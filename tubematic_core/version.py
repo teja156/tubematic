@@ -22,7 +22,7 @@ _FALLBACK = "0.0.0"
 # rather than naming a repo itself, TMDEV-167), release images default to its
 # owner's GHCR namespace (gen_release_compose.DEFAULT_OWNER), and anything that
 # later reads its releases should import it from here too (TMDEV-171).
-GITHUB_REPO = "teja156/tubematic-private"
+GITHUB_REPO = "teja156/tubematic"
 
 # The one definition of what a Tubematic version may look like: SemVer's
 # MAJOR.MINOR.PATCH with an optional prerelease suffix, restricted to

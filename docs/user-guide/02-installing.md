@@ -110,12 +110,13 @@ install's dashboard as trusted-LAN only. To use it from another machine, put HTT
 
 ## Install
 
-**From a release (recommended).** Download a release's tarball and its checksum from the project's
-GitHub Releases page, check it, extract it and run the wizard from inside the extracted directory:
+**From a release (recommended).** Download a release's tarball and its checksum from the
+[GitHub Releases page](https://github.com/teja156/tubematic/releases), check it, extract it and run
+the wizard from inside the extracted directory:
 
 ```bash
-curl -LO https://github.com/<owner>/<repo>/releases/download/v<version>/tubematic-v<version>.tar.gz
-curl -LO https://github.com/<owner>/<repo>/releases/download/v<version>/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v<version>/tubematic-v<version>.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v<version>/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
 tar xzf tubematic-v<version>.tar.gz
 cd tubematic-v<version>
@@ -125,7 +126,7 @@ python3 onboard.py
 **From source (alternative):**
 
 ```bash
-git clone <repo-url> tubematic
+git clone https://github.com/teja156/tubematic.git tubematic
 cd tubematic
 python3 onboard.py
 ```
@@ -685,7 +686,7 @@ python3 uninstall.py
 # Source install (built locally):
 docker rmi tubematic-renderer-image tubematic-tubematic-dashboard
 # Release install (pulled) — check `docker images | grep tubematic` for the exact tags:
-docker rmi ghcr.io/<owner>/tubematic-backend:<version> ghcr.io/<owner>/tubematic-dashboard:<version>
+docker rmi ghcr.io/teja156/tubematic-backend:<version> ghcr.io/teja156/tubematic-dashboard:<version>
 
 # 3. Remove any leftover volumes
 docker volume ls -q | grep tubematic | xargs -r docker volume rm

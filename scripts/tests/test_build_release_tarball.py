@@ -96,6 +96,7 @@ ALLOWLISTED_PATHS = [
     "INSTALL.md",
     "USAGE.md",
     "UNINSTALL.md",
+    "LICENSE",
     "CHECKSUMS.txt",
 ]
 
