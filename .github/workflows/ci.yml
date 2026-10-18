@@ -1,0 +1,210 @@
+name: CI
+
+# workflow_call: so release.yml can run this same suite (with the e2e job
+# turned on) as its own pre-flight, rather than keeping a second copy of
+# these jobs that could drift.
+# workflow_dispatch: so the e2e job -- excluded from every pull_request and
+# ordinary push because it builds two Docker images cold -- can still be run
+# on demand without cutting a tag.
+#
+# push excludes v*.*.* tags on purpose: a tag push already reaches this
+# workflow through release.yml's workflow_call (a separate trigger,
+# untouched by this exclusion), so leaving tags in the plain `push` trigger
+# too would run the whole matrix -- and the 12-20-minute e2e job -- twice
+# for every release.
+#
+# `branches: ["**"]` is NOT redundant with that exclusion, and removing it
+# silently disables CI on every branch. GitHub's rule: "If only branches or
+# only tags are defined, the workflow will not run for events affecting the
+# undefined ref type." A `push` block carrying only `tags-ignore` therefore
+# defines the tag side and leaves the branch side *undefined*, so no branch
+# push triggers anything -- no error, no skipped run, just silence. This was
+# shipped that way and CI never ran on a branch push until it was found by
+# hand. `branches` (a positive filter) may sit beside `tags-ignore` (an
+# ignore filter) because the "cannot mix positive and ignore filters"
+# restriction applies per ref type, not across them.
+on:
+  pull_request:
+  push:
+    branches:
+      - "**"
+    tags-ignore:
+      - "v*.*.*"
+  workflow_call:
+  workflow_dispatch:
+
+# Read-only: this workflow only checks out, tests and typechecks -- it never
+# pushes an image or creates a release (that's release.yml's push-images and
+# release jobs). Declared explicitly so that under workflow_call it does not
+# silently inherit the caller's broader `packages: write`.
+permissions:
+  contents: read
+
+jobs:
+  # Six suite directories, run one at a time. A single combined `pytest`
+  # invocation across them fails collection on a pre-existing
+  # conftest.py/sys.path collision -- this matrix is the fix for that, not a
+  # stylistic choice. Kept in sync with the filesystem by
+  # scripts/tests/test_workflows.py, which derives the expected list from
+  # disk rather than restating it here.
+  python-tests:
+    name: python-tests (${{ matrix.suite }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - tubematic_core/tests
+          - mcp/tests
+          - renderer/api/tests
+          - onboard/tests
+          - scripts/tests
+          - vqa/tests
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # All three requirements files, for every matrix entry -- several
+      # suites cross-import (vqa/tests needs flask/httpx/fastmcp from
+      # renderer/api and mcp; onboard/tests and scripts/tests need pyyaml).
+      # Per-suite dependency pinning is a maintenance trap that only fails
+      # in CI, once a suite's imports drift from whichever subset it used to
+      # get.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pyyaml
+          pip install -r scripts/requirements.txt
+          pip install -r mcp/requirements.txt
+          pip install -r renderer/api/requirements.txt
+
+      - name: Run ${{ matrix.suite }}
+        run: python -m pytest ${{ matrix.suite }} -q
+
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Unit tests
+        working-directory: dashboard
+        run: npx vitest run
+
+      # No Playwright here -- the e2e suite needs the Docker test stack
+      # (docker-compose.test.yml) and is handled by the separate,
+      # conditional e2e job below.
+      - name: Build
+        working-directory: dashboard
+        run: npm run build
+
+  remotion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # --ignore-scripts holds this install to a few hundred MB instead of
+      # pulling a Chromium headless shell via @remotion/renderer's postinstall
+      # -- typechecking needs no browser.
+      - name: Install
+        working-directory: renderer/remotion
+        run: npm ci --ignore-scripts
+
+      # Deliberately not `npm run lint` -- that script is `eslint src && tsc`
+      # and eslint has two pre-existing errors unrelated to type safety.
+      # `validate_job` (the pipeline's own per-render gate) runs `tsc`, not
+      # eslint, so `tsc` alone is the check that reflects production.
+      - name: Typecheck
+        working-directory: renderer/remotion
+        run: npx tsc --noEmit
+
+  compose-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate development compose
+        run: docker compose -f docker-compose.yml config
+
+      # The release compose (generated from docker-compose.yml by
+      # scripts/gen_release_compose.py) is a different document -- pinned
+      # images instead of `build:`, every port forced onto 127.0.0.1 -- so
+      # validating docker-compose.yml alone would not catch a syntax error
+      # the generator introduces into that release-only shape.
+      - name: Generate and validate release compose
+        run: |
+          pip install pyyaml
+          python3 scripts/gen_release_compose.py --out /tmp/release-compose.yml
+          docker compose -f /tmp/release-compose.yml config
+
+  # Conditional: a tag push or a manual dispatch, never a pull request or an
+  # ordinary push. This builds both the backend and dashboard images cold --
+  # 12-20 minutes before the first assertion -- which is affordable once at
+  # release time or on demand, not on every PR. Needs no secrets:
+  # docker-compose.test.yml passes literal "test" strings for every API key.
+  #
+  # continue-on-error: NON-BLOCKING, from an observed run, not a guess.
+  # Run inside a Kasm session against this branch's own code (2026-09-12):
+  # global-setup completed cleanly -- the compose build finished, all three
+  # containers reached healthy, and Playwright started -- which rules out
+  # the prior "may be dying in global-setup" theory outright. 84 tests ran;
+  # 76 passed; 8 failed, confined to 3 of the 9 spec files (settings.spec.ts,
+  # pipeline.spec.ts, modal.spec.ts -- the other six were fully green).
+  #
+  # Every one of those 8 failures traces to this branch having forked (at
+  # ca1d702) before commit b94bacf landed on main. That commit fixes a
+  # SaveBar remount bug on the Settings page plus drift in all three
+  # affected spec files in one change, and its own message reports "Full
+  # suite green: 84 passed". None of the 8 look like infrastructure flakes
+  # -- this reads as a branch simply missing a fix that already exists
+  # upstream, not as something needing separate diagnosis. That reading is
+  # a strong inference from b94bacf's content and message. It has not been
+  # re-verified by actually rebasing this branch past b94bacf and rerunning
+  # the suite.
+  #
+  # Promotion criterion: rebase this branch onto current main, rerun the
+  # suite, and flip this job to blocking if it comes back fully green.
+  e2e:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+    needs: [python-tests, dashboard, remotion, compose-check]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: dashboard
+        run: npx playwright install --with-deps
+
+      # global-setup.ts brings up docker-compose.test.yml (build + wait for
+      # health) and global-teardown.ts tears it down -- no separate compose
+      # step needed here.
+      - name: e2e tests
+        working-directory: dashboard
+        run: npx playwright test

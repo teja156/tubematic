@@ -1,0 +1,62 @@
+{
+  "youtube": [
+    "caption",
+    "category_id",
+    "contains_synthetic_media",
+    "default_language",
+    "description",
+    "embeddable",
+    "license",
+    "localizations",
+    "made_for_kids",
+    "media",
+    "privacy_status",
+    "public_stats_viewable",
+    "publish_at",
+    "recording_date",
+    "tags",
+    "title"
+  ],
+  "tiktok": [
+    "allow_comment",
+    "allow_duet",
+    "allow_stitch",
+    "auto_add_music",
+    "caption",
+    "disclose_branded_content",
+    "disclose_your_brand",
+    "is_ai_generated",
+    "is_draft",
+    "media",
+    "privacy_status",
+    "title"
+  ],
+  "instagram": [
+    "audio_name",
+    "caption",
+    "collaborators",
+    "location",
+    "media",
+    "placement",
+    "share_to_feed",
+    "trial_reel_type"
+  ],
+  "facebook": [
+    "caption",
+    "collaborators",
+    "location",
+    "media",
+    "placement",
+    "set_caption_for_each_image"
+  ],
+  "_create_social_post": [
+    "account_configurations",
+    "caption",
+    "external_id",
+    "isDraft",
+    "media",
+    "platform_configurations",
+    "scheduled_at",
+    "social_accounts"
+  ]
+}

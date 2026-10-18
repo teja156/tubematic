@@ -1,0 +1,8 @@
+fastmcp>=3.0,<4
+# Direct since TMDEV-87: server.py imports JSONResponse for the GET /health
+# custom_route. Already installed as a fastmcp dependency — declared here
+# because it is imported directly, not to pull in anything new. Unpinned so
+# fastmcp's own constraint stays the one that resolves.
+starlette
+httpx>=0.27.0
+pillow>=10.0.0

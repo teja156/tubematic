@@ -1,0 +1,168 @@
+FROM kasmweb/ubuntu-noble-dind:1.19.0-rolling-daily
+
+USER root
+
+ENV HOME /home/kasm-default-profile
+ENV STARTUPDIR /dockerstartup
+ENV INST_SCRIPTS $STARTUPDIR/install
+WORKDIR $HOME
+
+######### Customize Container Here ###########
+
+# Host timezone. The base image's tzdata defaults to Etc/UTC, and this
+# container is "the host" in the one-machine model (dockerd for the nested
+# compose stack runs inside it, so nested containers' /etc/localtime
+# bind-mounts source from here, not the real outer host) — see TMDEV-35.
+# /etc/localtime is a filesystem-level setting every process respects
+# regardless of environment, unlike a bare $TZ var. Matches
+# kasm_workspace/dockerfile_tubematic_kasm's own rationale.
+ENV TZ=America/New_York
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone
+
+# Prerequisites for the venv + kasm_post_run_user.sh (Docker CLI/daemon and
+# Python are already present in this base image). No cron here — VQA has no
+# poll.py, unlike kasm_workspace/dockerfile_tubematic_kasm. mpv: the
+# ticket's own "manually open them to view them" requirement — the DinD base
+# ships no media player. rsync: kasm_post_run_user.sh's own working-tree
+# refresh (/opt -> ~/tubematic) runs *inside this container at session
+# start* — easy to conflate with build.sh's rsync usage, which runs on the
+# host and needs nothing installed here. The two are unrelated call sites;
+# both need it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3-pip \
+        python3-venv \
+        git \
+        curl \
+        mpv \
+        rsync \
+    && rm -rf /var/lib/apt/lists/*
+
+# docker compose v2 (plugin) — kasm_post_run_user.sh needs it to bring up
+# tubematic-api/tubematic-renderer. Only install if the base image doesn't
+# already ship it.
+RUN docker compose version >/dev/null 2>&1 || \
+    (mkdir -p /usr/local/lib/docker/cli-plugins \
+     && curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+        -o /usr/local/lib/docker/cli-plugins/docker-compose \
+     && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose)
+
+# Node.js >= 22 (NodeSource) — needed both for the Claude Code CLI install
+# below and for the remotion-dev/skills prefetch further down. Deliberately
+# NOT the Ubuntu Noble apt `nodejs`/`npm` package (18.x): the `skills` npm
+# CLI hard-requires Node >= 22.20.0 and crashes on import under 18.x
+# (`EBADENGINE` / `SyntaxError: node:util does not provide styleText`)
+# rather than merely warning — see kasm_workspace/dockerfile_tubematic_kasm
+# for the full story (TMDEV-39). Scoped to this dev/test image only;
+# renderer/Dockerfile stays on node:20-slim.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Claude Code CLI — npm install is the documented approach for Dockerfiles
+# (code.claude.com/docs/en/devcontainer).
+ENV DISABLE_AUTOUPDATER=1
+RUN npm install -g @anthropic-ai/claude-code
+
+# kasm_post_run_user.sh runs as kasm-user (uid 1000, invoked by Kasm's own
+# platform after session start — see the COPY below) and needs to run
+# `docker`/`docker compose` — root-mode DinD's dockerd socket is typically
+# group-owned by "docker", not world-writable. Add kasm-user to that group
+# if it exists so this doesn't need root. Guarded: harmless no-op if the
+# base image doesn't define the group.
+RUN getent group docker >/dev/null && usermod -aG docker kasm-user || true
+
+# Stage the (already filtered — see build.sh) tubematic source at /opt,
+# image-owned and pristine. Nothing here is baked into
+# /home/kasm-default-profile beyond the Kasm boilerplate below — Claude Code
+# config, skills, and commands are populated at session start by
+# kasm_post_run_user.sh into the *persisted* $HOME instead (see
+# vqa/README.md's code/state split). That's what lets a Kasm persistent
+# profile stay valid across image rebuilds: skills/commands get re-copied
+# on every launch, so a stale persisted copy can never linger.
+COPY tubematic /opt/tubematic
+
+# venv for vqa/make_seed_db.py, vqa/review_video.py, and vqa/stage_script.py.
+# scripts/ + renderer/api/ are the same two requirement files onboard.py's
+# python_deps step would install (make_seed_db.py imports
+# renderer/api/pipeline.py, pulling in flask; review_video.py needs httpx +
+# python-dotenv). mcp/requirements.txt (fastmcp) is VQA-specific:
+# stage_script.py imports mcp/server.py directly to reuse its private
+# tts_text derivation helpers rather than duplicating that logic.
+RUN python3 -m venv /opt/tubematic/.venv \
+    && /opt/tubematic/.venv/bin/pip install --no-cache-dir -q \
+        -r /opt/tubematic/scripts/requirements.txt \
+        -r /opt/tubematic/renderer/api/requirements.txt \
+        -r /opt/tubematic/mcp/requirements.txt
+
+# Generate the seed DB at build time (the ticket's own requirement) using the
+# canonical, migration-aware schema in renderer/api/pipeline.py::_init_db —
+# see vqa/make_seed_db.py's docstring for why this isn't hand-written DDL.
+RUN mkdir -p /opt/tubematic/vqa/seed \
+    && /opt/tubematic/.venv/bin/python /opt/tubematic/vqa/make_seed_db.py
+
+# Pre-fetch remotion-dev/skills into an image-owned cache path (NOT $HOME —
+# $HOME here is still /home/kasm-default-profile, and this artifact needs to
+# survive into a *persisted* $HOME that kasm_post_run_user.sh populates
+# fresh on every launch; baking it under $HOME would be silently shadowed by
+# the persistent profile after the very first session). This is a hard
+# dependency of the tubematic-scene-config skill's Step 0, not optional.
+# Doing it at build time keeps session start off the network.
+RUN mkdir -p /opt/tubematic/vqa/skills-cache \
+    && HOME=/opt/tubematic/vqa/skills-cache npx --yes skills@latest add \
+        remotion-dev/skills --all -g -a claude-code -y
+
+# Build stamp — kasm_post_run_user.sh compares this against the working
+# tree's own copy to decide whether an image rebuild has happened (and the
+# working tree under the persisted profile needs refreshing) or whether
+# it's the same image relaunching (in which case a tester's in-session
+# edits are left alone). Any value that changes per build is sufficient;
+# wall-clock time is simplest and human-readable in logs.
+RUN date -u +%Y-%m-%dT%H:%M:%SZ > /opt/tubematic/vqa/.image-id
+
+RUN chmod +x /opt/tubematic/vqa/kasm_post_run_user.sh /opt/tubematic/vqa/watch_bootstrap.sh \
+             /opt/tubematic/vqa/custom_startup.sh
+
+# chown deliberately comes LAST, after every RUN step above that creates
+# files under /opt/tubematic (the venv, the seed DB, the skills cache, the
+# build stamp) — chown'ing right after COPY (as kasm_workspace's Dockerfile
+# does, since it has nothing else to build into that tree) would leave all
+# of those root-owned instead.
+RUN chown -R 1000:0 /opt/tubematic
+
+# Overwrite two of the base image's own stub hooks with the copies staged
+# under /opt/tubematic/vqa above:
+#   - kasm_post_run_root.sh's sibling, kasm_post_run_user.sh, is Kasm's own
+#     hook — invoked automatically as kasm-user after session start,
+#     independent of anything below. This is the actual bootstrap entry
+#     point; see vqa/kasm_post_run_user.sh's own header for the full design.
+#   - custom_startup.sh is the file kasm_workspace/dockerfile_tubematic_kasm
+#     (this repo's other Kasm image) deliberately avoids touching, after an
+#     earlier attempt in this repo's history (00099ff/a69cd1c/7abf2d0) edited
+#     it, hit a race, and was reverted — that incident was from inserting
+#     logic INSIDE the process-supervision while-loop this file runs
+#     (auto-launching onboard.py, re-entering on every loop iteration until
+#     supervisord became visible to pgrep). vqa/custom_startup.sh's own
+#     addition is kept OUTSIDE that loop and backgrounded specifically to
+#     avoid the same class of bug — see its header comment for the full
+#     byte-for-byte-verified diff against this exact base image's original.
+# Both end up root-owned (matching the base image's own stub ownership) —
+# COPY's default, and correct here since we're still in the USER root
+# context established at the top of this file. The execute bit is set
+# explicitly below rather than relied upon from the host-side file's own
+# mode, which build.sh's staging doesn't guarantee.
+COPY tubematic/vqa/kasm_post_run_user.sh /dockerstartup/kasm_post_run_user.sh
+COPY tubematic/vqa/custom_startup.sh $STARTUPDIR/custom_startup.sh
+RUN chmod +x /dockerstartup/kasm_post_run_user.sh $STARTUPDIR/custom_startup.sh
+
+######### End Customizations ###########
+
+RUN chown -R 1000:0 $HOME
+RUN $STARTUPDIR/set_user_permission.sh $HOME
+
+ENV HOME /home/kasm-user
+WORKDIR $HOME
+RUN mkdir -p $HOME && chown -R 1000:0 $HOME
+
+USER 1000

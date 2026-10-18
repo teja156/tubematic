@@ -1,0 +1,56 @@
+{
+  "file_mapping": {
+    "destination": "/tmp/launch_selections.json",
+    "is_readable": true,
+    "is_writeable": false,
+    "is_executable": false
+  },
+  "launch_form": [
+    {
+      "key": "delete_tubematic_data",
+      "label": "Delete Tubematic Data?",
+      "value": "no",
+      "allow_saving": false,
+      "placeholder": null,
+      "required": true,
+      "help": "Deletes ~/.tubematic-data outright",
+      "input_type": "select",
+      "options": [
+        {
+          "value": "no",
+          "label": "No — keep my data"
+        },
+        {
+          "value": "yes",
+          "label": "Yes — delete it"
+        }
+      ],
+      "validator_regex": null,
+      "validator_regex_description": null,
+      "display_if": null
+    },
+    {
+      "key": "delete_tubematic_agent",
+      "label": "Delete Tubematic Agent Directory",
+      "value": "no",
+      "allow_saving": false,
+      "placeholder": null,
+      "required": true,
+      "help": "Deletes ~/.tubematic-agent",
+      "input_type": "select",
+      "options": [
+        {
+          "value": "no",
+          "label": "No — keep it"
+        },
+        {
+          "value": "yes",
+          "label": "Yes — delete it"
+        }
+      ],
+      "validator_regex": null,
+      "validator_regex_description": null,
+      "display_if": null
+    }
+  ]
+}

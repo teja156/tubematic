@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512">
+  <defs>
+    <filter id="g" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.2" result="b"></feGaussianBlur>
+      <feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge>
+    </filter>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" fill="#0a0d14" stroke="#f5a623" stroke-width="2"></rect>
+  <path d="M 8 10 L 8 8 L 10 8" stroke="#f5a623" stroke-width="1" fill="none" opacity="0.6"></path>
+  <path d="M 56 10 L 56 8 L 54 8" stroke="#f5a623" stroke-width="1" fill="none" opacity="0.6"></path>
+  <path d="M 8 54 L 8 56 L 10 56" stroke="#f5a623" stroke-width="1" fill="none" opacity="0.6"></path>
+  <path d="M 56 54 L 56 56 L 54 56" stroke="#f5a623" stroke-width="1" fill="none" opacity="0.6"></path>
+  <g fill="#f5a623" filter="url(#g)">
+    <rect x="12" y="16" width="22" height="5"></rect>
+    <rect x="20" y="16" width="6" height="32"></rect>
+  </g>
+  <g fill="#f5a623" opacity="0.85">
+    <rect x="36" y="24" width="4" height="24"></rect>
+    <rect x="40" y="24" width="4" height="14"></rect>
+    <rect x="44" y="24" width="4" height="20"></rect>
+    <rect x="48" y="24" width="4" height="24"></rect>
+  </g>
+  <rect x="52" y="50" width="4" height="6" fill="#f5a623" opacity="0.6"></rect>
+</svg>

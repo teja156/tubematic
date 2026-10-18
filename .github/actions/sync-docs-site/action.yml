@@ -1,0 +1,94 @@
+name: Sync the docs site
+description: >
+  Sync this checkout's docs/ into the Docusaurus site repo (teja156/tubematic-docs), build it, and
+  push the result. Vercel deploys the site on that push. The caller checks out tubematic (a local
+  action needs the repo checked out anyway) and points `source` at the checkout of the ref to sync.
+
+# Shared by release.yml's publish-docs job and docs-site.yml (develop pushes and manual runs). It is
+# a composite action rather than a reusable workflow on purpose: the token is an *environment*
+# secret, and a reusable workflow only sees one if the caller passes it through as well -- miss
+# that and it silently resolves to an empty string. Here each calling job declares the environment
+# itself and hands the token straight in.
+
+inputs:
+  version:
+    description: '"develop", or a release version X.Y.Z (no "v") -- the second argument to sync-docs.mjs'
+    required: true
+  token:
+    description: A token with Contents read/write on the site repo (TUBEMATIC_DOCS_TOKEN)
+    required: true
+  source:
+    description: A directory holding the tubematic checkout (its docs/) to sync
+    required: false
+    default: ${{ github.workspace }}
+  site-repo:
+    description: The Docusaurus site repository
+    required: false
+    default: teja156/tubematic-docs
+
+runs:
+  using: composite
+  steps:
+    - name: Refuse an empty token
+      shell: bash
+      env:
+        TOKEN: ${{ inputs.token }}
+      run: |
+        # An environment secret the job cannot see resolves to "", and checkout would then fail
+        # with an unhelpful 404 on a private repo. Say what is actually wrong.
+        if [ -z "$TOKEN" ]; then
+          echo "::error::TUBEMATIC_DOCS_TOKEN is empty: the job must declare the environment holding it"
+          exit 1
+        fi
+
+    - name: Check out the site
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.site-repo }}
+        token: ${{ inputs.token }}
+        path: .docs-site
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: npm
+        cache-dependency-path: .docs-site/package-lock.json
+
+    - name: Install
+      shell: bash
+      working-directory: .docs-site
+      run: npm ci
+
+    - name: Sync docs/
+      shell: bash
+      working-directory: .docs-site
+      env:
+        VERSION: ${{ inputs.version }}
+        SOURCE: ${{ inputs.source }}
+      run: node scripts/sync-docs.mjs "$SOURCE" "$VERSION"
+
+    # Built before anything is pushed: the site build fails on any broken link or anchor, so a
+    # page that would publish a dead link stops here rather than reaching docs.tubematic.ai.
+    - name: Build
+      shell: bash
+      working-directory: .docs-site
+      run: npm run build
+
+    - name: Commit and push
+      shell: bash
+      working-directory: .docs-site
+      env:
+        VERSION: ${{ inputs.version }}
+        SOURCE: ${{ inputs.source }}
+      run: |
+        if [ -z "$(git status --porcelain)" ]; then
+          echo "Docs unchanged for $VERSION; nothing to push."
+          exit 0
+        fi
+        source_sha="$(git -C "$SOURCE" rev-parse --short HEAD)"
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add -A
+        git commit -q -m "Sync docs from tubematic: $VERSION@$source_sha"
+        git push
+        echo "Pushed $(git log --oneline -1)"

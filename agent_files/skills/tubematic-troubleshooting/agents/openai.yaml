@@ -1,0 +1,6 @@
+# Codex: keep this skill out of the list the model chooses from, so a scheduled
+# `codex exec` run can never pick it up. A person still invokes it by name with
+# $tubematic-troubleshooting. Claude Code and OpenCode read the equivalent
+# setting from SKILL.md's frontmatter instead.
+policy:
+  allow_implicit_invocation: false

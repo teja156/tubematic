@@ -1,0 +1,6 @@
+flask>=3.0.0
+httpx>=0.27.0
+# zoneinfo's fallback when the OS lacks a zone. Browsers list CLDR names
+# (Asia/Calcutta), which newer Debian/Ubuntu ship only in tzdata-legacy; a
+# scheduled post's timezone comes from that list (TMDEV-133).
+tzdata>=2024.1

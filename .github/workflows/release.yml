@@ -1,0 +1,406 @@
+name: Release
+
+# Tag-triggered: pushing a vX.Y.Z tag is the only way this runs. Never on a
+# branch push, a PR, or workflow_dispatch -- a Release and a set of pushed
+# GHCR images are not something to trigger by hand or by accident.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# Exactly what this workflow needs and nothing more (TMDEV-91 Phase 3 spec
+# section 4.3): `contents: write` to create the GitHub Release, `packages:
+# write` to push images to GHCR. A workflow that pushes to a registry and
+# publishes releases holding more permission than that is a standing risk.
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # 1. Assert the tag matches VERSION; run scripts/check_release.py.
+  #
+  # check_release.py's own "VERSION matches the requested version" check
+  # *is* the tag-matches-VERSION assertion -- the version handed to it here
+  # comes straight from the tag, so a mismatch fails loudly inside that
+  # script rather than needing a second, separate comparison here.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      owner: ${{ steps.version.outputs.owner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # github.ref_name for a tag push is the bare tag ("v1.2.3"); the
+      # release toolchain's own convention (VERSION file, check_release.py,
+      # build_release_tarball.py --version) is the version WITHOUT the "v" --
+      # stripping it once here, rather than in each downstream job, is the
+      # single place this rule lives.
+      #
+      # Owner is lowercased here too, for the same reason: GHCR requires a
+      # lowercase repository namespace, and GitHub Actions expressions have
+      # no toLower() function, so a bare `${{ github.repository_owner }}` in
+      # push-images/build-tarball would fail with "repository name must be
+      # lowercase" for any fork owner with an uppercase character. Doing it
+      # once here, not at each of the three call sites, is the single place
+      # this rule lives.
+      - name: Derive release version and owner from context
+        id: version
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      # check_release.py only needs PyYAML beyond the stdlib (it imports
+      # gen_release_compose.py and build_release_tarball.py, neither of
+      # which needs anything else) -- see scripts/tests/test_workflows.py's
+      # docstring for the precedent of this being a maintainer/test-only
+      # dependency, not a runtime one.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Pre-flight release checks
+        run: |
+          python3 scripts/check_release.py \
+            --owner "${{ steps.version.outputs.owner }}" \
+            "${{ steps.version.outputs.version }}"
+
+  # 2. Reuse ci.yml via workflow_call, with the e2e job enabled. Not a
+  # second copy of the test jobs -- one definition. The github context
+  # inside a called workflow stays that of the caller (a tag push), so
+  # ci.yml's own e2e `if:` (workflow_dispatch OR a push to a refs/tags/*
+  # ref) evaluates true here with no extra input needed -- verified against
+  # GitHub's reusable-workflow context docs during Task 1's review.
+  ci:
+    needs: [preflight]
+    uses: ./.github/workflows/ci.yml
+
+  # 3. Build and push tubematic-backend and tubematic-dashboard to GHCR,
+  # each under exactly ONE tag: the bare version, no "v".
+  #
+  # That tag is the load-bearing one and the only one that may not change:
+  # scripts/gen_release_compose.py bakes
+  # `ghcr.io/<owner>/tubematic-<role>:<version>` into the release compose
+  # using the *bare* version string (the same one build_release_tarball.py
+  # --version received, which must never carry a "v" or the tarball's own
+  # filename would double it to "tubematic-vv1.2.3.tar.gz"). Push anything
+  # other than this and the compose file the same version produces
+  # references an image tag that was never pushed -- the smoke test in job
+  # 5 would fail every time, by construction, on a 404 pulling the image.
+  # scripts/tests/test_workflows.py pins its presence.
+  #
+  # Two other tags were pushed originally and were deliberately dropped:
+  # `vX.Y.Z`, which nothing ever consumed, and the commit SHA. Dropping the
+  # SHA is a real trade, not pure simplification -- it was the only tag
+  # immutable by construction, so "which commit is this image actually
+  # built from" is now answered by the git tag of the same version rather
+  # than by the registry itself.
+  push-images:
+    needs: [preflight, ci]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Packages stay private (D6): a repository's GHCR packages are
+      # created private by default and require a separate, deliberate
+      # visibility change -- nothing in this workflow needs to assert that.
+      - name: Build and push tubematic-backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: renderer/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ needs.preflight.outputs.owner }}/tubematic-backend:${{ needs.preflight.outputs.version }}
+
+      - name: Build and push tubematic-dashboard
+        uses: docker/build-push-action@v6
+        with:
+          context: dashboard
+          push: true
+          tags: |
+            ghcr.io/${{ needs.preflight.outputs.owner }}/tubematic-dashboard:${{ needs.preflight.outputs.version }}
+
+  # 4. Build the tarball and write CHECKSUMS.txt.
+  #
+  # build_release_tarball.py already writes a CHECKSUMS.txt *inside* the
+  # tarball (per-file hashes of the staged tree). The CHECKSUMS.txt built
+  # here is a second, separate file: the sha256 of the tarball itself, so a
+  # downloader can verify the archive they fetched from the Release page --
+  # a different question from "was the staged tree tampered with".
+  build-tarball:
+    needs: [preflight, push-images]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Build release tarball
+        run: |
+          python3 scripts/build_release_tarball.py \
+            --owner "${{ needs.preflight.outputs.owner }}" \
+            --version "${{ needs.preflight.outputs.version }}" \
+            --out-dir dist
+
+      - name: Write tarball checksum
+        working-directory: dist
+        run: sha256sum tubematic-v${{ needs.preflight.outputs.version }}.tar.gz > CHECKSUMS.txt
+
+      # The GitHub Release body comes from docs/release-notes.md, which is
+      # the single source for release notes -- written once, reviewed in the
+      # commit that changed the behaviour it describes, never re-typed into a
+      # web form. Extracted here rather than in the `release` job because this
+      # is the job that has the repository checked out, and it travels to that
+      # job inside the artifact it already downloads.
+      #
+      # preflight has already run the same extraction through
+      # check_release.py, so a missing or unfilled section fails before any
+      # image is pushed. This step re-running it is deliberate: the file it
+      # reads is the tagged commit's, so the two cannot disagree.
+      - name: Extract the release notes for this version
+        run: |
+          python3 scripts/release_notes.py \
+            "${{ needs.preflight.outputs.version }}" > dist/RELEASE_NOTES.md
+          echo "--- release body ---"
+          cat dist/RELEASE_NOTES.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-artifact
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  # 5. Smoke-test the published artifact. Runs after the images are pushed
+  # (it has to pull them) and before the Release is created (a broken
+  # artifact must never become a published Release -- a failure here just
+  # leaves images on GHCR under a tag with no Release attached, which is
+  # recoverable by deleting the package version; an already-downloaded
+  # Release cannot be un-published).
+  #
+  # Deliberately does NOT check out the repository -- only extracting the
+  # real tarball and bringing up the real compose file it contains proves
+  # the thing a user downloads actually works. Using the checkout here
+  # would test the source tree, which job `ci` already did.
+  smoke-test:
+    needs: [preflight, build-tarball]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-artifact
+          path: dist
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Needed by the schema_migrations check below, which imports
+      # tubematic_core directly rather than shelling into a container. This
+      # only works today because ubuntu-latest happens to ship 3.12 -- the
+      # job that gates every Release should not depend on that coincidence.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Extract the tarball into its own temp directory
+        run: |
+          mkdir -p "${RUNNER_TEMP}/release-smoke"
+          tar -xzf "dist/tubematic-v${{ needs.preflight.outputs.version }}.tar.gz" \
+            -C "${RUNNER_TEMP}/release-smoke"
+          echo "SMOKE_DIR=${RUNNER_TEMP}/release-smoke/tubematic-v${{ needs.preflight.outputs.version }}" >> "$GITHUB_ENV"
+
+      # A real install gets these six directories from onboarding's
+      # directories step (onboard/actions.py::apply_directories) before any
+      # container starts. This job deliberately skips onboarding -- it is
+      # testing the published artifact, not the install flow -- so nothing
+      # else creates them here.
+      #
+      # Without this, `docker compose up` fails outright. The compose
+      # file's six volumes are `local`-driver, `o: bind` volumes with a
+      # `device:` under here, and -- verified directly against Docker, not
+      # inferred -- that kind of volume does NOT get its device path
+      # auto-created on a missing path; the mount fails with "no such file
+      # or directory". That's a different case from a short-syntax host
+      # bind, where dockerd does create the missing path (as root). See
+      # onboard/actions.py::apply_directories for where that distinction
+      # actually changes the guidance.
+      - name: Create the data directories a real install gets from onboarding
+        run: |
+          mkdir -p \
+            "$HOME/.tubematic-data/jobs" \
+            "$HOME/.tubematic-data/data" \
+            "$HOME/.tubematic-data/output_videos" \
+            "$HOME/.tubematic-data/scenes/generated" \
+            "$HOME/.tubematic-data/logs" \
+            "$HOME/.tubematic-data/backups"
+
+      - name: Bring up the release stack from the extracted artifact
+        working-directory: ${{ env.SMOKE_DIR }}
+        run: docker compose pull && docker compose up -d --wait --wait-timeout 300
+
+      # --retry-connrefused: even with docker compose --wait having reported
+      # healthy, a single unretried request at a container boundary is
+      # fragile (this is defense in depth, not the fix for the dashboard
+      # race itself -- that fix is docker-compose.yml's new healthcheck).
+      # Bounded, not indefinite: --retry-max-time caps the whole retry
+      # window so a genuinely dead service still fails this step promptly
+      # instead of hanging the job.
+      - name: API answers on /health
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 --retry-connrefused \
+            --retry-max-time 30 --max-time 5 \
+            http://127.0.0.1:4000/health
+
+      - name: Dashboard serves
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 --retry-connrefused \
+            --retry-max-time 30 --max-time 5 \
+            -o /dev/null http://127.0.0.1:3000/
+
+      # The fresh database's schema_migrations must be fully applied.
+      #
+      # EXPECTED is derived on the runner from this same commit's migrations
+      # dir, shipped inside the tarball and discovered with tubematic_core's
+      # own discover() -- never hardcoded, so it cannot go stale as
+      # migrations are added. That half touches no database, only filenames.
+      #
+      # ACTUAL is read from INSIDE the container, not from the runner, and
+      # that is not a stylistic preference. The db-data volume is a host bind
+      # mount, so reading it from the runner looks possible -- but the
+      # database is in WAL mode, and SQLite requires WRITE access to the
+      # `-shm` sidecar even to READ a WAL database. The file is created by
+      # containers running as root; the runner is a different user. Reading
+      # it host-side failed with "attempt to write a readonly database" on a
+      # SELECT, which reads like a bug in current_schema_version() and is
+      # not: it is WAL doing what WAL does. entrypoint.sh's chgrp/chmod to
+      # the host group cannot be relied on to close this either -- it runs
+      # before the database exists on a fresh install, so the files it means
+      # to fix are not there yet.
+      #
+      # This still calls current_schema_version(), the same function the rest
+      # of the codebase uses, so nothing is reimplemented -- only the process
+      # that calls it moves to the side of the mount that owns the file.
+      - name: schema_migrations reflects this commit's migrations
+        working-directory: ${{ env.SMOKE_DIR }}
+        run: |
+          expected=$(python3 -c "
+          from tubematic_core.db import discover
+          print(max(m.version for m in discover('tubematic_core/migrations')))
+          ")
+          actual=$(docker compose exec -T tubematic-api python3 -c "
+          from tubematic_core.db import current_schema_version
+          print(current_schema_version('/data/tubematic.db'))
+          " | tr -d '[:space:]')
+          echo "expected schema version: ${expected}, actual: ${actual}"
+          if [ "${expected}" != "${actual}" ]; then
+            echo "::error::schema_migrations reports ${actual}, expected ${expected}"
+            exit 1
+          fi
+
+      # Runs before teardown, because `docker compose down -v` destroys
+      # every piece of evidence this job produced. Without this the release
+      # gate can only report THAT it failed, never why -- which is how the
+      # first real failure here (tubematic-dashboard reported unhealthy)
+      # produced nothing to diagnose from. `|| true` on each command so one
+      # unavailable source never hides the others.
+      - name: Diagnostics (on failure)
+        if: failure() && env.SMOKE_DIR != ''
+        working-directory: ${{ env.SMOKE_DIR }}
+        run: |
+          echo "::group::compose ps"
+          docker compose ps --all || true
+          echo "::endgroup::"
+          echo "::group::data dir ownership"
+          id || true
+          ls -la "$HOME/.tubematic-data/data" || true
+          echo "::endgroup::"
+          for svc in tubematic-api tubematic-mcp tubematic-renderer tubematic-dashboard; do
+            echo "::group::health $svc"
+            docker inspect --format '{{json .State.Health}}' "$svc" 2>/dev/null | python3 -m json.tool || true
+            echo "::endgroup::"
+            echo "::group::logs $svc"
+            docker compose logs --no-color --tail 100 "$svc" || true
+            echo "::endgroup::"
+          done
+
+      # Guarded on SMOKE_DIR being set: `if: always()` alone runs this step
+      # even when extraction failed before that env var was ever written,
+      # and a `working-directory:` that resolves to an empty string errors
+      # rather than skipping.
+      - name: Tear down
+        if: always() && env.SMOKE_DIR != ''
+        working-directory: ${{ env.SMOKE_DIR }}
+        run: docker compose down -v
+
+  # 6. Create the GitHub Release and upload the tarball and checksums.
+  # `latest` is never set here -- a convenience tag, if one is ever added,
+  # is not the documented install target.
+  release:
+    needs: [preflight, smoke-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-artifact
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: TubeMatic v${{ needs.preflight.outputs.version }}
+          body_path: dist/RELEASE_NOTES.md
+          # RELEASE_NOTES.md rides in the artifact but is deliberately not
+          # listed here: it is the Release body, not a downloadable asset.
+          files: |
+            dist/tubematic-v${{ needs.preflight.outputs.version }}.tar.gz
+            dist/CHECKSUMS.txt
+
+  # 7. Publish this release's docs to docs.tubematic.ai: sync docs/ into the site repo as this
+  # release's line (X.Y.x), build it, push; Vercel deploys on the push.
+  #
+  # After `release`, never before: the docs move only once the Release really exists. It gates
+  # nothing -- the images, tarball and Release are already published -- so a failure here leaves
+  # the release intact and is recovered by re-running this job, or by docs-site.yml's manual run
+  # with this version.
+  publish-docs:
+    needs: [preflight, release]
+    runs-on: ubuntu-latest
+    # TUBEMATIC_DOCS_TOKEN is an environment secret: only a job naming this environment can read it.
+    environment: TubeMatic
+    permissions:
+      contents: read
+    # Shared with docs-site.yml, so a develop sync and a release sync never push to the site at once.
+    concurrency:
+      group: docs-site-sync
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/sync-docs-site
+        with:
+          version: ${{ needs.preflight.outputs.version }}
+          token: ${{ secrets.TUBEMATIC_DOCS_TOKEN }}

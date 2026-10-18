@@ -1,0 +1,82 @@
+name: Bug report
+description: Something in Tubematic is broken or behaves wrongly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Two things make a report quick to act on:
+
+        - Run `python3 scripts/collect_diagnostics.py` from your Tubematic install directory and use
+          the `report.md` it writes for the version, container and log fields below. It removes
+          API keys, tokens, emails, IPs, paths and your topics before you see it.
+        - The troubleshooting skill (`/tubematic-troubleshooting` in Claude Code) can fill this in
+          with you. It never posts anything itself.
+
+        **This issue is public.** Read everything you paste once more before submitting.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What I expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Include the exact error message if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+  - type: textarea
+    id: install
+    attributes:
+      label: Version and install
+      description: From the Install section of report.md.
+      value: |
+        - Tubematic version:
+        - Install type: release tarball / source checkout
+        - OS:
+        - Agent: <CLI name and version, model>
+    validations:
+      required: true
+  - type: textarea
+    id: containers
+    attributes:
+      label: Containers
+      description: The Stack table from report.md.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Short excerpts from report.md only, with their UTC timestamps.
+      render: text
+  - type: textarea
+    id: tried
+    attributes:
+      label: What I already tried
+  - type: textarea
+    id: redaction
+    attributes:
+      label: Redaction
+      description: The "Redaction summary" line from report.md, plus anything you removed by hand.
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have removed API keys, tokens, passwords and personal data from everything above.
+          required: true

@@ -1,0 +1,99 @@
+# docker-compose.test.yml — isolated test environment
+# Spun up by Playwright globalSetup; destroyed by globalTeardown
+name: tubematic-test
+
+networks:
+  tubematic-test-net:
+    driver: bridge
+
+# Fixed, public test tokens (TMDEV-152) -- see dashboard/tests/e2e/secrets/.
+secrets:
+  api_token:
+    file: ./dashboard/tests/e2e/secrets/api_token
+  session_secret:
+    file: ./dashboard/tests/e2e/secrets/session_secret
+
+volumes:
+  test-db-data:
+  test-jobs-data:
+  test-output-videos:
+
+services:
+  tubematic-api-test:
+    build:
+      context: .
+      dockerfile: renderer/Dockerfile
+    image: tubematic-renderer-test-image
+    ports:
+      - "4001:4000"
+    volumes:
+      - test-output-videos:/output_videos
+      - test-jobs-data:/jobs
+      - test-db-data:/data
+    networks:
+      - tubematic-test-net
+    environment:
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - OUTPUT_BASE_PATH=/output_videos
+      - TUBEMATIC_DB=/data/tubematic.db
+      - TUBEMATIC_JOBS_DIR=/jobs
+      - RENDERER_URL=http://localhost:4000
+      - MCP_PORT=4100
+      - ANTHROPIC_API_KEY=test
+      - ELEVENLABS_API_KEY=test
+      - GEMINI_API_KEY=test
+      - TUBEMATIC_SECRETS_DIR=/run/secrets
+      # Deliberately non-UTC and distinct from playwright.config.ts's browser
+      # timezoneId (Asia/Tokyo) — an e2e assertion that only passes when both
+      # zones happen to be UTC would prove nothing.
+      - TZ=America/New_York
+    secrets:
+      - api_token
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:4000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Render worker — same image, no build, so e2e specs that drive a video to
+  # RENDER_QUEUED actually get rendered (see docker-compose.yml's non-test
+  # tubematic-renderer service for the equivalent production wiring).
+  tubematic-renderer-test:
+    image: tubematic-renderer-test-image
+    command: python3 /app/api/worker.py
+    volumes:
+      - test-output-videos:/output_videos
+      - test-jobs-data:/jobs
+      - test-db-data:/data
+    networks:
+      - tubematic-test-net
+    environment:
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - OUTPUT_BASE_PATH=/output_videos
+      - TUBEMATIC_DB=/data/tubematic.db
+      - TUBEMATIC_JOBS_DIR=/jobs
+      - GEMINI_API_KEY=test
+      - TZ=America/New_York
+    shm_size: "2gb"
+    depends_on:
+      tubematic-api-test:
+        condition: service_healthy
+
+  tubematic-dashboard-test:
+    build: ./dashboard
+    ports:
+      - "3001:3000"
+    volumes:
+      - test-output-videos:/output_videos:ro
+    networks:
+      - tubematic-test-net
+    environment:
+      - RENDERER_URL=http://tubematic-api-test:4000
+      - NODE_ENV=production
+      - TUBEMATIC_SECRETS_DIR=/run/secrets
+    secrets:
+      - api_token
+      - session_secret
+    depends_on:
+      tubematic-api-test:
+        condition: service_healthy

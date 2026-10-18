@@ -1,0 +1,296 @@
+name: tubematic
+
+networks:
+  tubematic-net:
+    driver: bridge
+
+# All host↔container bind mounts live under ~/.tubematic-data/.
+#
+# A fixed absolute location, not ${PWD} and not configurable: the pipeline
+# database (which holds the API keys) and the rendered video library are
+# machine state, not properties of a git checkout. Under ${PWD} they lived
+# inside the repo, so `rm -rf tubematic && git clone` destroyed both silently,
+# and invoking compose from the wrong directory created a second empty tree.
+#
+# ${HOME} rather than a hardcoded path so this file stays committable. cron
+# strips the environment to HOME/LOGNAME/PATH/SHELL, so HOME survives there
+# too. Container-side paths (/data, /jobs, /output_videos) are unchanged.
+volumes:
+  output-videos:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.tubematic-data/output_videos
+  jobs-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.tubematic-data/jobs
+  db-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.tubematic-data/data
+  scenes-generated:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.tubematic-data/scenes/generated
+  # Structured JSONL logs, one file per service per day, read back by Flask at
+  # GET /logs. A bind mount so a `docker compose down` does not take the trail
+  # with it — which is most of the point, since the failures worth reading
+  # about are the ones that took a container with them.
+  logs-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.tubematic-data/logs
+  # Pre-migration database snapshots (TMDEV-91). A bind mount, and separate from
+  # db-data on purpose: a backup that lives in the directory it is protecting is
+  # not a backup. Never written except when a migration is actually pending.
+  backups-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.tubematic-data/backups
+
+# Service tokens (TMDEV-152), one file each under ~/.tubematic-data/secrets/,
+# written by onboarding and upgrade.py (tubematic_core/auth.py). Compose mounts
+# each one read-only at /run/secrets/<name> inside the services listed against
+# it, so no secret ever appears in an environment variable or `docker inspect`.
+# A missing file stops `up` with "bind source path does not exist": the stack
+# fails closed rather than starting without a token.
+secrets:
+  api_token:
+    file: ${HOME}/.tubematic-data/secrets/api_token
+  mcp_token:
+    file: ${HOME}/.tubematic-data/secrets/mcp_token
+  session_secret:
+    file: ${HOME}/.tubematic-data/secrets/session_secret
+
+services:
+  # ── Flask pipeline API ───────────────────────────────────────────────────
+  # Flask only. The MCP server used to share this container — one entrypoint
+  # backgrounding Flask and exec'ing MCP — which meant a Flask crash left MCP
+  # holding PID 1: the container stayed up, went at most `unhealthy`, and
+  # `restart: unless-stopped` never fired. TMDEV-87 gave each its own service
+  # so one dead process is one dead container. No rendering happens here
+  # either — that is tubematic-renderer below (TMDEV-32).
+  tubematic-api:
+    build:
+      context: .
+      dockerfile: renderer/Dockerfile
+    image: tubematic-renderer-image
+    container_name: tubematic-api
+    restart: unless-stopped
+    command: /app/entrypoint.sh python3 /app/api/server.py
+    # Loopback-bound (TMDEV-87): the dashboard reaches Flask over the
+    # tubematic-net bridge at http://tubematic-api:4000, which does not use the
+    # published port at all — publishing exists only for host-side callers
+    # (scripts/poll.py, scripts/status.py, curl), all of which use localhost.
+    ports:
+      - "127.0.0.1:4000:4000"   # Flask pipeline API (poll.py, host curl)
+    volumes:
+      - output-videos:/output_videos
+      - jobs-data:/jobs
+      - db-data:/data
+      - scenes-generated:/app/remotion/src/scenes/generated
+      - logs-data:/logs
+      - backups-data:/backups
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    networks:
+      - tubematic-net
+    # No env_file: API keys live in the settings table (TMDEV-73), which this
+    # container already mounts at /data. A side benefit is that `docker
+    # inspect` no longer exposes the whole key set.
+    environment:
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - OUTPUT_BASE_PATH=/output_videos
+      - TUBEMATIC_DB=/data/tubematic.db
+      - TUBEMATIC_JOBS_DIR=/jobs
+      - RENDERER_URL=http://localhost:4000
+      - TUBEMATIC_SECRETS_DIR=/run/secrets
+    # Every route but /health and /render/health needs this bearer token.
+    secrets:
+      - api_token
+    healthcheck:
+      # Flask only — deliberately says nothing about MCP, so this container's
+      # health reflects exactly the process it runs.
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:4000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── MCP server ───────────────────────────────────────────────────────────
+  # The agent's entire interface to the pipeline (mcp/server.py, streamable
+  # http on :4100). Reuses the tubematic-api image — no second build — with a
+  # different command.
+  #
+  # Mounts are deliberately the minimum the tools actually use: /data (the DB),
+  # /jobs (voice/timeline/scene-config/images), the generated scene tree,
+  # /logs (it writes its own JSONL trail; Flask is the only reader), and
+  # /backups. That last one is not idle: every one of the three backend
+  # services calls migrate() itself rather than assuming another process
+  # already has, so each one that migrates must be able to back up first —
+  # one that silently could not would fail closed on every start.
+  # No output_videos — nothing in mcp/ touches it; voice previews are written
+  # by Flask's POST /voices/<id>/preview. No /etc/localtime — no MCP tool
+  # formats a local timestamp; that is Flask's hosttz.py.
+  tubematic-mcp:
+    image: tubematic-renderer-image
+    container_name: tubematic-mcp
+    restart: unless-stopped
+    command: /app/entrypoint.sh python3 /app/mcp/server.py
+    # Loopback-bound, and more pointedly than Flask: MCP mutates pipeline
+    # state, writes scene files and spends money on paid APIs. /mcp also
+    # needs mcp_token, which the agent CLIs send through a helper that reads
+    # the token file.
+    ports:
+      - "127.0.0.1:4100:4100"   # MCP HTTP server (Claude Code)
+    volumes:
+      - jobs-data:/jobs
+      - db-data:/data
+      - scenes-generated:/app/remotion/src/scenes/generated
+      - logs-data:/logs
+      - backups-data:/backups
+    networks:
+      - tubematic-net
+    # No env_file — same reason as tubematic-api above.
+    environment:
+      - TUBEMATIC_DB=/data/tubematic.db
+      - TUBEMATIC_JOBS_DIR=/jobs
+      - MCP_PORT=4100
+      - TUBEMATIC_SECRETS_DIR=/run/secrets
+    secrets:
+      - mcp_token
+    healthcheck:
+      # MCP only. GET /health is a FastMCP custom_route served beside /mcp.
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:4100/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    # Startup ordering only, and mild at that (TMDEV-91). Schema creation no
+    # longer races: every service calls tubematic_core.db.migrate(), which
+    # holds a real write lock for its whole run, so two containers reaching a
+    # brand-new database at once simply serialize rather than corrupt
+    # anything. Waiting for a healthy Flask before starting MCP is a
+    # preference for a predictable startup order, not a correctness
+    # requirement. Nothing gates MCP at runtime once it is up — a later Flask
+    # crash does not stop it, and Flask never depends on MCP in either
+    # direction.
+    depends_on:
+      tubematic-api:
+        condition: service_healthy
+
+  # ── Render worker ────────────────────────────────────────────────────────
+  # The actual renderer (Remotion + Chromium + ffmpeg). Polls videos.status
+  # for RENDER_QUEUED, renders, and runs the AI-review tail. Its own
+  # container so a render OOM/crash only restarts this service, not the API
+  # or MCP (see renderer/api/worker.py). Reuses the tubematic-api image —
+  # no second build — with a different command.
+  tubematic-renderer:
+    image: tubematic-renderer-image
+    container_name: tubematic-renderer
+    restart: unless-stopped
+    command: python3 /app/api/worker.py
+    volumes:
+      - output-videos:/output_videos
+      - jobs-data:/jobs
+      - db-data:/data
+      - scenes-generated:/app/remotion/src/scenes/generated
+      - logs-data:/logs
+      - backups-data:/backups
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    networks:
+      - tubematic-net
+    # No env_file — same reason as tubematic-api above.
+    environment:
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - OUTPUT_BASE_PATH=/output_videos
+      - TUBEMATIC_DB=/data/tubematic.db
+      - TUBEMATIC_JOBS_DIR=/jobs
+    shm_size: '2gb'
+    depends_on:
+      tubematic-api:
+        condition: service_healthy
+
+  # ── Dashboard ──────────────────────────────────────────────────────────────
+  # Deliberately no /etc/localtime mount and no env_file here: the dashboard
+  # gets the host timezone from GET /pipeline/status (tubematic-api, which
+  # does have the mount) and formats with Intl.DateTimeFormat({timeZone}) —
+  # a second local source of truth could silently disagree with the API's.
+  # (The env_file half of this note is moot since TMDEV-73: no service has
+  # one. The dashboard still never sees a raw key — GET /settings masks
+  # them. See docs/dashboard.md.)
+  #
+  # Deliberately no logs-data mount either: the dashboard reads logs over HTTP
+  # from tubematic-api, which is what keeps the ticket's "no Docker socket, no
+  # docker logs" requirement true by construction rather than by discipline.
+  tubematic-dashboard:
+    build: ./dashboard
+    container_name: tubematic-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - output-videos:/output_videos:ro
+    networks:
+      - tubematic-net
+    environment:
+      - RENDERER_URL=http://tubematic-api:4000
+      - NODE_ENV=production
+      - TUBEMATIC_SECRETS_DIR=/run/secrets
+    # api_token to call Flask; session_secret to sign the login cookie. The
+    # files are 0644 because this container runs as uid 1001, not the host
+    # user; the 0700 secrets directory is what keeps other host users out.
+    secrets:
+      - api_token
+      - session_secret
+    healthcheck:
+      # wget, not curl: dashboard/Dockerfile's runtime stage is node:20-alpine,
+      # which has BusyBox wget but no curl at all (confirmed by running the
+      # base image directly) -- unlike tubematic-api/-mcp above, which are
+      # Debian-based. Without this, a container with no HEALTHCHECK is
+      # reported healthy the instant it starts running, before Next.js has
+      # bound its port -- exactly the race TMDEV-91's release smoke test would hit.
+      #
+      # 127.0.0.1, NOT localhost, and this is the whole difference between a
+      # probe that works and one that can never succeed. Alpine's /etc/hosts
+      # maps localhost to BOTH 127.0.0.1 and ::1; dashboard/Dockerfile sets
+      # HOSTNAME=0.0.0.0 so Next.js binds IPv4 only; and BusyBox wget picks
+      # the IPv6 address first and does NOT fall back to IPv4 on refusal.
+      # Reproduced directly in node:20-alpine against a 0.0.0.0 listener:
+      # `localhost` gives "can't connect to remote host: Connection refused",
+      # `127.0.0.1` succeeds. The curl probes above survive `localhost` only
+      # because curl retries the other address family; copying their URL
+      # shape here is what shipped a permanently-failing healthcheck.
+      #
+      # /login, not /: every other page redirects there without a session,
+      # and the login page is the one route that answers 200 on its own.
+      test: ["CMD-SHELL", "wget -q -T 5 --spider http://127.0.0.1:3000/login || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      # Failures inside start_period do not count toward `retries`, and a
+      # success inside it marks the container healthy immediately. Without
+      # one, the five-retry budget starts burning at t=0, so a slow cold
+      # start is indistinguishable from a broken service -- the container is
+      # declared unhealthy at ~75s whether or not it was about to come up.
+      # Next.js has to boot a Node process and bind before it can answer,
+      # and on a cold CI runner starting four containers at once that is not
+      # instant. 45s is a start budget, not a timeout: a service that comes
+      # up in 2s is still marked healthy in 2s.
+      start_period: 45s
+    depends_on:
+      tubematic-api:
+        condition: service_healthy

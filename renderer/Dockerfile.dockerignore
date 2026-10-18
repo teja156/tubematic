@@ -1,0 +1,22 @@
+# Paths relative to repo root (build context is the repo root)
+
+# Renderer-specific excludes
+renderer/remotion/node_modules/
+renderer/remotion/.cache/
+renderer/remotion/out/
+renderer/api/__pycache__/
+mcp/__pycache__/
+**/*.pyc
+
+# Not needed in the renderer image
+dashboard/
+mounted/
+logs/
+transcripts/
+agent_files/
+schemas/
+docs/
+plan/
+scripts/
+.venv/
+*.md
