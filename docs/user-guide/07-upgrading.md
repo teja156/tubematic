@@ -135,12 +135,9 @@ the steps in the order that keeps your data safe:
 
 ### If you installed from a release tarball
 
-`<owner>` and `<repo>` below are the GitHub account and repository the release was published from —
-substitute both.
-
 ```bash
-curl -LO https://github.com/<owner>/<repo>/releases/download/vX.Y.Z/tubematic-vX.Y.Z.tar.gz
-curl -LO https://github.com/<owner>/<repo>/releases/download/vX.Y.Z/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/vX.Y.Z/tubematic-vX.Y.Z.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/vX.Y.Z/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
 tar xzf tubematic-vX.Y.Z.tar.gz
 cd tubematic-vX.Y.Z
@@ -169,7 +166,7 @@ commands below — and an MCP server you registered with an agent yourself, rath
 ### If you installed from source
 
 ```bash
-cd <repo>
+cd tubematic   # your source checkout
 git fetch --tags
 git checkout vX.Y.Z
 python3 upgrade.py
@@ -209,8 +206,8 @@ column, released after some earlier `v2.0.x`.
 ### Release install
 
 ```bash
-curl -LO https://github.com/<owner>/<repo>/releases/download/v2.1.0/tubematic-v2.1.0.tar.gz
-curl -LO https://github.com/<owner>/<repo>/releases/download/v2.1.0/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.0/tubematic-v2.1.0.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.0/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
 tar xzf tubematic-v2.1.0.tar.gz
 cd tubematic-v2.1.0
@@ -238,7 +235,7 @@ directory; after that, the old one holds no data of its own and can be removed.
 ### Source install
 
 ```bash
-cd <repo>
+cd tubematic   # your source checkout
 git fetch --tags
 git checkout v2.1.0
 python3 upgrade.py

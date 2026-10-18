@@ -56,13 +56,13 @@ Treat it as trusted-LAN only, or put HTTPS in front of it before using it from a
 
 ## 1. Install
 
-**From a release — recommended.** Download the newest release from the project's GitHub Releases
-page, check it, and run the wizard from inside it. It pulls ready-built images; nothing is compiled
-and there is nothing to log in to.
+**From a release — recommended.** Download the newest release from the
+[GitHub Releases page](https://github.com/teja156/tubematic/releases), check it, and run the wizard
+from inside it. It pulls ready-built images; nothing is compiled and there is nothing to log in to.
 
 ```bash
-curl -LO https://github.com/<owner>/<repo>/releases/download/v<version>/tubematic-v<version>.tar.gz
-curl -LO https://github.com/<owner>/<repo>/releases/download/v<version>/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v<version>/tubematic-v<version>.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v<version>/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
 tar xzf tubematic-v<version>.tar.gz
 cd tubematic-v<version>
@@ -73,7 +73,7 @@ python3 onboard.py
 released. It builds the images locally and needs Node.js 22.20 or newer:
 
 ```bash
-git clone <repo-url> tubematic
+git clone https://github.com/teja156/tubematic.git tubematic
 cd tubematic
 python3 onboard.py
 ```
