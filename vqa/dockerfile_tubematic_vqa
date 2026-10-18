@@ -15,14 +15,14 @@ WORKDIR $HOME
 # bind-mounts source from here, not the real outer host) — see TMDEV-35.
 # /etc/localtime is a filesystem-level setting every process respects
 # regardless of environment, unlike a bare $TZ var. Matches
-# kasm_workspace/dockerfile_tubematic_kasm's own rationale.
+# kasm_workspace_testing/dockerfile_tubematic_kasm's own rationale.
 ENV TZ=America/New_York
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone
 
 # Prerequisites for the venv + kasm_post_run_user.sh (Docker CLI/daemon and
 # Python are already present in this base image). No cron here — VQA has no
-# poll.py, unlike kasm_workspace/dockerfile_tubematic_kasm. mpv: the
+# poll.py, unlike kasm_workspace_testing/dockerfile_tubematic_kasm. mpv: the
 # ticket's own "manually open them to view them" requirement — the DinD base
 # ships no media player. rsync: kasm_post_run_user.sh's own working-tree
 # refresh (/opt -> ~/tubematic) runs *inside this container at session
@@ -53,7 +53,7 @@ RUN docker compose version >/dev/null 2>&1 || \
 # NOT the Ubuntu Noble apt `nodejs`/`npm` package (18.x): the `skills` npm
 # CLI hard-requires Node >= 22.20.0 and crashes on import under 18.x
 # (`EBADENGINE` / `SyntaxError: node:util does not provide styleText`)
-# rather than merely warning — see kasm_workspace/dockerfile_tubematic_kasm
+# rather than merely warning — see kasm_workspace_testing/dockerfile_tubematic_kasm
 # for the full story (TMDEV-39). Scoped to this dev/test image only;
 # renderer/Dockerfile stays on node:20-slim.
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
@@ -126,7 +126,7 @@ RUN chmod +x /opt/tubematic/vqa/kasm_post_run_user.sh /opt/tubematic/vqa/watch_b
 
 # chown deliberately comes LAST, after every RUN step above that creates
 # files under /opt/tubematic (the venv, the seed DB, the skills cache, the
-# build stamp) — chown'ing right after COPY (as kasm_workspace's Dockerfile
+# build stamp) — chown'ing right after COPY (as kasm_workspace_testing's Dockerfile
 # does, since it has nothing else to build into that tree) would leave all
 # of those root-owned instead.
 RUN chown -R 1000:0 /opt/tubematic
@@ -137,7 +137,7 @@ RUN chown -R 1000:0 /opt/tubematic
 #     hook — invoked automatically as kasm-user after session start,
 #     independent of anything below. This is the actual bootstrap entry
 #     point; see vqa/kasm_post_run_user.sh's own header for the full design.
-#   - custom_startup.sh is the file kasm_workspace/dockerfile_tubematic_kasm
+#   - custom_startup.sh is the file kasm_workspace_testing/dockerfile_tubematic_kasm
 #     (this repo's other Kasm image) deliberately avoids touching, after an
 #     earlier attempt in this repo's history (00099ff/a69cd1c/7abf2d0) edited
 #     it, hit a race, and was reverted — that incident was from inserting

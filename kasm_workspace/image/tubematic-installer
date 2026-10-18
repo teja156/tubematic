@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# kasm_workspace/image/tubematic-installer
+#
+# What the installer terminal runs: opened by kasm_post_run_root.sh at session
+# start, and by the desktop launcher for a user who closed that window. It
+# runs the bootstrap, then always leaves an interactive shell behind -- a
+# window that closes on an error is indistinguishable from the hook never
+# having run.
+
+BOOTSTRAP=/opt/tubematic-workspace/tubematic_bootstrap.py
+
+python3 "$BOOTSTRAP"
+status=$?
+
+if dir="$(python3 "$BOOTSTRAP" --install-dir 2>/dev/null)" && [ -d "$dir" ]; then
+    cd "$dir" || true
+fi
+
+echo
+if [ "$status" -ne 0 ]; then
+    echo "The installer stopped with the message above. This window stays open."
+fi
+echo "Installer log: ~/.tubematic-workspace.log"
+echo "Run 'tubematic-installer' to start it again."
+echo
+exec bash

@@ -1,0 +1,151 @@
+FROM kasmweb/ubuntu-noble-dind:1.19.0-rolling-daily
+
+USER root
+
+ENV HOME /home/kasm-default-profile
+ENV STARTUPDIR /dockerstartup
+ENV INST_SCRIPTS $STARTUPDIR/install
+WORKDIR $HOME
+
+######### Customize Container Here ###########
+
+# Host timezone. The base image's tzdata defaults to Etc/UTC, and this
+# container is "the host" in the one-machine model (poll.py runs directly in
+# it, and dockerd for the nested compose stack runs inside it too, so nested
+# containers' /etc/localtime bind-mounts source from here, not the real
+# outer host) — see TMDEV-35 follow-up. Setting only $TZ isn't enough on its
+# own: cron resets its jobs' environment and won't reliably pass TZ through,
+# but /etc/localtime is a filesystem-level setting every process (including
+# cron jobs) respects regardless of environment. Matches the zone
+# docker-compose.test.yml already hardcodes for the same reason (no host to
+# inherit from).
+ENV TZ=America/New_York
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone
+
+# Prerequisites onboard.py needs that aren't already in the DinD
+# base (Docker CLI/daemon + Python are already present in this base image).
+# cron: onboard.py's `cron` step shells out to `crontab`. (Node.js/npm are
+# installed separately below — the Ubuntu Noble apt package is too old.)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3-pip \
+        python3-venv \
+        git \
+        curl \
+        cron \
+    && rm -rf /var/lib/apt/lists/*
+
+# docker compose v2 (plugin) is required by onboard.py's prerequisite check.
+# Only install it if the base image doesn't already ship it.
+RUN docker compose version >/dev/null 2>&1 || \
+    (mkdir -p /usr/local/lib/docker/cli-plugins \
+     && curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+        -o /usr/local/lib/docker/cli-plugins/docker-compose \
+     && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose)
+
+# Node.js >= 22 (NodeSource) — needed both for the agent CLI installs
+# below and for onboard.py's agent step, which installs
+# remotion-dev/skills via `npx`. Deliberately NOT the Ubuntu Noble apt
+# `nodejs`/`npm` package (18.x): the `skills` npm CLI hard-requires
+# Node >= 22.20.0 and crashes on import under 18.x (`EBADENGINE` /
+# `SyntaxError: node:util does not provide styleText`) rather than merely
+# warning — confirmed empirically inside a built image, and the crash was
+# silently swallowed by onboard.py's `warn()`-on-failure handling, so the
+# remotion-best-practices skill install failed on every onboarding run
+# without anyone noticing. This is scoped to the Kasm images only;
+# renderer/Dockerfile (the production tubematic-api/tubematic-renderer
+# image) is separately pinned to node:20-slim and is unaffected.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Claude Code CLI — npm install is the documented approach for Dockerfiles
+# (code.claude.com/docs/en/devcontainer).
+ENV DISABLE_AUTOUPDATER=1
+RUN npm install -g @anthropic-ai/claude-code
+
+# Codex CLI — same npm route, reusing the Node 22 installed above. Every
+# supported agent ships so this image can exercise any of them; none stores
+# credentials in the image, so each is logged in per-session by a human
+# (`codex login`).
+RUN npm install -g @openai/codex
+
+# OpenCode CLI. @opencode/cli is the v2 package; the older `opencode-ai` npm
+# name is the 1.x line, which Tubematic does not support — its config field
+# names differ. Logged in per-session with `opencode auth login`.
+RUN npm install -g @opencode/cli
+
+# Wire cron into supervisord the same way this base image already wires in
+# dockerd (/etc/supervisor/conf.d/dockerd.conf) — otherwise `crontab` entries
+# onboard.py writes would sit inert with no daemon to ever run them.
+RUN printf '[program:cron]\ncommand=/usr/sbin/cron -f\nautostart=true\nautorestart=true\nstderr_logfile=/var/log/cron.err.log\nstdout_logfile=/var/log/cron.out.log\n' \
+        > /etc/supervisor/conf.d/cron.conf
+
+# Stop dind from mounting an empty tmpfs over /tmp and killing the desktop.
+#
+# The base image's /dockerstartup/custom_startup.sh starts supervisord as soon
+# as /usr/bin/desktop_ready returns, and desktop_ready returns as soon as an
+# xfce4-session PID exists — mid-startup, not when the desktop is up.
+# supervisord then starts dockerd via dockerd-entrypoint.sh, which wraps it in
+# /usr/local/bin/dind, and dind does:
+#
+#     if ! mountpoint -q /tmp; then mount -t tmpfs none /tmp; fi
+#
+# That empty tmpfs hides /tmp/.X11-unix/X1, the dbus session socket, .X1-lock
+# and everything else in /tmp. xfce4-session loses its display and session
+# bus and dies, taking xfwm4, the panel and xfdesktop with it. Xvnc survives
+# because it already holds its fds, so the session connects fine and renders a
+# blank framebuffer — the symptom is "blank screen", not a crash.
+#
+# Making /tmp a mountpoint first makes dind's conditional false, so it skips
+# the tmpfs entirely. A self-bind rather than our own tmpfs: it keeps the
+# existing contents, where mounting a tmpfs early would hide the same sockets
+# — the same bug, just earlier. The guard makes a repeated loop iteration (or
+# a session where dind somehow got there first) add no second mount.
+#
+# Patched into the one anchor line rather than shipped as a forked copy of the
+# script: a whole copy would silently pin an old version across base-image
+# upgrades, whereas the grep below FAILS THE BUILD if kasmweb ever changes
+# that line. Do not soften it into a warning — a skipped patch is invisible
+# until a user sees a blank screen.
+#
+# /tmp consequently stays on the container's writable layer instead of
+# becoming a tmpfs, so heavy /tmp writers (the text-audit's Remotion bundle)
+# use disk rather than RAM.
+RUN set -eu; \
+    f="$STARTUPDIR/custom_startup.sh"; \
+    grep -qF 'sudo /usr/bin/supervisord -n &' "$f" \
+      || { echo "custom_startup.sh no longer contains the supervisord launch line; re-check the dind /tmp patch against the base image" >&2; exit 1; }; \
+    sed -i '\#sudo /usr/bin/supervisord -n &#i\                mountpoint -q /tmp || sudo mount --bind /tmp /tmp  # tubematic: keep dind from hiding /tmp' "$f"; \
+    grep -qF 'mount --bind /tmp /tmp' "$f"
+
+# NO TUBEMATIC SOURCE IS BAKED IN. This image never names a Tubematic
+# version: the launch form picks one and the bootstrap below downloads it into
+# the session. So the image is rebuilt only when the base image or the tooling
+# above changes, never per Tubematic release. Do not add a COPY of the repo
+# here -- that is what kasm_workspace_testing/ is for.
+
+# Kasm's root-context post-run hook, over the base image's one-line stub. Baked
+# rather than deployed as a File Mapping because a workspace registry entry
+# cannot carry file mappings. COPY keeps the source file's mode, so the
+# committed file must stay 0755: an inert hook is indistinguishable from one
+# Kasm never invoked.
+COPY kasm_post_run_root.sh $STARTUPDIR/kasm_post_run_root.sh
+
+# The bootstrap the hook opens in a terminal, plus a desktop launcher that
+# reopens it for a user who closed the window.
+COPY tubematic_bootstrap.py tubematic-installer /opt/tubematic-workspace/
+RUN ln -sf /opt/tubematic-workspace/tubematic-installer /usr/local/bin/tubematic-installer
+COPY --chmod=0755 tubematic-installer.desktop $HOME/Desktop/tubematic-installer.desktop
+
+######### End Customizations ###########
+
+RUN chown -R 1000:0 $HOME
+RUN $STARTUPDIR/set_user_permission.sh $HOME
+
+ENV HOME /home/kasm-user
+WORKDIR $HOME
+RUN mkdir -p $HOME && chown -R 1000:0 $HOME
+
+USER 1000

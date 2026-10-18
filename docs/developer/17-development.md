@@ -86,14 +86,14 @@ Two Kasm Workspaces images, both built by a script that stages the repository th
 `git ls-files`, so `.gitignore`d content — `.env`, `node_modules`, pipeline data — can never enter an
 image without maintaining a second exclude list.
 
-### `kasm_workspace/` — full-install testing
+### `kasm_workspace_testing/` — full-install testing
 
 A disposable browser-accessible desktop running Docker-in-Docker, where you run
 `python3 onboard.py` by hand and answer every prompt exactly as a first-time installer would, then
 bring up all four containers. This is how the *installation experience* gets tested.
 
 ```bash
-kasm_workspace/build.sh [tag] [--no-cache] [--worktree <path|branch|dirname>]
+kasm_workspace_testing/build.sh [tag] [--no-cache] [--worktree <path|branch|dirname>]
 ```
 
 Its launch form offers to delete the data directory and the agent workspace, defaulting to no and
@@ -103,7 +103,7 @@ recreate what it deletes, because Docker would then auto-create those directorie
 The image patches one line into the base image's `custom_startup.sh`, making `/tmp` a mountpoint
 before `supervisord` starts. Without it the nested Docker daemon's `dind` wrapper mounts an empty
 tmpfs over `/tmp`, which hides the X socket and the session bus and kills the desktop a few seconds
-after it appears — a session that connects normally and shows a blank screen. `kasm_workspace/README.md`
+after it appears — a session that connects normally and shows a blank screen. `kasm_workspace_testing/README.md`
 has the mechanism and the reason the patch is a guarded `sed` rather than a forked copy of the script.
 
 ### `vqa/` — video quality assessment
@@ -151,6 +151,60 @@ inherits its TTY and **will** stop at the interactive picker; unattended callers
 > An image holds whichever tree it was built from — by default the checkout `build.sh` itself lives
 > in — and recreating a session does not rebuild it. Testing a feature branch needs an explicit
 > `--worktree` build, then a new session.
+
+---
+
+## `kasm_workspace/` — the published workspace
+
+The Kasm Workspace users install Tubematic from — see
+[Installing in Kasm Workspaces](../user-guide/02-installing.md#installing-in-kasm-workspaces) for what
+they see. Unlike the two test environments it bakes **no** Tubematic source: the launch form picks a
+version and an install method, and the session downloads that version. The image is therefore
+version-agnostic, and **is rebuilt only when its base image or tooling changes, never per release**
+— `scripts/tests/test_kasm_workspaces.py` fails if a `COPY` of the repository appears in its
+Dockerfile. It shares the testing image's base, tooling and `dind` `/tmp` patch, comments included.
+
+**Everything is baked, nothing is mapped.** A workspace registry entry carries a launch form but no
+File Mappings, so the launch hook, the bootstrap and the desktop launcher are all in the image; the
+testing workspace's mapped hook is a route that cannot be published.
+
+**The launch hook is the root one, dropping to the session user.** `kasm_post_run_root.sh` is the
+post-run hook observed to fire automatically with no Docker Exec Config; the user-context sibling
+would need no privilege drop, but has never been seen to fire. The hook runs when Kasm's agent
+chooses, so it backgrounds itself and returns at once, waits a bounded time for the desktop (the
+base image's own `desktop_ready` is unbounded and returns mid-startup), retries the window a few
+times, and opens `xfce4-terminal` with `runuser -u kasm-user`. The install must run as that user:
+everything it creates — the extracted tree, `~/.tubematic-data`, the onboarding state, the compose
+bind sources — has to be user-owned, and a root-owned leftover in a persisted profile is the
+failure that breaks host-side scripts later.
+
+**The bootstrap** (`kasm_workspace/image/tubematic_bootstrap.py`, standard library only, since the
+image has no virtualenv) does the work, so all of it is unit-tested and every message lands in the
+window the user is watching:
+
+- It reads the launch-form answers from `/dockerstartup/tubematic_launch_selections.json` — not
+  `/tmp`, so nothing depends on the `/tmp` patch winning its race. An unreadable answer, a missing
+  key or a version that is not a plain `X.Y.Z` is refused; a version is never guessed.
+- A persistent profile is relaunched, so an existing install is the normal case. It records what it
+  installed in `~/.tubematic-workspace.json`. The same version is reported and left alone; a
+  **different** version is refused with a pointer to [Upgrading](../user-guide/07-upgrading.md),
+  because installing a second copy beside an install, or replacing one, is not something to do
+  silently. Tubematic data with no record of this launcher installing it is refused the same way.
+- **Release:** it downloads the tarball and the release's `CHECKSUMS.txt` and checks the sha256
+  **before** extracting anything — a downloaded archive is untrusted until it matches — and refuses
+  an archive with any path outside its own `tubematic-v<version>/` directory.
+- **Source:** it clones the version's **tag**, never the default branch.
+- It then runs `python3 onboard.py` interactively in the same terminal. The terminal always ends
+  in a shell, so a failure leaves the error on screen rather than a vanished window.
+
+The repository name is duplicated from `tubematic_core.version.GITHUB_REPO`, because the image has
+nothing to import it from; a test pins the two together.
+
+**The registry entry** is `kasm_workspace/registry/Tubematic/workspace.json` (registry schema 1.1)
+and is copied into a workspace registry by hand — `kasm_workspace/README.md` has the steps. The
+version list is a fixed list of published releases with no free-text fallback, newest first and the
+default; a version missing from it cannot be installed from the form. The entry asks for no GPU on
+purpose: a GPU attached to this desktop crash-loops XFCE on an NVIDIA EGL failure.
 
 ---
 
@@ -230,8 +284,8 @@ and `backup_db.py` need nothing beyond what already runs the pipeline.
 
 ## Continuous Integration
 
-Three GitHub Actions workflows: `.github/workflows/ci.yml`, `.github/workflows/release.yml` and
-`.github/workflows/docs-site.yml`.
+Four GitHub Actions workflows: `.github/workflows/ci.yml`, `.github/workflows/release.yml`,
+`.github/workflows/docs-site.yml` and `.github/workflows/kasm-workspace-image.yml`.
 
 > **Status: written and structurally checked, never executed.** GitHub Actions only runs on GitHub,
 > and this repository has never had a `.github/` directory before now, so neither workflow has ever
@@ -330,6 +384,16 @@ environment secret only if its caller passes it through too, and a missing one s
 empty string. The action refuses an empty token up front. Both jobs share one concurrency group, so
 a release sync and a `develop` sync queue rather than race on the site repo. This repository is
 only read (`contents: read`).
+
+### `kasm-workspace-image.yml` — the Kasm workspace image
+
+Builds and pushes `ghcr.io/<owner>/tubematic-kasm-workspace`, the image behind
+[the published workspace](#kasm_workspace--the-published-workspace), through `kasm_workspace/build.sh
+--push`. It runs **by hand only** (`workflow_dispatch`, with the Kasm release line as the tag) and
+nothing in `release.yml` builds it: the image carries no Tubematic version, so a release never needs
+a new one. The image is about 15 GB unpacked, so the job first deletes runner toolchains it does not
+use. After the first push the package's visibility is checked by hand on GHCR — Kasm pulls it
+anonymously.
 
 ---
 

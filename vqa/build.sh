@@ -5,7 +5,7 @@
 # assessment) environment (TMDEV-68): a Docker-in-Docker workspace, based on
 # kasmweb/ubuntu-noble-dind, with the tubematic source staged in and
 # pre-configured — no dashboard, no cron, no onboarding wizard at launch.
-# Fork of kasm_workspace/build.sh; see vqa/README.md for the full design.
+# Fork of kasm_workspace_testing/build.sh; see vqa/README.md for the full design.
 #
 # Usage:
 #   ./vqa/build.sh [tag] [--no-cache] [--worktree <path|branch|dirname>]
@@ -68,7 +68,7 @@ command -v git    >/dev/null 2>&1 || die "git is required on PATH"
 # worktree could only be staged from its committed tip, silently dropping
 # anything uncommitted; that is deliberately out of scope.
 #
-# Keep in sync with kasm_workspace/build.sh.
+# Keep in sync with kasm_workspace_testing/build.sh.
 
 WT_PATHS=(); WT_LABELS=(); WT_HEADS=()
 _wt_path=""; _wt_head=""; _wt_branch=""; _wt_bare=false
@@ -199,7 +199,7 @@ echo -e "${DIM}Source: $SOURCE_LABEL — $SOURCE_DIR${NC}"
 # tracked file plus every untracked-but-not-ignored file is staged, so
 # anything in .gitignore (.env, HANDOFF.md, mounted/, node_modules, vqa/logs,
 # vqa/seed, etc.) never enters the build context, let alone the built image.
-# Same pattern as kasm_workspace/build.sh.
+# Same pattern as kasm_workspace_testing/build.sh.
 #
 # $CONTEXT_DIR deliberately stays under this script's own directory even when
 # building another worktree — the build never writes into a tree it was only

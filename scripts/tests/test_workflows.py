@@ -723,3 +723,37 @@ def test_the_sync_action_builds_before_it_pushes_and_refuses_an_empty_token():
         uses = s.get("uses")
         if uses:
             assert _ACTION_USES_RE.match(uses) and re.match(r"^v\d+", uses.split("@")[1]), uses
+
+
+# ── kasm-workspace-image.yml ────────────────────────────────────────────────
+#
+# Builds the published Kasm Workspace image. That image carries no Tubematic
+# version, so it is rebuilt by hand when its tooling changes -- never by a tag
+# or a branch push, and never as part of a release.
+
+KASM_IMAGE_PATH = os.path.join(WORKFLOWS_DIR, "kasm-workspace-image.yml")
+
+
+def test_the_kasm_image_workflow_runs_by_hand_only():
+    wf = _load(KASM_IMAGE_PATH)
+    on = wf.get("on", wf.get(True))  # PyYAML reads a bare `on:` key as True
+    assert set(on) == {"workflow_dispatch"}, on
+    assert on["workflow_dispatch"]["inputs"]["tag"]["default"] == "1.19.0"
+
+
+def test_the_kasm_image_workflow_pushes_the_published_image_name():
+    wf = _load(KASM_IMAGE_PATH)
+    assert wf["permissions"] == {"contents": "read", "packages": "write"}
+    [job] = wf["jobs"].values()
+    runs = "\n".join(s.get("run", "") for s in _steps_of(job))
+    assert 'kasm_workspace/build.sh --image "ghcr.io/$owner/tubematic-kasm-workspace" --push' in runs
+    for s in _steps_of(job):
+        uses = s.get("uses")
+        if uses:
+            assert _ACTION_USES_RE.match(uses) and re.match(r"^v\d+", uses.split("@")[1]), uses
+
+
+def test_no_release_job_builds_the_kasm_workspace_image(release_jobs):
+    """A per-release rebuild of it is exactly what not baking the source avoids."""
+    with open(RELEASE_PATH) as fh:
+        assert "kasm-workspace" not in fh.read()

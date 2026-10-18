@@ -104,7 +104,7 @@ ALLOWLISTED_PATHS = [
 # Spelled loosely (substrings) on purpose -- a fragment like "renderer/"
 # must not show up as a nested path either, not just at the top level.
 FORBIDDEN_FRAGMENTS = [
-    "renderer/", "dashboard/", "mcp/", "vqa/", "kasm_workspace/",
+    "renderer/", "dashboard/", "mcp/", "vqa/", "kasm_workspace/", "kasm_workspace_testing/",
     "remotion/", "schemas/",
     "node_modules/", ".next/", ".venv/", ".git/", ".worktrees/",
     ".superpowers/",

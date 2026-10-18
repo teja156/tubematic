@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# kasm_workspace/kasm_post_run_root.sh
+# kasm_workspace_testing/kasm_post_run_root.sh
 #
 # Overwrites the base image's /dockerstartup/kasm_post_run_root.sh stub (a
 # one-line echo) — Kasm's own root-context hook, invoked automatically after

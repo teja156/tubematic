@@ -49,6 +49,10 @@ note on each affected step below, and
 builds the tarball in the first place. Moving an *existing* install to a newer version rather than
 installing from scratch is a different procedure — see [Upgrading](07-upgrading.md).
 
+Either route can also run inside a [Kasm Workspaces](https://kasmweb.com/) session instead of on a
+machine of your own: the Tubematic workspace downloads the version you pick and runs the wizard for
+you — see [Installing in Kasm Workspaces](#installing-in-kasm-workspaces).
+
 ---
 
 ## Prerequisites
@@ -265,6 +269,45 @@ generates anything or spends anything:
 
 How each provider signals a bad key, and the traps in reading those answers, are in
 [Settings internals — Rejection signatures](../developer/04-settings.md#rejection-signatures).
+
+---
+
+## Installing in Kasm Workspaces
+
+If you run [Kasm Workspaces](https://kasmweb.com/), you can install Tubematic as a workspace: a
+browser-accessible desktop with Docker, the three agent CLIs and every prerequisite above already
+in it. The session downloads the Tubematic version you pick and opens the wizard in a terminal; you
+answer its questions exactly as in [The ten steps](#the-ten-steps).
+
+1. **Add the registry.** In the Kasm admin UI, open **Workspaces → Workspace Registry → Add new**
+   and paste the registry's URL.
+2. **Install the Tubematic workspace** from that registry. Before you do, read its notes and its
+   Docker run settings: it runs **privileged** (Tubematic's containers run inside the session through
+   Docker-in-Docker, which needs it), it needs about 15 GB for its image plus about 10 GB inside the
+   session for Tubematic's own images, and it must **not** have a GPU attached. Give it a
+   **Persistent Profile Path**, or your install, its data and your agent logins go when the session
+   does.
+3. **Launch a session.** The launch form asks two things:
+   - **Tubematic version** — the published releases, newest first and selected by default. It is
+     deliberately not remembered between launches, so a new session always defaults to the newest.
+   - **Install method** — **Release (recommended)** downloads the release tarball, verifies its
+     checksum before extracting it, and pulls the published images. **Source** clones that version's
+     git tag and builds the images inside the session, which is much slower. See
+     [Two ways to install](#two-ways-to-install).
+4. **Finish onboarding in the terminal that opens.** Once the desktop is up, a *Tubematic installer*
+   terminal opens by itself, shows the download, then runs `onboard.py`. The install lands in
+   `~/tubematic-v<version>/`. When onboarding finishes the terminal stays open in that directory for
+   [Install an agent](#install-an-agent) — log your agent CLI in first.
+
+If you close the terminal, the **Tubematic installer** icon on the desktop reopens it, as does
+running `tubematic-installer` in any terminal. Its log is `~/.tubematic-workspace.log`.
+
+**Launching again.** On a persistent profile the next session finds the existing install and leaves
+it alone: with the same version picked it just says where the install is (run `python3 onboard.py`
+there to resume onboarding). With a **different** version picked it refuses and downloads nothing —
+it never installs a second copy beside an install or replaces one. Move to the new version with
+[Upgrading](07-upgrading.md), from inside the session. It refuses the same way if it finds Tubematic
+data it did not install.
 
 ---
 
@@ -708,7 +751,7 @@ cd .. && rm -rf tubematic
 
 ## Testing without touching your machine
 
-`kasm_workspace/` builds a disposable browser-accessible desktop with Docker-in-Docker, where you can
-run the entire onboarding flow from scratch as a new user would. `vqa/` builds a sibling environment
-aimed at judging rendered video quality, with the setup pre-baked. Both are in a source checkout
-only. See [Development](../developer/17-development.md#test-environments).
+To run Tubematic without installing it on your own machine, use
+[the Kasm workspace](#installing-in-kasm-workspaces). Contributors also have two disposable test
+environments in a source checkout — one for testing a branch's install from scratch, one for judging
+rendered video quality; see [Development — Test environments](../developer/17-development.md#test-environments).
