@@ -65,6 +65,9 @@ _ROOT_FILES = [
     "INSTALL.md",
     "USAGE.md",
     "UNINSTALL.md",
+    # Apache-2.0 4(a): a redistribution must carry a copy of the licence, and
+    # the tarball is one (TMDEV-171).
+    "LICENSE",
 ]
 
 # scripts/ is NOT copied wholesale -- gen_release_compose.py itself, and the
