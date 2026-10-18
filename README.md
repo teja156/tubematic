@@ -36,5 +36,5 @@ use it in a company.
 ## History
 
 This repository starts at its first commit. Development before 2.0.0 happened in a private repository
-whose history is not public. Every 1.x release was internal beta testing and was never publicly
-available, so 2.0.0 is Tubematic's first public release.
+whose history is not public. Every 1.x release was internal beta testing, so 2.0.0 is Tubematic's
+first public release.

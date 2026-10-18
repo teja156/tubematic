@@ -314,8 +314,9 @@ dashboard password is set and an OpenAI key is stored.
 
 ---
 
-> **Releases before 2.0.0 were internal beta testing and were never publicly available.** The notes
-> below are kept for reference only — no 1.x release, tarball or image can be downloaded.
+> **Releases before 2.0.0 were internal beta testing, not public releases.** The notes below are kept
+> for reference only. 1.x is not supported, and there is no 1.x release or tarball to download; any
+> 1.x image left in the container registry is unsupported. Install 2.0.0 or later.
 
 ## v1.2.3
 
