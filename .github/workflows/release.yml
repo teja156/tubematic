@@ -114,9 +114,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Packages stay private (D6): a repository's GHCR packages are
-      # created private by default and require a separate, deliberate
-      # visibility change -- nothing in this workflow needs to assert that.
+      # The packages are public, so a release install pulls them with no
+      # login. Visibility is a package setting changed by hand once on GHCR,
+      # not something this workflow sets or needs to assert.
       - name: Build and push tubematic-backend
         uses: docker/build-push-action@v6
         with:
