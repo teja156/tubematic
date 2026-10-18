@@ -46,6 +46,13 @@ dashboard password is set and an OpenAI key is stored.
 
 ### Added
 
+- **Tubematic is open source, and this is its first public release.** The source, the releases and
+  the container images are public at [github.com/teja156/tubematic](https://github.com/teja156/tubematic),
+  under the Apache License 2.0, and bug reports go to that repository's issues. Every 1.x release
+  was internal beta testing. Rendering uses Remotion, which has its own licence: a for-profit company
+  with more than three employees needs a
+  [Remotion company licence](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md) to run
+  Tubematic.
 - **The dashboard asks for a password.** Every page now needs a sign-in, and a sign-in lasts seven
   days. Before, anyone who could reach port 3000 — anyone on your network, on a development
   checkout — could change settings, approve paid work and publish. **Sign out** is at the right of
@@ -306,6 +313,9 @@ dashboard password is set and an OpenAI key is stored.
   password and the token files need nothing — 1.2.x ignores them.
 
 ---
+
+> **Releases before 2.0.0 were internal beta testing and were never publicly available.** The notes
+> below are kept for reference only — no 1.x release, tarball or image can be downloaded.
 
 ## v1.2.3
 
