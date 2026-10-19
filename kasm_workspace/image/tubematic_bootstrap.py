@@ -135,7 +135,8 @@ def decide(selection: Selection, existing: Install | None) -> tuple[str, str]:
         return "install", f"Installing Tubematic v{selection.version} ({selection.method})."
     if existing.version is None:
         return "refuse", (
-            f"Found Tubematic data in ~/{DATA_DIR_NAME}, but no install made by this launcher.\n"
+            f"Found an earlier Tubematic install in this profile (~/{DATA_DIR_NAME}, or an unreadable\n"
+            f"~/{MARKER_NAME}), but not one this launcher can identify.\n"
             "This launcher only installs onto an empty profile, so it will not touch it.\n"
             f"To upgrade an existing install, follow {UPGRADE_GUIDE}\n"
             "Nothing was downloaded."

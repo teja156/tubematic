@@ -181,6 +181,9 @@ def test_decide_refuses_data_it_did_not_install():
     action, message = bootstrap.decide(Selection("2.0.0", "release"), Install(None, None, None))
     assert action == "refuse"
     assert "Nothing was downloaded" in message
+    # The same refusal covers an unreadable marker with no data dir, so it
+    # must not claim the data dir exists (it once did, found live).
+    assert bootstrap.DATA_DIR_NAME in message and bootstrap.MARKER_NAME in message
 
 
 def test_a_relaunch_with_a_newer_version_downloads_nothing(tmp_path, monkeypatch):
