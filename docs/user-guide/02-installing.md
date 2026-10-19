@@ -280,7 +280,7 @@ in it. The session downloads the Tubematic version you pick and opens the wizard
 answer its questions exactly as in [The ten steps](#the-ten-steps).
 
 1. **Add the registry.** In the Kasm admin UI, open **Workspaces → Workspace Registry → Add new**
-   and paste the registry's URL.
+   and paste `https://registry.tejaswaroop.com/`.
 2. **Install the Tubematic workspace** from that registry. Before you do, read its notes and its
    Docker run settings: it runs **privileged** (Tubematic's containers run inside the session through
    Docker-in-Docker, which needs it), it needs about 15 GB for its image plus about 10 GB inside the
@@ -301,6 +301,10 @@ answer its questions exactly as in [The ten steps](#the-ten-steps).
 
 If you close the terminal, the **Tubematic installer** icon on the desktop reopens it, as does
 running `tubematic-installer` in any terminal. Its log is `~/.tubematic-workspace.log`.
+
+The session's clock is **UTC**, and the session is the machine Tubematic runs on, so the dashboard's
+times, spend days and Auto Pilot's daily numbers are all in UTC (see
+[Times](04-dashboard.md#times)).
 
 **Launching again.** On a persistent profile the next session finds the existing install and leaves
 it alone: with the same version picked it just says where the install is (run `python3 onboard.py`

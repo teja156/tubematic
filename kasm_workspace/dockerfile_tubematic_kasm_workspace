@@ -9,17 +9,16 @@ WORKDIR $HOME
 
 ######### Customize Container Here ###########
 
-# Host timezone. The base image's tzdata defaults to Etc/UTC, and this
-# container is "the host" in the one-machine model (poll.py runs directly in
-# it, and dockerd for the nested compose stack runs inside it too, so nested
-# containers' /etc/localtime bind-mounts source from here, not the real
-# outer host) — see TMDEV-35 follow-up. Setting only $TZ isn't enough on its
-# own: cron resets its jobs' environment and won't reliably pass TZ through,
-# but /etc/localtime is a filesystem-level setting every process (including
-# cron jobs) respects regardless of environment. Matches the zone
-# docker-compose.test.yml already hardcodes for the same reason (no host to
-# inherit from).
-ENV TZ=America/New_York
+# Timezone: UTC. This container is "the host" in the one-machine model (poll.py
+# runs directly in it, and dockerd for the nested compose stack runs inside it
+# too, so nested containers' /etc/localtime bind-mounts source from here, not
+# the real outer host). The published image is launched anywhere, so it bakes
+# no maintainer's zone; the testing image's America/New_York is not carried
+# over. It is still written to /etc/localtime explicitly: cron resets its jobs'
+# environment and won't reliably pass TZ through, but /etc/localtime is a
+# filesystem-level setting every process (including cron jobs) respects
+# regardless of environment.
+ENV TZ=Etc/UTC
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone
 

@@ -49,7 +49,8 @@ it anonymously.
 ## Publishing the registry entry
 
 The entry lives in this repo and is copied into the registry repo by hand. The registry repo is a
-fork of Kasm's workspace-registry template, on its schema branch `1.1`:
+fork of Kasm's workspace-registry template, on its schema branch `1.1`, served at
+`https://registry.tejaswaroop.com/` (the URL the user guide tells people to add):
 
 ```bash
 cp -r kasm_workspace/registry/Tubematic <registry checkout>/workspaces/
@@ -65,6 +66,12 @@ When a release is cut, add its version to the front of `tubematic_version`'s `op
 `(latest)` label, set it as the field's `value`, and remove `(latest)` from the previous version.
 The list has no free-text fallback, so a version missing from it cannot be installed from the
 form. The tests check that the list is newest first and that the default is the newest.
+
+## Timezone
+
+The image's clock is UTC (`TZ=Etc/UTC`, written to `/etc/localtime`). The session is Tubematic's
+host, so every time Tubematic shows is in UTC. The testing image keeps its own fixed zone; the
+published one is launched anywhere, so it names none.
 
 ## Sizing
 
@@ -94,3 +101,4 @@ Use a fresh install, on the branch build:
 8. Serve a tarball with a corrupted checksum: it aborts before extraction.
 9. Check that `/tmp` is not hidden and that `/dockerstartup/tubematic_launch_selections.json` is
    readable.
+10. The top bar of the dashboard shows UTC.

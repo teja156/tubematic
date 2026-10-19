@@ -102,7 +102,8 @@ dashboard password is set and an OpenAI key is stored.
   (release, or source), then a terminal opens by itself, downloads that version, checks the release's
   checksum before unpacking it, and runs onboarding for you to finish there. On a later launch it
   finds the existing install and leaves it alone, and it refuses to install a different version on
-  top of it — upgrade that from inside the session as usual. See
+  top of it — upgrade that from inside the session as usual. The session's clock is UTC, so
+  Tubematic's times there are in UTC. See
   [Installing in Kasm Workspaces](user-guide/02-installing.md#installing-in-kasm-workspaces).
 
 ### Changed

@@ -99,6 +99,15 @@ def test_the_published_image_bakes_no_tubematic_source():
     assert "COPY kasm_post_run_root.sh $STARTUPDIR/kasm_post_run_root.sh" in dockerfile
 
 
+def test_the_published_image_runs_on_utc():
+    """The session is Tubematic's host, so its zone is every time Tubematic
+    shows. The testing Dockerfile hardcodes a maintainer's zone; a re-copy
+    from it must not carry that into an image launched anywhere."""
+    dockerfile = _read(PUBLISHED_DOCKERFILE)
+    assert re.search(r"^ENV TZ=Etc/UTC$", dockerfile, re.M)
+    assert "ln -snf /usr/share/zoneinfo/$TZ /etc/localtime" in dockerfile
+
+
 def test_every_file_the_published_dockerfile_copies_exists_in_its_context():
     image_dir = os.path.join(PUBLISHED, "image")
     for line in _read(PUBLISHED_DOCKERFILE).splitlines():
