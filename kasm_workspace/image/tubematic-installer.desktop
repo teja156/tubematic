@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Tubematic installer
+Comment=Install the Tubematic version picked at launch, or reopen onboarding
+Exec=xfce4-terminal --disable-server --title "Tubematic installer" --geometry 120x36 -x tubematic-installer
+Icon=utilities-terminal
+Terminal=false
+Categories=Utility;

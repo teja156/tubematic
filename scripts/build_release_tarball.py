@@ -129,7 +129,8 @@ _DIR_TREES = {
 # allowlist entry (e.g. a bare "docs/") sweeping one of these in behind it
 # is exactly the failure mode this guards against.
 _FORBIDDEN_NAMES = {
-    "renderer", "dashboard", "mcp", "vqa", "kasm_workspace", "remotion", "schemas",
+    "renderer", "dashboard", "mcp", "vqa", "kasm_workspace", "kasm_workspace_testing",
+    "remotion", "schemas",
     "node_modules", ".next", ".venv", ".git", ".worktrees", ".superpowers",
     "superpowers",
     "mounted", "dist", "__pycache__", ".pytest_cache", "plan", "code_review",

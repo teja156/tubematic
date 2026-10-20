@@ -97,6 +97,14 @@ dashboard password is set and an OpenAI key is stored.
   layout. It never posts anything — filing is yours — and it only runs when you ask for it by name:
   `/tubematic-troubleshooting` in Claude Code, `$tubematic-troubleshooting` in Codex, or "use the
   tubematic-troubleshooting skill" in OpenCode. Scheduled runs never start it.
+- **Install Tubematic as a Kasm Workspace.** If you run Kasm Workspaces, add the Tubematic workspace
+  from its registry and launch a session. The launch form asks for a version and an install method
+  (release, or source), then a terminal opens by itself, downloads that version, checks the release's
+  checksum before unpacking it, and runs onboarding for you to finish there. On a later launch it
+  finds the existing install and leaves it alone, and it refuses to install a different version on
+  top of it — upgrade that from inside the session as usual. The session's clock is UTC, so
+  Tubematic's times there are in UTC. See
+  [Installing in Kasm Workspaces](user-guide/02-installing.md#installing-in-kasm-workspaces).
 
 ### Changed
 

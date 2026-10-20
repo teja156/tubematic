@@ -2,7 +2,7 @@
 # vqa/custom_startup.sh
 #
 # Overwrites the base image's $STARTUPDIR/custom_startup.sh — this is the
-# exact file the kasm_workspace/ image (this repo's other Kasm environment)
+# exact file the kasm_workspace_testing/ image (this repo's other Kasm environment)
 # deliberately avoids touching, after an earlier attempt in this repo's
 # history (00099ff/a69cd1c/7abf2d0) edited it, hit a race, and was reverted.
 # That incident was from inserting logic INSIDE the process-supervision

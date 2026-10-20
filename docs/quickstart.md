@@ -78,6 +78,11 @@ cd tubematic
 python3 onboard.py
 ```
 
+**In Kasm Workspaces**, if you run it: add the Tubematic workspace from
+`https://registry.tejaswaroop.com/` and launch it. The session already has every prerequisite above,
+downloads the version you pick on the launch form and opens the wizard in a terminal. See
+[Installing in Kasm Workspaces](user-guide/02-installing.md#installing-in-kasm-workspaces).
+
 The wizard creates its own virtualenv, asks for your API keys (checking each one with its provider
 as you type it), a dashboard password, at least one ElevenLabs voice, and the image model, then
 starts the containers. Every other setting takes a default you can change on the dashboard later.

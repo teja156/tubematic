@@ -6,7 +6,7 @@ the whole product: no dashboard, no cron, no `onboard.py` wizard. Open the sessi
 on-demand AI review whenever you want one.
 
 Base image: `kasmweb/ubuntu-noble-dind:1.19.0-rolling-daily` (root-mode Docker-in-Docker) — same
-base as [`kasm_workspace/`](../kasm_workspace/README.md), the existing full-onboarding testing
+base as [`kasm_workspace_testing/`](../kasm_workspace_testing/README.md), the existing full-onboarding testing
 environment. This is a sibling image with a different purpose, not a replacement for it.
 
 ## Building the image
@@ -34,7 +34,7 @@ wrapper run from a terminal *does* inherit a TTY and will stop at the prompt, so
 Branches without a worktree are deliberately **not** offered — they could only be staged from
 their committed tip, silently dropping uncommitted work. `git worktree add` one first.
 
-Same git-filtered staging as `kasm_workspace/build.sh`: `git ls-files --cached --others
+Same git-filtered staging as `kasm_workspace_testing/build.sh`: `git ls-files --cached --others
 --exclude-standard` decides what enters the build context, so `.env`, `mounted/`, `.venv`,
 `vqa/logs/`, and `vqa/seed/` never reach the image regardless of what's sitting in your working
 tree when you build.
@@ -122,7 +122,7 @@ rather than skipped when present: the server needs its token, which Claude Code 
 The VQA stack runs no dashboard, so it needs no dashboard password.
 
 The one other file this image overwrites is `$STARTUPDIR/custom_startup.sh` — the script that
-launches `supervisord` (and thus `dockerd`) in the first place. **`kasm_workspace/`, this repo's
+launches `supervisord` (and thus `dockerd`) in the first place. **`kasm_workspace_testing/`, this repo's
 other Kasm image, deliberately never touches this file**, after an earlier attempt in this repo's
 history (`00099ff`/`a69cd1c`/`7abf2d0`) edited it, hit a race, and was reverted — that incident came
 from inserting logic *inside* the process-supervision while-loop the file runs (auto-launching
@@ -144,7 +144,7 @@ entirely.
 - **Docker Run Config Override `{"privileged": true}` — mandatory.** This base image is root-mode
   DinD; the rootless variant was abandoned after a kernel-level `newuidmap: write to uid_map
   failed: Operation not permitted` on this host's Ubuntu 24.04 + AppArmor combination — see
-  `kasm_workspace/README.md` for the full story, which applies identically here.
+  `kasm_workspace_testing/README.md` for the full story, which applies identically here.
 - **No File Mapping is needed.** API keys used to arrive as a mapped `.env`; they now live in the
   settings table, which sits in the persistent profile — so you enter them once, in the session,
   and they survive every relaunch.
@@ -460,4 +460,4 @@ ElevenLabs cost before asking, since that spend is non-refundable.
 
 None — this environment's whole point is a disposable, pre-configured Kasm session. For local
 development against a real checkout, use the normal `onboard.py` flow at the repo root, or
-`kasm_workspace/` for a Kasm session with the full onboarding wizard still in the loop.
+`kasm_workspace_testing/` for a Kasm session with the full onboarding wizard still in the loop.

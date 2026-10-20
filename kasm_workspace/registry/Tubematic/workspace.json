@@ -1,0 +1,82 @@
+{
+  "friendly_name": "Tubematic",
+  "description": "Self-hosted pipeline for short-form videos: research, script, voice, render and publish. This workspace downloads the Tubematic version you pick at launch and walks you through onboarding in a terminal.",
+  "image_src": "tubematic.png",
+  "docker_registry": "https://ghcr.io",
+  "categories": [
+    "Productivity",
+    "Multimedia",
+    "AI Assistant"
+  ],
+  "architecture": [
+    "amd64"
+  ],
+  "cores": 4,
+  "memory": 8589934592,
+  "gpu_count": 0,
+  "notes": "Runs PRIVILEGED: Tubematic's own containers run inside the session through Docker-in-Docker, which needs it. Review run_config before installing, as with any third-party workspace. Needs about 15 GB for this image plus about 10 GB inside the session for Tubematic's images, so enable a Persistent Profile Path to keep the install, its data and agent logins across sessions. Onboarding asks for an OpenAI and an ElevenLabs API key (Gemini and the others are optional). Do not attach a GPU: gpu_count stays 0.",
+  "run_config": {
+    "hostname": "tubematic",
+    "privileged": true
+  },
+  "compatibility": [
+    {
+      "version": "1.19.x",
+      "image": "ghcr.io/teja156/tubematic-kasm-workspace:1.19.0",
+      "uncompressed_size_mb": 15200,
+      "available_tags": []
+    }
+  ],
+  "launch_config": {
+    "file_mapping": {
+      "destination": "/dockerstartup/tubematic_launch_selections.json",
+      "is_readable": true,
+      "is_writeable": false,
+      "is_executable": false
+    },
+    "launch_form": [
+      {
+        "key": "tubematic_version",
+        "label": "Tubematic version",
+        "value": "2.0.0",
+        "allow_saving": false,
+        "placeholder": null,
+        "required": true,
+        "help": "The release to install. Newest first. An existing install is never replaced: picking a different version on a session that already has one shows how to upgrade instead.",
+        "input_type": "select",
+        "options": [
+          {
+            "value": "2.0.0",
+            "label": "2.0.0 (latest)"
+          }
+        ],
+        "validator_regex": "^\\d+\\.\\d+\\.\\d+$",
+        "validator_regex_description": "A release version, X.Y.Z",
+        "display_if": null
+      },
+      {
+        "key": "install_method",
+        "label": "Install method",
+        "value": "release",
+        "allow_saving": true,
+        "placeholder": null,
+        "required": true,
+        "help": "Release downloads the published installer bundle and pulls the published images. Source clones the version's tag and builds the images in the session (slower).",
+        "input_type": "select",
+        "options": [
+          {
+            "value": "release",
+            "label": "Release (recommended)"
+          },
+          {
+            "value": "source",
+            "label": "Source"
+          }
+        ],
+        "validator_regex": null,
+        "validator_regex_description": null,
+        "display_if": null
+      }
+    ]
+  }
+}

@@ -176,9 +176,10 @@ tubematic/
 │   └── opencode/commands/     # the same commands for OpenCode (Codex has none)
 ├── scripts/                   # poll.py (cron), release tooling, and other host-side utilities
 ├── vqa/                       # the video-quality assessment environment
-├── kasm_workspace/            # the disposable full-install test environment
+├── kasm_workspace/            # the published Kasm Workspace: installs a release at session launch
+├── kasm_workspace_testing/    # the disposable full-install test environment
 ├── docs/                      # this documentation
-├── .github/workflows/         # CI (ci.yml) and the tag-triggered release workflow (release.yml)
+├── .github/workflows/         # CI, the tag-triggered release, the docs-site sync, the Kasm workspace image
 ├── VERSION                    # the single source of truth for the installed version
 ├── docker-compose.yml
 └── docker-compose.test.yml    # isolated stack for end-to-end tests
