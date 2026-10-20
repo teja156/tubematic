@@ -587,13 +587,15 @@ The system's single status readout. Returns:
 `paused` · `workable_count` · `proposed_count` · `video_counts` · `last_research_at` ·
 `active_strategies` · `mining_available` · `research_pending_cap` · `research_runs_today` ·
 `max_research_runs_per_day` · `research_window_resets_at` · `timezone` · `timezone_label` ·
-`pending_script_profiles` · `version`
+`pending_script_profiles` · `version` · `github_repo`
 
 `active_strategies` leaves `mining` out while no Gemini key is stored, and `mining_available` says
 so; the scheduled poller builds its research prompt from this list, so a run is never told to mine
 without a key. The two timezone fields come from `renderer/api/hosttz.py` and exist for the dashboard. See
 [Time](#time) below. `version` is the installed version from `VERSION`, read through
-`tubematic_core.version.version()`; the dashboard's version badge shows it.
+`tubematic_core.version.version()`; the dashboard's version badge shows it. `github_repo` is
+`tubematic_core.version.GITHUB_REPO` (`owner/name`), for the dashboard's
+[update check](15-dashboard.md#update-check), which cannot import that module.
 
 ---
 

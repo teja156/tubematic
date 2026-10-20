@@ -105,6 +105,16 @@ dashboard password is set and an OpenAI key is stored.
   top of it — upgrade that from inside the session as usual. The session's clock is UTC, so
   Tubematic's times there are in UTC. See
   [Installing in Kasm Workspaces](user-guide/02-installing.md#installing-in-kasm-workspaces).
+- **The dashboard tells you when a newer release is out.** A banner under the top bar names the new
+  version and links its release notes and the upgrade guide. ✕ hides it until a still newer release
+  comes out. Only stable releases are announced, never a prerelease such as `-rc.1` or `-beta`. To
+  do this, the dashboard asks GitHub's public releases API for this project's releases at most once
+  every two hours while a page is open, and sends nothing about your install. If GitHub cannot be
+  reached, no banner shows; there is no setting to turn the check off. A checkout of the
+  development branch never shows it. See
+  [Dashboard — The update banner](user-guide/04-dashboard.md#the-update-banner).
+- **Prerelease versions are published as GitHub prereleases.** A version such as `2.1.0-rc.1` is
+  marked as a prerelease on GitHub's Releases page and is never listed as the latest release.
 
 ### Changed
 

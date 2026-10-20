@@ -29,6 +29,7 @@ API container restarting underneath it.
 |---|---|
 | Pipeline board, Library, Projects, Script Profiles | 5s |
 | Settings page's pipeline-status readout, top-bar health indicator, top-bar version badge | 30s |
+| Update banner (`/api/update-check`; GitHub itself is asked at most every 2 hours) | 10 min |
 | Settings values themselves, timezone, voice roster, script-profile list, agent list | fetched once on mount |
 
 ---
@@ -392,6 +393,7 @@ answers.
 | `SummaryStrip.tsx` | Six stat tiles: Topics Awaiting, Scripts Ready, Videos Ready, In Pipeline, Published, Failed |
 | `StatusBadge.tsx` | Colored dot and label for any of the 15 statuses |
 | `SectionLabel.tsx` | Section heading rule with an optional count |
+| `UpdateBanner.tsx` | The "newer release available" strip under the top bar, mounted in `app/layout.tsx`. See [Update check](#update-check) |
 | `TopBar.tsx` | Sticky nav across every page, plus a version badge, timezone badge and health indicator. See below. One unwrapped row needs about 1510px plus the gutters; below a 1640px viewport (the bar's own max-width) the tabs drop to a second row (`.tm-topbar-*` in `globals.css`, which also raises `--hd-height`), because the row used to squeeze its text onto several lines and then make every page scroll sideways. The breakpoint leaves room for the scrollbar, which the media query counts, a longer timezone label and the version string; the row is `nowrap`, so it never wraps text |
 | `components/ui/*` | shadcn/ui primitives — `badge`, `button`, `dialog`, `tabs`, `textarea` |
 
@@ -542,11 +544,60 @@ worse than no version at all. The badge therefore disappears while the API is do
 an upgrade, and comes back showing whatever is serving afterwards: the last version it saw is a
 stale value like any other. The health indicator beside it turns red over the same window.
 
-A source install is **not** marked as such. Its `VERSION` holds the next version being worked on
-rather than one that was ever released, so the badge is not exactly what is running there. Marking
-it would mean recording the install mode a second time, in the database, purely so the API container
-could read it back; setting `TUBEMATIC_VERSION` on the API service is the existing way to override
-the string if you want one.
+A source install is **not** marked as such. A checkout of a release tag carries that release's
+number, and a checkout of the development branch carries the marker `develop`, so the badge reads
+`vdevelop` there. Marking the install mode would mean recording it a second time, in the database,
+purely so the API container could read it back; setting `TUBEMATIC_VERSION` on the API service is
+the existing way to override the string if you want one.
+
+---
+
+## Update check
+
+What a user sees is in
+[the user guide](../user-guide/04-dashboard.md#the-update-banner). Three pieces make it:
+
+| Piece | Role |
+|---|---|
+| `lib/updateCheck.ts` | The decision layer: version parsing and SemVer ordering, which releases count, and the cache of GitHub's release list |
+| `app/api/update-check/route.ts` | `GET /api/update-check`, server-side and session-checked. Answers `{"available": false}`, or `{"available": true, "current", "latest", "release_url", "upgrade_url"}` |
+| `components/UpdateBanner.tsx` | Mounted in `app/layout.tsx` under the top bar. Polls the route and renders its answer |
+
+**The check runs in the dashboard's server, not the browser.** Every open tab then shares one cache,
+a browser never talks to GitHub, and GitHub's unauthenticated limit (60 requests an hour per IP) is
+never close. The route reads `version` and `github_repo` from `GET /pipeline/status` on **every**
+request, and only GitHub's list is cached, so the banner disappears as soon as an upgrade lands.
+
+**The repo is not spelled in the dashboard.** It is `tubematic_core.version.GITHUB_REPO`, which the
+dashboard's image cannot import (its build context is `dashboard/` alone), so the API sends it in
+`/pipeline/status` alongside `version`. An API older than this field sends no repo, and the route
+then answers "no update" without asking GitHub.
+
+**What counts as a newer release.** The route asks
+`GET https://api.github.com/repos/<repo>/releases?per_page=100`. A release counts only if it is not a
+draft, GitHub does not flag it as a prerelease, **and** its tag is exactly `vX.Y.Z`. The tag check
+exists because a release can be published without GitHub's prerelease flag. The highest such version
+by SemVer wins, not the first listed: GitHub orders releases by creation date, so a patch to an
+older line published later would otherwise mask a newer major. The banner shows only when that
+version is strictly higher than the installed one under SemVer precedence, so an install on
+`2.1.0-rc.1` is offered `2.1.0`. An installed version that is not a release, `develop` included,
+never triggers a request.
+
+**Caching.** GitHub is asked at most once every 2 hours per dashboard process (`CHECK_INTERVAL_MS`),
+and concurrent requests share one call. A failure (offline, rate-limited, a non-list body) keeps the
+last good list and is retried after 15 minutes (`RETRY_AFTER_FAILURE_MS`), not on every poll. Every
+failure answers "no update" and never an error: the banner is a courtesy, and a false banner is
+worse than none. The cache is in memory, so restarting the dashboard clears it.
+
+**Links.** `release_url` is built from the repo (`https://github.com/<repo>/releases/tag/v<latest>`)
+rather than copied from GitHub's response, so the banner can only ever link to this project's own
+release page. `upgrade_url` is the docs site's upgrade guide, the same URL as
+`kasm_workspace/image/tubematic_bootstrap.py::UPGRADE_GUIDE`. The banner also refuses to render a link
+that is not `https://`.
+
+**Dismissal** is per browser and per version: ✕ stores the version under the localStorage key
+`tubematic.update-dismissed`, and only a different `latest` brings the banner back. Storage that
+throws (a privacy mode) leaves the dismissal in effect for the page only.
 
 ---
 

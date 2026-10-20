@@ -61,6 +61,8 @@ Browser  →  /api/proxy/stats          →  http://localhost:4000/stats
 
 A second route — `app/stream/[...path]/route.ts` — streams `.mp4` and `.mp3` files directly from the `/output_videos` volume mount with range-request support (HTTP 206), so the browser `<video>` element can scrub without downloading the full file. It serves nothing else, and a symlink that leads out of the volume is a 404 — see `docs/developer/15-dashboard.md` → the stream route.
 
+A third, `app/api/update-check/route.ts`, is the update check behind the "newer release available" banner. It asks GitHub's releases API for this project's releases at most every two hours, caching the list in memory. That cache is the one deliberate exception to `no-store` below: a release list is not pipeline state. See `docs/developer/15-dashboard.md` → Update check.
+
 ### Ports
 
 | Service | Port |

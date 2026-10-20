@@ -13,6 +13,11 @@ Docker images built for that exact version; a source install checks out the vers
 builds the images from that checkout instead. Either way you upgrade with one command, `upgrade.py`, run
 from the new version.
 
+**How you find out.** The dashboard shows a banner under the top bar when a newer stable release is
+out, linking that release and this page — see
+[Dashboard — The update banner](04-dashboard.md#the-update-banner). Prereleases are never
+announced there.
+
 **Read the [Release Notes](../release-notes.md) for the version you are moving to before you
 start** — above all their **Upgrade notes**, which list anything you must do by hand. When you skip
 versions, read every version in between.

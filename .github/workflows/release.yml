@@ -373,6 +373,10 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: TubeMatic v${{ needs.preflight.outputs.version }}
+          # A "-suffix" version (2.1.0-rc.1) is a prerelease. The action defaults
+          # this to false, which would publish a release candidate as an
+          # ordinary release that GitHub can list as Latest (TMDEV-114).
+          prerelease: ${{ contains(needs.preflight.outputs.version, '-') }}
           body_path: dist/RELEASE_NOTES.md
           # RELEASE_NOTES.md rides in the artifact but is deliberately not
           # listed here: it is the Release body, not a downloadable asset.

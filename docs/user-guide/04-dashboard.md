@@ -44,14 +44,35 @@ Every page shares one bar. From left to right it holds the page tabs, then:
   check which version an install is on, to make a bug report unambiguous, and to confirm an upgrade
   landed ([Upgrading](07-upgrading.md)). It is re-read every 30 seconds, so a page left open across
   an upgrade changes by itself. It **disappears while the API is down** rather than showing a stale
-  or guessed number, and comes back once the API answers. An install from a source checkout shows the
-  version being worked on, which may not be one that was ever released.
+  or guessed number, and comes back once the API answers. A source checkout of a release tag shows
+  that release; a checkout of the development branch shows `vdevelop`.
 - **The timezone** the dashboard is showing times in (see [Times](#times)).
 - **`SYS ● NOMINAL`**, the health indicator. It turns red with `ERROR` when the API stops answering;
   hover over it for the reason.
 - **Sign out.**
 
 On a window narrower than about 1640 pixels the tabs move to a second row instead of squeezing.
+
+### The update banner
+
+When a newer **stable** release of Tubematic is out, a strip under the top bar says so on every
+page: *Tubematic vX.Y.Z is available. This install is on vA.B.C.* It links to that release's notes
+on GitHub and to [Upgrading](07-upgrading.md). The dashboard does not upgrade anything itself.
+
+- **✕ hides it for that version**, in that browser. It comes back when a still newer release is
+  published, or in another browser.
+- **Only stable releases count.** A prerelease such as `v2.1.0-rc.1` or `v2.1.0-beta` never shows
+  the banner. An install that is itself on a prerelease is offered the stable release that follows
+  it.
+- **It goes away by itself** once the install is upgraded, within about ten minutes on a page left
+  open.
+- **A checkout of the development branch never shows it**, because `develop` is not a release and
+  has nothing to compare against.
+
+To do this, the dashboard asks GitHub for the project's releases at most once every two hours, while
+a dashboard page is open. It sends no data about your install: the request is the same public,
+unauthenticated one anyone can make. If GitHub cannot be reached (an offline install, a firewall),
+no banner shows and nothing else is affected. There is no setting to switch it off.
 
 ---
 
