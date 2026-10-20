@@ -130,7 +130,7 @@ with the approval. Each voice has its own ElevenLabs model, and the script was w
 of the video's voice, so a voice that cannot speak the script is offered but disabled. Pick another,
 or request a revision to have the script rewritten for it — see
 [The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice). A switch
-between `eleven_v3` and any other model almost always lands here, so the place to make it is one step
+between `eleven_v3`/`eleven_v4` and any other model almost always lands here, so the place to make it is one step
 earlier: approving a topic offers the same voice picker, and the script is then written for the
 voice picked there.
 

@@ -35,7 +35,7 @@ one to `post_settings`.
 `pronunciation_mode` is **not stored and not writable** — posting it is an unknown-key error. It
 belongs to a voice, not to the install, so `GET /settings` does not return it: it is computed from a
 voice's model wherever a video's model is needed (`tubematic_core/voice_models.py::pronunciation_mode_for_model`;
-the MCP `get_video` tool reports it per video) — `ipa` for `eleven_v3`, `phoneme` for a model that
+the MCP `get_video` tool reports it per video) — `ipa` for `eleven_v3` and `eleven_v4`, `phoneme` for a model that
 supports phoneme tags, `respell` otherwise.
 
 It is derived rather than stored because enabling phoneme mode only ever *adds* capability. There

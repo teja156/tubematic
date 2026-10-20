@@ -17,19 +17,19 @@ const STATUS_POLL_MS = 30_000;
 
 // Max named voices in the roster (TMDEV-51). Keep in sync with
 // renderer/api/pipeline.py, mcp/server.py and onboard/config.py.
-const MAX_VOICES = 5;
+const MAX_VOICES = 10;
 
 // The model sets below are copies of tubematic_core/voice_models.py, pinned by
 // renderer/api/tests/test_pipeline.py's cross-copy test. Each roster voice
 // carries its own model (TMDEV-121); these only drive the per-voice picker
 // and its pronunciation notes.
-// eleven_v3 is deliberately absent (TMDEV-26) — it applies no text
-// normalization, so phoneme tags break the caption timeline.
+// eleven_v3 and eleven_v4 are deliberately absent (TMDEV-26) — they apply no
+// text normalization, so phoneme tags break the caption timeline.
 // eleven_english_v1 was removed (TMDEV-122): ElevenLabs no longer has it.
 const PHONEME_COMPATIBLE_MODELS = ["eleven_turbo_v2", "eleven_flash_v2"];
 
-// Models that take inline IPA through <ipa> tags (TMDEV-123).
-const IPA_COMPATIBLE_MODELS = ["eleven_v3"];
+// Models that take inline IPA through <ipa> tags (TMDEV-123, TMDEV-172).
+const IPA_COMPATIBLE_MODELS = ["eleven_v3", "eleven_v4"];
 
 // The current (non-deprecated) ElevenLabs model catalog — every model here
 // is always usable, since pronunciation (the lexicon + inline <respell>
@@ -39,6 +39,7 @@ const IPA_COMPATIBLE_MODELS = ["eleven_v3"];
 const DICTIONARY_COMPATIBLE_MODELS = [
   "eleven_multilingual_v2",
   "eleven_v3",
+  "eleven_v4",
   "eleven_flash_v2_5",
   "eleven_turbo_v2_5",
   "eleven_flash_v2",

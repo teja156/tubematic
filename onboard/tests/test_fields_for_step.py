@@ -51,9 +51,9 @@ MINIMAL_BY_STEP = {
         "PUBLISHING_ENABLED", "POSTFORME_API_KEY",
         "GEMINI_REVIEW_ENABLED",
     ],
-    "pipeline_settings": [
-        "elevenlabs_voices", "elevenlabs_voice_id", "image_model",
-    ],
+    # The voice roster and default voice are advanced since a fresh install
+    # starts with the pre-loaded voices (TMDEV-172).
+    "pipeline_settings": ["image_model"],
     "cron": ["POLL_INTERVAL_MINS"],
 }
 
@@ -162,7 +162,7 @@ def test_only_pipeline_critical_settings_are_required():
     finish onboarding at all, so widening it must be a deliberate edit here
     too (TMDEV-80)."""
     required = sorted(k for k, f in FIELDS_BY_KEY.items() if f.required)
-    assert required == ["ELEVENLABS_API_KEY", "OPENAI_API_KEY", "elevenlabs_voices"]
+    assert required == ["ELEVENLABS_API_KEY", "OPENAI_API_KEY"]
 
 
 def test_the_optional_keys_stay_optional():
@@ -242,3 +242,23 @@ def test_the_toggle_is_asked_before_the_key_it_gates():
     earlier in the same step, so the gate has to come first."""
     asked = [f.key for f in fields_for_step("install_config")]
     assert asked.index("PUBLISHING_ENABLED") < asked.index("POSTFORME_API_KEY")
+
+
+# ── TMDEV-172: pre-loaded voices ────────────────────────────────────────────
+
+def test_the_skipped_voice_questions_seed_the_pre_loaded_roster():
+    """The voice fields are skipped by default, so their defaults are what a
+    fresh install gets — written without passing the prompt's checks. The
+    roster must survive _parse_voices (anything invalid drops the whole list
+    to []) and the default voice must be on it, or apply_pipeline_settings
+    quietly picks another."""
+    import json
+    from onboard.config import _parse_voices
+    from tubematic_core import voice_models
+    roster = _parse_voices(FIELDS_BY_KEY["elevenlabs_voices"].default)
+    assert roster == list(voice_models.DEFAULT_VOICES)
+    assert json.loads(FIELDS_BY_KEY["elevenlabs_voices"].default) == roster
+    default = FIELDS_BY_KEY["elevenlabs_voice_id"].default
+    assert default == voice_models.DEFAULT_VOICE_ID
+    assert default in FIELDS_BY_KEY["elevenlabs_voice_id"].dynamic_choices(
+        {"elevenlabs_voices": FIELDS_BY_KEY["elevenlabs_voices"].default})

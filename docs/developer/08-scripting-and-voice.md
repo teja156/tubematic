@@ -65,7 +65,7 @@ Two independent axes govern voice markup, and conflating them is the classic mis
 | **Pause markup** | the voice's model | `<break/>` versus `[pause]` |
 
 `pronunciation_mode` is **derived, never stored** — computed from the model on every read:
-`ipa` for `eleven_v3`, `phoneme` for the phoneme-compatible models, `respell` otherwise. Each mode
+`ipa` for `eleven_v3` and `eleven_v4`, `phoneme` for the phoneme-compatible models, `respell` otherwise. Each mode
 only ever *adds* a tag on top of respell mode, so there was never a real choice for a human to make.
 
 ### The model follows the voice
@@ -75,6 +75,15 @@ a video is voiced with the model of its voice. Both axes above follow from that,
 voice decides which markup its script may carry**. The agent reads the video's `pronunciation_mode`
 and `elevenlabs_model_id` from `get_video`, never from install-wide settings. Two videos can
 legitimately be scripted for different models.
+
+The roster holds at most 10 voices (`MAX_VOICES`, copied in onboarding, the API, the MCP server and
+the Settings page). A fresh install starts with two, `tubematic_core/voice_models.py::DEFAULT_VOICES`:
+Teja on `eleven_v4` as the install default, and Adam on `eleven_v3`. Onboarding seeds them as the
+default answers of its voice questions, which are asked only under `--full-questionnaire`, and a
+default answer only applies when no roster is stored. So they never reach an existing install, and
+voices someone deleted stay deleted on an onboarding re-run. The API's own default for a missing
+roster row is still `[]`, on purpose: if a missing row read as the list in code, editing that list
+would change the voices of every install that never re-ran onboarding.
 
 The voice a video resolves to is its own `voice_id`, else the install default. It never falls back to
 the project default: that is copied into `voice_id` when the video is created, on every creation
@@ -100,7 +109,8 @@ voicing that reads IPA aloud or silently drops a pronunciation:
 
 Because the script-writing skill places pauses explicitly, nearly every script carries its model's
 pause markup even with no pronunciation tags at all, so at `SCRIPT_READY` a switch between
-`eleven_v3` and any other model is almost always refused. **The per-video choice across that line is
+`eleven_v3`/`eleven_v4` and any other model is almost always refused. A switch between `eleven_v3`
+and `eleven_v4` is not, since they take the same markup. **The per-video choice across that line is
 made at `TOPIC_PROPOSED`**, where the dashboard offers the same voice picker and the script is then
 written for the voice picked. No voice conflicts with anything there, even when a topic revision
 sent a scripted video back with its old script still stored: approving the topic has that script
@@ -120,8 +130,8 @@ to `SCRIPT_READY`, because a new voice is a new voicing spend.
 - **`generate_voice` checks again before spending.** It is still the last guard, for a voice whose
   model was changed in Settings after the script was written.
 
-What counts as a conflict: `<ipa>` and `[pause]`-style tags need `eleven_v3`, and `<break/>` needs any
-other model, and `<phoneme>` needs one of the phoneme-capable models. Removing a phoneme tag would
+What counts as a conflict: `<ipa>` and `[pause]`-style tags need `eleven_v3` or `eleven_v4`, and
+`<break/>` needs any other model, and `<phoneme>` needs one of the phoneme-capable models. Removing a phoneme tag would
 voice the word as spelled, losing the pronunciation silently on a paid request. So the tag is
 refused at all three points: when a script is written for a voice that ignores it, when such a
 voice is chosen, and in `generate_voice` before spending. The last check matters because a voice's
@@ -188,7 +198,8 @@ why the set is not simply "every model":
 
 `eleven_v3` applies no text normalisation at all, so the XML `<phoneme>` tag can never work on it,
 and it is excluded from the phoneme-compatible set. It takes IPA in its own syntax instead — see IPA
-mode below.
+mode below. `eleven_v4` is the same: a probe found no normalisation either, and ElevenLabs documents
+that it takes no SSML.
 
 A tag needs exactly one `alphabet` attribute, set to `cmu-arpabet` or `ipa`. Both work; CMU is the
 one the skill writes, since ElevenLabs calls it the more predictable of the two. Anything else is
@@ -203,9 +214,9 @@ and that the skill wins on any conflict. That order matters: the docs allow a 3s
 skill keeps breaks to 1.0s for `validate_job`'s gap check, and the docs contradict each other on
 Turbo v2, which the probe above settled.
 
-### IPA mode (`eleven_v3`)
+### IPA mode (`eleven_v3`, `eleven_v4`)
 
-`eleven_v3` pronounces the International Phonetic Alphabet natively when it is written in the text
+`eleven_v3` and `eleven_v4` pronounce the International Phonetic Alphabet natively when it is written in the text
 between slashes, inside double quotes: `"/ˌbaɪoʊˈkemɪstri/"`. No SSML flag is involved. The agent
 never writes that form itself. It writes an inline tag, and the MCP server rewrites it when it builds
 the text for ElevenLabs:
@@ -230,23 +241,23 @@ the same display/spoken split `<respell>` has.
   IPA cannot be turned into a respelling, so the agent rewrites the term.
 - **One tag per word.** `ph` holds the bare IPA for that one word, with no spaces and no slashes, and
   the wrapped text is one word. Every `<ipa` must pair with exactly one `</ipa>`: a stray closer is
-  removed by neither the rewrite nor the strip, so it would reach the captions and the audio. A probe showed v3's alignment mirrors the slash form exactly, one
+  removed by neither the rewrite nor the strip, so it would reach the captions and the audio. Probes showed both models' alignment mirrors the slash form exactly, one
   whitespace token per quoted span, so the caption lockstep holds only while each tag stays one
   token.
-- **It is not exact.** ElevenLabs puts it at 80–90% consistency, so an IPA term can still come back
+- **It is not exact.** ElevenLabs puts v3's at 80–90% consistency (and calls v4's improved), so an IPA term can still come back
   from AI review as a `mispronunciation`. The review is told that an IPA transcription in the spoken
   form is pronounced rather than read out (see [Rendering and Review](11-rendering-and-review.md#what-it-is-given)).
 - **The IPA characters are billed.** In one probe the same spoken word cost 31 characters as IPA
   against 25 plain.
-- The lexicon and `<respell>` keep working on `eleven_v3`. An `<ipa>` tag discards its wrapped word,
+- The lexicon and `<respell>` keep working on both models. An `<ipa>` tag discards its wrapped word,
   so a lexicon term inside one is never substituted.
 
 ## Pauses
 
 | Model | Markup |
 |---|---|
-| Anything except `eleven_v3` | `<break time="0.6s" />` |
-| `eleven_v3` | `[pause]`, `[short pause]`, `[long pause]` |
+| Anything except `eleven_v3` and `eleven_v4` | `<break time="0.6s" />` |
+| `eleven_v3`, `eleven_v4` | `[pause]`, `[short pause]`, `[long pause]` |
 | Any model | Ellipses, at most three dots, attached to the preceding word |
 
 At most one break per segment, no longer than 1.0s, never at a segment's start or end. That is
@@ -265,9 +276,13 @@ Measured behaviour worth knowing before you build on this:
 - `eleven_v3`'s `[pause]` tags are consumed rather than read aloud, but each produces a short burst
   of audio inside the silence — 0.61s for `[pause]`, 0.20s for `[long pause]`. The magnitudes are
   *inverted* relative to the tag text, so it is not the tag being spoken; it reads as a breath.
+- `eleven_v4` also consumes the tags without speaking them, but its alignment gives the tag's own
+  characters the silence's duration instead of zero. The character-index skip handles both shapes.
+  Its `[long pause]` added about 2.0s of silence; a `[pause]` right after a full stop added only
+  about 0.14s over the sentence break, so the skill steers it to `[long pause]` for a clear beat.
 
 **Pause markup keys on the model; pronunciation keys on the mode.** Attaching pause guidance to the
-pronunciation-mode branch would deny break tags to the default install and hand them to the one model
+pronunciation-mode branch would deny break tags to the default install and hand them to the models
 that cannot use them.
 
 ---
@@ -307,7 +322,7 @@ pause, and it resets whenever the voice or model it is given changes.
 Three deliberate properties:
 
 - **On demand and cached, never as a side effect of saving settings.** Generating on save would
-  couple a database write to up to five paid, slow, fallible calls, and make a settings save look
+  couple a database write to up to ten paid, slow, fallible calls, and make a settings save look
   broken whenever ElevenLabs hiccuped.
 - **The cache key is `(voice_id, model_id, sample_text)`**, so it invalidates itself when a voice's
   model changes — the next play is a fresh sample — and removes the human-typed `voice_id` as a

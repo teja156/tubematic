@@ -25,6 +25,7 @@ def _segs(*voices):
 @pytest.mark.parametrize("model,mode", [
     ("eleven_multilingual_v2", "respell"),
     ("eleven_v3", "ipa"),
+    ("eleven_v4", "ipa"),
     ("eleven_turbo_v2", "phoneme"),
     ("eleven_flash_v2", "phoneme"),
     ("eleven_flash_v2_5", "respell"),
@@ -38,8 +39,17 @@ def test_the_retired_model_is_not_offered():
     assert "eleven_english_v1" not in vm.DICTIONARY_COMPATIBLE_MODELS
 
 
-def test_break_tags_work_everywhere_but_v3():
-    assert vm.BREAK_TAG_COMPATIBLE_MODELS == vm.DICTIONARY_COMPATIBLE_MODELS - {"eleven_v3"}
+def test_break_tags_work_everywhere_but_v3_and_v4():
+    assert vm.BREAK_TAG_COMPATIBLE_MODELS == (
+        vm.DICTIONARY_COMPATIBLE_MODELS - {"eleven_v3", "eleven_v4"})
+
+
+def test_v4_takes_exactly_the_v3_rules():
+    """Probed live (TMDEV-172): v4 aligns "/ipa/" and [pause] exactly as v3
+    does and takes no SSML, so it sits in every set v3 is in and none it isn't."""
+    for models in (vm.IPA_COMPATIBLE_MODELS, vm.V3_PAUSE_MODELS, vm.PHONEME_COMPATIBLE_MODELS,
+                   vm.BREAK_TAG_COMPATIBLE_MODELS, vm.DICTIONARY_COMPATIBLE_MODELS):
+        assert ("eleven_v4" in models) == ("eleven_v3" in models)
 
 
 # ── markup_conflict ──────────────────────────────────────────────────────────
@@ -50,23 +60,26 @@ def test_a_script_with_no_markup_fits_every_model(model):
     assert vm.markup_conflict(segs, "", model) is None
 
 
-def test_ipa_needs_v3():
+def test_ipa_needs_v3_or_v4():
     segs = _segs('Say <ipa ph="ˈmædɪsən">Madison</ipa> now.')
     assert vm.markup_conflict(segs, "", "eleven_v3") is None
+    assert vm.markup_conflict(segs, "", "eleven_v4") is None
     err = vm.markup_conflict(segs, "", "eleven_multilingual_v2", voice_label="Rachel")
     assert err and "<ipa>" in err and "Rachel" in err and "eleven_multilingual_v2" in err
 
 
-def test_bracketed_pauses_need_v3():
+def test_bracketed_pauses_need_v3_or_v4():
     segs = _segs("First. [long pause] Second.")
     assert vm.markup_conflict(segs, "", "eleven_v3") is None
+    assert vm.markup_conflict(segs, "", "eleven_v4") is None
     assert "[pause]" in vm.markup_conflict(segs, "", "eleven_flash_v2_5")
 
 
-def test_break_tags_are_refused_on_v3_only():
+def test_break_tags_are_refused_on_v3_and_v4_only():
     segs = _segs('First. <break time="0.6s" /> Second.')
     assert vm.markup_conflict(segs, "", "eleven_multilingual_v2") is None
     assert "<break/>" in vm.markup_conflict(segs, "", "eleven_v3")
+    assert "<break/>" in vm.markup_conflict(segs, "", "eleven_v4")
 
 
 def test_phoneme_tags_conflict_with_any_model_that_cannot_honour_them():
@@ -76,6 +89,7 @@ def test_phoneme_tags_conflict_with_any_model_that_cannot_honour_them():
     through and generate_voice would strip the tags on a paid request."""
     segs = _segs('Say <phoneme alphabet="ipa" ph="x">word</phoneme>.')
     assert "<phoneme>" in vm.markup_conflict(segs, "", "eleven_v3")
+    assert "<phoneme>" in vm.markup_conflict(segs, "", "eleven_v4")
     assert "<phoneme>" in vm.markup_conflict(segs, "", "eleven_multilingual_v2")
     assert vm.markup_conflict(segs, "", "eleven_turbo_v2") is None
     assert vm.markup_conflict(segs, "", "eleven_flash_v2") is None
@@ -126,3 +140,21 @@ def test_a_video_voice_that_left_the_roster_does_not_fall_back():
 def test_an_install_default_off_the_roster_is_no_default():
     assert vm.resolve_voice("", "gone", ROSTER) is None
     assert vm.resolve_voice("", "", ROSTER) is None
+
+
+# ── DEFAULT_VOICES (TMDEV-172) ───────────────────────────────────────────────
+
+def test_the_default_voices_are_teja_then_adam():
+    assert [(v["name"], v["voice_id"], v["model_id"]) for v in vm.DEFAULT_VOICES] == [
+        ("Teja", "w7yaXuKi0bjR3rtgNpVp", "eleven_v4"),
+        ("Adam", "bfGb7JTLUnZebZRiFYyq", "eleven_v3"),
+    ]
+    assert vm.DEFAULT_VOICE_ID == "w7yaXuKi0bjR3rtgNpVp"
+
+
+def test_every_default_voice_is_on_an_offered_model():
+    """A roster entry on a model outside the catalog makes every reader drop
+    the WHOLE roster, so a bad default would leave a fresh install with none."""
+    for v in vm.DEFAULT_VOICES:
+        assert set(v) == {"name", "voice_id", "model_id"}
+        assert v["model_id"] in vm.DICTIONARY_COMPATIBLE_MODELS

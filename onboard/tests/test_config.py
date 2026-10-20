@@ -112,3 +112,27 @@ def test_int_validators():
     assert _positive_int("abc") is not None
     assert _nonneg_int("0") is None
     assert _nonneg_int("-1") is not None
+
+
+def test_a_fresh_install_offers_the_pre_loaded_voices(tmp_path):
+    """No database yet: the voice questions fall back to their defaults, which
+    is how a fresh install gets the pre-loaded roster (TMDEV-172)."""
+    from tubematic_core import voice_models
+    values = load_current_values(repo_root=tmp_path, db_path=tmp_path / "missing.db")
+    assert json.loads(values["elevenlabs_voices"]) == list(voice_models.DEFAULT_VOICES)
+    assert values["elevenlabs_voice_id"] == voice_models.DEFAULT_VOICE_ID
+
+
+def test_a_stored_empty_roster_is_not_refilled_with_the_pre_loaded_voices(tmp_path):
+    """Someone who deleted every voice (the pre-loaded ones included) must not
+    get them back by re-running onboarding."""
+    db_path = tmp_path / "db.sqlite"
+    con = sqlite3.connect(str(db_path))
+    con.execute("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)")
+    con.execute("INSERT INTO settings VALUES ('elevenlabs_voices', '[]')")
+    con.execute("INSERT INTO settings VALUES ('elevenlabs_voice_id', '')")
+    con.commit()
+    con.close()
+    values = load_current_values(repo_root=tmp_path, db_path=db_path)
+    assert values["elevenlabs_voices"] == "[]"
+    assert values["elevenlabs_voice_id"] == ""

@@ -1431,11 +1431,24 @@ def test_post_settings_elevenlabs_voices_persists(client):
     assert json.loads(r2.data)["elevenlabs_voices"] == voices
 
 
+def _roster(n):
+    return [{"name": f"v{i}", "voice_id": f"id{i}", "model_id": "eleven_multilingual_v2"}
+            for i in range(n)]
+
+
+def test_post_settings_elevenlabs_voices_accepts_exactly_the_cap(client):
+    """The cap is 10 (TMDEV-172): two pre-loaded voices plus eight added."""
+    assert pipeline.MAX_VOICES == 10
+    r = client.post("/settings", json={"elevenlabs_voices": _roster(pipeline.MAX_VOICES)})
+    assert r.status_code == 200
+    assert len(json.loads(client.get("/settings").data)["elevenlabs_voices"]) == 10
+
+
 def test_post_settings_elevenlabs_voices_rejects_over_cap(client):
-    voices = [{"name": f"v{i}", "voice_id": f"id{i}"} for i in range(6)]
-    r = client.post("/settings", json={"elevenlabs_voices": voices})
+    # Otherwise valid entries, so the count is the only thing refused.
+    r = client.post("/settings", json={"elevenlabs_voices": _roster(pipeline.MAX_VOICES + 1)})
     assert r.status_code == 400
-    assert "elevenlabs_voices" in json.loads(r.data)["error"]
+    assert "at most 10 voices" in json.loads(r.data)["error"]
 
 
 def test_post_settings_elevenlabs_voices_rejects_duplicate_name(client):

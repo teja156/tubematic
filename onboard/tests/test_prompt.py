@@ -65,7 +65,7 @@ def _asked(step_key, monkeypatch, *, full=False, values=None):
 
 def test_prompt_step_skips_advanced_fields_by_default(monkeypatch):
     asked, _ = _asked("pipeline_settings", monkeypatch)
-    assert asked == ["elevenlabs_voices", "elevenlabs_voice_id", "image_model"]
+    assert asked == ["image_model"]
 
 
 def test_prompt_step_asks_advanced_fields_under_full(monkeypatch):
@@ -206,13 +206,13 @@ def _drive_voices(monkeypatch, answers, opts, current="[]", models=None):
     return val, seq
 
 
-def test_voice_roster_is_re_asked_until_one_is_entered(monkeypatch):
-    """An empty roster also forces elevenlabs_voice_id blank, and generate_voice
-    then fails on the first video anyone tries to voice."""
+def test_a_blank_roster_answer_with_nothing_stored_is_accepted(monkeypatch):
+    """No longer required (TMDEV-172): a fresh install's current value is the
+    pre-loaded roster, so nothing stored means someone deleted every voice on
+    purpose — re-asking would demand voices they chose to remove."""
     val, left = _drive_voices(monkeypatch, ["", "Rachel", "21m00Tcm", ""], PromptOptions())
-    assert json.loads(val) == [{"name": "Rachel", "voice_id": "21m00Tcm",
-                                "model_id": "eleven_multilingual_v2"}]
-    assert left == []
+    assert val == "[]"
+    assert left == ["Rachel", "21m00Tcm", ""]
 
 
 def test_each_voice_is_asked_for_its_model_defaulting_to_the_previous_one(monkeypatch):
@@ -236,8 +236,8 @@ def test_allow_skipping_accepts_an_empty_roster(monkeypatch):
 
 
 def test_a_blank_first_answer_still_keeps_an_existing_roster(monkeypatch):
-    """Required must not mean "retype the roster on every re-run" — an existing
-    list satisfies it."""
+    """A re-run must not mean "retype the roster" — Enter keeps the stored one,
+    and on a fresh install that is the pre-loaded pair."""
     existing = json.dumps([{"name": "Rachel", "voice_id": "21m00Tcm",
                             "model_id": "eleven_multilingual_v2"}])
     val, _ = _drive_voices(monkeypatch, [""], PromptOptions(), current=existing)

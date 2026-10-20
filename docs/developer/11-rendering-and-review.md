@@ -303,7 +303,7 @@ contract tells the reviewer to accept defects the video has no licence to contai
 The two-script rule is the whole negative control for pronunciation. When they differ, the prompt
 states that audio matching the *spoken* form is correct by design, with the exemption scoped to the
 words that actually differ. It also says that an IPA transcription between slashes in the spoken
-form (what an `<ipa>` tag becomes on `eleven_v3`) is pronounced rather than read out. Without that
+form (what an `<ipa>` tag becomes on `eleven_v3` and `eleven_v4`) is pronounced rather than read out. Without that
 clause the model reports every working respelling or IPA term as a defect — which, under the routing
 rule below, costs a paid re-voice and then recurs forever.
 

@@ -27,6 +27,7 @@ DEFAULT_MODEL_ID = "eleven_multilingual_v2"
 DICTIONARY_COMPATIBLE_MODELS = frozenset({
     "eleven_multilingual_v2",
     "eleven_v3",
+    "eleven_v4",
     "eleven_flash_v2_5",
     "eleven_turbo_v2_5",
     "eleven_flash_v2",
@@ -42,6 +43,7 @@ DICTIONARY_COMPATIBLE_MODELS = frozenset({
 # tokens instead of collapsing to one, and _lockstep_segment_frames can never
 # reconcile it against the authored word count. That is true of the XML tag
 # only: v3 takes IPA natively in its own syntax — see IPA_COMPATIBLE_MODELS.
+# eleven_v4 is the same (no normalization, and its docs say it takes no SSML).
 # TMDEV-122, probed live with speech-to-text: wrapping "Madison" in the
 # phonemes for "tomato" is spoken as "tomato" on both models below. The two
 # 2.5 models EAT the tagged word (the transcript skips it), so never add them
@@ -53,15 +55,36 @@ PHONEME_COMPATIBLE_MODELS = frozenset({
 
 # Models that pronounce inline IPA written between slashes
 # (pronunciation_mode="ipa"), reached through <ipa ph="...">word</ipa> tags.
-IPA_COMPATIBLE_MODELS = frozenset({"eleven_v3"})
+# eleven_v4 (TMDEV-172) was probed live the same way as v3: its alignment
+# mirrors the "/ph/" form exactly and normalized_alignment is identical to it
+# (no normalization), and wrapping "Madison" in the IPA for "tomato"
+# transcribes as "tomato".
+IPA_COMPATIBLE_MODELS = frozenset({"eleven_v3", "eleven_v4"})
 
-# Models that honor SSML <break time="..."/> tags. Every model except eleven_v3,
-# which uses bracketed audio tags ([pause] / [short pause] / [long pause])
-# instead.
-BREAK_TAG_COMPATIBLE_MODELS = DICTIONARY_COMPATIBLE_MODELS - {"eleven_v3"}
+# The models that understand the bracketed pause tags ([pause] /
+# [short pause] / [long pause]) and do NOT support SSML. Probed live on v4:
+# the tags are carried verbatim in the alignment and never spoken; [long pause]
+# added ~2s of silence, a [pause] right after a full stop only ~0.14s.
+V3_PAUSE_MODELS = frozenset({"eleven_v3", "eleven_v4"})
 
-# The only model that understands the bracketed pause tags.
-V3_PAUSE_MODELS = frozenset({"eleven_v3"})
+# Models that honor SSML <break time="..."/> tags: every model except the
+# bracketed-pause ones, which take no SSML at all.
+BREAK_TAG_COMPATIBLE_MODELS = DICTIONARY_COMPATIBLE_MODELS - V3_PAUSE_MODELS
+
+# The voices a fresh install starts with (TMDEV-172), in roster order; the
+# first is the install default. Onboarding seeds them as the default answers
+# of its voice questions, so they reach only an install that has never stored
+# a roster: an existing roster is kept, and one whose defaults were deleted
+# stays that way. The API's own default for a missing row is still [] —
+# editing this list must never change the voices of an install nobody
+# re-onboarded. Every entry must pass the roster readers' validation (a model
+# in DICTIONARY_COMPATIBLE_MODELS, at most MAX_VOICES entries), or the
+# readers drop the whole list.
+DEFAULT_VOICES = (
+    {"name": "Teja", "voice_id": "w7yaXuKi0bjR3rtgNpVp", "model_id": "eleven_v4"},
+    {"name": "Adam", "voice_id": "bfGb7JTLUnZebZRiFYyq", "model_id": "eleven_v3"},
+)
+DEFAULT_VOICE_ID = DEFAULT_VOICES[0]["voice_id"]
 
 IPA_OPEN_RE      = re.compile(r'<ipa\b', re.IGNORECASE)
 PHONEME_OPEN_RE  = re.compile(r'<phoneme\b[^>]*>', re.IGNORECASE)
@@ -91,7 +114,7 @@ def ipa_model_error(text: str, model_id: str, voice_label: str = "") -> str | No
     script has to be rewritten."""
     if IPA_OPEN_RE.search(text) and model_id not in IPA_COMPATIBLE_MODELS:
         return (f"voice text uses <ipa> tags, which only "
-                f"{', '.join(sorted(IPA_COMPATIBLE_MODELS))} understands, but "
+                f"{', '.join(sorted(IPA_COMPATIBLE_MODELS))} understand, but "
                 f"{_voice_phrase(voice_label, model_id)} — it would read the IPA aloud. "
                 "Rewrite those terms with the pronunciation lexicon or an inline "
                 '<respell as="...">word</respell> tag.')
@@ -101,9 +124,9 @@ def ipa_model_error(text: str, model_id: str, voice_label: str = "") -> str | No
 def pause_model_error(text: str, model_id: str, voice_label: str = "") -> str | None:
     """Error if the pause syntax doesn't match the model.
 
-    The two syntaxes are mutually exclusive by model: eleven_v3 ignores SSML
-    break tags, and every other model has no notion of the bracketed audio
-    tags. Getting this wrong doesn't fail loudly at ElevenLabs — the markup is
+    The two syntaxes are mutually exclusive by model: eleven_v3 and eleven_v4
+    ignore SSML break tags, and every other model has no notion of the
+    bracketed audio tags. Getting this wrong doesn't fail loudly at ElevenLabs — the markup is
     simply carried into the audio or the alignment — so it's refused instead.
     """
     if BREAK_TAG_RE.search(text) and model_id not in BREAK_TAG_COMPATIBLE_MODELS:
@@ -112,8 +135,8 @@ def pause_model_error(text: str, model_id: str, voice_label: str = "") -> str | 
                 "instead, or pick a voice on one of: "
                 f"{sorted(BREAK_TAG_COMPATIBLE_MODELS)}")
     if V3_PAUSE_TAG_RE.search(text) and model_id not in V3_PAUSE_MODELS:
-        return (f"voice text uses [pause]-style audio tags, which only eleven_v3 "
-                f"understands, but {_voice_phrase(voice_label, model_id)}. Use "
+        return (f"voice text uses [pause]-style audio tags, which only "
+                f"{', '.join(sorted(V3_PAUSE_MODELS))} understand, but {_voice_phrase(voice_label, model_id)}. Use "
                 '<break time="0.6s" /> instead.')
     return None
 

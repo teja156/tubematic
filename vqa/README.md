@@ -325,7 +325,7 @@ needed:
 - **`tts_text.txt`** — the text that would actually be sent to ElevenLabs: segments joined, then
   the same phoneme-tag/`<respell>`/`<ipa>`/pronunciation-lexicon processing `generate_voice()`
   applies — calling its `_build_tts_text` directly from `mcp/server.py` rather than a second,
-  drift-prone copy of that logic. A script with `<ipa>` tags on a model other than `eleven_v3` is
+  drift-prone copy of that logic. A script with `<ipa>` tags on a model other than `eleven_v3` or `eleven_v4` is
   refused here, exactly as `generate_voice` would refuse it.
 
 Staging only needs `videos.script_segments` to exist, not an actual ElevenLabs call — which is
@@ -394,7 +394,7 @@ That invariant breaks from either side, which is why the diff covers unrequested
 roster while keeping the default, or changing a voice's model, are not warned about.
 
 There is no install-wide ElevenLabs model: every entry in `elevenlabs_voices` carries its own
-`model_id`, and a video's pronunciation mode (`"ipa"` for `eleven_v3`, `"phoneme"` for the
+`model_id`, and a video's pronunciation mode (`"ipa"` for `eleven_v3` and `eleven_v4`, `"phoneme"` for the
 phoneme-compatible models, else `"respell"`) follows its voice's model. `elevenlabs_model_id` and
 `pronunciation_mode` are unknown keys to `POST /settings`.
 

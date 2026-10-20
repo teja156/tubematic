@@ -213,9 +213,16 @@ def test_get_voices_degrades_to_empty_on_corrupt_setting(job_db):
 
 
 def test_get_voices_degrades_to_empty_over_cap(job_db):
-    voices = [{"name": f"v{i}", "voice_id": f"id{i}", "model_id": "eleven_v3"} for i in range(6)]
+    voices = [{"name": f"v{i}", "voice_id": f"id{i}", "model_id": "eleven_v3"} for i in range(server.MAX_VOICES + 1)]
     server._set_setting("elevenlabs_voices", json.dumps(voices))
     assert server._get_voices() == []
+
+
+def test_get_voices_reads_a_roster_at_the_cap(job_db):
+    voices = [{"name": f"v{i}", "voice_id": f"id{i}", "model_id": "eleven_v4"}
+              for i in range(server.MAX_VOICES)]
+    server._set_setting("elevenlabs_voices", json.dumps(voices))
+    assert server._get_voices() == voices
 
 
 # ── TMDEV-30: status/strategy allow-lists + atomic only_if guard ────────────

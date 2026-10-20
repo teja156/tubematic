@@ -248,8 +248,8 @@ def print_help() -> None:
                                          "release tarball ships no source trees) and dev "
                                          "otherwise. Release installs pull container images "
                                          "instead of building them and don't require Node/npx."),
-        ("--allow-skipping", "Let required settings (the ElevenLabs and OpenAI keys, the voice "
-                             "roster) be left blank at the prompt. Without it the wizard re-asks "
+        ("--allow-skipping", "Let required settings (the ElevenLabs and OpenAI keys) be left "
+                             "blank at the prompt. Without it the wizard re-asks "
                              "until they are supplied, since the pipeline cannot run without "
                              "them. The OpenAI key is still needed for the install "
                              "configuration step to finish."),

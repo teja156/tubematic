@@ -282,7 +282,7 @@ still sending it, and stays visible even when no `READY` profile is left, so it 
 **The voice picker appears at both checkpoints because the script is written for its voice's
 model.** Each voice is labelled with its model. A voice whose model cannot speak the script is
 disabled, with the reason, from the video's `voice_conflicts` — so at `SCRIPT_READY` a switch
-between `eleven_v3` and any other model is almost always refused, since nearly every script carries
+between `eleven_v3`/`eleven_v4` and any other model is almost always refused, since nearly every script carries
 that model's pause markup. `TOPIC_PROPOSED` is where such a switch belongs: the script does not
 exist yet, the API lists no conflicts there (even when a topic revision left an old script stored,
 because approving has it rewritten), and nothing is disabled. The two pickers send differently.

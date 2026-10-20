@@ -94,7 +94,7 @@ ELEVENLABS_MODEL_ID      = tvoice.DEFAULT_MODEL_ID
 
 # Max named voices in the roster (TMDEV-51). Keep in sync with
 # renderer/api/pipeline.py, onboard/config.py and dashboard/app/settings/page.tsx.
-MAX_VOICES = 5
+MAX_VOICES = 10
 
 # Defensive cap on the install-wide pronunciation lexicon (TMDEV-26 follow-up)
 # — generous relative to expected size (tens of terms), just a backstop
@@ -1879,16 +1879,17 @@ def _validate_respell_tags(voice: str) -> str | None:
     return None
 
 
-# Inline IPA for eleven_v3 (TMDEV-123), the same display/spoken split as
+# Inline IPA for eleven_v3 and eleven_v4 (TMDEV-123, TMDEV-172), the same
+# display/spoken split as
 # <respell>:
 #   <ipa ph="vɑːˈɡɑːr">Vhagar</ipa>
-#     spoken:    "/vɑːˈɡɑːr/"  (via _apply_ipa — v3's native syntax: the IPA
+#     spoken:    "/vɑːˈɡɑːr/"  (via _apply_ipa — v3's and v4's native syntax: the IPA
 #                between slashes, double quotes included, no SSML flag)
 #     on-screen: Vhagar        (via _strip_ipa_tags)
 # The agent never writes the slash form itself: plain text would flow into
-# videos.script and the burned-in captions. Only eleven_v3 understands it —
+# videos.script and the burned-in captions. Only IPA_COMPATIBLE_MODELS understand it —
 # every other model reads the slashes and symbols aloud — so the tag is
-# refused elsewhere before spend (_check_ipa_model). Probed live: v3's
+# refused elsewhere before spend (_check_ipa_model). Probed live on both: the
 # alignment mirrors the slash form exactly, as one whitespace token, so the
 # segment/word lockstep holds as long as ph and the wrapped word are single
 # tokens.
@@ -1904,7 +1905,7 @@ def _strip_ipa_tags(text: str) -> str:
 
 
 def _apply_ipa(text: str) -> str:
-    """Replace <ipa ph="...">word</ipa> tags with eleven_v3's "/ph/" form, for
+    """Replace <ipa ph="...">word</ipa> tags with the IPA models' "/ph/" form, for
     building tts_text. The wrapped word is discarded. No-op without tags."""
     return _IPA_TAG_RE.sub(r'"/\1/"', text)
 
@@ -1972,8 +1973,8 @@ def _build_tts_text(joined: str, mode: str, lexicon: list[dict]) -> str:
 # Non-spoken pause markup permitted inside a segment's voice text (TMDEV-26).
 # Unlike <phoneme>, these wrap nothing — they are directives that produce
 # silence, so they strip to nothing rather than to a captured group.
-#   <break time="0.6s" />  — every model except eleven_v3
-#   [pause] / [short pause] / [long pause]  — eleven_v3 only
+#   <break time="0.6s" />  — every model except eleven_v3 and eleven_v4
+#   [pause] / [short pause] / [long pause]  — eleven_v3 and eleven_v4 only
 _BREAK_TAG_RE    = re.compile(r'<break\b[^>]*>', re.IGNORECASE)
 _V3_PAUSE_TAG_RE = re.compile(r'\[\s*(?:short\s+|long\s+)?pause\s*\]', re.IGNORECASE)
 # Any remaining bracketed run after the pause allowlist is a stage direction
@@ -2021,8 +2022,8 @@ def _check_phoneme_model(text: str, model_id: str, voice_label: str = "") -> str
 def _check_pause_markup_model(text: str, model_id: str, voice_label: str = "") -> str | None:
     """Return an error if the pause syntax doesn't match the voice's model.
 
-    The two syntaxes are mutually exclusive by model: eleven_v3 ignores SSML
-    break tags, and every other model has no notion of the bracketed audio
+    The two syntaxes are mutually exclusive by model: eleven_v3 and eleven_v4
+    ignore SSML break tags, and every other model has no notion of the bracketed audio
     tags. Getting this wrong doesn't fail loudly at ElevenLabs — the markup is
     simply carried into the audio or the alignment — so it's checked here, and
     again in generate_voice before any spend.
@@ -2103,7 +2104,7 @@ def _validate_script_segments(segments: list) -> str | None:
     Markup rules (TMDEV-26), all enforced here so they fail at authoring time
     rather than after ElevenLabs has been billed:
 
-    - Bracketed text is allowed ONLY for the three eleven_v3 pause tags. Any
+    - Bracketed text is allowed ONLY for the three bracketed pause tags. Any
       other [...] run is a stage direction that would be voiced aloud verbatim
       — this path never went through the legacy flat-script [...] strip.
     - No standalone punctuation-only word. Beyond being a prose smell, it is
@@ -2140,8 +2141,8 @@ def _validate_script_segments(segments: list) -> str | None:
         if leftover:
             return (f"script_segments[{i}].voice contains a bracketed stage direction "
                     f"{leftover.group(0)!r} — voice is spoken aloud verbatim, so put it in "
-                    "'visual' instead. The only bracketed text allowed is an eleven_v3 "
-                    "pause tag: [pause], [short pause], [long pause].")
+                    "'visual' instead. The only bracketed text allowed is a pause tag "
+                    "(eleven_v3 and eleven_v4): [pause], [short pause], [long pause].")
         for tok in _tokenize_on_word_boundaries(spoken):
             if _PUNCT_ONLY_RE.match(tok):
                 return (f"script_segments[{i}].voice has a standalone punctuation word "
@@ -2249,11 +2250,11 @@ def update_video(
       - <phoneme alphabet="cmu-arpabet" ph="...">word</phoneme>, when
         pronunciation_mode="phoneme"
       - <ipa ph="...">word</ipa>, when pronunciation_mode="ipa" (eleven_v3
-        only — rejected on any other model). ph is the bare IPA for that one
+        and eleven_v4 only — rejected on any other model). ph is the bare IPA for that one
         word, with stress marks, no spaces and no slashes
       - pause markup: <break time="0.6s" /> on any model in
         BREAK_TAG_COMPATIBLE_MODELS, or [pause] / [short pause] /
-        [long pause] on eleven_v3
+        [long pause] on eleven_v3 and eleven_v4
     All of it must suit the model of the video's voice (get_video's
     elevenlabs_model_id and pronunciation_mode; a voice_id passed in the same
     call counts instead) — the wrong syntax for that model is rejected here
@@ -3554,16 +3555,16 @@ def generate_voice(video_id: str, script: str) -> dict:
     tags themselves, which is exactly why enabling phoneme mode whenever the
     model supports it is safe: it only adds a capability, never removes one.
 
-    When the voice's model is eleven_v3, the derived mode is "ipa" and
+    When the voice's model is eleven_v3 or eleven_v4, the derived mode is "ipa" and
     segment voice text may contain inline <ipa ph="...">word</ipa> tags: each
-    is sent as "/ph/" — v3's native IPA syntax, no SSML flag — while every
+    is sent as "/ph/" — those models' native IPA syntax, no SSML flag — while every
     other surface keeps the wrapped word. On any other model an <ipa> tag is
     refused before any spend, since it would be read aloud.
 
     Pause markup is independent of pronunciation_mode and keys on the model
     instead: <break time="0.6s" /> for any model in
     BREAK_TAG_COMPATIBLE_MODELS, or [pause] / [short pause] / [long pause] for
-    eleven_v3. It is sent verbatim in both modes (break tags need no
+    eleven_v3 and eleven_v4. It is sent verbatim in both modes (break tags need no
     enable_ssml_parsing), and skipped when
     building timeline.words — the silence it produces survives as a gap
     between adjacent words' frame spans. Using the wrong syntax for the

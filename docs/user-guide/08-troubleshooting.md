@@ -165,7 +165,7 @@ wrong voice.
 
 **"This script can't be voiced with that voice", or a voice greyed out at approval.** The script's
 pronunciation or pause markup was written for another model — for example an `<ipa>` tag, which only
-`eleven_v3` understands, against a voice on `eleven_multilingual_v2`. It also happens to the video's
+`eleven_v3` and `eleven_v4` understand, against a voice on `eleven_multilingual_v2`. It also happens to the video's
 own voice if that voice's model was changed in Settings after the script was written. Keep a voice
 that can speak it, or request a revision so the agent rewrites the markup for the voice you want.
 Nothing is charged. Next time, pick a voice on another model when approving the topic, before the
