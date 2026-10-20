@@ -210,10 +210,18 @@ dashboard container, and a forwarded client address is spoofable. Restarting the
 ### Using the dashboard from another machine
 
 Put HTTPS in front of port 3000: a reverse proxy such as Caddy or nginx that terminates TLS, or a
-private network such as Tailscale. The session cookie is marked `Secure` whenever the request
-arrived over HTTPS — directly, or as reported by the proxy's `X-Forwarded-Proto` header — and is
-`HttpOnly` and `SameSite=Strict` always. Over plain HTTP, the password and the cookie cross the network
-readable. Tubematic does not manage certificates itself.
+private network such as Twingate. Step-by-step guides are in
+[Remote Access](../user-guide/09-remote-access.md). The session cookie is marked `Secure` whenever the
+request arrived over HTTPS — directly, or as reported by the proxy's `X-Forwarded-Proto` header — and
+is `HttpOnly` and `SameSite=Strict` always. Over plain HTTP, the password and the cookie cross the
+network readable. Tubematic does not manage certificates itself.
+
+**The login redirect is relative, so no proxy needs to forward the public host name.** Middleware
+builds its `/login` URL from `req.url`, which in the standalone server is the server's own listen
+address (`http://0.0.0.0:3000/…`, from `HOSTNAME`), never the browser's `Host`. Next.js then rewrites
+a same-origin `Location` to a relative path before sending it, so the browser resolves `/login` against
+whatever address it used. That is why the dashboard sets no `trustHostHeader` and reads no
+`X-Forwarded-Host`: a proxy that forwards only `X-Forwarded-Proto` is enough.
 
 ## Volumes
 

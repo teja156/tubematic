@@ -109,9 +109,9 @@ Know what listens before you install. The Flask API (4000) and the MCP server (4
   can reach this machine on port 3000 gets the login page.
 
 Over plain HTTP the password and the session cookie cross the network readable, so treat a source
-install's dashboard as trusted-LAN only. To use it from another machine, put HTTPS in front of it
-(a reverse proxy such as Caddy or nginx, or a private network such as Tailscale). See
-[Infrastructure — Using the dashboard from another machine](../developer/16-infrastructure.md#using-the-dashboard-from-another-machine).
+install's dashboard as trusted-LAN only. To use it from another machine, use a private network
+(Twingate) or an HTTPS reverse proxy (Caddy or nginx); [Remote Access](09-remote-access.md) has
+step-by-step guides for all three.
 
 ---
 

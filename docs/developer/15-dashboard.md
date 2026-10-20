@@ -84,7 +84,9 @@ and the API proxy therefore check two more things on every request that is not `
 Neither check reads `Host`, which is why there is still no `Origin`-against-`Host` comparison: a
 reverse proxy in front rewrites `Host`, and that comparison would refuse every request through it.
 Reaching the dashboard from another machine: see
-[Infrastructure — Authentication](16-infrastructure.md#authentication).
+[Infrastructure — Using the dashboard from another machine](16-infrastructure.md#using-the-dashboard-from-another-machine)
+for how it behaves behind a proxy, and [Remote Access](../user-guide/09-remote-access.md) for the
+setup guides.
 
 ---
 

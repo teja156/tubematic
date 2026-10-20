@@ -51,8 +51,8 @@ Deleting the install directory does not remove it.
 
 The API and the MCP server listen on `127.0.0.1` only. The dashboard on port 3000 is
 password-protected but speaks plain HTTP, and a **source** install publishes it on every interface.
-Treat it as trusted-LAN only, or put HTTPS in front of it before using it from another machine. See
-[Installing — Network exposure](user-guide/02-installing.md#network-exposure).
+Treat it as trusted-LAN only. To use it from another machine, set up Twingate or an HTTPS proxy
+(Caddy or nginx) as described in [Remote Access](user-guide/09-remote-access.md).
 
 ---
 

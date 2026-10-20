@@ -221,10 +221,6 @@ tubematic-api`) to clear it.
 `api_token` values — usually after a rotation the API was not restarted for. `docker compose restart
 tubematic-api tubematic-dashboard`.
 
-**The login page loads over plain HTTP from another machine.** It works, but the password and the
-cookie cross the network readable. Put HTTPS in front — see
-[Infrastructure — Authentication](../developer/16-infrastructure.md#authentication).
-
 **Timestamps look wrong.** The dashboard displays the **host's** timezone, fetched from
 `GET /pipeline/status`, not the browser's. If it degraded to UTC, that endpoint failed or returned an
 invalid zone.
@@ -235,6 +231,35 @@ since the page last polled. Refresh.
 **Approving or revising says an agent "is uninstalled, so no work can be handed to it".** The agent
 picked for the video was uninstalled after the page loaded its agent list. Reload the page and pick
 a live agent, or re-install that one with `python onboard.py --install-agent <agent>`.
+
+---
+
+## Remote access
+
+Setting it up is covered in [Remote Access](09-remote-access.md).
+
+**The login page loads over plain HTTP from another machine.** It works, but the password and the
+cookie cross the network readable. On a source install, port 3000 is open on every interface. Put
+Twingate or an HTTPS proxy in front, and bind the port to `127.0.0.1` — see
+[Why it needs setting up](09-remote-access.md#why-it-needs-setting-up).
+
+**Behind an HTTPS proxy, the `tm_session` cookie is not marked Secure.** The proxy is not sending
+`X-Forwarded-Proto: https`. nginx never does unless told to; add
+`proxy_set_header X-Forwarded-Proto $scheme;` ([nginx](09-remote-access.md#nginx)).
+
+**Saves and approvals fail with `403 cross-site request refused`.** The browser did not mark the
+request as coming from the dashboard's own page. Open the dashboard at the proxy's address itself,
+not inside a frame or from another site's page, and check that nothing between the browser and the
+proxy rewrites requests.
+
+**The browser warns about the certificate (Caddy `tls internal`).** That device does not trust
+Caddy's root certificate yet. Install it there — see
+[On a private network](09-remote-access.md#on-a-private-network).
+
+**Twingate connects, but the dashboard address does not load.** Check, in this order: the Connector
+runs on the Tubematic host itself; a Docker Connector uses host networking; the Resource allows
+TCP 3000; and you are opening the Resource's alias, not `127.0.0.1`. See
+[Twingate](09-remote-access.md#twingate).
 
 ---
 

@@ -33,6 +33,7 @@ For anyone running Tubematic. No knowledge of the code is assumed.
 | **[6 · Publishing](user-guide/06-publishing.md)** | Connecting social accounts, publishing and scheduling posts, and Auto Pilot |
 | **[7 · Upgrading](user-guide/07-upgrading.md)** | Moving to a new version, versioning, backups, and rollback |
 | **[8 · Troubleshooting](user-guide/08-troubleshooting.md)** | Symptoms and where the cause usually is |
+| **[9 · Remote Access](user-guide/09-remote-access.md)** | Using the dashboard from another machine: Twingate, or HTTPS with Caddy or nginx |
 
 ## Developer docs
 
@@ -65,7 +66,8 @@ For contributors and anyone integrating with or extending Tubematic.
 ## Reading routes
 
 **Just want to run it.** [Quickstart](quickstart.md) → [Using Tubematic](user-guide/03-using-tubematic.md)
-→ [The Dashboard](user-guide/04-dashboard.md).
+→ [The Dashboard](user-guide/04-dashboard.md), and [Remote Access](user-guide/09-remote-access.md) to
+use it from another machine.
 
 **Want to change how videos look.** [Overview](user-guide/01-overview.md) →
 [The Remotion Project](developer/09-remotion-project.md) → [Scene Authoring](developer/10-scene-authoring.md).

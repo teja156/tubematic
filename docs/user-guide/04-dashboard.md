@@ -30,9 +30,9 @@ no password reset in the dashboard itself.
 - **A session that ends while a page is open is noticed within 30 seconds**, and the browser is sent
   to the login page; after signing in you return to the page you were on.
 
-The dashboard listens on the local machine only. To use it from another machine, put HTTPS in front
-of it — over plain HTTP the password and the session cookie cross the network readable. See
-[Infrastructure — Using the dashboard from another machine](../developer/16-infrastructure.md#using-the-dashboard-from-another-machine).
+The dashboard listens on the local machine only. To use it from another machine, see
+[Remote Access](09-remote-access.md). Over plain HTTP the password and the session cookie cross the
+network readable.
 
 ---
 
