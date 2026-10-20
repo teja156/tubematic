@@ -61,12 +61,15 @@ Install these before running `onboard.py`:
 
 | | Version | Check | Why |
 |---|---|---|---|
-| Linux host | — | — | The only supported platform. Cron, `flock`, `/proc` and bind-mounted volumes under `~` are all assumed |
-| Docker + Compose v2 | — | `docker info`, `docker compose version` | All four services. The Docker daemon must be running |
+| Linux host | — | `uname -s` | The only supported platform. Cron, `flock`, `/proc` and bind-mounted volumes under `~` are all assumed |
+| Docker Engine | 29+ | `docker --version`, `docker info` | All four services. The Docker daemon must be running |
+| Docker Compose | v2 | `docker compose version` | The `docker compose` plugin, not the legacy `docker-compose` script |
 | Python | 3.11+ | `python3 --version` | The wizard, the poller, host scripts |
 | Node.js | **22.20 or newer** | `node --version` | The Remotion skills installer crashes on import below 22.20. Onboarding only *warns* when Node is older or missing, and the Remotion best-practices skill is then not installed; rendering itself runs in a container and is unaffected. Only checked for a **source** install — a release install builds nothing locally and skips this entirely |
 | An AI agent CLI | Latest | `which claude` / `which codex` / `which opencode` | Claude Code, Codex, or OpenCode v2 (the `@opencode/cli` package). Needed for `--install-agent`, not for the main wizard; any number may be installed. Log it in first — `claude` once interactively, `codex login`, or `opencode auth login` |
-| Disk | ~10 GB | `df -h ~` | Images, `node_modules`, and rendered video |
+| CPU | 2 cores, 4+ recommended | `nproc` | Rendering opens parallel browser tabs — half the available CPU threads — so more cores render faster. At 2 cores the render also competes with the API, worker and dashboard |
+| Memory | 4 GB, 8 GB recommended | `free -g` | The renderer reserves 2 GB of shared memory for Chromium on its own. Each parallel render tab needs roughly 1–2 GB more, so size memory together with the core count |
+| Disk | ~15 GB | `df -h ~` | Images, `node_modules`, and rendered video |
 
 You will also need API keys. Two are **required** and onboarding will not finish without them:
 
@@ -282,7 +285,7 @@ answer its questions exactly as in [The ten steps](#the-ten-steps).
    and paste `https://registry.tejaswaroop.com/`.
 2. **Install the Tubematic workspace** from that registry. Before you do, read its notes and its
    Docker run settings: it runs **privileged** (Tubematic's containers run inside the session through
-   Docker-in-Docker, which needs it), it needs about 15 GB for its image plus about 10 GB inside the
+   Docker-in-Docker, which needs it), it needs about 15 GB for its image plus about 15 GB inside the
    session for Tubematic's own images, and it must **not** have a GPU attached. Give it a
    **Persistent Profile Path**, or your install, its data and your agent logins go when the session
    does.

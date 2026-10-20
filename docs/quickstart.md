@@ -9,12 +9,14 @@ The short path from nothing to a first video. Each step links to the page with t
 
 - **A Linux machine.** Cron, `flock` and bind-mounted volumes under `~` are assumed; nothing else is
   supported.
-- **Docker with Compose v2**, with the daemon running.
+- **Docker Engine 29+ with Compose v2**, with the daemon running.
 - **Python 3.11 or newer.**
 - **An agent CLI, logged in:** Claude Code (`claude`), Codex (`codex`) or OpenCode v2 (`opencode`,
   the `@opencode/cli` package). It does the writing, so it needs a real model behind it.
 - **Node.js 22.20 or newer** — only if you install from source. A release builds nothing locally.
-- **About 10 GB of disk** for images and rendered video.
+- **2 CPU cores and 4 GB of memory** at a minimum; 4 cores and 8 GB render noticeably faster,
+  because a render opens parallel browser tabs — half the available CPU threads.
+- **About 15 GB of disk** for images and rendered video.
 - **API keys:** ElevenLabs and OpenAI are required. Gemini (for topic mining and AI review),
   youtube-transcript.io (for script profiles only; topic mining does not use it) and postforme.dev (for publishing)
   are optional. OpenAI needs **billing enabled** on the key's project for image generation.

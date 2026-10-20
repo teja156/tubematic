@@ -78,7 +78,7 @@ published one is launched anywhere, so it names none.
 The registry entry asks for 4 cores and 8 GiB of memory, no GPU, and privileged mode.
 - **Privileged** is needed for Docker-in-Docker.
 - **No GPU:** an attached GPU crash-loops XFCE on an NVIDIA EGL failure.
-- **Disk:** about 15 GB for the image, plus about 10 GB inside the session for Tubematic's own
+- **Disk:** about 15 GB for the image, plus about 15 GB inside the session for Tubematic's own
   images.
 - **Persistent Profile Path:** recommended. Without one, the install, its data and the agent logins
   go when the session does.
