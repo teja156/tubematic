@@ -344,6 +344,9 @@ export interface PipelineStatus {
    * TMDEV-100 does not send it, and the top bar renders nothing in that case
    * rather than guessing. */
   version?: string;
+  /** This project's GitHub repo, `owner/name`, from tubematic_core.version.GITHUB_REPO.
+   * The update check (TMDEV-114) reads it here so the dashboard never spells it. */
+  github_repo?: string;
 }
 
 export interface PatchVideoBody {

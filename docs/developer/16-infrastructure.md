@@ -149,6 +149,10 @@ Flask), which return nothing a caller could use.
 **The render worker has no check because it has nothing to protect**: it listens on no port and
 only makes outbound calls.
 
+The dashboard makes one outbound call of its own: the [update check](15-dashboard.md#update-check)
+reads `api.github.com` at most every two hours, unauthenticated. Without internet access it fails
+quietly and nothing else is affected.
+
 ### The secrets directory
 
 `~/.tubematic-data/secrets/` holds one file per secret, each a random 256-bit value:

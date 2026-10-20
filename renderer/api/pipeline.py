@@ -4582,6 +4582,8 @@ def create_pipeline_blueprint() -> Blueprint:
     # /stats is a bare status->count map that callers iterate, so a non-count key
     # there would break its shape; this payload is already named keys, and the
     # dashboard already fetches it once on mount for the timezone.
+    # `github_repo` (TMDEV-114) rides along for the dashboard's update check:
+    # its image cannot import tubematic_core, and the repo is spelled only there.
 
     @bp.get("/pipeline/status")
     def pipeline_status():
@@ -4651,6 +4653,7 @@ def create_pipeline_blueprint() -> Blueprint:
             "timezone": tz["timezone"],
             "timezone_label": tz["timezone_label"],
             "version": tversion.version(),
+            "github_repo": tversion.GITHUB_REPO,
         })
 
     # ── /logs ────────────────────────────────────────────────────────────────

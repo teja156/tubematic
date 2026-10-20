@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { TopBar } from "@/components/TopBar";
 import { TimeZoneProvider } from "@/components/TimeZoneProvider";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body>
         <TimeZoneProvider>
           <TopBar />
+          <UpdateBanner />
           <main
             className="mx-auto"
             style={{

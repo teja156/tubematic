@@ -1015,6 +1015,16 @@ def test_pipeline_status_reports_the_installed_version(client):
     assert json.loads(r.data)["version"] == version()
 
 
+def test_pipeline_status_reports_the_github_repo(client):
+    """The dashboard's update check reads the repo from here (TMDEV-114): its
+    image cannot import tubematic_core, and the repo is spelled in one place."""
+    from tubematic_core.version import GITHUB_REPO
+
+    r = client.get("/pipeline/status")
+    assert r.status_code == 200
+    assert json.loads(r.data)["github_repo"] == GITHUB_REPO
+
+
 def test_stats_stays_a_pure_status_count_map(client, db_path):
     """The version rides on /pipeline/status specifically so that /stats does not
     have to change shape. Callers iterate /stats expecting every value to be a

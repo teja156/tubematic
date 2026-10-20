@@ -634,6 +634,26 @@ def test_the_smoke_tests_curl_checks_retry_rather_than_fire_once(release_jobs):
             )
 
 
+def test_a_prerelease_version_is_published_as_a_github_prerelease(release_jobs):
+    """A `-suffix` version (2.1.0-rc.1) must be a GitHub prerelease (TMDEV-114).
+    The action defaults `prerelease` to false, which published a release
+    candidate as an ordinary release that GitHub could list as "Latest". The
+    dashboard's update check also filters by tag, so this is not its only guard,
+    but GitHub's own release page and /releases/latest depend on it."""
+    steps = [
+        (name, step)
+        for name, job in release_jobs.items()
+        for step in _steps_of(job)
+        if "action-gh-release" in step.get("uses", "")
+    ]
+    assert len(steps) == 1, f"expected one Release-creating step, found {len(steps)}"
+    name, step = steps[0]
+    assert step.get("with", {}).get("prerelease") == (
+        "${{ contains(needs.preflight.outputs.version, '-') }}"
+    )
+    assert "preflight" in _ancestors(name, release_jobs)
+
+
 # ── Docs site (docs.tubematic.ai) ─────────────────────────────────────────
 # release.yml's publish-docs job and docs-site.yml both run the composite
 # action .github/actions/sync-docs-site, which syncs docs/ into the
