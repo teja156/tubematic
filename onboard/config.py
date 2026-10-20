@@ -131,9 +131,13 @@ MAX_LOG_RETENTION_DAYS = 365
 MIN_RETENTION_DAYS = 0
 MAX_RETENTION_DAYS = 365
 
+# "Teja (eleven_v4) and Adam (eleven_v3)" — the pre-loaded roster, for help text.
+_DEFAULT_VOICE_NAMES = " and ".join(
+    f"{v['name']} ({v['model_id']})" for v in _voice_models.DEFAULT_VOICES)
+
 # Max named voices in the roster (TMDEV-51). Keep in sync with
 # renderer/api/pipeline.py, mcp/server.py and dashboard/app/settings/page.tsx.
-MAX_VOICES = 5
+MAX_VOICES = 10
 
 
 # ── Validators ─────────────────────────────────────────────────────────────
@@ -509,25 +513,30 @@ SECTIONS = [
         # each answer into cfg.values as it iterates and passes cfg.values as
         # all_values, so elevenlabs_voice_id's dynamic_choices only sees the
         # roster if it was asked first.
-        # Required (TMDEV-80): an empty roster also forces elevenlabs_voice_id
-        # blank (see apply_pipeline_settings), and generate_voice then fails
-        # with "No default voice set" on the first video anyone tries to voice.
+        # Advanced (TMDEV-172): a fresh install starts with
+        # voice_models.DEFAULT_VOICES and its first voice as the default,
+        # seeded through these fields' defaults — load_current_values only
+        # falls back to a default when no row is stored, so a re-run keeps the
+        # stored roster, even an emptied one. That default is also why the
+        # roster is no longer required (it was since TMDEV-80: an empty roster
+        # fails the first voicing with "No default voice set").
         # Each voice carries its own model (TMDEV-121), asked right after its
         # ID. Pronunciation is not a separate choice: the lexicon and inline
         # <respell> tags work on every model, and a model in
         # PRONUNCIATION_PHONEME_MODELS additionally gets <phoneme> tags, and
-        # eleven_v3 <ipa> tags, detected automatically from the voice's model.
-        Field("elevenlabs_voices", "Named voices (up to 5)", source="settings", kind="voices",
-              default="[]", required=True,
+        # the IPA models <ipa> tags, detected automatically from the voice's model.
+        Field("elevenlabs_voices", f"Named voices (up to {MAX_VOICES})", source="settings",
+              kind="voices", default=json.dumps(list(_voice_models.DEFAULT_VOICES)),
+              advanced=True,
               help="Give each ElevenLabs voice ID a short name and pick the model it speaks "
-                   "with — find the IDs in your ElevenLabs voice library. At least one is "
-                   "needed before any video can be voiced. Pronunciation control (the term "
+                   "with — find the IDs in your ElevenLabs voice library. A new install starts "
+                   f"with {_DEFAULT_VOICE_NAMES}. Pronunciation control (the term "
                    "lexicon and inline <respell> tags) works on every model; "
                    f"{', '.join(PRONUNCIATION_PHONEME_MODELS)} also take exact <phoneme> tags "
-                   "and eleven_v3 exact IPA. On a re-run, Enter on the first prompt keeps the "
-                   "roster you already have."),
+                   f"and {', '.join(sorted(_voice_models.IPA_COMPATIBLE_MODELS))} exact IPA. "
+                   "Enter on the first prompt keeps the roster you already have."),
         Field("elevenlabs_voice_id", "Default voice", source="settings", kind="select",
-              default="",
+              default=_voice_models.DEFAULT_VOICE_ID, advanced=True,
               help="Used whenever a video doesn't have its own voice picked.",
               dynamic_choices=lambda values: [
                   v["voice_id"] for v in _parse_voices(values.get("elevenlabs_voices"))

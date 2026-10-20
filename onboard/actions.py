@@ -326,10 +326,10 @@ def apply_pipeline_settings(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> 
     cap = _clamp_nonneg_int(v.get("RESEARCH_PENDING_CAP", "15"), "15")
 
     # Voice roster (TMDEV-51) — purely DB-backed, like every other field in
-    # this section. No bootstrap source: the "voices" prompt
-    # (kind="voices") is the only place a roster gets entered, and leaving it
-    # blank on a re-apply keeps the existing roster unchanged (see
-    # onboard/prompt.py) rather than needing a separate seed source.
+    # this section. A fresh install gets voice_models.DEFAULT_VOICES through
+    # the field's default (TMDEV-172); a re-run carries the stored roster,
+    # since load_current_values prefers it, and leaving the "voices" prompt
+    # blank keeps it unchanged (see onboard/prompt.py).
     from onboard.config import _parse_voices
     voices = _parse_voices(v.get("elevenlabs_voices", "[]"))
     roster_ids = {voice["voice_id"] for voice in voices}

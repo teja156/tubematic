@@ -138,8 +138,9 @@ Every segment's `voice` is pure spoken words. It must **never** contain `[SCENE]
 ElevenLabs TTS and would be read aloud verbatim. Visual and animation directions belong in that
 segment's `visual` field.
 
-**The only bracketed text ever allowed in `voice`** is an Eleven v3 pause tag — exactly `[pause]`,
-`[short pause]` or `[long pause]`, and only when the video's model is `eleven_v3` (Step 6).
+**The only bracketed text ever allowed in `voice`** is a pause tag — exactly `[pause]`,
+`[short pause]` or `[long pause]`, and only when the video's model is `eleven_v3` or `eleven_v4`
+(Step 6).
 `update_video` rejects any other `[...]` run outright, so a stray stage direction fails loudly at
 authoring time instead of being voiced aloud.
 
@@ -228,7 +229,7 @@ gives exact phonetic control.
   spaces: a respelling containing whitespace is **rejected** by `update_video`, because the
   substitution has to replace the term as a single token.
 
-**`pronunciation_mode == "ipa"` (the model is `eleven_v3`):** v3 pronounces the International
+**`pronunciation_mode == "ipa"` (the model is `eleven_v3` or `eleven_v4`):** both pronounce the International
 Phonetic Alphabet natively, which is the most exact control this pipeline has. Wrap a flagged term in
 the segment's `voice` with an inline IPA tag: `<ipa ph="...">word</ipa>`. The wrapped word is what is
 displayed (captions, the dashboard Script tab, `videos.script`); the IPA is only ever spoken — never
@@ -241,16 +242,16 @@ write the IPA, or slashes around it, into `voice` yourself, or viewers read it o
 - **One tag per word, and `ph` is the bare IPA for that one word:** no spaces and no slashes — the
   pipeline adds the slashes itself when it sends the text. A multi-word name needs one tag per word.
 - **Selection rule, restated:** recurring term → lexicon entry (plain respelling, exactly as in
-  respell mode — the lexicon and `<respell>` still work on v3); one-off term that needs to be exact →
+  respell mode — the lexicon and `<respell>` still work on v3 and v4); one-off term that needs to be exact →
   `<ipa>`. An acronym spelled out letter by letter stays a lexicon entry or `<respell as="S-Y-N">`.
 - **The respelling rule "one plain word, never hyphenated" is about respellings.** IPA is a different
   alphabet and that rule does not apply to it.
-- **It is not exact.** ElevenLabs puts v3's IPA at 80–90% consistent, and different voices may read
+- **It is not exact.** ElevenLabs puts v3's IPA at 80–90% consistent (v4's is described as improved, not exact), and different voices may read
   it differently. A term can still come back from AI review as a `mispronunciation`. When one does,
   fix the transcription (the stress placement, a vowel) rather than re-sending the same one, or fall
   back to a respelling.
-- Do not use `<phoneme>` tags here — v3 does not support them. Pause markup on v3 is unchanged and
-  covered in Step 6.
+- Do not use `<phoneme>` tags here — v3 and v4 do not support them. Their pause markup is covered in
+  Step 6.
 
 ### The final output
 
@@ -272,12 +273,15 @@ then:
 
 | `elevenlabs_model_id` | Explicit pause syntax |
 |---|---|
-| anything except `eleven_v3` | `<break time="0.6s" />` — inline, self-closing |
-| `eleven_v3` | `[pause]`, `[short pause]`, `[long pause]` |
+| anything except `eleven_v3` and `eleven_v4` | `<break time="0.6s" />` — inline, self-closing |
+| `eleven_v3`, `eleven_v4` | `[pause]`, `[short pause]`, `[long pause]` |
 | every model | ellipses and sentence structure (Step 5) — always available, no markup |
 
 Using the wrong syntax for the video's model is rejected by `update_video`, before any
 ElevenLabs spend.
+
+On `eleven_v4` a `[pause]` right after a sentence ends adds very little silence; use `[long pause]`
+where a beat has to be clearly heard.
 
 Placement rules, each for a reason:
 

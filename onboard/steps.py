@@ -86,8 +86,9 @@ STEP_DEFS = [
         "trending sources, the "
         "ElevenLabs voice roster (each voice with its own model; pronunciation mode is "
         "auto-detected from the model, not asked) and default voice, the image-generation model, the render timeout, and the AI "
-        "review model/sampling rate/loop cap, all asked fresh. Only the voice roster/default and "
-        "the image model are asked by default; the rest need --full-questionnaire.",
+        "review model/sampling rate/loop cap, all asked fresh. Only the image model is asked by "
+        "default; the rest need --full-questionnaire. A new install's voice roster starts with "
+        "the pre-loaded voices.",
         consumes=[
             "GEMINI_REVIEW_ENABLED", "MAX_RENDER_RETRIES", "RESEARCH_PENDING_CAP",
             "max_curriculum_per_run", "max_trending_per_run",

@@ -37,8 +37,8 @@ Flags:
                    install has to answer are asked; everything else uses its
                    default, editable later on the Settings dashboard. Applies to
                    --install-agent too.
-  --allow-skipping Let required settings (the ElevenLabs and OpenAI API keys,
-                   the voice roster) be left blank at the prompt. Without it
+  --allow-skipping Let required settings (the ElevenLabs and OpenAI API keys)
+                   be left blank at the prompt. Without it
                    the wizard re-asks until they are supplied — onboarding is
                    meant to hand back an install that can actually run. The
                    OpenAI key is still needed for the install configuration

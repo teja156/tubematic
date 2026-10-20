@@ -440,10 +440,21 @@ describe("SettingsPage", () => {
     });
   });
 
-  it("hides the add-voice row and shows a cap note at the 5-voice maximum", async () => {
-    const fiveVoices = Array.from({ length: 5 }, (_, i) => ({
+  it("keeps the add-voice row below the 10-voice maximum", async () => {
+    const nineVoices = Array.from({ length: 9 }, (_, i) => ({
       name: `v${i}`, voice_id: `id${i}`, model_id: "eleven_multilingual_v2" }));
-    stubFetch({ ...MOCK_SETTINGS, elevenlabs_voices: fiveVoices, elevenlabs_voice_id: "id0" });
+    stubFetch({ ...MOCK_SETTINGS, elevenlabs_voices: nineVoices, elevenlabs_voice_id: "id0" });
+    render(<SettingsPage />);
+    await waitFor(() => screen.getByTestId("tab-voice"));
+    await openTab("voice");
+    await waitFor(() => expect(screen.getByTestId("voice-add-row")).toBeTruthy());
+    expect(screen.queryByTestId("voice-cap-note")).toBeNull();
+  });
+
+  it("hides the add-voice row and shows a cap note at the 10-voice maximum", async () => {
+    const tenVoices = Array.from({ length: 10 }, (_, i) => ({
+      name: `v${i}`, voice_id: `id${i}`, model_id: "eleven_multilingual_v2" }));
+    stubFetch({ ...MOCK_SETTINGS, elevenlabs_voices: tenVoices, elevenlabs_voice_id: "id0" });
     render(<SettingsPage />);
     await waitFor(() => screen.getByTestId("tab-voice"));
     await openTab("voice");
@@ -467,13 +478,13 @@ describe("SettingsPage", () => {
     const modelSelect = screen.getByTestId("voice-model-0") as HTMLSelectElement;
     expect(modelSelect.value).toBe("eleven_turbo_v2");
     expect([...modelSelect.options].map((o) => o.value)).toEqual(
-      expect.arrayContaining(["eleven_multilingual_v2", "eleven_v3", "eleven_flash_v2"]));
+      expect.arrayContaining(["eleven_multilingual_v2", "eleven_v3", "eleven_v4", "eleven_flash_v2"]));
     expect(modelSelect.title).toMatch(/<phoneme>/);
   });
 
-  it("the legend says eleven_v3 takes exact IPA", async () => {
+  it("the legend says eleven_v3 and eleven_v4 take exact IPA", async () => {
     await renderTab("voice");
-    expect(screen.getByTestId("voice-model-legend").textContent).toMatch(/eleven_v3 exact IPA/);
+    expect(screen.getByTestId("voice-model-legend").textContent).toMatch(/eleven_v3\/eleven_v4 exact IPA/);
   });
 
   it("changing a voice's model saves the roster with it, and no install-wide model", async () => {

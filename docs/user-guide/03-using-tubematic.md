@@ -234,7 +234,7 @@ change it now?" What every setting means, with its default, is in [Settings](05-
 
 | Value | Change it via |
 |---|---|
-| ElevenLabs voices (up to five, each with its own model) and the default voice | **Settings → Voice** |
+| ElevenLabs voices (up to ten, each with its own model; a new install starts with Teja and Adam) and the default voice | **Settings → Voice** |
 | Image model, and the model used for illustrated characters | **Settings → Images** |
 | AI review on or off (off by default, experimental), its model, frame rate and number of rounds | **Settings → AI Review** |
 | Topics per run (curriculum, trending, mining), pending-proposal cap, research runs per day, trending sources | **Settings → Research** |

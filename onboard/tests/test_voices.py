@@ -100,7 +100,7 @@ def test_default_voice_choices_empty_when_roster_unanswered():
 
 
 def test_voices_asked_before_default():
-    keys = [f.key for f in fields_for_step("pipeline_settings")]
+    keys = [f.key for f in fields_for_step("pipeline_settings", full=True)]
     assert keys.index("elevenlabs_voices") < keys.index("elevenlabs_voice_id")
 
 

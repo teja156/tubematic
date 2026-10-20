@@ -325,9 +325,9 @@ test.describe("Settings page", () => {
       expect(settings.elevenlabs_voice_id).toBe("");
     });
 
-    test("the add-voice row is hidden and a cap note shown at 5 voices", async ({ page }) => {
+    test("the add-voice row is hidden and a cap note shown at 10 voices", async ({ page }) => {
       await setSettings({
-        elevenlabs_voices: Array.from({ length: 5 }, (_, i) => ({
+        elevenlabs_voices: Array.from({ length: 10 }, (_, i) => ({
           name: `v${i}`, voice_id: `id${i}`, model_id: "eleven_multilingual_v2" })),
         elevenlabs_voice_id: "id0",
       });

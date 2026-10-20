@@ -204,7 +204,7 @@ SECRET_MASK_TAIL = 4
 
 # Max named voices in the roster (TMDEV-51). Keep in sync with mcp/server.py,
 # onboard/config.py and dashboard/app/settings/page.tsx.
-MAX_VOICES = 5
+MAX_VOICES = 10
 
 # Voice preview generation (TMDEV-51 follow-up). Sample text is fixed, not a
 # setting — nobody asked for it to be configurable, and it would need a
@@ -3243,7 +3243,7 @@ def create_pipeline_blueprint() -> Blueprint:
     # ── /voices/<voice_id>/preview ──────────────────────────────────────────────
     # Generate-if-missing, idempotent audio preview for a roster voice (TMDEV-51
     # follow-up). Deliberately its own endpoint, not part of POST /settings — a
-    # settings save must stay a cheap DB write, not up to 5 paid, slow, fallible
+    # settings save must stay a cheap DB write, not up to 10 paid, slow, fallible
     # ElevenLabs calls. The credits a generated preview spends are recorded in
     # the usage ledger with no video (TMDEV-107) and returned to the caller; a
     # cached preview makes no call and records nothing.

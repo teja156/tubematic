@@ -115,6 +115,13 @@ dashboard password is set and an OpenAI key is stored.
   [Dashboard — The update banner](user-guide/04-dashboard.md#the-update-banner).
 - **Prerelease versions are published as GitHub prereleases.** A version such as `2.1.0-rc.1` is
   marked as a prerelease on GitHub's Releases page and is never listed as the latest release.
+- **A new install comes with two ElevenLabs voices**, so you can voice a video without looking up
+  voice IDs first: Teja, on Eleven v4, as the default voice, and Adam, on Eleven v3. Remove or
+  replace them on Settings → Voice like any other voice.
+- **Eleven v4 (`eleven_v4`) can be picked as a voice's model.** It takes the same script markup as
+  Eleven v3: exact IPA pronunciations and `[pause]`-style pause tags, and no `<break>` tags. Its
+  `[pause]` right after a sentence ends adds very little silence, so scripts use `[long pause]` for a
+  pause that has to be heard.
 
 ### Changed
 
@@ -194,6 +201,10 @@ dashboard password is set and an OpenAI key is stored.
   was a single line, which is the wrong shape for the scope research works from. Drag its corner to
   make it taller. A description now holds at most 2000 characters, and a counter under the box
   shows how many you have used. The domain list still shows it on one line.
+
+- **Onboarding no longer asks for ElevenLabs voices** unless you run it with
+  `--full-questionnaire`. Before, it would not finish until at least one voice was entered.
+- **The voice list holds up to 10 voices**, up from 5.
 
 ### Fixed
 
@@ -325,6 +336,9 @@ dashboard password is set and an OpenAI key is stored.
   kept, and the domain's other settings still save. Only changing it to another text over the
   limit is refused, from the dashboard, the API and the MCP server alike — so a script of your own
   that writes a longer description now gets an error.
+- **An upgraded install keeps its voice list exactly as it was.** The two new pre-loaded voices
+  reach new installs only; to use them on an existing install, add them on Settings → Voice
+  (Teja: `w7yaXuKi0bjR3rtgNpVp`, model `eleven_v4`; Adam: `bfGb7JTLUnZebZRiFYyq`, model `eleven_v3`).
 - **Rolling back to 1.2.x means restoring the database backup** the upgrade took, because this
   release changes the database: 1.2.x's `upgrade.py` refuses to start otherwise. Restoring discards
   everything done since the upgrade; follow the rollback steps in the releases guide. The stored

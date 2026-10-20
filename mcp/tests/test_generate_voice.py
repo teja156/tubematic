@@ -1180,11 +1180,14 @@ def test_eleven_english_v1_is_not_offered():
     assert "eleven_english_v1" not in server.DICTIONARY_COMPATIBLE_MODELS
 
 
-def test_break_tags_are_every_model_except_v3():
-    """ElevenLabs: v3 does not support SSML break tags; every other model does.
-    Kept independent of the phoneme set on purpose — see docs/developer/08-scripting-and-voice.md."""
+def test_break_tags_are_every_model_except_v3_and_v4():
+    """ElevenLabs: v3 and v4 do not support SSML break tags; every other model
+    does. Kept independent of the phoneme set on purpose — see
+    docs/developer/08-scripting-and-voice.md."""
     assert "eleven_v3" not in server.BREAK_TAG_COMPATIBLE_MODELS
-    assert server.BREAK_TAG_COMPATIBLE_MODELS == server.DICTIONARY_COMPATIBLE_MODELS - {"eleven_v3"}
+    assert "eleven_v4" not in server.BREAK_TAG_COMPATIBLE_MODELS
+    assert server.BREAK_TAG_COMPATIBLE_MODELS == (
+        server.DICTIONARY_COMPATIBLE_MODELS - {"eleven_v3", "eleven_v4"})
 
 
 @pytest.mark.parametrize("model", ["eleven_flash_v2_5", "eleven_turbo_v2_5"])
@@ -1269,6 +1272,43 @@ def test_generate_voice_ipa_tag_is_sent_as_slash_ipa_but_captions_keep_the_word(
     with server._conn() as con:
         row = con.execute("SELECT tts_text FROM videos WHERE id = ?", ("vid_ipa1",)).fetchone()
     assert row["tts_text"] == 'Only "/vɑːˈɡɑːr/", could match it.'
+
+
+def test_generate_voice_on_v4_sends_ipa_and_pause_tags_and_keeps_the_caption_words(
+    job_db, voice_env, fake_httpx
+):
+    """eleven_v4 takes v3's markup (TMDEV-172). Probed live: its alignment
+    mirrors "/ph/" and [pause] tags verbatim and, unlike v3, the pause tag's
+    own characters span the silence — the fake alignment gives every
+    character a duration too, so the word after the tag must start after it."""
+    _set_install_model("eleven_v4")
+    segments = [{"id": "s1", "visual": "",
+                 "voice": 'Only <ipa ph="vɑːˈɡɑːr">Vhagar</ipa> could. [long pause] Then silence.'}]
+    job_db("vid_v4", script="ignored", script_segments=segments)
+
+    result = server.generate_voice("vid_v4", "ignored")
+
+    assert "error" not in result
+    sent = fake_httpx.last_payload["text"]
+    assert sent == 'Only "/vɑːˈɡɑːr/" could. [long pause] Then silence.'
+    assert fake_httpx.last_payload["model_id"] == "eleven_v4"
+    assert "enable_ssml_parsing" not in fake_httpx.last_payload
+    timeline = json.loads(server.JOBS_DIR.joinpath("vid_v4", "timeline.json").read_text())
+    words = timeline["words"]
+    assert [w["word"] for w in words] == ["Only", "Vhagar", "could.", "Then", "silence."]
+    pause_end = (sent.index("[long pause]") + len("[long pause]")) * 0.05
+    assert words[3]["startFrame"] >= round(pause_end * server.FPS)
+
+
+def test_generate_voice_rejects_break_tag_on_eleven_v4(job_db, voice_env, fake_httpx):
+    _set_install_model("eleven_v4")
+    segments = [{"id": "s1", "voice": 'First. <break time="0.6s" /> Second.', "visual": ""}]
+    job_db("vid_v4b", script="ignored", script_segments=segments)
+
+    result = server.generate_voice("vid_v4b", "ignored")
+
+    assert "<break/>" in result["error"]
+    assert fake_httpx.last_payload is None
 
 
 def test_generate_voice_refuses_ipa_before_spend_when_the_model_is_no_longer_v3(

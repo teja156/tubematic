@@ -111,9 +111,13 @@ These caps are **reported by the API and enforced by `scripts/poll.py`**, not by
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `elevenlabs_voices` | voice list | `[]` | Up to 5 entries of `{name, voice_id, model_id}`, names and ids unique and non-empty, `model_id` one of the supported ElevenLabs models — see [Scripting and Voice](../developer/08-scripting-and-voice.md#the-model-follows-the-voice) |
+| `elevenlabs_voices` | voice list | `[]` | Up to 10 entries of `{name, voice_id, model_id}`, names and ids unique and non-empty, `model_id` one of the supported ElevenLabs models — see [Scripting and Voice](../developer/08-scripting-and-voice.md#the-model-follows-the-voice) |
 | `elevenlabs_voice_id` | str | `""` | The install default voice. Must be `""` or a member of the roster |
 | `pronunciation_lexicon` | lexicon | `[]` | Up to 500 `{term, respell}` entries. `respell` must contain no whitespace and should be one plain word spelling the sound, never hyphen-separated — see [Scripting and voice](../developer/08-scripting-and-voice.md#respell-mode-the-default). `term` must be unique |
+
+The defaults above are what the API reads when nothing is stored. Onboarding stores a starting
+roster on a new install: Teja (`eleven_v4`) as the default voice and Adam (`eleven_v3`). Remove
+either like any other voice; re-running onboarding does not put them back.
 
 **Removing the default voice from the roster leaves the install with no default**, rather than
 refusing the save: the default reads as `""` until you pick another. Why it works that way is on

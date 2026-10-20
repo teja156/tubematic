@@ -296,7 +296,8 @@ work differently, noted below.
   comments to see whether a review ran.
 - **Images** — the OpenAI model for scene images and the one for the Illustrated style's characters.
   There is no provider choice: every image comes from OpenAI.
-- **Voice** — up to five named voices and the default one. Each voice has its own ElevenLabs model
+- **Voice** — up to ten named voices and the default one. A new install starts with Teja (on
+  `eleven_v4`, the default) and Adam (on `eleven_v3`), which can be removed like any other voice. Each voice has its own ElevenLabs model
   and a ▶ button that plays a sample of it with that model; there is no install-wide model.
 - **Scheduling** — how many agent sessions run at once and the session timeout, plus read-only
   research figures: runs used in the last 24 hours, when the next one frees, and the last research

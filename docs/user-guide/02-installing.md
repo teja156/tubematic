@@ -161,7 +161,7 @@ container steps are always last and ask nothing, so no prompt ever interleaves b
 | 4 | `database` | Creates the SQLite file, if needed, and runs any pending schema migrations |
 | 5 | `auth` | Creates the three service tokens in `~/.tubematic-data/secrets/` (keeps any that exist) and asks for the dashboard password — twice, hidden, at least 12 characters — when none is set. It cannot be skipped |
 | 6 | `install_config` | Stores the API keys (**each verified live** as it is typed), the publishing switch and whether AI review is on. Advanced-only: MCP port, render retry budget, pending-topic cap |
-| 7 | `pipeline_settings` | Seeds the rest of the dashboard-editable settings. Asked by default: the ElevenLabs voice roster (each voice with the model it speaks with) and default voice, and the image model. Advanced-only: per-run topic caps, trending sources, the research run cap, the render timeout, log and video retention, the AI review model, sampling rate and loop cap, and Auto Pilot |
+| 7 | `pipeline_settings` | Seeds the rest of the dashboard-editable settings. Asked by default: the image model. Advanced-only: the ElevenLabs voice roster (each voice with the model it speaks with) and default voice, which a new install pre-loads with Teja (`eleven_v4`, the default) and Adam (`eleven_v3`); per-run topic caps, trending sources, the research run cap, the render timeout, log and video retention, the AI review model, sampling rate and loop cap, and Auto Pilot |
 | 8 | `cron` | Asks for the poll interval (default 30 minutes) and writes one cron entry to your user crontab. See [Manual cron setup](#manual-cron-setup) |
 | 9 | `renderer` | Builds one image and starts `tubematic-api`, `tubematic-mcp` and `tubematic-renderer` (release install: pulls the published image instead of building), waiting on the API's and MCP's healthchecks separately and confirming the worker container is running |
 | 10 | `dashboard` | Builds and starts `tubematic-dashboard` (release install: pulls instead of building) |
@@ -181,15 +181,14 @@ Progress is tracked in `.onboard-state.json` in the install directory, so an int
 ### Questions
 
 On a fresh machine the wizard asks only the questions it cannot answer with a sensible default: the
-API keys, whether to publish and review, the voice roster, the image model, and the
-cron interval. The rest are marked advanced and take their defaults, editable afterwards on the
+API keys, whether to publish and review, the image model, and the cron interval. The rest are marked advanced and take their defaults, editable afterwards on the
 dashboard's Settings page; `--full-questionnaire` asks every one.
 
-Three answers are **required** and are re-asked until supplied: the ElevenLabs key, the OpenAI key,
-and at least one voice in the roster. Onboarding exists to hand back an install that can actually
-run, and none of those three has a fallback or a usable default — an empty voice roster, for
-instance, makes the first voicing fail outright, and without the OpenAI key no scene image can be
-drawn. The Gemini key is optional: without it, mining is off and AI review is skipped.
+Two answers are **required** and are re-asked until supplied: the ElevenLabs key and the OpenAI key.
+Onboarding exists to hand back an install that can actually run, and neither has a fallback or a
+usable default — without the OpenAI key no scene image can be drawn. The voice roster no longer
+needs an answer, because a new install starts with two voices. Those pre-loaded voices are only a
+default answer, so a re-run keeps whatever roster is stored, including one you emptied on purpose. The Gemini key is optional: without it, mining is off and AI review is skipped.
 `--allow-skipping` lets those answers be left blank at the prompt, though the install configuration
 step still refuses to finish without the OpenAI key.
 
