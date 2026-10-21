@@ -122,6 +122,15 @@ dashboard password is set and an OpenAI key is stored.
   Eleven v3: exact IPA pronunciations and `[pause]`-style pause tags, and no `<break>` tags. Its
   `[pause]` right after a sentence ends adds very little silence, so scripts use `[long pause]` for a
   pause that has to be heard.
+- **Guides for using the dashboard from another machine.** A new
+  [Remote Access](user-guide/09-remote-access.md) page walks through three ways in: Twingate, a
+  private network that needs no domain and opens no port, and HTTPS with Caddy or nginx. Each comes
+  with a configuration that was tested in front of a real dashboard, plus a short checklist that it
+  works.
+- **A guide to installing Docker on Ubuntu.** [Installing](user-guide/02-installing.md#installing-docker-on-ubuntu)
+  now walks through Docker Engine and the Compose plugin from Docker's own repository, adding your
+  user to the `docker` group, and a check that it all works without `sudo`. On other distributions,
+  follow Docker's instructions for yours.
 
 ### Changed
 
@@ -299,9 +308,9 @@ dashboard password is set and an OpenAI key is stored.
   The MCP server's token is `~/.tubematic-data/secrets/mcp_token`. An MCP server you registered
   with an agent by hand, rather than through `onboard.py --install-agent`, must be re-registered
   through the installer.
-- **Using the dashboard from another machine:** put HTTPS in front of it — a reverse proxy such as
-  Caddy, or a private network such as Tailscale. It works over plain HTTP, but then the password
-  crosses the network readable.
+- **Using the dashboard from another machine:** put HTTPS in front of it, or use a private network —
+  see [Remote Access](user-guide/09-remote-access.md) for Twingate, Caddy and nginx. It works over
+  plain HTTP, but then the password crosses the network readable.
 - **Moving the install directory** now also needs `python3 onboard.py --install-agent <agent>` for
   each agent, because each agent's registration names the install's helper script.
   `upgrade.py` does this for you when you upgrade into a new directory.

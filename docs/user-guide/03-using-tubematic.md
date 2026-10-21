@@ -77,8 +77,8 @@ data directory and re-points Docker volumes whose data location has moved before
 `python3 scripts/service.py status` shows whether everything is up, and `stop` stops it.
 
 Open <http://localhost:3000> and sign in with the dashboard password you set during onboarding.
-Signing in, signing out, and using the dashboard from another machine are in
-[The Dashboard — Signing in](04-dashboard.md#signing-in). Forgot the password?
+Signing in and signing out are in [The Dashboard — Signing in](04-dashboard.md#signing-in), and
+using the dashboard from another machine is in [Remote Access](09-remote-access.md). Forgot the password?
 `python onboard.py --set-password` on the host sets a new one and signs every browser out.
 
 ---

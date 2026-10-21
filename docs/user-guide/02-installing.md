@@ -62,8 +62,8 @@ Install these before running `onboard.py`:
 | | Version | Check | Why |
 |---|---|---|---|
 | Linux host | — | `uname -s` | The only supported platform. Cron, `flock`, `/proc` and bind-mounted volumes under `~` are all assumed |
-| Docker Engine | 29+ | `docker --version`, `docker info` | All four services. The Docker daemon must be running |
-| Docker Compose | v2 | `docker compose version` | The `docker compose` plugin, not the legacy `docker-compose` script |
+| Docker Engine | 29+ | `docker --version`, `docker info` | All four services. The Docker daemon must be running, and usable without `sudo`. On Ubuntu, see [Installing Docker on Ubuntu](#installing-docker-on-ubuntu) |
+| Docker Compose | v2 or newer | `docker compose version` | The `docker compose` plugin, not the legacy `docker-compose` script. Current releases of the plugin report v5 |
 | Python | 3.11+ | `python3 --version` | The wizard, the poller, host scripts |
 | Node.js | **22.20 or newer** | `node --version` | The Remotion skills installer crashes on import below 22.20. Onboarding only *warns* when Node is older or missing, and the Remotion best-practices skill is then not installed; rendering itself runs in a container and is unaffected. Only checked for a **source** install — a release install builds nothing locally and skips this entirely |
 | An AI agent CLI | Latest | `which claude` / `which codex` / `which opencode` | Claude Code, Codex, or OpenCode v2 (the `@opencode/cli` package). Needed for `--install-agent`, not for the main wizard; any number may be installed. Log it in first — `claude` once interactively, `codex login`, or `opencode auth login` |
@@ -96,6 +96,102 @@ normally but reports no views, likes or comments — ever, and without any error
 permission later means reconnecting the account. See
 [Connecting accounts](06-publishing.md#connecting-accounts).
 
+### Installing Docker on Ubuntu
+
+> **These steps are for Ubuntu only.** On any other distribution — Debian, Fedora, RHEL, Arch, and
+> so on — follow Docker's own instructions for that distribution instead
+> ([docs.docker.com/engine/install](https://docs.docker.com/engine/install/)), then come back for the
+> [docker group](#run-docker-without-sudo) and [check](#check-docker) steps, which are the same
+> everywhere. Commands written for one distribution's package manager do not work on another.
+
+**1. Check whether Docker is already installed.** Neither command needs `sudo` or a running daemon:
+
+```bash
+docker --version
+docker compose version
+```
+
+| What you see | What to do |
+|---|---|
+| `Docker version 29` or newer, **and** a `Docker Compose version` line | Nothing to install. Skip to [Run Docker without sudo](#run-docker-without-sudo) |
+| Docker 29 or newer, but `docker compose version` fails | Docker is fine; only the Compose plugin is missing. Add it with `sudo apt install -y docker-compose-plugin` (Docker installed from Docker's repository, which `dpkg -s docker-ce` confirms) or `sudo apt install -y docker-compose-v2` (installed from Ubuntu's `docker.io`), then skip to [Run Docker without sudo](#run-docker-without-sudo) |
+| `docker: command not found`, or a version below 29 | Install it with steps 2–4 below |
+
+A `docker-compose` command (with a hyphen) does not count. That is the legacy Compose script, which
+Tubematic does not use; it needs the `docker compose` plugin.
+
+The steps below install Docker from **Docker's own apt repository**. Ubuntu's `docker.io` and
+`docker-compose-v2` packages follow Ubuntu's release schedule, so their version depends on which
+Ubuntu you run, and an older release can ship an Engine below the 29 Tubematic needs. Docker's
+repository always carries the current Engine and Compose plugin. These steps follow Docker's
+[Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/), which also lists
+the Ubuntu releases it supports.
+
+**2. Remove conflicting packages.** Ubuntu's own Docker packages clash with Docker's. `apt` may
+report that none are installed, which is fine:
+
+```bash
+sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc docker-buildx podman-docker containerd runc | cut -f1)
+```
+
+Images, containers and volumes under `/var/lib/docker/` are not removed by this.
+
+**3. Add Docker's apt repository:**
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+
+sudo apt update
+```
+
+**4. Install Docker Engine and the Compose plugin:**
+
+```bash
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+The daemon starts on its own and is enabled at boot. If it is not running, start it with
+`sudo systemctl enable --now docker`.
+
+#### Run Docker without sudo
+
+Onboarding, the upgrade and the uninstaller all run `docker` as you, not as root, so your user must
+be in the `docker` group:
+
+```bash
+sudo usermod -aG docker $USER
+```
+
+Log out and back in for it to take effect (`newgrp docker` applies it to the current shell only).
+Membership of the `docker` group is equivalent to root on this machine, because anyone in it can
+start a container that mounts the whole filesystem; add only the account that runs Tubematic.
+
+Without this, `docker info` fails with a permission error on `/var/run/docker.sock`, and onboarding
+reports Docker as installed but not running.
+
+#### Check Docker
+
+```bash
+docker --version          # 29 or newer
+docker compose version    # v2 or newer
+docker run --rm hello-world
+```
+
+All three must work **without** `sudo`. If `hello-world` prints its greeting, Docker is ready.
+
 ---
 
 ## Network exposure
@@ -109,9 +205,9 @@ Know what listens before you install. The Flask API (4000) and the MCP server (4
   can reach this machine on port 3000 gets the login page.
 
 Over plain HTTP the password and the session cookie cross the network readable, so treat a source
-install's dashboard as trusted-LAN only. To use it from another machine, put HTTPS in front of it
-(a reverse proxy such as Caddy or nginx, or a private network such as Tailscale). See
-[Infrastructure — Using the dashboard from another machine](../developer/16-infrastructure.md#using-the-dashboard-from-another-machine).
+install's dashboard as trusted-LAN only. To use it from another machine, use a private network
+(Twingate) or an HTTPS reverse proxy (Caddy or nginx); [Remote Access](09-remote-access.md) has
+step-by-step guides for all three.
 
 ---
 
@@ -158,7 +254,7 @@ container steps are always last and ask nothing, so no prompt ever interleaves b
 
 | # | Step | What it does |
 |---|---|---|
-| 1 | `prerequisites` | Checks Docker is running, Compose v2, Python 3.11+ and — for a source install — Node and npx. The agent binary is checked later, by `--install-agent` |
+| 1 | `prerequisites` | Checks Docker is running, the Compose plugin (v2 or newer), Python 3.11+ and — for a source install — Node and npx. The agent binary is checked later, by `--install-agent` |
 | 2 | `python_deps` | Installs `scripts/requirements.txt` into `.venv` — in both modes, since the poller runs on the host either way |
 | 3 | `directories` | Creates `~/.tubematic-data/{jobs,data,output_videos,scenes/generated,logs,backups}` |
 | 4 | `database` | Creates the SQLite file, if needed, and runs any pending schema migrations |
@@ -515,7 +611,6 @@ about whether the poller is running.
 | **Install-time answers** | The same table, seeded by onboarding |
 | **Installed agents** | The `agents` table, written by `--install-agent` |
 | **Service tokens and the session key** | `~/.tubematic-data/secrets/` |
-| **The output-video path for Compose** | `docker-compose.override.yml`, generated by the `renderer` step. Compose interpolation cannot read SQLite, which is why that single value is materialised as a file |
 | **Wizard progress** | `.onboard-state.json` in the install directory |
 
 **There is no `.env` file.** Credentials live in the settings table so they can be rotated from
@@ -678,7 +773,10 @@ To remove one agent and keep the project, use [Uninstall an agent](#uninstall-an
 go back to an older version rather than removing Tubematic, see
 [Upgrading — Rollback policy](07-upgrading.md#rollback-policy).
 
-Every step asks for confirmation before deleting anything, and every prompt **defaults to no**.
+Every step asks for confirmation before deleting anything. A prompt that deletes your data (the
+database, job files, generated scenes, the agent workspace, a leftover `.env`, the data root)
+**defaults to no**; one that removes something Tubematic can recreate (containers, volumes, agent
+config, cron lines, a leftover override) defaults to yes.
 `--yes`, `-y` or `--force` confirms every step without asking. There is no `--help`; unrecognised
 arguments are swallowed silently.
 
@@ -691,7 +789,7 @@ arguments are swallowed silently.
 | 5 · Generated scenes | `~/.tubematic-data/scenes/generated/*` — the agent-written scene components |
 | 6 · Agent integration | Each installed agent's skills, commands and MCP registration (and, for a project-scope Claude Code install, the agent workspace) |
 | 7 · Cron | The Tubematic lines in your user crontab |
-| 8 · Generated files | `docker-compose.override.yml`, and any leftover `.env` |
+| 8 · Leftover files | A `docker-compose.override.yml` or `.env` left by an older version. Nothing writes either any more, but Compose still loads an override it finds |
 | 9 · Data root | Offers to delete `~/.tubematic-data/` outright — **including rendered videos** |
 
 Step 6 reads Claude Code's install scope and workspace from its row in the `agents` table, falling

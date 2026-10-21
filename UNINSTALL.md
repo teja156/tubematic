@@ -1,10 +1,10 @@
 # Tubematic — Uninstall
 
 `uninstall.py` removes Tubematic in nine steps — containers, Docker volumes, the database, job files,
-generated scenes, each agent's skills and MCP registration, the cron entry, generated files, and
-finally the `~/.tubematic-data/` data root. Every step asks first and defaults to **no**; only the
-last one can delete your rendered videos, and it says how many are at stake. Run it from the install
-directory:
+generated scenes, each agent's skills and MCP registration, the cron entry, files an older version
+left behind, and finally the `~/.tubematic-data/` data root. Every step asks first, and every step
+that deletes your data defaults to **no**; only the last one can delete your rendered videos, and it
+says how many are at stake. Run it from the install directory:
 
 ```bash
 python3 uninstall.py            # --yes confirms every step without asking
