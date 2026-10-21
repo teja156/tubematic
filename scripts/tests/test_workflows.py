@@ -745,32 +745,73 @@ def test_the_sync_action_builds_before_it_pushes_and_refuses_an_empty_token():
             assert _ACTION_USES_RE.match(uses) and re.match(r"^v\d+", uses.split("@")[1]), uses
 
 
-# ── kasm-workspace-image.yml ────────────────────────────────────────────────
+# ── Kasm workspace registry ───────────────────────────────────────────────
 #
-# Builds the published Kasm Workspace image. That image carries no Tubematic
-# version, so it is rebuilt by hand when its tooling changes -- never by a tag
-# or a branch push, and never as part of a release.
+# release.yml's publish-kasm-registry job runs the composite action
+# .github/actions/sync-kasm-registry, which rewrites the Tubematic entry in the
+# workspace registry repo with every published release. The workspace image
+# itself is built and pushed by hand (kasm_workspace/build.sh --push): it
+# carries no Tubematic version, so nothing in CI builds it.
 
-KASM_IMAGE_PATH = os.path.join(WORKFLOWS_DIR, "kasm-workspace-image.yml")
-
-
-def test_the_kasm_image_workflow_runs_by_hand_only():
-    wf = _load(KASM_IMAGE_PATH)
-    on = wf.get("on", wf.get(True))  # PyYAML reads a bare `on:` key as True
-    assert set(on) == {"workflow_dispatch"}, on
-    assert on["workflow_dispatch"]["inputs"]["tag"]["default"] == "1.19.0"
+KASM_SYNC_ACTION_PATH = os.path.join(REPO_ROOT, ".github", "actions", "sync-kasm-registry", "action.yml")
+KASM_REGISTRY_TOKEN = "${{ secrets.TUBEMATIC_KASM_REGISTRY_TOKEN }}"
 
 
-def test_the_kasm_image_workflow_pushes_the_published_image_name():
-    wf = _load(KASM_IMAGE_PATH)
-    assert wf["permissions"] == {"contents": "read", "packages": "write"}
-    [job] = wf["jobs"].values()
-    runs = "\n".join(s.get("run", "") for s in _steps_of(job))
-    assert 'kasm_workspace/build.sh --image "ghcr.io/$owner/tubematic-kasm-workspace" --push' in runs
-    for s in _steps_of(job):
+def test_no_workflow_builds_the_kasm_workspace_image():
+    assert not os.path.exists(os.path.join(WORKFLOWS_DIR, "kasm-workspace-image.yml"))
+    for name in os.listdir(WORKFLOWS_DIR):
+        with open(os.path.join(WORKFLOWS_DIR, name)) as fh:
+            assert "kasm_workspace/build.sh" not in "".join(
+                line for line in fh if not line.lstrip().startswith("#")), name
+
+
+def test_the_registry_sync_runs_after_the_release_and_gates_nothing(release_jobs):
+    job = release_jobs["publish-kasm-registry"]
+    assert "release" in _ancestors("publish-kasm-registry", release_jobs)
+    for name, other in release_jobs.items():
+        assert "publish-kasm-registry" not in _needs_of(other), (
+            f"job {name!r} depends on publish-kasm-registry; a registry failure must never block a release")
+    # A prerelease is never offered on the launch form.
+    assert job["if"] == "${{ !contains(needs.preflight.outputs.version, '-') }}"
+
+
+def test_the_registry_sync_names_the_environment_and_passes_the_token(release_jobs):
+    job = release_jobs["publish-kasm-registry"]
+    assert job.get("environment") == DOCS_ENVIRONMENT, "the token reads as empty without it"
+    [step] = [s for s in _steps_of(job) if s.get("uses") == "./.github/actions/sync-kasm-registry"]
+    assert step["with"]["token"] == KASM_REGISTRY_TOKEN
+    assert job["permissions"] == {"contents": "read"}
+    assert job["concurrency"] == {"group": "kasm-registry-sync", "cancel-in-progress": False}
+
+
+def test_the_registry_action_checks_the_image_before_it_writes_anything():
+    """An entry naming an image Kasm cannot pull lists a workspace that fails
+    at install; the image is pushed by hand, so this is where a forgotten
+    push is caught."""
+    action = _load(KASM_SYNC_ACTION_PATH)
+    steps = action["runs"]["steps"]
+    names = [s.get("name", s.get("uses", "")) for s in steps]
+    assert names[0] == "Refuse an empty token", names
+    assert (names.index("Check the workspace image is publicly pullable")
+            < names.index("Check out the registry")
+            < names.index("Write the entry")
+            < names.index("Commit and push")), names
+    check = steps[names.index("Check the workspace image is publicly pullable")]["run"]
+    assert "docker manifest inspect" in check and "docker login" not in check
+    assert action["inputs"]["registry-branch"]["default"] == "1.1"
+    for s in steps:
         uses = s.get("uses")
         if uses:
             assert _ACTION_USES_RE.match(uses) and re.match(r"^v\d+", uses.split("@")[1]), uses
+
+
+def test_the_registry_action_offers_only_published_releases():
+    steps = _load(KASM_SYNC_ACTION_PATH)["runs"]["steps"]
+    [listing] = [s for s in steps if s.get("name") == "List the published releases"]
+    assert "--exclude-drafts" in listing["run"] and "--exclude-pre-releases" in listing["run"]
+    # The entry body comes from the newest release, never from an older line's tag.
+    [entry] = [s for s in steps if s.get("name") == "Take the entry from the newest release"]
+    assert entry["env"]["NEWEST"] == "${{ steps.releases.outputs.newest }}"
 
 
 def test_no_release_job_builds_the_kasm_workspace_image(release_jobs):
