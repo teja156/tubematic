@@ -104,17 +104,30 @@ permission later means reconnecting the account. See
 > [docker group](#run-docker-without-sudo) and [check](#check-docker) steps, which are the same
 > everywhere. Commands written for one distribution's package manager do not work on another.
 
-If `docker --version` already reports 29 or newer and `docker compose version` works, Docker is
-installed: skip to [Run Docker without sudo](#run-docker-without-sudo).
+**1. Check whether Docker is already installed.** Neither command needs `sudo` or a running daemon:
 
-Otherwise, install it from **Docker's own apt repository**. Ubuntu's `docker.io` and
+```bash
+docker --version
+docker compose version
+```
+
+| What you see | What to do |
+|---|---|
+| `Docker version 29` or newer, **and** a `Docker Compose version` line | Nothing to install. Skip to [Run Docker without sudo](#run-docker-without-sudo) |
+| Docker 29 or newer, but `docker compose version` fails | Docker is fine; only the Compose plugin is missing. Add it with `sudo apt install -y docker-compose-plugin` (Docker installed from Docker's repository, which `dpkg -s docker-ce` confirms) or `sudo apt install -y docker-compose-v2` (installed from Ubuntu's `docker.io`), then skip to [Run Docker without sudo](#run-docker-without-sudo) |
+| `docker: command not found`, or a version below 29 | Install it with steps 2–4 below |
+
+A `docker-compose` command (with a hyphen) does not count. That is the legacy Compose script, which
+Tubematic does not use; it needs the `docker compose` plugin.
+
+The steps below install Docker from **Docker's own apt repository**. Ubuntu's `docker.io` and
 `docker-compose-v2` packages follow Ubuntu's release schedule, so their version depends on which
 Ubuntu you run, and an older release can ship an Engine below the 29 Tubematic needs. Docker's
 repository always carries the current Engine and Compose plugin. These steps follow Docker's
 [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/), which also lists
 the Ubuntu releases it supports.
 
-**1. Remove conflicting packages.** Ubuntu's own Docker packages clash with Docker's. `apt` may
+**2. Remove conflicting packages.** Ubuntu's own Docker packages clash with Docker's. `apt` may
 report that none are installed, which is fine:
 
 ```bash
@@ -123,7 +136,7 @@ sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-
 
 Images, containers and volumes under `/var/lib/docker/` are not removed by this.
 
-**2. Add Docker's apt repository:**
+**3. Add Docker's apt repository:**
 
 ```bash
 sudo apt update
@@ -144,7 +157,7 @@ EOF
 sudo apt update
 ```
 
-**3. Install Docker Engine and the Compose plugin:**
+**4. Install Docker Engine and the Compose plugin:**
 
 ```bash
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
