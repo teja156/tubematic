@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))  # scripts/
 
@@ -844,6 +845,56 @@ def test_the_registry_action_offers_only_published_releases():
     # The entry body comes from the newest release, never from an older line's tag.
     [entry] = [s for s in steps if s.get("name") == "Take the entry from the newest release"]
     assert entry["env"]["NEWEST"] == "${{ steps.releases.outputs.newest }}"
+
+
+def test_the_registry_listing_fails_on_a_gh_error():
+    """Piped through `tr`, a failing `gh` would otherwise surface only as
+    "no published release versions"."""
+    steps = _load(KASM_SYNC_ACTION_PATH)["runs"]["steps"]
+    [listing] = [s for s in steps if s.get("name") == "List the published releases"]
+    run = listing["run"]
+    assert "set -o pipefail" in run and run.index("set -o pipefail") < run.index("gh release list")
+
+
+def test_the_entry_is_fetched_from_a_tag_the_checkout_already_made(tmp_path):
+    """On a tag-push run actions/checkout leaves a local refs/tags/vX.Y.Z on
+    the bare commit. Fetching the annotated tag onto that ref is refused
+    ("would clobber existing tag"), which failed v2.0.0's registry sync. The
+    step is run for real against that exact state."""
+    def git(cwd, *args):
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+                              cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+
+    origin = tmp_path / "origin"
+    entry = origin / "kasm_workspace" / "registry" / "Tubematic"
+    entry.mkdir(parents=True)
+    (entry / "workspace.json").write_text("{}\n")
+    git(origin, "init", "-q")
+    git(origin, "add", "-A")
+    git(origin, "commit", "-q", "-m", "release")
+    git(origin, "tag", "-a", "v2.0.0", "-m", "Tubematic v2.0.0")
+    sha = git(origin, "rev-parse", "HEAD")
+
+    # What actions/checkout does for a tag push: the commit, fetched onto refs/tags/<tag>.
+    work = tmp_path / "work"
+    work.mkdir()
+    git(work, "init", "-q")
+    git(work, "remote", "add", "origin", str(origin))
+    git(work, "fetch", "-q", "--no-tags", "--depth=1", "origin", f"+{sha}:refs/tags/v2.0.0")
+    git(work, "checkout", "-q", "v2.0.0")
+
+    steps = _load(KASM_SYNC_ACTION_PATH)["runs"]["steps"]
+    [step] = [s for s in steps if s.get("name") == "Take the entry from the newest release"]
+    out, runner_temp = tmp_path / "github_output", tmp_path / "runner_temp"
+    out.write_text("")
+    runner_temp.mkdir()
+    proc = subprocess.run(["bash", "-e", "-c", step["run"]], cwd=work, capture_output=True, text=True,
+                          env={**os.environ, "NEWEST": "2.0.0", "RUNNER_TEMP": str(runner_temp),
+                               "GITHUB_OUTPUT": str(out)})
+    assert proc.returncode == 0, proc.stderr
+    [line] = out.read_text().splitlines()
+    assert line.startswith("dir=")
+    assert (Path(line[len("dir="):]) / "workspace.json").is_file()
 
 
 def test_no_release_job_builds_the_kasm_workspace_image(release_jobs):
