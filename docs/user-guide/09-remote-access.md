@@ -307,16 +307,17 @@ one silently drops all of these for it.
 
 With a public DNS name pointing at the host and port 80 reachable from the internet,
 [certbot](https://certbot.eff.org/) obtains a Let's Encrypt certificate and rewrites the server block
-for HTTPS:
+for HTTPS. On Debian or Ubuntu, install it with its nginx plugin from the distribution's packages:
 
 ```bash
-sudo snap install --classic certbot
-sudo ln -s /snap/bin/certbot /usr/local/bin/certbot
+sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d tubematic.example.com
 ```
 
-It adds a `listen 443 ssl` with the certificate, redirects `http://` to `https://`, and installs a
-timer that renews the certificate. Check that renewal works with:
+The package installs a timer that renews the certificate. certbot adds a `listen 443 ssl` with the
+certificate and redirects `http://` to `https://`. (certbot's own site recommends its snap, which
+tracks the newest release; that route needs `snapd`, which Debian does not install by default.)
+Check that renewal works with:
 
 ```bash
 sudo certbot renew --dry-run
