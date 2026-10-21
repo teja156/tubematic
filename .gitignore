@@ -116,3 +116,6 @@ vqa/logs/
 # Root-level QA scratch notes
 /test_*.md
 HANDOFF-archive.md
+
+# /brag-slim launch-video output and its render scratch
+/brag-output*/
