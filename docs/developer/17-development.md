@@ -200,10 +200,12 @@ window the user is watching:
 The repository name is duplicated from `tubematic_core.version.GITHUB_REPO`, because the image has
 nothing to import it from; a test pins the two together.
 
-**The registry entry** is `kasm_workspace/registry/Tubematic/workspace.json` (registry schema 1.1)
-and is copied into a workspace registry by hand — `kasm_workspace/README.md` has the steps. The
-version list is a fixed list of published releases with no free-text fallback, newest first and the
-default; a version missing from it cannot be installed from the form. The entry asks for no GPU on
+**The registry entry** is `kasm_workspace/registry/Tubematic/workspace.json` (registry schema 1.1).
+Each release writes it into the workspace registry with every published release on the form — see
+[Publishing the Kasm registry entry](#publishing-the-kasm-registry-entry). The version list there
+has no free-text fallback, newest first and the default; a version missing from it cannot be
+installed from the form. The list in this repository is only a seed: the release job replaces it,
+and copies every other key verbatim. The entry asks for no GPU on
 purpose: a GPU attached to this desktop crash-loops XFCE on an NVIDIA EGL failure.
 
 ---
@@ -284,8 +286,8 @@ and `backup_db.py` need nothing beyond what already runs the pipeline.
 
 ## Continuous Integration
 
-Four GitHub Actions workflows: `.github/workflows/ci.yml`, `.github/workflows/release.yml`,
-`.github/workflows/docs-site.yml` and `.github/workflows/kasm-workspace-image.yml`.
+Three GitHub Actions workflows: `.github/workflows/ci.yml`, `.github/workflows/release.yml` and
+`.github/workflows/docs-site.yml`.
 
 > **Status: written and structurally checked, never executed.** GitHub Actions only runs on GitHub,
 > and this repository has never had a `.github/` directory before now, so neither workflow has ever
@@ -346,6 +348,9 @@ The job order is load-bearing:
 6. **Create the GitHub Release** and attach the tarball and its checksum.
 7. **Publish the docs** (`publish-docs`) — sync this tag's `docs/` into the documentation site as its
    release line, then build and push it. See [Publishing the docs](#docs-siteyml--publishing-the-docs).
+8. **Publish the Kasm registry entry** (`publish-kasm-registry`) — put this release on the Kasm
+   workspace's launch form. Skipped for a prerelease. See
+   [Publishing the Kasm registry entry](#publishing-the-kasm-registry-entry).
 
 **Why the smoke test sits between the image push and the Release.** It has to pull the images, so
 they must already be pushed — but a broken artifact must never become a published Release. A failure
@@ -385,15 +390,30 @@ empty string. The action refuses an empty token up front. Both jobs share one co
 a release sync and a `develop` sync queue rather than race on the site repo. This repository is
 only read (`contents: read`).
 
-### `kasm-workspace-image.yml` — the Kasm workspace image
+### Publishing the Kasm registry entry
 
-Builds and pushes `ghcr.io/<owner>/tubematic-kasm-workspace`, the image behind
-[the published workspace](#kasm_workspace--the-published-workspace), through `kasm_workspace/build.sh
---push`. It runs **by hand only** (`workflow_dispatch`, with the Kasm release line as the tag) and
-nothing in `release.yml` builds it: the image carries no Tubematic version, so a release never needs
-a new one. The image is about 15 GB unpacked, so the job first deletes runner toolchains it does not
-use. After the first push the package's visibility is checked by hand on GHCR — Kasm pulls it
-anonymously.
+`release.yml`'s `publish-kasm-registry` job, after `release`, runs the composite action
+`.github/actions/sync-kasm-registry`. It writes the Tubematic entry into the workspace registry
+repository (the one the [install guide](../user-guide/02-installing.md#installing-in-kasm-workspaces)
+tells people to add, on its schema branch `1.1`) with `kasm_workspace/sync_registry.py`, and pushes
+only if something changed. The registry's own build then republishes its `list.json`.
+
+- **The version list is every published Release**, newest first, drafts and prereleases excluded —
+  not every tag, because a release-method install downloads the Release's assets. A prerelease tag
+  skips the job entirely.
+- **The entry comes from the newest release's tree**, not the tag being released, so a patch on an
+  older line adds its version without rolling back a newer entry's description or image.
+- **The workspace image is checked first.** Nothing in CI builds it — it carries no Tubematic
+  version, so it is built and pushed by hand with `kasm_workspace/build.sh --push` only when its
+  base image or tooling changes. The job therefore runs `docker manifest inspect` on the entry's
+  image without logging in, exactly as Kasm pulls it, and writes nothing if that fails.
+- **It gates nothing**, like `publish-docs`: a failure leaves the release intact and is recovered
+  by re-running the job.
+
+The registry is reached with `TUBEMATIC_KASM_REGISTRY_TOKEN`, a fine-grained token with Contents
+read/write on that repository only, in the same `TubeMatic` environment and for the same reason as
+the docs token. Its push is also what triggers the registry's build: a push made with a workflow's
+own `GITHUB_TOKEN` starts no workflow.
 
 ---
 

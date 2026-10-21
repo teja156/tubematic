@@ -408,3 +408,28 @@ jobs:
         with:
           version: ${{ needs.preflight.outputs.version }}
           token: ${{ secrets.TUBEMATIC_DOCS_TOKEN }}
+
+  # 8. Put this release on the Kasm workspace's launch form: rewrite the Tubematic entry in the
+  # workspace registry repo with every published release, newest first. After `release`, like
+  # publish-docs, and for the same reason it gates nothing: a failure leaves the release intact and
+  # is recovered by re-running this job. A prerelease is never offered on the form, so it skips.
+  # The workspace image is NOT built here -- it carries no Tubematic version, and is pushed by hand
+  # with kasm_workspace/build.sh --push; the action refuses to write an entry whose image Kasm
+  # cannot pull.
+  publish-kasm-registry:
+    needs: [preflight, release]
+    if: ${{ !contains(needs.preflight.outputs.version, '-') }}
+    runs-on: ubuntu-latest
+    # TUBEMATIC_KASM_REGISTRY_TOKEN is an environment secret: only a job naming this environment can read it.
+    environment: TubeMatic
+    permissions:
+      contents: read
+    # Two releases published close together must not race on the registry repo.
+    concurrency:
+      group: kasm-registry-sync
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/sync-kasm-registry
+        with:
+          token: ${{ secrets.TUBEMATIC_KASM_REGISTRY_TOKEN }}

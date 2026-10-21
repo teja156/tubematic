@@ -24,7 +24,8 @@ The design is in
 | `image/tubematic_bootstrap.py` | Reads the launch form, detects an existing install, then downloads and verifies, or clones, and runs `onboard.py` |
 | `image/tubematic-installer` | What the terminal runs: the bootstrap, then always an interactive shell |
 | `image/tubematic-installer.desktop` | Desktop launcher that reopens the installer |
-| `registry/Tubematic/` | The workspace registry entry (schema 1.1) and its icon |
+| `registry/Tubematic/` | The workspace registry entry (schema 1.1) and its icon. Its version list is a seed |
+| `sync_registry.py` | Writes the entry into a registry checkout with a given list of releases; run by `release.yml` |
 
 ## The invariant: never rebuilt per release
 
@@ -39,33 +40,31 @@ kasm_workspace/build.sh                     # local: tubematic/tubematic-kasm-wo
 kasm_workspace/build.sh --image ghcr.io/<owner>/tubematic-kasm-workspace --push 1.19.0
 ```
 
-The published image is built by the **Kasm workspace image** workflow
-(`.github/workflows/kasm-workspace-image.yml`), run by hand from the Actions tab. The tag is the
-Kasm release line the image targets. It is not a Tubematic version.
+The published image is built and pushed **by hand**, from a machine logged in to `ghcr.io` with a
+token that can write packages. No workflow builds it. The tag is the Kasm release line the image
+targets. It is not a Tubematic version.
 
 After the **first** push, open the package on GHCR and make sure it is **public**. Kasm pulls
 it anonymously.
 
 ## Publishing the registry entry
 
-The entry lives in this repo and is copied into the registry repo by hand. The registry repo is a
-fork of Kasm's workspace-registry template, on its schema branch `1.1`, served at
-`https://registry.tejaswaroop.com/` (the URL the user guide tells people to add):
+Each release writes the entry for you. `release.yml`'s `publish-kasm-registry` job runs
+`sync_registry.py`, which copies `registry/Tubematic/` into the registry repo's
+`workspaces/Tubematic/` and replaces the launch form's version list with every published release,
+newest first and the default. The registry repo is a copy of Kasm's workspace-registry template, on
+its schema branch `1.1`, served at `https://registry.tejaswaroop.com/` (the URL the user guide tells
+people to add). The job first checks the image above can be pulled anonymously, and writes nothing
+if it cannot. So **push the image before the first release**.
 
-```bash
-cp -r kasm_workspace/registry/Tubematic <registry checkout>/workspaces/
-# then commit and push on the 1.1 branch; the registry's own workflow rebuilds list.json
-```
+To edit anything else on the entry (description, sizing, image tag), change
+`registry/Tubematic/workspace.json` here; the next release carries it. The version list in this
+repo is only a seed, so do not maintain it by hand.
 
 The registry's build copies every key of `workspace.json` into `list.json` verbatim, and
 `launch_config` (including the form's own `file_mapping` for the answers) reaches Kasm that way.
 **A registry entry cannot carry the workspace's File Mappings**, which is why the hook and bootstrap
 are baked into the image rather than mapped like the testing workspace's.
-
-When a release is cut, add its version to the front of `tubematic_version`'s `options`. Give it the
-`(latest)` label, set it as the field's `value`, and remove `(latest)` from the previous version.
-The list has no free-text fallback, so a version missing from it cannot be installed from the
-form. The tests check that the list is newest first and that the default is the newest.
 
 ## Timezone
 

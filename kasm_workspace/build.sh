@@ -11,7 +11,7 @@
 #   ./build.sh [--image NAME] [--push] [--no-cache] [tag]
 #
 # tag defaults to 1.19.0, the Kasm release line the image targets. NAME
-# defaults to tubematic/tubematic-kasm-workspace (a local name); CI passes
+# defaults to tubematic/tubematic-kasm-workspace (a local name); publishing passes
 # ghcr.io/<owner>/tubematic-kasm-workspace with --push.
 #
 # The build context is image/ alone: there is no repository to stage, which is

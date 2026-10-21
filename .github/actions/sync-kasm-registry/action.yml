@@ -1,0 +1,129 @@
+name: Sync the Kasm workspace registry
+description: >
+  Write the Tubematic entry into the Kasm workspace registry repo (teja156/kasm_registry, schema
+  branch 1.1) with every published release on its launch form, and push it. The registry's own
+  workflow then rebuilds list.json and redeploys registry.tejaswaroop.com. The caller checks out
+  tubematic (this action and kasm_workspace/sync_registry.py come from it).
+
+# Used by release.yml's publish-kasm-registry job. A composite action rather than a reusable
+# workflow for the same reason as sync-docs-site: the token is an *environment* secret, and a
+# reusable workflow only sees one if the caller passes it through as well.
+
+inputs:
+  token:
+    description: A token with Contents read/write on the registry repo (TUBEMATIC_KASM_REGISTRY_TOKEN)
+    required: true
+  registry-repo:
+    description: The workspace registry repository
+    required: false
+    default: teja156/kasm_registry
+  registry-branch:
+    description: The registry's schema branch the entry is written to
+    required: false
+    default: "1.1"
+
+runs:
+  using: composite
+  steps:
+    - name: Refuse an empty token
+      shell: bash
+      env:
+        TOKEN: ${{ inputs.token }}
+      run: |
+        # An environment secret the job cannot see resolves to "". Say what is actually wrong
+        # rather than failing later on a 404 from the registry checkout.
+        if [ -z "$TOKEN" ]; then
+          echo "::error::TUBEMATIC_KASM_REGISTRY_TOKEN is empty: the job must declare the environment holding it"
+          exit 1
+        fi
+
+    # The list is every published Release, not every tag: a release-method install downloads the
+    # Release's assets, so a tag without one would be offered and then fail. Drafts and
+    # prereleases are never offered.
+    - name: List the published releases
+      id: releases
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        tags="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
+          --limit 1000 --json tagName --jq '.[].tagName' | tr '\n' ' ')"
+        # shellcheck disable=SC2086  # word-split on purpose: one argument per tag
+        newest="$(python3 kasm_workspace/sync_registry.py --print-newest $tags)"
+        echo "Published releases: $tags (newest: $newest)"
+        echo "tags=$tags" >> "$GITHUB_OUTPUT"
+        echo "newest=$newest" >> "$GITHUB_OUTPUT"
+
+    # The entry body comes from the NEWEST release's tree, not this checkout's: a patch released on
+    # an older line must add its version without rolling back a newer entry's description or image.
+    - name: Take the entry from the newest release
+      id: entry
+      shell: bash
+      env:
+        NEWEST: ${{ steps.releases.outputs.newest }}
+      run: |
+        git fetch --no-tags --depth=1 origin "refs/tags/v$NEWEST:refs/tags/v$NEWEST"
+        dest="$RUNNER_TEMP/kasm-entry"
+        rm -rf "$dest" && mkdir -p "$dest"
+        git archive "v$NEWEST" kasm_workspace/registry/Tubematic | tar -x -C "$dest"
+        echo "dir=$dest/kasm_workspace/registry/Tubematic" >> "$GITHUB_OUTPUT"
+
+    # Checked before anything is written: an entry naming an image Kasm cannot pull lists a
+    # workspace that fails at install. The image is built and pushed by hand (build.sh --push),
+    # never by a release, so this is the one place a forgotten push is caught. Nothing in this job
+    # logs in to GHCR, so the check is anonymous -- exactly how Kasm pulls.
+    - name: Check the workspace image is publicly pullable
+      shell: bash
+      env:
+        ENTRY: ${{ steps.entry.outputs.dir }}
+      run: |
+        # Assigned first: a failure inside `for ... in $(...)` would just loop zero times and pass.
+        images="$(python3 kasm_workspace/sync_registry.py --entry "$ENTRY" --print-images)"
+        if [ -z "$images" ]; then
+          echo "::error::The entry names no compatibility image."
+          exit 1
+        fi
+        for image in $images; do
+          if ! docker manifest inspect "$image" > /dev/null 2>&1; then
+            echo "::error::$image cannot be pulled anonymously. Push it with kasm_workspace/build.sh --push, make the GHCR package public, then re-run this job. Nothing was written to the registry."
+            exit 1
+          fi
+          echo "Pullable: $image"
+        done
+
+    - name: Check out the registry
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.registry-repo }}
+        ref: ${{ inputs.registry-branch }}
+        token: ${{ inputs.token }}
+        path: .kasm-registry
+
+    - name: Write the entry
+      shell: bash
+      env:
+        ENTRY: ${{ steps.entry.outputs.dir }}
+        TAGS: ${{ steps.releases.outputs.tags }}
+      run: |
+        # shellcheck disable=SC2086  # word-split on purpose: one argument per tag
+        python3 kasm_workspace/sync_registry.py --entry "$ENTRY" \
+          --out .kasm-registry/workspaces/Tubematic $TAGS
+
+    # Pushed with the PAT the checkout persisted, which is what makes the registry's own build
+    # run: a push made with a workflow's GITHUB_TOKEN triggers no workflow.
+    - name: Commit and push
+      shell: bash
+      working-directory: .kasm-registry
+      env:
+        NEWEST: ${{ steps.releases.outputs.newest }}
+      run: |
+        if [ -z "$(git status --porcelain)" ]; then
+          echo "Registry entry unchanged; nothing to push."
+          exit 0
+        fi
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add -A workspaces/Tubematic
+        git commit -q -m "Tubematic: launch form lists every release, latest v$NEWEST"
+        git push
+        echo "Pushed $(git log --oneline -1)"
