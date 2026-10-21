@@ -3,7 +3,8 @@ name: Docs site
 # Keeps the "develop (unreleased)" version of docs.tubematic.ai current: every push to develop that
 # touches docs/ syncs it into the site repo, which Vercel deploys. Released versions are synced by
 # release.yml's publish-docs job once a Release is published. workflow_dispatch is the manual
-# re-run -- for develop, or to re-sync a release whose publish-docs job failed.
+# re-run -- for develop, to re-sync a release whose publish-docs job failed, or to publish a docs
+# fix on a release line (release/X.Y.x) without cutting a patch release.
 on:
   push:
     branches:
@@ -13,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '"develop", or a release version X.Y.Z (no "v") whose tag exists'
+        description: '"develop", a release version X.Y.Z (no "v") whose tag exists, or a release line release/X.Y.x'
         required: true
         default: develop
 
@@ -40,28 +41,58 @@ jobs:
         run: |
           version="${INPUT_VERSION:-develop}"   # a push carries no input
           version="${version#v}"
+          line=""
           if [ "$version" = develop ]; then
             ref="${{ github.event_name == 'push' && github.sha || 'develop' }}"
           elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             ref="v$version"
+          elif [[ "$version" =~ ^release/([0-9]+)\.([0-9]+)\.x$ ]]; then
+            ref="$version"
+            line="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+            version=""   # named after the line's newest release, once its tags are fetched
           else
-            echo "::error::not \"develop\" or a release version: $INPUT_VERSION"
+            echo "::error::not \"develop\", a release version or a release/X.Y.x line: $INPUT_VERSION"
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "line=$line" >> "$GITHUB_OUTPUT"
 
       # This workflow's own commit, for the sync action itself -- an older release tag predates it.
       - uses: actions/checkout@v4
 
-      # The docs to sync, in their own directory.
+      # The docs to sync, in their own directory. A release line needs its history and tags, to find
+      # which release it carries.
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.target.outputs.ref }}
           path: .docs-source
+          fetch-depth: ${{ steps.target.outputs.line && '0' || '1' }}
+
+      # A release line's docs replace that line's version on the site, labelled with the newest stable
+      # release the branch contains. A line with no release yet is refused: syncing it would publish
+      # an unreleased line, and as the highest one it would become "Latest". Its first release syncs
+      # it through publish-docs.
+      - name: Name a release line after its newest release
+        id: label
+        working-directory: .docs-source
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+          LINE: ${{ steps.target.outputs.line }}
+        run: |
+          if [ -n "$LINE" ]; then
+            tag="$(git tag --merged HEAD --list "v$LINE.*" --sort=-v:refname | grep -v -- - | head -n 1 || true)"
+            if [ -z "$tag" ]; then
+              echo "::error::release/$LINE.x contains no v$LINE.* release yet; nothing published to sync"
+              exit 1
+            fi
+            VERSION="${tag#v}"
+            echo "Syncing release/$LINE.x as $VERSION's docs"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/sync-docs-site
         with:
-          version: ${{ steps.target.outputs.version }}
+          version: ${{ steps.label.outputs.version }}
           source: ${{ github.workspace }}/.docs-source
           token: ${{ secrets.TUBEMATIC_DOCS_TOKEN }}

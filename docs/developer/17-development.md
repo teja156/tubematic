@@ -376,9 +376,17 @@ commits and pushes only if something changed:
   once the Release exists and nothing depends on it, so a docs failure never blocks or undoes a
   release; re-run the job, or run `docs-site.yml` by hand with the version.
 - **`docs-site.yml`**, on a push to `develop` that touches `docs/` (the site's "develop
-  (unreleased)" version), and by hand (`workflow_dispatch`) with `develop` or any released version.
-  A manual run checks out its own commit for the action and the requested ref separately, because an
-  older release tag predates the action.
+  (unreleased)" version), and by hand (`workflow_dispatch`) with `develop`, any released version,
+  or a release line such as `release/2.0.x`. A manual run checks out its own commit for the action
+  and the requested ref separately, because an older release tag predates the action.
+
+**A docs fix on a release line needs no patch release.** A released version's pages normally come
+from its tag, so a correction committed to `release/X.Y.x` reaches the site only with the next tag.
+Running `docs-site.yml` with the line's name publishes the branch's `docs/` as that line's version
+instead, labelled with the newest stable `vX.Y.*` release the branch contains. The site's pages for
+that line then describe the branch, which can be ahead of what the tarball holds. That is the point
+of a correction, so it is accepted. A line with no release yet is refused: it would publish
+documentation for a version nobody can install, and as the highest line it would become Latest.
 
 **The build runs before the push.** The site's build fails on any broken link or anchor, so a page
 that would publish a dead link stops in CI and never reaches the site.
