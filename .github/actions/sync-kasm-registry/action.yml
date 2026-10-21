@@ -46,6 +46,9 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
+        # pipefail: without it a failing `gh` is hidden behind `tr`, and the step reports "no
+        # published release versions" instead of gh's own error.
+        set -o pipefail
         tags="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
           --limit 1000 --json tagName --jq '.[].tagName' | tr '\n' ' ')"
         # shellcheck disable=SC2086  # word-split on purpose: one argument per tag
@@ -56,16 +59,20 @@ runs:
 
     # The entry body comes from the NEWEST release's tree, not this checkout's: a patch released on
     # an older line must add its version without rolling back a newer entry's description or image.
+    #
+    # Fetched into FETCH_HEAD, never into refs/tags/: on a tag-push run the checkout has already made
+    # a local refs/tags/vX.Y.Z pointing straight at the commit, and fetching the annotated tag object
+    # onto it is refused ("would clobber existing tag") -- which failed v2.0.0's run.
     - name: Take the entry from the newest release
       id: entry
       shell: bash
       env:
         NEWEST: ${{ steps.releases.outputs.newest }}
       run: |
-        git fetch --no-tags --depth=1 origin "refs/tags/v$NEWEST:refs/tags/v$NEWEST"
+        git fetch --no-tags --depth=1 origin "refs/tags/v$NEWEST"
         dest="$RUNNER_TEMP/kasm-entry"
         rm -rf "$dest" && mkdir -p "$dest"
-        git archive "v$NEWEST" kasm_workspace/registry/Tubematic | tar -x -C "$dest"
+        git archive FETCH_HEAD kasm_workspace/registry/Tubematic | tar -x -C "$dest"
         echo "dir=$dest/kasm_workspace/registry/Tubematic" >> "$GITHUB_OUTPUT"
 
     # Checked before anything is written: an entry naming an image Kasm cannot pull lists a
