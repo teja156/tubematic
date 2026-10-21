@@ -9,7 +9,9 @@ The short path from nothing to a first video. Each step links to the page with t
 
 - **A Linux machine.** Cron, `flock` and bind-mounted volumes under `~` are assumed; nothing else is
   supported.
-- **Docker Engine 29+ with Compose v2**, with the daemon running.
+- **Docker Engine 29+ with the Compose plugin (v2 or newer)**, with the daemon running and usable
+  without `sudo`. On Ubuntu, [Installing Docker on Ubuntu](user-guide/02-installing.md#installing-docker-on-ubuntu)
+  walks through it; on other distributions, use Docker's instructions for yours.
 - **Python 3.11 or newer.**
 - **An agent CLI, logged in:** Claude Code (`claude`), Codex (`codex`) or OpenCode v2 (`opencode`,
   the `@opencode/cli` package). It does the writing, so it needs a real model behind it.

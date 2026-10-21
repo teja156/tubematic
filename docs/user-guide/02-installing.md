@@ -62,8 +62,8 @@ Install these before running `onboard.py`:
 | | Version | Check | Why |
 |---|---|---|---|
 | Linux host | — | `uname -s` | The only supported platform. Cron, `flock`, `/proc` and bind-mounted volumes under `~` are all assumed |
-| Docker Engine | 29+ | `docker --version`, `docker info` | All four services. The Docker daemon must be running |
-| Docker Compose | v2 | `docker compose version` | The `docker compose` plugin, not the legacy `docker-compose` script |
+| Docker Engine | 29+ | `docker --version`, `docker info` | All four services. The Docker daemon must be running, and usable without `sudo`. On Ubuntu, see [Installing Docker on Ubuntu](#installing-docker-on-ubuntu) |
+| Docker Compose | v2 or newer | `docker compose version` | The `docker compose` plugin, not the legacy `docker-compose` script. Current releases of the plugin report v5 |
 | Python | 3.11+ | `python3 --version` | The wizard, the poller, host scripts |
 | Node.js | **22.20 or newer** | `node --version` | The Remotion skills installer crashes on import below 22.20. Onboarding only *warns* when Node is older or missing, and the Remotion best-practices skill is then not installed; rendering itself runs in a container and is unaffected. Only checked for a **source** install — a release install builds nothing locally and skips this entirely |
 | An AI agent CLI | Latest | `which claude` / `which codex` / `which opencode` | Claude Code, Codex, or OpenCode v2 (the `@opencode/cli` package). Needed for `--install-agent`, not for the main wizard; any number may be installed. Log it in first — `claude` once interactively, `codex login`, or `opencode auth login` |
@@ -95,6 +95,89 @@ account connected directly on postforme.dev gets `posts` alone by default, and t
 normally but reports no views, likes or comments — ever, and without any error saying so. Adding the
 permission later means reconnecting the account. See
 [Connecting accounts](06-publishing.md#connecting-accounts).
+
+### Installing Docker on Ubuntu
+
+> **These steps are for Ubuntu only.** On any other distribution — Debian, Fedora, RHEL, Arch, and
+> so on — follow Docker's own instructions for that distribution instead
+> ([docs.docker.com/engine/install](https://docs.docker.com/engine/install/)), then come back for the
+> [docker group](#run-docker-without-sudo) and [check](#check-docker) steps, which are the same
+> everywhere. Commands written for one distribution's package manager do not work on another.
+
+If `docker --version` already reports 29 or newer and `docker compose version` works, Docker is
+installed: skip to [Run Docker without sudo](#run-docker-without-sudo).
+
+Otherwise, install it from **Docker's own apt repository**. Ubuntu's `docker.io` and
+`docker-compose-v2` packages follow Ubuntu's release schedule, so their version depends on which
+Ubuntu you run, and an older release can ship an Engine below the 29 Tubematic needs. Docker's
+repository always carries the current Engine and Compose plugin. These steps follow Docker's
+[Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/), which also lists
+the Ubuntu releases it supports.
+
+**1. Remove conflicting packages.** Ubuntu's own Docker packages clash with Docker's. `apt` may
+report that none are installed, which is fine:
+
+```bash
+sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc docker-buildx podman-docker containerd runc | cut -f1)
+```
+
+Images, containers and volumes under `/var/lib/docker/` are not removed by this.
+
+**2. Add Docker's apt repository:**
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+
+sudo apt update
+```
+
+**3. Install Docker Engine and the Compose plugin:**
+
+```bash
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+The daemon starts on its own and is enabled at boot. If it is not running, start it with
+`sudo systemctl enable --now docker`.
+
+#### Run Docker without sudo
+
+Onboarding, the upgrade and the uninstaller all run `docker` as you, not as root, so your user must
+be in the `docker` group:
+
+```bash
+sudo usermod -aG docker $USER
+```
+
+Log out and back in for it to take effect (`newgrp docker` applies it to the current shell only).
+Membership of the `docker` group is equivalent to root on this machine, because anyone in it can
+start a container that mounts the whole filesystem; add only the account that runs Tubematic.
+
+Without this, `docker info` fails with a permission error on `/var/run/docker.sock`, and onboarding
+reports Docker as installed but not running.
+
+#### Check Docker
+
+```bash
+docker --version          # 29 or newer
+docker compose version    # v2 or newer
+docker run --rm hello-world
+```
+
+All three must work **without** `sudo`. If `hello-world` prints its greeting, Docker is ready.
 
 ---
 
@@ -158,7 +241,7 @@ container steps are always last and ask nothing, so no prompt ever interleaves b
 
 | # | Step | What it does |
 |---|---|---|
-| 1 | `prerequisites` | Checks Docker is running, Compose v2, Python 3.11+ and — for a source install — Node and npx. The agent binary is checked later, by `--install-agent` |
+| 1 | `prerequisites` | Checks Docker is running, the Compose plugin (v2 or newer), Python 3.11+ and — for a source install — Node and npx. The agent binary is checked later, by `--install-agent` |
 | 2 | `python_deps` | Installs `scripts/requirements.txt` into `.venv` — in both modes, since the poller runs on the host either way |
 | 3 | `directories` | Creates `~/.tubematic-data/{jobs,data,output_videos,scenes/generated,logs,backups}` |
 | 4 | `database` | Creates the SQLite file, if needed, and runs any pending schema migrations |

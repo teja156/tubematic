@@ -127,6 +127,10 @@ dashboard password is set and an OpenAI key is stored.
   private network that needs no domain and opens no port, and HTTPS with Caddy or nginx. Each comes
   with a configuration that was tested in front of a real dashboard, plus a short checklist that it
   works.
+- **A guide to installing Docker on Ubuntu.** [Installing](user-guide/02-installing.md#installing-docker-on-ubuntu)
+  now walks through Docker Engine and the Compose plugin from Docker's own repository, adding your
+  user to the `docker` group, and a check that it all works without `sudo`. On other distributions,
+  follow Docker's instructions for yours.
 
 ### Changed
 
