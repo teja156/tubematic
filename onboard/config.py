@@ -686,7 +686,7 @@ ENV_FIELD_TO_SETTING = {
     "RESEARCH_PENDING_CAP":       "research_pending_cap",
     # Tier B — stored for visibility and for onboard's own re-runs, but a
     # dashboard edit would be a silent no-op until onboard regenerates the
-    # derived artifact (the cron line, docker-compose.override.yml), so these
+    # derived artifact (the cron line), so these
     # are deliberately outside SETTINGS_SPEC. The agent's binary, workspace and
     # install scope used to be here too; they are columns of its agents row
     # now (TMDEV-90), written by --install-agent.
