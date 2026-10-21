@@ -749,7 +749,7 @@ def test_docs_site_workflow_runs_on_develop_docs_pushes_and_by_hand_only():
     docs = _load(DOCS_SITE_PATH)
     on = docs.get("on", docs.get(True))  # PyYAML reads a bare `on:` key as True
     assert set(on) == {"push", "workflow_dispatch"}, on
-    assert on["push"]["branches"] == ["develop"]
+    assert on["push"]["branches"] == ["develop", "release/*.*.x"]
     assert on["push"]["paths"] == ["docs/**"]
 
 
@@ -763,6 +763,135 @@ def test_docs_site_checks_out_its_own_commit_before_the_target_ref():
     assert checkouts[1]["with"]["path"] == ".docs-source"
     [step] = _sync_steps(job)
     assert step["with"]["source"].endswith("/.docs-source")
+
+
+def _docs_site_step(name):
+    [job] = _load(DOCS_SITE_PATH)["jobs"].values()
+    [step] = [s for s in _steps_of(job) if s.get("name") == name]
+    return step
+
+
+def _run_step(script, env, cwd=None, tmp_path=None):
+    """Run a workflow step's bash the way Actions does (bash -e), returning
+    (exit code, the step's GITHUB_OUTPUT as a dict)."""
+    out = tmp_path / "github_output"
+    out.write_text("")
+    proc = subprocess.run(["bash", "-e", "-c", script], cwd=cwd, capture_output=True, text=True,
+                          env={**os.environ, **env, "GITHUB_OUTPUT": str(out)})
+    outputs = dict(line.split("=", 1) for line in out.read_text().splitlines())
+    return proc.returncode, outputs
+
+
+def _resolve(tmp_path, inp, pushed_branch=""):
+    """The step's env carries the push context as plain variables; a manual
+    run has an input and no push, a push has a branch and a SHA and no input."""
+    step = _docs_site_step("Resolve what to sync")
+    assert step["env"]["PUSHED_BRANCH"] == "${{ github.event_name == 'push' && github.ref_name || '' }}"
+    assert step["env"]["PUSHED_SHA"] == "${{ github.event_name == 'push' && github.sha || '' }}"
+    env = {"INPUT_VERSION": inp, "PUSHED_BRANCH": pushed_branch,
+           "PUSHED_SHA": "abc123" if pushed_branch else ""}
+    return _run_step(step["run"], env, tmp_path=tmp_path)
+
+
+@pytest.mark.parametrize("inp, ref, version, line", [
+    ("", "develop", "develop", ""),
+    ("develop", "develop", "develop", ""),
+    ("2.0.0", "v2.0.0", "2.0.0", ""),
+    ("v2.0.1", "v2.0.1", "2.0.1", ""),
+    ("release/2.0.x", "release/2.0.x", "", "2.0"),
+    ("release/12.3.x", "release/12.3.x", "", "12.3"),
+])
+def test_docs_site_resolves_develop_a_release_or_a_release_line(tmp_path, inp, ref, version, line):
+    code, out = _resolve(tmp_path, inp)
+    assert code == 0
+    assert out == {"version": version, "ref": ref, "line": line}
+
+
+@pytest.mark.parametrize("branch, ref, version, line", [
+    ("develop", "abc123", "develop", ""),
+    ("release/2.0.x", "abc123", "", "2.0"),
+])
+def test_a_push_syncs_the_pushed_branch_at_the_pushed_commit(tmp_path, branch, ref, version, line):
+    code, out = _resolve(tmp_path, "", pushed_branch=branch)
+    assert code == 0
+    assert out == {"version": version, "ref": ref, "line": line}
+
+
+@pytest.mark.parametrize("inp", ["main", "release/2.0", "release/2.x", "release/2.0.1", "2.0", "feature/x"])
+def test_docs_site_refuses_anything_else(tmp_path, inp):
+    code, out = _resolve(tmp_path, inp)
+    assert code != 0 and out == {}
+
+
+def test_a_release_line_is_checked_out_with_its_tags():
+    [job] = _load(DOCS_SITE_PATH)["jobs"].values()
+    [_, source] = [s for s in _steps_of(job) if str(s.get("uses", "")).startswith("actions/checkout@")]
+    assert source["with"]["fetch-depth"] == "${{ steps.target.outputs.line && '0' || '1' }}"
+    [sync] = _sync_steps(job)
+    assert sync["with"]["version"] == "${{ steps.label.outputs.version }}"
+
+
+@pytest.fixture
+def line_repo(tmp_path):
+    """A release/2.0.x branch tagged v2.0.0, v2.0.1 and v2.0.2-rc.1, with a
+    v2.1.0 tag on another branch it does not contain."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+                       cwd=repo, check=True, capture_output=True)
+
+    git("init", "-q", "-b", "release/2.0.x")
+    for tag in ("v2.0.0", "v2.0.1", "v2.0.2-rc.1"):
+        git("commit", "-q", "--allow-empty", "-m", tag)
+        git("tag", tag)
+    git("checkout", "-q", "-b", "release/2.1.x")
+    git("commit", "-q", "--allow-empty", "-m", "2.1")
+    git("tag", "v2.1.0")
+    git("checkout", "-q", "release/2.0.x")
+    git("commit", "-q", "--allow-empty", "-m", "a docs fix after v2.0.2-rc.1")
+    return repo
+
+
+def _label(tmp_path, cwd, version, line, event="workflow_dispatch"):
+    script = _docs_site_step("Name a release line after its newest release")["run"]
+    return _run_step(script, {"VERSION": version, "LINE": line, "EVENT": event},
+                     cwd=cwd, tmp_path=tmp_path)
+
+
+def test_a_release_line_is_named_after_its_newest_stable_release(tmp_path, line_repo):
+    """Not the prerelease on the line, and not a newer line's tag."""
+    code, out = _label(tmp_path, line_repo, "", "2.0")
+    assert code == 0 and out == {"version": "2.0.1"}
+
+
+def test_a_release_line_with_no_release_yet_is_refused_by_hand(tmp_path, line_repo):
+    """Syncing it would publish an unreleased line, which as the highest
+    would become Latest on the site."""
+    code, out = _label(tmp_path, line_repo, "", "2.2")
+    assert code != 0 and out == {}
+
+
+def test_a_push_to_a_release_line_with_no_release_yet_skips_the_sync(tmp_path, line_repo):
+    """Cutting a line, before its tag, is routine: the run passes and syncs
+    nothing, and the line's first release syncs it through publish-docs."""
+    code, out = _label(tmp_path, line_repo, "", "2.2", event="push")
+    assert code == 0 and out == {"skip": "true"}
+    [job] = _load(DOCS_SITE_PATH)["jobs"].values()
+    [sync] = _sync_steps(job)
+    assert sync["if"] == "steps.label.outputs.skip != 'true'"
+
+
+def test_a_push_to_a_released_line_syncs_it(tmp_path, line_repo):
+    code, out = _label(tmp_path, line_repo, "", "2.0", event="push")
+    assert code == 0 and out == {"version": "2.0.1"}
+
+
+def test_develop_and_a_release_version_pass_through_unchanged(tmp_path, line_repo):
+    for version in ("develop", "2.0.0"):
+        code, out = _label(tmp_path, line_repo, version, "")
+        assert code == 0 and out == {"version": version}
 
 
 def test_the_sync_action_builds_before_it_pushes_and_refuses_an_empty_token():
