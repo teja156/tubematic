@@ -749,7 +749,7 @@ def test_docs_site_workflow_runs_on_develop_docs_pushes_and_by_hand_only():
     docs = _load(DOCS_SITE_PATH)
     on = docs.get("on", docs.get(True))  # PyYAML reads a bare `on:` key as True
     assert set(on) == {"push", "workflow_dispatch"}, on
-    assert on["push"]["branches"] == ["develop"]
+    assert on["push"]["branches"] == ["develop", "release/*.*.x"]
     assert on["push"]["paths"] == ["docs/**"]
 
 
@@ -782,11 +782,15 @@ def _run_step(script, env, cwd=None, tmp_path=None):
     return proc.returncode, outputs
 
 
-def _resolve(tmp_path, inp, event="workflow_dispatch"):
-    script = _docs_site_step("Resolve what to sync")["run"].replace(
-        "${{ github.event_name == 'push' && github.sha || 'develop' }}",
-        "abc123" if event == "push" else "develop")
-    return _run_step(script, {"INPUT_VERSION": inp}, tmp_path=tmp_path)
+def _resolve(tmp_path, inp, pushed_branch=""):
+    """The step's env carries the push context as plain variables; a manual
+    run has an input and no push, a push has a branch and a SHA and no input."""
+    step = _docs_site_step("Resolve what to sync")
+    assert step["env"]["PUSHED_BRANCH"] == "${{ github.event_name == 'push' && github.ref_name || '' }}"
+    assert step["env"]["PUSHED_SHA"] == "${{ github.event_name == 'push' && github.sha || '' }}"
+    env = {"INPUT_VERSION": inp, "PUSHED_BRANCH": pushed_branch,
+           "PUSHED_SHA": "abc123" if pushed_branch else ""}
+    return _run_step(step["run"], env, tmp_path=tmp_path)
 
 
 @pytest.mark.parametrize("inp, ref, version, line", [
@@ -799,6 +803,16 @@ def _resolve(tmp_path, inp, event="workflow_dispatch"):
 ])
 def test_docs_site_resolves_develop_a_release_or_a_release_line(tmp_path, inp, ref, version, line):
     code, out = _resolve(tmp_path, inp)
+    assert code == 0
+    assert out == {"version": version, "ref": ref, "line": line}
+
+
+@pytest.mark.parametrize("branch, ref, version, line", [
+    ("develop", "abc123", "develop", ""),
+    ("release/2.0.x", "abc123", "", "2.0"),
+])
+def test_a_push_syncs_the_pushed_branch_at_the_pushed_commit(tmp_path, branch, ref, version, line):
+    code, out = _resolve(tmp_path, "", pushed_branch=branch)
     assert code == 0
     assert out == {"version": version, "ref": ref, "line": line}
 
@@ -840,9 +854,10 @@ def line_repo(tmp_path):
     return repo
 
 
-def _label(tmp_path, cwd, version, line):
+def _label(tmp_path, cwd, version, line, event="workflow_dispatch"):
     script = _docs_site_step("Name a release line after its newest release")["run"]
-    return _run_step(script, {"VERSION": version, "LINE": line}, cwd=cwd, tmp_path=tmp_path)
+    return _run_step(script, {"VERSION": version, "LINE": line, "EVENT": event},
+                     cwd=cwd, tmp_path=tmp_path)
 
 
 def test_a_release_line_is_named_after_its_newest_stable_release(tmp_path, line_repo):
@@ -851,11 +866,26 @@ def test_a_release_line_is_named_after_its_newest_stable_release(tmp_path, line_
     assert code == 0 and out == {"version": "2.0.1"}
 
 
-def test_a_release_line_with_no_release_yet_is_refused(tmp_path, line_repo):
+def test_a_release_line_with_no_release_yet_is_refused_by_hand(tmp_path, line_repo):
     """Syncing it would publish an unreleased line, which as the highest
     would become Latest on the site."""
     code, out = _label(tmp_path, line_repo, "", "2.2")
     assert code != 0 and out == {}
+
+
+def test_a_push_to_a_release_line_with_no_release_yet_skips_the_sync(tmp_path, line_repo):
+    """Cutting a line, before its tag, is routine: the run passes and syncs
+    nothing, and the line's first release syncs it through publish-docs."""
+    code, out = _label(tmp_path, line_repo, "", "2.2", event="push")
+    assert code == 0 and out == {"skip": "true"}
+    [job] = _load(DOCS_SITE_PATH)["jobs"].values()
+    [sync] = _sync_steps(job)
+    assert sync["if"] == "steps.label.outputs.skip != 'true'"
+
+
+def test_a_push_to_a_released_line_syncs_it(tmp_path, line_repo):
+    code, out = _label(tmp_path, line_repo, "", "2.0", event="push")
+    assert code == 0 and out == {"version": "2.0.1"}
 
 
 def test_develop_and_a_release_version_pass_through_unchanged(tmp_path, line_repo):
