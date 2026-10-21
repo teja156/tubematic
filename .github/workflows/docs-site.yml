@@ -1,14 +1,15 @@
 name: Docs site
 
-# Keeps the "develop (unreleased)" version of docs.tubematic.ai current: every push to develop that
-# touches docs/ syncs it into the site repo, which Vercel deploys. Released versions are synced by
-# release.yml's publish-docs job once a Release is published. workflow_dispatch is the manual
-# re-run -- for develop, to re-sync a release whose publish-docs job failed, or to publish a docs
-# fix on a release line (release/X.Y.x) without cutting a patch release.
+# Keeps docs.tubematic.ai current: every push that touches docs/ syncs it into the site repo, which
+# Vercel deploys -- a push to develop as the "develop (unreleased)" version, and a push to a release
+# line (release/X.Y.x) as that line's version, so a docs fix there needs no patch release. A release
+# tag is synced by release.yml's publish-docs job once its Release is published. workflow_dispatch is
+# the manual re-run -- for develop, a release line, or a release whose publish-docs job failed.
 on:
   push:
     branches:
       - develop
+      - "release/*.*.x"
     paths:
       - "docs/**"
   workflow_dispatch:
@@ -38,16 +39,19 @@ jobs:
         id: target
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          # A push carries no input: it syncs the branch pushed, at the exact commit pushed.
+          PUSHED_BRANCH: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          PUSHED_SHA: ${{ github.event_name == 'push' && github.sha || '' }}
         run: |
-          version="${INPUT_VERSION:-develop}"   # a push carries no input
+          version="${INPUT_VERSION:-${PUSHED_BRANCH:-develop}}"
           version="${version#v}"
           line=""
           if [ "$version" = develop ]; then
-            ref="${{ github.event_name == 'push' && github.sha || 'develop' }}"
+            ref="${PUSHED_SHA:-develop}"
           elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             ref="v$version"
           elif [[ "$version" =~ ^release/([0-9]+)\.([0-9]+)\.x$ ]]; then
-            ref="$version"
+            ref="${PUSHED_SHA:-$version}"
             line="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
             version=""   # named after the line's newest release, once its tags are fetched
           else
@@ -70,19 +74,26 @@ jobs:
           fetch-depth: ${{ steps.target.outputs.line && '0' || '1' }}
 
       # A release line's docs replace that line's version on the site, labelled with the newest stable
-      # release the branch contains. A line with no release yet is refused: syncing it would publish
-      # an unreleased line, and as the highest one it would become "Latest". Its first release syncs
-      # it through publish-docs.
+      # release the branch contains. A line with no release yet is never synced: it would publish an
+      # unreleased line, and as the highest one it would become "Latest". Its first release syncs it
+      # through publish-docs. A push to such a line (cutting it, before its tag) skips quietly; asking
+      # for one by hand is an error.
       - name: Name a release line after its newest release
         id: label
         working-directory: .docs-source
         env:
           VERSION: ${{ steps.target.outputs.version }}
           LINE: ${{ steps.target.outputs.line }}
+          EVENT: ${{ github.event_name }}
         run: |
           if [ -n "$LINE" ]; then
             tag="$(git tag --merged HEAD --list "v$LINE.*" --sort=-v:refname | grep -v -- - | head -n 1 || true)"
             if [ -z "$tag" ]; then
+              if [ "$EVENT" = push ]; then
+                echo "::notice::release/$LINE.x has no v$LINE.* release yet; its first release syncs it"
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
               echo "::error::release/$LINE.x contains no v$LINE.* release yet; nothing published to sync"
               exit 1
             fi
@@ -92,6 +103,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/sync-docs-site
+        if: steps.label.outputs.skip != 'true'
         with:
           version: ${{ steps.label.outputs.version }}
           source: ${{ github.workspace }}/.docs-source
