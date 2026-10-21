@@ -16,6 +16,7 @@ the existing precedent).
 """
 import os
 import re
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))  # scripts/
@@ -632,6 +633,37 @@ def test_the_smoke_tests_curl_checks_retry_rather_than_fire_once(release_jobs):
                 f"job {name!r} step {step.get('name')!r} curl retries with "
                 f"no time bound -- a dead service would hang this step"
             )
+
+
+def test_the_smoke_test_creates_every_secret_file_compose_mounts_before_up(release_jobs, tmp_path):
+    """Compose refuses to start a service whose secret file is missing, and
+    the smoke test skips onboarding, which is what normally writes them. The
+    v2.0.0 tag run failed exactly there ("bind source path does not exist").
+    The step is run for real against a scratch HOME, and every `secrets:`
+    file in docker-compose.yml must exist afterwards -- so a fourth secret
+    added to compose without one here fails this test, not the next release."""
+    [(name, job)] = [
+        (n, j) for n, j in release_jobs.items()
+        if "docker compose" in _run_text(j) and " up" in _run_text(j)
+    ]
+    steps = _steps_of(job)
+    names = [s.get("name", "") for s in steps]
+    tokens = names.index("Create the service tokens a real install gets from onboarding")
+    up = next(i for i, s in enumerate(steps) if "docker compose" in s.get("run", "")
+              and " up" in s.get("run", ""))
+    assert tokens < up, f"{name}: the tokens must exist before `docker compose up`"
+
+    proc = subprocess.run(["bash", "-e", "-c", steps[tokens]["run"]], cwd=REPO_ROOT,
+                          capture_output=True, text=True, env={k: v for k, v in os.environ.items() if k != "TUBEMATIC_SECRETS_DIR"} | {"HOME": str(tmp_path)})
+    assert proc.returncode == 0, proc.stderr
+
+    with open(os.path.join(REPO_ROOT, "docker-compose.yml")) as fh:
+        compose_secrets = yaml.safe_load(fh)["secrets"]
+    assert compose_secrets
+    for secret, spec in compose_secrets.items():
+        path = spec["file"].replace("${HOME}", str(tmp_path))
+        assert os.path.isfile(path) and open(path).read().strip(), (
+            f"compose mounts secret {secret!r} from {spec['file']}, which the smoke test never creates")
 
 
 def test_a_prerelease_version_is_published_as_a_github_prerelease(release_jobs):

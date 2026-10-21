@@ -258,6 +258,14 @@ jobs:
             "$HOME/.tubematic-data/logs" \
             "$HOME/.tubematic-data/backups"
 
+      # The compose file mounts each service token from ~/.tubematic-data/secrets/ and, on purpose,
+      # refuses to start a service whose file is missing ("bind source path does not exist"). A real
+      # install gets them from onboarding's auth step; this is the same function it calls, run from
+      # the tarball's own tubematic_core.
+      - name: Create the service tokens a real install gets from onboarding
+        working-directory: ${{ env.SMOKE_DIR }}
+        run: python3 -m tubematic_core.auth ensure
+
       - name: Bring up the release stack from the extracted artifact
         working-directory: ${{ env.SMOKE_DIR }}
         run: docker compose pull && docker compose up -d --wait --wait-timeout 300

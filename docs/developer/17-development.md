@@ -343,7 +343,9 @@ The job order is load-bearing:
 4. **Build the release tarball** with `scripts/build_release_tarball.py` and write a `CHECKSUMS.txt`
    for the archive itself.
 5. **Smoke-test the published artifact** — extract the tarball into a fresh temporary directory
-   (never the checkout), bring up its own `docker-compose.yml` against the images just pushed, assert
+   (never the checkout), create the data directories and service tokens onboarding would have made
+   (Compose refuses to start a service whose token file is missing), bring up its own
+   `docker-compose.yml` against the images just pushed, assert
    every service reaches healthy and the API answers, then tear down.
 6. **Create the GitHub Release** and attach the tarball and its checksum.
 7. **Publish the docs** (`publish-docs`) — sync this tag's `docs/` into the documentation site as its
