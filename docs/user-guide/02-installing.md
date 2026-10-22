@@ -23,8 +23,9 @@ route**; building from source is the alternative for people who want to change T
    source tree. Extract it and run the wizard from inside it, and it pulls the published container
    images instead of building anything. The images are public: there is nothing to log in to. A
    release is a version that has been through the full release pipeline, which is why it is the
-   route to use unless you have a reason not to. It is also faster to install (nothing is built) and
-   needs no Node.js.
+   route to use unless you have a reason not to. It is also faster to install, because nothing is
+   built. It still wants Node.js, but for `--install-agent` rather than for a build — see the
+   [prerequisites](#prerequisites).
 2. **Clone and build from source (alternative).** `git clone` this repository, then run the wizard
    from inside it. Docker builds the `tubematic-api`/`tubematic-mcp`/`tubematic-renderer` image and
    the dashboard image locally, from the source trees in the checkout. Use it to work on Tubematic,
@@ -41,9 +42,9 @@ prints the mode it picked as the first line of output, and records it in `.onboa
 later "why didn't my change get rebuilt?" can be answered without re-running the wizard. Override
 either direction with `--install-mode dev` or `--install-mode release`.
 
-The only things that actually differ between the two are **build vs. pull** at the two container
-steps, and that Node.js/npx are not checked at all for a release install — every other step
-(directories, the database, API keys and settings, MCP registration, cron) is identical. See the
+The only thing that actually differs between the two is **build vs. pull** at the two container
+steps — every other step (directories, the database, API keys and settings, MCP registration,
+cron) is identical, and so are the prerequisites. See the
 note on each affected step below, and
 [Development — Release tooling](../developer/17-development.md#release-tooling) for how a maintainer
 builds the tarball in the first place. Moving an *existing* install to a newer version rather than
@@ -57,15 +58,24 @@ you — see [Installing in Kasm Workspaces](#installing-in-kasm-workspaces).
 
 ## Prerequisites
 
-Install these before running `onboard.py`:
+Install these before running `onboard.py`. **The wizard checks for them and never installs them** —
+it runs no package manager at all, so a missing one is reported and nothing else happens. On Ubuntu,
+[Installing Docker](#installing-docker-on-ubuntu) and
+[Installing Python's venv module and Node.js](#installing-pythons-venv-module-and-nodejs-on-ubuntu)
+below have the commands.
+
+The one thing the wizard does install for itself is its own virtualenv, `.venv` in the install
+directory — which is why Python's `venv` module is in this table: `python3 -m venv` is the one
+command it cannot run on your behalf. Everything *inside* the install directory and
+`~/.tubematic-data` is its job; everything the machine needs underneath is yours.
 
 | | Version | Check | Why |
 |---|---|---|---|
 | Linux host | — | `uname -s` | The only supported platform. Cron, `flock`, `/proc` and bind-mounted volumes under `~` are all assumed |
 | Docker Engine | 29+ | `docker --version`, `docker info` | All four services. The Docker daemon must be running, and usable without `sudo`. On Ubuntu, see [Installing Docker on Ubuntu](#installing-docker-on-ubuntu) |
 | Docker Compose | v2 or newer | `docker compose version` | The `docker compose` plugin, not the legacy `docker-compose` script. Current releases of the plugin report v5 |
-| Python | 3.11+ | `python3 --version` | The wizard, the poller, host scripts |
-| Node.js | **22.20 or newer** | `node --version` | The Remotion skills installer crashes on import below 22.20. Onboarding only *warns* when Node is older or missing, and the Remotion best-practices skill is then not installed; rendering itself runs in a container and is unaffected. Only checked for a **source** install — a release install builds nothing locally and skips this entirely |
+| Python | 3.11+, with `venv` | `python3 --version`, `python3 -c "import ensurepip"` | The wizard, the poller, host scripts. The wizard creates its own virtualenv and cannot start without one; Debian and Ubuntu package the part that seeds `pip` into it separately, so the second command is the one that catches it. See [Installing Python's venv module and Node.js on Ubuntu](#installing-pythons-venv-module-and-nodejs-on-ubuntu) |
+| Node.js | **22.20 or newer** | `node --version` | The Remotion skills installer crashes on import below 22.20. Onboarding only *warns* when Node is older or missing, and the Remotion best-practices skill is then not installed; rendering itself runs in a container and is unaffected. Needed for a **release** install too: it is `--install-agent` that uses Node, not the build. On Ubuntu, see [Installing Python's venv module and Node.js on Ubuntu](#installing-pythons-venv-module-and-nodejs-on-ubuntu) |
 | An AI agent CLI | Latest | `which claude` / `which codex` / `which opencode` | Claude Code, Codex, or OpenCode v2 (the `@opencode/cli` package). Needed for `--install-agent`, not for the main wizard; any number may be installed. Log it in first — `claude` once interactively, `codex login`, or `opencode auth login` |
 | CPU | 2 cores, 4+ recommended | `nproc` | Rendering opens parallel browser tabs — half the available CPU threads — so more cores render faster. At 2 cores the render also competes with the API, worker and dashboard |
 | Memory | 4 GB, 8 GB recommended | `free -g` | The renderer reserves 2 GB of shared memory for Chromium on its own. Each parallel render tab needs roughly 1–2 GB more, so size memory together with the core count |
@@ -192,6 +202,43 @@ docker run --rm hello-world
 
 All three must work **without** `sudo`. If `hello-world` prints its greeting, Docker is ready.
 
+### Installing Python's venv module and Node.js on Ubuntu
+
+> **These steps are for Ubuntu**, like the Docker ones above. On another distribution, install the
+> equivalent packages with its own package manager.
+
+Both of these are missing on a bare server, and neither failure says what to install.
+
+**Python's `venv` module.** Ubuntu and Debian ship `venv` with the base interpreter but package
+pip's bootstrap separately, so `python3 -m venv` creates a directory and then fails with
+`ensurepip is not available`. The wizard creates its own virtualenv before it does anything else,
+so it gets no further than that:
+
+```bash
+sudo apt install -y python3-venv
+python3 -c "import ensurepip"      # silence means it is there
+```
+
+**Node.js 22.20 or newer.** Ubuntu's own `nodejs` package can be older than the Remotion skills
+installer accepts — 24.04 ships 18.19 — which is worse than having no Node at all: `npx` exists, so
+the installer runs and then crashes on import. Install Node 22 from
+[NodeSource](https://github.com/nodesource/distributions), which carries the current release
+whatever Ubuntu you run:
+
+```bash
+sudo apt install -y curl ca-certificates
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+node --version                     # v22.20 or newer
+```
+
+If Ubuntu's `nodejs` is already installed, remove it first (`sudo apt remove nodejs npm`), or
+`node` may keep resolving to the older build.
+
+`nvm` also works if you only ever run `--install-agent` from an interactive shell, but it is
+per-user and Ubuntu's `~/.bashrc` returns before nvm's lines in a non-interactive one, so anything
+run from a script finds the system Node instead. On a server, NodeSource is the simpler choice.
+
 ---
 
 ## Network exposure
@@ -244,6 +291,10 @@ so it has to be the venv the poller's dependencies were installed into. `upgrade
 `scripts/service.py` bootstrap the same way. Run other host scripts with `.venv/bin/python` (or
 activate `.venv` first).
 
+What it cannot do is install the venv machinery itself. On Debian and Ubuntu that is a separate
+package, and without it the wizard stops on its first line with `ensurepip is not available` —
+see [Installing Python's venv module and Node.js on Ubuntu](#installing-pythons-venv-module-and-nodejs-on-ubuntu).
+
 The wizard requires a real terminal on both stdin and stdout. `--status`, `--steps`,
 `--list-agents` and `--rotate-tokens` are the exceptions and are safe to run from a script.
 
@@ -254,7 +305,7 @@ container steps are always last and ask nothing, so no prompt ever interleaves b
 
 | # | Step | What it does |
 |---|---|---|
-| 1 | `prerequisites` | Checks Docker is running, the Compose plugin (v2 or newer), Python 3.11+ and — for a source install — Node and npx. The agent binary is checked later, by `--install-agent` |
+| 1 | `prerequisites` | Checks Docker is running, the Compose plugin (v2 or newer), Python 3.11+, and Node and npx (a warning, never a block, and checked in both install modes — `--install-agent` needs them). The agent binary is checked later, by `--install-agent` |
 | 2 | `python_deps` | Installs `scripts/requirements.txt` into `.venv` — in both modes, since the poller runs on the host either way |
 | 3 | `directories` | Creates `~/.tubematic-data/{jobs,data,output_videos,scenes/generated,logs,backups}` |
 | 4 | `database` | Creates the SQLite file, if needed, and runs any pending schema migrations |
@@ -717,6 +768,26 @@ Problems with a running install — nothing happening, renders, review, voice, t
 > The `docker compose build --no-cache` commands below are for a **source** install. A release
 > install has no source tree to rebuild from — use `docker compose pull <service>` instead, or
 > `python3 upgrade.py` to pull and restart everything in order.
+
+**The wizard stops at `ensurepip is not available`.** Python's `venv` module is present but the
+part that seeds `pip` into a new virtualenv is not; on Debian and Ubuntu it is packaged separately.
+Install it, delete the half-created virtualenv and run the wizard again:
+
+```bash
+sudo apt install -y python3-venv
+rm -rf .venv
+python3 onboard.py
+```
+
+The directory has to go because the failed attempt leaves an interpreter in it with no `pip`. The
+wizard detects that and rebuilds it for you, but removing it makes the next run unambiguous.
+
+**`npx not found — remotion-dev/skills skipped`, during `--install-agent`.** Node.js is missing or
+older than 22.20. Everything else in the install is fine and rendering is unaffected, but the
+`remotion-best-practices` skill is not installed, and the scene-writing skill invokes it first on
+every scene it writes — so fix it rather than ignoring it. Install Node 22 (see
+[Installing Python's venv module and Node.js on Ubuntu](#installing-pythons-venv-module-and-nodejs-on-ubuntu)),
+then re-run `python3 onboard.py --install-agent <agent>`; it is idempotent and retries the skill.
 
 **`docker compose pull` fails on a release install.** The images are public, so this is not a login
 problem: the wizard shows Docker's own reason. It is usually this machine not reaching `ghcr.io`

@@ -7,15 +7,21 @@ The short path from nothing to a first video. Each step links to the page with t
 
 ## What you need
 
+Install these yourself first: the wizard checks for them and never installs them. It runs no package
+manager — the only thing it installs for itself is its own virtualenv.
+
 - **A Linux machine.** Cron, `flock` and bind-mounted volumes under `~` are assumed; nothing else is
   supported.
 - **Docker Engine 29+ with the Compose plugin (v2 or newer)**, with the daemon running and usable
   without `sudo`. On Ubuntu, [Installing Docker on Ubuntu](user-guide/02-installing.md#installing-docker-on-ubuntu)
   walks through it; on other distributions, use Docker's instructions for yours.
-- **Python 3.11 or newer.**
+- **Python 3.11 or newer, with its `venv` module.** On Debian and Ubuntu that is a separate
+  `python3-venv` package, and the wizard stops on its first line without it.
 - **An agent CLI, logged in:** Claude Code (`claude`), Codex (`codex`) or OpenCode v2 (`opencode`,
   the `@opencode/cli` package). It does the writing, so it needs a real model behind it.
-- **Node.js 22.20 or newer** — only if you install from source. A release builds nothing locally.
+- **Node.js 22.20 or newer.** Needed by `--install-agent` for the Remotion best-practices skill,
+  on a release install as much as a source one. Nothing stops without it, but the agent is left
+  without a skill it uses on every scene.
 - **2 CPU cores and 4 GB of memory** at a minimum; 4 cores and 8 GB render noticeably faster,
   because a render opens parallel browser tabs — half the available CPU threads.
 - **About 15 GB of disk** for images and rendered video.
@@ -74,7 +80,7 @@ python3 onboard.py
 ```
 
 **From source — the alternative**, if you want to change Tubematic itself or run something not yet
-released. It builds the images locally and needs Node.js 22.20 or newer:
+released. It builds the images locally, inside Docker:
 
 ```bash
 git clone https://github.com/teja156/tubematic.git tubematic
