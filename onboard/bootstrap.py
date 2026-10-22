@@ -16,6 +16,22 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def _ensurepip_missing() -> bool:
+    """True when this interpreter cannot bootstrap pip into a new venv.
+
+    Debian and Ubuntu ship `venv` with the base interpreter but move pip's
+    bootstrap into a separate python3.N-venv package. Without it
+    `python3 -m venv` creates the directory, fails at the pip step and leaves
+    an interpreter with no pip beside it, so the retry hint has to name that
+    package — repeating `python3 -m venv` fails identically.
+    """
+    try:
+        import importlib.util
+        return importlib.util.find_spec("ensurepip") is None
+    except (ImportError, ValueError):  # a shadowed or broken import system
+        return False
+
+
 def ensure_venv(script: Path) -> None:
     """Re-exec `script` inside REPO_ROOT/.venv if not already running in it.
 
@@ -42,19 +58,33 @@ def ensure_venv(script: Path) -> None:
     """
     venv_dir = REPO_ROOT / ".venv"
     venv_python = venv_dir / "bin" / "python3"
+    venv_pip = venv_dir / "bin" / "pip3"
     script = Path(script).resolve()
 
     if Path(sys.prefix).resolve() == venv_dir.resolve():
         return  # already running inside REPO_ROOT/.venv
 
-    if not venv_python.exists():
+    # A venv whose pip was never seeded counts as absent, not as ready. A
+    # failed ensurepip leaves bin/python3 behind, so keying only on the
+    # interpreter made the next run re-exec into a pip-less venv and fail
+    # further along, at ensure_deps, with "No module named pip" — the same
+    # cause reported as a different problem. Re-running `python -m venv` over
+    # it seeds pip once the missing package is installed, so this self-heals.
+    if not venv_python.exists() or not venv_pip.exists():
         print(f"  → No virtual environment detected — creating one at {venv_dir}…")
         r = subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=False)
-        if r.returncode != 0 or not venv_python.exists():
-            print("  ✘  Failed to create a virtual environment. Run manually:")
-            print(f"       python3 -m venv {venv_dir}")
-            print(f"       source {venv_dir}/bin/activate")
-            print(f"       python {script.name} {' '.join(sys.argv[1:])}")
+        if r.returncode != 0 or not venv_python.exists() or not venv_pip.exists():
+            print("  ✘  Failed to create a virtual environment.")
+            if _ensurepip_missing():
+                print("       pip's bootstrap (ensurepip) is missing — Debian and Ubuntu")
+                print("       package it separately. Install it, then run this again:")
+                print("         sudo apt install python3-venv")
+                print(f"         python3 {script.name} {' '.join(sys.argv[1:])}")
+            else:
+                print("       Run manually:")
+                print(f"         python3 -m venv {venv_dir}")
+                print(f"         source {venv_dir}/bin/activate")
+                print(f"         python {script.name} {' '.join(sys.argv[1:])}")
             sys.exit(1)
         print(f"  ✔  Virtual environment created at {venv_dir}")
 
@@ -88,5 +118,8 @@ def ensure_deps() -> None:
         )
         if r.returncode != 0:
             print("  ✘  pip install failed. Run manually: pip install rich questionary httpx")
+            if _ensurepip_missing():
+                print("       This venv has no pip: install Debian/Ubuntu's python3-venv "
+                      "package,\n       delete .venv and run this again.")
             sys.exit(1)
         print("  ✔  Wizard dependencies installed.")
