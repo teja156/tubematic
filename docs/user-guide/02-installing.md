@@ -218,11 +218,11 @@ step-by-step guides for all three.
 the wizard from inside the extracted directory:
 
 ```bash
-curl -LO https://github.com/teja156/tubematic/releases/download/v<version>/tubematic-v<version>.tar.gz
-curl -LO https://github.com/teja156/tubematic/releases/download/v<version>/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/tubematic-v2.0.0.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
-tar xzf tubematic-v<version>.tar.gz
-cd tubematic-v<version>
+tar xzf tubematic-v2.0.0.tar.gz
+cd tubematic-v2.0.0
 python3 onboard.py
 ```
 
