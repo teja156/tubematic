@@ -2,9 +2,9 @@
 
 A release tarball ships no source trees to build from — it deliberately has
 no renderer/Dockerfile — so `onboard.py` has to know not to `docker compose
-build` against a tree that isn't there, and to skip the Node/npx prereqs a
-local build would need. Detection is auto (release when renderer/Dockerfile
-is absent) with an explicit --install-mode escape hatch, and the resolved
+build` against a tree that isn't there. Detection is auto (release when
+renderer/Dockerfile is absent) with an explicit --install-mode escape hatch,
+and the resolved
 mode is both printed to the user and recorded in .onboard-state.json so a
 later "why didn't my change get rebuilt?" can be answered from disk.
 
@@ -163,10 +163,22 @@ def test_dev_mode_still_builds_exactly_as_before(no_volume_reconcile):
 
 # ── Prerequisites ────────────────────────────────────────────────────────
 
-def test_prerequisites_does_not_require_node_in_release_mode():
-    from onboard.checks import check_prerequisites
-    items = check_prerequisites(mode="release")
-    assert not any("Node" in i.label or "npx" in i.label for i in items), items
+def test_the_node_prereqs_are_checked_in_release_mode_too(monkeypatch):
+    """A release install builds nothing locally, which is why these were once
+    skipped for it. The build is not what wants Node: `--install-agent` runs
+    the remotion-dev/skills installer with npx in every mode, so skipping
+    them hid a prerequisite a release install needs just as much, and the
+    user met it later as a warning from a different command."""
+    from onboard import checks
+    monkeypatch.setattr(checks.shutil, "which", lambda name: None)
+    items = checks.check_prerequisites(mode="release")
+    node = [i for i in items if i.label.startswith("Node.js")]
+    npx = [i for i in items if i.label.startswith("npx")]
+    assert len(node) == 1 and len(npx) == 1, items
+    # Warn-only in every mode: a missing Remotion skill must never block an
+    # install that renders perfectly well without it.
+    assert [i.severity for i in node + npx] == ["warning", "warning"]
+    assert "install-agent" in node[0].hint
 
 
 @pytest.mark.parametrize("version, ok", [

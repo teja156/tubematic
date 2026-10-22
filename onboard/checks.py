@@ -40,9 +40,9 @@ def check_prerequisites(mode: str = "dev") -> list:
     mid-wizard failure once `pipeline_settings` actually tries to write.
     A data subdirectory this user cannot write gets the same treatment.
 
-    Node/npx are skipped entirely in release mode (TMDEV-91 Phase 2): a
-    release install builds nothing locally, so warning about them would be
-    noise the user can't act on.
+    Node/npx are warn-only but are checked in every install mode. `mode` no
+    longer changes any check; it stays in the signature because all three
+    entry points resolve an install mode and pass the one they ran for.
     """
     import sys
 
@@ -64,28 +64,38 @@ def check_prerequisites(mode: str = "dev") -> list:
         items.append(CheckItem("docker compose v2", compose_ok,
                                 hint="update Docker Desktop or install the Compose plugin" if not compose_ok else ""))
 
-    if mode != "release":
-        node_bin = shutil.which("node")
-        if node_bin:
-            version_str = _run(["node", "--version"]).stdout.strip()
-            try:
-                major, minor = (int(x) for x in version_str.lstrip("v").split(".")[:2])
-            except ValueError:
-                major, minor = 0, 0
-            node_ok = (major, minor) >= (22, 20)
-            items.append(CheckItem(
-                f"Node.js {version_str}", node_ok, severity="warning",
-                hint="" if node_ok else
-                     f"Node.js {version_str} found, but the remotion-dev/skills installer requires "
-                     ">= 22.20.0 — it will crash on import (not just warn), so remotion-best-practices "
-                     "will silently fail to install. Upgrade Node.js.",
-            ))
-        else:
-            items.append(CheckItem("Node.js", False, severity="warning",
-                                    hint="remotion-dev/skills install will be skipped. Container rendering unaffected."))
+    # Checked in every install mode. The only host-side consumer of Node is
+    # _install_remotion_skills, which --install-agent runs whatever the mode
+    # is, so the old release-mode skip (TMDEV-91 Phase 2, reasoning that a
+    # release install builds nothing locally) hid a prerequisite a release
+    # install needs just as much: the local build is not what wants Node.
+    node_bin = shutil.which("node")
+    if node_bin:
+        version_str = _run(["node", "--version"]).stdout.strip()
+        try:
+            major, minor = (int(x) for x in version_str.lstrip("v").split(".")[:2])
+        except ValueError:
+            major, minor = 0, 0
+        node_ok = (major, minor) >= (22, 20)
+        items.append(CheckItem(
+            f"Node.js {version_str}", node_ok, severity="warning",
+            hint="" if node_ok else
+                 f"Node.js {version_str} found, but the remotion-dev/skills installer requires "
+                 ">= 22.20.0 — it will crash on import (not just warn), so remotion-best-practices "
+                 "will silently fail to install. Upgrade Node.js.",
+        ))
+    else:
+        items.append(CheckItem(
+            "Node.js", False, severity="warning",
+            hint="not found — --install-agent cannot install the remotion-best-practices "
+                 "skill, which the scene-writing skill invokes first. Container rendering is "
+                 "unaffected. Node.js >= 22.20 is needed for a release install too."))
 
-        items.append(CheckItem("npx available", bool(shutil.which("npx")), severity="warning",
-                                hint="remotion-dev/skills install will be skipped." if not shutil.which("npx") else ""))
+    items.append(CheckItem(
+        "npx available", bool(shutil.which("npx")), severity="warning",
+        hint="" if shutil.which("npx") else
+             "comes with Node.js; without it remotion-dev/skills is skipped on every "
+             "--install-agent."))
 
     # Read-only ownership probe — a prior install's containers (root-owned)
     # may have left tubematic.db*/-wal/-shm owned by root.

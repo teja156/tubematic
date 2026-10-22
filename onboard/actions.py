@@ -755,7 +755,9 @@ def _install_remotion_skills(cwd: Path, agent_flag: str, *, global_scope: bool =
 
     npx_bin = shutil.which("npx")
     if not npx_bin:
-        rep.warn("npx not found — remotion-dev/skills skipped (install Node.js >= 22 first)")
+        rep.warn("npx not found — remotion-dev/skills skipped. The scene-writing skill "
+                 "invokes remotion-best-practices first, so install Node.js >= 22.20 (npx "
+                 "comes with it) and re-run --install-agent. Rendering is unaffected.")
         return False
     cmd = ["npx", "--yes", "skills@latest", "add", "remotion-dev/skills", "--all"]
     if global_scope:
