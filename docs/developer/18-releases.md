@@ -58,6 +58,15 @@ development branch can never be tagged. The number is set on the release line, i
 own, as the first step of a release; that commit is never cherry-picked back, so the development
 branch keeps its marker.
 
+The install and upgrade commands in [Quickstart](../quickstart.md), [Installing](../user-guide/02-installing.md)
+and [Upgrading](../user-guide/07-upgrading.md) name a real version, never a `<version>`
+placeholder, so they can be pasted as they are. On a release line they name that line's release;
+on the development branch, the newest published release. GitHub's `releases/latest/download/` URL
+cannot stand in for the number, because the tarball's file name carries the version. A release
+updates them in a commit of its own on the line, next to the `VERSION` bump, and that commit is
+cherry-picked to the development branch once the release is published and only if it is the newest
+release. A patch on an older line must not move the development branch's commands back.
+
 ---
 
 ## Release branches

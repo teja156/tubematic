@@ -65,11 +65,11 @@ Treat it as trusted-LAN only. To use it from another machine, set up Twingate or
 from inside it. It pulls ready-built images; nothing is compiled and there is nothing to log in to.
 
 ```bash
-curl -LO https://github.com/teja156/tubematic/releases/download/v<version>/tubematic-v<version>.tar.gz
-curl -LO https://github.com/teja156/tubematic/releases/download/v<version>/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/tubematic-v2.0.0.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
-tar xzf tubematic-v<version>.tar.gz
-cd tubematic-v<version>
+tar xzf tubematic-v2.0.0.tar.gz
+cd tubematic-v2.0.0
 python3 onboard.py
 ```
 
