@@ -35,42 +35,6 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
 ---
 
-## v2.0.1
-
-A patch release for the first-install experience on a bare Linux server. Nothing in a running
-install changes.
-
-### Fixed
-
-- **Onboarding could stop on its first line with `ensurepip is not available`, and then told you to
-  run the command that had just failed.** The wizard creates its own virtualenv before it does
-  anything else, and Debian and Ubuntu package the part that seeds `pip` into one separately. It now
-  names the package to install. A second run after that failure used to get further and fail
-  differently, with `No module named pip`, because the abandoned virtualenv had an interpreter in it
-  and no `pip`; such a virtualenv is now rebuilt instead of trusted.
-- **Node.js was not listed as a prerequisite for an install from a release, although installing an
-  agent needs it.** Onboarding skipped the Node and `npx` checks entirely for a release install, on
-  the grounds that nothing is built locally — but it is `python3 onboard.py --install-agent` that
-  uses Node, to install the Remotion best-practices skill, and it does that whichever way Tubematic
-  was installed. Both checks now run in every install, still as warnings that never block. The
-  warning you get when it is missing now says what is lost: the scene-writing skill invokes that
-  skill first on every scene it writes.
-- **The documentation never mentioned the `python3-venv` package, and marked Node.js as needed only
-  for a source install.** Both prerequisites are now listed with the command that checks them, and
-  [Installing](user-guide/02-installing.md#installing-pythons-venv-module-and-nodejs-on-ubuntu) has
-  install steps for Ubuntu beside the Docker ones, including why `nvm` is the wrong choice on a
-  server and why Ubuntu's own `nodejs` package can be worse than having none. That section also now
-  says plainly what onboarding does and does not do for you: it checks for every prerequisite and
-  installs none of them, because it runs no package manager — the only thing it installs for itself
-  is its own virtualenv.
-
-### Upgrade notes
-
-Nothing to do. This release changes two onboarding warnings and the documentation; no setting, no
-database and no container behaviour is affected, and an existing install is unchanged by it.
-
----
-
 ## v2.0.0
 
 **A major release because it is not backward compatible**: the dashboard now needs a password, and
@@ -307,6 +271,17 @@ dashboard password is set and an OpenAI key is stored.
   **Script Profiles** page and builds itself from there. The guide now describes that. Several
   places also said the youtube-transcript.io key was used for topic mining; it is not, and mining
   works without it.
+- **Onboarding did not say what to install when Python could not create its virtualenv, and two
+  prerequisites were missing from the documentation.** On Debian and Ubuntu the part of Python that
+  seeds `pip` into a new virtualenv is packaged separately, so the wizard stopped on its first line
+  with `ensurepip is not available` and then suggested the command that had just failed. It now
+  names the package to install, and a half-created virtualenv left behind by that failure is
+  rebuilt rather than trusted — before, a second attempt got further and failed differently. Node.js
+  was also treated as a prerequisite only for an install from source, although installing an agent
+  needs it either way, so a missing one is now reported in both.
+  [Installing](user-guide/02-installing.md#prerequisites) lists both prerequisites with the commands
+  that check them, has install steps for Ubuntu beside the Docker ones, and says plainly that
+  onboarding checks for every prerequisite and installs none of them.
 
 ### Upgrade notes
 
