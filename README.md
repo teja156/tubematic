@@ -15,6 +15,14 @@ OpenCode) writes for that specific video, rendered by [Remotion](https://remotio
 exactly what produced any frame. You run it from a web dashboard on your own Linux machine with
 Docker.
 
+## Walkthrough
+
+<p align="center">
+  <a href="https://youtu.be/-y9zBSg8WEc">
+    <img alt="Watch the Tubematic walkthrough" src="https://img.youtube.com/vi/-y9zBSg8WEc/maxresdefault.jpg" width="640">
+  </a>
+</p>
+
 ## Documentation
 
 **[docs.tubematic.ai](https://docs.tubematic.ai)** has the quickstart, the user guide (installing,
