@@ -8,7 +8,7 @@ Every scene is a React component an AI agent writes for that specific video, com
 [Remotion](https://remotion.dev). The output is real code, which is why you can read exactly what
 produced any frame.
 
-[![Watch the Tubematic walkthrough](https://img.youtube.com/vi/-y9zBSg8WEc/maxresdefault.jpg)](https://youtu.be/-y9zBSg8WEc)
+[![Watch the Tubematic walkthrough](https://raw.githubusercontent.com/teja156/tubematic/develop/logos/social/tubematic-walkthrough-1280x720.png)](https://youtu.be/-y9zBSg8WEc)
 
 The documentation is split by who is reading. Pick the entry point that matches what you want to do.
 

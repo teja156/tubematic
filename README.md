@@ -19,7 +19,7 @@ Docker.
 
 <p align="center">
   <a href="https://youtu.be/-y9zBSg8WEc">
-    <img alt="Watch the Tubematic walkthrough" src="https://img.youtube.com/vi/-y9zBSg8WEc/maxresdefault.jpg" width="640">
+    <img alt="Watch the Tubematic walkthrough" src="logos/social/tubematic-walkthrough-1280x720.png" width="640">
   </a>
 </p>
 
