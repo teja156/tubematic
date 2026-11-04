@@ -8,6 +8,7 @@ import { clamp01, hash, lerp, ramp } from "../kit/prng";
 import { makeSky } from "../kit/Sky";
 import { softDot } from "../kit/textures";
 import { buildDesk, DESK, leadGeometry } from "./desk";
+import { NEWSBOY_STATES } from "./newsboy";
 import { OPERATOR_STATES } from "./operator";
 import { buildTown, PORCH_H } from "./town";
 
@@ -36,23 +37,24 @@ export const BEATS: Beat[] = [
   {
     start: 0,
     end: 105,
-    from: { pos: [-7.2, 2.1, 14.5], target: [-1.6, 2.4, 0.6], fov: 52, focus: 13.5 },
-    to: { pos: [-6.0, 2.0, 12.4], target: [-1.3, 2.3, 0.7], fov: 50, focus: 11.6 },
+    from: { pos: [-7.2, 2.1, 14.5], target: [-1.6, 2.4, 0.6], fov: 52, focus: 12.0 },
+    to: { pos: [-6.0, 2.0, 12.4], target: [-1.3, 2.3, 0.7], fov: 50, focus: 10.6 },
   },
-  // 2. glide up to the wires and along them toward the setting sun
+  // 2. glide up the pole to the wires, then along them toward the setting sun
   {
     start: 185,
-    end: 285,
+    end: 275,
     from: { pos: [-5.6, 6.0, 6.2], target: [-26, 5.4, 3.4], fov: 50, focus: 9 },
-    to: { pos: [-11.5, 5.9, 6.4], target: [-33, 5.2, 3.4], fov: 50, focus: 9 },
-    via: [[-6.4, 3.6, 10.0]],
+    to: { pos: [-11.0, 5.9, 6.4], target: [-32, 5.2, 3.4], fov: 50, focus: 9 },
+    via: [[-6.2, 3.8, 9.6]],
+    viaTarget: [[-4.2, 6.2, 3.3]],
   },
-  // 3. night: tilt up to the aurora over the rooftops
+  // 3. night: low angle, the office and the wires under the aurora
   {
     start: 330,
-    end: 385,
-    from: { pos: [-11, 4.0, 10.5], target: [-4, 11.5, -12], fov: 56, focus: 18 },
-    to: { pos: [-9.6, 3.6, 10.0], target: [-3.2, 10.8, -12], fov: 56, focus: 16 },
+    end: 390,
+    from: { pos: [-3.6, 1.3, 12.6], target: [-1.5, 7.8, -6], fov: 64, focus: 6.1 },
+    to: { pos: [-3.0, 1.5, 12.0], target: [-1.2, 7.3, -6], fov: 63, focus: 5.5 },
   },
   // 4. the operator at his desk; sparks, recoil
   {
@@ -60,14 +62,13 @@ export const BEATS: Beat[] = [
     end: 585,
     from: { pos: [0.2, 1.85, 5.0], target: [-0.6, 1.5, 1.0], fov: 42, focus: 4.25 },
     to: { pos: [-0.05, 1.8, 4.4], target: [-0.6, 1.5, 1.0], fov: 41, focus: 3.65 },
-    via: [[-4.5, 2.6, 8.2]],
   },
   // 5. unplug, the key keeps clicking; slow push-in on his face
   {
     start: 620,
     end: 809,
     from: { pos: [0.15, 1.7, 3.7], target: [-0.5, 1.45, 1.0], fov: 40, focus: 2.95 },
-    to: { pos: [-0.42, 1.78, 2.35], target: [-0.6, 1.62, 0.84], fov: 36, focus: 1.52 },
+    to: { pos: [-0.48, 1.8, 2.85], target: [-0.6, 1.66, 0.84], fov: 36, focus: 2.0 },
   },
 ];
 
@@ -108,13 +109,14 @@ export class CarringtonScene {
   private town = buildTown();
   private desk = buildDesk();
   private op = new Cutout(1.7, OPERATOR_STATES);
+  private boy = new Cutout(1.25, NEWSBOY_STATES);
   private sparks: THREE.Points;
   private sparkGeo: THREE.BufferGeometry;
   private arcs: THREE.Mesh[] = [];
   private arcMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 2.8, 4.0) });
   private smoke: THREE.Sprite[] = [];
   private fog = new THREE.Fog(0xffffff, 60, 330);
-  private static readonly NSPARK = 90;
+  private static readonly NSPARK = 140;
   grade!: Grade;
   dof!: Dof;
 
@@ -126,6 +128,7 @@ export class CarringtonScene {
     s.add(this.desk.root);
     this.op.mesh.position.set(OP.x, PORCH_H, OP.z);
     s.add(this.op.mesh);
+    s.add(this.boy.mesh);
 
     this.key.castShadow = shadows;
     this.key.shadow.mapSize.set(2048, 2048);
@@ -209,10 +212,10 @@ export class CarringtonScene {
 
     // ---- sky ----
     const u = this.sky.uniforms;
-    u.zenith.value.copy(pal([C(0.18, 0.42, 0.95), C(0.22, 0.2, 0.62), C(0.07, 0.07, 0.3), C(0.02, 0.03, 0.14)], tod));
-    u.horizon.value.copy(pal([C(1.0, 0.78, 0.48), C(1.0, 0.38, 0.22), C(0.42, 0.18, 0.42), C(0.08, 0.1, 0.3)], tod));
-    u.ground.value.copy(pal([C(0.6, 0.45, 0.4), C(0.5, 0.25, 0.3), C(0.18, 0.1, 0.3), C(0.06, 0.06, 0.2)], tod));
-    u.cloudColor.value.copy(pal([C(1.0, 0.92, 0.85), C(1.0, 0.5, 0.45), C(0.5, 0.25, 0.55), C(0.12, 0.12, 0.32)], tod));
+    u.zenith.value.copy(pal([C(0.12, 0.36, 1.0), C(0.2, 0.16, 0.62), C(0.04, 0.04, 0.2), C(0.006, 0.01, 0.06)], tod));
+    u.horizon.value.copy(pal([C(1.0, 0.7, 0.42), C(1.0, 0.36, 0.2), C(0.36, 0.14, 0.38), C(0.03, 0.04, 0.15)], tod));
+    u.ground.value.copy(pal([C(0.6, 0.45, 0.4), C(0.5, 0.25, 0.3), C(0.14, 0.08, 0.26), C(0.02, 0.02, 0.09)], tod));
+    u.cloudColor.value.copy(pal([C(1.0, 0.92, 0.85), C(1.0, 0.5, 0.45), C(0.45, 0.22, 0.5), C(0.05, 0.06, 0.18)], tod));
     const sunEl = num([0.32, 0.05, -0.08, -0.2], tod);
     u.sunDir.value.set(-1, sunEl, 0.25).normalize();
     u.sunColor.value.copy(pal([C(1, 0.85, 0.55), C(1, 0.45, 0.2), C(0.5, 0.15, 0.2), C(0, 0, 0)], tod));
@@ -225,13 +228,13 @@ export class CarringtonScene {
     const auroraTint = C(0.3, 1.0, 0.6).lerp(C(0.85, 0.35, 1.0), pulse * 0.6);
     const keyCol = pal([C(1.0, 0.82, 0.55), C(1.0, 0.5, 0.28), C(0.5, 0.45, 1.0), auroraTint], tod);
     this.key.color.copy(keyCol);
-    this.key.intensity = num([3.2, 2.4, 1.1, 1.5], tod);
+    this.key.intensity = num([3.6, 2.6, 1.2, 1.8], tod);
     // the key swings from a low western sun to a high night light over the town
-    const dir = pal([C(-26, 16, 20), C(-30, 7, 14), C(-16, 22, 18), C(-12, 30, 16)], tod);
+    const dir = pal([C(-30, 13, 14), C(-30, 7, 16), C(-16, 9, 15), C(-16, 6, 12)], tod);
     this.key.position.set(-10 + dir.r, dir.g, 4 + dir.b);
-    this.hemi.color.copy(pal([C(0.55, 0.72, 1.0), C(0.55, 0.45, 0.95), C(0.35, 0.35, 0.95), C(0.32, 0.45, 0.95).lerp(auroraTint, 0.35)], tod));
-    this.hemi.groundColor.copy(pal([C(0.55, 0.38, 0.3), C(0.45, 0.25, 0.35), C(0.2, 0.12, 0.38), C(0.18, 0.12, 0.38)], tod));
-    this.hemi.intensity = num([1.15, 0.95, 0.85, 1.05], tod);
+    this.hemi.color.copy(pal([C(0.42, 0.58, 1.0), C(0.5, 0.42, 1.0), C(0.3, 0.32, 0.95), C(0.22, 0.3, 0.9).lerp(auroraTint, 0.3)], tod));
+    this.hemi.groundColor.copy(pal([C(0.42, 0.3, 0.5), C(0.4, 0.22, 0.45), C(0.18, 0.1, 0.36), C(0.12, 0.08, 0.32)], tod));
+    this.hemi.intensity = num([0.9, 0.85, 0.55, 0.45], tod);
 
     for (const g of this.town.windowGlow) {
       const lit = g.color.r > 0.9; // warm windows glow after dusk
@@ -280,13 +283,13 @@ export class CarringtonScene {
       const vy = hash(i, birth, 5) * 2.0 + 0.4;
       const vz = (hash(i, birth, 6) - 0.2) * 2.0;
       pos.setXYZ(i, src.x + vx * age, src.y + vy * age - 4.9 * age * age, src.z + vz * age);
-      size.setX(i, (1 - age / (period / FPS)) * 34 * (0.5 + hash(i, birth, 8)));
+      size.setX(i, (1 - age / (period / FPS)) * 80 * (0.5 + hash(i, birth, 8)));
     }
     pos.needsUpdate = true;
     size.needsUpdate = true;
     const flicker = 0.4 + 0.6 * hash(f, 9);
     this.sparkLight.position.set(o.x, o.y + 0.15, o.z + 0.15);
-    this.sparkLight.intensity = si * flicker * 9;
+    this.sparkLight.intensity = si * flicker * 2.5;
 
     for (const [k, arc] of this.arcs.entries()) {
       arc.geometry.dispose();
@@ -307,7 +310,7 @@ export class CarringtonScene {
         p.z += (hash(f, k, j, 15) - 0.5) * 2 * amp;
         pts.push(p);
       }
-      arc.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0), 28, 0.0035, 4, false);
+      arc.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0), 28, 0.006, 4, false);
     }
 
     // paper tape smoulders: ember glow + rising smoke
@@ -338,11 +341,27 @@ export class CarringtonScene {
     const bob = Math.sin(time * 2.4) * 0.008 + (down && tapping && f < T.recoil ? -0.006 : 0);
     this.op.mesh.position.set(OP.x, PORCH_H + bob + recoilT * 0.05, OP.z - recoilT * 0.06);
     this.op.face(this.camera, 0.8);
-    this.op.setTint(this.hemi.color.clone().lerp(C(1, 0.95, 0.9), 0.3), num([0.22, 0.2, 0.22, 0.26], tod) + si * 0.1);
+    this.op.setTint(this.hemi.color.clone().lerp(C(1, 0.95, 0.9), 0.3), num([0.22, 0.2, 0.22, 0.26], tod));
+
+    // ---- newsboy: walks along the street by day, points at the sky by night ----
+    let boyState: string;
+    if (f < 200) {
+      const t = clamp01(f / 150);
+      const step = t < 1 ? Math.floor(f / 8) % 2 : 0;
+      boyState = step ? "walkB:smile" : "walkA:smile";
+      if (f >= 60 && f < 64) boyState = "walkA:smile:blink";
+      this.boy.mesh.position.set(lerp(-5.4, -3.6, t), Math.abs(Math.sin((f / 8) * Math.PI)) * 0.025, 6.0);
+    } else {
+      boyState = f >= 365 && f < 369 ? "point:awe:blink" : "point:awe";
+      this.boy.mesh.position.set(-3.8, Math.sin(time * 2) * 0.006, 5.5);
+    }
+    this.boy.setState(boyState);
+    this.boy.face(this.camera, 0.8);
+    this.boy.setTint(this.hemi.color.clone().lerp(C(1, 0.95, 0.9), 0.3), num([0.22, 0.2, 0.22, 0.26], tod));
 
     // ---- grade + dof ----
     this.grade = {
-      exposure: num([1.0, 1.05, 1.25, 1.35], tod),
+      exposure: num([1.0, 1.05, 1.15, 1.15], tod),
       saturation: num([1.3, 1.35, 1.3, 1.35], tod),
       contrast: num([1.06, 1.08, 1.05, 1.05], tod),
       lift: pal([C(0.07, 0.05, 0.09), C(0.08, 0.04, 0.1), C(0.05, 0.04, 0.12), C(0.045, 0.045, 0.13)], tod),
@@ -351,6 +370,6 @@ export class CarringtonScene {
       hiTint: pal([C(1.06, 1.0, 0.9), C(1.08, 0.97, 0.88), C(1.0, 0.98, 1.0), C(0.98, 1.0, 1.02)], tod),
     };
     const near = clamp01((pose.focus - 2) / 9);
-    this.dof = { focus: pose.focus, strength: lerp(16, 9, near), maxRadius: 10 };
+    this.dof = { focus: pose.focus, strength: lerp(16, 6, near), maxRadius: 10 };
   }
 }

@@ -225,29 +225,37 @@ export const cobbles = (seed: number) => {
   const S = 1024;
   const { c, ctx } = makeCanvas(S, S);
   const rng = makeRng(seed);
-  ctx.fillStyle = "hsl(258, 35%, 16%)";
+  ctx.fillStyle = "hsl(258, 30%, 34%)";
   ctx.fillRect(0, 0, S, S);
-  const n = 12;
-  const cs = S / n;
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
-      const off = j % 2 ? cs / 2 : 0;
-      const cx = i * cs + off + range(rng, -4, 4);
-      const cy = j * cs + cs / 2 + range(rng, -4, 4);
-      const rx = cs * range(rng, 0.38, 0.46);
-      const ry = cs * range(rng, 0.34, 0.44);
-      const hue = range(rng, 18, 38);
-      const l = range(rng, 0.42, 0.56);
+  // irregular setts in staggered courses of varying length
+  const rows = 14;
+  const rh = S / rows;
+  for (let j = 0; j < rows; j++) {
+    let x = -rng() * rh;
+    while (x < S) {
+      const w = rh * range(rng, 0.9, 1.6);
+      const hue = range(rng, 14, 40);
+      const l = range(rng, 0.47, 0.57);
+      const pts: [number, number][] = [];
+      const cx = x + w / 2;
+      const cy = j * rh + rh / 2;
+      for (let k = 0; k < 7; k++) {
+        const a = (k / 7) * Math.PI * 2;
+        const rr = range(rng, 0.82, 1.0);
+        pts.push([cx + Math.cos(a) * (w / 2 - 3) * rr, cy + Math.sin(a) * (rh / 2 - 3) * rr]);
+      }
       for (const dx of [0, -S, S]) {
-        ctx.fillStyle = hsl(hue, 0.42, l);
+        ctx.fillStyle = hsl(hue, 0.45, l);
         ctx.beginPath();
-        ctx.ellipse(cx + dx, cy, rx, ry, range(rng, -0.3, 0.3), 0, Math.PI * 2);
+        pts.forEach(([px, py], k) => (k === 0 ? ctx.moveTo(px + dx, py) : ctx.lineTo(px + dx, py)));
+        ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = hsl(hue + 10, 0.5, l + 0.12, 0.6);
+        ctx.fillStyle = hsl(hue + 10, 0.55, l + 0.12, 0.55);
         ctx.beginPath();
-        ctx.ellipse(cx + dx - rx * 0.2, cy - ry * 0.25, rx * 0.5, ry * 0.35, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx + dx - w * 0.1, cy - rh * 0.12, w * 0.28, rh * 0.18, 0, 0, Math.PI * 2);
         ctx.fill();
       }
+      x += w;
     }
   }
   brush(ctx, makeRng(seed + 1), 0, 0, S, S, 30, 0.4, 0.5, 120, true);

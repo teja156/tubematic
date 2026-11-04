@@ -45,7 +45,7 @@ export const buildTown = (): Town => {
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 150, uv.getY(i) * 150);
   const ground = mesh(groundGeo, dirtMat, [0, 0, 0], { cast: false });
   root.add(ground);
-  const street = mesh(worldBox(70, 0.04, 8.4, 3.2), cobble, [-14, 0.02, 7.9], { cast: false });
+  const street = mesh(worldBox(70, 0.04, 8.4, 2.6), cobble, [-14, 0.02, 7.9], { cast: false });
   root.add(street);
 
   // --- boardwalk along the north side ---
@@ -91,7 +91,7 @@ export const buildTown = (): Town => {
     office.add(mesh(worldBox(w, 2.5, 0.14, 1), trim, [x, PORCH_H + 1.25, 0.06]));
   office.add(mesh(worldBox(1.3, 0.16, 0.16, 1), trim, [1.75, PORCH_H + 2.4, 0.06]));
   // window behind the operator
-  const winGlass = lambert(undefined, 0x3a5fd0, { emissive: new THREE.Color(0x101850) });
+  const winGlass = lambert(undefined, 0x1c2866, { emissive: new THREE.Color(0x04061a) });
   windowGlow.push(winGlass);
   office.add(mesh(new THREE.BoxGeometry(1.6, 1.1, 0.04), winGlass, [-0.6, PORCH_H + 1.85, 0.02], { cast: false }));
   for (const y of [1.28, 2.42]) office.add(mesh(worldBox(1.8, 0.12, 0.12, 1), trim, [-0.6, PORCH_H + y, 0.06]));

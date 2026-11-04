@@ -234,7 +234,7 @@ export class InkPipeline {
         texel: { value: texel },
         near: { value: 0.1 },
         far: { value: 500 },
-        lineScale: { value: 2.0 * res },
+        lineScale: { value: 2.4 * res },
         projInv: { value: new THREE.Matrix4() },
         viewInv: { value: new THREE.Matrix4() },
         inkColor: { value: new THREE.Color(0.07, 0.045, 0.13) },

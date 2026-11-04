@@ -7,9 +7,9 @@ import type { DrawFn } from "../kit/Cutout";
 export type Pose = "tap" | "recoil" | "reach" | "hold";
 export type Expr = "focus" | "smile" | "shock" | "amazed";
 
-const INK = "#1b1033";
-const SKIN = "#f6b98a";
-const SKIN_SHADE = "#e0906a";
+export const INK = "#1b1033";
+export const SKIN = "#f6b98a";
+export const SKIN_SHADE = "#e0906a";
 const VEST = "#13a39b";
 const SHIRT = "#fff3dc";
 const GARTER = "#e8344a";
@@ -18,7 +18,7 @@ const VISOR = "rgba(40, 210, 120, 0.82)";
 
 type P = [number, number];
 
-const stroke = (ctx: CanvasRenderingContext2D, w = 6) => {
+export const stroke = (ctx: CanvasRenderingContext2D, w = 6) => {
   ctx.lineWidth = w;
   ctx.strokeStyle = INK;
   ctx.lineJoin = "round";
@@ -26,7 +26,7 @@ const stroke = (ctx: CanvasRenderingContext2D, w = 6) => {
   ctx.stroke();
 };
 
-const limb = (ctx: CanvasRenderingContext2D, pts: P[], width: number, color: string) => {
+export const limb = (ctx: CanvasRenderingContext2D, pts: P[], width: number, color: string) => {
   ctx.beginPath();
   ctx.moveTo(...pts[0]);
   for (const p of pts.slice(1)) ctx.lineTo(...p);
@@ -40,7 +40,7 @@ const limb = (ctx: CanvasRenderingContext2D, pts: P[], width: number, color: str
   ctx.stroke();
 };
 
-const hand = (ctx: CanvasRenderingContext2D, p: P, open = false) => {
+export const hand = (ctx: CanvasRenderingContext2D, p: P, open = false) => {
   ctx.beginPath();
   ctx.arc(p[0], p[1], 22, 0, Math.PI * 2);
   ctx.fillStyle = SKIN;

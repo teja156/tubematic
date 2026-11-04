@@ -20,6 +20,8 @@ export interface Beat {
   cut?: boolean;
   // optional extra control points the glide INTO this beat passes through
   via?: [number, number, number][];
+  // optional look-at points the glide's target passes through
+  viaTarget?: [number, number, number][];
 }
 
 type Vec = number[];
@@ -62,17 +64,24 @@ export const poseAt = (beats: Beat[], f: number): Pose => {
       const m1 = v1.map((x) => x * dur);
       const t = (f - b.end) / dur;
       const base = toPose(hermite(a0, m0, a1, m1, t));
-      if (!n.via || n.via.length === 0) return base;
-      // Position through via points: a Catmull-Rom curve, walked with a Hermite
-      // parameter whose end speeds match the drifts, so speed stays continuous.
-      const pts = [b.to.pos, ...n.via, n.from.pos].map((p) => new THREE.Vector3(...p));
-      const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
-      const len = curve.getLength();
-      const s0 = (Math.hypot(v0[0], v0[1], v0[2]) * dur) / len;
-      const s1 = (Math.hypot(v1[0], v1[1], v1[2]) * dur) / len;
-      const u = hermite([0], [s0], [1], [s1], t)[0];
-      const p = curve.getPointAt(Math.min(1, Math.max(0, u)));
-      return { ...base, pos: [p.x, p.y, p.z] };
+      // Through via points: a Catmull-Rom curve, walked with a Hermite parameter
+      // whose end speeds match the drifts, so speed stays continuous.
+      type V3 = [number, number, number];
+      const along = (a: V3, vias: V3[], b: V3, vs: number, ve: number): V3 => {
+        const curve = new THREE.CatmullRomCurve3([a, ...vias, b].map((p) => new THREE.Vector3(...p)), false, "centripetal");
+        const len = Math.max(1e-3, curve.getLength());
+        const u = hermite([0], [(vs * dur) / len], [1], [(ve * dur) / len], t)[0];
+        const p = curve.getPointAt(Math.min(1, Math.max(0, u)));
+        return [p.x, p.y, p.z];
+      };
+      let out = base;
+      if (n.via && n.via.length) {
+        out = { ...out, pos: along(b.to.pos, n.via, n.from.pos, Math.hypot(v0[0], v0[1], v0[2]), Math.hypot(v1[0], v1[1], v1[2])) };
+      }
+      if (n.viaTarget && n.viaTarget.length) {
+        out = { ...out, target: along(b.to.target, n.viaTarget, n.from.target, Math.hypot(v0[3], v0[4], v0[5]), Math.hypot(v1[3], v1[4], v1[5])) };
+      }
+      return out;
     }
   }
   return beats[beats.length - 1].to;

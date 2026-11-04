@@ -49,20 +49,23 @@ void main() {
     vec3 acc = vec3(0.0);
     for (int k = 0; k < 3; k++) {
       float fk = float(k);
-      float base = 0.14 + 0.05 * fk + 0.06 * sin(az * (2.0 + fk) + time * (0.25 + 0.1 * fk) + fk * 1.7)
-                 + 0.03 * sin(az * 7.0 - time * 0.6 + fk);
+      // each curtain's lower edge snakes across the sky
+      float base = 0.12 + 0.11 * fk + 0.07 * sin(az * (1.6 + fk * 0.7) + time * (0.22 + 0.08 * fk) + fk * 2.1)
+                 + 0.035 * sin(az * 5.0 - time * 0.5 + fk * 3.0);
       float h = el - base;
-      float body = smoothstep(-0.015, 0.012, h) * exp(-max(h, 0.0) * (5.0 - fk));
-      float rays = 0.45 + 0.55 * n1(az * (55.0 + fk * 20.0) + time * (1.2 + fk * 0.4) + fk * 9.0);
-      float fold = 0.5 + 0.5 * sin(az * (9.0 + fk * 3.0) + time * 0.8 + n1(az * 4.0 + time * 0.2) * 3.0);
-      float strength = body * rays * (0.45 + 0.55 * fold);
-      vec3 green = vec3(0.15, 1.0, 0.45);
-      vec3 red = vec3(1.0, 0.18, 0.45);
-      vec3 magenta = vec3(0.85, 0.2, 1.0);
-      vec3 c = mix(green, mix(magenta, red, fk / 2.0), smoothstep(0.0, 0.22, h));
-      acc += c * strength * (k == 0 ? 1.6 : 1.1);
+      float body = smoothstep(-0.012, 0.006, h) * exp(-max(h, 0.0) * (11.0 - 2.0 * fk));
+      float rays = pow(n1(az * (70.0 + fk * 25.0) + time * (1.0 + fk * 0.4) + fk * 9.0), 1.6);
+      // ribbons: only some stretches of azimuth carry a curtain
+      float ribbon = smoothstep(0.35, 0.75, n1(az * (2.2 + fk) + time * 0.15 + fk * 5.0));
+      float fold = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(az * (11.0 + fk * 3.0) + time * 0.7 + n1(az * 4.0 + time * 0.2) * 3.0), 2.0);
+      float strength = body * (0.25 + 0.75 * rays) * fold * ribbon;
+      vec3 green = vec3(0.12, 1.0, 0.42);
+      vec3 red = vec3(1.0, 0.12, 0.35);
+      vec3 magenta = vec3(0.8, 0.15, 1.0);
+      vec3 c = mix(green, mix(magenta, red, fk / 2.0), smoothstep(0.0, 0.12, h));
+      acc += c * strength * (k == 0 ? 1.4 : 1.0);
     }
-    col += acc * aurora * 2.2;
+    col += acc * aurora * 1.3;
   }
   gl_FragColor = vec4(col, 1.0);
 }
