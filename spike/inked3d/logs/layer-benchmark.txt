@@ -1,0 +1,22 @@
+bundle_seconds 1.870003588
+1_base still_run1 11.744353676
+1_base still_run2 10.542175114
+1_base still_run3 10.623816847
+1_base range_1frame 10.891680166 range_30frames 28.285885642 marginal_per_frame .599
+2_shadows still_run1 11.519226678
+2_shadows still_run2 11.400133728
+2_shadows still_run3 11.516390819
+2_shadows range_1frame 11.281891848 range_30frames 32.060422337 marginal_per_frame .716
+3_ink still_run1 12.382940449
+3_ink still_run2 11.714206682
+3_ink still_run3 11.728023344
+3_ink range_1frame 11.936012040 range_30frames 37.470753841 marginal_per_frame .880
+4_grade still_run1 11.822832615
+4_grade still_run2 11.876877237
+4_grade still_run3 11.481388100
+4_grade range_1frame 12.668734724 range_30frames 36.965808226 marginal_per_frame .837
+5_dof still_run1 12.248907293
+5_dof still_run2 13.004962563
+5_dof still_run3 12.430380840
+5_dof range_1frame 12.796282945 range_30frames 45.282249713 marginal_per_frame 1.120
+BENCH_DONE

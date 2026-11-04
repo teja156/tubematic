@@ -1,0 +1,6 @@
+frames=810 moving=809 (100.0%) cuts=0
+max camera speed 0.302 m/frame; max frame-to-frame speed change 0.0198 m/frame
+glide 105->185 (80 frames): peak 0.120 m/f at 149, ease-in 44 f, ease-out 36 f
+glide 275->330 (55 frames): peak 0.302 m/f at 303, ease-in 28 f, ease-out 27 f
+glide 390->440 (50 frames): peak 0.227 m/f at 414, ease-in 24 f, ease-out 26 f
+glide 585->620 (35 frames): peak 0.030 m/f at 602, ease-in 17 f, ease-out 18 f

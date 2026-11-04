@@ -1,0 +1,22 @@
+# still vs same frame of the full render (raw CRF 20 encode), mean |diff| summed over RGB (0-765)
+frame 0: 11.82
+frame 52: 11.87
+frame 105: 12.41
+frame 145: 7.47
+frame 185: 8.46
+frame 230: 7.44
+frame 275: 6.21
+frame 300: 7.01
+frame 330: 7.24
+frame 360: 6.63
+frame 390: 6.54
+frame 415: 6.26
+frame 440: 6.94
+frame 512: 7.16
+frame 585: 7.68
+frame 602: 7.53
+frame 620: 7.36
+frame 715: 5.64
+frame 809: 6.68
+# reference: codec-only error measured on a 5-frame render of frames 436-440 was 7.2 at frame 440
+# final video.mp4, all 810 frames decoded to RGB: min luma 0.0/255, median of per-frame minima 0.6, pixels with all channels 0: 503
