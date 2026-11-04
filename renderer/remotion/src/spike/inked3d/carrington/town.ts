@@ -140,6 +140,10 @@ export const buildTown = (): Town => {
         g.add(mesh(worldBox(1.2, 0.12, 0.12, 1), trim, [wx, PORCH_H + row + 0.68, 0.06]));
       }
     }
+    // South-side buildings (behind the camera most of the time) don't cast:
+    // with a low key from the south they would put the whole street in shade
+    // and swallow the characters' own shadows. A deliberate stylised cheat.
+    if (opts.north) g.traverse((o) => (o.castShadow = false));
     root.add(g);
     return g;
   };

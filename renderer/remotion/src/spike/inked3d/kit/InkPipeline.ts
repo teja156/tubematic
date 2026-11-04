@@ -301,6 +301,13 @@ export class InkPipeline {
     dof: Dof,
   ) {
     gl.autoClear = true;
+    // Re-assert every frame: R3F's configure() runs on every React re-render of
+    // the <Canvas> and resets shadowMap.enabled from its `shadows` prop. When it
+    // went false after frame 1, every later frame in a tab silently reused the
+    // first frame's shadow map (found by diffing a sequential render against
+    // single stills).
+    gl.shadowMap.enabled = this.flags.shadows;
+    gl.shadowMap.type = THREE.PCFShadowMap;
     gl.shadowMap.autoUpdate = false;
     gl.shadowMap.needsUpdate = this.flags.shadows;
     gl.setRenderTarget(this.rtMain);

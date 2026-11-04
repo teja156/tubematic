@@ -197,6 +197,14 @@ export class CarringtonScene {
     ((this.sparks.material as THREE.ShaderMaterial).uniforms.scale as { value: number }).value = heightPx / 1920;
   }
 
+  debugInfo() {
+    const v = (p: THREE.Vector3) => `${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}`;
+    const sc = this.key.shadow.camera;
+    const lp = new THREE.Vector3().setFromMatrixPosition(this.key.matrixWorld);
+    return `key=${v(this.key.position)} keyMW=${v(lp)} shadowCam=${v(sc.position)} proj00=${sc.projectionMatrix.elements[0].toFixed(4)} ` +
+      `smat0=${this.key.shadow.matrix.elements[0].toFixed(4)},${this.key.shadow.matrix.elements[12].toFixed(4)} int=${this.key.intensity.toFixed(2)} boy=${v(this.boy.mesh.position)} cam=${v(this.camera.position)}`;
+  }
+
   sparkIntensity(f: number) {
     if (f < T.sparksStart) return 0;
     const on = ramp(f, T.sparksStart, T.sparksStart + 8);
@@ -366,7 +374,7 @@ export class CarringtonScene {
       contrast: num([1.06, 1.08, 1.05, 1.05], tod),
       lift: pal([C(0.07, 0.05, 0.09), C(0.08, 0.04, 0.1), C(0.05, 0.04, 0.12), C(0.045, 0.045, 0.13)], tod),
       gain: pal([C(1, 0.99, 0.96), C(1, 0.96, 0.93), C(0.95, 0.96, 1), C(0.94, 0.98, 1)], tod),
-      shadowTint: pal([C(0.85, 0.88, 1.15), C(0.85, 0.78, 1.2), C(0.72, 0.72, 1.3), C(0.72, 0.75, 1.3)], tod),
+      shadowTint: pal([C(0.82, 0.86, 1.2), C(0.8, 0.74, 1.25), C(0.64, 0.62, 1.42), C(0.64, 0.64, 1.42)], tod),
       hiTint: pal([C(1.06, 1.0, 0.9), C(1.08, 0.97, 0.88), C(1.0, 0.98, 1.0), C(0.98, 1.0, 1.02)], tod),
     };
     const near = clamp01((pose.focus - 2) / 9);

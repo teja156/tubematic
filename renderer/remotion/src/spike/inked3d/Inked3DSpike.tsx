@@ -15,6 +15,7 @@ export interface Inked3DProps {
   dof?: boolean;
   debugView?: DebugView;
   showGlInfo?: boolean; // overlay the WebGL renderer string (proof of backend)
+  debugOverlay?: boolean; // overlay per-frame light/shadow state (determinism debugging)
   [key: string]: unknown;
 }
 
@@ -44,6 +45,8 @@ const Runner: React.FC<{ frame: number; flags: FxFlags; debugView: DebugView }> 
     const { world, pipe } = state.current;
     world.update(frameRef.current);
     pipe.render(gl, world.scene, world.camera, world.grade, world.dof);
+    const dbg = typeof document !== "undefined" ? document.getElementById("inked3d-dbg") : null;
+    if (dbg) dbg.textContent = `f=${frameRef.current} ${world.debugInfo()}`;
   }, 1);
   return null;
 };
@@ -71,6 +74,7 @@ export const Inked3DSpike: React.FC<Inked3DProps> = (props) => {
         dpr={dpr}
         flat
         linear
+        shadows={{ enabled: flags.shadows, type: THREE.PCFShadowMap }}
         gl={{ antialias: false, alpha: false, powerPreference: "high-performance" }}
         onCreated={(st) => {
           if (props.showGlInfo) setGlInfo(`${rendererString(st.gl)} | buffer ${st.gl.domElement.width}x${st.gl.domElement.height}`);
@@ -78,6 +82,9 @@ export const Inked3DSpike: React.FC<Inked3DProps> = (props) => {
       >
         <Runner frame={frame} flags={flags} debugView={props.debugView ?? 0} />
       </ThreeCanvas>
+      {props.debugOverlay ? (
+        <div id="inked3d-dbg" style={{ position: "absolute", left: 20, right: 20, bottom: 40, padding: 16, fontSize: 26, fontFamily: "monospace", color: "#fff", background: "rgba(0,0,0,0.8)", wordBreak: "break-all" }} />
+      ) : null}
       {props.showGlInfo ? (
         <div style={{ position: "absolute", left: 30, right: 30, top: 60, padding: 20, fontSize: 30, fontFamily: "monospace", color: "#fff", background: "rgba(20,10,50,0.85)", wordBreak: "break-all" }}>
           {glInfo}
