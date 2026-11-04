@@ -3,6 +3,7 @@ import { AbsoluteFill, Composition } from "remotion";
 import { CompositionBuilder } from "./CompositionBuilder";
 import { PlaceholderComposition } from "./Composition";
 import { TextLayoutProbe } from "./audit/TextLayoutProbe";
+import { Inked3DSpike } from "./spike/inked3d/Inked3DSpike";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
 // renders, plus a measurement probe. A separate composition rather than a prop
@@ -78,6 +79,17 @@ export const RemotionRoot: React.FC = () => {
           audioPath: "/public/preview/audio.mp3",
         }}
         calculateMetadata={durationFromTimeline}
+      />
+
+      {/* Throwaway visual-style spike (inked 3D world + flat 2D characters). */}
+      <Composition
+        id="Inked3DSpike"
+        component={Inked3DSpike}
+        durationInFrames={810}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{ shadows: true, ink: true, grade: true, dof: true, debugView: 0 }}
       />
 
       {/* Phase 0 placeholder — smoke-test the container without real assets */}
