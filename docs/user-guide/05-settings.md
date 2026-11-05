@@ -47,6 +47,10 @@ verified, the bookkeeping rows that share their table, and how to add one are on
 | `text_layout_audit_enabled` | bool | `true` | Kill switch for the advisory text-overlap and safe-zone audit inside `validate_job` |
 | `watermark_enabled` | bool | `true` | Burns the "Made with tubematic.ai" mark into every render. Read by the worker when a render starts, so it affects later renders only. **A setting rather than a `scene-config.json` key on purpose** — see [Watermark](../developer/09-remotion-project.md#watermark) |
 
+Which GPU renders, if any, is **not** a setting: a container's GPU is fixed when it is created, so it
+is chosen on the host with `python3 onboard.py --step gpu`. The Rendering tab shows the result. See
+[GPU rendering](10-gpu-rendering.md).
+
 ### Scheduling
 
 The cron poller's supervisor — see [The Poller](../developer/13-the-poller.md). Both are read on every

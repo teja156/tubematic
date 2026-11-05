@@ -44,6 +44,27 @@ These two are the only routes that need no token.
 process that outruns the 10-second timeout raises through to Flask's default HTML error page rather
 than the JSON shape above.
 
+### GPU rendering
+
+Unlike `/render/health`, these need the token. The API container has no GPU, so both only read and
+write settings rows; the render worker does the testing
+([Rendering and Review](11-rendering-and-review.md#the-gl-renderer)).
+
+| Route | Response |
+|---|---|
+| `GET /render/gpu` | The worker's last GPU probe (below) |
+| `POST /render/gpu/test` | Stamps `gpu_probe_requested_at` for the worker's next pass and answers `202` with the same body, `pending: true`. The result arrives in a later `GET` |
+
+| Field | Meaning |
+|---|---|
+| `status` | `unknown` (the worker has never probed), `not_configured` (no GPU override: CPU rendering), `working`, or `not_usable` (a GPU is configured but the probe rejected it: CPU rendering) |
+| `rendering_on` | `gpu` only when `status` is `working`, otherwise `cpu` |
+| `configured`, `gpu` | Whether the renderer was given a GPU, and its `{uuid, name}` |
+| `host_gpus` | Every NVIDIA GPU the host had when onboarding's `gpu` step ran: `index`, `uuid`, `name`, `memory_mib`, `driver` |
+| `probe` | The stored result row, or `null` |
+| `requested_at`, `pending` | The last Test request, and whether no probe has started since |
+| `waiting_for_render` | `pending`, and a video is `RENDERING`. The worker answers only after that render |
+
 ---
 
 ## Dashboard login

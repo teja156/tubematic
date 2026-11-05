@@ -60,7 +60,8 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   `~/.tubematic-data/compose.gpu.json`, so later upgrades carry it over.
 - **With a GPU chosen, start containers with `python3 scripts/service.py start`, not a bare
   `docker compose up`.** A bare `docker compose up` does not read the GPU choice, and recreates the
-  renderer without the GPU. Rendering still works, on the CPU, and Settings → Rendering says so.
+  renderer without the GPU. Rendering still works, on the CPU, and `python3 scripts/service.py status`
+  warns that a GPU is chosen but not in use.
 - **An upgrade refuses to start while the chosen GPU cannot be used** — the NVIDIA Container Toolkit
   was removed, or the GPU was taken out. It stops before changing anything and tells you to run
   `python3 onboard.py --step gpu` to pick again or go back to the CPU.
