@@ -17,4 +17,5 @@ Report:
   cannot be checked this way. Say so rather than guessing, and tell the user to run
   `docker compose ps` themselves if they need to know.
 
-If nothing answers, tell the user to run: docker compose up -d
+If nothing answers, tell the user to run, from the Tubematic install directory:
+`python3 scripts/service.py start`

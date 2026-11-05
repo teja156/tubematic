@@ -26,8 +26,8 @@ import {
 // import context only governs the scene entry module, not its static imports.
 //
 // Deliberately no blur — a `filter: blur()` over a full-bleed photo for 300+
-// frames is expensive on this renderer (software GL via swangle, PNG frames,
-// no GPU) and a slow render doesn't fail cleanly: it hits RENDER_TIMEOUT_SECS
+// frames is expensive on a CPU install (software GL via swangle, PNG frames;
+// a GPU is optional) and a slow render doesn't fail cleanly: it hits RENDER_TIMEOUT_SECS
 // and bounces back to RENDER_QUEUED for a retry. Tracked separately.
 
 /**

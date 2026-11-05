@@ -14,4 +14,5 @@ be down while the other is fine:
   curl -s http://localhost:4000/health
   curl -s http://localhost:4100/health
 
-Show the result. If containers are not running, tell the user: docker compose up -d
+Show the result. If containers are not running, tell the user to run, from the Tubematic install
+directory: python3 scripts/service.py start
