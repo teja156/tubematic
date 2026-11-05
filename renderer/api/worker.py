@@ -154,29 +154,38 @@ def _render_timeout_secs() -> int:
 # Chromium's WebGL renderer string naming that GPU. Anything else renders on
 # the CPU (remotion.config.ts's swangle) rather than failing the video.
 #
-# The flags, all measured in this image (Plane TMDEV-178, Phase 0):
-# - --gl=angle-egl: hardware GL through EGL. The other values either fail or
-#   stay in software.
-# - --chrome-mode=chrome-for-testing: on the Debian Chromium this image runs,
-#   only switches to --headless=new. Old headless passes a one-tab probe but
-#   cannot create WebGL contexts in several tabs at once, so a real three.js
-#   render fails in every tab. NEVER on the CPU path: new headless rendering
-#   in software is about 5x slower than old.
-# - --enable-multiprocess-on-linux: Remotion's default in 4.x already; stated
-#   so a default change cannot quietly put Chromium in --single-process, which
-#   disables the GPU process.
+# The GPU options, all measured in this image (Plane TMDEV-178):
+# - browserExecutable /usr/bin/chromium: the image's Debian Chromium. Note the
+#   CLI flag is --browser-executable; the --browser-executable-path every render
+#   has always passed is not a Remotion flag and is ignored, so CPU renders use
+#   the headless shell Remotion downloads on first use. Left as it is for the
+#   CPU path (unchanged behaviour); the GPU path names Debian Chromium
+#   properly, which renders on the GPU with nothing to download.
+# - gl angle-egl: hardware GL through EGL. The other values either fail or stay
+#   in software.
+# - chromeMode chrome-for-testing: with a named browser this only switches it to
+#   --headless=new. Old headless passes a one-tab probe but cannot create WebGL
+#   contexts in several tabs at once, so a real three.js render fails in every
+#   tab. NEVER on the CPU path: new headless in software is about 5x slower.
+# - enableMultiprocessOnLinux: Remotion's default in 4.x already; stated so a
+#   default change cannot put Chromium in --single-process, which disables the
+#   GPU process.
 # - __EGL_VENDOR_LIBRARY_FILENAMES: without it libglvnd may pick another EGL
 #   vendor (Mesa, or an integrated GPU on a host that passes one in), and the
 #   render still "works" on the wrong device.
-GPU_GL_ARGV = ("--gl=angle-egl", "--chrome-mode=chrome-for-testing",
-               "--enable-multiprocess-on-linux")
+GPU_GL_OPTIONS = {"gl": "angle-egl", "chromeMode": "chrome-for-testing",
+                  "enableMultiprocessOnLinux": True, "browserExecutable": CHROMIUM_BIN}
+# What a CPU render gets implicitly from remotion.config.ts (swangle) and the
+# CLI's defaults. Spelled out because the probe driver uses the Node API,
+# which does not read remotion.config.ts.
+CPU_GL_OPTIONS = {"gl": "swangle", "chromeMode": "headless-shell",
+                  "enableMultiprocessOnLinux": True, "browserExecutable": None}
 GPU_GL_ENV = {"__EGL_VENDOR_LIBRARY_FILENAMES": "/usr/share/glvnd/egl_vendor.d/10_nvidia.json"}
 
 GPU_PROBE_RESULT_KEY = pipeline.GPU_PROBE_RESULT_KEY
 GPU_PROBE_REQUEST_KEY = pipeline.GPU_PROBE_REQUEST_KEY
-GPU_PROBE_TAG = "TUBEMATIC_GPU_PROBE"  # keep in sync with src/gpu-probe/GpuProbe.tsx
 GPU_PROBE_TIMEOUT_SECS = 180
-GPU_PROBE_ENTRY = "src/gpu-probe/index.ts"
+GPU_PROBE_DRIVER = "gpu-probe/run-gpu-probe.mjs"
 
 # Set only by _run_gpu_probe. False until a probe passes, so a worker that has
 # not probed yet renders on the CPU, never on an unverified GPU.
@@ -198,27 +207,24 @@ def _render_on_gpu() -> bool:
     return bool(_gpu_config()["uuid"]) and _gpu_verified
 
 
-def _gl_args(on_gpu: bool) -> tuple[list, dict]:
-    """The extra render argv and environment for one GL path. The one place
-    both the render and the probe get them, so they cannot drift — the probe
-    is only evidence about the flags it actually ran with."""
+def _gl_options(on_gpu: bool) -> tuple[dict, dict]:
+    """The browser/GL options and environment for one path. The single
+    source: a render's flags (_gl_args) and the probe's driver config are both
+    built from it, so the probe is evidence about exactly what a render runs."""
     if on_gpu:
-        return list(GPU_GL_ARGV), dict(GPU_GL_ENV)
-    return [], {}
+        return dict(GPU_GL_OPTIONS), dict(GPU_GL_ENV)
+    return dict(CPU_GL_OPTIONS), {}
 
 
-def _parse_probe_output(text: str) -> dict | None:
-    """The JSON after the last tagged line, or None when there is none."""
-    found = None
-    for line in (text or "").splitlines():
-        idx = line.find(GPU_PROBE_TAG + " ")
-        if idx < 0:
-            continue
-        try:
-            found = json.loads(line[idx + len(GPU_PROBE_TAG) + 1:].strip())
-        except ValueError:
-            continue
-    return found if isinstance(found, dict) else None
+def _gl_args(on_gpu: bool) -> tuple[list, dict]:
+    """The extra `remotion render` argv and environment for one path. The CPU
+    path adds nothing, so a CPU render's command is what it always was."""
+    options, env = _gl_options(on_gpu)
+    if not on_gpu:
+        return [], env
+    return [f"--gl={options['gl']}", f"--chrome-mode={options['chromeMode']}",
+            "--enable-multiprocess-on-linux",
+            f"--browser-executable={options['browserExecutable']}"], env
 
 
 def _judge_probe(webgl: dict | None, expected_name: str) -> tuple[bool, str]:
@@ -288,7 +294,7 @@ def _kill_group_and_reap(proc: subprocess.Popen) -> None:
 
 
 def _run_gpu_probe(reason: str) -> dict:
-    """Render the GpuProbe still with a render's flags, judge the renderer
+    """Render the GpuProbe still with a render's options, judge the renderer
     string, store the result for the dashboard, and set _gpu_verified.
 
     Runs even with no GPU configured: then it uses the CPU flags, and the
@@ -304,11 +310,10 @@ def _run_gpu_probe(reason: str) -> dict:
               "ok": False, "error": "", "secs": None, "smi": None}
     t0 = time.monotonic()
     try:
-        gl_argv, gl_env = _gl_args(configured)
-        out_png = Path("/tmp") / f"tubematic-gpu-probe-{uuid.uuid4().hex}.png"
+        options, gl_env = _gl_options(configured)
+        out_json = Path("/tmp") / f"tubematic-gpu-probe-{uuid.uuid4().hex}.json"
         proc = subprocess.Popen(
-            ["npx", "remotion", "still", GPU_PROBE_ENTRY, "GpuProbe", str(out_png),
-             "--browser-executable-path", CHROMIUM_BIN, *gl_argv],
+            ["node", GPU_PROBE_DRIVER, json.dumps({**options, "outputPath": str(out_json)})],
             cwd=str(REMOTION_DIR), env={**os.environ, **gl_env},
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             start_new_session=True,
@@ -319,19 +324,27 @@ def _run_gpu_probe(reason: str) -> dict:
         except subprocess.TimeoutExpired:
             _kill_group_and_reap(proc)
             stdout, stderr, timed_out = "", "", True
+        # The answer is a file, never stdout: Remotion prints every page
+        # console line there too (see the driver's header).
+        try:
+            webgl = json.loads(out_json.read_text())
+        except (OSError, ValueError):
+            webgl = None
         finally:
-            out_png.unlink(missing_ok=True)
-        webgl = _parse_probe_output(f"{stdout}\n{stderr}")
+            out_json.unlink(missing_ok=True)
+        if not isinstance(webgl, dict):
+            webgl = None
         if webgl:
             result["renderer"] = str(webgl.get("renderer") or "")
             result["vendor"] = str(webgl.get("vendor") or "")
         if configured:
             result["ok"], result["error"] = _judge_probe(webgl, cfg["name"])
             result["smi"] = _nvidia_smi(cfg["uuid"])
+        elif webgl and not webgl.get("webgl"):
+            result["error"] = str(webgl.get("error") or "")
         if webgl is None:
             # Say what actually happened rather than "no result": a hang, or
-            # the tail of whatever Remotion printed (a bundling error, a
-            # Chromium that would not start).
+            # the tail of whatever the driver printed before dying.
             tail = (stderr or stdout).strip()[-300:]
             result["error"] = (f"the probe did not finish within {GPU_PROBE_TIMEOUT_SECS}s"
                                if timed_out else

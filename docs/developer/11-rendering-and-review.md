@@ -191,16 +191,24 @@ OpenGL implementation. There are two paths, and the worker picks one per render.
 `setChromiumOpenGlRenderer("swangle")`, ANGLE over SwiftShader. It works on any machine, which is
 why it is the file's setting and not the worker's. The render command above is exactly what runs.
 
-**The GPU path** adds four settings, from `worker.py::_gl_args`:
+> **`--browser-executable-path` is not a Remotion flag.** The CLI's flag is `--browser-executable`,
+> and an unknown flag is ignored, so a CPU render does not use the image's Debian Chromium: it uses
+> the headless shell Remotion downloads into the container on its first render. That has always
+> been so, and the CPU path is left exactly as it was. The GPU path names the browser with the real
+> flag.
+
+**The GPU path** adds five settings, from `worker.py::_gl_options` (`_gl_args` turns them into
+flags):
 
 | Setting | Why it is needed |
 |---|---|
+| `--browser-executable=/usr/bin/chromium` | The image's Debian Chromium, which reaches the GPU with nothing to download. Without it Remotion downloads its own Chrome for Testing (about 177 MB) on the first GPU render |
 | `--gl=angle-egl` | Hardware OpenGL through EGL. The other values Remotion accepts either fail to get a context in the container or stay in software |
-| `--chrome-mode=chrome-for-testing` | With the image's Debian Chromium (passed as `--browser-executable-path`) this only switches Chromium to `--headless=new`. In the old headless mode a single tab gets a GPU WebGL context but several tabs at once cannot (`BindToCurrentSequence failed`), so a real multi-tab three.js render fails in every tab |
+| `--chrome-mode=chrome-for-testing` | With a named browser this only switches it to `--headless=new`. In the old headless mode a single tab gets a GPU WebGL context but several tabs at once cannot (`BindToCurrentSequence failed`), so a real multi-tab three.js render fails in every tab |
 | `--enable-multiprocess-on-linux` | Already Remotion's default in 4.x. Stated so a default change cannot put Chromium in `--single-process`, which disables its GPU process |
 | `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json` | Points libglvnd at NVIDIA's EGL. Without it EGL may load another vendor's (Mesa's is in the image), and the render succeeds on the wrong device |
 
-**None of the four is ever used on the CPU path.** New headless rendering in software is about five
+**None of these is ever used on the CPU path.** New headless rendering in software is about five
 times slower than old headless rendering, measured on a 2D scene.
 
 How the GPU reaches the container is the Compose override written by the `gpu` onboarding step
@@ -215,15 +223,19 @@ Being configured is not the same as working. A driver update, an old Container T
 Chromium cannot use, and **a render on the wrong GL device still succeeds**, only several times
 slower. So nothing about a finished render counts as evidence.
 
-`worker.py::_run_gpu_probe` renders one still, the `GpuProbe` composition, with `npx remotion still`
-and exactly the flags and environment `_gl_args` gives a render. The composition creates a WebGL
-context, reads `WEBGL_debug_renderer_info`'s unmasked renderer string, and prints it on a tagged
-`console.error` line. The CLI forwards a page's errors at its default log level but not its
-`console.log`. `_judge_probe` passes it only if the string names NVIDIA **and** the configured GPU,
+`worker.py::_run_gpu_probe` renders one still of the `GpuProbe` composition through a small Node
+driver, `renderer/remotion/gpu-probe/run-gpu-probe.mjs`, given exactly the options and environment
+`_gl_options` gives a render. The composition creates a WebGL context, reads
+`WEBGL_debug_renderer_info`'s unmasked renderer string and prints it on a tagged console line; the
+driver catches that line through Remotion's `onBrowserLog` and writes it to a JSON file, never to
+stdout, which Remotion fills with page output. It is a driver and not `npx remotion still` because
+the CLI never passes a still's page console output on, so the answer could not get out. The Node API
+does not read `remotion.config.ts`, which is why the CPU options spell out `swangle` (a test pins
+them to the config file). `_judge_probe` passes it only if the string names NVIDIA **and** the configured GPU,
 so SwiftShader, Mesa/llvmpipe and an integrated GPU all fail. The worker renders on the GPU only
 while the last probe passed (`_render_on_gpu`); otherwise it takes the CPU path.
 
-- **It has its own entry point**, `src/gpu-probe/index.ts`. The main entry bundles every
+- **It bundles its own entry point**, `src/gpu-probe/index.ts`. The main entry bundles every
   agent-written scene, and one broken scene fails the whole bundle, which would then read as a broken
   GPU.
 - **It runs once at startup, before the first claim**, so no render ever runs on an unverified GPU,
@@ -237,7 +249,7 @@ while the last probe passed (`_render_on_gpu`); otherwise it takes the CPU path.
 - **It runs on a CPU install too**, with the CPU path, so the dashboard's Test GPU shows what Chromium
   gets there (SwiftShader).
 - **It never raises.** A probe that cannot start, times out (180 s, with the same process-group kill
-  as a render) or prints nothing stores a failed result with the reason.
+  as a render) or writes no answer stores a failed result with the reason.
 
 The result is the bare settings row `gpu_probe_result` ([Settings internals](04-settings.md#undeclared-rows)),
 served by `GET /render/gpu` and read directly by `upgrade.py --check`. The API container has no GPU

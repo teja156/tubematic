@@ -57,14 +57,14 @@ def configured(monkeypatch):
           "memory_mib": 4096, "driver": "595.91.07"}]))
 
 
-def _probe_line(renderer=None, webgl=True, error=None):
+def _answer(renderer=None, webgl=True, error=None):
+    """What the probe driver writes to its output file."""
     body = {"webgl": webgl}
     if renderer:
         body.update(renderer=renderer, vendor="Google Inc.")
     if error:
         body["error"] = error
-    # The shape Remotion forwards a page's console.error in (seen live).
-    return f"[Tab 0, src/gpu-probe/GpuProbe.tsx:38] TUBEMATIC_GPU_PROBE {json.dumps(body)}"
+    return body
 
 
 def _popen(stdout="", stderr="", returncode=0):
@@ -75,6 +75,27 @@ def _popen(stdout="", stderr="", returncode=0):
     return proc
 
 
+def _driver(answer, stderr=""):
+    """A Popen stand-in for the probe driver: on communicate() it writes
+    `answer` to the outputPath named in its JSON config, as the real one does.
+    `answer=None` writes nothing (a driver that died)."""
+    calls = []
+
+    def factory(argv, **kw):
+        calls.append((argv, kw))
+        proc = _popen(stderr=stderr)
+
+        def communicate(timeout=None):
+            if answer is not None:
+                with open(json.loads(argv[2])["outputPath"], "w") as f:
+                    json.dump(answer, f)
+            return "", stderr
+        proc.communicate.side_effect = communicate
+        return proc
+    factory.calls = calls
+    return factory
+
+
 def _stored(db_path):
     con = sqlite3.connect(db_path)
     row = con.execute("SELECT value FROM settings WHERE key = ?",
@@ -83,30 +104,48 @@ def _stored(db_path):
     return json.loads(row[0]) if row else None
 
 
-def _probe(db_path, stderr, smi_ok=True):
+def _probe(db_path, answer, smi_ok=True, stderr=""):
     smi = mock.MagicMock(returncode=0, stdout="NVIDIA GeForce GTX 1650, 595.91.07, 4096\n", stderr="")
     if not smi_ok:
         smi = mock.MagicMock(returncode=9, stdout="", stderr="no devices")
-    with mock.patch("subprocess.Popen", return_value=_popen(stderr=stderr)) as popen, \
+    driver = _driver(answer, stderr=stderr)
+    with mock.patch("subprocess.Popen", side_effect=driver), \
          mock.patch("subprocess.run", return_value=smi):
         result = worker._run_gpu_probe(reason="test")
-    return result, popen
+    return result, driver
 
 
 # ── The flags ────────────────────────────────────────────────────────────────
 
-def test_the_cpu_path_adds_nothing():
-    """remotion.config.ts's swangle applies. In particular no chrome-for-testing
-    mode: new headless in software is about 5x slower (measured)."""
+def test_the_cpu_path_adds_nothing_to_a_render():
+    """remotion.config.ts's swangle applies, and a CPU render's command is what
+    it always was. In particular no chrome-for-testing mode: new headless in
+    software is about 5x slower (measured)."""
     assert worker._gl_args(False) == ([], {})
 
 
-def test_the_gpu_path_is_all_four_settings():
+def test_the_gpu_path_is_all_the_settings_and_names_the_browser():
     argv, env = worker._gl_args(True)
     assert argv == ["--gl=angle-egl", "--chrome-mode=chrome-for-testing",
-                    "--enable-multiprocess-on-linux"]
+                    "--enable-multiprocess-on-linux", "--browser-executable=/usr/bin/chromium"]
     assert env == {"__EGL_VENDOR_LIBRARY_FILENAMES":
                    "/usr/share/glvnd/egl_vendor.d/10_nvidia.json"}
+
+
+def test_the_browser_flag_is_the_one_remotion_reads():
+    """--browser-executable-path, which renders have always passed, is not a
+    Remotion CLI flag and is silently ignored — the GPU path must not rely on
+    it (measured: Remotion downloaded its own browser instead)."""
+    assert not any(a.startswith("--browser-executable-path") for a in worker._gl_args(True)[0])
+
+
+def test_the_cpu_options_are_what_remotion_config_sets():
+    """The probe driver uses the Node API, which ignores remotion.config.ts, so
+    the CPU options spell out what the config gives a CPU render."""
+    import pathlib
+    config = (pathlib.Path(worker.__file__).resolve().parent.parent / "remotion"
+              / "remotion.config.ts").read_text()
+    assert f'setChromiumOpenGlRenderer("{worker.CPU_GL_OPTIONS["gl"]}")' in config
 
 
 def test_unconfigured_never_renders_on_the_gpu(monkeypatch):
@@ -148,23 +187,14 @@ def test_no_webgl_context_fails():
     assert not ok and why == "no context"
 
 
-def test_no_probe_line_fails():
+def test_no_probe_answer_fails():
     assert worker._judge_probe(None, "x")[0] is False
-
-
-def test_the_tagged_line_is_found_among_remotion_output():
-    text = "Bundling 100%\nRendered 1/1\n" + _probe_line(NVIDIA) + "\n+ /tmp/x.png\n"
-    assert worker._parse_probe_output(text)["renderer"] == NVIDIA
-
-
-def test_output_without_the_tag_parses_as_nothing():
-    assert worker._parse_probe_output("Error: Chromium crashed\n") is None
 
 
 # ── The probe ────────────────────────────────────────────────────────────────
 
 def test_a_passing_probe_verifies_the_gpu_and_stores_the_result(db_path, configured):
-    result, popen = _probe(db_path, _probe_line(NVIDIA))
+    result, _ = _probe(db_path, _answer(NVIDIA))
     assert result["ok"] is True and worker._gpu_verified is True
     stored = _stored(db_path)
     assert stored["renderer"] == NVIDIA and stored["configured"] is True
@@ -173,27 +203,38 @@ def test_a_passing_probe_verifies_the_gpu_and_stores_the_result(db_path, configu
     assert [g["uuid"] for g in stored["host_gpus"]] == ["GPU-aaaa"]
 
 
-def test_the_probe_runs_with_exactly_the_gpu_flags_a_render_gets(db_path, configured):
+def test_the_probe_runs_with_exactly_the_options_a_render_gets(db_path, configured):
     """Old headless passes a one-tab probe but fails a real multi-tab three.js
-    render (measured) — a probe on different flags proves nothing."""
-    _, popen = _probe(db_path, _probe_line(NVIDIA))
-    argv = popen.call_args.args[0]
-    gpu_argv, gpu_env = worker._gl_args(True)
-    assert argv[-len(gpu_argv):] == gpu_argv
-    for key, value in gpu_env.items():
-        assert popen.call_args.kwargs["env"][key] == value
-    assert argv[:4] == ["npx", "remotion", "still", worker.GPU_PROBE_ENTRY]
+    render (measured) — a probe on different options proves nothing."""
+    _, driver = _probe(db_path, _answer(NVIDIA))
+    [(argv, kw)] = driver.calls
+    assert argv[:2] == ["node", worker.GPU_PROBE_DRIVER]
+    config = json.loads(argv[2])
+    options, env = worker._gl_options(True)
+    assert {k: config[k] for k in options} == options
+    for key, value in env.items():
+        assert kw["env"][key] == value
 
 
 def test_the_probe_uses_its_own_entry_not_the_scene_bundle():
     """One broken agent-written scene breaks the main bundle; through it, that
     would read as a broken GPU."""
-    assert worker.GPU_PROBE_ENTRY == "src/gpu-probe/index.ts"
+    import pathlib
+    driver = (pathlib.Path(worker.__file__).resolve().parent.parent / "remotion"
+              / worker.GPU_PROBE_DRIVER).read_text()
+    assert '"src", "gpu-probe", "index.ts"' in driver
+    assert "TUBEMATIC_GPU_PROBE" in driver
+
+
+def test_the_driver_output_file_is_removed(db_path, configured, tmp_path):
+    _, driver = _probe(db_path, _answer(NVIDIA))
+    out = json.loads(driver.calls[0][0][2])["outputPath"]
+    assert not os.path.exists(out)
 
 
 @pytest.mark.parametrize("renderer", [SWIFTSHADER, INTEL, LLVMPIPE])
 def test_a_probe_on_the_wrong_device_leaves_rendering_on_the_cpu(db_path, configured, renderer):
-    result, _ = _probe(db_path, _probe_line(renderer))
+    result, _ = _probe(db_path, _answer(renderer))
     assert result["ok"] is False and worker._gpu_verified is False
     assert worker._render_on_gpu() is False
     assert _stored(db_path)["renderer"] == renderer
@@ -202,18 +243,29 @@ def test_a_probe_on_the_wrong_device_leaves_rendering_on_the_cpu(db_path, config
 def test_a_failing_probe_withdraws_an_earlier_verification(db_path, configured, monkeypatch):
     """A GPU that broke after start (a driver update) must stop being used."""
     monkeypatch.setattr(worker, "_gpu_verified", True)
-    _probe(db_path, "Error: something went wrong")
+    _probe(db_path, None, stderr="Error: something went wrong")
     assert worker._gpu_verified is False
 
 
 def test_unconfigured_probes_on_the_cpu_path_and_reports_what_it_got(db_path):
     """The dashboard's Test button on a CPU install shows SwiftShader."""
-    result, popen = _probe(db_path, _probe_line(SWIFTSHADER))
-    argv = popen.call_args.args[0]
-    assert not any(a.startswith(("--gl", "--chrome-mode")) for a in argv)
+    result, driver = _probe(db_path, _answer(SWIFTSHADER))
+    config = json.loads(driver.calls[0][0][2])
+    assert config["gl"] == "swangle" and config["chromeMode"] == "headless-shell"
+    assert "__EGL_VENDOR_LIBRARY_FILENAMES" not in driver.calls[0][1]["env"]
     assert result["configured"] is False and result["renderer"] == SWIFTSHADER
     assert result["error"] == ""
     assert worker._gpu_verified is False
+
+
+def test_a_driver_that_dies_says_why(db_path, configured):
+    result, _ = _probe(db_path, None, stderr="Error: Cannot find module '@remotion/bundler'")
+    assert result["ok"] is False and "Cannot find module" in result["error"]
+
+
+def test_a_render_error_inside_the_driver_is_reported(db_path):
+    result, _ = _probe(db_path, _answer(webgl=False, error="the probe could not render: boom"))
+    assert result["error"] == "the probe could not render: boom"
 
 
 def test_a_probe_that_hangs_is_killed_with_its_whole_process_group(db_path, configured):
@@ -405,3 +457,8 @@ def test_the_two_processes_agree_on_the_row_names():
     import pathlib
     src = (pathlib.Path(__file__).resolve().parents[3] / "onboard" / "gpu.py").read_text()
     assert 'PROBE_RESULT_KEY = "gpu_probe_result"' in src
+
+
+def test_a_malformed_driver_answer_is_no_answer(db_path, configured):
+    result, _ = _probe(db_path, [1, 2])
+    assert result["ok"] is False and result["error"].startswith("the probe produced no result")

@@ -1,10 +1,10 @@
 import React, { useMemo } from "react";
 import { AbsoluteFill, Composition } from "remotion";
 
-// The worker (renderer/api/worker.py::_run_gpu_probe) renders this as a still
-// with exactly the GL flags a real render would get, and reads the tagged line
-// from Remotion's output. console.error, not console.log: the CLI forwards a
-// page's errors and warnings at its default log level, but not its logs.
+// The worker (renderer/api/worker.py::_run_gpu_probe) renders this as a still,
+// through gpu-probe/run-gpu-probe.mjs, with the same browser and GL options a
+// real render gets, and the driver picks the tagged line out of the page's
+// console through Remotion's onBrowserLog.
 //
 // The renderer string is the only trustworthy answer. A render that "worked"
 // proves nothing: without the right EGL vendor, Chromium silently renders on
