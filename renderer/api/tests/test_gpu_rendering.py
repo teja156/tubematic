@@ -457,6 +457,9 @@ def test_the_two_processes_agree_on_the_row_names():
     import pathlib
     src = (pathlib.Path(__file__).resolve().parents[3] / "onboard" / "gpu.py").read_text()
     assert 'PROBE_RESULT_KEY = "gpu_probe_result"' in src
+    # onboard.py --step gpu writes the hold that worker.py::_claim_next reads.
+    assert pipeline.RENDER_CLAIM_HOLD_KEY == "render_claim_hold_until"
+    assert 'RENDER_HOLD_KEY = "render_claim_hold_until"' in src
 
 
 def test_a_malformed_driver_answer_is_no_answer(db_path, configured):

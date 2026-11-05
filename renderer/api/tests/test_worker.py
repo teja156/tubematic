@@ -153,6 +153,31 @@ def test_claim_next_fifo_by_updated_at(db_path):
     assert worker._claim_next() == "vid-old"
 
 
+def _set_hold(db_path, until):
+    con = sqlite3.connect(db_path)
+    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (pipeline_module.RENDER_CLAIM_HOLD_KEY, until))
+    con.commit()
+    con.close()
+
+
+def test_claim_next_claims_nothing_while_onboarding_holds_claims(db_path):
+    """`onboard.py --step gpu` holds claims while it recreates the renderer,
+    so no render is started just to be killed by the recreate."""
+    _seed_video(db_path, status="RENDER_QUEUED")
+    _set_hold(db_path, "2999-01-01T00:00:00Z")
+    assert worker._claim_next() is None
+    assert _read_video(db_path)["status"] == "RENDER_QUEUED"
+
+
+def test_claim_next_ignores_an_expired_hold(db_path):
+    """A crashed onboarding leaves its hold behind; it must not stop
+    rendering past its ceiling."""
+    _seed_video(db_path, status="RENDER_QUEUED")
+    _set_hold(db_path, "2000-01-01T00:00:00Z")
+    assert worker._claim_next() == "vid-1"
+
+
 # ── render_timeout_secs (TMDEV-57) ────────────────────────────────────────────
 
 def test_render_timeout_secs_defaults_to_2400(db_path):

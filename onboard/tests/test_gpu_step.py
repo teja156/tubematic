@@ -338,6 +338,87 @@ def test_a_render_in_progress_is_not_killed_to_apply_the_change(step):
     assert "service.py start tubematic-renderer" in rep.text()
 
 
+def _hold(db_path):
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute("SELECT value FROM settings WHERE key = ?",
+                          (gpu.RENDER_HOLD_KEY,)).fetchone()
+    finally:
+        con.close()
+    return row[0] if row else None
+
+
+def test_render_claims_are_held_while_the_renderer_is_recreated(step, override, monkeypatch):
+    """Codex review: a render claimed between the look for one and the
+    recreate was killed. The hold is written before the look and is still in
+    place while compose runs, then released."""
+    step.container["exists"] = True
+    seen = {}
+    from onboard import stack
+    real = stack.in_flight
+
+    def looking(db_path):
+        seen["hold_at_look"] = _hold(db_path)
+        return real(db_path)
+    monkeypatch.setattr(stack, "in_flight", looking)
+    orig_run = _RecordingEx.run
+
+    def run(self, cmd, cwd=None, **kw):
+        seen["hold_at_up"] = _hold(step.db_path)
+        return orig_run(self, cmd, cwd=cwd, **kw)
+    monkeypatch.setattr(_RecordingEx, "run", run)
+    rep, ex, _ = step()
+    assert ex.calls == [[*actions._compose(), "up", "-d", "tubematic-renderer"]]
+    assert seen["hold_at_look"] and seen["hold_at_up"]
+    assert _hold(step.db_path) is None
+
+
+def test_a_deferred_recreate_releases_the_hold(step):
+    step.container["exists"] = True
+    con = sqlite3.connect(step.db_path)
+    con.execute("INSERT INTO videos (id, topic, status, created_at, updated_at) "
+                "VALUES ('vid_1', 't', 'RENDERING', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+    con.commit()
+    con.close()
+    rep, ex, _ = step()
+    assert ex.calls == []
+    assert _hold(step.db_path) is None
+
+
+def test_an_unreadable_database_defers_the_recreate(step, monkeypatch):
+    """Codex review: the RENDERING-only filter dropped stack.in_flight's
+    "cannot read the database" reason and recreated anyway."""
+    step.container["exists"] = True
+    from onboard import stack
+    monkeypatch.setattr(stack, "in_flight", lambda db_path: ["cannot read the database at x"])
+    rep, ex, _ = step()
+    assert ex.calls == []
+    assert "cannot read the database" in rep.text()
+
+
+def test_a_hold_that_cannot_be_written_defers_the_recreate(step, monkeypatch):
+    step.container["exists"] = True
+
+    def refuse(self, db_path, fn, detail):
+        raise sqlite3.OperationalError("attempt to write a readonly database")
+    monkeypatch.setattr(_RecordingEx, "sqlite_write", refuse)
+    rep, ex, _ = step()
+    assert ex.calls == []
+    assert "readonly" in rep.text()
+
+
+def test_a_voicing_video_does_not_hold_up_the_renderer(step):
+    """Voicing runs in the MCP container; recreating the renderer cannot hurt it."""
+    step.container["exists"] = True
+    con = sqlite3.connect(step.db_path)
+    con.execute("INSERT INTO videos (id, topic, status, created_at, updated_at) "
+                "VALUES ('vid_1', 't', 'VOICING', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+    con.commit()
+    con.close()
+    rep, ex, _ = step()
+    assert ex.calls == [[*actions._compose(), "up", "-d", "tubematic-renderer"]]
+
+
 # ── upgrade.py --check / service.py status ───────────────────────────────────
 
 def _store_probe(db_path, probe):
@@ -364,7 +445,8 @@ def test_the_readout_says_cpu_without_an_override(readout):
 
 def test_the_readout_names_the_gpu_the_probe_confirmed(readout, override):
     override.write_text(gpu.render_override(GTX, [GTX]))
-    _store_probe(readout, {"configured": True, "ok": True, "renderer": "ANGLE (NVIDIA …)"})
+    _store_probe(readout, {"configured": True, "ok": True, "renderer": "ANGLE (NVIDIA …)",
+                           "gpu": {"uuid": GTX.uuid, "name": GTX.name}})
     [(level, text)] = gpu.report_lines(readout)
     assert level == "ok" and "NVIDIA GeForce GTX 1650" in text
 
@@ -373,7 +455,8 @@ def test_the_readout_warns_when_the_chosen_gpu_is_not_usable(readout, override):
     """Renders still succeed — on the CPU, several times slower — so this is
     the line that explains a slow install."""
     override.write_text(gpu.render_override(GTX, [GTX]))
-    _store_probe(readout, {"configured": True, "ok": False, "error": "no WebGL context"})
+    _store_probe(readout, {"configured": True, "ok": False, "error": "no WebGL context",
+                           "gpu": {"uuid": GTX.uuid, "name": GTX.name}})
     [(level, text)] = gpu.report_lines(readout)
     assert level == "warn" and "no WebGL context" in text
 
@@ -385,6 +468,28 @@ def test_the_readout_warns_when_the_renderer_never_got_the_override(readout, ove
     _store_probe(readout, {"configured": False, "ok": False})
     [(level, text)] = gpu.report_lines(readout)
     assert level == "warn" and "service.py start tubematic-renderer" in text
+
+
+def test_the_readout_rejects_a_probe_from_the_previous_gpu(readout, override, monkeypatch):
+    """A change whose recreate was deferred behind a render: the running
+    renderer, and so its probe, is still on the old GPU. Reporting the new
+    one as working would be false."""
+    monkeypatch.setattr(gpu, "list_gpus", lambda run=None: [GTX, RTX])
+    override.write_text(gpu.render_override(RTX, [GTX, RTX]))
+    _store_probe(readout, {"configured": True, "ok": True, "renderer": "ANGLE (NVIDIA GTX …)",
+                           "gpu": {"uuid": GTX.uuid, "name": GTX.name}})
+    [(level, text)] = gpu.report_lines(readout)
+    assert level == "warn"
+    assert GTX.name in text and RTX.name in text
+    assert "service.py start tubematic-renderer" in text
+
+
+def test_the_readout_does_not_say_cpu_while_the_old_gpu_still_renders(readout, override):
+    """GPU switched off, recreate deferred: the renderer is still on the GPU."""
+    _store_probe(readout, {"configured": True, "ok": True,
+                           "gpu": {"uuid": GTX.uuid, "name": GTX.name}})
+    [(level, text)] = gpu.report_lines(readout)
+    assert level == "warn" and GTX.name in text and "the CPU is chosen" in text
 
 
 def test_the_readout_gives_no_recreate_advice_for_an_override_that_cannot_apply(readout, override,

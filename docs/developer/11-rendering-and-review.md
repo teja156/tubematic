@@ -56,6 +56,13 @@ ORDER BY updated_at ASC, id ASC LIMIT 1;
 followed by `UPDATE videos SET status = 'RENDERING' WHERE id = ? AND status = 'RENDER_QUEUED'`. The
 `WHERE` clause *is* the lock — there is no window between reading and claiming.
 
+The same `UPDATE` also refuses while the settings row `render_claim_hold_until` holds a time still in
+the future. `onboard.py --step gpu` writes it before it looks for a running render and clears it once
+it has recreated the renderer. Looking first and recreating second would otherwise let a render be
+claimed in between and then killed. SQLite has a single writer, so a claim either committed before the
+hold (and the look sees it) or sees the hold (and does not happen). The time is a ceiling of ten
+minutes, so an onboarding run that dies holding it delays renders, never stops them.
+
 Ordering is FIFO on `updated_at`. **Anything that writes `updated_at` changes render order**, which
 is why the publishing poll (where it exists) deliberately keys its own timeouts off a different
 column.

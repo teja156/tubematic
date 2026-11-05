@@ -185,6 +185,10 @@ def override_problems(path: Path = None, *, run=None) -> list[str]:
 
 
 PROBE_RESULT_KEY = "gpu_probe_result"  # keep in sync with renderer/api/pipeline.py
+RENDER_HOLD_KEY = "render_claim_hold_until"  # keep in sync with renderer/api/pipeline.py
+# A ceiling, not the expected time: the hold is cleared as soon as the
+# recreate returns, and only a crashed run leaves it to expire.
+RENDER_HOLD_SECS = 600
 
 
 def report_lines(db_path: Path) -> list[tuple[str, str]]:
@@ -216,6 +220,19 @@ def report_lines(db_path: Path) -> list[tuple[str, str]]:
             probe = json.loads(row[0]) if row and row[0] else None
         except (sqlite3.Error, ValueError):
             probe = None
+    # The probe describes the container that ran it. After a change whose
+    # recreate was deferred (a render was running), that is still the previous
+    # choice, so it says nothing about the one in the override.
+    if isinstance(probe, dict):
+        ran = probe.get("gpu") if probe.get("configured") else None
+        ran = ran if isinstance(ran, dict) and ran.get("uuid") else None
+        if (ran and ran["uuid"]) != (current and current["uuid"]):
+            was = f"GPU {ran.get('name') or ran['uuid']}" if ran else "the CPU"
+            now = f"GPU {current['name']}" if current else "the CPU"
+            lines.append(("warn", f"The running renderer still uses {was}, but {now} is chosen "
+                                  "— apply it with: python3 scripts/service.py start "
+                                  "tubematic-renderer"))
+            return lines
     if current is None:
         lines.append(("info", "Rendering on the CPU (no GPU chosen — to add one: "
                               f"{STEP_HINT})"))

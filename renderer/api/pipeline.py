@@ -2077,6 +2077,12 @@ def start_publish(db_path: str, api_key: str, video_id: str, account_ids: list,
 # Test request only stamps the request row for the worker's next pass.
 GPU_PROBE_RESULT_KEY = "gpu_probe_result"
 GPU_PROBE_REQUEST_KEY = "gpu_probe_requested_at"
+# `onboard.py --step gpu` sets this (a UTC time, db._now's format) before it
+# looks for a running render and recreates the renderer; until that time the
+# worker claims nothing (worker.py::_claim_next). The check-then-recreate is
+# otherwise racy: a render claimed between the two would be killed. The time
+# is a ceiling, so a crashed onboarding never stops rendering for long.
+RENDER_CLAIM_HOLD_KEY = "render_claim_hold_until"
 
 
 def now_precise() -> str:

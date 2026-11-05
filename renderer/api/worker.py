@@ -1660,10 +1660,22 @@ def _claim_next() -> str | None:
     # Guarded in the UPDATE's own WHERE clause (not SELECT-then-compare) —
     # the same atomic-claim pattern used throughout the pipeline. With a
     # single worker process this never actually loses a race, but it's the
-    # same defensive shape as submit_render's claim.
-    if db.set_status(DB_PATH, video_id, "RENDERING", only_if="RENDER_QUEUED"):
-        return video_id
-    return None
+    # same defensive shape as submit_render's claim. The hold is in the same
+    # statement for the same reason: onboarding writes it, then looks for a
+    # RENDERING row, and SQLite's single writer means a claim either landed
+    # before the hold (and is seen) or sees the hold (and does not happen).
+    now = db._now()
+    try:
+        with db.conn(DB_PATH) as con:
+            cur = con.execute(
+                "UPDATE videos SET status = 'RENDERING', updated_at = ? "
+                "WHERE id = ? AND status = 'RENDER_QUEUED' AND NOT EXISTS ("
+                " SELECT 1 FROM settings WHERE key = ? AND value > ?)",
+                (now, video_id, pipeline.RENDER_CLAIM_HOLD_KEY, now))
+    except Exception as e:
+        log.error(f"claim failed: {e}")
+        return None
+    return video_id if cur.rowcount > 0 else None
 
 
 def _stage_and_render(video_id: str) -> None:

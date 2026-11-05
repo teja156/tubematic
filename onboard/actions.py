@@ -18,6 +18,7 @@ and that must keep working unchanged.
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -1081,15 +1082,41 @@ def _recreate_renderer(ex: Executor, rep: Reporter) -> None:
                        capture_output=True, text=True)
     if r.returncode != 0:
         return  # no container yet: the renderer step will create it
-    from onboard import stack
-    rendering = [why for why in stack.in_flight(DB_PATH) if " is RENDERING " in why]
-    if rendering:
-        for why in rendering:
-            rep.warn(why)
-        rep.info("Not recreating the renderer mid-render. Once it finishes, apply the change "
-                 "with: python3 scripts/service.py start tubematic-renderer")
+    from onboard import gpu, stack
+    defer = ("Not recreating the renderer now. Once it is idle, apply the change with: "
+             "python3 scripts/service.py start tubematic-renderer")
+    # Hold the worker's render claims first, then look: a render claimed
+    # between a bare look and the recreate would be killed (see
+    # pipeline.py::RENDER_CLAIM_HOLD_KEY). A hold that cannot be written means
+    # nothing can be promised, so the recreate waits.
+    until = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + gpu.RENDER_HOLD_SECS))
+    try:
+        ex.sqlite_write(DB_PATH, lambda con: con.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            (gpu.RENDER_HOLD_KEY, until)), f"hold render claims until {until}")
+    except sqlite3.Error as e:
+        rep.warn(f"Could not pause render claims in {DB_PATH}: {e}")
+        rep.info(defer)
         return
-    r = ex.run([*_compose(), "up", "-d", "tubematic-renderer"], cwd=REPO_ROOT)
+    try:
+        # VOICING runs in the MCP container and is untouched by this. Anything
+        # else stack.in_flight reports — a render, an upload the worker may be
+        # running, or a database it cannot read — is a reason to wait.
+        busy = [why for why in stack.in_flight(DB_PATH) if " is VOICING " not in why]
+        if busy:
+            for why in busy:
+                rep.warn(why)
+            rep.info(defer)
+            return
+        r = ex.run([*_compose(), "up", "-d", "tubematic-renderer"], cwd=REPO_ROOT)
+    finally:
+        try:
+            ex.sqlite_write(DB_PATH, lambda con: con.execute(
+                "DELETE FROM settings WHERE key = ?", (gpu.RENDER_HOLD_KEY,)),
+                "release the render-claim hold")
+        except sqlite3.Error as e:
+            rep.warn(f"Could not release the render-claim hold ({e}); renders resume by "
+                     f"themselves at {until} UTC")
     if r.returncode != 0:
         rep.fail("docker compose up failed", (r.stderr or "").strip()[-500:])
         return
