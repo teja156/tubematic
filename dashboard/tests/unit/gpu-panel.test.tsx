@@ -11,7 +11,7 @@
  */
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { GpuPanel, GPU_STEP_COMMAND } from "@/components/GpuPanel";
+import { GpuPanel, GPU_STEP_COMMAND, describeDevice } from "@/components/GpuPanel";
 
 vi.mock("@/components/SectionLabel", () => ({
   SectionLabel: ({ label }: { label: string }) => <div>{label}</div>,
@@ -65,6 +65,8 @@ describe("GpuPanel", () => {
     expect(screen.getByText(GTX.name)).toBeInTheDocument();
     expect(screen.getByText(/595\.91\.07/)).toBeInTheDocument();
     expect(screen.getByTestId("gpu-renderer")).toHaveTextContent(NVIDIA);
+    expect(screen.getByTestId("gpu-device")).toHaveTextContent("The chosen GPU (NVIDIA GeForce GTX 1650)");
+    expect(screen.getByTestId("gpu-test")).toBeInTheDocument();
   });
 
   it("shows a rejected GPU in red with the reason and the device actually used", async () => {
@@ -78,6 +80,9 @@ describe("GpuPanel", () => {
     expect(head.style.color).toBe("var(--red)");
     expect(screen.getByTestId("gpu-why")).toHaveTextContent("another device");
     expect(screen.getByTestId("gpu-renderer")).toHaveTextContent(intel);
+    expect(screen.getByTestId("gpu-device")).toHaveTextContent("Another graphics device, not the chosen GPU");
+    // A GPU is chosen, so a re-test is worth offering: a driver fix can change the answer.
+    expect(screen.getByTestId("gpu-test")).toBeInTheDocument();
   });
 
   it("says CPU and how to add a GPU when none is configured", async () => {
@@ -87,8 +92,12 @@ describe("GpuPanel", () => {
     render(<GpuPanel />);
     expect(await screen.findByTestId("gpu-status")).toHaveTextContent("Rendering on the CPU");
     expect(screen.getByTestId("gpu-renderer")).toHaveTextContent("SwiftShader");
+    expect(screen.getByTestId("gpu-device")).toHaveTextContent("Software rendering on the CPU");
     expect(screen.getByTestId("gpu-help")).toHaveTextContent(GPU_STEP_COMMAND);
     expect(screen.queryByTestId("gpu-why")).toBeNull();
+    // No GPU chosen: a test could only re-confirm the CPU, and choosing a GPU
+    // recreates the renderer, which tests as it starts.
+    expect(screen.queryByTestId("gpu-test")).toBeNull();
   });
 
   it("says it has not tested yet before the worker's first probe", async () => {
@@ -96,6 +105,17 @@ describe("GpuPanel", () => {
                   host_gpus: [], probe: null }));
     render(<GpuPanel />);
     expect(await screen.findByTestId("gpu-status")).toHaveTextContent("Not tested yet");
+    expect(screen.queryByTestId("gpu-test")).toBeNull();
+  });
+
+  it("names each kind of device in plain words", () => {
+    const working = status() as Parameters<typeof describeDevice>[0];
+    const usable = { ...working, status: "not_usable" } as typeof working;
+    expect(describeDevice(working, NVIDIA)).toBe("The chosen GPU (NVIDIA GeForce GTX 1650)");
+    expect(describeDevice(usable, SWIFTSHADER)).toMatch(/^Software rendering on the CPU/);
+    expect(describeDevice(usable, NVIDIA)).toBe("A different NVIDIA GPU than the chosen one");
+    expect(describeDevice(usable, "ANGLE (Mesa, llvmpipe)")).toBe("Another graphics device, not the chosen GPU");
+    expect(describeDevice(usable, "")).toMatch(/^No graphics device/);
   });
 
   it("lists every host GPU, marks the chosen one and offers the switch command", async () => {

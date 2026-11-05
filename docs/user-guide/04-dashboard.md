@@ -298,8 +298,8 @@ work differently, noted below.
   There is no provider choice: every image comes from OpenAI.
 - **Rendering** — besides its settings, a **GPU** section that says whether videos render on an
   NVIDIA GPU or the CPU, names the GPU and the graphics device Chromium actually gets, and says why
-  when a chosen GPU is not being used. **Test GPU** has the renderer check again; it answers within
-  about a minute, or after the render in progress. The GPU is chosen on the host, not here — see
+  when a chosen GPU is not being used. With a GPU chosen, **Test GPU** has the renderer check again;
+  it answers within about a minute, or after the render in progress. The GPU is chosen on the host, not here — see
   [GPU rendering](10-gpu-rendering.md).
 - **Voice** — up to ten named voices and the default one. A new install starts with Teja (on
   `eleven_v4`, the default) and Adam (on `eleven_v3`), which can be removed like any other voice. Each voice has its own ElevenLabs model

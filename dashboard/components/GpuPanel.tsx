@@ -51,6 +51,17 @@ function isGpuStatus(body: unknown): body is GpuStatus {
     && Array.isArray((body as GpuStatus).host_gpus);
 }
 
+/** Plain words for Chromium's WebGL renderer string, which names the GL
+ *  stack rather than saying what it means. `status` decides "the chosen GPU":
+ *  only the worker's probe knows whether the string matched it. */
+export function describeDevice(status: GpuStatus, renderer: string): string {
+  if (!renderer) return "No graphics device: Chromium could not create a WebGL context";
+  if (/swiftshader/i.test(renderer)) return "Software rendering on the CPU (SwiftShader, Remotion's swangle)";
+  if (status.status === "working") return `The chosen GPU${status.gpu ? ` (${status.gpu.name})` : ""}`;
+  if (/nvidia/i.test(renderer)) return "A different NVIDIA GPU than the chosen one";
+  return "Another graphics device, not the chosen GPU";
+}
+
 function gpuLine(g: HostGpu): string {
   const mem = g.memory_mib ? ` · ${Math.round(g.memory_mib / 1024)} GB` : "";
   return `GPU ${g.index}: ${g.name}${mem}`;
@@ -143,7 +154,13 @@ export function GpuPanel() {
           )}
           {probe && (
             <Field label="Chromium sees">
-              <span data-testid="gpu-renderer">{probe.renderer || "no WebGL device"}</span>
+              <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span data-testid="gpu-device">{describeDevice(status, probe.renderer)}</span>
+                {/* The raw string stays: it is the evidence the label is read from. */}
+                <span data-testid="gpu-renderer" style={{ ...note, wordBreak: "break-word" }}>
+                  {probe.renderer || "no WebGL device"}
+                </span>
+              </span>
             </Field>
           )}
           {status.status === "not_usable" && probe?.error && (
@@ -180,6 +197,11 @@ export function GpuPanel() {
         </div>
       )}
 
+      {/* Only with a GPU chosen. Without one a test can only re-confirm the CPU,
+          and choosing a GPU (onboard.py --step gpu) recreates the renderer,
+          which tests as it starts. With one, a driver update or a failed
+          render can change the answer while the container keeps running. */}
+      {status?.configured && (
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <button type="button" data-testid="gpu-test" onClick={test}
                 disabled={requesting || !!status?.pending}
@@ -190,10 +212,11 @@ export function GpuPanel() {
           <span data-testid="gpu-pending" style={note}>
             {status.waiting_for_render
               ? "Queued — the renderer runs the test once the current render finishes."
-              : "The renderer runs the test on its next pass, usually within half a minute."}
+              : "The renderer runs the test on its next pass, usually within a minute."}
           </span>
         )}
       </div>
+      )}
     </div>
   );
 }

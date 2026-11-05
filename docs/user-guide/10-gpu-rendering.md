@@ -124,12 +124,16 @@ Open **Settings → Rendering** on the dashboard. The **GPU** section shows one 
 | **Rendering on the CPU** | No GPU is chosen |
 | **Not tested yet** | The renderer has never finished a test: a new install, or the first minute after upgrading from a version without GPU support |
 
-**Chromium sees** is the graphics device Chromium actually got, read from inside a test frame. On the
-GPU it names your card, for example `ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1650/PCIe/SSE2,
-OpenGL ES 3.2)`. On the CPU it names `SwiftShader`, Chromium's software renderer.
+**Chromium sees** is the graphics device Chromium actually got, read from inside a test frame: first
+in plain words, then the exact string Chromium reports, which is the evidence. On the GPU it names
+your card, for example `ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1650/PCIe/SSE2, OpenGL ES
+3.2)`. On the CPU it names SwiftShader, Chromium's software renderer — what Remotion calls `swangle`
+(`ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) …), SwiftShader driver)`).
 
-The renderer runs that test every time it starts. **Test GPU** asks it to run it again; the answer
-usually appears within a minute, or after the current render if one is in progress.
+The renderer runs that test every time it starts. With a GPU chosen, **Test GPU** asks it to run it
+again — after a driver update, say — and the answer usually appears within a minute, or after the
+current render if one is in progress. Without a GPU there is no button: the answer cannot change
+until you choose one, and choosing one recreates the renderer, which tests as it starts.
 
 From a terminal, `python3 scripts/service.py status` (or `python3 upgrade.py --check`) prints the
 same thing on its GPU line.
