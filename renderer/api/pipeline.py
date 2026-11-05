@@ -2070,6 +2070,60 @@ def start_publish(db_path: str, api_key: str, video_id: str, account_ids: list,
             "publications": [_publication_row(r) for r in rows]}, 201
 
 
+# ── GPU rendering (TMDEV-178) ────────────────────────────────────────────────
+# Bare settings rows, not SETTINGS_SPEC keys: nobody edits them through
+# POST /settings. The worker (worker.py::_run_gpu_probe) writes the result —
+# only it can see the GPU, since this container has none — and a dashboard
+# Test request only stamps the request row for the worker's next pass.
+GPU_PROBE_RESULT_KEY = "gpu_probe_result"
+GPU_PROBE_REQUEST_KEY = "gpu_probe_requested_at"
+
+
+def now_precise() -> str:
+    """UTC with microseconds. The request and result stamps are compared as
+    strings, and second precision would let a request made in the same second
+    a probe started look already answered."""
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def gpu_status(con) -> dict:
+    """GET /render/gpu's body, from the worker's last probe."""
+    rows = {r["key"]: r["value"] for r in con.execute(
+        "SELECT key, value FROM settings WHERE key IN (?, ?)",
+        (GPU_PROBE_RESULT_KEY, GPU_PROBE_REQUEST_KEY))}
+    try:
+        probe = _json.loads(rows.get(GPU_PROBE_RESULT_KEY) or "null")
+    except ValueError:
+        probe = None
+    if not isinstance(probe, dict):
+        probe = None
+    requested_at = rows.get(GPU_PROBE_REQUEST_KEY) or None
+    pending = bool(requested_at) and (probe is None or requested_at > (probe.get("at") or ""))
+    rendering = con.execute(
+        "SELECT 1 FROM videos WHERE status = 'RENDERING' LIMIT 1").fetchone() is not None
+    if probe is None:
+        status = "unknown"          # the worker has not probed yet
+    elif not probe.get("configured"):
+        status = "not_configured"   # no GPU override: CPU rendering
+    elif probe.get("ok"):
+        status = "working"
+    else:
+        status = "not_usable"       # configured, but renders fall back to the CPU
+    return {
+        "status": status,
+        "rendering_on": "gpu" if status == "working" else "cpu",
+        "configured": bool(probe and probe.get("configured")),
+        "gpu": (probe or {}).get("gpu"),
+        "host_gpus": (probe or {}).get("host_gpus") or [],
+        "probe": probe,
+        "requested_at": requested_at,
+        "pending": pending,
+        # A Test request waits for the worker's next pass, and the worker
+        # holds its loop for a whole render.
+        "waiting_for_render": pending and rendering,
+    }
+
+
 def create_pipeline_blueprint() -> Blueprint:
     bp = Blueprint("pipeline", __name__)
 
@@ -4207,6 +4261,24 @@ def create_pipeline_blueprint() -> Blueprint:
                         "last_sync_attempt_at": state.get("last_price_sync_at") or None,
                         "last_sync_ok_at": state.get("last_price_sync_ok_at") or None,
                         "last_sync_error": state.get("last_price_sync_error") or None})
+
+    @bp.get("/render/gpu")
+    def get_gpu_status():
+        """The renderer's GPU: configured or not, and whether its last probe
+        showed Chromium's WebGL on it."""
+        with _conn() as con:
+            return jsonify(gpu_status(con))
+
+    @bp.post("/render/gpu/test")
+    def request_gpu_test():
+        """Ask the worker to probe again on its next pass. 202: the answer
+        arrives later in GET /render/gpu."""
+        with _conn() as con:
+            con.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (GPU_PROBE_REQUEST_KEY, now_precise()))
+            return jsonify(gpu_status(con)), 202
 
     @bp.post("/prices/sync")
     def sync_prices_now():

@@ -14,11 +14,15 @@ Config.setVideoImageFormat("png");
 // Overwrite existing output files without prompting.
 Config.setOverwriteOutput(true);
 
-// A working OpenGL renderer is required for @remotion/three (WebGL) to work in
-// headless Chromium. This container has no GPU, so "angle" fails to acquire a
-// WebGL context ("GL_VENDOR = Disabled") — "swangle" (software ANGLE/SwiftShader)
-// is Remotion's recommended renderer for GPU-less machines. Has no downside for
-// non-3D renders and should always be set.
+// The CPU default. A working OpenGL renderer is required for @remotion/three
+// (WebGL) in headless Chromium, and without a GPU "angle" fails to acquire a
+// WebGL context ("GL_VENDOR = Disabled") — "swangle" (software
+// ANGLE/SwiftShader) is Remotion's recommended renderer for GPU-less machines.
+//
+// When an NVIDIA GPU is configured and its probe has passed, the render
+// worker overrides this on the command line (CLI flags win over this file)
+// with the GPU flags in renderer/api/worker.py::_gl_args. Change the GPU path
+// there, not here.
 Config.setChromiumOpenGlRenderer("swangle");
 
 // Tailwind v4 webpack integration.

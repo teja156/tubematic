@@ -832,3 +832,51 @@ def test_a_scene_written_during_the_build_refuses_under_no_stop(upgrade, env, mo
     code, order, rep = _run(upgrade, env, no_stop=True)
     assert code == 1
     assert not any("up -d" in d for d in order)
+
+
+# ── GPU override (TMDEV-178) ─────────────────────────────────────────────────
+
+def _gpu_override(monkeypatch, tmp_path, *, runtime=True, gpus=True):
+    """A GPU override on disk, plus fakes for the two host probes it is
+    checked against: the `nvidia` Docker runtime and nvidia-smi."""
+    from onboard import gpu
+    the_gpu = gpu.Gpu(0, "GPU-1111", "NVIDIA GeForce GTX 1650", 4096, "595.91.07")
+    path = tmp_path / "compose.gpu.json"
+    path.write_text(gpu.render_override(the_gpu, [the_gpu]))
+    monkeypatch.setattr(gpu, "OVERRIDE_PATH", path)
+    monkeypatch.setattr(gpu, "docker_has_nvidia_runtime", lambda run=None: runtime)
+    monkeypatch.setattr(gpu, "list_gpus", lambda run=None: [the_gpu] if gpus else [])
+    return path
+
+
+@pytest.mark.parametrize("runtime,gpus,needle", [
+    (False, True, "no `nvidia` runtime"),
+    (True, False, "no longer on this machine"),
+])
+def test_an_unusable_gpu_override_refuses_before_anything_changes(
+        upgrade, env, monkeypatch, tmp_path, runtime, gpus, needle):
+    """`up` cannot create a container whose GPU Docker cannot hand over, so an
+    upgrade that went ahead would stop the stack and then fail to start it."""
+    _gpu_override(monkeypatch, tmp_path, runtime=runtime, gpus=gpus)
+    code, order, rep = _run(upgrade, env)
+    assert code == 1
+    assert order == []
+    assert needle in rep.text()
+    assert "python3 onboard.py --step gpu" in rep.text()
+
+
+def test_a_usable_gpu_override_is_carried_into_start(upgrade, env, monkeypatch, tmp_path):
+    """The override lives under the data root, not the install, so the new
+    install's `up` must name it — or the upgrade silently drops the GPU."""
+    path = _gpu_override(monkeypatch, tmp_path)
+    code, order, rep = _run(upgrade, env)
+    assert code == 0, rep.text()
+    up = next(d for d in order if " up -d" in d)
+    assert f"-f {path}" in up
+
+
+def test_without_an_override_start_is_the_bare_compose_up(upgrade, env):
+    code, order, rep = _run(upgrade, env)
+    assert code == 0, rep.text()
+    assert any(d.startswith("docker compose up -d") for d in order)
+    assert not any("compose.gpu.json" in d for d in order)

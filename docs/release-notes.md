@@ -35,6 +35,40 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
 ---
 
+## v2.1.0
+
+### Added
+
+- **Videos can render on an NVIDIA GPU.** With the NVIDIA driver and the NVIDIA Container Toolkit
+  installed, a new onboarding step lists the machine's NVIDIA GPUs and hands the one you pick to the
+  renderer. On a GTX 1650 an ordinary video rendered about three times faster than on the CPU, and
+  3D scenes several times faster than that, with the same picture. Rendering on the CPU is unchanged
+  and stays the default; Intel and AMD GPUs are not supported. See
+  [GPU rendering](user-guide/10-gpu-rendering.md).
+- **The renderer checks that it is really using the GPU before it does.** When it starts, and when
+  you press **Test GPU** in Settings → Rendering, it renders a small test frame and reads which
+  graphics device Chromium actually got. A video renders on the GPU only when that device is the GPU
+  you chose. Otherwise it renders on the CPU, so a GPU that stops working slows rendering down but
+  never fails a video. Settings → Rendering shows which GPU is in use, the driver, and the reason
+  when it is not being used.
+
+### Upgrade notes
+
+- **Nothing changes unless you turn GPU rendering on.** After upgrading, install the NVIDIA driver
+  and the NVIDIA Container Toolkit (see [GPU rendering](user-guide/10-gpu-rendering.md)), then run
+  `python3 onboard.py --step gpu` from the install directory. Your choice is kept in
+  `~/.tubematic-data/compose.gpu.json`, so later upgrades carry it over.
+- **With a GPU chosen, start containers with `python3 scripts/service.py start`, not a bare
+  `docker compose up`.** A bare `docker compose up` does not read the GPU choice, and recreates the
+  renderer without the GPU. Rendering still works, on the CPU, and Settings → Rendering says so.
+- **An upgrade refuses to start while the chosen GPU cannot be used** — the NVIDIA Container Toolkit
+  was removed, or the GPU was taken out. It stops before changing anything and tells you to run
+  `python3 onboard.py --step gpu` to pick again or go back to the CPU.
+- **Going back to 2.0.0 ignores the GPU choice.** The renderer then runs on the CPU; nothing else is
+  affected.
+
+---
+
 ## v2.0.0
 
 **A major release because it is not backward compatible**: the dashboard now needs a password, and

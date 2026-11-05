@@ -106,6 +106,14 @@ STEP_DEFS = [
         consumes=["POLL_INTERVAL_MINS"],
     ),
     Step(
+        "gpu", "GPU rendering (optional)",
+        "Lists this machine's NVIDIA GPUs and asks which one renders, or none. Writes "
+        "~/.tubematic-data/compose.gpu.json, the Compose override that hands the chosen GPU "
+        "to tubematic-renderer, or removes it for CPU rendering. Asks nothing when there is "
+        "no NVIDIA driver or no NVIDIA Container Toolkit. Before `renderer` so the first "
+        "`up` carries it; re-run on its own, it recreates the renderer.",
+    ),
+    Step(
         "renderer", "API, MCP + render worker containers",
         "docker compose build tubematic-api (shared image) + up tubematic-api tubematic-mcp "
         "tubematic-renderer. Waits for the API and MCP health checks.",

@@ -201,6 +201,15 @@ def test_data_root_step_prunes_empty_subdirs_when_declined(uninstall, populated,
     assert (populated / "output_videos").exists()
 
 
+def test_a_kept_data_root_names_the_gpu_choice(uninstall, populated, monkeypatch, capsys):
+    """A reinstall over a kept data root would hand the GPU to the new renderer
+    again (TMDEV-178), so the file that does it is named."""
+    (populated / "compose.gpu.json").write_text("{}")
+    _answer(uninstall, monkeypatch, False)
+    uninstall.remove_data_root()
+    assert "compose.gpu.json" in capsys.readouterr().out
+
+
 def test_data_root_step_with_no_root_is_not_an_error(uninstall, tmp_path, monkeypatch):
     monkeypatch.setattr(uninstall, "DATA_ROOT", tmp_path / "gone")
     uninstall.remove_data_root()  # must not raise

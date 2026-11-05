@@ -67,6 +67,8 @@ def _auth(token=TOKEN):
 def test_every_pipeline_route_refuses_a_missing_or_wrong_token(client, headers):
     for method, path in [("GET", "/settings"), ("GET", "/videos"), ("POST", "/settings"),
                          ("GET", "/agents"), ("POST", "/publishing/accounts/connect"),
+                         # /render/... like the open /render/health, but not exempt
+                         ("GET", "/render/gpu"), ("POST", "/render/gpu/test"),
                          ("GET", "/no/such/route")]:
         r = client.open(path, method=method, headers=headers, json={})
         assert r.status_code == 401, (method, path)
