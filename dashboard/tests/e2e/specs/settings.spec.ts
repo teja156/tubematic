@@ -132,6 +132,26 @@ test.describe("Settings page", () => {
     expect(settings.render_timeout_secs).toBe(2700);
   });
 
+  test("the GPU panel reports CPU rendering and a real test confirms software GL", async ({ page }) => {
+    // TMDEV-178. The test stack's worker has no GPU override, so it renders on
+    // the CPU. Test GPU runs the worker's real probe — a Remotion still in the
+    // real image — whose WebGL renderer string must be the software one.
+    test.setTimeout(240_000);
+    await gotoTab(page, "rendering");
+    const status = page.getByTestId("gpu-status");
+    await expect(status).toBeVisible({ timeout: 10_000 });
+    // The worker probes once as it starts; that answer may still be on its way.
+    await expect(status).toHaveAttribute("data-status", /^(unknown|not_configured)$/);
+
+    await page.getByTestId("gpu-test").click();
+    await expect(page.getByTestId("gpu-test")).toHaveText("Testing…");
+    await expect(status).toHaveAttribute("data-status", "not_configured", { timeout: 200_000 });
+    await expect(page.getByTestId("gpu-test")).toHaveText("Test GPU", { timeout: 200_000 });
+    await expect(status).toHaveText(/Rendering on the CPU/);
+    await expect(page.getByTestId("gpu-renderer")).toContainText("SwiftShader");
+    await expect(page.getByTestId("gpu-help")).toContainText("python3 onboard.py --step gpu");
+  });
+
   test("the agent-session settings save from the Scheduling tab", async ({ page }) => {
     await gotoTab(page, "scheduling");
 
