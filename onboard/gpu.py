@@ -197,8 +197,13 @@ def report_lines(db_path: Path) -> list[tuple[str, str]]:
         current = read_override()
     except ValueError as e:
         return [("warn", str(e))]
-    for problem in override_problems():
+    problems = override_problems()
+    for problem in problems:
         lines.append(("warn", problem))
+    if problems:
+        # The override cannot be applied, so advice about recreating the
+        # renderer with it would only fail the same way.
+        return lines
     probe = None
     if Path(db_path).exists():
         try:

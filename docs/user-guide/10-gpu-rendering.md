@@ -106,8 +106,10 @@ renderer gets. Then it:
   `python3 scripts/service.py start tubematic-renderer`.
 
 The step asks nothing when there is no NVIDIA driver or no Container Toolkit: it says which is
-missing and leaves rendering on the CPU. Choosing **None** removes the file and puts the renderer
-back on the CPU.
+missing and leaves rendering on the CPU. The one exception is a GPU chosen earlier whose toolkit has
+since gone: then it offers to go back to the CPU (the default) or keep the choice while you reinstall
+the toolkit, because Docker cannot start the renderer while the choice stands. Choosing **None**
+removes the file and puts the renderer back on the CPU.
 
 ---
 

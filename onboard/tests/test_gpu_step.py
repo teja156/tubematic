@@ -225,14 +225,43 @@ def test_no_nvidia_gpu_removes_a_stale_override(step, override):
     assert not override.exists()
 
 
-def test_no_toolkit_warns_asks_nothing_and_keeps_an_existing_override(step, override):
-    """Not deleted on that evidence alone: Docker being briefly unreachable
-    reads the same, and the override may be fine."""
+def test_docker_unreachable_asks_nothing_and_keeps_an_existing_override(step, override):
+    """Not deleted on a guess: an override may be fine while Docker is briefly
+    unreachable."""
     override.write_text(gpu.render_override(GTX, [GTX]))
     rep, ex, asked = step(runtime=None)
     assert asked == []
     assert override.exists()
     assert "NVIDIA Container Toolkit" in rep.text()
+
+
+def test_no_toolkit_on_a_clean_install_asks_nothing(step, override):
+    rep, ex, asked = step(runtime=False)
+    assert asked == [] and not override.exists()
+    assert "NVIDIA Container Toolkit" in rep.text()
+
+
+def test_no_toolkit_with_an_override_offers_to_go_back_to_the_cpu(step, override):
+    """Found live: with the toolkit gone, every `up` fails while the override
+    stays, and the step used to point back at itself with no way out."""
+    override.write_text(gpu.render_override(GTX, [GTX]))
+    rep, ex, [(choices, default)] = step(runtime=False)
+    assert choices == [actions.CPU_CHOICE, actions.KEEP_CHOICE]
+    assert default == actions.CPU_CHOICE
+    assert not override.exists()
+
+
+def test_no_toolkit_can_keep_the_override_on_purpose(step, override):
+    """Someone halfway through installing the toolkit keeps their choice."""
+    override.write_text(gpu.render_override(GTX, [GTX]))
+    step(runtime=False, answer=lambda c: actions.KEEP_CHOICE)
+    assert override.exists()
+
+
+def test_no_toolkit_dry_run_asks_and_removes_nothing(step, override):
+    override.write_text(gpu.render_override(GTX, [GTX]))
+    rep, ex, asked = step(runtime=False, dry_run=True)
+    assert asked == [] and override.exists()
 
 
 def test_a_fresh_install_offers_every_gpu_and_the_cpu_defaulting_to_the_first(step, override):
@@ -356,3 +385,14 @@ def test_the_readout_warns_when_the_renderer_never_got_the_override(readout, ove
     _store_probe(readout, {"configured": False, "ok": False})
     [(level, text)] = gpu.report_lines(readout)
     assert level == "warn" and "service.py start tubematic-renderer" in text
+
+
+def test_the_readout_gives_no_recreate_advice_for_an_override_that_cannot_apply(readout, override,
+                                                                                monkeypatch):
+    """Found live: with no `nvidia` runtime the readout also said to recreate
+    the renderer with the override, which fails for the same reason."""
+    override.write_text(gpu.render_override(GTX, [GTX]))
+    monkeypatch.setattr(gpu, "docker_has_nvidia_runtime", lambda run=None: False)
+    _store_probe(readout, {"configured": False, "ok": False})
+    [(level, text)] = gpu.report_lines(readout)
+    assert level == "warn" and "no `nvidia` runtime" in text

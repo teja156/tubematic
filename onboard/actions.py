@@ -981,6 +981,7 @@ def _pull_failure_hint(r) -> str:
 # ── GPU rendering (optional) ─────────────────────────────────────────────────
 
 CPU_CHOICE = "None — render on the CPU"
+KEEP_CHOICE = "Keep the GPU — I will install the NVIDIA Container Toolkit"
 
 
 def apply_gpu(cfg: OnboardConfig, ex: Executor, rep: Reporter, *, list_gpus=None,
@@ -1014,15 +1015,30 @@ def apply_gpu(cfg: OnboardConfig, ex: Executor, rep: Reporter, *, list_gpus=None
         turn_off("No NVIDIA GPU found (nvidia-smi is missing or reports none) — renders use "
                  f"the CPU. To add one later see {gpu.DOCS_HINT}, then run: {gpu.STEP_HINT}")
         return
-    if has_runtime() is not True:
-        # Not turn_off: a working override on a machine whose Docker is
-        # momentarily unreachable must not be deleted on a guess.
+    runtime = has_runtime()
+    if runtime is not True:
         rep.warn(f"Found {len(gpus)} NVIDIA GPU(s), but Docker has no `nvidia` runtime, so it "
                  f"cannot hand one to a container. Install the NVIDIA Container Toolkit "
                  f"({gpu.DOCS_HINT}), then run: {gpu.STEP_HINT}")
-        if before is not None:
-            rep.warn(f"{path} is left as it is; `docker compose up` will fail until the "
-                     f"toolkit works or GPU rendering is turned off with: {gpu.STEP_HINT}")
+        if before is None:
+            return
+        if runtime is None:
+            # Docker could not be asked at all: a working override must not
+            # be deleted on a guess.
+            rep.warn(f"Docker could not be asked, so {path} is left as it is.")
+            return
+        # Docker answered and has no runtime: every `up` fails while the
+        # override stays, and this step is the documented way out, so it
+        # must offer one rather than point back at itself.
+        if ex.dry_run:
+            rep.info(f"[dry-run] would ask whether to remove {path}")
+            return
+        if ask is None:
+            from onboard.prompt import ask_gpu_choice as ask
+        if ask([CPU_CHOICE, KEEP_CHOICE], CPU_CHOICE) == CPU_CHOICE:
+            turn_off("GPU rendering off — renders use the CPU.")
+        else:
+            rep.warn(f"{path} is kept; `docker compose up` fails until the toolkit works.")
         return
 
     try:
@@ -1077,8 +1093,11 @@ def _recreate_renderer(ex: Executor, rep: Reporter) -> None:
     if r.returncode != 0:
         rep.fail("docker compose up failed", (r.stderr or "").strip()[-500:])
         return
-    rep.ok("tubematic-renderer recreated — it tests the GPU as it starts; see Settings → "
-           "Rendering on the dashboard")
+    # Compose recreates the container only when its configuration differs, so
+    # this may legitimately have been a no-op (seen live: a renderer that never
+    # had the override being removed). Say what is true either way.
+    rep.ok("tubematic-renderer is up to date with this choice — Settings → Rendering on the "
+           "dashboard shows what it renders on")
 
 
 def apply_renderer(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
