@@ -61,7 +61,9 @@ the future. `onboard.py --step gpu` writes it before it looks for a running rend
 it has recreated the renderer. Looking first and recreating second would otherwise let a render be
 claimed in between and then killed. SQLite has a single writer, so a claim either committed before the
 hold (and the look sees it) or sees the hold (and does not happen). The time is a ceiling of ten
-minutes, so an onboarding run that dies holding it delays renders, never stops them.
+minutes, so an onboarding run that dies holding it delays renders, never stops them. The row is shared,
+so two overlapping runs would release each other's hold; a lock file next to the database
+(`.gpu-recreate.lock`) lets only one run recreate at a time, and the other defers.
 
 Ordering is FIFO on `updated_at`. **Anything that writes `updated_at` changes render order**, which
 is why the publishing poll (where it exists) deliberately keys its own timeouts off a different

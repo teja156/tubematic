@@ -373,6 +373,26 @@ def test_render_claims_are_held_while_the_renderer_is_recreated(step, override, 
     assert _hold(step.db_path) is None
 
 
+def test_an_overlapping_run_leaves_the_other_runs_hold_alone(step):
+    """Codex review: the hold is one shared row, so a second run that wrote
+    and then released it would lift the first run's hold mid-recreate. While
+    another run holds the recreate lock, this one recreates nothing and does
+    not touch the row."""
+    step.container["exists"] = True
+    con = sqlite3.connect(step.db_path)
+    con.execute("INSERT INTO settings (key, value) VALUES (?, ?)",
+                (gpu.RENDER_HOLD_KEY, "2999-01-01T00:00:00Z"))
+    con.commit()
+    con.close()
+    from onboard import stack
+    with stack.poll_lock(step.db_path.parent / actions.RECREATE_LOCK_NAME) as acquired:
+        assert acquired
+        rep, ex, _ = step()
+    assert ex.calls == []
+    assert _hold(step.db_path) == "2999-01-01T00:00:00Z"
+    assert "Another" in rep.text()
+
+
 def test_a_deferred_recreate_releases_the_hold(step):
     step.container["exists"] = True
     con = sqlite3.connect(step.db_path)

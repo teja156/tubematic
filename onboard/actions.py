@@ -1074,6 +1074,9 @@ def apply_gpu(cfg: OnboardConfig, ex: Executor, rep: Reporter, *, list_gpus=None
     _recreate_renderer(ex, rep)
 
 
+RECREATE_LOCK_NAME = ".gpu-recreate.lock"
+
+
 def _recreate_renderer(ex: Executor, rep: Reporter) -> None:
     """Recreate a running tubematic-renderer so a new device reservation takes
     effect. A fresh install has no container yet; the `renderer` step creates
@@ -1082,9 +1085,24 @@ def _recreate_renderer(ex: Executor, rep: Reporter) -> None:
                        capture_output=True, text=True)
     if r.returncode != 0:
         return  # no container yet: the renderer step will create it
-    from onboard import gpu, stack
+    from onboard import stack
     defer = ("Not recreating the renderer now. Once it is idle, apply the change with: "
              "python3 scripts/service.py start tubematic-renderer")
+    # The hold below is one shared row, so two overlapping runs would each
+    # release the other's: the first to finish deletes it while the second is
+    # still checking or recreating. One run at a time. The lock sits next to
+    # the database it guards; flock is released if this process dies.
+    with stack.poll_lock(DB_PATH.parent / RECREATE_LOCK_NAME) as acquired:
+        if not acquired:
+            rep.warn("Another `onboard.py --step gpu` is recreating the renderer right now.")
+            rep.info(defer)
+            return
+        _recreate_renderer_held(ex, rep, defer)
+
+
+def _recreate_renderer_held(ex: Executor, rep: Reporter, defer: str) -> None:
+    """_recreate_renderer's body, run with RECREATE_LOCK_NAME held."""
+    from onboard import gpu, stack
     # Hold the worker's render claims first, then look: a render claimed
     # between a bare look and the recreate would be killed (see
     # pipeline.py::RENDER_CLAIM_HOLD_KEY). A hold that cannot be written means
