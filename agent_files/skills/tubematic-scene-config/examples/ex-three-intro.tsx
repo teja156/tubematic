@@ -9,13 +9,14 @@
  *
  * WHEN TO USE: only when 3D clearly elevates the topic — e.g. a rotating globe
  * for a networking explainer, a 3D cube for a data-structure video, a spinning
- * model for a product breakdown. 3D takes longer to render in headless Chromium
- * (software WebGL). Don't use it just for decoration.
+ * model for a product breakdown. 3D takes longer to render in headless Chromium,
+ * much longer on an install without a GPU (software WebGL). Don't use it just for
+ * decoration.
  *
  * REQUIRED: renderer must have @remotion/three, three, @react-three/fiber installed.
- * remotion.config.ts must set: Config.setChromiumOpenGlRenderer("swangle") — the renderer
- * container has no GPU, so "swangle" (software ANGLE/SwiftShader) is required; "angle" fails
- * to acquire a WebGL context on a GPU-less machine.
+ * The GL renderer is not this scene's business: renders use software WebGL
+ * ("swangle", set in remotion.config.ts) and switch to the install's NVIDIA GPU by
+ * themselves when one is set up.
  */
 import React from "react";
 import { ThreeCanvas } from "@remotion/three";

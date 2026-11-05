@@ -69,6 +69,9 @@ them as unknown:
 | `mining_youtube_urls` | `POST /research/mining-sources`, or the MCP server's `set_mining_sources` | JSON array of YouTube video URLs, each `https://www.youtube.com/watch?v=<id>`, no repeats, at most 50. Both writers refuse any other entry ([HTTP API — Mining sources](05-http-api.md#mining-sources)) |
 | `mining_url_cursor` | A mining run (the MCP server's `mine_youtube_topics`) | Integer as a string: the index of the URL the next run starts from, so runs rotate through the list |
 | `last_retention_sweep_at` | The render worker's retention sweep, stamped before it runs | ISO timestamp |
+| `gpu_probe_result` | The render worker's GPU probe (`worker.py::_run_gpu_probe`) | JSON object: when it ran and why, whether a GPU is configured, the GPU and the host's GPU list, Chromium's WebGL renderer and vendor strings, `ok`, the reason when not, and `nvidia-smi`'s view. Served by `GET /render/gpu` ([Rendering and Review](11-rendering-and-review.md#the-gl-renderer)) |
+| `gpu_probe_requested_at` | `POST /render/gpu/test` | ISO timestamp with microseconds, compared as a string with the result's `at` |
+| `render_claim_hold_until` | `onboard.py --step gpu`, around its recreate of the renderer | ISO timestamp (seconds, `Z`). The worker claims no render until then ([Rendering and Review — The claim](11-rendering-and-review.md#the-claim)); the step deletes the row when it is done |
 | `voicing_stall_paused_at` | The render worker's voicing-stall check, on every pass while the pipeline is paused | ISO timestamp. A stall is flagged only once enough time has passed since the later of this and the video's own last change, so a long pause does not flag every video the moment it ends |
 | `research_run_timestamps` | `POST /research/record-run` | JSON array of ISO timestamps, pruned to 24 hours |
 | `last_research_at` | The MCP server's `mark_research_done` | ISO timestamp |

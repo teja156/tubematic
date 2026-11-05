@@ -19,14 +19,15 @@ each pass decides is on the page that owns that subject, linked from the table b
 
 ```mermaid
 flowchart TD
-    S[startup: migrate the database,<br/>requeue or fail rows stuck at RENDERING] --> P
+    S[startup: migrate the database,<br/>requeue or fail rows stuck at RENDERING,<br/>test the GPU] --> P
     P[1 · publishing: release due scheduled posts,<br/>settle posts in flight] --> A
     A[2 · Auto Pilot: approve checkpoints,<br/>start one post] --> M
     M[3 · analytics poll — hourly] --> PR
     PR[4 · price sync — weekly] --> R
     R[5 · retention sweep — hourly] --> N
     N[6 · checkpoint notifications] --> V
-    V[7 · stalled-voicing check] --> C{8 · a video at<br/>RENDER_QUEUED?}
+    V[7 · stalled-voicing check] --> G
+    G[8 · GPU test, if one was requested] --> C{9 · a video at<br/>RENDER_QUEUED?}
     C -->|no| SL[sleep 20 s] --> P
     C -->|yes| RN[render it, review it,<br/>write the result] --> P
 ```
@@ -41,13 +42,15 @@ flowchart TD
 | 5 | Retention sweep | `_sweep_retention` | hourly | either retention key is above 0 | [Rendering and Review](11-rendering-and-review.md#retention) |
 | 6 | Checkpoint notifications | `_sweep_notifications` | every tick | a webhook and at least one trigger are set | [The Pipeline](02-pipeline.md#notifications) |
 | 7 | Stalled-voicing check | `_sweep_stalled_voicing` | every tick | the pipeline is not paused | [The Pipeline](02-pipeline.md#script_ready--the-money-checkpoint) |
-| 8 | Render | `_claim_next`, `_stage_and_render` | every tick | a video is at `RENDER_QUEUED` | [Rendering and Review](11-rendering-and-review.md) |
+| 0b | GPU test | `_run_gpu_probe` | once, at start, before any render | — (also runs on a CPU install, to report what Chromium gets) | [Rendering and Review](11-rendering-and-review.md#the-gl-renderer) |
+| 8 | GPU test on request | `_sweep_gpu_probe` | every tick | the dashboard's **Test GPU** asked after the last test started | [Rendering and Review](11-rendering-and-review.md#the-gl-renderer) |
+| 9 | Render | `_claim_next`, `_stage_and_render` | every tick | a video is at `RENDER_QUEUED` | [Rendering and Review](11-rendering-and-review.md) |
 
 The loop itself is `worker.py::main`.
 
 ## What a tick is
 
-A tick is one trip round the loop. How long it takes depends on step 8:
+A tick is one trip round the loop. How long it takes depends on step 9:
 
 - **Nothing to render:** the worker sleeps `RENDER_POLL_INTERVAL_SECS` (default 20 seconds) and goes
   round again. So an idle worker runs every pass about every 20 seconds. The interval is a plain
@@ -121,7 +124,9 @@ human has asked for.
 - **It never takes a request.** The dashboard's Publish, Retry and Cancel actions go to the Flask
   API, which acts at once and leaves rows for the worker to settle. The one thing the two share in
   code is `pipeline.py::start_publish`, which the API calls for a human and the worker calls for
-  Auto Pilot, so both run the same claim, upload and reconciliation rules.
+  Auto Pilot, so both run the same claim, upload and reconciliation rules. The one exception is
+  **Test GPU**: only this container can have a GPU, so the API just stamps a settings row and the
+  worker answers on its next pass, behind any render in progress.
 - **It never renders two videos at once.** One loop, one render. Videos queue at `RENDER_QUEUED` in
   `updated_at` order.
 - **It never trusts a stored file path.** Every job file it stages and the mp4 it writes are found

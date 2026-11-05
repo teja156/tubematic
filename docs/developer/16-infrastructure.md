@@ -74,6 +74,40 @@ same timezone mounts, no exposed ports, `shm_size: 2gb` for Chromium, and
 Its `command:` is the bare interpreter, so unlike the other two it **never runs `entrypoint.sh`** —
 which is why it applies its own umask at startup rather than inheriting one.
 
+It is the only service that can get a GPU, and only through the override below.
+
+#### GPU override
+
+`docker-compose.yml` reserves no GPU, and cannot: a device reservation Docker cannot satisfy stops
+the container from being created ("could not select device driver"), and the file is the same on
+every install. Instead the `gpu` onboarding step (`onboard/gpu.py`) writes
+`~/.tubematic-data/compose.gpu.json`, which changes `tubematic-renderer` only:
+
+- `deploy.resources.reservations.devices`: `driver: nvidia`, `device_ids: [<the GPU's UUID>]`,
+  `capabilities: [gpu]`. Compose requires `capabilities`, and refuses `count` alongside
+  `device_ids`.
+- `NVIDIA_DRIVER_CAPABILITIES=graphics,utility`. `graphics` brings the EGL/OpenGL driver libraries
+  WebGL needs, and `utility` brings `nvidia-smi`. Toolkit 1.20 injects the graphics libraries for any
+  GPU request anyway, but older toolkits default to `compute,utility` and leave them out.
+- `TUBEMATIC_GPU_UUID`, `TUBEMATIC_GPU_NAME`, and `TUBEMATIC_HOST_GPUS` (every NVIDIA GPU the host
+  had when the step ran, for the dashboard's list).
+
+It is JSON, which Compose reads as YAML, so onboarding needs no YAML library to write and read it.
+It lives under the data root, not the install, because upgrades install into a new directory.
+
+`onboard/actions.py::_compose()` adds `-f docker-compose.yml -f <override>` when the file exists, and
+is the bare `docker compose` otherwise, so an install without a GPU keeps the argv it always had.
+Everything that runs `up` goes through it: the onboarding steps, `scripts/service.py` and
+`upgrade.py`. **A hand-run `docker compose up` does not**, and recreates the renderer without the
+GPU. That is safe, because the worker then simply renders on the CPU, but it is why the docs and
+hints say `scripts/service.py start`. Naming files with `-f` also stops Compose loading a stray
+`docker-compose.override.yml`, which only very old installs ever had.
+
+`upgrade.py` refuses before stopping anything when the override names a GPU Docker cannot hand
+over (`gpu.py::override_problems`: no `nvidia` runtime, no driver, or the GPU is gone). Without
+that check, the upgrade would stop the stack and then fail at `up`. How the worker decides whether
+the GPU works is in [Rendering and Review](11-rendering-and-review.md#the-gl-renderer).
+
 ### `tubematic-dashboard`
 
 Built from `dashboard/Dockerfile`. Port 3000. `RENDERER_URL=http://tubematic-api:4000`. It mounts
@@ -328,6 +362,10 @@ Container names are fixed, so two checkouts cannot run their stacks simultaneous
 > picking a path. Note also that Pillow's `load_default()` returns a bitmap font with no `.size` or
 > stroke support, so a fallback using those raises rather than merely looking worse.
 
+No NVIDIA library is installed: the NVIDIA Container Toolkit mounts the host driver's own libraries
+and `10_nvidia.json` into a container that is given a GPU, so they always match the host's driver.
+`libglvnd0` and `libegl1`, which load them, come in with `chromium`.
+
 It sets `PUPPETEER_EXECUTABLE_PATH` and Chromium flags (`--disable-dev-shm-usage --no-sandbox`),
 creates `/data`, `/jobs`, `/output_videos`, `/logs`, then installs three source trees in
 dependency-first order so a source edit does not invalidate the dependency layers:
@@ -435,7 +473,7 @@ project record in `~/.claude.json`, both written by `python onboard.py --install
 ## Operating
 
 ```bash
-python3 scripts/service.py status                        # version, schema, cron, container health
+python3 scripts/service.py status                        # version, schema, cron, container health, GPU
 python3 scripts/service.py logs tubematic-api -f         # Flask
 python3 scripts/service.py logs tubematic-mcp -f         # the agent's tools
 python3 scripts/service.py logs tubematic-renderer -f    # render output lands here

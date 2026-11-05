@@ -347,9 +347,10 @@ a 0.571 image in a 0.5625 frame loses about 8px a side — but inside a `PanelIm
 in a squarer panel loses nearly half its height, centred, which is how a subject's head gets
 trimmed off without anything reporting a fault.
 
-There is also **no blur filter**, on purpose. A full-bleed blur across 300+ frames is expensive on a
-software GL renderer, and a slow render does not fail cleanly: it can hit the render timeout and
-bounce the job back to the queue.
+There is also **no blur filter**, on purpose. A full-bleed blur across 300+ frames is expensive on the
+software GL renderer every install without a GPU uses ([The GL renderer](11-rendering-and-review.md#the-gl-renderer)),
+and a slow render does not fail cleanly: it can hit the render timeout and bounce the job back to the
+queue.
 
 ### `Subtitles`
 

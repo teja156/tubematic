@@ -109,6 +109,12 @@ docker compose logs -f tubematic-renderer
 `render_timeout_secs`, or look for a scene doing something expensive — a full-bleed blur across
 hundreds of frames is the classic case.
 
+**Renders are slow although the machine has an NVIDIA GPU.** Open Settings → Rendering. Red means a
+GPU is chosen but the renderer could not use it, with the reason; grey **Rendering on the CPU**
+means none is chosen, or the renderer was recreated without it by a bare `docker compose up` —
+`python3 scripts/service.py status` tells those two apart. See
+[GPU rendering](10-gpu-rendering.md#troubleshooting).
+
 **A video reached `FAILED`.** `render_fail_count` exceeded `max_render_retries` (default 1, so the
 *second* failure escalates). Read the comment thread for the captured error. Note that a container
 restart mid-render counts as a failure, so two restarts across one video's life will escalate it.

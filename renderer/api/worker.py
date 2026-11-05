@@ -142,6 +142,263 @@ def _render_timeout_secs() -> int:
         return 2400
 
 
+# ── GPU rendering (TMDEV-178) ───────────────────────────────────────────────
+#
+# A GPU reaches this container only through the Compose override that
+# `onboard.py --step gpu` writes (onboard/gpu.py), which also sets
+# TUBEMATIC_GPU_UUID/_NAME and TUBEMATIC_HOST_GPUS. Being configured is not
+# the same as working: a driver update, a missing toolkit capability, or a
+# hand-run `docker compose up` that skipped the override all leave the
+# environment variables saying "GPU" while Chromium gets none. So the GPU is
+# used only after a probe, run with the exact flags a render gets, has shown
+# Chromium's WebGL renderer string naming that GPU. Anything else renders on
+# the CPU (remotion.config.ts's swangle) rather than failing the video.
+#
+# The GPU options, all measured in this image (Plane TMDEV-178):
+# - browserExecutable /usr/bin/chromium: the image's Debian Chromium. Note the
+#   CLI flag is --browser-executable; the --browser-executable-path every render
+#   has always passed is not a Remotion flag and is ignored, so CPU renders use
+#   the headless shell Remotion downloads on first use. Left as it is for the
+#   CPU path (unchanged behaviour); the GPU path names Debian Chromium
+#   properly, which renders on the GPU with nothing to download.
+# - gl angle-egl: hardware GL through EGL. The other values either fail or stay
+#   in software.
+# - chromeMode chrome-for-testing: with a named browser this only switches it to
+#   --headless=new. Old headless passes a one-tab probe but cannot create WebGL
+#   contexts in several tabs at once, so a real three.js render fails in every
+#   tab. NEVER on the CPU path: new headless in software is about 5x slower.
+# - enableMultiprocessOnLinux: Remotion's default in 4.x already; stated so a
+#   default change cannot put Chromium in --single-process, which disables the
+#   GPU process.
+# - __EGL_VENDOR_LIBRARY_FILENAMES: without it libglvnd may pick another EGL
+#   vendor (Mesa, or an integrated GPU on a host that passes one in), and the
+#   render still "works" on the wrong device.
+GPU_GL_OPTIONS = {"gl": "angle-egl", "chromeMode": "chrome-for-testing",
+                  "enableMultiprocessOnLinux": True, "browserExecutable": CHROMIUM_BIN}
+# What a CPU render gets implicitly from remotion.config.ts (swangle) and the
+# CLI's defaults. Spelled out because the probe driver uses the Node API,
+# which does not read remotion.config.ts.
+CPU_GL_OPTIONS = {"gl": "swangle", "chromeMode": "headless-shell",
+                  "enableMultiprocessOnLinux": True, "browserExecutable": None}
+GPU_GL_ENV = {"__EGL_VENDOR_LIBRARY_FILENAMES": "/usr/share/glvnd/egl_vendor.d/10_nvidia.json"}
+
+GPU_PROBE_RESULT_KEY = pipeline.GPU_PROBE_RESULT_KEY
+GPU_PROBE_REQUEST_KEY = pipeline.GPU_PROBE_REQUEST_KEY
+GPU_PROBE_TIMEOUT_SECS = 180
+GPU_PROBE_DRIVER = "gpu-probe/run-gpu-probe.mjs"
+
+# Set only by _run_gpu_probe. False until a probe passes, so a worker that has
+# not probed yet renders on the CPU, never on an unverified GPU.
+_gpu_verified = False
+
+
+def _gpu_config() -> dict:
+    """What the Compose override told this container. Empty uuid = no GPU."""
+    try:
+        host_gpus = json.loads(os.getenv("TUBEMATIC_HOST_GPUS") or "[]")
+    except ValueError:
+        host_gpus = []
+    return {"uuid": os.getenv("TUBEMATIC_GPU_UUID", "").strip(),
+            "name": os.getenv("TUBEMATIC_GPU_NAME", "").strip(),
+            "host_gpus": host_gpus if isinstance(host_gpus, list) else []}
+
+
+def _render_on_gpu() -> bool:
+    return bool(_gpu_config()["uuid"]) and _gpu_verified
+
+
+def _gl_options(on_gpu: bool) -> tuple[dict, dict]:
+    """The browser/GL options and environment for one path. The single
+    source: a render's flags (_gl_args) and the probe's driver config are both
+    built from it, so the probe is evidence about exactly what a render runs."""
+    if on_gpu:
+        return dict(GPU_GL_OPTIONS), dict(GPU_GL_ENV)
+    return dict(CPU_GL_OPTIONS), {}
+
+
+def _gl_args(on_gpu: bool) -> tuple[list, dict]:
+    """The extra `remotion render` argv and environment for one path. The CPU
+    path adds nothing, so a CPU render's command is what it always was."""
+    options, env = _gl_options(on_gpu)
+    if not on_gpu:
+        return [], env
+    return [f"--gl={options['gl']}", f"--chrome-mode={options['chromeMode']}",
+            "--enable-multiprocess-on-linux",
+            f"--browser-executable={options['browserExecutable']}"], env
+
+
+def _judge_probe(webgl: dict | None, expected_name: str) -> tuple[bool, str]:
+    """Did Chromium's WebGL land on the configured NVIDIA GPU?
+
+    The renderer string, never "the render succeeded": the wrong device
+    renders successfully too. It must name NVIDIA and the configured GPU, so
+    SwiftShader, llvmpipe/Mesa and an integrated GPU all fail."""
+    if not webgl:
+        return False, "the probe produced no result (see the worker log)"
+    if not webgl.get("webgl"):
+        return False, webgl.get("error") or "Chromium could not create a WebGL context"
+    renderer = str(webgl.get("renderer") or "")
+    if "nvidia" not in renderer.lower():
+        return False, f"Chromium is rendering on another device: {renderer or 'unknown'}"
+    if expected_name and expected_name.lower() not in renderer.lower():
+        return False, f"Chromium got a different NVIDIA GPU than the configured {expected_name}"
+    return True, ""
+
+
+def _nvidia_smi(uuid_: str) -> dict:
+    """Driver, memory and name of the configured GPU as seen inside this
+    container. Informational: the probe's renderer string decides."""
+    try:
+        r = subprocess.run(
+            ["nvidia-smi", f"--id={uuid_}", "--query-gpu=name,driver_version,memory.total",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"error": f"nvidia-smi did not run: {e}"}
+    if r.returncode != 0:
+        return {"error": (r.stderr or r.stdout).strip()[-300:] or "nvidia-smi failed"}
+    parts = [p.strip() for p in r.stdout.strip().splitlines()[0].split(",")] if r.stdout.strip() else []
+    if len(parts) < 3:
+        return {"error": "nvidia-smi gave no row for the configured GPU"}
+    return {"name": ", ".join(parts[:-2]), "driver": parts[-2],
+            "memory_mib": int(parts[-1]) if parts[-1].isdigit() else None}
+
+
+def _kill_group_and_reap(proc: subprocess.Popen) -> None:
+    """SIGKILL a start_new_session child's whole process group and reap
+    everything it left behind. Shared by the render and the GPU probe, which
+    both run `npx remotion` (npx → node → Chromium → ffmpeg)."""
+    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    proc.wait()  # reaps our direct child (npx)
+    # killpg's SIGKILL hits the whole group at once, but grandchildren
+    # (node, chrome-headless, ffmpeg, ...) reparent to this container's
+    # PID 1 -- this same worker process -- the instant their own parent dies,
+    # before proc.wait() can claim them by PID. Confirmed live (TMDEV-57
+    # follow-up): SIGKILL guarantees they'll all exit but not instantly --
+    # heavier processes (a Chromium instance tearing down many threads) can
+    # take noticeably longer to actually finish than the lightweight npx
+    # wrapper proc.wait() above already reaped. A non-blocking WNOHANG drain
+    # right here races ahead of that and finds nothing (confirmed live: the
+    # trivial `sh` link died fast enough to be caught, everything heavier
+    # didn't, and sat as permanent zombies since nothing ever revisited
+    # reaping). Block instead: wait() for each already-reparented child in
+    # turn -- bounded by SIGKILL itself guaranteeing they all eventually exit
+    # -- until none remain. Safe only because this worker is single-threaded
+    # and runs one subprocess at a time; see mcp/server.py's write_gif_script
+    # for why the same loop is wrong in a multi-threaded process.
+    try:
+        while True:
+            os.waitpid(-1, 0)
+    except ChildProcessError:
+        pass
+
+
+def _run_gpu_probe(reason: str) -> dict:
+    """Render the GpuProbe still with a render's options, judge the renderer
+    string, store the result for the dashboard, and set _gpu_verified.
+
+    Runs even with no GPU configured: then it uses the CPU flags, and the
+    stored software renderer string is what the dashboard's Test button
+    shows. Never raises — the worker loop must survive a broken probe."""
+    global _gpu_verified
+    cfg = _gpu_config()
+    configured = bool(cfg["uuid"])
+    started = pipeline.now_precise()
+    result = {"at": started, "reason": reason, "configured": configured,
+              "gpu": {"uuid": cfg["uuid"], "name": cfg["name"]} if configured else None,
+              "host_gpus": cfg["host_gpus"], "renderer": "", "vendor": "",
+              "ok": False, "error": "", "secs": None, "smi": None}
+    t0 = time.monotonic()
+    try:
+        options, gl_env = _gl_options(configured)
+        out_json = Path("/tmp") / f"tubematic-gpu-probe-{uuid.uuid4().hex}.json"
+        proc = subprocess.Popen(
+            ["node", GPU_PROBE_DRIVER, json.dumps({**options, "outputPath": str(out_json)})],
+            cwd=str(REMOTION_DIR), env={**os.environ, **gl_env},
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            start_new_session=True,
+        )
+        timed_out = False
+        try:
+            stdout, stderr = proc.communicate(timeout=GPU_PROBE_TIMEOUT_SECS)
+        except subprocess.TimeoutExpired:
+            _kill_group_and_reap(proc)
+            stdout, stderr, timed_out = "", "", True
+        # The answer is a file, never stdout: Remotion prints every page
+        # console line there too (see the driver's header).
+        try:
+            webgl = json.loads(out_json.read_text())
+        except (OSError, ValueError):
+            webgl = None
+        finally:
+            out_json.unlink(missing_ok=True)
+        if not isinstance(webgl, dict):
+            webgl = None
+        if webgl:
+            result["renderer"] = str(webgl.get("renderer") or "")
+            result["vendor"] = str(webgl.get("vendor") or "")
+        if configured:
+            result["ok"], result["error"] = _judge_probe(webgl, cfg["name"])
+            result["smi"] = _nvidia_smi(cfg["uuid"])
+        elif webgl and not webgl.get("webgl"):
+            result["error"] = str(webgl.get("error") or "")
+        if webgl is None:
+            # Say what actually happened rather than "no result": a hang, or
+            # the tail of whatever the driver printed before dying.
+            tail = (stderr or stdout).strip()[-300:]
+            result["error"] = (f"the probe did not finish within {GPU_PROBE_TIMEOUT_SECS}s"
+                               if timed_out else
+                               f"the probe produced no result: {tail or 'no output'}")
+            log.warning(f"GPU probe produced no result: {(stderr or stdout)[-2000:]}")
+    except Exception as e:  # noqa: BLE001 — a broken probe must not stop the worker
+        log.exception("GPU probe failed")
+        result["error"] = f"the probe could not run: {e}"
+    result["secs"] = round(time.monotonic() - t0, 1)
+
+    was = _gpu_verified
+    _gpu_verified = configured and result["ok"]
+    if configured and _gpu_verified:
+        log.info(f"GPU probe ({reason}): rendering on {cfg['name']} — {result['renderer']}")
+    elif configured:
+        # WARNING, logged on every failed probe: renders still succeed on the
+        # CPU, so this line is how a slow-but-working install finds out why.
+        log.warning(f"GPU probe ({reason}): {cfg['name']} is configured but not usable "
+                    f"({result['error']}) — rendering on the CPU")
+    if was and not _gpu_verified:
+        log.warning("GPU rendering stopped: renders fall back to the CPU until a probe passes")
+    try:
+        with db.conn(DB_PATH) as con:
+            con.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (GPU_PROBE_RESULT_KEY, json.dumps(result)))
+    except Exception:
+        log.exception("could not store the GPU probe result")
+    return result
+
+
+def _gpu_probe_requested() -> bool:
+    """A dashboard Test request newer than the last probe's start."""
+    requested = _setting(GPU_PROBE_REQUEST_KEY, "")
+    if not requested:
+        return False
+    try:
+        last = json.loads(_setting(GPU_PROBE_RESULT_KEY, "") or "{}").get("at", "")
+    except (ValueError, AttributeError):
+        last = ""
+    return requested > (last or "")
+
+
+def _sweep_gpu_probe() -> None:
+    """Run a requested probe. One pass of the worker loop, so a request waits
+    behind a render in progress — the API reports that as queued."""
+    try:
+        if _gpu_probe_requested():
+            _run_gpu_probe(reason="requested from the dashboard")
+    except Exception:
+        log.exception("GPU probe sweep failed")
+
+
 # ── Publishing (TMDEV-83) ───────────────────────────────────────────────────
 #
 # PUBLISHING is unlike every other status this worker touches: Flask sets it,
@@ -1403,10 +1660,22 @@ def _claim_next() -> str | None:
     # Guarded in the UPDATE's own WHERE clause (not SELECT-then-compare) —
     # the same atomic-claim pattern used throughout the pipeline. With a
     # single worker process this never actually loses a race, but it's the
-    # same defensive shape as submit_render's claim.
-    if db.set_status(DB_PATH, video_id, "RENDERING", only_if="RENDER_QUEUED"):
-        return video_id
-    return None
+    # same defensive shape as submit_render's claim. The hold is in the same
+    # statement for the same reason: onboarding writes it, then looks for a
+    # RENDERING row, and SQLite's single writer means a claim either landed
+    # before the hold (and is seen) or sees the hold (and does not happen).
+    now = db._now()
+    try:
+        with db.conn(DB_PATH) as con:
+            cur = con.execute(
+                "UPDATE videos SET status = 'RENDERING', updated_at = ? "
+                "WHERE id = ? AND status = 'RENDER_QUEUED' AND NOT EXISTS ("
+                " SELECT 1 FROM settings WHERE key = ? AND value > ?)",
+                (now, video_id, pipeline.RENDER_CLAIM_HOLD_KEY, now))
+    except Exception as e:
+        log.error(f"claim failed: {e}")
+        return None
+    return video_id if cur.rowcount > 0 else None
 
 
 def _stage_and_render(video_id: str) -> None:
@@ -1494,13 +1763,19 @@ def _stage_and_render(video_id: str) -> None:
         # next (TMDEV-57, confirmed live: a timed-out render left <defunct>
         # Chromium/ffmpeg processes and an orphaned temp file behind). Using
         # Popen directly so a killpg on the whole group is possible here.
+        # Decided once per render: the same answer picks the flags and,
+        # on a failure below, whether the GPU is re-tested.
+        on_gpu = _render_on_gpu()
+        gl_argv, gl_env = _gl_args(on_gpu)
         proc = subprocess.Popen(
             [
                 "npx", "remotion", "render", "Composition", output_path,
                 "--props", props,
                 "--browser-executable-path", CHROMIUM_BIN,
+                *gl_argv,
             ],
             cwd=str(REMOTION_DIR),
+            env={**os.environ, **gl_env},
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -1509,28 +1784,7 @@ def _stage_and_render(video_id: str) -> None:
         try:
             stdout, stderr = proc.communicate(timeout=timeout_secs)
         except subprocess.TimeoutExpired:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            proc.wait()  # reaps our direct child (npx)
-            # killpg's SIGKILL hits the whole group at once, but grandchildren
-            # (node, chrome-headless, ffmpeg, ...) reparent to this container's
-            # PID 1 -- this same worker process, per the comment above -- the
-            # instant their own parent dies, before proc.wait() can claim them
-            # by PID. Confirmed live (TMDEV-57 follow-up): SIGKILL guarantees
-            # they'll all exit but not instantly -- heavier processes (a
-            # Chromium instance tearing down many threads) can take noticeably
-            # longer to actually finish than the lightweight npx wrapper
-            # proc.wait() above already reaped. A non-blocking WNOHANG drain
-            # right here races ahead of that and finds nothing (confirmed
-            # live: the trivial `sh` link died fast enough to be caught,
-            # everything heavier didn't, and sat as permanent zombies since
-            # nothing ever revisited reaping). Block instead: wait() for each
-            # already-reparented child in turn -- bounded by SIGKILL itself
-            # guaranteeing they all eventually exit -- until none remain.
-            try:
-                while True:
-                    os.waitpid(-1, 0)
-            except ChildProcessError:
-                pass
+            _kill_group_and_reap(proc)
             raise
         result = subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
     except subprocess.TimeoutExpired:
@@ -1541,6 +1795,10 @@ def _stage_and_render(video_id: str) -> None:
         # the agent as REVISION_REQUESTED.
         _handle_render_failure(video_id, f"Render timed out after {timeout_secs}s",
                                 retry_status="RENDER_QUEUED")
+        if on_gpu:
+            # Same reason as a failed render below: if the GPU hung, the retry
+            # this just queued should run on the CPU.
+            _run_gpu_probe(reason="a render on the GPU timed out")
         return
 
     if result.returncode == 0:
@@ -1550,6 +1808,11 @@ def _stage_and_render(video_id: str) -> None:
         error_msg = result.stderr or result.stdout
         log.error(f"[{video_id}] render failed: {error_msg}", extra={"video_id": video_id})
         _handle_render_failure(video_id, error_msg)
+        if on_gpu:
+            # A GPU that stopped working (a driver update, a reset) fails every
+            # render after it. Re-testing now means the next one falls back to
+            # the CPU instead of failing the same way.
+            _run_gpu_probe(reason="a render on the GPU failed")
 
 
 def _handle_render_success(video_id: str, output_path: str) -> None:
@@ -1722,6 +1985,10 @@ def main() -> None:
     )
     log.info("render worker starting")
     _reconcile_rendering_videos()
+    # Before the first claim, so no render ever runs on an unverified GPU,
+    # and every container start (which is when a GPU change applies) leaves
+    # a fresh answer for the dashboard.
+    _run_gpu_probe(reason="the worker started")
 
     while True:
         # Both passes are non-blocking and run before the render claim, so
@@ -1737,6 +2004,7 @@ def main() -> None:
         _sweep_retention()
         _sweep_notifications()
         _sweep_stalled_voicing()
+        _sweep_gpu_probe()
 
         video_id = _claim_next()
         if video_id:

@@ -36,6 +36,7 @@ For anyone running Tubematic. No knowledge of the code is assumed.
 | **[7 · Upgrading](user-guide/07-upgrading.md)** | Moving to a new version, versioning, backups, and rollback |
 | **[8 · Troubleshooting](user-guide/08-troubleshooting.md)** | Symptoms and where the cause usually is |
 | **[9 · Remote Access](user-guide/09-remote-access.md)** | Using the dashboard from another machine: Twingate, or HTTPS with Caddy or nginx |
+| **[10 · GPU Rendering](user-guide/10-gpu-rendering.md)** | Rendering on an NVIDIA GPU: the driver, the NVIDIA Container Toolkit, picking the GPU, and checking it is really used |
 
 ## Developer docs
 

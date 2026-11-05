@@ -22,3 +22,12 @@ def _no_real_secrets(tmp_path, monkeypatch):
     Starting the stack creates any that are missing, so a test that runs a real
     Executor through it would otherwise write tokens into the host's home."""
     monkeypatch.setenv("TUBEMATIC_SECRETS_DIR", str(tmp_path / "secrets"))
+
+
+@pytest.fixture(autouse=True)
+def _no_real_gpu_override(tmp_path, monkeypatch):
+    """_compose() adds `-f` flags when ~/.tubematic-data/compose.gpu.json exists
+    (TMDEV-178). A developer machine with a GPU configured would otherwise
+    change every argv a test asserts."""
+    from onboard import gpu
+    monkeypatch.setattr(gpu, "OVERRIDE_PATH", tmp_path / "compose.gpu.json")

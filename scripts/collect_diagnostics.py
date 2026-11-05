@@ -56,7 +56,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from onboard import stack  # noqa: E402
+from onboard import gpu, stack  # noqa: E402
 from onboard.config import DATA_ROOT, DB_PATH, POLL_LOG_DIR  # noqa: E402
 from tubematic_core import auth as tauth  # noqa: E402
 from tubematic_core import db as tdb  # noqa: E402
@@ -79,6 +79,8 @@ SECRET_SETTING_KEYS = (
 PASSWORD_KEY = tauth.PASSWORD_KEY
 
 # Settings whose values are the user's own material rather than configuration.
+GPU_UUID = re.compile(r"GPU-[0-9a-fA-F][0-9a-fA-F-]{7,}")
+
 CONTENT_SETTING_KEYS = ("user_preferences", "mining_youtube_urls", "pronunciation_lexicon",
                         "mining_url_cursor")
 
@@ -498,6 +500,11 @@ def section_stack() -> str:
              f"- MCP `/health`: {_http_status(MCP_URL + '/health')}",
              f"- Cron entry: {'present, runs ' + str(target) if line else 'missing'}",
              f"- Poller heartbeat: {beat}"]
+    # GPU rendering (TMDEV-178): the same readout as `upgrade.py --check`,
+    # with GPU UUIDs dropped — they identify a physical card, and the name
+    # says everything a bug report needs.
+    for level, text in gpu.report_lines(DB_PATH):
+        rows.append(f"- GPU ({level}): {GPU_UUID.sub('GPU-<uuid>', text)}")
     return "\n".join(rows)
 
 

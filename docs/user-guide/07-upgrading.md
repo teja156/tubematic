@@ -101,6 +101,12 @@ the steps in the order that keeps your data safe:
    malformed `\x`/`\u`), which TypeScript rejects too. It lists the files; delete them, fix the
    import or the file's permissions, then re-run. A video whose `scene-config.json` names `GifFX` is only warned about: if it is
    rendered again, the renderer skips the scene it cannot load and that overlay is simply left out.
+
+   **It also refuses, before changing anything, when a GPU is chosen that Docker can no longer hand
+   to the renderer** — the NVIDIA Container Toolkit was removed, or the GPU named in
+   `~/.tubematic-data/compose.gpu.json` is no longer in the machine. The new renderer could not
+   start, after everything had already been stopped. Run `python3 onboard.py --step gpu` to pick
+   another GPU or go back to the CPU, then re-run. See [GPU rendering](10-gpu-rendering.md).
 2. Installs `scripts/requirements.txt` into this directory's `.venv`.
 3. **Pulls (release) or builds (source) the new images.** The old stack keeps running meanwhile —
    containers keep the image they started from until they are recreated.

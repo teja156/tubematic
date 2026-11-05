@@ -11,7 +11,7 @@ Steps:
 
 1. Verify the containers are up:
    Run: docker compose ps
-   If tubematic-mcp is not running: docker compose up -d
+   If tubematic-mcp is not running, from the Tubematic install directory: python3 scripts/service.py start
 
 2. Re-run the installer from the Tubematic install directory. It registers the server with its
    token helper at the scope the agent was installed with, and also refreshes the skills and

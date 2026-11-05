@@ -687,7 +687,7 @@ export default function MyScene() {
 
 - ALL animation must use `useCurrentFrame()` — **never** `useFrame` from `@react-three/fiber` (breaks render-time determinism)
 - Pass `frame` and `fps` as props into 3D mesh components and drive rotation/scale from them
-- `remotion.config.ts` already sets `Config.setChromiumOpenGlRenderer("swangle")` for WebGL support — the renderer container has no GPU, and `swangle` (software ANGLE/SwiftShader) is the renderer that works on GPU-less machines
+- WebGL already works: renders use software WebGL (`swangle`, set in `remotion.config.ts`), and switch to the install's NVIDIA GPU by themselves when one is set up. Never set a GL renderer in a scene. Without a GPU, 3D is the most expensive thing a scene can do, so keep it opt-in
 - See `examples/ex-three-intro.tsx` for the exact pattern
 
 ---

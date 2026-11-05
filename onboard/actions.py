@@ -18,6 +18,7 @@ and that must keep working unchanged.
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -35,11 +36,22 @@ def _live_ex() -> Executor:
 
 def _compose() -> list:
     """The `docker compose` argv prefix — the one place apply_renderer,
-    apply_dashboard and _reconcile_volume_devices read it from, so they
-    cannot disagree about which compose file they're talking to. The
-    release tarball's compose file is named identically
-    (docker-compose.yml), so this never needs a -f flag; the difference
-    between dev and release installs is the actions run, not the file."""
+    apply_dashboard, _reconcile_volume_devices, stack.start/stop and
+    scripts/service.py read it from, so they cannot disagree about which
+    compose files they're talking to. The release tarball's compose file is
+    named identically (docker-compose.yml); the difference between dev and
+    release installs is the actions run, not the file.
+
+    With a GPU override (onboard/gpu.py) both files are named explicitly. Only
+    then: the bare form keeps Compose's own discovery, which every install
+    without a GPU has always used. An explicit -f also stops Compose loading a
+    stray docker-compose.override.yml, which nothing has written for several
+    releases (uninstall.py treats it as a leftover)."""
+    from onboard import gpu
+    override = gpu.override_path()
+    if override.is_file():
+        return ["docker", "compose", "-f", str(REPO_ROOT / "docker-compose.yml"),
+                "-f", str(override)]
     return ["docker", "compose"]
 
 
@@ -967,6 +979,172 @@ def _pull_failure_hint(r) -> str:
     return f"{tail}\n{advice}" if tail else advice
 
 
+# ── GPU rendering (optional) ─────────────────────────────────────────────────
+
+CPU_CHOICE = "None — render on the CPU"
+KEEP_CHOICE = "Keep the GPU — I will install the NVIDIA Container Toolkit"
+
+
+def apply_gpu(cfg: OnboardConfig, ex: Executor, rep: Reporter, *, list_gpus=None,
+              has_runtime=None, ask=None) -> None:
+    """Pick the NVIDIA GPU the renderer gets, or none, and write (or remove)
+    the Compose override that hands it over (onboard/gpu.py).
+
+    Asks only when there is something to choose: no driver, no GPU or no
+    NVIDIA Container Toolkit all mean CPU rendering, and the step says why
+    instead of asking. Before `renderer` in STEP_DEFS so the first `up`
+    already carries the override; on a running install (`--step gpu`) it
+    recreates tubematic-renderer itself, because the device reservation is
+    fixed when a container is created — a restart would not apply it.
+
+    The keyword arguments are test seams for the three host probes."""
+    from onboard import gpu
+    list_gpus = list_gpus or gpu.list_gpus
+    has_runtime = has_runtime or gpu.docker_has_nvidia_runtime
+    path = gpu.override_path()
+    before = path.read_text() if path.is_file() else None
+
+    def turn_off(reason: str) -> None:
+        rep.info(reason)
+        if before is not None:
+            ex.unlink(path)
+            rep.ok(f"Removed {path} — the renderer will use the CPU")
+            _recreate_renderer(ex, rep)
+
+    gpus = list_gpus()
+    if not gpus:
+        turn_off("No NVIDIA GPU found (nvidia-smi is missing or reports none) — renders use "
+                 f"the CPU. To add one later see {gpu.DOCS_HINT}, then run: {gpu.STEP_HINT}")
+        return
+    runtime = has_runtime()
+    if runtime is not True:
+        rep.warn(f"Found {len(gpus)} NVIDIA GPU(s), but Docker has no `nvidia` runtime, so it "
+                 f"cannot hand one to a container. Install the NVIDIA Container Toolkit "
+                 f"({gpu.DOCS_HINT}), then run: {gpu.STEP_HINT}")
+        if before is None:
+            return
+        if runtime is None:
+            # Docker could not be asked at all: a working override must not
+            # be deleted on a guess.
+            rep.warn(f"Docker could not be asked, so {path} is left as it is.")
+            return
+        # Docker answered and has no runtime: every `up` fails while the
+        # override stays, and this step is the documented way out, so it
+        # must offer one rather than point back at itself.
+        if ex.dry_run:
+            rep.info(f"[dry-run] would ask whether to remove {path}")
+            return
+        if ask is None:
+            from onboard.prompt import ask_gpu_choice as ask
+        if ask([CPU_CHOICE, KEEP_CHOICE], CPU_CHOICE) == CPU_CHOICE:
+            turn_off("GPU rendering off — renders use the CPU.")
+        else:
+            rep.warn(f"{path} is kept; `docker compose up` fails until the toolkit works.")
+        return
+
+    try:
+        current = gpu.read_override(path)
+    except ValueError as e:
+        rep.warn(str(e))
+        current = None
+    labels = {g.label(): g for g in gpus}
+    choices = [*labels, CPU_CHOICE]
+    default = next((lbl for lbl, g in labels.items() if current and g.uuid == current["uuid"]),
+                   CPU_CHOICE if before is not None and current is None else choices[0])
+    if ex.dry_run:
+        rep.info(f"[dry-run] would ask which GPU renders (default: {default})")
+        return
+    if ask is None:
+        from onboard.prompt import ask_gpu_choice as ask
+    picked = ask(choices, default)
+
+    if picked == CPU_CHOICE:
+        turn_off("GPU rendering off — renders use the CPU.")
+        if before is None:
+            rep.ok("No GPU override to remove")
+        return
+    selected = labels[picked]
+    text = gpu.render_override(selected, gpus)
+    if text == before:
+        rep.ok(f"Renderer keeps {selected.name} ({path} unchanged)")
+        return
+    ex.mkdir(path.parent)
+    ex.write_file(path, text)
+    rep.ok(f"Renderer will use {selected.name} — wrote {path}")
+    _recreate_renderer(ex, rep)
+
+
+RECREATE_LOCK_NAME = ".gpu-recreate.lock"
+
+
+def _recreate_renderer(ex: Executor, rep: Reporter) -> None:
+    """Recreate a running tubematic-renderer so a new device reservation takes
+    effect. A fresh install has no container yet; the `renderer` step creates
+    it with the override. A render in progress is not killed for this."""
+    r = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-renderer"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return  # no container yet: the renderer step will create it
+    from onboard import stack
+    defer = ("Not recreating the renderer now. Once it is idle, apply the change with: "
+             "python3 scripts/service.py start tubematic-renderer")
+    # The hold below is one shared row, so two overlapping runs would each
+    # release the other's: the first to finish deletes it while the second is
+    # still checking or recreating. One run at a time. The lock sits next to
+    # the database it guards; flock is released if this process dies.
+    with stack.poll_lock(DB_PATH.parent / RECREATE_LOCK_NAME) as acquired:
+        if not acquired:
+            rep.warn("Another `onboard.py --step gpu` is recreating the renderer right now.")
+            rep.info(defer)
+            return
+        _recreate_renderer_held(ex, rep, defer)
+
+
+def _recreate_renderer_held(ex: Executor, rep: Reporter, defer: str) -> None:
+    """_recreate_renderer's body, run with RECREATE_LOCK_NAME held."""
+    from onboard import gpu, stack
+    # Hold the worker's render claims first, then look: a render claimed
+    # between a bare look and the recreate would be killed (see
+    # pipeline.py::RENDER_CLAIM_HOLD_KEY). A hold that cannot be written means
+    # nothing can be promised, so the recreate waits.
+    until = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + gpu.RENDER_HOLD_SECS))
+    try:
+        ex.sqlite_write(DB_PATH, lambda con: con.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            (gpu.RENDER_HOLD_KEY, until)), f"hold render claims until {until}")
+    except sqlite3.Error as e:
+        rep.warn(f"Could not pause render claims in {DB_PATH}: {e}")
+        rep.info(defer)
+        return
+    try:
+        # VOICING runs in the MCP container and is untouched by this. Anything
+        # else stack.in_flight reports — a render, an upload the worker may be
+        # running, or a database it cannot read — is a reason to wait.
+        busy = [why for why in stack.in_flight(DB_PATH) if " is VOICING " not in why]
+        if busy:
+            for why in busy:
+                rep.warn(why)
+            rep.info(defer)
+            return
+        r = ex.run([*_compose(), "up", "-d", "tubematic-renderer"], cwd=REPO_ROOT)
+    finally:
+        try:
+            ex.sqlite_write(DB_PATH, lambda con: con.execute(
+                "DELETE FROM settings WHERE key = ?", (gpu.RENDER_HOLD_KEY,)),
+                "release the render-claim hold")
+        except sqlite3.Error as e:
+            rep.warn(f"Could not release the render-claim hold ({e}); renders resume by "
+                     f"themselves at {until} UTC")
+    if r.returncode != 0:
+        rep.fail("docker compose up failed", (r.stderr or "").strip()[-500:])
+        return
+    # Compose recreates the container only when its configuration differs, so
+    # this may legitimately have been a no-op (seen live: a renderer that never
+    # had the override being removed). Say what is true either way.
+    rep.ok("tubematic-renderer is up to date with this choice — Settings → Rendering on the "
+           "dashboard shows what it renders on")
+
+
 def apply_renderer(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
     _reconcile_volume_devices(ex, rep)
     mode = _install_mode(cfg)
@@ -1012,6 +1190,16 @@ def apply_renderer(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
                                capture_output=True, text=True)
     if r_worker.stdout.strip() == "running":
         rep.ok("tubematic-renderer (render worker) running")
+        from onboard import gpu
+        try:
+            chosen = gpu.read_override()
+        except ValueError:
+            chosen = None
+        if chosen:
+            # The answer takes the worker a few seconds after it starts, so it
+            # is pointed at rather than waited for here.
+            rep.info(f"It tests {chosen['name']} as it starts — see Settings → Rendering on the "
+                     "dashboard, or run: python3 upgrade.py --check")
     else:
         rep.warn("tubematic-renderer container is not running. Check: docker compose logs tubematic-renderer")
 
@@ -1058,6 +1246,7 @@ ACTIONS = {
     "install_config":    apply_install_config,
     "pipeline_settings": apply_pipeline_settings,
     "cron":              apply_cron,
+    "gpu":               apply_gpu,
     "renderer":          apply_renderer,
     "dashboard":         apply_dashboard,
 }

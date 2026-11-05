@@ -56,6 +56,15 @@ ORDER BY updated_at ASC, id ASC LIMIT 1;
 followed by `UPDATE videos SET status = 'RENDERING' WHERE id = ? AND status = 'RENDER_QUEUED'`. The
 `WHERE` clause *is* the lock — there is no window between reading and claiming.
 
+The same `UPDATE` also refuses while the settings row `render_claim_hold_until` holds a time still in
+the future. `onboard.py --step gpu` writes it before it looks for a running render and clears it once
+it has recreated the renderer. Looking first and recreating second would otherwise let a render be
+claimed in between and then killed. SQLite has a single writer, so a claim either committed before the
+hold (and the look sees it) or sees the hold (and does not happen). The time is a ceiling of ten
+minutes, so an onboarding run that dies holding it delays renders, never stops them. The row is shared,
+so two overlapping runs would release each other's hold; a lock file next to the database
+(`.gpu-recreate.lock`) lets only one run recreate at a time, and the other defers.
+
 Ordering is FIFO on `updated_at`. **Anything that writes `updated_at` changes render order**, which
 is why the publishing poll (where it exists) deliberately keys its own timeouts off a different
 column.
@@ -181,6 +190,82 @@ prop and not inside `scene-config.json` because the agent writes that file — s
 
 It is launched with `start_new_session=True`, which puts npx, node, Chromium and ffmpeg in one
 process group.
+
+## The GL renderer
+
+Chromium draws every frame, and WebGL (three.js scenes, and Chromium's own compositing) needs an
+OpenGL implementation. There are two paths, and the worker picks one per render.
+
+**The CPU path is the default**, set in `renderer/remotion/remotion.config.ts`:
+`setChromiumOpenGlRenderer("swangle")`, ANGLE over SwiftShader. It works on any machine, which is
+why it is the file's setting and not the worker's. The render command above is exactly what runs.
+
+> **`--browser-executable-path` is not a Remotion flag.** The CLI's flag is `--browser-executable`,
+> and an unknown flag is ignored, so a CPU render does not use the image's Debian Chromium: it uses
+> the headless shell Remotion downloads into the container on its first render. That has always
+> been so, and the CPU path is left exactly as it was. The GPU path names the browser with the real
+> flag.
+
+**The GPU path** adds five settings, from `worker.py::_gl_options` (`_gl_args` turns them into
+flags):
+
+| Setting | Why it is needed |
+|---|---|
+| `--browser-executable=/usr/bin/chromium` | The image's Debian Chromium, which reaches the GPU with nothing to download. Without it Remotion downloads its own Chrome for Testing (about 177 MB) on the first GPU render |
+| `--gl=angle-egl` | Hardware OpenGL through EGL. The other values Remotion accepts either fail to get a context in the container or stay in software |
+| `--chrome-mode=chrome-for-testing` | With a named browser this only switches it to `--headless=new`. In the old headless mode a single tab gets a GPU WebGL context but several tabs at once cannot (`BindToCurrentSequence failed`), so a real multi-tab three.js render fails in every tab |
+| `--enable-multiprocess-on-linux` | Already Remotion's default in 4.x. Stated so a default change cannot put Chromium in `--single-process`, which disables its GPU process |
+| `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json` | Points libglvnd at NVIDIA's EGL. Without it EGL may load another vendor's (Mesa's is in the image), and the render succeeds on the wrong device |
+
+**None of these is ever used on the CPU path.** New headless rendering in software is about five
+times slower than old headless rendering, measured on a 2D scene.
+
+How the GPU reaches the container is the Compose override written by the `gpu` onboarding step
+([Infrastructure](16-infrastructure.md#gpu-override)). That override also sets
+`TUBEMATIC_GPU_UUID` and `TUBEMATIC_GPU_NAME`, which is how the worker knows a GPU is meant to be
+there.
+
+### The probe decides, never the configuration
+
+Being configured is not the same as working. A driver update, an old Container Toolkit, or a hand-run
+`docker compose up` that skipped the override all leave the container believing in a GPU that
+Chromium cannot use, and **a render on the wrong GL device still succeeds**, only several times
+slower. So nothing about a finished render counts as evidence.
+
+`worker.py::_run_gpu_probe` renders one still of the `GpuProbe` composition through a small Node
+driver, `renderer/remotion/gpu-probe/run-gpu-probe.mjs`, given exactly the options and environment
+`_gl_options` gives a render. The composition creates a WebGL context, reads
+`WEBGL_debug_renderer_info`'s unmasked renderer string and prints it on a tagged console line; the
+driver catches that line through Remotion's `onBrowserLog` and writes it to a JSON file, never to
+stdout, which Remotion fills with page output. It is a driver and not `npx remotion still` because
+the CLI never passes a still's page console output on, so the answer could not get out. The Node API
+does not read `remotion.config.ts`, which is why the CPU options spell out `swangle` (a test pins
+them to the config file). `_judge_probe` passes it only if the string names NVIDIA **and** the configured GPU,
+so SwiftShader, Mesa/llvmpipe and an integrated GPU all fail. The worker renders on the GPU only
+while the last probe passed (`_render_on_gpu`); otherwise it takes the CPU path.
+
+- **It bundles its own entry point**, `src/gpu-probe/index.ts`. The main entry bundles every
+  agent-written scene, and one broken scene fails the whole bundle, which would then read as a broken
+  GPU.
+- **It runs once at startup, before the first claim**, so no render ever runs on an unverified GPU,
+  and every container start (which is when a GPU change applies) leaves a fresh answer.
+- **It runs again after a GPU render fails or times out.** If the GPU is what broke, the next render
+  falls back to the CPU instead of failing the same way. The failed render itself is routed as
+  before.
+- **It runs on request**: `POST /render/gpu/test` stamps `gpu_probe_requested_at`, and the
+  `_sweep_gpu_probe` pass runs a probe when that stamp is newer than the last probe's start. Both
+  stamps carry microseconds, because they are compared as strings.
+- **It runs on a CPU install too**, with the CPU path, so the dashboard's Test GPU shows what Chromium
+  gets there (SwiftShader).
+- **It never raises.** A probe that cannot start, times out (180 s, with the same process-group kill
+  as a render) or writes no answer stores a failed result with the reason.
+
+The result is the bare settings row `gpu_probe_result` ([Settings internals](04-settings.md#undeclared-rows)),
+served by `GET /render/gpu` and read directly by `upgrade.py --check`. The API container has no GPU
+and no override, so it never guesses: everything it reports comes from that row.
+
+The text-layout audit stays on `swangle` whatever the install has. It runs in the MCP container,
+which never gets a GPU, and it measures text, which comes out the same on either path.
 
 ### The timeout, and why it is more than a kill
 

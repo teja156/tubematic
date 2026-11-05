@@ -15,7 +15,8 @@ Your job is to work out what is wrong and hand the user the exact commands to ru
 
 1. Check the containers by fetching `http://localhost:4100/health` and
    `http://localhost:4000/health` (`webfetch` is available to you; `docker compose ps` is not).
-   If nothing answers, the fix is `docker compose up -d`, not registration.
+   If nothing answers, the fix is `python3 scripts/service.py start` (run by the user from the
+   Tubematic install directory), not registration.
 
 2. Tell the user to re-run the installer, which is the correct fix and the only one that also
    refreshes the skills and commands, adds the token header, and — unlike a bare `mcp add` —

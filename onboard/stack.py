@@ -378,6 +378,14 @@ def report(rep: Reporter, *, db_path: Path = DB_PATH, repo_root: Path = REPO_ROO
         rep.warn("docker is not installed or not on PATH — container state unknown")
         healthy = False
 
+    # GPU rendering (TMDEV-178). A GPU that is chosen but not working is a
+    # fault: renders still succeed, on the CPU, several times slower.
+    from onboard import gpu
+    for level, text in gpu.report_lines(db_path):
+        getattr(rep, level)(text)
+        if level == "warn":
+            healthy = False
+
     # In-flight work — information, not a fault
     for reason in in_flight(db_path):
         rep.info(f"In flight: {reason}")

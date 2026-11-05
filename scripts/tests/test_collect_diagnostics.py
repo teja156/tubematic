@@ -369,3 +369,21 @@ def test_a_link_planted_while_the_report_is_built_is_not_followed(install, tmp_p
     monkeypatch.setattr(cd, "build_raw_report", build_then_plant)
     assert cd.main(["--out", str(install["out"])]) == 1
     assert target.read_text() == "keep me"
+
+
+def test_the_gpu_state_is_reported_without_the_card_uuid(install, monkeypatch):
+    """The report carries the `--check` GPU readout (TMDEV-178) so a slow
+    install can be explained, but a GPU UUID identifies a physical card and
+    the name is all a bug report needs."""
+    from onboard import gpu
+    card = gpu.Gpu(0, "GPU-1304d027-cdec-cc65-95ea-ba9e1a267376", "NVIDIA GeForce GTX 1650",
+                   4096, "595.91.07")
+    override = install["data"] / "compose.gpu.json"
+    override.write_text(gpu.render_override(card, [card]))
+    monkeypatch.setattr(gpu, "OVERRIDE_PATH", override)
+    monkeypatch.setattr(gpu, "docker_has_nvidia_runtime", lambda run=None: True)
+    monkeypatch.setattr(gpu, "list_gpus", lambda run=None: [])  # the card was taken out
+    report = _collect(install)
+    assert "GPU (warn)" in report and "no longer on this machine" in report
+    assert "NVIDIA GeForce GTX 1650" in report
+    assert "1304d027" not in report

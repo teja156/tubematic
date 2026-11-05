@@ -80,6 +80,7 @@ command it cannot run on your behalf. Everything *inside* the install directory 
 | CPU | 2 cores, 4+ recommended | `nproc` | Rendering opens parallel browser tabs — half the available CPU threads — so more cores render faster. At 2 cores the render also competes with the API, worker and dashboard |
 | Memory | 4 GB, 8 GB recommended | `free -g` | The renderer reserves 2 GB of shared memory for Chromium on its own. Each parallel render tab needs roughly 1–2 GB more, so size memory together with the core count |
 | Disk | ~15 GB | `df -h ~` | Images, `node_modules`, and rendered video |
+| NVIDIA GPU (optional) | Driver + NVIDIA Container Toolkit | `nvidia-smi`, `docker info \| grep nvidia` | Renders run on the CPU without one. With one, the `gpu` step hands it to the renderer: about three times faster for an ordinary video, more for 3D. Intel and AMD GPUs are not used. See [GPU rendering](10-gpu-rendering.md) |
 
 You will also need API keys. Two are **required** and onboarding will not finish without them:
 
@@ -298,7 +299,7 @@ see [Installing Python's venv module and Node.js on Ubuntu](#installing-pythons-
 The wizard requires a real terminal on both stdin and stdout. `--status`, `--steps`,
 `--list-agents` and `--rotate-tokens` are the exceptions and are safe to run from a script.
 
-### The ten steps
+### The eleven steps
 
 Each step's questions, if it has any, are asked right before that step's own action runs. The two
 container steps are always last and ask nothing, so no prompt ever interleaves between builds.
@@ -313,12 +314,15 @@ container steps are always last and ask nothing, so no prompt ever interleaves b
 | 6 | `install_config` | Stores the API keys (**each verified live** as it is typed), the publishing switch and whether AI review is on. Advanced-only: MCP port, render retry budget, pending-topic cap |
 | 7 | `pipeline_settings` | Seeds the rest of the dashboard-editable settings. Asked by default: the image model. Advanced-only: the ElevenLabs voice roster (each voice with the model it speaks with) and default voice, which a new install pre-loads with Teja (`eleven_v4`, the default) and Adam (`eleven_v3`); per-run topic caps, trending sources, the research run cap, the render timeout, log and video retention, the AI review model, sampling rate and loop cap, and Auto Pilot |
 | 8 | `cron` | Asks for the poll interval (default 30 minutes) and writes one cron entry to your user crontab. See [Manual cron setup](#manual-cron-setup) |
-| 9 | `renderer` | Builds one image and starts `tubematic-api`, `tubematic-mcp` and `tubematic-renderer` (release install: pulls the published image instead of building), waiting on the API's and MCP's healthchecks separately and confirming the worker container is running |
-| 10 | `dashboard` | Builds and starts `tubematic-dashboard` (release install: pulls instead of building) |
+| 9 | `gpu` | Lists the machine's NVIDIA GPUs and asks which one renders, or none. Writes `~/.tubematic-data/compose.gpu.json`, which hands that GPU to the renderer, or removes it for CPU rendering. Asks nothing when there is no NVIDIA driver or no NVIDIA Container Toolkit, except to offer going back to the CPU when a GPU was chosen before the toolkit went. See [GPU rendering](10-gpu-rendering.md) |
+| 10 | `renderer` | Builds one image and starts `tubematic-api`, `tubematic-mcp` and `tubematic-renderer` (release install: pulls the published image instead of building), waiting on the API's and MCP's healthchecks separately and confirming the worker container is running |
+| 11 | `dashboard` | Builds and starts `tubematic-dashboard` (release install: pulls instead of building) |
 
-Steps 3 and 4 must precede 9 and 10. If Compose starts first, Docker auto-creates the missing
+Steps 3 and 4 must precede 10 and 11. If Compose starts first, Docker auto-creates the missing
 bind-mount directories **as root**, which the containers can use but host-side tooling cannot. Step
-5 must precede them too: Compose refuses to start a service whose token file is missing. A re-run
+5 must precede them too: Compose refuses to start a service whose token file is missing. Step 9
+comes right before the renderer is created, because which GPU a container gets is fixed when it is
+created. A re-run
 never changes the password; that is `--set-password`'s job. The tokens and the password are
 explained in [Infrastructure — Authentication](../developer/16-infrastructure.md#authentication).
 
@@ -426,7 +430,7 @@ How each provider signals a bad key, and the traps in reading those answers, are
 If you run [Kasm Workspaces](https://kasmweb.com/), you can install Tubematic as a workspace: a
 browser-accessible desktop with Docker, the three agent CLIs and every prerequisite above already
 in it. The session downloads the Tubematic version you pick and opens the wizard in a terminal; you
-answer its questions exactly as in [The ten steps](#the-ten-steps).
+answer its questions exactly as in [The eleven steps](#the-eleven-steps).
 
 1. **Add the registry.** In the Kasm admin UI, open **Workspaces → Workspace Registry → Add new**
    and paste `https://registry.tejaswaroop.com/`.
@@ -613,7 +617,7 @@ curl -s localhost:4100/health                          # the MCP server, a separ
 curl -s localhost:4000/render/health                   # Chromium inside the container
 curl -s -H "$TOKEN" localhost:4000/pipeline/status     # the full readout
 curl -s -H "$TOKEN" localhost:4000/agents              # the installed agents and their models
-python3 scripts/service.py status          # version, schema, cron entry, all four containers
+python3 scripts/service.py status          # version, schema, cron entry, all four containers, GPU
 crontab -l | grep poll.py                  # exactly one line
 .venv/bin/python scripts/poll.py --dry-run # what the next tick would do, without doing it
 .venv/bin/python scripts/status.py         # videos, costs, disk usage
@@ -662,6 +666,7 @@ about whether the poller is running.
 | **Install-time answers** | The same table, seeded by onboarding |
 | **Installed agents** | The `agents` table, written by `--install-agent` |
 | **Service tokens and the session key** | `~/.tubematic-data/secrets/` |
+| **The GPU the renderer uses**, if any | `~/.tubematic-data/compose.gpu.json`, written by the `gpu` step. See [GPU rendering](10-gpu-rendering.md) |
 | **Wizard progress** | `.onboard-state.json` in the install directory |
 
 **There is no `.env` file.** Credentials live in the settings table so they can be rotated from
@@ -686,6 +691,7 @@ Completed steps are skipped automatically, so re-running the wizard is safe:
 python3 onboard.py                       # skip done steps, run pending ones
 python3 onboard.py --step install_config # re-ask and re-apply just that step
 python3 onboard.py --step cron           # rewrite the cron line (after changing the poll interval)
+python3 onboard.py --step gpu            # pick a GPU, or go back to the CPU (recreates the renderer)
 python3 onboard.py --install-agent claude  # redeploy skills/commands, re-check models
 python3 onboard.py --force               # re-run everything from scratch
 python3 onboard.py --dry-run             # preview any of the above — nothing changes
@@ -860,7 +866,7 @@ arguments are swallowed silently.
 | 5 · Generated scenes | `~/.tubematic-data/scenes/generated/*` — the agent-written scene components |
 | 6 · Agent integration | Each installed agent's skills, commands and MCP registration (and, for a project-scope Claude Code install, the agent workspace) |
 | 7 · Cron | The Tubematic lines in your user crontab |
-| 8 · Leftover files | A `docker-compose.override.yml` or `.env` left by an older version. Nothing writes either any more, but Compose still loads an override it finds |
+| 8 · Leftover files | A `docker-compose.override.yml` or `.env` left by an older version. Nothing writes either any more, but Compose still loads an override it finds — except on an install with a GPU chosen, where Tubematic names its compose files explicitly and a stray override is ignored |
 | 9 · Data root | Offers to delete `~/.tubematic-data/` outright — **including rendered videos** |
 
 Step 6 reads Claude Code's install scope and workspace from its row in the `agents` table, falling
@@ -891,6 +897,8 @@ empty, then tells you the path so you can finish by hand.
   step 9, which asks explicitly and defaults to no.
 - **The service tokens** in `~/.tubematic-data/secrets/` — only step 9 removes them. Declining it,
   the step names their path; a reinstall creates new ones, so they are safe to delete by hand.
+- **The GPU choice** in `~/.tubematic-data/compose.gpu.json` — also only step 9. A reinstall that
+  keeps the data root uses it again; delete it to start on the CPU.
 - **Docker images** — the built or pulled images stay cached, and a later install reuses them.
 - **The install directory itself** — delete it by hand.
 

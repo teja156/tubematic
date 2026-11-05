@@ -504,6 +504,44 @@ export interface PriceTable {
   last_sync_error: string | null;
 }
 
+/** One host NVIDIA GPU as onboarding listed it (TMDEV-178). */
+export interface HostGpu {
+  index: number;
+  uuid: string;
+  name: string;
+  memory_mib: number | null;
+  driver: string;
+}
+
+/** The worker's last GPU probe: Chromium's WebGL renderer string, judged
+ *  against the configured GPU. Written only by the render worker. */
+export interface GpuProbe {
+  at: string;
+  reason: string;
+  configured: boolean;
+  gpu: { uuid: string; name: string } | null;
+  host_gpus: HostGpu[];
+  renderer: string;
+  vendor: string;
+  ok: boolean;
+  error: string;
+  secs: number | null;
+  smi: { name?: string; driver?: string; memory_mib?: number | null; error?: string } | null;
+}
+
+/** GET /render/gpu. `status` is "unknown" until the worker's first probe. */
+export interface GpuStatus {
+  status: "unknown" | "not_configured" | "working" | "not_usable";
+  rendering_on: "gpu" | "cpu";
+  configured: boolean;
+  gpu: { uuid: string; name: string } | null;
+  host_gpus: HostGpu[];
+  probe: GpuProbe | null;
+  requested_at: string | null;
+  pending: boolean;
+  waiting_for_render: boolean;
+}
+
 /** GET /retention/backlog (TMDEV-134): the non-archived FAILED and
  *  TOPIC_REJECTED videos unpublished_retention_days would sweep, and the disk
  *  their mp4s and job dirs hold. Answered whether or not the key is on. */

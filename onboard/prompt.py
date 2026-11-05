@@ -454,6 +454,18 @@ def prompt_fields(candidates: list, cfg, *, opts: PromptOptions = DEFAULT_PROMPT
     render_step_summary(asked, cfg.values)
 
 
+def ask_gpu_choice(choices: list[str], default: str) -> str:
+    """Which GPU renders, or the CPU (TMDEV-178). Cancel exits, like every
+    other question."""
+    val = questionary.select(
+        "Render on:", choices=choices, default=default,
+        instruction=HINTS["select"], style=ASK_STYLE, qmark=QMARK, pointer=POINTER,
+    ).ask()
+    if val is None:
+        raise SystemExit(0)
+    return val
+
+
 def ask_new_password() -> str:
     """The dashboard password, asked twice and hidden (TMDEV-152).
 

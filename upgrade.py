@@ -737,7 +737,17 @@ def run_upgrade(*, dry_run: bool, force: bool, no_stop: bool, install_mode: str 
         return 1
     if not _check_removed_giffx(data_root, rep):
         return 1
-    missing_tokens = [n for n in auth.SECRET_NAMES
+    # A GPU override (onboard/gpu.py) whose runtime or GPU has gone makes the
+    # `up` in "Start" fail after everything is already stopped. Checked here,
+    # before the lock, so a refusal leaves the running install untouched.
+    from onboard import gpu
+    gpu_problems = gpu.override_problems()
+    if gpu_problems:
+        for problem in gpu_problems:
+            rep.warn(problem)
+        rep.info("Nothing was stopped. Fix the above and re-run this upgrade.")
+        return 1
+    missing_tokens =[n for n in auth.SECRET_NAMES
                       if not (auth.secrets_dir() / n).is_file()]
     if no_stop and missing_tokens:
         rep.warn("--no-stop is refused for this upgrade: it creates the service tokens, and "

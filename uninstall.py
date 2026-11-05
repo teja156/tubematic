@@ -862,6 +862,12 @@ def remove_data_root() -> None:
         # content". A reinstall makes new ones, so they are safe to delete.
         info(f"The service tokens are still in {DATA_ROOT / 'secrets'} — a reinstall creates "
              f"new ones, so they can go: rm -rf {DATA_ROOT / 'secrets'}")
+    gpu_override = DATA_ROOT / "compose.gpu.json"  # keep in sync with onboard/gpu.py
+    if gpu_override.is_file():
+        # A reinstall that keeps the data root would hand the GPU to the new
+        # renderer again, so say it is there rather than let that surprise.
+        info(f"The GPU choice is still in {gpu_override} — a reinstall keeps using it; "
+             f"delete it to start on the CPU: rm {gpu_override}")
     skipped(f"Data root kept — remaining content is under {DATA_ROOT}")
 
 

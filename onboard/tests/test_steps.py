@@ -36,8 +36,15 @@ def test_step_keys_are_unique():
     assert len(keys) == len(set(keys))
 
 
-def test_ten_steps_in_the_default_flow():
-    assert len(STEP_DEFS) == 10
+def test_eleven_steps_in_the_default_flow():
+    assert len(STEP_DEFS) == 11
+
+
+def test_the_gpu_step_precedes_the_renderer_step():
+    """The GPU override must exist before the first `up` creates the renderer,
+    or a fresh install starts on the CPU and needs a recreate (TMDEV-178)."""
+    keys = [s.key for s in STEP_DEFS]
+    assert keys.index("gpu") == keys.index("renderer") - 1
 
 
 def test_the_auth_step_precedes_every_container_step():

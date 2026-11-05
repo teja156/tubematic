@@ -128,6 +128,13 @@ def check_prerequisites(mode: str = "dev") -> list:
                 hint=f"Run: sudo chown {target} {path}",
             ))
 
+    # A warning, never an error: the wizard stops on an error before reaching
+    # the `gpu` step, which is exactly what fixes this. upgrade.py refuses on
+    # the same problems itself (TMDEV-178).
+    from onboard import gpu
+    for problem in gpu.override_problems():
+        items.append(CheckItem("GPU override usable", False, severity="warning", hint=problem))
+
     return items
 
 
@@ -523,28 +530,32 @@ def check_installation() -> dict:
                                hint="required for scene images — re-run: python onboard.py "
                                     "--step install_config"))
 
+    # The hints name scripts/service.py, not a bare `docker compose up`: that
+    # goes through _compose(), so it keeps a GPU override (TMDEV-178), and it
+    # creates the data directories and service tokens first.
+    #
     # Flask and MCP are separate containers with separate healthchecks, so
     # they are reported separately: a healthy Flask says nothing about whether
     # the agent's tools are reachable, and vice versa.
     r = subprocess.run(["docker", "inspect", "--format", "{{.State.Health.Status}}", "tubematic-api"],
                         capture_output=True, text=True)
     services.append(CheckItem("API container healthy", r.stdout.strip() == "healthy",
-                               hint="docker compose up -d tubematic-api"))
+                               hint="python3 scripts/service.py start tubematic-api"))
 
     r_mcp = subprocess.run(["docker", "inspect", "--format", "{{.State.Health.Status}}", "tubematic-mcp"],
                             capture_output=True, text=True)
     services.append(CheckItem("MCP container healthy", r_mcp.stdout.strip() == "healthy",
-                               hint="docker compose up -d tubematic-mcp"))
+                               hint="python3 scripts/service.py start tubematic-mcp"))
 
     r_worker = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-renderer"],
                                capture_output=True, text=True)
     services.append(CheckItem("Render worker container running", r_worker.stdout.strip() == "running",
-                               hint="docker compose up -d tubematic-renderer"))
+                               hint="python3 scripts/service.py start tubematic-renderer"))
 
     r2 = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-dashboard"],
                          capture_output=True, text=True)
     services.append(CheckItem("Dashboard container running", r2.stdout.strip() == "running",
-                               hint="docker compose up -d tubematic-dashboard"))
+                               hint="python3 scripts/service.py start tubematic-dashboard"))
 
     services.append(CheckItem("Database exists", DB_PATH.exists()))
 
