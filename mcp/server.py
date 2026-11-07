@@ -4346,6 +4346,12 @@ def validate_job(video_id: str) -> dict:
     # hard gate is a deliberate later step, once it's been seen clean across real
     # videos — a geometric check that blocks renders on a false positive is worse
     # than no check.
+    #
+    # Not for a Cartoon 3D video: its one scene is a painted canvas whose only
+    # text is the captions, so there are no text rects to measure, and the
+    # audit's first frame on software GL (this container has no GPU) exceeds
+    # Remotion's 30 s initial-render timeout anyway. Its checks are the frame
+    # check, the part gate and the beat gate (mcp/cartoon.py, step 8 above).
     warnings: list[str] = []
     try:
         if (
@@ -4353,6 +4359,7 @@ def validate_job(video_id: str) -> dict:
             and _get_setting("text_layout_audit_enabled", "true").lower() == "true"
             and "scene_config" in dir()
             and isinstance(scene_config, dict)
+            and not cartoon.is_cartoon(scene_config)
         ):
             from text_audit import audit_text_layout
             warnings = audit_text_layout(

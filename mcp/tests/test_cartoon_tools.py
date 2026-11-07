@@ -265,6 +265,41 @@ def test_validate_job_carries_the_readiness_errors(job_db, jobs, monkeypatch):
     assert "Cartoon 3D parts without a judge's PASS: bollard" in result["errors"]
 
 
+def test_validate_job_skips_the_text_layout_audit_for_a_cartoon_video(job_db, jobs, tmp_path, monkeypatch):
+    """A painted canvas has no text rects to measure, and the audit's first frame
+    on software GL exceeds Remotion's initial-render timeout (seen live): the
+    gates are its checks, so the audit is not even started. A DOM video still
+    gets it."""
+    import text_audit
+    called = []
+    monkeypatch.setattr(text_audit, "audit_text_layout", lambda *a, **k: called.append(1) or ["measured"])
+    monkeypatch.setattr("shutil.which", lambda name: None)   # no npx: the typecheck is skipped
+    monkeypatch.setattr(cartoon, "readiness", lambda *a: [])
+    # a scene library the configs resolve against, and job files past the other checks
+    repo = tmp_path / "repo"
+    monkeypatch.setattr(server, "REPO_ROOT", repo)
+    monkeypatch.setattr(server, "SCENES_DIR", repo / "remotion" / "src" / "scenes" / "generated")
+    monkeypatch.setattr(server, "INSTALLED_DIR", repo / "remotion" / "src" / "scenes" / "installed")
+    (repo / "remotion" / "src" / "scenes" / "installed").mkdir(parents=True)
+    (repo / "remotion" / "src" / "scenes" / "installed" / "Cartoon3D.tsx").write_text("export default () => null;")
+    (repo / "remotion" / "src" / "scenes" / "generated" / "vid-plain").mkdir(parents=True)
+    (repo / "remotion" / "src" / "scenes" / "generated" / "vid-plain" / "hero.tsx").write_text("export default () => null;")
+    timeline = json.dumps({"totalFrames": 100, "fps": 30, "audioDurationSeconds": 100 / 30, "words": []})
+    plain = {"totalFrames": 100, "fps": 30, "scenes": [{"type": "generated", "src": "vid-plain/hero", "props": {}}]}
+    for vid, config in ((VID, CARTOON_CONFIG), ("vid-plain", plain)):
+        job_db(vid)
+        (jobs / vid).mkdir(exist_ok=True)
+        (jobs / vid / "scene-config.json").write_text(json.dumps(config))
+        (jobs / vid / "timeline.json").write_text(timeline)
+        (jobs / vid / "audio.mp3").write_bytes(b"\x00" * (60 * 1024))   # past the 50 KB floor
+
+    result = server.validate_job(VID)
+    assert result == {"passed": True, "errors": [], "warnings": []} and called == []
+
+    result = server.validate_job("vid-plain")
+    assert result["passed"] is True and result["warnings"] == ["measured"] and called == [1]
+
+
 def test_the_tools_are_offered_and_a_still_name_is_checked_before_any_path(through_mcp):
     import asyncio
     from fastmcp import Client

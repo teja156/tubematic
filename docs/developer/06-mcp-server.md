@@ -316,7 +316,7 @@ The agent is expected to call this before `submit_render`. It runs ten checks in
    The first 20 lines of any failure are reported as a hard error. Silently skipped if `npx` is
    unavailable. This runs for *every* video, so a type error anywhere in the project blocks every
    render, not just the one that introduced it.
-10. **Text-layout audit** — advisory only, and only when the checks above found no errors. See
+10. **Text-layout audit** — advisory only, only when the checks above found no errors, and never for a Cartoon 3D video (a painted canvas has no text rects to measure; its checks are step 8's). See
    [Rendering and Review](11-rendering-and-review.md#the-text-layout-audit). Its findings land in
    `warnings` and can never change `passed`.
 
