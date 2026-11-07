@@ -299,6 +299,39 @@ On the incremental path, every other config entry must be written back **byte-id
 
 ---
 
+## Cartoon 3D
+
+A Cartoon 3D video is **data, not TSX**: one installed `Cartoon3D` scene spanning the whole
+video, whose props carry the world (`world`), the beat sheet (`beats`) and the scene options
+(`opts`). The renderer under `renderer/remotion/src/cartoon3d/` builds a painted 3D world from
+that data — a town plan with slots, parts placed in them, marks the cast walks between, shots the
+camera glides through, water, fog and time of day per beat — and draws the cast as flat inked
+cut-outs on lit cards inside it. The agent never writes a component; it writes the world.
+
+The data is checked before it is rendered, and the checks are the reason the style can be trusted
+to an agent at all:
+
+- **The frame check** (`probe2/qa.ts::checkWorld`) runs headless over every frame: a head hidden by
+  a wall, a body in a crate, a sign cut by the frame edge, feet that would have to slide, a cast
+  member under the captions, a cue outside its beat. It uses the same `layout()` the renderer draws
+  from, so what it reasons about is what is drawn.
+- **The part gate** (`probe2/gate/gateCli.ts`): a part or character the agent invents in the part
+  grammar (`probe2/partGrammar.ts`, `kit/Figure.ts`) must pass a deterministic check and then a
+  fresh judge's five questions over renders of it beside a townsman and a crate. Two judged
+  attempts per name.
+- **The beat gate** (`probe2/gate/beatGateCli.ts`): one frame from the middle of every beat beside
+  the sentence the narrator speaks during it; two fresh judges say whether the picture shows the
+  sentence, a third breaks a split. Keyed by a hash of the data, so a changed shot is judged again.
+
+The author never grades its own work: a judge is a separate model call with no other context. The
+MCP tools that run these checks, keep the verdicts and refuse an ungated render are described in
+[MCP server — Cartoon 3D authoring](06-mcp-server.md#cartoon-3d-authoring); the agent's workflow
+is the `tubematic-cartoon3d` skill (see [the agent layer](07-agent-layer.md#the-skills)). The
+renderer's own notes on the grammar and the gate are in
+`renderer/remotion/src/cartoon3d/probe2/gate/README.md`.
+
+---
+
 ## Adding an installed component
 
 For anything worth reusing across videos:

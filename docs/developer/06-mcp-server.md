@@ -94,7 +94,7 @@ next tool call use it, with no restart.
 
 ---
 
-## The 38 tools
+## The 46 tools
 
 ### Pipeline state
 
@@ -205,7 +205,35 @@ and no obvious cause.
 | Tool | Signature | Notes |
 |---|---|---|
 | `validate_job` | `(video_id)` | Returns `{passed, errors[], warnings[]}`. See below |
-| `submit_render` | `(video_id)` | A pure database write: `VOICE_READY → RENDER_QUEUED`. It does **not** render, and does not wait |
+| `submit_render` | `(video_id)` | A pure database write: `VOICE_READY → RENDER_QUEUED`. It does **not** render, and does not wait. A Cartoon 3D video is refused with `cartoon_not_ready` while any of its gates is open (see below) |
+
+### Cartoon 3D authoring
+
+A Cartoon 3D video is one installed `Cartoon3D` scene whose props carry the world, the beat
+sheet and the scene options as data (see [Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d)).
+The author writes that data with `write_scene_config` like any other config; these tools are the
+checks and gates of the data, and the verdicts they keep are what `validate_job` and
+`submit_render` read. All of them run the renderer's own command lines
+(`renderer/remotion/cartoon-tools/`) on the written file; none takes the scene-work claim, because
+the record tools are called by judge subagents, which may be other sessions.
+
+| Tool | Signature | Notes |
+|---|---|---|
+| `cartoon_catalog` | `()` | Every part a world may name, with footprint and blurb, plus the gestures, hats, holds and coats the cast grammar knows |
+| `cartoon_qa` | `(video_id)` | The deterministic check over every frame: occlusion, collisions, cropped signs, feet that would slide, a cast member under the captions, a cue outside its beat. `BLOCK` findings stop the render; `ADVISE` findings are thresholds |
+| `cartoon_still` | `(video_id, frames)` | One to six frames as the render will show them, returned as pictures and kept under the job for `cartoon_read_still` |
+| `cartoon_read_still` | `(video_id, kind, name)` | One still by name, `kind` one of `gate`, `beatgate`, `stills`. The name is a plain file name under the video's `cartoon/` directory and nothing else. This is how a judge sees what it judges |
+| `cartoon_gate` | `(video_id)` | The **part gate** for the world's own parts and cast figures: the deterministic check, renders beside a townsman and a crate, and a judge prompt per part. A part with a PASS for its current spec is not rendered again; two judged attempts per name |
+| `cartoon_gate_record` | `(video_id, part, answers)` | A judge's five answers for a part's current spec. Called by the judge subagent, never by the author |
+| `cartoon_beat_gate` | `(video_id)` | The **beat gate**: one still at the middle of every beat and a prompt with each beat's sentence. Two fresh judges answer; a beat they split on goes to a third |
+| `cartoon_beat_gate_record` | `(video_id, answers)` | One judge's per-beat answers; identical answers are refused, since the second judge must be a different one |
+
+The judge is the point of the design: the author never grades its own work. A judge is a fresh
+subagent with no other context, given the prompt verbatim; it reads the stills through
+`cartoon_read_still` and records its own answers through the record tool, so the verdict never
+passes through the author's hands. Verdicts live under `<jobs>/<video_id>/cartoon/`, keyed by a
+hash of the spec (a part) or of world + beats + options (the beat sheet), so a changed thing is
+judged again and an unchanged one never is.
 
 ### Configuration and scheduling
 
@@ -256,7 +284,7 @@ as stored. See [HTTP API — Mining sources](05-http-api.md#mining-sources) for 
 
 ## `validate_job` — the pre-render gate
 
-The agent is expected to call this before `submit_render`. It runs nine checks in order and returns
+The agent is expected to call this before `submit_render`. It runs ten checks in order and returns
 `{passed, errors, warnings}`, where **`passed` depends only on `errors`**.
 
 1. `audio.mp3`, `timeline.json` and `scene-config.json` exist in `<jobs>/<video_id>/`. The location
@@ -275,11 +303,17 @@ The agent is expected to call this before `submit_render`. It runs nine checks i
    `source`. A stale bare `src` that collides with a newer namespaced file is caught here.
 7. **Image references resolve.** Every image-shaped string in a scene's props must be of the form
    `/public/<video_id>/images/…` and must exist on disk, inside that video's `images/` directory.
-8. **TypeScript typechecks.** `npx tsc --noEmit` over the whole Remotion project, 60-second timeout.
+8. **Cartoon 3D readiness**, for a config with a `Cartoon3D` scene only: every agent-made
+   part and cast figure holds a judge's PASS for the spec the world carries now, two fresh judges
+   have passed the beat sheet (or a third has broken their tie), and the deterministic frame check
+   blocks nothing. Each open gate is one error naming the tool that closes it. `submit_render`
+   asks the same question, so an ungated world cannot be queued by skipping this call. See
+   [Cartoon 3D authoring](#cartoon-3d-authoring).
+9. **TypeScript typechecks.** `npx tsc --noEmit` over the whole Remotion project, 60-second timeout.
    The first 20 lines of any failure are reported as a hard error. Silently skipped if `npx` is
    unavailable. This runs for *every* video, so a type error anywhere in the project blocks every
    render, not just the one that introduced it.
-9. **Text-layout audit** — advisory only, and only when the checks above found no errors. See
+10. **Text-layout audit** — advisory only, and only when the checks above found no errors. See
    [Rendering and Review](11-rendering-and-review.md#the-text-layout-audit). Its findings land in
    `warnings` and can never change `passed`.
 

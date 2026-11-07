@@ -147,6 +147,14 @@ def test_an_unknown_background_is_rejected(job_db):
     assert "pill" in err and "shadow" in err
 
 
+def test_outline_background_is_accepted(job_db):
+    # the plate-free style the cartoon 3D scenes use; it must not trip the
+    # same guard that rejects a made-up value
+    vid = job_db()
+    server.write_scene_config(vid, _config({"background": "outline"}))
+    assert _written(vid)["subtitles"]["background"] == "outline"
+
+
 def test_null_colour_is_allowed_and_means_follow_the_canvas(job_db):
     vid = job_db()
     assert "error" not in server.write_scene_config(vid, _config({"color": None}))

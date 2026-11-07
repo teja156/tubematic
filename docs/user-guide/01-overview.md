@@ -59,7 +59,7 @@ work, before **voicing spends money**, and before a finished video goes out.
 | Piece | What it is | Where |
 |---|---|---|
 | **Pipeline API** | Flask. The state machine, settings, and every read/write the dashboard makes | `renderer/api/`, port 4000 |
-| **MCP server** | The AI agent's entire interface — 38 tools and nothing else | `mcp/`, its own container, port 4100 |
+| **MCP server** | The AI agent's entire interface — 46 tools and nothing else | `mcp/`, its own container, port 4100 |
 | **Render worker** | Polls for queued videos, runs Remotion, runs AI review; also sends due scheduled posts and settles posts in flight, runs Auto Pilot, and does the periodic sweeps. See [The Worker](../developer/12-the-worker.md) | `renderer/api/worker.py` |
 | **Remotion project** | The React video codebase — a curated component library plus per-video generated scenes | `renderer/remotion/` |
 | **Dashboard** | Next.js. Where a human creates videos, approves, configures, and watches — the way you run Tubematic | `dashboard/`, port 3000 |

@@ -45,6 +45,8 @@ import html
 
 from fastmcp import FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
+
+import cartoon  # the Cartoon 3D gates and checks (TMDEV-181); a sibling module like text_audit
 from fastmcp.server.middleware import Middleware
 from starlette.responses import JSONResponse
 
@@ -330,7 +332,7 @@ AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
 # one word at a time is a deliberate style, not a mistake.
 # Keep in sync: renderer/remotion/src/scenes/installed/Subtitles.tsx (which
 # holds the defaults — they are NOT repeated here, so there is nothing to drift).
-SUBTITLE_BACKGROUNDS = ("pill", "shadow", "none")
+SUBTITLE_BACKGROUNDS = ("pill", "shadow", "outline", "none")
 SUBTITLE_NUMERIC_RANGES = {
     "maxWords": (1, 7),
     "fontSize": (28, 120),
@@ -338,6 +340,85 @@ SUBTITLE_NUMERIC_RANGES = {
 }
 SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
                  "background", "position", "uppercase")
+
+
+# ── Cartoon 3D agent-made parts (TMDEV-181) ─────────────────────────────────
+# A Cartoon 3D world (an installed "Cartoon3D" scene) may carry parts the
+# agent wrote in the part grammar under props.world.parts. The grammar and its
+# real checks (sizes, materials, nothing floating, the vision judge) live in
+# the renderer (src/cartoon3d/probe2/partGrammar.ts and gate/gateCli.ts);
+# this is only the shape a file must have to be worth handing to them, so a
+# typo is refused here with a reason instead of failing a render later.
+# Keep in sync: partGrammar.ts PRIM_KINDS / PART_LIMITS.
+CARTOON_SCENE_SRC = "Cartoon3D"
+PART_PRIM_KINDS = ("box", "cylinder", "rod", "sphere", "torus", "lathe", "shape", "plane", "card", "group")
+PART_NAME_RE = re.compile(r"^[a-z][A-Za-z0-9]{1,31}$")
+PART_MAX_PRIMS = 160
+
+
+def _validate_part_spec(name, spec) -> str:
+    """Shape check of one agent-made part. Returns an error string, or ""."""
+    where = f"parts[{name!r}]"
+    if not PART_NAME_RE.match(str(name)):
+        return f"{where}: a part name is lowerCamelCase, 2-32 characters"
+    if not isinstance(spec, dict):
+        return f"{where} must be an object"
+    if spec.get("name") != name:
+        return f"{where}.name must equal its key ({name!r}), got {spec.get('name')!r}"
+    blurb = spec.get("blurb")
+    if not isinstance(blurb, str) or not blurb.strip():
+        return f"{where}.blurb must say what the part is"
+    prims = spec.get("prims")
+    if not isinstance(prims, list) or not prims:
+        return f"{where}.prims must be a non-empty list of primitives"
+
+    count = 0
+
+    def walk(items, path, depth):
+        nonlocal count
+        for i, p in enumerate(items):
+            here = f"{path}[{i}]"
+            if not isinstance(p, dict) or p.get("kind") not in PART_PRIM_KINDS:
+                return f"{here}.kind must be one of {list(PART_PRIM_KINDS)}"
+            rep = p.get("repeat")
+            n = rep.get("n") if isinstance(rep, dict) else 1
+            if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+                return f"{here}.repeat.n must be a whole number >= 1"
+            count += n
+            if count > PART_MAX_PRIMS:
+                return f"{where} has more than {PART_MAX_PRIMS} primitives after repeats"
+            if p["kind"] == "group":
+                if depth >= 4:
+                    return f"{here}: groups nest deeper than 4"
+                items2 = p.get("items")
+                if not isinstance(items2, list) or not items2:
+                    return f"{here}.items must be a non-empty list"
+                err = walk(items2, f"{here}.items", depth + 1)
+                if err:
+                    return err
+        return ""
+
+    return walk(prims, f"{where}.prims", 0)
+
+
+def _validate_cartoon_parts(scenes) -> str:
+    """Every Cartoon 3D scene's props.world.parts, if present. Returns "" if fine."""
+    for i, scene in enumerate(scenes):
+        if not isinstance(scene, dict) or scene.get("src") != CARTOON_SCENE_SRC:
+            continue
+        world = (scene.get("props") or {}).get("world") if isinstance(scene.get("props"), dict) else None
+        if not isinstance(world, dict):
+            return f"scenes[{i}] ({CARTOON_SCENE_SRC}) needs props.world"
+        parts = world.get("parts")
+        if parts is None:
+            continue
+        if not isinstance(parts, dict):
+            return f"scenes[{i}].props.world.parts must be an object keyed by part name"
+        for name, spec in parts.items():
+            err = _validate_part_spec(name, spec)
+            if err:
+                return f"scenes[{i}].props.world.{err}"
+    return ""
 
 
 def _validate_subtitles(sub) -> str:
@@ -4177,6 +4258,18 @@ def validate_job(video_id: str) -> dict:
     except Exception as e:
         errors.append(f"Image reference check failed: {e}")
 
+    # Cartoon 3D readiness (TMDEV-181). A Cartoon 3D world renders only once
+    # every agent-made part and cast figure holds a judge's PASS for its
+    # current spec, two fresh judges have passed the beat sheet, and the
+    # deterministic frame check blocks nothing. write_scene_config writes the
+    # world freely (the gates read it from there); this is where an ungated
+    # world is stopped, and submit_render asks the same question.
+    try:
+        if "scene_config" in dir() and isinstance(scene_config, dict) and cartoon.is_cartoon(scene_config):
+            errors.extend(cartoon.readiness(JOBS_DIR, video_id, REPO_ROOT / "remotion"))
+    except Exception as e:
+        errors.append(f"Cartoon 3D readiness could not be checked: {e}")
+
     # TypeScript typecheck — fail-loud: broken TSX degrades to silent black
     # during render, which is very hard to diagnose. Catching it here is much better.
     try:
@@ -4231,6 +4324,28 @@ def validate_job(video_id: str) -> dict:
     return {"passed": len(errors) == 0, "errors": errors, "warnings": warnings}
 
 
+def _cartoon_block(video_id: str) -> dict | None:
+    """Why a Cartoon 3D video may not be queued, as a tool error; None for a
+    video that is not Cartoon 3D, has no scene-config yet (validate_job's
+    report), or is ready."""
+    try:
+        path = tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG)
+        if path.is_symlink() or not path.is_file():
+            return None
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not cartoon.is_cartoon(config):
+        return None
+    try:
+        errors = cartoon.readiness(JOBS_DIR, video_id, REPO_ROOT / "remotion")
+    except Exception as e:
+        errors = [f"Cartoon 3D readiness could not be checked: {e}"]
+    if errors:
+        return {"error": "cartoon_not_ready", "errors": errors}
+    return None
+
+
 @mcp.tool
 def submit_render(video_id: str) -> dict:
     """Queue a video for rendering.
@@ -4260,6 +4375,12 @@ def submit_render(video_id: str) -> dict:
     guard_err = _guard_scene_work(video_id)
     if guard_err:
         return guard_err
+
+    # A Cartoon 3D world that has not passed its gates does not render, whether
+    # or not the agent remembered validate_job (TMDEV-181).
+    cartoon_err = _cartoon_block(video_id)
+    if cartoon_err:
+        return cartoon_err
 
     # Atomically claim the VOICE_READY → RENDER_QUEUED transition — the guard
     # is expressed in the UPDATE's own WHERE clause (not a separate
@@ -5574,7 +5695,9 @@ def write_scene_config(video_id: str, config: dict) -> dict:
             {"enabled": false} only when you can say why this video is better
             without them. Optional keys: maxWords (1-7, how many words are on
             screen at once), fontFamily, fontSize, color (null follows the
-            canvas), background ("pill"/"shadow"/"none"), position (fraction of
+            canvas), background ("pill"/"shadow"/"outline"/"none"; "outline"
+            is bold text with a thick dark stroke and no plate, the look of
+            narrated cartoon Shorts), position (fraction of
             frame height), uppercase. Because the narration is captioned, a
             scene should not also spell it out: put text in a scene only when
             the text is the thing being shown.
@@ -5658,6 +5781,10 @@ def write_scene_config(video_id: str, config: dict) -> dict:
         sub_err = _validate_subtitles(config["subtitles"])
         if sub_err:
             return {"error": sub_err}
+
+    parts_err = _validate_cartoon_parts(scenes)  # TMDEV-181
+    if parts_err:
+        return {"error": parts_err}
 
     guard_err = _guard_scene_work(video_id)  # TMDEV-61
     if guard_err:
@@ -6045,6 +6172,171 @@ async def health(request):
     the server process is accepting connections, nothing more.
     """
     return JSONResponse({"status": "ok"})
+
+
+# ── Group 9: Cartoon 3D authoring (TMDEV-181) ───────────────────────────────
+# A Cartoon 3D video is one installed "Cartoon3DProbe" scene whose props carry
+# the world, the beat sheet and the scene options as data. These tools are the
+# gates and checks of that data; the real work is the renderer's command lines
+# (mcp/cartoon.py says how). None takes the scene-work claim: they read the
+# written scene-config and write only under the job's cartoon/ directory, and
+# the record tools are called by judge subagents, which may be other sessions.
+
+_CARTOON_REMOTION = REPO_ROOT / "remotion"
+
+
+def _cartoon_call(video_id: str, fn, *args):
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    try:
+        return fn(JOBS_DIR, video_id, _CARTOON_REMOTION, *args)
+    except cartoon.CartoonError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def cartoon_catalog() -> dict:
+    """Every part a Cartoon 3D world may name, with its footprint in metres and
+    what it is: the kit kinds, the promoted agent-made parts, the code parts
+    with their acts, the promoted cast, and the gestures, hats, holds and
+    coats the cast grammar knows. Read it before writing a world; a world that
+    names a part not in this list is refused by the frame check.
+
+    Returns {catalog: markdown}.
+    """
+    try:
+        return {"catalog": cartoon.catalog(_CARTOON_REMOTION)}
+    except cartoon.CartoonError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def cartoon_qa(video_id: str) -> dict:
+    """The deterministic frame check over EVERY frame of the Cartoon 3D
+    scene-config written for this video: a head hidden by a wall, a body
+    standing in a crate, a sign cut by the frame edge, feet that would slide,
+    a cast member under the captions, a cue outside its beat, a part the world
+    does not carry. BLOCK findings stop the render (validate_job repeats this
+    check); ADVISE findings are thresholds worth a look. Fast, no render.
+
+    Returns {passed, blocking, advisories, findings: [{gate, detail}], summary}.
+    """
+    return _cartoon_call(video_id, cartoon.qa)
+
+
+@mcp.tool
+def cartoon_still(video_id: str, frames: list[int]):
+    """Look at frames of the Cartoon 3D video as the render will show them:
+    the world, the captions, the voice timing. One to six frame numbers per
+    call; use each beat's middle frame. Looking is the authoring loop: write
+    the world, check, look, fix. The pictures are returned at half size and
+    kept as stills/fNNNN.png for cartoon_read_still.
+
+    Returns a text block naming the stills, then the pictures.
+    """
+    result = _cartoon_call(video_id, cartoon.stills, frames)
+    if isinstance(result, dict):
+        return result
+    from fastmcp.utilities.types import Image as MCPImage
+    out = [json.dumps({"video_id": video_id, "stills": [p.name for p in result]})]
+    for p in result:
+        out.append(MCPImage(data=p.read_bytes(), format="png"))
+    return out
+
+
+@mcp.tool
+def cartoon_read_still(video_id: str, kind: str, name: str):
+    """One still by name: kind "gate" (a part's renders: <part>-quarter.png,
+    <part>-end.png, <part>-close.png for a cast figure), "beatgate" (one frame
+    per beat: beatNN-fNNNN.png) or "stills" (frames cartoon_still rendered).
+    This is how a judge sees what it judges: the prompts name the stills and
+    this call shows them. A pure read.
+
+    Returns a text block and the picture, or {error}.
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    try:
+        path = cartoon.still_file(JOBS_DIR, video_id, kind, name)
+    except cartoon.CartoonError as e:
+        return {"error": str(e)}
+    if path.is_symlink() or not path.is_file():
+        return {"error": f"no {kind} still named {name!r} for {video_id}"}
+    from fastmcp.utilities.types import Image as MCPImage
+    return [json.dumps({"video_id": video_id, "kind": kind, "name": name}), MCPImage(data=path.read_bytes(), format="png")]
+
+
+@mcp.tool
+def cartoon_gate(video_id: str) -> dict:
+    """The PART GATE for the agent-made parts and cast figures the written
+    world carries (props.world.parts and props.world.cast): the deterministic
+    check (shape, size, materials, nothing floating), then renders of each
+    one beside a townsman and a crate, and a judge prompt per part. A part
+    with a PASS for its current spec is not rendered again.
+
+    The judge is NOT you. For every part whose status is "awaiting judge",
+    spawn a FRESH subagent with no other context, give it the part's
+    judge_prompt verbatim and nothing else, and let it answer: it reads the
+    stills with cartoon_read_still and records its own verdict with
+    cartoon_gate_record. A part gets two judged attempts (two specs under
+    one name); the third is refused — fall back to a kit or promoted part.
+    validate_job and submit_render refuse a world with an unpassed part.
+
+    Returns {passed, summary, parts: {name: {status, attempts, errors,
+    stills, answers?, seen?, judge_prompt?}}}.
+    """
+    return _cartoon_call(video_id, cartoon.gate)
+
+
+@mcp.tool
+def cartoon_gate_record(video_id: str, part: str, answers: dict) -> dict:
+    """Record a judge's answers for one part's current spec. Called by the
+    JUDGE subagent that cartoon_gate's prompt was given to, with the JSON the
+    prompt asked for: {seen, recognisable: {ok, why}, grounded: {ok, why},
+    silhouette: {ok, why}, scale: {ok, why}, style: {ok, why}}. Pass = all
+    five ok. A spec already judged is refused; change the spec instead.
+
+    Returns the part's verdict: {part, passed, status, attempts, answers, seen}.
+    """
+    return _cartoon_call(video_id, cartoon.gate_record, part, answers)
+
+
+@mcp.tool
+def cartoon_beat_gate(video_id: str) -> dict:
+    """The BEAT GATE: does the frame at the middle of every beat show what the
+    narrator says during it? Renders one still per beat (the real frame,
+    captions burned in) and writes the judges' prompt with each beat's
+    sentence. Keyed by the written world, beats and options, so a changed
+    shot is judged again and an unchanged one is not.
+
+    TWO fresh judges answer the same prompt, each a separate subagent with no
+    other context, given judge_prompt verbatim; a beat they split on goes to
+    a third. Each judge reads the stills with cartoon_read_still and records
+    its own answers with cartoon_beat_gate_record. The status says which
+    judge is still owed. Look at the stills yourself first (cartoon_read_still,
+    kind "beatgate") and fix what you can see before spending a judge.
+    validate_job and submit_render refuse a video without a PASS.
+
+    Returns {passed, need, judges, tie, fails, summary, beats, stills,
+    judge_prompt?}.
+    """
+    return _cartoon_call(video_id, cartoon.beat_gate)
+
+
+@mcp.tool
+def cartoon_beat_gate_record(video_id: str, answers: dict) -> dict:
+    """Record one judge's answers for the current beat sheet. Called by the
+    JUDGE subagent that cartoon_beat_gate's prompt was given to, with the JSON
+    the prompt asked for: {beats: [{beat, seen, shows, why, fix?}, ...]}, one
+    entry per beat in order. Identical answers are refused: the second judge
+    is a different, fresh judge.
+
+    Returns the gate's status after this record: {passed, need, judges, tie,
+    fails, summary, recorded: [one line per beat]}.
+    """
+    return _cartoon_call(video_id, cartoon.beat_gate_record, answers)
 
 
 # ── Registered tool names ───────────────────────────────────────────────────
