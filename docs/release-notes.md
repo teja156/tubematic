@@ -39,6 +39,11 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
 ### Added
 
+- **The render worker runs a stills server for Cartoon 3D authoring.** The gate and preview stills
+  the agent's tools ask for are rendered inside `tubematic-renderer`, on the GPU, by a server that
+  keeps the project bundled and one browser open, so a still takes seconds instead of the half
+  minute a cold software render costs in the MCP container. It listens on the Compose network only
+  (port 4455) and the tools fall back to rendering locally when it does not answer.
 - **A new visual style, Cartoon 3D.** Flat cartoon characters with ink outlines standing in a painted
   3D world — a street, a wharf, a clearing — with a camera that glides through it, a sun that moves
   with the story and fog when the story needs it. The agent builds the world the topic calls for,

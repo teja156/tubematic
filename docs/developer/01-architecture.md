@@ -51,7 +51,7 @@ flowchart TB
 |---|---|---|---|
 | `tubematic-api` | built from `renderer/Dockerfile` | 4000 | The Flask Pipeline API |
 | `tubematic-mcp` | **the same image** | 4100 | The MCP server — the agent's entire interface |
-| `tubematic-renderer` | **the same image** | none | The render worker |
+| `tubematic-renderer` | **the same image** | 4455, Compose network only | The render worker, and the Cartoon 3D stills server beside it |
 | `tubematic-dashboard` | built from `dashboard/Dockerfile` | 3000 | Next.js |
 
 The first three are one image with a different `command:`. Only the API service declares `build:`;
@@ -82,6 +82,7 @@ MCP server down, and an agent session survives a Flask restart.
 | 3000 | Dashboard — all interfaces in a checkout, `127.0.0.1` in a release install; behind a login either way |
 | 4000 | Flask Pipeline API — `127.0.0.1` only |
 | 4100 | MCP server — `127.0.0.1` only |
+| 4455 | The render worker's stills server — Compose network only, never published |
 | 3001 / 4001 | The isolated end-to-end test stack |
 
 Loopback binding costs nothing between containers: they reach each other over the compose network by

@@ -235,6 +235,12 @@ passes through the author's hands. Verdicts live under `<jobs>/<video_id>/cartoo
 hash of the spec (a part) or of world + beats + options (the beat sheet), so a changed thing is
 judged again and an unchanged one never is.
 
+The stills themselves are rendered by the render worker's stills server (`TUBEMATIC_STILLS_SERVER`,
+`http://tubematic-renderer:4455`), the one container with the GPU, which serves the shared jobs
+volume as the composition's public directory, so a video's files are `/public/<video_id>/…` and
+nothing is staged. When that server does not answer, the tool renders the stills in this container
+on software GL, over the same directory. See [The Worker](12-the-worker.md#the-stills-server).
+
 ### Configuration and scheduling
 
 `get_pipeline_status()` · `pause_pipeline()` · `resume_pipeline()` · `get_research_strategies()` ·

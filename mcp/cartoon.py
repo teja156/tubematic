@@ -6,10 +6,9 @@ A Cartoon 3D video is one installed "Cartoon3D" scene whose props carry
 the world, the beat sheet and the scene options (renderer/remotion/src/spike/
 inked3d/probe2). Everything that judges that data runs in the renderer's Node
 command lines, bundled by renderer/remotion/cartoon-tools/build.mjs into
-cartoon-tools/dist/*.mjs; this module stages a video's job files where the
-composition can fetch them, runs the right command line, and keeps every
-verdict under the video's job directory, where validate_job and submit_render
-read it back:
+cartoon-tools/dist/*.mjs; this module runs the right command line over the
+video's job directory and keeps every verdict there, where validate_job and
+submit_render read it back:
 
   <jobs>/<vid>/cartoon/gate/verdict.json           the part gate (+ stills, judge prompts)
   <jobs>/<vid>/cartoon/beatgate/beat-verdict.json  the beat gate (+ stills, judge prompt)
@@ -19,6 +18,15 @@ The rule the tools enforce is the spike's: the author never grades its own
 work. A judge is a fresh model call that sees only the prompt and the stills;
 here it reads the stills with cartoon_read_still and records its own answers
 with the record tools, so the author's hands never touch the verdict.
+
+Where the stills render: the render worker runs a stills server inside
+tubematic-renderer, the one container with the GPU, serving the shared /jobs
+volume as its public directory (renderer/remotion/cartoon-tools/stills-server.mjs);
+the command lines post their stills to it (TUBEMATIC_STILLS_SERVER) and the
+PNGs land under the job directory both containers share. When the server
+does not answer, the command line renders the stills here, on software GL,
+over the same directory (CARTOON_PUBLIC_DIR), so nothing is staged either way
+and a video's files are always /public/<vid>/... to the composition.
 
 Nothing here executes agent-authored code: the command lines run the
 renderer's own TypeScript over JSON the agent wrote.
@@ -126,9 +134,14 @@ def ensure_built(remotion_dir: Path) -> None:
         _built.add(key)
 
 
-def _env(remotion_dir: Path, props: dict | None = None) -> dict:
+def _env(remotion_dir: Path, props: dict | None = None, public_dir: Path | None = None) -> dict:
     env = dict(os.environ)
     env["REMOTION_ROOT"] = str(remotion_dir)
+    if public_dir is not None:
+        env["CARTOON_PUBLIC_DIR"] = str(public_dir)
+        server = os.getenv("TUBEMATIC_STILLS_SERVER", "").strip()
+        if server:
+            env["STILLS_SERVER"] = server
     # the container's Chromium, as the text audit uses it; a host without the
     # variable lets Remotion use its own browser
     browser = os.getenv("PUPPETEER_EXECUTABLE_PATH")
@@ -139,11 +152,12 @@ def _env(remotion_dir: Path, props: dict | None = None) -> dict:
     return env
 
 
-def run_cli(remotion_dir: Path, name: str, args: list[str], *, timeout: int, props: dict | None = None) -> subprocess.CompletedProcess:
+def run_cli(remotion_dir: Path, name: str, args: list[str], *, timeout: int, props: dict | None = None,
+            public_dir: Path | None = None) -> subprocess.CompletedProcess:
     ensure_built(remotion_dir)
     cli = remotion_dir / "cartoon-tools" / "dist" / f"{name}.mjs"
     try:
-        return subprocess.run([_node(), str(cli), *args], cwd=str(remotion_dir), env=_env(remotion_dir, props),
+        return subprocess.run([_node(), str(cli), *args], cwd=str(remotion_dir), env=_env(remotion_dir, props, public_dir),
                               capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         raise CartoonError(f"the {name} tool did not finish within {timeout} s")
@@ -167,18 +181,13 @@ def _fail_text(proc: subprocess.CompletedProcess) -> str:
     return "\n".join(text.splitlines()[-8:])
 
 
-# ── Staging ─────────────────────────────────────────────────────────────────
-
-def _public_name(video_id: str) -> str:
-    # its own directory under public/, not the text audit's <vid>/, which that
-    # audit deletes when it finishes
-    return f"cartoon-{video_id}"
-
+# ── The video's files, as the composition sees them ─────────────────────────
 
 def _props(video_id: str) -> dict:
-    name = _public_name(video_id)
-    return {"sceneConfigPath": f"/public/{name}/scene-config.json", "timelinePath": f"/public/{name}/timeline.json",
-            "audioPath": f"/public/{name}/audio.mp3", "watermark": False}
+    """The Composition's props: the jobs volume is the public directory, so the
+    video's files are /public/<vid>/..., the layout the worker renders from."""
+    return {"sceneConfigPath": f"/public/{video_id}/scene-config.json", "timelinePath": f"/public/{video_id}/timeline.json",
+            "audioPath": f"/public/{video_id}/audio.mp3", "watermark": False}
 
 
 def _job_files(jobs_dir, video_id: str) -> tuple[Path, Path, Path]:
@@ -206,12 +215,14 @@ def _read_config(jobs_dir, video_id: str) -> tuple[Path, dict]:
 
 
 class _Staged:
-    """public/cartoon-<vid>/ with the job's three files, for the length of one
-    tool call; removed on exit."""
+    """One rendering tool at a time per video (two would write the same
+    verdict file), over the video's job directory, which holds the three job
+    files the composition fetches. Nothing is copied: the jobs volume is the
+    public directory of both the stills server and a local render."""
 
     def __init__(self, jobs_dir, video_id: str, remotion_dir: Path):
         self.video_id = video_id
-        self.dir = remotion_dir / "public" / _public_name(video_id)
+        self.dir = tjobs.job_dir(jobs_dir, video_id)
         self.jobs_dir = jobs_dir
 
     def __enter__(self) -> Path:
@@ -220,11 +231,7 @@ class _Staged:
                 raise CartoonError(f"another Cartoon 3D tool is still running for {self.video_id}; wait for it")
             _busy.add(self.video_id)
         try:
-            config, timeline, audio = _job_files(self.jobs_dir, self.video_id)
-            self.dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy(config, self.dir / tjobs.SCENE_CONFIG)
-            shutil.copy(timeline, self.dir / tjobs.TIMELINE)
-            shutil.copy(audio, self.dir / tjobs.AUDIO)
+            _job_files(self.jobs_dir, self.video_id)
         except Exception:
             with _busy_lock:
                 _busy.discard(self.video_id)
@@ -232,7 +239,6 @@ class _Staged:
         return self.dir
 
     def __exit__(self, *exc) -> None:
-        shutil.rmtree(self.dir, ignore_errors=True)
         with _busy_lock:
             _busy.discard(self.video_id)
 
@@ -280,7 +286,7 @@ def stills(jobs_dir, video_id: str, remotion_dir: Path, frames: list[int]) -> li
     outdir = cartoon_dir(jobs_dir, video_id) / STILLS_DIR
     with _Staged(jobs_dir, video_id, remotion_dir) as staged:
         proc = run_cli(remotion_dir, "still", [str(staged), str(outdir), *map(str, clean)],
-                       timeout=CLI_TIMEOUT_SECS, props=_props(video_id))
+                       timeout=CLI_TIMEOUT_SECS, props=_props(video_id), public_dir=Path(jobs_dir))
     if proc.returncode != 0:
         raise CartoonError(f"the stills could not be rendered: {_fail_text(proc)}")
     return [Path(p) for p in _last_json(proc.stdout).get("stills", [])]
@@ -329,7 +335,7 @@ def gate(jobs_dir, video_id: str, remotion_dir: Path) -> dict:
     outdir = _gate_outdir(jobs_dir, video_id)
     outdir.mkdir(parents=True, exist_ok=True)
     with _Staged(jobs_dir, video_id, remotion_dir):
-        proc = run_cli(remotion_dir, "gate", [str(path), str(outdir)], timeout=CLI_TIMEOUT_SECS)
+        proc = run_cli(remotion_dir, "gate", [str(path), str(outdir)], timeout=CLI_TIMEOUT_SECS, public_dir=Path(jobs_dir))
     if proc.returncode not in (0, 2):
         raise CartoonError(f"the part gate could not run: {_fail_text(proc)}")
     parts = _gate_state(jobs_dir, video_id)
@@ -365,7 +371,7 @@ def _beatgate_outdir(jobs_dir, video_id: str) -> Path:
 
 def _beat_status(jobs_dir, video_id: str, remotion_dir: Path, staged: Path) -> dict:
     proc = run_cli(remotion_dir, "beatgate", [str(staged), str(_beatgate_outdir(jobs_dir, video_id)), "--status"],
-                   timeout=CHECK_TIMEOUT_SECS, props=_props(video_id))
+                   timeout=CHECK_TIMEOUT_SECS, props=_props(video_id), public_dir=Path(jobs_dir))
     if proc.returncode not in (0, 2):
         raise CartoonError(f"the beat gate's status could not be read: {_fail_text(proc)}")
     s = _last_json(proc.stdout)
@@ -385,7 +391,8 @@ def beat_gate(jobs_dir, video_id: str, remotion_dir: Path) -> dict:
     outdir = _beatgate_outdir(jobs_dir, video_id)
     outdir.mkdir(parents=True, exist_ok=True)
     with _Staged(jobs_dir, video_id, remotion_dir) as staged:
-        proc = run_cli(remotion_dir, "beatgate", [str(staged), str(outdir)], timeout=CLI_TIMEOUT_SECS, props=_props(video_id))
+        proc = run_cli(remotion_dir, "beatgate", [str(staged), str(outdir)], timeout=CLI_TIMEOUT_SECS, props=_props(video_id),
+                       public_dir=Path(jobs_dir))
         if proc.returncode not in (0, 2):
             raise CartoonError(f"the beat gate could not run: {_fail_text(proc)}")
         return _beat_status(jobs_dir, video_id, remotion_dir, staged)
@@ -402,7 +409,7 @@ def beat_gate_record(jobs_dir, video_id: str, remotion_dir: Path, answers: dict)
     try:
         with _Staged(jobs_dir, video_id, remotion_dir) as staged:
             proc = run_cli(remotion_dir, "beatgate", [str(staged), str(outdir), "--record", answers_file],
-                           timeout=CHECK_TIMEOUT_SECS, props=_props(video_id))
+                           timeout=CHECK_TIMEOUT_SECS, props=_props(video_id), public_dir=Path(jobs_dir))
             if proc.returncode not in (0, 2):
                 raise CartoonError(_fail_text(proc))
             status = _beat_status(jobs_dir, video_id, remotion_dir, staged)

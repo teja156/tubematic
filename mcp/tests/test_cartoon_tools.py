@@ -62,7 +62,7 @@ for path, content in (spec.get("files") or {{}}).items():
     open(path, "w").write(content)
 with open({str(log_file)!r}, "a") as fh:
     fh.write(json.dumps({{"key": key, "argv": sys.argv[1:],
-        "env": {{k: os.environ.get(k) for k in ("REMOTION_ROOT", "BEAT_PROPS", "CARTOON_BROWSER")}}}}) + "\\n")
+        "env": {{k: os.environ.get(k) for k in ("REMOTION_ROOT", "BEAT_PROPS", "CARTOON_BROWSER", "CARTOON_PUBLIC_DIR", "STILLS_SERVER")}}}}) + "\\n")
 sys.stdout.write(spec.get("stdout", ""))
 sys.exit(spec.get("code", 0))
 """)
@@ -142,14 +142,33 @@ def test_readiness_reports_every_gate_that_is_not_passed(fake_node, jobs):
     assert "blocks 1 finding" in errors[2] and "standing inside crate" in errors[2]
     keys = [c["key"] for c in _calls(log)]
     assert keys == ["gate --check", "beatgate --status", "qa-config"]
-    # the beat gate ran against a staging directory of its own, named for the composition's props,
-    # and it was removed afterwards
+    # the beat gate ran over the video's job directory, which the jobs volume serves as /public/<vid>/:
+    # nothing staged, nothing copied
     status_call = _calls(log)[1]
-    staged = Path(status_call["argv"][1])
-    assert staged == remotion / "public" / f"cartoon-{VID}"
-    assert not staged.exists()
-    assert json.loads(status_call["env"]["BEAT_PROPS"])["sceneConfigPath"] == f"/public/cartoon-{VID}/scene-config.json"
+    assert Path(status_call["argv"][1]) == jobs / VID
+    assert not (remotion / "public" / f"cartoon-{VID}").exists()
+    assert json.loads(status_call["env"]["BEAT_PROPS"])["sceneConfigPath"] == f"/public/{VID}/scene-config.json"
+    assert status_call["env"]["CARTOON_PUBLIC_DIR"] == str(jobs)
+    assert status_call["env"]["STILLS_SERVER"] is None   # no server configured: the tool renders locally
     assert status_call["env"]["REMOTION_ROOT"] == str(remotion)
+
+
+def test_the_stills_server_is_handed_to_every_rendering_tool(fake_node, jobs, monkeypatch):
+    """TUBEMATIC_STILLS_SERVER (the worker's server, on the GPU) reaches the
+    command lines as STILLS_SERVER; the frame check, which renders nothing,
+    never sees it."""
+    plan, remotion, log = fake_node
+    monkeypatch.setenv("TUBEMATIC_STILLS_SERVER", "http://tubematic-renderer:4455")
+    plan({
+        "still": {"stdout": json.dumps({"stills": [str(jobs / VID / "cartoon" / "stills" / "f0010.png")]})},
+        "qa-config": {"stdout": "=== quay === 0 findings (0 blocking)\n"},
+    })
+    cartoon.stills(jobs, VID, remotion, [10])
+    cartoon.qa(jobs, VID, remotion)
+    still_call, qa_call = _calls(log)
+    assert still_call["env"]["STILLS_SERVER"] == "http://tubematic-renderer:4455"
+    assert still_call["env"]["CARTOON_PUBLIC_DIR"] == str(jobs)
+    assert qa_call["env"]["STILLS_SERVER"] is None and qa_call["env"]["CARTOON_PUBLIC_DIR"] is None
 
 
 def test_readiness_is_empty_when_every_gate_passes(fake_node, jobs):

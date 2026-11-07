@@ -42,6 +42,7 @@ from tubematic_core import usage as tusage
 DB_PATH = os.getenv("TUBEMATIC_DB", "/data/tubematic.db")
 OUTPUT_DIR = Path(os.getenv("OUTPUT_BASE_PATH", "/output_videos"))
 REMOTION_DIR = Path("/app/remotion")
+JOBS_DIR = os.getenv("TUBEMATIC_JOBS_DIR", "/jobs")   # the volume the stills server serves as /public/
 LOG_DIR = Path(os.getenv("TUBEMATIC_LOG_DIR", "/logs"))
 CHROMIUM_BIN = os.getenv("CHROMIUM_BIN", "/usr/bin/chromium")
 
@@ -510,6 +511,91 @@ def _sweep_gpu_probe() -> None:
             _run_gpu_probe(reason="requested from the dashboard")
     except Exception:
         log.exception("GPU probe sweep failed")
+
+
+# ── The stills server (TMDEV-179) ───────────────────────────────────────────
+#
+# The MCP container's Cartoon 3D tools need stills of a video's composition
+# (the part gate, the beat gate, the author's own previews), and this is the
+# one container with the GPU. So the worker runs cartoon-tools/stills-server.mjs
+# beside its renders: bundled once, one browser, a still in a few seconds
+# instead of the ~30 s a cold software-GL still costs in the MCP container.
+# It gets exactly the GL options a render gets (_gl_options), so a passing
+# probe moves it onto the GPU and a failing one moves it back, and it serves
+# the shared /jobs volume as its public directory so a video's files are
+# /public/<vid>/... with nothing staged. Compose-network only; never published.
+STILLS_SERVER_PORT = int(os.getenv("TUBEMATIC_STILLS_PORT", "0") or "0")   # 0: do not run one
+STILLS_SERVER_SCRIPT = "cartoon-tools/stills-server.mjs"
+STILLS_SERVER_HOST = "0.0.0.0"
+# A server that dies is started again, but not in a tight loop: a Chromium
+# that cannot open is retried every so often, not every pass of the loop.
+STILLS_SERVER_RETRY_SECS = 60
+
+_stills_proc = None
+_stills_on_gpu: bool | None = None
+_stills_started_at = 0.0
+
+
+def _stills_server_argv(on_gpu: bool) -> tuple[list, dict]:
+    """The command and environment for one GL path: the same options as a
+    render's, spelled as the server's flags."""
+    options, env = _gl_options(on_gpu)
+    argv = ["node", STILLS_SERVER_SCRIPT, "--port", str(STILLS_SERVER_PORT), "--host", STILLS_SERVER_HOST,
+            "--public", JOBS_DIR, "--gl", options["gl"], "--chrome-mode", options["chromeMode"],
+            "--multiprocess", "1" if options["enableMultiprocessOnLinux"] else "0"]
+    if options.get("browserExecutable"):
+        argv += ["--browser-executable", options["browserExecutable"]]
+    return argv, env
+
+
+def _stop_stills_server() -> None:
+    global _stills_proc
+    proc = _stills_proc
+    _stills_proc = None
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        proc.wait(timeout=15)
+    except Exception:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except Exception:
+            pass
+
+
+def _ensure_stills_server(now: float | None = None) -> None:
+    """Start the server, or start it again when it has died or when the GL
+    path it was started on no longer matches what renders use. One pass of the
+    worker loop, so never blocking."""
+    global _stills_proc, _stills_on_gpu, _stills_started_at
+    if not STILLS_SERVER_PORT:
+        return
+    now = time.monotonic() if now is None else now
+    on_gpu = _render_on_gpu()
+    alive = _stills_proc is not None and _stills_proc.poll() is None
+    if alive and _stills_on_gpu == on_gpu:
+        return
+    if alive:
+        log.info(f"stills server: GL path changed ({'GPU' if on_gpu else 'CPU'}), starting it again")
+        _stop_stills_server()
+    elif _stills_proc is not None:
+        log.warning(f"stills server exited with {_stills_proc.returncode}; starting it again")
+        _stills_proc = None
+    if now - _stills_started_at < STILLS_SERVER_RETRY_SECS and _stills_on_gpu == on_gpu:
+        return
+    argv, extra_env = _stills_server_argv(on_gpu)
+    try:
+        _stills_proc = subprocess.Popen(
+            argv, cwd=str(REMOTION_DIR), env={**os.environ, **extra_env},
+            stdin=subprocess.DEVNULL, stdout=None, stderr=None, start_new_session=True)
+    except Exception:
+        log.exception("stills server could not start")
+        _stills_proc = None
+    _stills_on_gpu = on_gpu
+    _stills_started_at = now
+    if _stills_proc is not None:
+        log.info(f"stills server started on the {'GPU' if on_gpu else 'CPU'} path, port {STILLS_SERVER_PORT}")
 
 
 # ── Publishing (TMDEV-83) ───────────────────────────────────────────────────
@@ -2141,6 +2227,7 @@ def main() -> None:
     # and every container start (which is when a GPU change applies) leaves
     # a fresh answer for the dashboard.
     _run_gpu_probe(reason="the worker started")
+    _ensure_stills_server()
 
     while True:
         # Both passes are non-blocking and run before the render claim, so
@@ -2157,6 +2244,7 @@ def main() -> None:
         _sweep_notifications()
         _sweep_stalled_voicing()
         _sweep_gpu_probe()
+        _ensure_stills_server()
 
         video_id = _claim_next()
         if video_id:

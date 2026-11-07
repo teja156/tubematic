@@ -39,6 +39,7 @@ services:
       - TUBEMATIC_JOBS_DIR=/jobs
       - RENDERER_URL=http://localhost:4000
       - MCP_PORT=4100
+      - TUBEMATIC_STILLS_SERVER=http://tubematic-renderer:4455
       - ANTHROPIC_API_KEY=test
       - ELEVENLABS_API_KEY=test
       - GEMINI_API_KEY=test
@@ -72,6 +73,7 @@ services:
       - OUTPUT_BASE_PATH=/output_videos
       - TUBEMATIC_DB=/data/tubematic.db
       - TUBEMATIC_JOBS_DIR=/jobs
+      - TUBEMATIC_STILLS_PORT=4455
       - GEMINI_API_KEY=test
       - TZ=America/New_York
     shm_size: "2gb"

@@ -19,7 +19,7 @@ each pass decides is on the page that owns that subject, linked from the table b
 
 ```mermaid
 flowchart TD
-    S[startup: migrate the database,<br/>requeue or fail rows stuck at RENDERING,<br/>test the GPU] --> P
+    S[startup: migrate the database,<br/>requeue or fail rows stuck at RENDERING,<br/>test the GPU, start the stills server] --> P
     P[1 · publishing: release due scheduled posts,<br/>settle posts in flight] --> A
     A[2 · Auto Pilot: approve checkpoints,<br/>start one post] --> M
     M[3 · analytics poll — hourly] --> PR
@@ -44,9 +44,25 @@ flowchart TD
 | 7 | Stalled-voicing check | `_sweep_stalled_voicing` | every tick | the pipeline is not paused | [The Pipeline](02-pipeline.md#script_ready--the-money-checkpoint) |
 | 0b | GPU test | `_run_gpu_probe` | once, at start, before any render | — (also runs on a CPU install, to report what Chromium gets) | [Rendering and Review](11-rendering-and-review.md#the-gl-renderer) |
 | 8 | GPU test on request | `_sweep_gpu_probe` | every tick | the dashboard's **Test GPU** asked after the last test started | [Rendering and Review](11-rendering-and-review.md#the-gl-renderer) |
+| 8b | Stills server | `_ensure_stills_server` | at start and every tick | `TUBEMATIC_STILLS_PORT` is set (it is, in Compose); starts the server once, again when it has died (at most once a minute) or when a GPU test moved renders between the GPU and the CPU | [below](#the-stills-server) |
 | 9 | Render | `_claim_next`, `_stage_and_render` | every tick | a video is at `RENDER_QUEUED` | [Rendering and Review](11-rendering-and-review.md) |
 
 The loop itself is `worker.py::main`.
+
+### The stills server
+
+The MCP container's Cartoon 3D tools (`cartoon_gate`, `cartoon_beat_gate`, `cartoon_still`) need
+stills of a video's composition, and this is the one container with the GPU. So the worker runs
+`renderer/remotion/cartoon-tools/stills-server.mjs` as a child process beside its renders: the
+project is bundled once, one Chromium stays open, and a still takes a few seconds instead of the
+25 to 30 seconds a cold software-GL still costs in the MCP container. It is started with exactly
+the GL options a render gets (`_gl_options`), so a passing GPU test moves it onto the GPU and a
+failing one moves it back, and it serves the shared `/jobs` volume as its public directory, so a
+video's files are `/public/<video_id>/…` to the composition with nothing copied. It listens on
+`TUBEMATIC_STILLS_PORT` (4455) on the Compose network only and is never published; the MCP
+container reaches it as `TUBEMATIC_STILLS_SERVER`, and when it does not answer the tools render
+their stills locally instead. Renders and stills share the GPU; the server renders one still at a
+time.
 
 ## What a tick is
 

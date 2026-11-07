@@ -1,31 +1,46 @@
-// A stills server: bundle the Remotion project ONCE, open ONE browser, then render any frame of any composition
-// on request in a few seconds instead of the ~25 s a fresh `remotion still` costs (Chrome boot + bundle every time).
-// The single biggest time cost of an authoring run was stills, by far.
+// The stills server: bundle the Remotion project ONCE, open ONE browser, then render any frame of any composition
+// on request in a few seconds instead of the ~25 s a cold `remotion still` costs (Chrome boot + bundle every time).
+// Stills were by far the biggest time cost of an authoring run.
 //
-//   node cartoon-tools/stills-server.mjs [--port 4455] [--gl angle-egl] [--chrome-mode chrome-for-testing]
+// In production the render worker (renderer/api/worker.py) runs it inside tubematic-renderer, the one container with
+// the GPU, with the same GL flags its renders get, and the MCP container's Cartoon 3D tools post their gate and
+// preview stills to it over the Compose network (STILLS_SERVER in src/cartoon3d/probe2/gate/stills.ts). The public
+// directory is the shared /jobs volume, served live through a symlink, so a video's scene-config, timeline and
+// audio are reachable as /public/<vid>/... with nothing staged and nothing re-bundled.
+//
+//   node cartoon-tools/stills-server.mjs [--port 4455] [--host 127.0.0.1] [--public <dir>] [--gl angle-egl]
+//        [--chrome-mode chrome-for-testing] [--multiprocess 1] [--browser-executable /usr/bin/chromium]
 //
 // Requests: POST /still  {"composition": "Composition", "frame": 83, "props": {...}, "out": "/abs/path.png", "scale": 0.5}
 //           POST /stills {"composition", "props", "frames": [83, 200], "outDir": "/abs/dir", "scale", "prefix": "f"}
-//           GET  /health
-// Responses: JSON {ok, out | outs, ms}. Public assets are served from the bundle, so files the request's props name
-// under /public/<dir>/ must exist in public/ BEFORE the server starts, or be re-bundled with POST /rebundle.
-// Browser console lines are collected per request and returned as `logs` (what `npx remotion still` never shows).
+//           POST /rebundle                 (after the project's own source changes; public files need none)
+//           GET  /health                   {ok, bundled, browser, public, gl, chromeMode}
+// Responses: JSON {ok, out | outs, ms, logs}. Browser console lines are collected per request and returned as
+// `logs` (what `npx remotion still` never shows).
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
 import { bundle } from "@remotion/bundler";
 import { openBrowser, renderStill, selectComposition } from "@remotion/renderer";
+import { enableTailwind } from "@remotion/tailwind-v4";
 
 const arg = (name, def) => {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : def;
 };
 const PORT = Number(arg("port", 4455));
+const HOST = arg("host", "127.0.0.1");
 const GL = arg("gl", "angle-egl");
 const CHROME_MODE = arg("chrome-mode", "chrome-for-testing");
+const MULTI = arg("multiprocess", "1") !== "0";
+const BROWSER = arg("browser-executable", null);
 const ROOT = process.cwd();
+const PUBLIC = path.resolve(arg("public", path.join(ROOT, "public")));
 const ENTRY = path.join(ROOT, "src/index.ts");
-const chromiumOptions = { gl: GL, enableMultiProcessOnLinux: true, disableWebSecurity: false };
+// 120 s, not Remotion's 30 s: on software GL the composition's first frame has exceeded 30 s (stills.ts)
+const TIMEOUT_MS = 120_000;
+const chromiumOptions = { gl: GL, enableMultiProcessOnLinux: MULTI, disableWebSecurity: false };
+const browserOptions = { chromiumOptions, chromeMode: CHROME_MODE, browserExecutable: BROWSER, logLevel: "error" };
 
 let serveUrl = null;
 let browser = null;
@@ -33,14 +48,16 @@ let busy = Promise.resolve();
 
 const rebundle = async () => {
   const t = Date.now();
-  serveUrl = await bundle({ entryPoint: ENTRY, publicDir: path.join(ROOT, "public"), onProgress: () => {} });
-  console.log(`[stills] bundled in ${Date.now() - t} ms: ${serveUrl}`);
+  // remotion.config.ts does not apply to the Node API: the Tailwind override and the public dir are passed here,
+  // and the public dir is symlinked so files added under it later are served without another bundle
+  serveUrl = await bundle({ entryPoint: ENTRY, publicDir: PUBLIC, webpackOverride: enableTailwind, symlinkPublicDir: true, onProgress: () => {} });
+  console.log(`[stills] bundled in ${Date.now() - t} ms: ${serveUrl} (public ${PUBLIC})`);
 };
 
 const ensureBrowser = async () => {
   if (browser) return browser;
-  browser = await openBrowser("chrome", { chromiumOptions, chromeMode: CHROME_MODE, logLevel: "error" });
-  console.log(`[stills] browser open (${GL}, ${CHROME_MODE})`);
+  browser = await openBrowser("chrome", browserOptions);
+  console.log(`[stills] browser open (${GL}, ${CHROME_MODE}${BROWSER ? `, ${BROWSER}` : ""})`);
   return browser;
 };
 
@@ -49,16 +66,13 @@ const ensureBrowser = async () => {
 const MIN_PNG_BYTES = 40_000;
 const one = async (composition, inputProps, frame, out, scale, attempt = 0) => {
   const logs = [];
-  const comp = await selectComposition({ serveUrl, id: composition, inputProps, puppeteerInstance: await ensureBrowser(), chromiumOptions, chromeMode: CHROME_MODE, logLevel: "error" });
-  await renderStill({
-    composition: comp, serveUrl, output: out, frame, inputProps, scale, imageFormat: "png",
-    puppeteerInstance: await ensureBrowser(), chromiumOptions, chromeMode: CHROME_MODE, logLevel: "error",
-    onBrowserLog: (l) => logs.push(`${l.type}: ${l.text}`),
-  });
+  const common = { serveUrl, inputProps, puppeteerInstance: await ensureBrowser(), ...browserOptions, timeoutInMilliseconds: TIMEOUT_MS };
+  const comp = await selectComposition({ ...common, id: composition });
+  await renderStill({ ...common, composition: comp, output: out, frame, scale, imageFormat: "png", onBrowserLog: (l) => logs.push(`${l.type}: ${l.text}`) });
   const bytes = fs.statSync(out).size;
   if (bytes < MIN_PNG_BYTES * Math.max(0.1, scale * scale) && attempt === 0) {
     console.log(`[stills] frame ${frame} came out near-empty (${bytes} bytes): retrying with a fresh browser`);
-    try { await browser?.close(); } catch {}
+    try { await browser?.close({ silent: true }); } catch { /* already gone */ }
     browser = null;
     return one(composition, inputProps, frame, out, scale, 1);
   }
@@ -77,7 +91,9 @@ const body = (req) => new Promise((resolve, reject) => {
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (req.method === "GET" && req.url === "/health") return json(res, 200, { ok: true, bundled: !!serveUrl, browser: !!browser });
+    if (req.method === "GET" && req.url === "/health") {
+      return json(res, 200, { ok: true, bundled: !!serveUrl, browser: !!browser, public: PUBLIC, gl: GL, chromeMode: CHROME_MODE });
+    }
     if (req.method === "POST" && req.url === "/rebundle") { await (busy = busy.then(rebundle)); return json(res, 200, { ok: true }); }
     if (req.method === "POST" && (req.url === "/still" || req.url === "/stills")) {
       const b = await body(req);
@@ -114,7 +130,7 @@ const server = http.createServer(async (req, res) => {
 
 await rebundle();
 await ensureBrowser();
-server.listen(PORT, "127.0.0.1", () => console.log(`[stills] listening on http://127.0.0.1:${PORT}`));
-const bye = async () => { try { await browser?.close(); } catch {} process.exit(0); };
+server.listen(PORT, HOST, () => console.log(`[stills] listening on http://${HOST}:${PORT}`));
+const bye = async () => { try { await browser?.close({ silent: true }); } catch { /* already gone */ } process.exit(0); };
 process.on("SIGINT", bye);
 process.on("SIGTERM", bye);
