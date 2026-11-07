@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { Agent, Project, ScriptProfile, Video, VisualStyle, Voice } from "@/lib/types";
+import type { Agent, GpuStatus, Project, ScriptProfile, Video, VisualStyle, Voice } from "@/lib/types";
 import { SectionLabel } from "@/components/SectionLabel";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { AGENT_EFFORTS, effortOptionLabel, isUsable } from "@/lib/agents";
@@ -67,6 +67,7 @@ export default function NewVideoPage() {
   // it only exists after the first manual video.
   const [manualVoiceId, setManualVoiceId] = useState("");
   const [canIllustrate, setCanIllustrate] = useState(true);
+  const [gpu, setGpu] = useState<GpuStatus | null>(null);
   const [profiles, setProfiles] = useState<ScriptProfile[]>([]);
 
   const [title, setTitle] = useState("");
@@ -102,6 +103,10 @@ export default function NewVideoPage() {
         setInstallVoiceId(s.elevenlabs_voice_id ?? "");
         setCanIllustrate(illustratedAvailable(s));
       })
+      .catch(() => {});
+    apiFetch("/render/gpu")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((g) => setGpu(g && typeof g.status === "string" ? (g as GpuStatus) : null))
       .catch(() => {});
     apiFetch("/projects")
       .then((r) => r.json())
@@ -274,7 +279,7 @@ export default function NewVideoPage() {
               onChange={(e) => setStyle(e.target.value as VisualStyle)}
               style={selectStyle}
             >
-              {styleOptions(canIllustrate).map((o) => (
+              {styleOptions(canIllustrate, gpu).map((o) => (
                 <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
               ))}
             </select>

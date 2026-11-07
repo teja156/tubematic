@@ -178,7 +178,11 @@ never changes videos already filed there.
 With no `visual_style` given, a `curriculum` video inherits its project's `default_visual_style`;
 every other strategy starts at `auto`. An inherited `illustrated` is kept even with no OpenAI key —
 a stored choice is never silently rewritten — and is refused instead by the approving `PATCH`, which
-carries `visual_style`, at the topic checkpoint and before anything is spent.
+carries `visual_style`, at the topic checkpoint and before anything is spent. `cartoon_3d` follows
+the same shape with a different condition: it is refused by `POST /videos`, `PATCH /videos/<id>`
+and the project routes unless `GET /render/gpu` reports `status: working`, with a message naming the
+GPU step (or Test GPU, when the worker has not probed yet). A stored project default is refused only
+when it changes.
 
 A `curriculum` video likewise starts with its project's `default_script_profile_id`, while that
 profile is still `READY` and not deleted; every other strategy, and a stale default, starts with

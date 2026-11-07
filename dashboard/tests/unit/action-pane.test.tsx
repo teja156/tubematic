@@ -19,7 +19,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionPane } from "@/components/ActionPane";
-import type { Agent, Video, VideoStatus } from "@/lib/types";
+import type { Agent, Video, VideoStatus, GpuStatus } from "@/lib/types";
 
 // Fixed to America/New_York so the date-rendering test below has a
 // deterministic, non-UTC expected value.
@@ -659,9 +659,22 @@ describe("ActionPane — visual style picker", () => {
     render(<ActionPane videos={[video]} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
     const select = screen.getByTestId(`style-select-${video.id}`) as HTMLSelectElement;
     expect([...select.options].map((o) => o.value)).toEqual([
-      "auto", "motion_graphics", "stick", "illustrated",
+      "auto", "motion_graphics", "stick", "illustrated", "cartoon_3d",
     ]);
     expect(select.value).toBe("auto");
+  });
+
+  it("disables Cartoon 3D, saying why, while the renderer's GPU is not working", () => {
+    // The style renders on the GPU only; the API refuses it on every other
+    // probe state, so the picker says so before the click.
+    const video = makeVideo("TOPIC_PROPOSED");
+    const gpu: GpuStatus = { status: "not_usable", rendering_on: "cpu", configured: true, gpu: null,
+                             host_gpus: [], probe: null, requested_at: null, pending: false, waiting_for_render: false };
+    render(<ActionPane videos={[video]} gpu={gpu} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
+    const select = screen.getByTestId(`style-select-${video.id}`) as HTMLSelectElement;
+    const option = [...select.options].find((o) => o.value === "cartoon_3d")!;
+    expect(option.disabled).toBe(true);
+    expect(option.text).toMatch(/needs a working GPU/);
   });
 
   it("disables Illustrated, saying why, when no OpenAI key is stored", () => {

@@ -5,6 +5,7 @@ former docstring, now merged in here), and startup reconciliation.
 
 Run from renderer/api/: pytest tests/test_worker.py
 """
+import io
 import json
 import os
 import signal
@@ -96,15 +97,31 @@ def _job_files(tmp_path, video_id="vid-1"):
 
 
 def _fake_popen(returncode=0, stdout="", stderr="", pid=4242):
-    """A Popen-shaped mock: worker.py drives it via .communicate(timeout=...)
-    then reads .returncode, exactly like a real process once communicate()
-    has returned."""
+    """A Popen-shaped mock of a process that has already exited: worker.py
+    drains .stdout/.stderr on threads while polling, then reads .returncode,
+    exactly like a real process once it has ended."""
     proc = mock.MagicMock()
     proc.pid = pid
     proc.args = ["npx", "remotion", "render"]
-    proc.communicate.return_value = (stdout, stderr)
+    proc.stdout = io.StringIO(stdout)
+    proc.stderr = io.StringIO(stderr)
+    proc.poll.return_value = returncode
     proc.returncode = returncode
     return proc
+
+
+@pytest.fixture(autouse=True)
+def _fast_render_clock(monkeypatch):
+    """The render watcher's clock jumps an hour per read and its sleep is a
+    no-op, so a double whose poll() never returns a code hits the ceiling at
+    once instead of waiting it out."""
+    tick = {"now": 0.0}
+
+    def clock():
+        tick["now"] += 3600.0
+        return tick["now"]
+    monkeypatch.setattr(worker, "_clock", clock)
+    monkeypatch.setattr(worker, "_sleep", lambda _s: None)
 
 
 def _mock_subprocess_success():
@@ -116,11 +133,15 @@ def _mock_subprocess_failure(stderr="render error"):
 
 
 def _fake_popen_timeout(pid=4242):
-    """communicate() raises TimeoutExpired, as it does for a real Popen once
-    the timeout elapses — worker.py must then kill the process group."""
+    """A process that never ends: poll() keeps answering None and its pipes
+    are silent, so the watcher gives up at its ceiling (the test clock above
+    makes that immediate) — worker.py must then kill the process group."""
     proc = mock.MagicMock()
     proc.pid = pid
-    proc.communicate.side_effect = subprocess.TimeoutExpired(cmd="npx", timeout=1200)
+    proc.args = ["npx", "remotion", "render"]
+    proc.stdout = io.StringIO("")
+    proc.stderr = io.StringIO("")
+    proc.poll.return_value = None
     return proc
 
 
@@ -180,8 +201,9 @@ def test_claim_next_ignores_an_expired_hold(db_path):
 
 # ── render_timeout_secs (TMDEV-57) ────────────────────────────────────────────
 
-def test_render_timeout_secs_defaults_to_2400(db_path):
-    assert worker._render_timeout_secs() == 2400
+def test_render_timeout_secs_defaults_to_10800(db_path):
+    assert worker._render_timeout_secs() == 10800
+    assert worker._render_stall_timeout_secs() == 600
 
 
 def test_render_timeout_secs_reads_settings_table(db_path):
@@ -205,10 +227,16 @@ def test_stage_and_render_uses_configured_timeout(db_path, dirs, tmp_path):
                 timeline_path=timeline, scene_config_path=scene_config)
 
     fake_proc = _mock_subprocess_success()
-    with mock.patch("subprocess.Popen", return_value=fake_proc):
+    seen = {}
+
+    def watch(proc, timeout_secs, stall_secs):
+        seen.update(timeout=timeout_secs, stall=stall_secs)
+        return "", "", "exited"
+    with mock.patch("subprocess.Popen", return_value=fake_proc), \
+         mock.patch.object(worker, "_wait_for_render", side_effect=watch):
         worker._stage_and_render("vid-1")
 
-    fake_proc.communicate.assert_called_once_with(timeout=900)
+    assert seen == {"timeout": 900, "stall": 600}
 
 
 # ── The watermark render prop (TMDEV-141) ──────────────────────────────────

@@ -269,7 +269,12 @@ which never gets a GPU, and it measures text, which comes out the same on either
 
 ### The timeout, and why it is more than a kill
 
-`render_timeout_secs` (default 2400) bounds one render. On expiry the worker:
+Two settings bound one render. `render_stall_timeout_secs` (default 600) is the one that matters: the
+worker reads Remotion's progress counters (`Bundling N%`, `Rendered N/M`, `Encoded N/M`) from the
+render's own output as it runs, and a render whose count stops advancing for that long is judged
+hung, whatever its style or length — the number must advance, since real logs repeat a line.
+`render_timeout_secs` (default 10800) is the absolute ceiling, for a render that advances
+pathologically slowly. On either the worker:
 
 1. `SIGKILL`s the whole **process group** — one signal reaches every descendant.
 2. Reaps the direct child.

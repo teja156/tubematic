@@ -6,10 +6,11 @@ description: Author a Cartoon 3D narrated Short as data (a painted 3D world, a c
 # Tubematic Cartoon 3D authoring skill
 
 **Invoke this skill when:** a video is at `VOICE_READY` (`generate_voice` has produced its timeline) and it is
-to be a **Cartoon 3D** Short: the video's visual style says so, or the person running the pipeline asked for
-one in a comment on the video or in the user preferences. Every other video takes the `tubematic-scene-config`
-skill. Also take this skill, on its **Revising an existing video** branch, for a `REVISION_REQUESTED` video
-whose scene-config carries a `Cartoon3D` scene.
+a **Cartoon 3D** Short: its `visual_style` is `cartoon_3d`, or it is `auto` and the `tubematic-scene-config`
+skill has just resolved the renderer to `cartoon_3d` (`resolved_renderer` on `get_video`). Every other video
+takes the `tubematic-scene-config` skill. Also take this skill, on its **Revising an existing video** branch,
+for a `REVISION_REQUESTED` video whose scene-config carries a `Cartoon3D` scene. The style renders on the GPU
+only: `cartoon_3d_available` on `get_video` is true while it can; the pipeline refused the style otherwise.
 
 ---
 

@@ -253,7 +253,7 @@ MINING_NEEDS_GEMINI_KEY = (
 # why auto can produce a video neither named option could: white-line-art
 # figures for the role beats of an otherwise image-led, dark-canvas video.
 # Keep in sync: the other copy of this block, and dashboard/lib/types.ts.
-VISUAL_STYLES = ("auto", "motion_graphics", "stick", "illustrated")
+VISUAL_STYLES = ("auto", "motion_graphics", "stick", "illustrated", "cartoon_3d")
 DEFAULT_VISUAL_STYLE = "auto"
 
 # "illustrated" draws its characters with OpenAI, the only provider with a
@@ -282,7 +282,9 @@ ILLUSTRATED_NEEDS_OPENAI_KEY = (
 # Keep in sync: the other copy of this block and
 # renderer/remotion/src/CompositionBuilder.tsx.
 VALID_CANVASES = ("dark", "light")
-CANVAS_BY_STYLE = {"motion_graphics": "dark", "stick": "light"}
+# cartoon_3d fills the frame, so its canvas is never visible, but the field must
+# hold a legal value: dark, the default, so an uncovered pixel cannot flash white.
+CANVAS_BY_STYLE = {"motion_graphics": "dark", "stick": "light", "cartoon_3d": "dark"}
 DEFAULT_CANVAS = "dark"
 
 # What videos.resolved_visual_style holds: the canvas "auto" settled on, and
@@ -290,6 +292,60 @@ DEFAULT_CANVAS = "dark"
 # stores is a canvas, because the canvas is the only thing "auto" must fix for
 # the life of the video. Everything else stays free per beat.
 RESOLVED_VISUAL_STYLES = VALID_CANVASES
+
+# Cartoon 3D renders on the GPU only. POLICY, not impossibility: software WebGL
+# (swangle) renders the style, at about 1.1 s a frame, so a 90-second Short takes
+# ~50 minutes and a long one over two hours. With the GPU onboarding step, the
+# dashboard panel and its Test button the refusal names something a person can
+# do. Gate on the probe's "working" status, never on "configured": a configured
+# GPU whose renders fall back to the CPU is the case the gate must catch, and the
+# worker's _render_on_gpu() asks the same question of the same probe.
+# Keep in sync: the other copy of this block (pinned by an agreement test).
+CARTOON3D_NEEDS_GPU = (
+    "Cartoon 3D renders on the GPU only (on the CPU a 90-second Short takes about 50 minutes). "
+    "The renderer has no working GPU: configure one with `python onboard.py --step gpu`, test it "
+    "on the dashboard Settings page under GPU, or choose another visual style."
+)
+CARTOON3D_GPU_UNKNOWN = (
+    "Cartoon 3D renders on the GPU only, and the renderer has not tested its GPU yet (it does so "
+    "when it starts, and on Test GPU on the dashboard Settings page). Test it first, then choose "
+    "the style."
+)
+# What videos.resolved_renderer holds: which renderer "auto" settled on, written
+# once by the agent before any scene is authored. The DOM styles need no such
+# record (per-beat freedom is the design); the renderer is the one thing a
+# revision round must not flip, since flipping it discards every scene.
+RENDERERS = ("dom", "cartoon_3d")
+
+
+def gpu_probe_status(raw_probe) -> str:
+    """The renderer's GPU state from the worker's stored probe (the settings
+    row gpu_probe_result, JSON): "unknown" (never probed), "not_configured"
+    (no GPU override), "working" (configured and the last probe passed) or
+    "not_usable" (configured, but renders fall back to the CPU).
+    Keep in sync: the other copy (pinned by an agreement test)."""
+    import json as _json_
+    try:
+        probe = _json_.loads(raw_probe or "null")
+    except ValueError:
+        probe = None
+    if not isinstance(probe, dict):
+        return "unknown"
+    if not probe.get("configured"):
+        return "not_configured"
+    return "working" if probe.get("ok") else "not_usable"
+
+
+def cartoon_3d_gpu_error(visual_style: str, gpu_status: str) -> str:
+    """Why `visual_style` may not be chosen on a renderer whose GPU is in
+    `gpu_status`, or "". Only "cartoon_3d" is gated and only "working" passes;
+    "unknown" gets its own message, since its fix is a test, not an install.
+    Keep in sync: the other copy (pinned by an agreement test)."""
+    if (visual_style or "").strip() != "cartoon_3d":
+        return ""
+    if gpu_status == "working":
+        return ""
+    return CARTOON3D_GPU_UNKNOWN if gpu_status == "unknown" else CARTOON3D_NEEDS_GPU
 
 # ── Agent effort (TMDEV-106) ─────────────────────────────────────────────────
 # The effort level the agent CLI runs at, the sibling of its model: an
@@ -340,85 +396,6 @@ SUBTITLE_NUMERIC_RANGES = {
 }
 SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
                  "background", "position", "uppercase")
-
-
-# ── Cartoon 3D agent-made parts (TMDEV-181) ─────────────────────────────────
-# A Cartoon 3D world (an installed "Cartoon3D" scene) may carry parts the
-# agent wrote in the part grammar under props.world.parts. The grammar and its
-# real checks (sizes, materials, nothing floating, the vision judge) live in
-# the renderer (src/cartoon3d/probe2/partGrammar.ts and gate/gateCli.ts);
-# this is only the shape a file must have to be worth handing to them, so a
-# typo is refused here with a reason instead of failing a render later.
-# Keep in sync: partGrammar.ts PRIM_KINDS / PART_LIMITS.
-CARTOON_SCENE_SRC = "Cartoon3D"
-PART_PRIM_KINDS = ("box", "cylinder", "rod", "sphere", "torus", "lathe", "shape", "plane", "card", "group")
-PART_NAME_RE = re.compile(r"^[a-z][A-Za-z0-9]{1,31}$")
-PART_MAX_PRIMS = 160
-
-
-def _validate_part_spec(name, spec) -> str:
-    """Shape check of one agent-made part. Returns an error string, or ""."""
-    where = f"parts[{name!r}]"
-    if not PART_NAME_RE.match(str(name)):
-        return f"{where}: a part name is lowerCamelCase, 2-32 characters"
-    if not isinstance(spec, dict):
-        return f"{where} must be an object"
-    if spec.get("name") != name:
-        return f"{where}.name must equal its key ({name!r}), got {spec.get('name')!r}"
-    blurb = spec.get("blurb")
-    if not isinstance(blurb, str) or not blurb.strip():
-        return f"{where}.blurb must say what the part is"
-    prims = spec.get("prims")
-    if not isinstance(prims, list) or not prims:
-        return f"{where}.prims must be a non-empty list of primitives"
-
-    count = 0
-
-    def walk(items, path, depth):
-        nonlocal count
-        for i, p in enumerate(items):
-            here = f"{path}[{i}]"
-            if not isinstance(p, dict) or p.get("kind") not in PART_PRIM_KINDS:
-                return f"{here}.kind must be one of {list(PART_PRIM_KINDS)}"
-            rep = p.get("repeat")
-            n = rep.get("n") if isinstance(rep, dict) else 1
-            if isinstance(n, bool) or not isinstance(n, int) or n < 1:
-                return f"{here}.repeat.n must be a whole number >= 1"
-            count += n
-            if count > PART_MAX_PRIMS:
-                return f"{where} has more than {PART_MAX_PRIMS} primitives after repeats"
-            if p["kind"] == "group":
-                if depth >= 4:
-                    return f"{here}: groups nest deeper than 4"
-                items2 = p.get("items")
-                if not isinstance(items2, list) or not items2:
-                    return f"{here}.items must be a non-empty list"
-                err = walk(items2, f"{here}.items", depth + 1)
-                if err:
-                    return err
-        return ""
-
-    return walk(prims, f"{where}.prims", 0)
-
-
-def _validate_cartoon_parts(scenes) -> str:
-    """Every Cartoon 3D scene's props.world.parts, if present. Returns "" if fine."""
-    for i, scene in enumerate(scenes):
-        if not isinstance(scene, dict) or scene.get("src") != CARTOON_SCENE_SRC:
-            continue
-        world = (scene.get("props") or {}).get("world") if isinstance(scene.get("props"), dict) else None
-        if not isinstance(world, dict):
-            return f"scenes[{i}] ({CARTOON_SCENE_SRC}) needs props.world"
-        parts = world.get("parts")
-        if parts is None:
-            continue
-        if not isinstance(parts, dict):
-            return f"scenes[{i}].props.world.parts must be an object keyed by part name"
-        for name, spec in parts.items():
-            err = _validate_part_spec(name, spec)
-            if err:
-                return f"scenes[{i}].props.world.{err}"
-    return ""
 
 
 def _validate_subtitles(sub) -> str:
@@ -1138,6 +1115,18 @@ def _gemini_key() -> str:
     return _get_setting("gemini_api_key", "") or os.getenv("GEMINI_API_KEY", "")
 
 
+def _gpu_probe_status() -> str:
+    """The renderer's GPU state from the worker's stored probe. The settings
+    row is pipeline.GPU_PROBE_RESULT_KEY, read raw here because this server
+    cannot import the API (keep the key in sync)."""
+    return gpu_probe_status(_get_setting("gpu_probe_result", ""))
+
+
+def _cartoon3d_gpu_error(style: str) -> str:
+    """Keep in sync: renderer/api/pipeline.py's _cartoon3d_gpu_error."""
+    return cartoon_3d_gpu_error(style, _gpu_probe_status())
+
+
 def _openai_key() -> str:
     return _get_setting("openai_api_key", "") or os.getenv("OPENAI_API_KEY", "")
 
@@ -1335,6 +1324,12 @@ def get_video(video_id: str) -> dict:
     "auto" visual style before choosing generated character art; under
     "illustrated" the style itself is the permission and there is nothing to
     check first.
+
+    cartoon_3d_available is true while the renderer's GPU probe says the GPU
+    is working. Cartoon 3D renders on the GPU only, so under "auto" read it
+    here before resolving the renderer to cartoon_3d; when it is false, author
+    the video with the scene components and say in the handback that a world
+    was wanted but the install cannot render one.
     """
     _init_db()
     with _conn() as con:
@@ -1348,6 +1343,9 @@ def get_video(video_id: str) -> dict:
     video["elevenlabs_model_id"] = model_id
     video["pronunciation_mode"] = _pronunciation_mode_for_model(model_id)
     video["illustrated_available"] = bool(_openai_key())
+    # Under "auto" the skill reads this before choosing the renderer, as it
+    # reads illustrated_available before choosing generated art.
+    video["cartoon_3d_available"] = _gpu_probe_status() == "working"
     return video
 
 
@@ -2248,6 +2246,7 @@ def update_video(
     script_profile_id: str | None = None,
     visual_style: str | None = None,
     resolved_visual_style: str | None = None,
+    resolved_renderer: str | None = None,
     publish_title: str | None = None,
     publish_description: str | None = None,
 ) -> dict:
@@ -2299,7 +2298,16 @@ def update_video(
     Write it once, when you choose the canvas while authoring the scene config,
     and never again: a revision round must render on the canvas the video
     already uses. Writable only when the style does not already fix a canvas —
-    that is "auto" and "illustrated"; "motion_graphics" and "stick" fix theirs.
+    that is "auto" and "illustrated"; "motion_graphics", "stick" and
+    "cartoon_3d" fix theirs.
+
+    resolved_renderer: under "auto", which renderer you settled on — "dom"
+    (the scene components) or "cartoon_3d" (one Cartoon 3D world as data).
+    Write it BEFORE authoring any scene and never again: a revision round
+    renders with the renderer the video already uses, and flipping it would
+    discard every scene. "cartoon_3d" is refused while the renderer's GPU is
+    not working (get_video's cartoon_3d_available), with the reason. Not
+    writable when visual_style already names the renderer.
 
     agent_id: which installed agent does this video's next piece of work — the
     id of a live agent from get_pipeline_status's `agents`. A video is dealt
@@ -2505,6 +2513,17 @@ def update_video(
         # Keep in sync with renderer/api/pipeline.py's patch_video.
         if visual_style == "illustrated" and not _openai_key():
             return {"error": ILLUSTRATED_NEEDS_OPENAI_KEY}
+        gpu_err = _cartoon3d_gpu_error(visual_style)
+        if gpu_err:
+            return {"error": gpu_err}
+    if resolved_renderer is not None:
+        resolved_renderer = resolved_renderer.strip()
+        if resolved_renderer not in RENDERERS:
+            return {"error": f"Invalid resolved_renderer '{resolved_renderer}'. Must be one of: "
+                             f"{sorted(RENDERERS)} — it records which renderer 'auto' settled on"}
+        gpu_err = _cartoon3d_gpu_error(resolved_renderer)
+        if gpu_err:
+            return {"error": gpu_err}
     if resolved_visual_style is not None:
         resolved_visual_style = resolved_visual_style.strip()
         if resolved_visual_style not in RESOLVED_VISUAL_STYLES:
@@ -2521,6 +2540,7 @@ def update_video(
         "script_profile_id": script_profile_id,
         "visual_style": visual_style,
         "resolved_visual_style": resolved_visual_style,
+        "resolved_renderer": resolved_renderer,
         "publish_title": publish_title, "publish_description": publish_description,
     }.items() if v is not None}
     if script_segments is not None:
@@ -2627,6 +2647,23 @@ def update_video(
         if already and already != fields["resolved_visual_style"]:
             return {"error": f"resolved_visual_style is already {already!r} and is written once; "
                              "a revision renders at the register the video already uses"}
+    # resolved_renderer: the same write-once rule, for the one choice a revision
+    # round must never flip (flipping the renderer discards every scene).
+    if "resolved_renderer" in fields:
+        with _conn() as con:
+            row = con.execute(
+                "SELECT visual_style, resolved_renderer FROM videos WHERE id = ?",
+                (video_id,)).fetchone()
+        if not row:
+            return {"error": f"Video not found: {video_id}"}
+        if (row["visual_style"] or DEFAULT_VISUAL_STYLE) != "auto":
+            return {"error": f"resolved_renderer records the renderer 'auto' settled on, but this "
+                             f"video's visual_style is {row['visual_style']!r}, which already names "
+                             "it — there is nothing to resolve"}
+        already = row["resolved_renderer"] or ""
+        if already and already != fields["resolved_renderer"]:
+            return {"error": f"resolved_renderer is already {already!r} and is written once; a "
+                             "revision renders with the renderer the video already uses"}
     # TMDEV-84: frozen once archived, for the same reason as set_video_status.
     # Checked in the UPDATE's own WHERE rather than inside _update_fields: its
     # other two callers (generate_voice, write_scene_config) run only at
@@ -2877,6 +2914,10 @@ def upsert_project(
         if (default_visual_style == "illustrated" and not _openai_key()
                 and not (existing and existing["default_visual_style"] == "illustrated")):
             return {"error": ILLUSTRATED_NEEDS_OPENAI_KEY}
+        if not (existing and existing["default_visual_style"] == default_visual_style):
+            gpu_err = _cartoon3d_gpu_error(default_visual_style)
+            if gpu_err:
+                return {"error": gpu_err}
         will_be_seed = seed if seed is not None else (existing["is_curriculum_seed"] if existing else 0)
         if not will_be_seed:
             if status == "paused":
@@ -4525,6 +4566,7 @@ def get_pipeline_status() -> dict:
         "agents": agents,
         "user_preferences": _get_setting("user_preferences", ""),
         "illustrated_available": bool(_openai_key()),
+        "cartoon_3d_available": _gpu_probe_status() == "working",
     }
 
 
@@ -6172,6 +6214,85 @@ async def health(request):
     the server process is accepting connections, nothing more.
     """
     return JSONResponse({"status": "ok"})
+
+
+# ── Cartoon 3D agent-made parts (TMDEV-181) ─────────────────────────────────
+# A Cartoon 3D world (an installed "Cartoon3D" scene) may carry parts the
+# agent wrote in the part grammar under props.world.parts. The grammar and its
+# real checks (sizes, materials, nothing floating, the vision judge) live in
+# the renderer (src/cartoon3d/probe2/partGrammar.ts and gate/gateCli.ts);
+# this is only the shape a file must have to be worth handing to them, so a
+# typo is refused here with a reason instead of failing a render later.
+# Keep in sync: partGrammar.ts PRIM_KINDS / PART_LIMITS.
+CARTOON_SCENE_SRC = "Cartoon3D"
+PART_PRIM_KINDS = ("box", "cylinder", "rod", "sphere", "torus", "lathe", "shape", "plane", "card", "group")
+PART_NAME_RE = re.compile(r"^[a-z][A-Za-z0-9]{1,31}$")
+PART_MAX_PRIMS = 160
+
+
+def _validate_part_spec(name, spec) -> str:
+    """Shape check of one agent-made part. Returns an error string, or ""."""
+    where = f"parts[{name!r}]"
+    if not PART_NAME_RE.match(str(name)):
+        return f"{where}: a part name is lowerCamelCase, 2-32 characters"
+    if not isinstance(spec, dict):
+        return f"{where} must be an object"
+    if spec.get("name") != name:
+        return f"{where}.name must equal its key ({name!r}), got {spec.get('name')!r}"
+    blurb = spec.get("blurb")
+    if not isinstance(blurb, str) or not blurb.strip():
+        return f"{where}.blurb must say what the part is"
+    prims = spec.get("prims")
+    if not isinstance(prims, list) or not prims:
+        return f"{where}.prims must be a non-empty list of primitives"
+
+    count = 0
+
+    def walk(items, path, depth):
+        nonlocal count
+        for i, p in enumerate(items):
+            here = f"{path}[{i}]"
+            if not isinstance(p, dict) or p.get("kind") not in PART_PRIM_KINDS:
+                return f"{here}.kind must be one of {list(PART_PRIM_KINDS)}"
+            rep = p.get("repeat")
+            n = rep.get("n") if isinstance(rep, dict) else 1
+            if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+                return f"{here}.repeat.n must be a whole number >= 1"
+            count += n
+            if count > PART_MAX_PRIMS:
+                return f"{where} has more than {PART_MAX_PRIMS} primitives after repeats"
+            if p["kind"] == "group":
+                if depth >= 4:
+                    return f"{here}: groups nest deeper than 4"
+                items2 = p.get("items")
+                if not isinstance(items2, list) or not items2:
+                    return f"{here}.items must be a non-empty list"
+                err = walk(items2, f"{here}.items", depth + 1)
+                if err:
+                    return err
+        return ""
+
+    return walk(prims, f"{where}.prims", 0)
+
+
+def _validate_cartoon_parts(scenes) -> str:
+    """Every Cartoon 3D scene's props.world.parts, if present. Returns "" if fine."""
+    for i, scene in enumerate(scenes):
+        if not isinstance(scene, dict) or scene.get("src") != CARTOON_SCENE_SRC:
+            continue
+        world = (scene.get("props") or {}).get("world") if isinstance(scene.get("props"), dict) else None
+        if not isinstance(world, dict):
+            return f"scenes[{i}] ({CARTOON_SCENE_SRC}) needs props.world"
+        parts = world.get("parts")
+        if parts is None:
+            continue
+        if not isinstance(parts, dict):
+            return f"scenes[{i}].props.world.parts must be an object keyed by part name"
+        for name, spec in parts.items():
+            err = _validate_part_spec(name, spec)
+            if err:
+                return f"scenes[{i}].props.world.{err}"
+    return ""
 
 
 # ── Group 9: Cartoon 3D authoring (TMDEV-181) ───────────────────────────────

@@ -102,7 +102,13 @@ SETTINGS_SPEC = {
     # The Illustrated style's transparent cut-outs.
     # Keep in sync: mcp/server.py DEFAULT_CHARACTER_MODEL.
     "character_model":        ("str",       "gpt-image-2.5-flare"),
-    "render_timeout_secs":    ("int",       "2400"),
+    # The absolute ceiling on one render: a crash detector of last resort, not a
+    # budget. 3 h covers a 180 s Short on the CPU (~1 h 40) with headroom; a
+    # slow CPU on an over-length video may need it raised. Stalls are caught
+    # far sooner by render_stall_timeout_secs: the worker reads Remotion's
+    # progress counters and kills a render whose count stops advancing.
+    "render_timeout_secs":    ("int",       "10800"),
+    "render_stall_timeout_secs": ("int",    "600"),
     # The cron poller's supervisor (TMDEV-129). max_concurrent_agent_sessions
     # caps the pipeline lane only — research and script profiles run beside it
     # in lanes of one each. Its default applies to an upgraded install too,
@@ -438,7 +444,7 @@ DEFAULT_AGENT_EFFORT = "high"
 # why auto can produce a video neither named option could: white-line-art
 # figures for the role beats of an otherwise image-led, dark-canvas video.
 # Keep in sync: the other copy of this block, and dashboard/lib/types.ts.
-VISUAL_STYLES = ("auto", "motion_graphics", "stick", "illustrated")
+VISUAL_STYLES = ("auto", "motion_graphics", "stick", "illustrated", "cartoon_3d")
 DEFAULT_VISUAL_STYLE = "auto"
 
 # "illustrated" draws its characters with OpenAI, the only provider with a
@@ -477,7 +483,9 @@ MINING_NEEDS_GEMINI_KEY = (
 # Keep in sync: the other copy of this block and
 # renderer/remotion/src/CompositionBuilder.tsx.
 VALID_CANVASES = ("dark", "light")
-CANVAS_BY_STYLE = {"motion_graphics": "dark", "stick": "light"}
+# cartoon_3d fills the frame, so its canvas is never visible, but the field must
+# hold a legal value: dark, the default, so an uncovered pixel cannot flash white.
+CANVAS_BY_STYLE = {"motion_graphics": "dark", "stick": "light", "cartoon_3d": "dark"}
 DEFAULT_CANVAS = "dark"
 
 # What videos.resolved_visual_style holds: the canvas "auto" settled on, and
@@ -485,6 +493,60 @@ DEFAULT_CANVAS = "dark"
 # stores is a canvas, because the canvas is the only thing "auto" must fix for
 # the life of the video. Everything else stays free per beat.
 RESOLVED_VISUAL_STYLES = VALID_CANVASES
+
+# Cartoon 3D renders on the GPU only. POLICY, not impossibility: software WebGL
+# (swangle) renders the style, at about 1.1 s a frame, so a 90-second Short takes
+# ~50 minutes and a long one over two hours. With the GPU onboarding step, the
+# dashboard panel and its Test button the refusal names something a person can
+# do. Gate on the probe's "working" status, never on "configured": a configured
+# GPU whose renders fall back to the CPU is the case the gate must catch, and the
+# worker's _render_on_gpu() asks the same question of the same probe.
+# Keep in sync: the other copy of this block (pinned by an agreement test).
+CARTOON3D_NEEDS_GPU = (
+    "Cartoon 3D renders on the GPU only (on the CPU a 90-second Short takes about 50 minutes). "
+    "The renderer has no working GPU: configure one with `python onboard.py --step gpu`, test it "
+    "on the dashboard Settings page under GPU, or choose another visual style."
+)
+CARTOON3D_GPU_UNKNOWN = (
+    "Cartoon 3D renders on the GPU only, and the renderer has not tested its GPU yet (it does so "
+    "when it starts, and on Test GPU on the dashboard Settings page). Test it first, then choose "
+    "the style."
+)
+# What videos.resolved_renderer holds: which renderer "auto" settled on, written
+# once by the agent before any scene is authored. The DOM styles need no such
+# record (per-beat freedom is the design); the renderer is the one thing a
+# revision round must not flip, since flipping it discards every scene.
+RENDERERS = ("dom", "cartoon_3d")
+
+
+def gpu_probe_status(raw_probe) -> str:
+    """The renderer's GPU state from the worker's stored probe (the settings
+    row gpu_probe_result, JSON): "unknown" (never probed), "not_configured"
+    (no GPU override), "working" (configured and the last probe passed) or
+    "not_usable" (configured, but renders fall back to the CPU).
+    Keep in sync: the other copy (pinned by an agreement test)."""
+    import json as _json_
+    try:
+        probe = _json_.loads(raw_probe or "null")
+    except ValueError:
+        probe = None
+    if not isinstance(probe, dict):
+        return "unknown"
+    if not probe.get("configured"):
+        return "not_configured"
+    return "working" if probe.get("ok") else "not_usable"
+
+
+def cartoon_3d_gpu_error(visual_style: str, gpu_status: str) -> str:
+    """Why `visual_style` may not be chosen on a renderer whose GPU is in
+    `gpu_status`, or "". Only "cartoon_3d" is gated and only "working" passes;
+    "unknown" gets its own message, since its fix is a test, not an install.
+    Keep in sync: the other copy (pinned by an agreement test)."""
+    if (visual_style or "").strip() != "cartoon_3d":
+        return ""
+    if gpu_status == "working":
+        return ""
+    return CARTOON3D_GPU_UNKNOWN if gpu_status == "unknown" else CARTOON3D_NEEDS_GPU
 
 
 def effective_canvas(visual_style: str, resolved_visual_style: str) -> str:
@@ -884,6 +946,14 @@ def _coerce_setting(key: str, raw) -> tuple:
                 f"render_timeout_secs must be at least 60 seconds — a lower value "
                 f"guarantees every render times out before completing, got {int_val}"
             )
+        # The stall detector counts seconds between two advances of Remotion's
+        # progress counter; the quiet stretches (bundling, muxing) run to a
+        # minute or more on a slow machine, so a floor well above one frame.
+        if key == "render_stall_timeout_secs" and int_val < 60:
+            raise ValueError(
+                f"render_stall_timeout_secs must be at least 60 seconds — Remotion prints no "
+                f"progress while it bundles or muxes, got {int_val}"
+            )
         # A timeout under a minute kills every session before the agent CLI
         # has even connected to MCP; 0 concurrent sessions would stop the
         # pipeline in a way that reads as a fault rather than a pause.
@@ -1201,6 +1271,15 @@ def _active_strategies(con) -> list:
     no Gemini key is stored. The row itself is left alone (TMDEV-165)."""
     mining_available = _mining_available(con)
     return [s for s in _stored_strategies(con) if s != "mining" or mining_available]
+
+
+def _cartoon3d_gpu_error(con, style: str) -> str:
+    """Why `style` may not be chosen on this install's renderer, or "": only
+    cartoon_3d is gated, on the worker's GPU probe (gpu_status). Keep in sync:
+    mcp/server.py's _cartoon3d_gpu_error reads the same settings row."""
+    if style != "cartoon_3d":
+        return ""
+    return cartoon_3d_gpu_error(style, gpu_status(con)["status"])
 
 
 def _illustrated_needs_key(con, style: str) -> bool:
@@ -2107,14 +2186,9 @@ def gpu_status(con) -> dict:
     pending = bool(requested_at) and (probe is None or requested_at > (probe.get("at") or ""))
     rendering = con.execute(
         "SELECT 1 FROM videos WHERE status = 'RENDERING' LIMIT 1").fetchone() is not None
-    if probe is None:
-        status = "unknown"          # the worker has not probed yet
-    elif not probe.get("configured"):
-        status = "not_configured"   # no GPU override: CPU rendering
-    elif probe.get("ok"):
-        status = "working"
-    else:
-        status = "not_usable"       # configured, but renders fall back to the CPU
+    # unknown (never probed), not_configured, working, or not_usable (configured,
+    # but renders fall back to the CPU); the Cartoon 3D gate reads the same
+    status = gpu_probe_status(rows.get(GPU_PROBE_RESULT_KEY))
     return {
         "status": status,
         "rendering_on": "gpu" if status == "working" else "cpu",
@@ -2521,6 +2595,9 @@ def create_pipeline_blueprint() -> Blueprint:
                     }), 400
                 if _illustrated_needs_key(con, fields["visual_style"]):
                     return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+                gpu_err = _cartoon3d_gpu_error(con, fields["visual_style"])
+                if gpu_err:
+                    return jsonify({"error": gpu_err}), 400
 
             # The per-video choices freeze in two groups, and both are checked
             # against the *current* status — the UPDATE has not run yet — so the
@@ -2862,6 +2939,9 @@ def create_pipeline_blueprint() -> Blueprint:
             # refuses it at the topic checkpoint, before any spend.
             if _illustrated_needs_key(con, visual_style):
                 return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+            gpu_err = _cartoon3d_gpu_error(con, visual_style)
+            if gpu_err:
+                return jsonify({"error": gpu_err}), 400
             # Unlike visual_style, a project's default voice seeds EVERY video
             # filed into it, whatever the strategy (TMDEV-121) — it is the
             # domain's narrator, not a series identity. An explicit voice wins.
@@ -3002,6 +3082,9 @@ def create_pipeline_blueprint() -> Blueprint:
                     return jsonify({"error": err}), 400
             if _illustrated_needs_key(con, visual_style):
                 return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+            gpu_err = _cartoon3d_gpu_error(con, visual_style)
+            if gpu_err:
+                return jsonify({"error": gpu_err}), 400
             if agent_id:
                 err = _agent_id_error(con, None, agent_id)
                 if err:
@@ -3135,6 +3218,9 @@ def create_pipeline_blueprint() -> Blueprint:
             unchanged = prev is not None and (prev["default_visual_style"] or "") == default_style
             if not unchanged and _illustrated_needs_key(con, default_style):
                 return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+            gpu_err = "" if unchanged else _cartoon3d_gpu_error(con, default_style)
+            if gpu_err:
+                return jsonify({"error": gpu_err}), 400
             # The default voice (TMDEV-121) follows the same rule: checked
             # against the roster only when it changes, so a voice removed from
             # the roster later does not block every other edit to the domain.

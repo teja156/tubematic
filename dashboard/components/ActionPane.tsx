@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Agent, ScriptProfile, Video, Voice } from "@/lib/types";
+import type { Agent, GpuStatus, ScriptProfile, Video, Voice } from "@/lib/types";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
@@ -45,6 +45,9 @@ interface ActionPaneProps {
    *  disabled in the picker. Defaults to true — the API refuses it anyway, so
    *  a page that never loads settings gets a clear error, not a wrong grey. */
   illustratedAvailable?: boolean;
+  /** GET /render/gpu, or null while unloaded: Cartoon 3D is disabled in the
+   *  picker unless the renderer's GPU is working. Null = available, as above. */
+  gpu?: GpuStatus | null;
   onAction: (videoId: string, action: string, video: Video, extra?: Record<string, unknown>) => void;
   /** `revise` opens the modal straight into its Request Revision dialog —
    *  the only place a human comment can be added. `picks` carries the row's
@@ -121,13 +124,14 @@ function PickerField({ label, readOnly, children }: {
   );
 }
 
-function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], agents, illustratedAvailable = true, onAction, onOpenModal }: {
+function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], agents, illustratedAvailable = true, gpu = null, onAction, onOpenModal }: {
   video: Video;
   voices: Voice[];
   defaultVoiceId: string;
   scriptProfiles?: ScriptProfile[];
   agents?: Agent[];
   illustratedAvailable?: boolean;
+  gpu?: GpuStatus | null;
   onAction: ActionPaneProps["onAction"];
   onOpenModal: ActionPaneProps["onOpenModal"];
 }) {
@@ -385,7 +389,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
               maxWidth: 150,
             }}
           >
-            {styleOptions(illustratedAvailable).map((o) => (
+            {styleOptions(illustratedAvailable, gpu).map((o) => (
               <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
             ))}
           </select>
@@ -644,7 +648,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
   return null;
 }
 
-export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = [], agents, illustratedAvailable = true, onAction, onOpenModal }: ActionPaneProps) {
+export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = [], agents, illustratedAvailable = true, gpu = null, onAction, onOpenModal }: ActionPaneProps) {
   const [flashing, setFlashing] = useState<Record<string, "approve" | "reject">>({});
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   // Statuses the human switched off. Stored as the excluded set, so every
@@ -798,7 +802,7 @@ export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = []
                 {/* flex-end, not center: the pickers carry a caption above them, so
                     centring would float every button halfway up a caption. */}
                 <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", rowGap: 10 }}>
-                  <ActionButtons video={video} voices={voices} defaultVoiceId={defaultVoiceId} scriptProfiles={scriptProfiles} agents={agents} illustratedAvailable={illustratedAvailable} onAction={handleAction} onOpenModal={onOpenModal} />
+                  <ActionButtons video={video} voices={voices} defaultVoiceId={defaultVoiceId} scriptProfiles={scriptProfiles} agents={agents} illustratedAvailable={illustratedAvailable} gpu={gpu} onAction={handleAction} onOpenModal={onOpenModal} />
                 </div>
               </div>
             );

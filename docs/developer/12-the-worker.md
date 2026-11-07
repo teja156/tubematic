@@ -56,7 +56,8 @@ A tick is one trip round the loop. How long it takes depends on step 9:
   round again. So an idle worker runs every pass about every 20 seconds. The interval is a plain
   environment variable, not a settings row.
 - **A video to render:** the render runs inside the loop and holds it until it finishes: typically
-  around twenty minutes, and at most `render_timeout_secs` (default 40 minutes) plus the AI review.
+  around twenty minutes on the CPU and a few on the GPU; a render that stops advancing is killed after
+  `render_stall_timeout_secs` (default 10 minutes), and `render_timeout_secs` (default 3 hours) caps the whole render.
   There is no sleep afterwards; the next tick starts at once.
 
 **So every pass waits behind a running render.** A post that falls due, a checkpoint Auto Pilot

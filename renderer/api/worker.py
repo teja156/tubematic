@@ -13,6 +13,8 @@ Run: python3 worker.py
 import calendar
 import datetime as dt
 import json
+import re
+import threading
 import logging
 import os
 import shutil
@@ -136,10 +138,121 @@ def _max_ai_review_loops() -> int:
 
 
 def _render_timeout_secs() -> int:
+    """The absolute ceiling on one render. Keep the default in sync with
+    pipeline.py SETTINGS_SPEC."""
     try:
-        return int(_setting("render_timeout_secs", "2400"))
+        return int(_setting("render_timeout_secs", "10800"))
     except (ValueError, TypeError):
-        return 2400
+        return 10800
+
+
+def _render_stall_timeout_secs() -> int:
+    """How long Remotion's progress counter may stand still before the render
+    is judged hung. Keep the default in sync with pipeline.py SETTINGS_SPEC."""
+    try:
+        return int(_setting("render_stall_timeout_secs", "600"))
+    except (ValueError, TypeError):
+        return 600
+
+
+# ── Render progress (TMDEV-179) ─────────────────────────────────────────────
+#
+# A timeout here is a crash detector, not a budget. Total elapsed time is a
+# poor proxy for "hung": a legitimate long render on a slow machine looks the
+# same as a Chromium wedged at frame 3, and the old 40-minute ceiling made the
+# wedged one burn 40 minutes, retry, and burn 40 more. Remotion prints a
+# monotonic counter per phase to a plain pipe (newline-terminated, no carriage
+# returns, verified on captured logs):
+#
+#   Bundling 6% … Bundling 100%
+#   Rendered 0/60 … Rendered 60/60
+#   Encoded 17/60 … Encoded 60/60
+#
+# so the render is alive while (phase, count) strictly increases. The NUMBER
+# must advance, not merely a line arrive: real logs repeat "Rendered 8/60", so
+# a stalled render that reprints its count would otherwise read as healthy.
+_PROGRESS_RE = re.compile(r"\b(Bundling|Rendered|Encoded)\s+(\d+)")
+_PHASE_RANK = {"Bundling": 0, "Rendered": 1, "Encoded": 2}
+
+
+def _progress_of(line: str):
+    """(phase rank, count) when `line` carries one of Remotion's progress
+    counters, else None."""
+    m = _PROGRESS_RE.search(line)
+    if not m:
+        return None
+    return (_PHASE_RANK[m.group(1)], int(m.group(2)))
+
+
+# Indirections so the loop below can be driven by a test clock.
+_clock = time.monotonic
+_sleep = time.sleep
+_POLL_SECS = 0.5
+
+
+def _wait_for_render(proc, timeout_secs: int, stall_secs: int) -> tuple[str, str, str]:
+    """Drain both of `proc`'s pipes while it runs and watch its progress.
+
+    Returns (stdout, stderr, outcome): outcome "exited" when the process
+    ended by itself, "stall" when the progress counter did not advance for
+    stall_secs, "timeout" when timeout_secs elapsed in all. On "stall" and
+    "timeout" the process is still running: the caller kills its group.
+
+    Both pipes are read on threads of their own: a hand-rolled read of stdout
+    alone deadlocks the moment a chatty render fills the stderr pipe, and
+    communicate() hands both over only at the end, which is why it could not
+    see progress. The full output is kept: _handle_render_failure records it.
+    """
+    out_lines: list[str] = []
+    err_lines: list[str] = []
+    state = {"progress": (-1, -1), "advanced_at": _clock()}
+    lock = threading.Lock()
+
+    def pump(stream, sink):
+        for line in iter(stream.readline, ""):
+            sink.append(line)
+            p = _progress_of(line)
+            if p is None:
+                continue
+            with lock:
+                if p > state["progress"]:
+                    state["progress"] = p
+                    state["advanced_at"] = _clock()
+        stream.close()
+
+    threads = [threading.Thread(target=pump, args=(proc.stdout, out_lines), daemon=True),
+               threading.Thread(target=pump, args=(proc.stderr, err_lines), daemon=True)]
+    for t in threads:
+        t.start()
+    started = _clock()
+    outcome = "exited"
+    while proc.poll() is None:
+        now = _clock()
+        if now - started > timeout_secs:
+            outcome = "timeout"
+            break
+        with lock:
+            quiet = now - state["advanced_at"]
+        if quiet > stall_secs:
+            outcome = "stall"
+            break
+        _sleep(_POLL_SECS)
+    if outcome == "exited":
+        for t in threads:
+            t.join()
+    return "".join(out_lines), "".join(err_lines), outcome
+
+
+def _scene_config_is_cartoon3d(scene_config_path) -> bool:
+    """Whether the written scene-config renders a Cartoon 3D world: one
+    installed `Cartoon3D` scene. Keep the name in sync with mcp/cartoon.py."""
+    try:
+        config = json.loads(Path(scene_config_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    scenes = config.get("scenes") if isinstance(config, dict) else None
+    return isinstance(scenes, list) and any(
+        isinstance(s, dict) and s.get("src") == "Cartoon3D" for s in scenes)
 
 
 # ── GPU rendering (TMDEV-178) ───────────────────────────────────────────────
@@ -1683,7 +1796,8 @@ def _stage_and_render(video_id: str) -> None:
     files into the Remotion public dir, invoke Remotion, then run the tail."""
     with db.conn(DB_PATH) as con:
         row = con.execute(
-            "SELECT project_id, voice_file_path, timeline_path, scene_config_path FROM videos WHERE id = ?",
+            "SELECT project_id, voice_file_path, timeline_path, scene_config_path, "
+            "visual_style, resolved_renderer FROM videos WHERE id = ?",
             (video_id,),
         ).fetchone()
     if not row:
@@ -1752,6 +1866,33 @@ def _stage_and_render(video_id: str) -> None:
     })
 
     timeout_secs = _render_timeout_secs()
+    stall_secs = _render_stall_timeout_secs()
+
+    # Cartoon 3D renders on the GPU only (TMDEV-179): policy, decided where the
+    # style is chosen, and enforced here for a video approved before its GPU
+    # went away. Never judged on an unprobed GPU: the worker probes after
+    # every start, so a video claimed first simply triggers that probe. No
+    # CPU fallback and no retry: straight to FAILED, bypassing the render
+    # retry counter, since neither a requeue nor the agent can bring a GPU
+    # back, and the comment is the only thing the human gets.
+    cartoon = (_scene_config_is_cartoon3d(scene_config_path)
+               or (row["visual_style"] or "") == "cartoon_3d"
+               or (row["resolved_renderer"] or "") == "cartoon_3d")
+    if cartoon and not _render_on_gpu():
+        if pipeline.gpu_probe_status(_setting("gpu_probe_result", "")) == "unknown":
+            _run_gpu_probe(reason="a Cartoon 3D video needs the GPU")
+    if cartoon and not _render_on_gpu():
+        probe = json.loads(_setting("gpu_probe_result", "") or "null") or {}
+        status = pipeline.gpu_probe_status(_setting("gpu_probe_result", ""))
+        why = (probe.get("error") or "").strip() if isinstance(probe, dict) else ""
+        db.add_comment(DB_PATH, video_id, "agent", _truncate_comment(
+            f"Not rendered, moved to FAILED: this video is Cartoon 3D, which renders on the GPU "
+            f"only, and the renderer's GPU is {status}" + (f" — {why}" if why else "") +
+            ". Configure or fix the GPU (python onboard.py --step gpu; Test GPU on the dashboard "
+            "Settings page), then create the video again."))
+        db.set_status(DB_PATH, video_id, "FAILED", only_if="RENDERING")
+        return
+
     log.info(f"[{video_id}] rendering -> {output_path}", extra={"video_id": video_id})
     try:
         # start_new_session=True puts npx and everything it spawns (node,
@@ -1767,12 +1908,17 @@ def _stage_and_render(video_id: str) -> None:
         # on a failure below, whether the GPU is re-tested.
         on_gpu = _render_on_gpu()
         gl_argv, gl_env = _gl_args(on_gpu)
+        # The Cartoon 3D post stack hung at Remotion's default concurrency on
+        # the GPU (one shared GPU, several tabs); two tabs measured fine, and
+        # software showed no gain above one.
+        extra_argv = ["--concurrency=2"] if cartoon else []
         proc = subprocess.Popen(
             [
                 "npx", "remotion", "render", "Composition", output_path,
                 "--props", props,
                 "--browser-executable-path", CHROMIUM_BIN,
                 *gl_argv,
+                *extra_argv,
             ],
             cwd=str(REMOTION_DIR),
             env={**os.environ, **gl_env},
@@ -1781,20 +1927,21 @@ def _stage_and_render(video_id: str) -> None:
             text=True,
             start_new_session=True,
         )
-        try:
-            stdout, stderr = proc.communicate(timeout=timeout_secs)
-        except subprocess.TimeoutExpired:
+        stdout, stderr, outcome = _wait_for_render(proc, timeout_secs, stall_secs)
+        if outcome != "exited":
             _kill_group_and_reap(proc)
-            raise
+            raise subprocess.TimeoutExpired(proc.args, stall_secs if outcome == "stall" else timeout_secs)
         result = subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
-    except subprocess.TimeoutExpired:
-        log.error(f"[{video_id}] render timed out after {timeout_secs}s", extra={"video_id": video_id})
+    except subprocess.TimeoutExpired as hung:
+        stalled = hung.timeout == stall_secs and stall_secs != timeout_secs
+        what = (f"Render stalled: no progress for {stall_secs}s" if stalled
+                else f"Render timed out after {timeout_secs}s")
+        log.error(f"[{video_id}] {what}", extra={"video_id": video_id})
         # A hung Chromium is environmental, not something the agent can fix
         # by revising the scene — auto-retry via RENDER_QUEUED (same terminal
         # choice as the crash-reconcile path above) rather than bouncing to
         # the agent as REVISION_REQUESTED.
-        _handle_render_failure(video_id, f"Render timed out after {timeout_secs}s",
-                                retry_status="RENDER_QUEUED")
+        _handle_render_failure(video_id, what, retry_status="RENDER_QUEUED")
         if on_gpu:
             # Same reason as a failed render below: if the GPU hung, the retry
             # this just queued should run on the CPU.
@@ -1837,7 +1984,7 @@ def _handle_render_success(video_id: str, output_path: str) -> None:
             )
             row = con.execute(
                 "SELECT ai_review_count, script, tts_text, visual_style, "
-                "resolved_visual_style FROM videos WHERE id = ?", (video_id,)
+                "resolved_visual_style, resolved_renderer FROM videos WHERE id = ?", (video_id,)
             ).fetchone()
             new_count = row["ai_review_count"] if row else 1
             # VQA-6: the review's pronunciation reference. script is the
@@ -1861,6 +2008,10 @@ def _handle_render_success(video_id: str, output_path: str) -> None:
             # generated artwork, so the reviewer must not be told that simple
             # line art is intended there.
             has_line_art = pipeline.line_art_allowed(raw_style)
+            # A Cartoon 3D video (chosen, or what "auto" settled on) is judged
+            # against its own look: ink, blur and grading are the style.
+            is_cartoon_3d = raw_style == "cartoon_3d" or (
+                (row["resolved_renderer"] if row else "") or "") == "cartoon_3d"
 
         over_cap = new_count > max_review_loops
 
@@ -1886,7 +2037,8 @@ def _handle_render_success(video_id: str, output_path: str) -> None:
                                                  api_key=gemini_api_key,
                                                  canvas=canvas,
                                                  figures=has_figures,
-                                                 line_art=has_line_art)
+                                                 line_art=has_line_art,
+                                                 cartoon_3d=is_cartoon_3d)
         # Every paid review is recorded — a second loop costs a second row, and
         # a reply that failed to parse was still billed (TMDEV-107).
         review_usage = result_review.get("usage")

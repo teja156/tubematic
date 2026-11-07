@@ -82,7 +82,7 @@ Rules that come out of the frame model:
 
 ## Visual registers
 
-A video is produced in one of three registers, pinned per video and chosen by a human at the topic
+A video is produced in one of four registers, pinned per video and chosen by a human at the topic
 checkpoint (`videos.visual_style`, frozen there — see [Frozen
 choices](02-pipeline.md#frozen-choices)):
 
@@ -90,11 +90,16 @@ choices](02-pipeline.md#frozen-choices)):
 |---|---|---|
 | **Motion graphics** | Dark | Generated imagery with continuous camera moves, animated vector diagrams. Image-led |
 | **Stick explainer** | White | Black **hand-drawn** line art, figures with attire overlays and standardised faces, discrete poses. Animation-led |
+| **Cartoon 3D** | Dark (never visible) | Flat inked cartoon characters in a **painted 3D world** with a gliding camera, authored as data rather than scenes — see [Cartoon 3D](#cartoon-3d). Unlike the other three it does not restrict the scene system, it **replaces** it. Renders on the GPU only, so it is refused where it is chosen unless the renderer's GPU probe says working: a policy, since software WebGL does render it at about an hour a Short |
 | **Illustrated** | Agent's choice | Characters are **generated illustrated assets** rather than hand-drawn line art, held consistent across scenes by editing every pose from one canonical character sheet. It fixes neither the drawing style nor the canvas: the agent picks cartoon or rendered, and light or dark, from the topic. Costs an image call per pose, and needs an OpenAI key — see [Settings](../user-guide/05-settings.md#images) for why there is no Gemini fallback. Without one the style cannot be chosen |
 
-A third value, `auto`, defers the choice: the agent classifies every beat and picks the register
-once, video-wide, then records it in `resolved_visual_style` so the dashboard can say what a video
-actually is. It never re-decides — see [Frozen choices](02-pipeline.md#frozen-choices).
+A fifth value, `auto`, defers the choice: the agent classifies every beat and picks the register
+once, video-wide. It records two things, each once: `resolved_renderer` (`dom` or `cartoon_3d`,
+before any scene is authored, because flipping the renderer later would discard every scene) and,
+on the DOM renderer, `resolved_visual_style` (the canvas), so the dashboard can say what a video
+actually is. It never re-decides — see [Frozen choices](02-pipeline.md#frozen-choices). Under `auto`
+the agent may choose Cartoon 3D only while `cartoon_3d_available` is true, and it says in its
+handback when a world was wanted but the install could not render one.
 
 **A permission is not an instruction.** `auto` says which vocabularies are *available*; each beat's
 treatment is still decided by its subject. A video that uses every vocabulary because it was

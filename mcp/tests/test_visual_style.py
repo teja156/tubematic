@@ -20,6 +20,8 @@ Run from repo root: pytest mcp/tests/
 
 from datetime import datetime, timezone
 
+import json
+
 import pytest
 
 import server
@@ -431,3 +433,72 @@ def test_a_legacy_video_still_writes_a_dark_canvas(db):
     video that predates the feature does."""
     _video("vid_s", status="VOICE_READY", style="motion_graphics")
     assert server.write_scene_config("vid_s", _config())["canvas"] == "dark"
+
+
+# ── Cartoon 3D needs a working GPU (TMDEV-179) ───────────────────────────────
+
+def _probe(db, **probe):
+    server._set_setting("gpu_probe_result", json.dumps(probe))
+
+
+def test_cartoon_3d_is_a_value_while_the_gpu_works(db):
+    _probe(db, configured=True, ok=True)
+    _video("vid_c3")
+    assert "error" not in server.update_video("vid_c3", visual_style="cartoon_3d")
+    assert _read("vid_c3", "visual_style") == "cartoon_3d"
+
+
+def test_cartoon_3d_is_refused_without_a_working_gpu_with_the_state_named(db):
+    """Policy, not impossibility: software WebGL renders the style, at about
+    an hour a Short. The refusal names what to do, and tells an untested GPU
+    apart from a missing one, since their fixes differ."""
+    _video("vid_c4")
+    assert server.update_video("vid_c4", visual_style="cartoon_3d") == {"error": server.CARTOON3D_GPU_UNKNOWN}
+    _probe(db, configured=False, ok=False)
+    assert server.update_video("vid_c4", visual_style="cartoon_3d") == {"error": server.CARTOON3D_NEEDS_GPU}
+    _probe(db, configured=True, ok=False, error="Chromium is rendering on another device")
+    assert server.update_video("vid_c4", visual_style="cartoon_3d") == {"error": server.CARTOON3D_NEEDS_GPU}
+    assert _read("vid_c4", "visual_style") == "auto"
+    assert "onboard.py --step gpu" in server.CARTOON3D_NEEDS_GPU and "Test GPU" in server.CARTOON3D_GPU_UNKNOWN
+
+
+def test_the_gpu_flag_is_reported_where_the_key_flag_is(db):
+    _video("vid_c5")
+    assert server.get_video("vid_c5")["cartoon_3d_available"] is False
+    assert server.get_pipeline_status()["cartoon_3d_available"] is False
+    _probe(db, configured=True, ok=True)
+    assert server.get_video("vid_c5")["cartoon_3d_available"] is True
+    assert server.get_pipeline_status()["cartoon_3d_available"] is True
+
+
+def test_a_project_default_of_cartoon_3d_is_refused_only_on_change(db):
+    _probe(db, configured=True, ok=True)
+    assert "error" not in server.upsert_project("dom3d", "Worlds", default_visual_style="cartoon_3d")
+    _probe(db, configured=True, ok=False)
+    # the stored default is re-sent by every row edit: not refused
+    assert "error" not in server.upsert_project("dom3d", "Worlds renamed", default_visual_style="cartoon_3d")
+    assert server.upsert_project("dom3d2", "New", default_visual_style="cartoon_3d") == {"error": server.CARTOON3D_NEEDS_GPU}
+
+
+# ── resolved_renderer: what auto settled on, written once ───────────────────
+
+def test_resolved_renderer_is_written_once_under_auto(db):
+    _probe(db, configured=True, ok=True)
+    _video("vid_r1")
+    assert "error" not in server.update_video("vid_r1", resolved_renderer="cartoon_3d")
+    assert _read("vid_r1", "resolved_renderer") == "cartoon_3d"
+    assert "error" not in server.update_video("vid_r1", resolved_renderer="cartoon_3d")   # the same again is fine
+    result = server.update_video("vid_r1", resolved_renderer="dom")
+    assert "written once" in result["error"]
+    assert _read("vid_r1", "resolved_renderer") == "cartoon_3d"
+    assert "Invalid resolved_renderer" in server.update_video("vid_r1", resolved_renderer="css")["error"]
+
+
+def test_resolved_renderer_needs_the_gpu_too_and_only_auto_resolves(db):
+    _video("vid_r2")
+    assert server.update_video("vid_r2", resolved_renderer="cartoon_3d") == {"error": server.CARTOON3D_GPU_UNKNOWN}
+    _video("vid_r3", style="stick")
+    assert "nothing to resolve" in server.update_video("vid_r3", resolved_renderer="dom")["error"]
+    _video("vid_r4")
+    assert "error" not in server.update_video("vid_r4", resolved_renderer="dom")
+    assert server.get_video("vid_r4")["resolved_renderer"] == "dom"

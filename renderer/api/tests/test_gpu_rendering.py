@@ -8,6 +8,7 @@ on the CPU, and a broken GPU never fails a video.
 
 Run from renderer/api/: pytest tests/test_gpu_rendering.py
 """
+import io
 import json
 import os
 import signal
@@ -68,9 +69,15 @@ def _answer(renderer=None, webgl=True, error=None):
 
 
 def _popen(stdout="", stderr="", returncode=0):
+    """A render process that has already exited: real pipes for the worker's
+    progress watcher, a poll() that answers at once."""
     proc = mock.MagicMock()
     proc.pid = 4242
+    proc.args = ["npx", "remotion", "render"]
     proc.communicate.return_value = (stdout, stderr)
+    proc.stdout = io.StringIO(stdout)
+    proc.stderr = io.StringIO(stderr)
+    proc.poll.return_value = returncode
     proc.returncode = returncode
     return proc
 

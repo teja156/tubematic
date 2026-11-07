@@ -21,7 +21,9 @@ export type ProjectStatus = "active" | "paused";
  *  one, video-wide, at scene-config time and records it in
  *  resolved_visual_style. Keep in sync: mcp/server.py and
  *  renderer/api/pipeline.py's VISUAL_STYLES. */
-export type VisualStyle = "auto" | "motion_graphics" | "stick" | "illustrated";
+export type VisualStyle = "auto" | "motion_graphics" | "stick" | "illustrated" | "cartoon_3d";
+/** Which renderer `auto` settled on (videos.resolved_renderer): "" until the agent chose. */
+export type ResolvedRenderer = "" | "dom" | "cartoon_3d";
 export type CommentAuthor = "human" | "agent";
 export type ScriptProfileStatus = "PENDING" | "GENERATING" | "READY" | "FAILED";
 
@@ -95,6 +97,7 @@ export interface Video {
   /** What "auto" settled on, written once by the agent at scene-config time.
    *  '' until it has. Meaningless unless visual_style is "auto". */
   resolved_visual_style?: string;
+  resolved_renderer?: ResolvedRenderer;
   /** Scheduled agent sessions in a row that left this video at the status
    *  they found it at (TMDEV-129). Reset by any progress. Optional for the
    *  same reason as tts_text above. */

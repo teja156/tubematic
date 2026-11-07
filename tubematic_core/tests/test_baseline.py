@@ -32,6 +32,7 @@ EXPECTED_VIDEO_COLUMNS = {
     "created_at", "updated_at", "ai_review_count", "render_fail_count",
     "script_segments", "script_profile_id", "publish_title",
     "publish_description", "archived_at", "visual_style", "resolved_visual_style",
+    "resolved_renderer",
     "agent_effort", "agent_no_progress_count", "agent_stuck_at", "agent_last_outcome_key",
 }
 

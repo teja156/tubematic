@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Agent, Project, Video, VideoStatus, Voice } from "@/lib/types";
+import type { Agent, GpuStatus, Project, Video, VideoStatus, Voice } from "@/lib/types";
 import { VideoModal } from "@/components/VideoModal";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTimeZone } from "@/components/TimeZoneProvider";
@@ -40,6 +40,7 @@ export default function ProjectsPage() {
   const [initialTab, setInitialTab]         = useState<string>("overview");
   const [agents, setAgents]                 = useState<Agent[] | undefined>(undefined);
   const [canIllustrate, setCanIllustrate]   = useState(true);
+  const [gpu, setGpu] = useState<GpuStatus | null>(null);
   const [publishingEnabled, setPublishingEnabled] = useState(false);
   const [voices, setVoices]                 = useState<Voice[]>([]);
   const [defaultVoiceId, setDefaultVoiceId] = useState("");
@@ -90,6 +91,10 @@ export default function ProjectsPage() {
         // schedule. Off until this answers, and on failure.
         setPublishingEnabled(!!s.publishing_enabled);
       })
+      .catch(() => {});
+    apiFetch("/render/gpu")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((g) => setGpu(g && typeof g.status === "string" ? (g as GpuStatus) : null))
       .catch(() => {});
   }, []);
 
@@ -341,6 +346,7 @@ export default function ProjectsPage() {
         voices={voices}
         defaultVoiceId={defaultVoiceId}
         illustratedAvailable={canIllustrate}
+        gpu={gpu}
         publishingEnabled={publishingEnabled}
         onClose={() => { setSelectedVideo(null); setInitialTab("overview"); }}
         onAction={(id, action, video, extra) => handleAction(id, action, video, extra)}

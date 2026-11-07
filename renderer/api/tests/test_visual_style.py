@@ -81,6 +81,12 @@ def test_the_visual_style_constants_match_the_mcp_copy():
     # The dashboard and the agent hit different write paths; a refusal that
     # reads differently on each looks like two different problems.
     assert ns["ILLUSTRATED_NEEDS_OPENAI_KEY"] == pipeline.ILLUSTRATED_NEEDS_OPENAI_KEY
+    # The Cartoon 3D gate (TMDEV-179) is the third hand-duplicated piece: the
+    # two refusals and the derivation of the GPU state from the worker's probe.
+    assert ns["CARTOON3D_NEEDS_GPU"] == pipeline.CARTOON3D_NEEDS_GPU
+    assert ns["CARTOON3D_GPU_UNKNOWN"] == pipeline.CARTOON3D_GPU_UNKNOWN
+    assert ns["RENDERERS"] == pipeline.RENDERERS
+    assert "cartoon_3d" in pipeline.VISUAL_STYLES and pipeline.CANVAS_BY_STYLE["cartoon_3d"] == "dark"
     # The resolved column holds a CANVAS, not a register name. If these ever
     # drift back to ("motion_graphics", "stick") the value stops describing
     # what it stores, and auto-on-dark-with-figures becomes unrepresentable.
@@ -396,3 +402,23 @@ def test_a_dark_canvas_gets_its_own_contract():
     block = ai_review._register_block("dark").lower()
     assert "deliberately dark" in block
     assert "should be moving" in block
+
+
+def test_the_gpu_gate_matches_the_mcp_copy():
+    """gpu_probe_status and cartoon_3d_gpu_error are duplicated like the
+    canvas helpers, and for the same reason: the MCP server cannot import the
+    API. The agent and the dashboard must refuse Cartoon 3D on the same probe."""
+    ns = _mcp_block()
+    probes = [None, "", "not json", '{"configured": false}', '{"configured": true, "ok": false}',
+              '{"configured": true, "ok": true}', '[]']
+    for raw in probes:
+        assert ns["gpu_probe_status"](raw) == pipeline.gpu_probe_status(raw), raw
+    assert [pipeline.gpu_probe_status(r) for r in probes] == [
+        "unknown", "unknown", "unknown", "not_configured", "not_usable", "working", "unknown"]
+    for style in ("auto", "stick", "illustrated", "cartoon_3d", ""):
+        for status in ("unknown", "not_configured", "not_usable", "working"):
+            assert ns["cartoon_3d_gpu_error"](style, status) == pipeline.cartoon_3d_gpu_error(style, status)
+    assert pipeline.cartoon_3d_gpu_error("cartoon_3d", "working") == ""
+    assert pipeline.cartoon_3d_gpu_error("cartoon_3d", "unknown") == pipeline.CARTOON3D_GPU_UNKNOWN
+    assert pipeline.cartoon_3d_gpu_error("cartoon_3d", "not_usable") == pipeline.CARTOON3D_NEEDS_GPU
+    assert pipeline.cartoon_3d_gpu_error("stick", "unknown") == ""
