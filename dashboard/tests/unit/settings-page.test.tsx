@@ -33,6 +33,7 @@ const MOCK_SETTINGS: Settings = {
   image_model: "gpt-image-2.5-flare",
   character_model: "gpt-image-2.5-flare",
   render_timeout_secs: 2400,
+  render_stall_timeout_secs: 600,
   watermark_enabled: true,
   max_concurrent_agent_sessions: 3,
   agent_session_timeout_secs: 5400,
@@ -125,6 +126,7 @@ const TAB_OF: Record<string, string> = {
   "select-elevenlabs-model-id": "voice",
   "select-image-model": "images",
   "input-render-timeout-mins": "rendering",
+  "input-render-stall-timeout-mins": "rendering",
   "input-max-render-retries": "rendering",
   "input-max-concurrent-agent-sessions": "scheduling",
   "input-agent-session-timeout-mins": "scheduling",
@@ -731,6 +733,54 @@ describe("SettingsPage", () => {
       const input = screen.getByTestId("input-render-timeout-mins") as HTMLInputElement;
       expect(input.value).toBe("40"); // 2400s / 60
     });
+  });
+
+  it("renders the stall timeout in minutes and patches render_stall_timeout_secs on commit", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<SettingsPage />);
+    await waitFor(() => screen.getByTestId("tab-rendering"));
+    await openTab("rendering");
+    await waitFor(() => screen.getByTestId("input-render-stall-timeout-mins"));
+
+    const input = screen.getByTestId("input-render-stall-timeout-mins") as HTMLInputElement;
+    expect(input.value).toBe("10"); // 600s / 60
+    fireEvent.change(input, { target: { value: "15" } });
+    await act(async () => {
+      fireEvent.blur(input);
+    });
+
+    await clickSave("rendering");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/settings"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ render_stall_timeout_secs: 900 }),
+      }),
+    );
+  });
+
+  it("accepts the 180-minute default render timeout (the input's ceiling is above it)", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<SettingsPage />);
+    await waitFor(() => screen.getByTestId("tab-rendering"));
+    await openTab("rendering");
+    await waitFor(() => screen.getByTestId("input-render-timeout-mins"));
+
+    const input = screen.getByTestId("input-render-timeout-mins") as HTMLInputElement;
+    expect(input.max).toBe("600");
+    fireEvent.change(input, { target: { value: "180" } });
+    await act(async () => {
+      fireEvent.blur(input);
+    });
+
+    await clickSave("rendering");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/settings"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ render_timeout_secs: 10800 }),
+      }),
+    );
   });
 
   it("switching the watermark off patches watermark_enabled", async () => {

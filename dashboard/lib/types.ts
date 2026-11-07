@@ -222,6 +222,9 @@ export interface Settings {
    *  image catalog as image_model. */
   character_model: string;
   render_timeout_secs: number;
+  /** Kill a render whose progress counter has not moved for this long
+   *  (TMDEV-179). Seconds, shown in minutes like render_timeout_secs. */
+  render_stall_timeout_secs: number;
   /** Burn the "Made with tubematic.ai" mark into every render. Human-only:
    *  nothing in scene-config.json can switch it. */
   watermark_enabled: boolean;

@@ -73,7 +73,9 @@ export const renderStills = async (root: string, jobs: StillJob[], scale = 0.5):
       groups.get(k)!.push(j);
     }
     for (const g of groups.values()) {
-      const common = { serveUrl, inputProps: g[0].props as Record<string, unknown>, puppeteerInstance: browser, chromiumOptions, chromeMode, browserExecutable, logLevel: "error" as const };
+      // 120 s, not Remotion's 30 s: on software GL (the MCP container has no GPU) the composition's
+      // first frame, with the post stack and the fonts and audio it waits for, has exceeded 30 s.
+      const common = { serveUrl, inputProps: g[0].props as Record<string, unknown>, puppeteerInstance: browser, chromiumOptions, chromeMode, browserExecutable, logLevel: "error" as const, timeoutInMilliseconds: 120_000 };
       const composition = await selectComposition({ ...common, id: g[0].composition });
       for (const j of g) {
         fs.mkdirSync(path.dirname(j.out), { recursive: true });

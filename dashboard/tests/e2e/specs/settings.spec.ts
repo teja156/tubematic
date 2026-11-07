@@ -42,6 +42,7 @@ test.describe("Settings page", () => {
       pipeline_paused: false,
       research_pending_cap: 15,
       render_timeout_secs: 2400,
+      render_stall_timeout_secs: 600,
       watermark_enabled: true,
       ai_review_model: "gemini-2.5-flash",
       ai_review_fps: 10,

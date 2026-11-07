@@ -297,7 +297,7 @@ work differently, noted below.
   comments to see whether a review ran.
 - **Images** — the OpenAI model for scene images and the one for the Illustrated style's characters.
   There is no provider choice: every image comes from OpenAI.
-- **Rendering** — besides its settings, a **GPU** section that says whether videos render on an
+- **Rendering** — the two render timeouts (the stall timeout that catches a hung render, the ceiling on a whole one), the retry count and the watermark, and a **GPU** section that says whether videos render on an
   NVIDIA GPU or the CPU, names the GPU and the graphics device Chromium actually gets, and says why
   when a chosen GPU is not being used. With a GPU chosen, **Test GPU** has the renderer check again;
   it answers within about a minute, or after the render in progress. The GPU is chosen on the host, not here — see

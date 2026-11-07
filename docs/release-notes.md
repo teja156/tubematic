@@ -78,9 +78,10 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 - **Reinstalling the agent picks up the new skill.** The upgrade redeploys every installed agent's
   skills, so `tubematic-cartoon3d` arrives with it; an agent you install by hand gets it from
   `python3 onboard.py --install-agent <agent>` as usual.
-- **The render timeout defaults changed.** An install that set `render_timeout_secs` itself keeps
-  its value; one on the old default moves to 10800. `render_stall_timeout_secs` starts at 600 on
-  every install.
+- **The render timeout defaults changed, for new installs.** Onboarding now seeds
+  `render_timeout_secs` at 10800 (180 minutes). An upgraded install keeps whatever value its
+  settings table holds, usually the old 2400, so raise it on Settings → Rendering if your renders
+  run longer than forty minutes. `render_stall_timeout_secs` starts at 600 on every install.
 - **Nothing changes unless you turn GPU rendering on.** After upgrading, install the NVIDIA driver
   and the NVIDIA Container Toolkit (see [GPU rendering](user-guide/10-gpu-rendering.md)), then run
   `python3 onboard.py --step gpu` from the install directory. Your choice is kept in
