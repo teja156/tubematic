@@ -13,6 +13,13 @@ const FEET_Y = H - 50, BASE_U = 18, WALK_PX_PER_S = 320, EDGE_PX = W / 2 + 40;
 const LOOK = { up: [0, -.9], down: [0, .8], left: [-.9, 0], right: [.9, 0] };
 
 let TRK = null;
+// Where the move in progress at time t has the feet, as frame fractions; null when no move is in progress.
+function movingAt(moves, t) {
+  let m = null; for (const x of moves) if (x.t0 <= t) m = x;
+  if (!m || t >= m.t1) return null;
+  const k = ease(seg(t, m.t0, m.t1));
+  return { x: lerp(m.x0, m.x1, k), y: lerp(m.y0, m.y1, k) };
+}
 function compile(track) {
   const fps = track.fps, Wv = track.width, Hv = track.height;
   const cues = [...track.cues].sort((a, b) => a.frame - b.frame);
@@ -25,10 +32,13 @@ function compile(track) {
     for (const k of ['x', 'y', 'scale', 'look', 'facing', 'on']) if (c[k] !== undefined) st[k] = c[k];
     if (c.emotion) keys.push([t, c.emotion]);
     if (c.jump) jumps.push(t);
+    // a new move starts from where the mascot actually is at this cue, so a cue that lands mid-walk never pops it
+    const here = movingAt(moves, t);
     let x0 = null, y0 = null, x1 = st.x, y1 = st.y;
-    if (st.on && !prev.on) { x0 = edgeX(st.x); y0 = st.y; }            // walk in from the nearer edge
-    else if (!st.on && prev.on) { x0 = prev.x; y0 = prev.y; x1 = edgeX(prev.x); y1 = prev.y; }   // walk off
-    else if (st.on && (st.x !== prev.x || st.y !== prev.y)) { x0 = prev.x; y0 = prev.y; }
+    if (st.on && !prev.on && !here) { x0 = edgeX(st.x); y0 = st.y; }       // walk in from the nearer edge
+    else if (!st.on && (prev.on || here)) {                                  // walk off
+      x0 = here ? here.x : prev.x; y0 = here ? here.y : prev.y; x1 = edgeX(x0); y1 = y0;
+    } else if (st.on && ((!prev.on && here) || st.x !== prev.x || st.y !== prev.y)) { x0 = here ? here.x : prev.x; y0 = here ? here.y : prev.y; }
     if (x0 !== null) {
       const d = Math.hypot((x1 - x0) * Wv, (y1 - y0) * Hv);
       moves.push({ t0: t, t1: t + clamp(d / WALK_PX_PER_S, .5, 3.2), x0, y0, x1, y1, scale: st.scale });
