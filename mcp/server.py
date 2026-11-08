@@ -32,6 +32,7 @@ import random
 import re
 import sqlite3
 import subprocess
+import tempfile
 import sys
 import threading
 import time
@@ -4388,6 +4389,11 @@ def _cartoon_block(video_id: str) -> dict | None:
         return None
     try:
         errors = cartoon.readiness(JOBS_DIR, video_id, REPO_ROOT / "remotion", SCENES_DIR)
+        if not errors:
+            # the worker renders exactly this tree: a write after the gate is
+            # refused by write_scene_file once the video is queued, and a tree
+            # that differs from this record fails the render
+            cartoon.freeze_source(JOBS_DIR, video_id, SCENES_DIR)
     except Exception as e:
         errors = [f"Cartoon 3D readiness could not be checked: {e}"]
     if errors:
@@ -5000,6 +5006,48 @@ def _split_source_name(scene_name: str):
         return None, (f"scene_name '{scene_name}' must be a scene name (alphanumeric characters and hyphens) or a "
                       f"Cartoon 3D module like 'story.ts' or 'sets/street.ts' (one directory deep, .ts or .tsx)")
     return (m.group("dir"), m.group("stem"), m.group("ext") or ".tsx"), None
+
+
+def _module_target(scene_name: str, video_id: str):
+    """((video_id, (dirname, stem, ext)), None) for a Cartoon 3D module name,
+    or (None, error). list_scene_files hands modules out composed with their
+    video ('<video_id>/sets/street.ts'), the skill writes them bare
+    ('sets/street.ts') with a video_id, and read_scene_file and
+    delete_scene_file take both through this one parser: a leading component
+    is the video when the name is deeper than a module can be, when no
+    video_id is given, or when it is that video_id; a leading component that
+    is another video's source directory (and not a subdirectory of this
+    video's) is a conflict, never silently a subdirectory.
+    """
+    parts = scene_name.split("/")
+    if len(parts) > 3 or "" in parts:
+        return None, (f"scene_name '{scene_name}' must be a Cartoon 3D module like 'story.ts' or 'sets/street.ts', "
+                      f"optionally composed with its video ('<video_id>/sets/street.ts')")
+    if len(parts) == 3 or (len(parts) == 2 and (not video_id or parts[0] == video_id)):
+        head, rest = parts[0], "/".join(parts[1:])
+        if not tids.is_component(head):
+            return None, f"scene_name '{scene_name}' names an invalid video '{head}'"
+        if video_id and head != video_id:
+            return None, (f"conflicting video_id: scene_name '{scene_name}' names video '{head}' but video_id is "
+                          f"'{video_id}' — pass one or the other")
+        video_id, scene_name = head, rest
+    elif len(parts) == 2:
+        err = _video_id_error(video_id)
+        if err:
+            return None, err["error"]
+        head = parts[0]
+        if (tids.is_component(head) and (SCENES_DIR / head).is_dir() and not (SCENES_DIR / video_id / head).is_dir()):
+            return None, (f"conflicting video_id: scene_name '{scene_name}' names video '{head}' but video_id is "
+                          f"'{video_id}' — pass one or the other")
+    if not video_id:
+        return None, f"scene_name '{scene_name}' is a Cartoon 3D module, which belongs to a video: pass its video_id"
+    err = _video_id_error(video_id)
+    if err:
+        return None, err["error"]
+    split, err = _split_source_name(scene_name)
+    if err:
+        return None, err
+    return (video_id, split), None
 
 
 def _source_path(video_id: str, dirname, stem: str, ext: str):
@@ -5743,9 +5791,15 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
     # The useful check. The path-traversal guard is the shape check at the
     # top (_video_id_error).
     with _conn() as con:
-        row = con.execute("SELECT id FROM videos WHERE id = ?", (video_id,)).fetchone()
+        row = con.execute("SELECT id, status FROM videos WHERE id = ?", (video_id,)).fetchone()
     if not row:
         return {"error": f"Video not found: {video_id}"}
+    if row["status"] in ("RENDER_QUEUED", "RENDERING"):
+        # the worker bundles the generated tree while it renders (a Cartoon 3D
+        # video once per segment): what it renders must be what was validated
+        return {"error": "status_mismatch", "video_id": video_id, "current_status": row["status"],
+                "detail": "the video is queued or rendering, so its scene files cannot change now; "
+                          "wait for the render (REVISION_REQUESTED or VIDEO_READY) and write then"}
 
     guard_err = _guard_scene_work(video_id)  # TMDEV-61
     if guard_err:
@@ -5757,7 +5811,23 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(tsx_content, encoding="utf-8")
+    # written beside the file and moved over it: a short write, a full disk or
+    # a kill mid-write never leaves a truncated module where the last good one was
+    tmp = None
+    try:
+        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".", suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(tsx_content)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            if tmp:
+                os.unlink(tmp)
+        except OSError:
+            pass
+        return {"error": f"{video_id}/{scene_name} could not be written: {e}"}
     is_scene = dirname is None and ext == ".tsx"
     result = {
         "video_id": video_id,
@@ -6157,15 +6227,11 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
     # is told apart from a scene by its extension or its depth (TMDEV-185).
     is_module = source == "generated" and (scene_name.endswith((".ts", ".tsx")) or scene_name.count("/") > 1)
     if is_module:
-        if "/" in scene_name and (not video_id or scene_name.startswith(f"{video_id}/")):
-            head, rest = scene_name.split("/", 1)
-            if tids.is_component(head) and (not video_id or head == video_id) and _split_source_name(rest)[1] is None:
-                video_id, scene_name = head, rest
-        if not video_id:
-            return {"error": f"scene_name '{scene_name}' is a Cartoon 3D module, which belongs to a video: pass its video_id"}
-        split, err = _split_source_name(scene_name)
+        target, err = _module_target(scene_name, video_id)
         if err:
             return {"error": err}
+        video_id, split = target
+        scene_name = "/".join(filter(None, (split[0], split[1] + split[2])))
     elif "/" in scene_name:
         # The composed form. _check_scene_src is validate_job's existing
         # validator for exactly this shape — reused rather than reimplemented,
@@ -6247,9 +6313,16 @@ def delete_scene_file(scene_name: str, video_id: str = "") -> dict:
     Returns {deleted: True, scene_name, video_id} or
     {error: "not found", scene_name, video_id}.
     """
-    split, err = _split_source_name(scene_name)
-    if err:
-        return {"error": err}
+    if scene_name.endswith((".ts", ".tsx")) or scene_name.count("/") > 1:
+        # a Cartoon 3D module, bare or as list_scene_files composed it
+        target, err = _module_target(scene_name, video_id)
+        if err:
+            return {"error": err}
+        video_id, split = target
+    else:
+        split, err = _split_source_name(scene_name)
+        if err:
+            return {"error": err}
     # Checked before the path is built (TMDEV-161): this tool never looks the
     # video up, and an absolute video_id would replace SCENES_DIR outright, so
     # without it any .tsx the server can write was deletable.

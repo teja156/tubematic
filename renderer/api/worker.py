@@ -271,7 +271,9 @@ def _scene_config_is_cartoon3d(scene_config_path) -> bool:
 # when it is there and newer than the voice, else the voice alone.
 CARTOON_CHUNK_FRAMES = 450          # 15 s at 30 fps
 CARTOON_CHUNK_ATTEMPTS = 2          # a segment that hangs or fails is tried once more, fresh
-CARTOON_MIX = ("cartoon", "audio", "mix", "mix.wav")   # keep in sync with mcp/cartoon.py's mix_file
+CARTOON_MIX = ("cartoon", "audio", "mix", "mix.wav")
+CARTOON_SOURCE = ("cartoon", "source.json")          # what submit_render froze: mcp/cartoon.py's SOURCE_RECORD
+GENERATED_DIR = REMOTION_DIR / "src" / "scenes" / "generated"   # keep in sync with mcp/cartoon.py's mix_file
 FFMPEG_TIMEOUT_SECS = 900
 
 
@@ -299,25 +301,57 @@ def _soundtrack_for(video_id: str, voice_path: Path) -> Path:
     return voice_path
 
 
+def _cartoon_source_error(video_id: str) -> str | None:
+    """Why the video's generated source is not the tree submit_render froze
+    (its fingerprint under the job, written when the beat gate had passed):
+    it was edited since, or a non-regular file sits in it. None when it
+    matches, or when nothing was frozen (a video queued before this check)."""
+    try:
+        record = tjobs.job_dir(pipeline.JOBS_DIR, video_id).joinpath(*CARTOON_SOURCE)
+        if record.is_symlink() or not record.is_file():
+            return None
+        frozen = json.loads(record.read_text(encoding="utf-8")).get("fingerprint")
+        live = tjobs.source_fingerprint(tjobs.scene_dir(GENERATED_DIR, video_id))
+    except tjobs.UnsafePath as e:
+        return f"the generated source cannot be rendered: {e}"
+    except (OSError, ValueError, AttributeError) as e:
+        return f"the generated source could not be checked against the one that was queued: {e}"
+    if frozen != live:
+        return ("the generated source changed after the beat gate passed and the video was queued; "
+                "run cartoon_beat_gate again on the new source, then submit_render")
+    return None
+
+
 def _render_cartoon(video_id: str, props: str, output_path: str, gl_argv: list, gl_env: dict,
                     timeout_secs: int, stall_secs: int, total_frames: int, voice_path: Path) -> tuple:
     """Render a Cartoon 3D video in segments and mux its soundtrack. Returns
-    (outcome, detail): outcome "ok", "hung" (a segment stalled or timed out
-    twice: environmental, retried by the caller as a timeout is) or "failed"
-    (Remotion or ffmpeg reported an error)."""
+    (outcome, detail): outcome "ok", "hung" (a segment stalled, or the whole
+    render ran past timeout_secs: environmental, retried by the caller as a
+    timeout is) or "failed" (Remotion or ffmpeg reported an error, the source
+    is not the one that was queued, or the render could not be run at all).
+    timeout_secs caps the whole render, every segment and retry included,
+    as it caps an ordinary render."""
     out_file = Path(output_path)
     work = out_file.parent / f".{video_id}.segments"
-    shutil.rmtree(work, ignore_errors=True)
-    work.mkdir(parents=True, exist_ok=True)
+    tmp_out = out_file.with_name(f"{out_file.name}.tmp.mp4")
+    deadline = _clock() + timeout_secs
     chunks = _cartoon_chunks(total_frames)
     if not chunks:
         return "failed", f"timeline.json has no frames to render (totalFrames {total_frames})"
     segments = []
     try:
+        shutil.rmtree(work, ignore_errors=True)
+        work.mkdir(parents=True, exist_ok=True)
+        err = _cartoon_source_error(video_id)
+        if err:
+            return "failed", err
         for a, b in chunks:
             seg = work / f"seg_{a:05d}-{b:05d}.mp4"
             last_err, hung = "", False
             for attempt in range(1, CARTOON_CHUNK_ATTEMPTS + 1):
+                remaining = deadline - _clock()
+                if remaining <= 0:
+                    return "hung", f"frames {a}-{b}: the render ran past {timeout_secs}s in all"
                 log.info(f"[{video_id}] rendering frames {a}-{b} (attempt {attempt}/{CARTOON_CHUNK_ATTEMPTS})",
                          extra={"video_id": video_id})
                 proc = subprocess.Popen(
@@ -327,12 +361,12 @@ def _render_cartoon(video_id: str, props: str, output_path: str, gl_argv: list, 
                      "--concurrency=2", f"--frames={a}-{b}", "--muted"],
                     cwd=str(REMOTION_DIR), env={**os.environ, **gl_env},
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
-                stdout, stderr, outcome = _wait_for_render(proc, timeout_secs, stall_secs)
+                stdout, stderr, outcome = _wait_for_render(proc, remaining, stall_secs)
                 if outcome != "exited":
                     _kill_group_and_reap(proc)
                     hung = True
                     last_err = (f"frames {a}-{b}: no progress for {stall_secs}s" if outcome == "stall"
-                                else f"frames {a}-{b}: timed out after {timeout_secs}s")
+                                else f"frames {a}-{b}: the render ran past {timeout_secs}s in all")
                     log.warning(f"[{video_id}] {last_err}", extra={"video_id": video_id})
                     continue
                 if proc.returncode == 0 and seg.is_file() and seg.stat().st_size > 0:
@@ -351,8 +385,10 @@ def _render_cartoon(video_id: str, props: str, output_path: str, gl_argv: list, 
                                 timeout=FFMPEG_TIMEOUT_SECS)
         if joined.returncode != 0 or not silent.is_file():
             return "failed", f"joining the {len(segments)} segments failed: {(joined.stderr or joined.stdout).strip()[-800:]}"
+        err = _cartoon_source_error(video_id)       # every segment bundled the tree afresh
+        if err:
+            return "failed", err
         audio = _soundtrack_for(video_id, voice_path)
-        tmp_out = out_file.with_name(f"{out_file.name}.tmp.mp4")
         muxed = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(silent), "-i", str(audio),
                                 "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
                                 "-shortest", "-movflags", "+faststart", str(tmp_out)],
@@ -365,8 +401,16 @@ def _render_cartoon(video_id: str, props: str, output_path: str, gl_argv: list, 
                       + ("the synthesised soundtrack" if audio != voice_path else "the voice alone"))
     except subprocess.TimeoutExpired as e:
         return "failed", f"ffmpeg did not finish: {e}"
+    except OSError as e:
+        # a missing executable, a full or vanished disk: a reportable failure
+        # of this render, not the end of the worker
+        return "failed", f"the render could not be run: {e}"
     finally:
         shutil.rmtree(work, ignore_errors=True)
+        try:
+            tmp_out.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 # ── GPU rendering (TMDEV-178) ───────────────────────────────────────────────
@@ -2415,9 +2459,21 @@ def main() -> None:
 
         video_id = _claim_next()
         if video_id:
-            _stage_and_render(video_id)
+            _render_claimed(video_id)
         else:
             time.sleep(POLL_INTERVAL_SECS)
+
+
+def _render_claimed(video_id: str) -> None:
+    """One claimed video, with a boundary: whatever _stage_and_render lets
+    escape (an OSError from a disk or an executable, a bug) is this video's
+    failure, recorded and retried as a stall is, never the worker's exit with
+    the row left RENDERING until the container restarts."""
+    try:
+        _stage_and_render(video_id)
+    except Exception as exc:  # noqa: BLE001 — the boundary itself
+        log.exception(f"[{video_id}] the render raised: {exc}", extra={"video_id": video_id})
+        _handle_render_failure(video_id, f"The worker hit an error: {exc}", retry_status="RENDER_QUEUED")
 
 
 if __name__ == "__main__":

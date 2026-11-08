@@ -123,7 +123,7 @@ def stubs(tmp_path, monkeypatch):
 
 def test_a_segmented_render_joins_the_segments_and_muxes_the_voice(stubs):
     calls, _, voice, out = stubs
-    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), ["--gl=angle-egl"], {}, 600, 60, 1000, voice)
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), ["--gl=angle-egl"], {}, 6000, 60, 1000, voice)
     assert outcome == "ok" and detail == "2 segments, the voice alone"
     assert [next(a for a in argv if a.startswith("--frames=")) for argv in calls["popen"]] == ["--frames=0-449", "--frames=450-999"]
     for argv in calls["popen"]:
@@ -139,7 +139,7 @@ def test_the_synthesised_mix_is_muxed_when_present(stubs):
     mix = voice.parent / "cartoon" / "audio" / "mix" / "mix.wav"
     mix.parent.mkdir(parents=True)
     mix.write_bytes(b"m")
-    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 600, 60, 100, voice)
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)
     assert outcome == "ok" and detail == "1 segments, the synthesised soundtrack"
     assert str(mix) in calls["run"][1]
 
@@ -147,7 +147,7 @@ def test_the_synthesised_mix_is_muxed_when_present(stubs):
 def test_a_failed_segment_is_tried_once_more_and_then_reported(stubs):
     calls, plan, voice, out = stubs
     plan["fail_once"].add("450-999")
-    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 600, 60, 1000, voice)
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 1000, voice)
     assert outcome == "ok"
     assert len(calls["popen"]) == 3          # segment two failed once and rendered on its second attempt
     plan["fail_once"].update({"0-449"})
@@ -156,7 +156,7 @@ def test_a_failed_segment_is_tried_once_more_and_then_reported(stubs):
     class AlwaysFail(set):
         def discard(self, x): pass
     plan["fail_once"] = AlwaysFail({"0-449"})
-    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 600, 60, 1000, voice)
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 1000, voice)
     assert outcome == "failed" and "frames 0-449" in detail and "shader failed" in detail
     assert len(calls["popen"]) == 2
 
@@ -164,8 +164,83 @@ def test_a_failed_segment_is_tried_once_more_and_then_reported(stubs):
 def test_a_stalled_segment_is_killed_tried_again_and_reported_as_hung(stubs):
     calls, plan, voice, out = stubs
     plan["hang_always"].add("0-449")
-    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 600, 60, 1000, voice)
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 1000, voice)
     assert outcome == "hung" and detail == "frames 0-449: no progress for 60s"
     assert len(calls["popen"]) == 2 and len(calls["killed"]) == 2
     assert not calls["run"]                 # nothing joined, nothing muxed
     assert not (out.parent / ".vid-1.segments").exists()
+
+
+def test_the_timeout_caps_the_whole_render_segments_and_retries_included(stubs):
+    """render_timeout_secs is the ceiling on one whole render, as it is for an
+    ordinary one: the fake clock advances 100 per look, so a 250 s ceiling is
+    spent by the first segment and the second never starts."""
+    calls, _, voice, out = stubs
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 250, 60, 1000, voice)
+    assert outcome == "hung" and detail == "frames 450-999: the render ran past 250s in all"
+    assert len(calls["popen"]) == 1 and not calls["run"]
+    assert not (out.parent / ".vid-1.segments").exists() and not out.exists()
+
+
+def test_a_render_that_cannot_run_is_a_failure_of_that_video(stubs, monkeypatch):
+    calls, _, voice, out = stubs
+
+    def no_npx(argv, **kw):
+        raise FileNotFoundError(2, "No such file or directory", "npx")
+    monkeypatch.setattr(subprocess, "Popen", no_npx)
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)
+    assert outcome == "failed" and detail.startswith("the render could not be run: ") and "npx" in detail
+    assert not (out.parent / ".vid-1.segments").exists()
+
+
+def test_the_source_rendered_is_the_one_submit_render_froze(stubs, monkeypatch, tmp_path):
+    """submit_render records the fingerprint of the gated source under the job;
+    a tree that differs from it (edited after the gate, or with a symlink in it)
+    is not rendered, before the first segment and again before the mux."""
+    from tubematic_core import jobfiles as tjobs
+    calls, _, voice, out = stubs
+    generated = tmp_path / "generated"
+    monkeypatch.setattr(worker, "GENERATED_DIR", generated)
+    src = generated / "vid-1"
+    (src / "sets").mkdir(parents=True)
+    (src / "CartoonShort.tsx").write_text("export default () => null;")
+    (src / "sets" / "street.ts").write_text("export const STREET = 1;")
+    record = voice.parent / "cartoon" / "source.json"
+    record.parent.mkdir(parents=True)
+    record.write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(src), "at": "now"}))
+    assert worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)[0] == "ok"
+
+    (src / "sets" / "street.ts").write_text("export const STREET = 2;")
+    calls["popen"].clear()
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)
+    assert outcome == "failed" and "changed after the beat gate passed" in detail and not calls["popen"]
+
+    record.write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(src), "at": "now"}))
+    (src / "evil.ts").symlink_to(src / "sets" / "street.ts")
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)
+    assert outcome == "failed" and "symlink" in detail
+
+    # a source that changes under a running render is caught before the mux
+    (src / "evil.ts").unlink()
+    record.write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(src), "at": "now"}))
+    real_run = subprocess.run
+
+    def run_and_edit(argv, **kw):
+        (src / "sets" / "street.ts").write_text("export const STREET = 3;")
+        return real_run(argv, **kw)
+    monkeypatch.setattr(subprocess, "run", run_and_edit)
+    out.unlink()
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)
+    assert outcome == "failed" and "changed after the beat gate passed" in detail and not out.exists()
+    monkeypatch.setattr(subprocess, "run", real_run)
+
+    record.unlink()                            # a video queued before the record existed renders as before
+    assert worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)[0] == "ok"
+
+
+def test_a_render_that_raises_is_that_videos_failure_not_the_workers_exit(monkeypatch):
+    failures = []
+    monkeypatch.setattr(worker, "_stage_and_render", mock.Mock(side_effect=OSError(28, "No space left on device")))
+    monkeypatch.setattr(worker, "_handle_render_failure", lambda vid, msg, retry_status="REVISION_REQUESTED": failures.append((vid, msg, retry_status)))
+    worker._render_claimed("vid-9")             # does not raise
+    assert failures == [("vid-9", "The worker hit an error: [Errno 28] No space left on device", "RENDER_QUEUED")]

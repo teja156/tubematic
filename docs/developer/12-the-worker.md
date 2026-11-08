@@ -84,6 +84,17 @@ demuxer without re-encoding, and the soundtrack is muxed on: the synthesised mix
 when it exists and is at least as new as the voice, else `audio.mp3` alone. The work directory beside
 the output is removed either way.
 
+`render_timeout_secs` caps the whole segmented render, every segment and retry included, as it caps an
+ordinary render: each segment gets what is left of the one deadline. Every segment bundles the generated
+source tree afresh, so what is rendered has to be what the beat gate judged: `submit_render` recorded that
+tree's fingerprint under `<jobs>/<video_id>/cartoon/source.json`, and the worker compares the live tree
+with it before the first segment and again before the mux. A tree that differs (edited after the gate) or
+holds a symlink fails the render to the agent with the reason; a video queued before the record existed
+renders as before. A render that cannot run at all (no `npx`, a full disk) is that video's failure, not an
+exception out of the worker: `_render_claimed` is the per-video boundary round `_stage_and_render`, and
+whatever escapes it is recorded with `_handle_render_failure` and requeued, so a row never stays
+`RENDERING` with the worker gone.
+
 ## What a tick is
 
 A tick is one trip round the loop. How long it takes depends on step 9:

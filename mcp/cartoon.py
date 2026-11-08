@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 import re
 import shutil
 import subprocess
@@ -60,6 +61,7 @@ BEATGATE_DIR, STILLS_DIR, AUDIO_DIR = "beatgate", "stills", "audio"
 STILL_KINDS = (BEATGATE_DIR, STILLS_DIR)
 MIX_DIR = "mix"
 MIX_WAV = "mix.wav"
+SOURCE_RECORD = "source.json"      # <cartoon>/source.json: the fingerprint of the source submit_render queued
 
 # A still's name is a path component under the cartoon directory and nothing
 # else: the command lines name them (beat03-f0184.png, f0460.png) and a judge
@@ -167,13 +169,34 @@ def source_dir(scenes_dir, video_id: str) -> Path:
         raise CartoonError(str(e))
 
 
+def _utcnow() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _check_source(scenes_dir, video_id: str) -> Path:
     src = source_dir(scenes_dir, video_id)
     entry = src / f"{ENTRY_SCENE}.tsx"
     if not src.is_dir() or not entry.is_file():
         raise CartoonError(f"{video_id} has no generated source yet: write {video_id}/{ENTRY_SCENE} (and its modules) "
                            f"with write_scene_file first")
+    try:
+        # a symlink in the tree would be followed here, by the bundler and by the
+        # worker while the gate's hash and the stills server skip it: refused outright
+        tjobs.source_fingerprint(src)
+    except tjobs.UnsafePath as e:
+        raise CartoonError(f"{video_id}'s generated source: {e}")
     return src
+
+
+def freeze_source(jobs_dir, video_id: str, scenes_dir) -> str:
+    """Record the fingerprint of the source submit_render is queueing, under
+    <cartoon>/source.json; the worker refuses to render any other tree."""
+    src = _check_source(scenes_dir, video_id)
+    fp = tjobs.source_fingerprint(src)
+    record = cartoon_dir(jobs_dir, video_id) / SOURCE_RECORD
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(json.dumps({"fingerprint": fp, "at": _utcnow()}), encoding="utf-8")
+    return fp
 
 
 # ── Running the command lines ───────────────────────────────────────────────
@@ -481,20 +504,30 @@ def soundtrack(jobs_dir, video_id: str, remotion_dir: Path, spec: dict) -> dict:
         if conv.returncode != 0 or not voice.is_file():
             raise CartoonError(f"the voice could not be resampled: {conv.stderr.strip()[-400:]}")
         out = adir / MIX_DIR
+        # built beside the live mix and swapped in whole once it is complete: a
+        # failed or interrupted run never leaves a partial mix.wav where the
+        # worker would mux it, and the previous mix stays until the new one is
+        new = adir / f"{MIX_DIR}.new"
+        shutil.rmtree(new, ignore_errors=True)
         try:
-            proc = subprocess.run([python, "-I", str(mix_py), "--voice", str(voice), "--timeline", str(timeline),
-                                   "--spec", str(adir / "audio-spec.json"), "--out", str(out)],
-                                  cwd=str(mix_py.parent), capture_output=True, text=True, timeout=SOUNDTRACK_TIMEOUT_SECS)
-        except subprocess.TimeoutExpired:
-            raise CartoonError(f"the soundtrack did not finish within {SOUNDTRACK_TIMEOUT_SECS} s")
-        if proc.returncode != 0:
-            text = _fail_text(proc)
-            if "No module named" in text:
-                text += "\n(numpy and scipy must be installed in the MCP container)"
-            raise CartoonError(f"the soundtrack could not be mixed: {text}")
+            try:
+                proc = subprocess.run([python, "-I", str(mix_py), "--voice", str(voice), "--timeline", str(timeline),
+                                       "--spec", str(adir / "audio-spec.json"), "--out", str(new)],
+                                      cwd=str(mix_py.parent), capture_output=True, text=True, timeout=SOUNDTRACK_TIMEOUT_SECS)
+            except subprocess.TimeoutExpired:
+                raise CartoonError(f"the soundtrack did not finish within {SOUNDTRACK_TIMEOUT_SECS} s")
+            if proc.returncode != 0:
+                text = _fail_text(proc)
+                if "No module named" in text:
+                    text += "\n(numpy and scipy must be installed in the MCP container)"
+                raise CartoonError(f"the soundtrack could not be mixed: {text}")
+            if not (new / MIX_WAV).is_file():
+                raise CartoonError(f"mix.py finished but wrote no {MIX_WAV}: {_fail_text(proc)}")
+            shutil.rmtree(out, ignore_errors=True)
+            os.replace(new, out)
+        finally:
+            shutil.rmtree(new, ignore_errors=True)
         mix = out / MIX_WAV
-        if not mix.is_file():
-            raise CartoonError(f"mix.py finished but wrote no {MIX_WAV}: {_fail_text(proc)}")
         # newer than the voice by construction; a re-voiced video makes this mix stale and the worker ignores it
         os.utime(mix)
         cues_md = (out / "cues.md").read_text(encoding="utf-8") if (out / "cues.md").is_file() else ""

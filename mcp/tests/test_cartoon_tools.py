@@ -322,6 +322,26 @@ print('mixed')
     assert cartoon.mix_file(jobs, VID).stat().st_mtime >= (jobs / VID / "audio.mp3").stat().st_mtime
 
 
+def test_a_failed_soundtrack_leaves_the_previous_mix_in_place(fake_node, jobs, tmp_path):
+    """The engine writes mix.wav first and the report after it: a run that
+    dies in between must not leave its half-made mix where the worker muxes
+    it, nor take the last good mix away."""
+    _, remotion, _ = fake_node
+    (tmp_path / "bin" / "ffmpeg").write_text(f"#!{sys.executable}\nimport sys\nopen(sys.argv[-1], 'wb').write(b'RIFF')\n")
+    (tmp_path / "bin" / "ffmpeg").chmod(0o755)
+    audio_dir = remotion / "cartoon-tools" / "audio"
+    audio_dir.mkdir(parents=True)
+    (audio_dir / "mix.py").write_text("import os, sys\nout = sys.argv[sys.argv.index('--out') + 1]\nos.makedirs(out, exist_ok=True)\n"
+                                      "open(os.path.join(out, 'mix.wav'), 'wb').write(b'HALF')\nsys.stderr.write('MemoryError\\n')\nsys.exit(1)\n")
+    good = cartoon.mix_file(jobs, VID)
+    good.parent.mkdir(parents=True)
+    good.write_bytes(b"GOOD")
+    with pytest.raises(cartoon.CartoonError, match="MemoryError"):
+        cartoon.soundtrack(jobs, VID, remotion, GOOD_SPEC)
+    assert good.read_bytes() == b"GOOD"
+    assert sorted(p.name for p in good.parent.parent.iterdir()) == ["audio-spec.json", "mix", "voice.wav"]   # no mix.new
+
+
 def test_a_failing_engine_is_reported_with_its_last_lines(fake_node, jobs, tmp_path):
     _, remotion, _ = fake_node
     (tmp_path / "bin" / "ffmpeg").write_text(f"#!{sys.executable}\nimport sys\nopen(sys.argv[-1], 'wb').write(b'RIFF')\n")
@@ -350,15 +370,37 @@ def job_db(tmp_path, monkeypatch):
     return make_video
 
 
-def test_submit_render_refuses_an_ungated_cartoon_video_and_queues_a_gated_one(job_db, jobs, monkeypatch):
+def test_submit_render_refuses_an_ungated_cartoon_video_and_queues_a_gated_one(job_db, jobs, scenes, monkeypatch):
     job_db(VID)
     monkeypatch.setattr(cartoon, "readiness", lambda *a: ["Cartoon 3D beat gate: no judge has answered yet"])
     result = server.submit_render(VID)
     assert result == {"error": "cartoon_not_ready", "errors": ["Cartoon 3D beat gate: no judge has answered yet"]}
     with server._conn() as con:
         assert con.execute("SELECT status FROM videos WHERE id = ?", (VID,)).fetchone()["status"] == "VOICE_READY"
+    assert not (jobs / VID / "cartoon" / "source.json").exists()
     monkeypatch.setattr(cartoon, "readiness", lambda *a: [])
     assert server.submit_render(VID) == {"status": "queued", "video_id": VID}
+    # the gated source is frozen with the queue: the worker renders this tree or nothing
+    from tubematic_core import jobfiles as tjobs
+    record = json.loads((jobs / VID / "cartoon" / "source.json").read_text())
+    assert record["fingerprint"] == tjobs.source_fingerprint(scenes / VID) and record["at"].endswith("Z")
+    # and a write to the queued video's source is refused
+    result = server.write_scene_file(VID, "story.ts", "export const TOTAL = 101;")
+    assert result["error"] == "status_mismatch" and result["current_status"] == "RENDER_QUEUED"
+    assert (scenes / VID / "story.ts").read_text() == "export const TOTAL = 100;"
+
+
+def test_a_symlink_in_the_source_tree_is_refused_before_anything_is_judged(fake_node, jobs, scenes):
+    """jobfiles.source_file refuses to write through a link; a link planted
+    some other way must not be followed by the gate or the render while the
+    verdict hash and the stills server skip it."""
+    (scenes / VID / "stage.ts").symlink_to(jobs / VID / "timeline.json")
+    errors = cartoon.readiness(jobs, VID, fake_node[1], scenes)
+    assert len(errors) == 1 and "stage.ts is a symlink" in errors[0]
+    with pytest.raises(cartoon.CartoonError, match="symlink"):
+        cartoon.beat_gate(jobs, VID, fake_node[1], scenes)
+    with pytest.raises(cartoon.CartoonError, match="symlink"):
+        cartoon.freeze_source(jobs, VID, scenes)
 
 
 def test_submit_render_does_not_ask_readiness_of_a_video_that_is_not_cartoon(job_db, jobs, monkeypatch):

@@ -37,7 +37,9 @@ opened beneath the root (openat2 with RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS),
 which this layer does not do. Everything that writes under these roots is
 Tubematic's own containers.
 """
+import hashlib
 import os
+import stat
 from pathlib import Path
 
 from tubematic_core import ids
@@ -144,6 +146,34 @@ def source_file(scenes_dir, video_id, dirname, stem, ext) -> Path:
     _check_video_id(video_id)
     parts = (video_id, dirname, f"{stem}{ext}") if dirname is not None else (video_id, f"{stem}{ext}")
     return join_below(scenes_dir, *parts)
+
+
+def source_fingerprint(src_dir) -> str:
+    """A short hash of a video's generated source tree: every file's relative
+    path and bytes, in a fixed order (TMDEV-185). The beat gate judged one
+    tree and the worker must render that same tree, so submit_render records
+    this and the worker compares before and after it renders. A symlink or
+    any other non-regular entry raises UnsafePath: a link reaches outside the
+    tree and its target can change without the tree changing.
+    """
+    rows = []
+
+    def walk(d, rel):
+        for entry in sorted(os.scandir(d), key=lambda e: e.name):
+            name = f"{rel}/{entry.name}" if rel else entry.name
+            mode = os.lstat(entry.path).st_mode
+            if stat.S_ISLNK(mode):
+                raise UnsafePath(f"{name} is a symlink; a generated source tree holds plain files only")
+            if stat.S_ISDIR(mode):
+                walk(entry.path, name)
+            elif stat.S_ISREG(mode):
+                with open(entry.path, "rb") as fh:
+                    rows.append(f"{name}:{hashlib.sha256(fh.read()).hexdigest()}")
+            else:
+                raise UnsafePath(f"{name} is not a regular file")
+
+    walk(os.fspath(src_dir), "")
+    return hashlib.sha256("\n".join(rows).encode("utf-8")).hexdigest()[:16]
 
 
 def ignore_symlinks(directory, names):
