@@ -197,7 +197,7 @@ pickers, since videos submitted in a row usually share them.
 
   A default voice that has left the roster shows as "(removed)", and a default profile that has
   been deleted as "Unavailable profile". **Illustrated** is greyed out until an OpenAI key is
-  stored, and **Cartoon 3D** until the renderer's GPU is working (Settings → Rendering).
+  stored, and **Cartoon 3D (experimental)** until the renderer's GPU is working (Settings → Rendering).
 
 ### Script Profiles
 
@@ -253,7 +253,7 @@ pickers are stacked, and at Video Ready they serve Request Revision, since appro
 nothing to an agent. Each picker has a small caption naming it.
 
 - **Script profile and visual style are fixed once the topic is approved.** Pick them at the topic.
-  **Illustrated** needs an OpenAI key and is greyed out without one; **Cartoon 3D** needs a working
+  **Illustrated** needs an OpenAI key and is greyed out without one; **Cartoon 3D (experimental)** needs a working
   GPU (see [GPU rendering](10-gpu-rendering.md)) and is greyed out without one.
 - **Pick the voice at the topic if it uses a different ElevenLabs model.** The script is written for
   its voice's model, so each voice is labelled with its model. At Topic Proposed every voice is

@@ -76,8 +76,8 @@ describe("styleOptions with the GPU status", () => {
 
 describe("videoStyleLabel with a resolved renderer", () => {
   it("names the world auto settled on before any canvas", () => {
-    expect(videoStyleLabel({ visual_style: "auto", resolved_visual_style: "", resolved_renderer: "cartoon_3d" })).toBe("Auto — Cartoon 3D");
+    expect(videoStyleLabel({ visual_style: "auto", resolved_visual_style: "", resolved_renderer: "cartoon_3d" })).toBe("Auto — Cartoon 3D (experimental)");
     expect(videoStyleLabel({ visual_style: "auto", resolved_visual_style: "dark", resolved_renderer: "dom" })).toBe("Auto — dark canvas");
-    expect(videoStyleLabel({ visual_style: "cartoon_3d", resolved_visual_style: "", resolved_renderer: "" })).toBe("Cartoon 3D");
+    expect(videoStyleLabel({ visual_style: "cartoon_3d", resolved_visual_style: "", resolved_renderer: "" })).toBe("Cartoon 3D (experimental)");
   });
 });

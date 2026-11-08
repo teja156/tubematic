@@ -17,7 +17,7 @@ export const VISUAL_STYLE_OPTIONS: { value: VisualStyle; label: string }[] = [
   { value: "motion_graphics", label: "Motion Graphics" },
   { value: "stick", label: "Stick Explainer" },
   { value: "illustrated", label: "Illustrated" },
-  { value: "cartoon_3d", label: "Cartoon 3D" },
+  { value: "cartoon_3d", label: "Cartoon 3D (experimental)" },
 ];
 
 /**
@@ -106,7 +106,7 @@ export function videoStyleLabel(video: Pick<Video, "visual_style" | "resolved_vi
   if (chosen !== "auto") return styleLabel(chosen);
   // The renderer is the first thing auto settles (before any scene exists);
   // a Cartoon 3D world has no canvas worth naming.
-  if (video.resolved_renderer === "cartoon_3d") return "Auto — Cartoon 3D";
+  if (video.resolved_renderer === "cartoon_3d") return "Auto — Cartoon 3D (experimental)";
   const resolved = video.resolved_visual_style ?? "";
   if (!resolved) return "Auto (not yet chosen)";
   return CANVAS_LABELS[resolved] ?? `Auto — ${resolved}`;

@@ -141,14 +141,30 @@ def is_cartoon(config) -> bool:
     return cartoon_scene(config) is not None
 
 
+def _below(jobs_dir, video_id: str, *parts) -> Path:
+    """`<jobs>/<video_id>/parts...`, refusing a symlink in any component that
+    exists on the way (a planted link under the job would redirect the gate's
+    record or the mix). The job directory itself is checked by job_dir."""
+    try:
+        return tjobs.join_below(tjobs.job_dir(jobs_dir, video_id), *parts)
+    except tjobs.UnsafePath as e:
+        raise CartoonError(str(e))
+
+
 def cartoon_dir(jobs_dir, video_id: str) -> Path:
-    return tjobs.job_dir(jobs_dir, video_id) / CARTOON_DIR
+    return _below(jobs_dir, video_id, CARTOON_DIR)
+
+
+def source_record(jobs_dir, video_id: str) -> Path:
+    """Where submit_render records the fingerprint of the source it queued
+    (keep in sync with worker.py's CARTOON_SOURCE)."""
+    return _below(jobs_dir, video_id, CARTOON_DIR, SOURCE_RECORD)
 
 
 def mix_file(jobs_dir, video_id: str) -> Path:
     """Where the synthesised soundtrack lands; the worker muxes it when it is
     newer than the voice (keep in sync with worker.py)."""
-    return cartoon_dir(jobs_dir, video_id) / AUDIO_DIR / MIX_DIR / MIX_WAV
+    return _below(jobs_dir, video_id, CARTOON_DIR, AUDIO_DIR, MIX_DIR, MIX_WAV)
 
 
 def still_file(jobs_dir, video_id: str, kind: str, name: str) -> Path:
@@ -158,7 +174,7 @@ def still_file(jobs_dir, video_id: str, kind: str, name: str) -> Path:
         raise CartoonError(f"kind must be one of {list(STILL_KINDS)}, got {kind!r}")
     if not STILL_NAME_RE.match(name or ""):
         raise CartoonError(f"a still is named like 'beat03-f0184.png' or 'f0460.png', got {name!r}")
-    return cartoon_dir(jobs_dir, video_id) / kind / name
+    return _below(jobs_dir, video_id, CARTOON_DIR, kind, name)
 
 
 def source_dir(scenes_dir, video_id: str) -> Path:
@@ -193,7 +209,7 @@ def freeze_source(jobs_dir, video_id: str, scenes_dir) -> str:
     <cartoon>/source.json; the worker refuses to render any other tree."""
     src = _check_source(scenes_dir, video_id)
     fp = tjobs.source_fingerprint(src)
-    record = cartoon_dir(jobs_dir, video_id) / SOURCE_RECORD
+    record = source_record(jobs_dir, video_id)
     record.parent.mkdir(parents=True, exist_ok=True)
     record.write_text(json.dumps({"fingerprint": fp, "at": _utcnow()}), encoding="utf-8")
     return fp
@@ -491,7 +507,7 @@ def soundtrack(jobs_dir, video_id: str, remotion_dir: Path, spec: dict) -> dict:
     ffmpeg = shutil.which("ffmpeg")
     if not python or not ffmpeg:
         raise CartoonError("python3 and ffmpeg must be on PATH in the MCP container for the soundtrack")
-    adir = cartoon_dir(jobs_dir, video_id) / AUDIO_DIR
+    adir = _below(jobs_dir, video_id, CARTOON_DIR, AUDIO_DIR)
     with _Staged(jobs_dir, video_id, remotion_dir):
         adir.mkdir(parents=True, exist_ok=True)
         (adir / "audio-spec.json").write_text(json.dumps(spec, indent=1), encoding="utf-8")
@@ -503,7 +519,7 @@ def soundtrack(jobs_dir, video_id: str, remotion_dir: Path, spec: dict) -> dict:
             raise CartoonError("resampling the voice did not finish")
         if conv.returncode != 0 or not voice.is_file():
             raise CartoonError(f"the voice could not be resampled: {conv.stderr.strip()[-400:]}")
-        out = adir / MIX_DIR
+        out = _below(jobs_dir, video_id, CARTOON_DIR, AUDIO_DIR, MIX_DIR)
         # built beside the live mix and swapped in whole once it is complete: a
         # failed or interrupted run never leaves a partial mix.wav where the
         # worker would mux it, and the previous mix stays until the new one is
@@ -526,6 +542,9 @@ def soundtrack(jobs_dir, video_id: str, remotion_dir: Path, spec: dict) -> dict:
             # published file by file into the live directory, the mix itself last and
             # by an atomic replace: the last good mix.wav is never missing or partial,
             # and a worker that already opened it keeps reading the file it opened
+            # looked up again now: a link planted as `mix` since would be published
+            # into, and its target's files removed as stale
+            out = _below(jobs_dir, video_id, CARTOON_DIR, AUDIO_DIR, MIX_DIR)
             out.mkdir(parents=True, exist_ok=True)
             fresh = sorted(p for p in new.iterdir() if p.is_file() and not p.is_symlink())
             for p in fresh:

@@ -44,7 +44,12 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   keeps the project bundled and one browser open, so a still takes seconds instead of the half
   minute a cold software render costs in the MCP container. It listens on the Compose network only
   (port 4455) and the tools fall back to rendering locally when it does not answer.
-- **A new visual style, Cartoon 3D.** Flat cartoon characters with ink outlines standing in a painted
+- **Credits.** The Cartoon 3D kit descends from [mromidev/claude-animated-shorts](https://github.com/mromidev/claude-animated-shorts)
+  (MIT License, Copyright (c) 2026 Mr omi): the runner, cast, lights, world, toon shader and build helpers
+  are adapted from its bridge template, the camera grammar from its motion study, and the soundtrack
+  engine from its synthesis library. Every ported file names its origin in its header. Its reference
+  frames and sheets are not included.
+- **A new visual style, Cartoon 3D (experimental).** Flat cartoon characters with ink outlines standing in a painted
   3D world — a street, a wharf, a clearing — with a camera that glides through it, a sun that moves
   with the story and fog when the story needs it. The agent writes the world the topic calls for as
   code for that one video (its sets, who stands where, a camera that follows the words) against a

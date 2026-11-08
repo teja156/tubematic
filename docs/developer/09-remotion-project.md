@@ -417,6 +417,15 @@ under `src/scenes/generated/<video_id>/` and imports the kit from there; see
 lines under `gate/` are bundled by `cartoon-tools/build.mjs` for the MCP server; `cartoon-tools/audio/`
 is the soundtrack engine (Python) and `cartoon-tools/stills-server.mjs` the worker's stills server.
 
+The style is offered as **Cartoon 3D (experimental)**: every video is code the agent writes, and the look,
+the gate and the kit are still settling. **Credits:** the kit descends from
+[mromidev/claude-animated-shorts](https://github.com/mromidev/claude-animated-shorts) (MIT License,
+Copyright (c) 2026 Mr omi). `CartoonShort.tsx`, `kit/cast.ts`, `kit/lights.ts`, `kit/world.ts`,
+`kit/toon.ts` and `kit/build.ts` are adapted from its bridge template, `camera.ts` from its motion study,
+and `cartoon-tools/audio/` (`dsp.py`, `instruments.py`, `sfx_gen.py`, and the generalised `band.py`,
+`cues.py`, `mix.py`) from its synthesis library; each file's header names its origin. The repository's
+reference frames and sheets are not vendored.
+
 ## Building and checking
 
 ```bash

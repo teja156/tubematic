@@ -253,6 +253,12 @@ def test_the_source_rendered_is_the_one_submit_render_froze(stubs, monkeypatch, 
     record.unlink()
     record.write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(src), "at": "now"}))
     assert worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)[0] == "ok"
+    # a link planted as the `cartoon` directory itself would redirect the record: refused on the way
+    import shutil as _shutil
+    _shutil.move(record.parent, tmp_path / "elsewhere")
+    record.parent.symlink_to(tmp_path / "elsewhere")
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)
+    assert outcome == "failed" and "symlink" in detail
 
 
 def test_ffmpeg_spends_what_is_left_of_the_same_deadline(stubs, monkeypatch):

@@ -81,10 +81,27 @@ def test_a_queued_or_rendering_videos_source_is_frozen(job_db, scenes):
         with mock.patch.object(server.cartoon, "soundtrack", side_effect=AssertionError("must not run")):
             result = server.cartoon_soundtrack("vid-a", {"music": {}, "sfx": {}})
         assert result["error"] == "status_mismatch" and "soundtrack" in result["detail"]
+        # the scene-config is frozen with the source: the gate's verdict is keyed by its beats
+        result = server.write_scene_config("vid-a", {"totalFrames": 100, "fps": 30, "scenes": [{"type": "generated", "src": "vid-a/CartoonShort"}]})
+        assert result["error"] == "status_mismatch" and result["current_status"] == status
     job_db.set_status("vid-a", "REVISION_REQUESTED")
     assert "error" not in server.write_scene_file("vid-a", "story.ts", "export const TOTAL = 1;")
     assert (scenes / "vid-a" / "story.ts").read_text() == "export const TOTAL = 1;"
     assert server.delete_scene_file("sets/street.ts", video_id="vid-a")["deleted"]
+
+
+def test_a_module_directory_cannot_be_named_after_its_video(job_db, scenes):
+    """'vid-a/story.ts' is the composed name of vid-a's root story.ts, so a
+    directory of that name under vid-a could never be read or deleted by its
+    own name: the write is refused rather than left unreachable."""
+    job_db("vid-a")
+    _author("vid-a")
+    result = server.write_scene_file("vid-a", "vid-a/story.ts", "export const NESTED = 1;")
+    assert "cannot be named after its video" in result["error"]
+    assert not (scenes / "vid-a" / "vid-a").exists()
+    assert server.read_scene_file("vid-a/story.ts", video_id="vid-a")["tsx_content"] == "export const TOTAL = 100;"
+    assert "cannot be named after its video" in server.delete_scene_file("vid-a/story.ts", video_id="vid-b")["error"] or \
+        server.delete_scene_file("vid-a/story.ts", video_id="vid-b")["error"] == "not found"
 
 
 def test_submit_render_holds_the_source_lock_from_the_gate_to_the_queue(job_db, scenes, monkeypatch):
@@ -175,6 +192,8 @@ def test_the_module_grammar_reads_the_arguments_only_never_the_directories(job_d
     # ...and the same two-component name is that subdirectory once it exists
     assert "error" not in server.write_scene_file("vid-b", "vid-a/story.ts", "export const NESTED = 1;")
     assert server.read_scene_file("vid-a/story.ts", video_id="vid-b")["tsx_content"] == "export const NESTED = 1;"
+    assert server.delete_scene_file("vid-a/story.ts", video_id="vid-b")["deleted"]
+    assert (scenes / "vid-a" / "story.ts").exists()           # vid-a's own root module was never the target
     assert server.read_scene_file("vid-a/story.ts")["tsx_content"] == "export const TOTAL = 100;"      # no video_id: composed
     assert server.read_scene_file("sets/street.ts", video_id="vid-b")["src"] == "vid-b/sets/street.ts"
     assert server.read_scene_file("nowhere/street.ts", video_id="vid-b")["error"].startswith("scene file not found")

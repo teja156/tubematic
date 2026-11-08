@@ -342,6 +342,33 @@ def test_a_failed_soundtrack_leaves_the_previous_mix_in_place(fake_node, jobs, t
     assert sorted(p.name for p in good.parent.parent.iterdir()) == ["audio-spec.json", "mix", "voice.wav"]   # no mix.new
 
 
+def test_a_symlink_under_the_job_is_refused_for_the_record_and_the_mix(fake_node, jobs, scenes, tmp_path):
+    """The record of the queued source and the soundtrack live under
+    <job>/cartoon; a link planted there (or as audio/mix) would redirect
+    the record or have the publication delete the link target's files."""
+    _, remotion, _ = fake_node
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "keep.txt").write_text("mine")
+    (jobs / VID / "cartoon").symlink_to(elsewhere)
+    with pytest.raises(cartoon.CartoonError, match="symlink"):
+        cartoon.freeze_source(jobs, VID, scenes)
+    with pytest.raises(cartoon.CartoonError, match="symlink"):
+        cartoon.still_file(jobs, VID, "beatgate", "beat00-f0001.png")
+    (jobs / VID / "cartoon").unlink()
+    (jobs / VID / "cartoon" / "audio").mkdir(parents=True)
+    (jobs / VID / "cartoon" / "audio" / "mix").symlink_to(elsewhere)
+    (tmp_path / "bin" / "ffmpeg").write_text(f"#!{sys.executable}\nimport sys\nopen(sys.argv[-1], 'wb').write(b'RIFF')\n")
+    (tmp_path / "bin" / "ffmpeg").chmod(0o755)
+    (remotion / "cartoon-tools" / "audio").mkdir(parents=True)
+    (remotion / "cartoon-tools" / "audio" / "mix.py").write_text("import os, sys\nout = sys.argv[sys.argv.index('--out') + 1]\nos.makedirs(out, exist_ok=True)\nopen(os.path.join(out, 'mix.wav'), 'wb').write(b'NEW')\n")
+    with pytest.raises(cartoon.CartoonError, match="symlink"):
+        cartoon.soundtrack(jobs, VID, remotion, GOOD_SPEC)
+    with pytest.raises(cartoon.CartoonError, match="symlink"):
+        cartoon.mix_file(jobs, VID)
+    assert sorted(p.name for p in elsewhere.iterdir()) == ["keep.txt"]       # nothing published into, nothing removed from, the target
+
+
 def test_a_new_soundtrack_is_published_file_by_file_with_the_mix_last(fake_node, jobs, tmp_path):
     """The live mix directory is never removed or emptied: each new file is
     moved over its predecessor, mix.wav last and atomically, and only then

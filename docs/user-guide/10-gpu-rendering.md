@@ -4,7 +4,7 @@ How to let the renderer use an NVIDIA graphics card, how to tell whether it real
 happens when it cannot.
 
 **This is optional for every style but one.** Without a GPU every video renders on the CPU, exactly
-as before, and nothing on this page needs doing — except that the **Cartoon 3D** visual style cannot
+as before, and nothing on this page needs doing — except that the **Cartoon 3D (experimental)** visual style cannot
 be chosen: it draws a 3D world for every frame, which takes about an hour per Short on a CPU, so
 it is offered only while the renderer's GPU is working. **Only NVIDIA GPUs are supported.** Intel
 and AMD GPUs, integrated or not, are never used.

@@ -5085,6 +5085,12 @@ def _source_path(video_id: str, dirname, stem: str, ext: str):
         return tjobs.scene_file(SCENES_DIR, video_id, stem)
     if not video_id:
         raise tjobs.UnsafePath("a Cartoon 3D module belongs to a video: pass its video_id")
+    if dirname == video_id:
+        # '<video_id>/story.ts' is the composed name of the video's own root
+        # module (what list_scene_files hands out), so a module directory of
+        # that name could never be read or deleted again by its own name
+        raise tjobs.UnsafePath(f"a module directory cannot be named after its video ({video_id!r}): "
+                               f"'{video_id}/{stem}{ext}' names the root module {stem}{ext}")
     return tjobs.source_file(SCENES_DIR, video_id, dirname, stem, ext)
 
 
@@ -5921,7 +5927,12 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     # below and the file it is decided for are one operation, or two
     # interleaved calls could leave a DOM config on a video resolved to
     # cartoon_3d (or the reverse). Same shape as the Cartoon 3D tools' lock.
-    with _scene_config_lock(video_id):
+    # Under the source lock too (TMDEV-185): the beat gate's verdict is keyed by
+    # the config's beats and the worker reads the live config to choose the
+    # render path, so a queued or rendering video's config is frozen with its
+    # source. Always source lock first, then config lock; nothing takes them
+    # the other way round.
+    with _source_lock(video_id), _scene_config_lock(video_id):
         return _write_scene_config_locked(video_id, config)
 
 
@@ -5944,6 +5955,9 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # The path-traversal guard is the shape check at the top (_video_id_error).
     if not row:
         return {"error": f"Video not found: {video_id}"}
+    frozen = _source_frozen_error(video_id)
+    if frozen:
+        return frozen
 
     if not isinstance(config, dict):
         return {"error": "config must be an object"}

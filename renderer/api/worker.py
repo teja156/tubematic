@@ -293,7 +293,8 @@ def _soundtrack_for(video_id: str, voice_path: Path) -> Path:
     """The audio to mux: the synthesised mix when it exists and is at least as
     new as the voice (a re-voiced video makes an older mix stale), else the voice."""
     try:
-        mix = tjobs.job_dir(pipeline.JOBS_DIR, video_id).joinpath(*CARTOON_MIX)
+        # join_below refuses a symlink in any component on the way
+        mix = tjobs.join_below(tjobs.job_dir(pipeline.JOBS_DIR, video_id), *CARTOON_MIX)
         if mix.is_file() and not mix.is_symlink() and mix.stat().st_mtime >= voice_path.stat().st_mtime:
             return mix
     except (OSError, tjobs.UnsafePath):
@@ -309,7 +310,9 @@ def _cartoon_source_error(video_id: str) -> str | None:
     writes one: a missing or replaced record is not rendered). None when the
     live tree is the frozen one."""
     try:
-        record = tjobs.job_dir(pipeline.JOBS_DIR, video_id).joinpath(*CARTOON_SOURCE)
+        # join_below refuses a symlink in any component on the way (a planted
+        # `cartoon` link would redirect the record itself)
+        record = tjobs.join_below(tjobs.job_dir(pipeline.JOBS_DIR, video_id), *CARTOON_SOURCE)
         if record.is_symlink():
             return f"{'/'.join(CARTOON_SOURCE)} is a symlink; the record of the queued source must be a plain file"
         if not record.is_file():

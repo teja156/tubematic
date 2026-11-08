@@ -90,8 +90,9 @@ the lesser of what is left and `FFMPEG_TIMEOUT_SECS`. Every segment bundles the 
 source tree afresh, so what is rendered has to be what the beat gate judged: `submit_render` recorded that
 tree's fingerprint under `<jobs>/<video_id>/cartoon/source.json`, and the worker compares the live tree
 with it before every segment and again before the join. A tree that differs (edited after the gate) or
-holds a symlink fails the render to the agent with the reason, and so does a missing or symlinked record:
-only `submit_render` queues a Cartoon 3D video, and it always writes one. A render that cannot run at all (no `npx`, a full disk) is that video's failure, not an
+holds a symlink fails the render to the agent with the reason, and so does a missing or symlinked record
+(the record's and the mix's paths are built with `join_below`, so a link in any component on the way is
+refused too): only `submit_render` queues a Cartoon 3D video, and it always writes one. A render that cannot run at all (no `npx`, a full disk) is that video's failure, not an
 exception out of the worker: `_render_claimed` is the per-video boundary round `_stage_and_render`, and
 whatever escapes it is recorded with `_handle_render_failure` and requeued, so a row never stays
 `RENDERING` with the worker gone.
