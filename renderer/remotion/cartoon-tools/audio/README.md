@@ -44,12 +44,13 @@ Needs numpy and scipy.
 **Styles** (`score.py`): `tutti` full band with a whistling crowd, `march`, `light`, `vamp` (no melody), `whistle`
 (one whistler, then the crowd joins), `tension` (dominant pedal, chromatic climb, roll, dead stop at the end),
 `silence`, `sway` (warm pad, soft brass, vibes), `waltz` (music box, 3/4), `soft` (golden, quiet), `swing`
-(lazy, vibes and brushes), `pad`. `level` = the music's loudness in LU under the voice in that section (−9 loud,
-−12 quiet); the music is also ducked 3 dB under every spoken word.
+(lazy, vibes and brushes), `pad`. `level` = the music's loudness in LU under the voice in that section (−14 loud,
+−18 quiet); the music is also ducked 3 dB under every spoken word and 5 dB under every event.
 
 **Cues** (`cues.py`): `naive` = the event's loudness in LU relative to the voice stem (0 = as loud as the voice;
-events are then placed 6 dB lower, the standard rule; beds are not reduced). `dist` in metres adds the camera-distance
-loss, low-pass and reverb. Generators: beds `bed_day`, `bed_golden`, `bed_night`, `bed_water`, `bed_town`; crowds
+an event is placed at exactly that level and the music ducks 5 dB under it for its length; beds are not reduced).
+`dist` in metres adds the camera-distance loss, low-pass and reverb. The cue sheet's `over music` column gives every
+event against the music at its moment, and `loudness.json` counts the events under the music. Generators: beds `bed_day`, `bed_golden`, `bed_night`, `bed_water`, `bed_town`; crowds
 `murmur`, `cheer`, `oofs`, `whoas`, `groans`, `scuffle`, `footsteps`; things `steam_whistle`, `bell`, `paddle_churn`,
 `engine_chuff`, `telegraph_key`, `whoosh`, `creak`, `splashes`, `debris`, `bounces`, `flash`; and the raw library:
 `clink`, `rattle`, `boot`, `column_stomp`, `deck_flex`, `chain_groan`, `bolt_snap`, `chain_whip`, `timber_tear`,

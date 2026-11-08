@@ -3,7 +3,7 @@
 Every sound in a Cartoon 3D Short is synthesised by the renderer's engine
 (`renderer/remotion/cartoon-tools/audio/`, ported from mromidev/claude-animated-shorts, MIT): no samples, no
 licensing. You write one spec object and call `cartoon_soundtrack(video_id, spec)`. The engine resamples
-the voice, plays a score from `music`, renders every `sfx` cue, ducks the music 3 dB under every spoken word,
+the voice, plays a score from `music`, renders every `sfx` cue, ducks the music 3 dB under every spoken word and 5 dB under every sound-effect event,
 and masters the mix to −14 LUFS at exactly the video's length (true peak under −1.5 dBTP). It returns the
 cue sheet (`cues`) with every event's level in the mix, and `loudness`. The render muxes the mix.
 
@@ -36,7 +36,9 @@ cue sheet (`cues`) with every event's level in the mix, and `loudness`. The rend
 ## Music
 
 `sections` are the score. `style` is how the band plays the tune between two times; `level` is the music's
-loudness in LU relative to the voice in that section (−9 loud, −12 quiet; default −10). Make a section for
+loudness in LU relative to the voice in that section. **Always set it, between −14 (loud: the hook, the payoff)
+and −18 (quiet: under explanation);** the dense styles (`tutti`, `march`, `stabs`) go at the quiet end of that
+range, because a full band at −10 covers every effect and tires the ear under narration. Make a section for
 each change of mood, matched to the shot plan; a `silence` section is gated to true silence.
 
 | style | what it is |
@@ -67,11 +69,20 @@ words of a sentence that should land.
 
 Each cue: a time (`t` in seconds or `f` in frames), a generator `gen`, its `args` (keyword arguments; `dur`
 in seconds where the generator takes one), `naive` = the event's loudness in LU relative to the voice stem
-(0 = as loud as the voice; events are then placed 6 dB lower, the standard rule; beds are not reduced),
+(0 = as loud as the voice; an event is placed at exactly that level, and the music ducks 5 dB under it for its
+length; beds are not reduced),
 `kind` `"event"` (default) or `"bed"`, `pan` −1..1, `dist` in metres from the lens (adds the camera-distance
 loss, a low-pass and more reverb), optional `db` (extra), `lpf` (Hz), `send` (0..1 reverb), `cut` (hard end
 at seconds), `fade` ([in, out] seconds), `desc` (for the cue sheet). A bed per place, under every section, at
-−28 to −32; an event on the frame its picture happens, −4 to −12. An unknown generator is refused by name.
+−28 to −32; an event on the frame its picture happens, **0 to −6** (a hammer blow or a splash 0 to −2, a
+footstep or a creak −4 to −6). Use `dist` only for things genuinely far from the lens (a bell across the water,
+a boat on the horizon); foley a few metres away takes none, since every metre of distance also takes level
+away. An unknown generator is refused by name.
+
+**Check the mix, as you check the frames.** The cue sheet (`cues`) has an `over music` column for every event:
+its level against the music at that moment. **An event below 0 is a fix**, the same way a failed beat is: raise
+its `naive` level, or lower that section's `level`, and call `cartoon_soundtrack` again. The count is also in
+`loudness.events_under_music`; hand the video over with it at 0.
 
 **Beds:** `bed_day` (dur, river, flags, birds, wind), `bed_golden` (dur, crickets, birds), `bed_night` (dur,
 crickets, wind), `bed_water` (dur, close, slosh), `bed_town` (dur, voices, wind), `bed_street` (dur, hooves,

@@ -22,7 +22,9 @@ import score  # noqa: E402
 import cues as CU  # noqa: E402
 
 CEIL_DBTP = -1.5   # the AAC encode in the mux adds ~0.2-0.3 dB of peak; -1.5 on the WAV keeps the mp4 under -1.0
-DUCK_DB = -3.0
+DUCK_DB = -3.0            # the music under every spoken word
+EVENT_DUCK_DB = -5.0      # ...and under every sound-effect event, for the event's length (EVENT_DUCK_MAX_S at most)
+EVENT_DUCK_MAX_S = 3.0
 
 
 def log(*a):
@@ -92,6 +94,26 @@ def section_db(m_ducked, v, secs, dips, dur):
         d[ns(a): ns(b)] = db
         curve += ndimage.uniform_filter1d(d, ns(0.06), mode="nearest")
     return curve, gains
+
+
+def event_margins(C, gm, vI):
+    """Each event's level in the mix against the music's momentary loudness over
+    the event's first 0.4 s (the final music stem, section gains and ducking
+    applied). Sets c.music and c.over; returns how many events sit under the
+    music, which the cue sheet and loudness.json report: an effect the band
+    covers is a fix for the author (raise its naive level, or quieten the section)."""
+    Mm = momentary(gm)
+    under = 0
+    for c in C:
+        if c.kind != "event" or c.measured is None:
+            continue
+        i0, i1 = max(0, int((c.t - 0.2) / 0.01)), min(len(Mm) - 1, int((c.t + 0.4) / 0.01))
+        music = float(Mm[i0:i1 + 1].max()) if len(Mm) and i1 >= i0 else -np.inf
+        c.music = music
+        c.over = float((vI + c.measured) - music) if np.isfinite(music) else float("inf")
+        if c.over < 0:
+            under += 1
+    return under
 
 
 def limiter(x, ceil_db=CEIL_DBTP, look=0.003, rel=0.08):
@@ -170,6 +192,10 @@ def write_cues(path, C, b, stats, rows, G, secs, fps, dur):
     w(f"- Length {dur:.3f} s, 48 kHz stereo 24-bit. Integrated **{stats['I']:.1f} LUFS**, true peak **{stats['TP']:.1f} dBTP**, "
       f"LRA {stats['LRA']:.1f} LU, max momentary {stats['Mmax']:.1f} LUFS, max short-term {stats['Smax']:.1f} LUFS")
     w(f"- Stems: voice {stats['voice_I']:.1f} LUFS, music {stats['music_I']:.1f} LUFS, sfx {stats['sfx_I']:.1f} LUFS (voice gain {G:+.2f} dB)")
+    n_ev, n_under = stats["events"], stats["events_under_music"]
+    w(f"- Events over the music: {n_ev - n_under} of {n_ev} sit above the music at their moment"
+      + (" — every effect is audible" if not n_under else
+         f"; **{n_under} under the music** (see the `over music` column): raise their naive level or quieten the section"))
     gr = stats["gr"]
     w(f"- Limiter (ceiling {CEIL_DBTP} dBTP): max gain reduction {gr['max']:.2f} dB, active (>0.1 dB) on {gr['pct_over_0_1']:.2f} % of samples")
     w("")
@@ -191,15 +217,17 @@ def write_cues(path, C, b, stats, rows, G, secs, fps, dur):
         w(f"| {t:.2f} | {int(round(t * fps))} | {d} |")
     w("")
     w("## SFX events")
-    w(f"Events: applied = naive - 6 dB + distance/extra. Beds: integrated, not reduced. 'mix LUFS' = the event's level in the mix "
-      f"(voice stem {vI:.1f} LUFS integrated).")
+    w(f"Events: applied = naive + distance/extra (no fixed offset); the music is ducked {-EVENT_DUCK_DB:.0f} dB under every event. "
+      f"Beds: integrated, not reduced. 'mix LUFS' = the event's level in the mix (voice stem {vI:.1f} LUFS integrated); "
+      f"'over music' = that level against the music's momentary loudness at the event's moment (below 0 = covered by the band).")
     w("")
-    w("| # | time s | frame | cue | what | naive LU | applied LU | mix LUFS | pan |")
-    w("|---|---|---|---|---|---|---|---|---|")
+    w("| # | time s | frame | cue | what | naive LU | applied LU | mix LUFS | over music LU | pan |")
+    w("|---|---|---|---|---|---|---|---|---|---|")
     for i, c in enumerate(sorted(C, key=lambda c: (c.t, c.name))):
         kind = " (bed)" if c.kind == "bed" else ""
         meas = c.measured if c.measured is not None else c.applied
-        w(f"| {i + 1} | {c.t:.3f} | {c.t * fps:.1f} | {c.name}{kind} | {c.desc} | {c.naive:+.0f} | {c.applied:+.1f} | {vI + meas:.1f} | {c.p:+.2f} |")
+        over = "-" if c.over is None else ("inf" if not np.isfinite(c.over) else f"{c.over:+.1f}")
+        w(f"| {i + 1} | {c.t:.3f} | {c.t * fps:.1f} | {c.name}{kind} | {c.desc} | {c.naive:+.0f} | {c.applied:+.1f} | {vI + meas:.1f} | {over} | {c.p:+.2f} |")
     w("")
     open(path, "w", encoding="utf-8").write("\n".join(L))
 
@@ -232,18 +260,24 @@ def main():
     m_raw, levels = score.render(b, ref=-20.0)
     log("music rendered", f"{lufs(m_raw):.2f} LUFS raw", levels)
     secs = score.sections(music_spec, dur) or [("all", 0.0, dur, -10.0, "march")]
-    dk = duck_db(spans, dur)
+
+    # ---------------- sfx (before the music's gains: the music ducks under every event)
+    C = CU.from_spec(spec.get("sfx", {"cues": spec.get("cues", [])}), dur, fps)
+    ev_spans = []
+
+    def note_event(c, x, t0):
+        if c.kind == "event":
+            ev_spans.append([max(0.0, t0), min(dur, t0 + min(x.shape[1] / SR, EVENT_DUCK_MAX_S))])
+    s_st, C = CU.render(C, dur, v_ref, on_event=note_event)
+    log("sfx rendered", f"{lufs(s_st):.2f} LUFS, {len(C)} cues")
+
+    dk = duck_db(spans, dur) + duck_db(ev_spans, dur, depth=EVENT_DUCK_DB, pre=0.03, post=0.05, att=0.03, rel=0.35)
     m_d = m_raw * dbg(dk)[None, :]
     dips = [tuple(x) for x in music_spec.get("dips", [])]
     sec_curve, sec_gains = section_db(m_d, v, secs, dips, dur)
     m = m_d * dbg(sec_curve)[None, :]
     end = ns(dur - 0.03)
     m[:, end:] *= np.linspace(1, 0, N - end)[None, :]
-
-    # ---------------- sfx
-    C = CU.from_spec(spec.get("sfx", {"cues": spec.get("cues", [])}), dur, fps)
-    s_st, C = CU.render(C, dur, v_ref)
-    log("sfx rendered", f"{lufs(s_st):.2f} LUFS, {len(C)} cues")
 
     # ---------------- master
     mix0 = v + m + s_st
@@ -259,6 +293,9 @@ def main():
     y = fades(y, 0.0, 0.03)
     assert y.shape == (2, N)
     gv, gm, gs = v * dbg(G), m * dbg(G), s_st * dbg(G)
+    under = event_margins(C, gm, v_ref + G)
+    n_events = sum(1 for c in C if c.kind == "event")
+    log(f"events over the music: {n_events - under} of {n_events}" + (f" ({under} under)" if under else ""))
     write_wav(os.path.join(a.out, "mix.wav"), y)
     write_wav(os.path.join(a.out, "stem_voice.wav"), gv)
     write_wav(os.path.join(a.out, "stem_music.wav"), gm)
@@ -272,7 +309,8 @@ def main():
     gr_stats = dict(max=float(grdb.max()), pct_over_0_5=float((grdb > 0.5).mean() * 100), pct_over_0_1=float((grdb > 0.1).mean() * 100))
     rows = section_table(gv, gm, gs, words, secs)
     stats = dict(I=I_, TP=TP, LRA=LRA, Mmax=Mmax, Smax=Smax, G=G, gr=gr_stats, v_ref=v_ref,
-                 voice_I=lufs(gv), music_I=lufs(gm), sfx_I=lufs(gs), sec_gains=sec_gains)
+                 voice_I=lufs(gv), music_I=lufs(gm), sfx_I=lufs(gs), sec_gains=sec_gains,
+                 events=n_events, events_under_music=under)
     log(json.dumps({k: (round(x, 2) if isinstance(x, float) else x) for k, x in stats.items() if k not in ("gr", "sec_gains")}))
     for r in rows:
         log(f"{r[0]:<15} voice {r[3]:6.1f}  music {r[4]:6.1f}  sfx {r[5]:6.1f}  bed {r[6]:6.1f}  margin {r[7]:5.1f}  speech med {r[9]:5.1f} p10 {r[8]:5.1f}")

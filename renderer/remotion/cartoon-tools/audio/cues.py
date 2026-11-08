@@ -9,7 +9,7 @@
 #   ] }
 # Fields: t (s) or f (frame); gen (a name below); args (that generator's keyword arguments; `dur` in seconds where the
 # generator takes one); naive = the event's loudness in LU relative to the voice stem (max momentary for events,
-# integrated for beds); kind "event" (placed 6 dB under its naive level, the standard mix rule) or "bed" (not reduced);
+# integrated for beds); kind "event" (placed at exactly its naive level; the mixer ducks the music under it) or "bed" (not reduced);
 # pan -1..1; dist = metres from the lens (adds gain loss, a low-pass and more reverb); extra dB; lpf Hz; send 0..1
 # (valley reverb); group; desc; cut (s: hard end); fade [in, out] seconds.
 import math
@@ -19,7 +19,7 @@ from dsp import (SR, ns, tt, rng, dbg, lp, hp, bp, peq, shelf, pan, st, place, f
 import sfx_gen as G
 import instruments as I
 
-SFX_DB = -6.0
+SFX_DB = 0.0    # an event sits where the spec puts it: the bridge short's -6 dB "standard rule" buried every effect under the band
 FPS = 30
 
 
@@ -335,6 +335,7 @@ class Cue:
         self.group = group or name
         self.applied = naive + (SFX_DB if kind == "event" else 0.0) + extra
         self.measured = None
+        self.music = self.over = None      # set by the mixer: the music at the event's moment, and the event over it
 
 
 def from_spec(spec, dur, fps=FPS):
