@@ -69,8 +69,34 @@ _built: set[str] = set()
 # One staging per video at a time: two concurrent gate runs for one video would
 # stage into the same public directory and one would delete it from under the
 # other. The caller is told rather than blocked.
-_busy: set[str] = set()
-_busy_lock = threading.Lock()
+_locks: dict[str, threading.Lock] = {}
+_locks_guard = threading.Lock()
+# How long a recorder waits for a rendering tool or another recorder on the
+# same video. Judges answer in parallel; their record calls queue here rather
+# than lose a verdict (two writers of one verdict.json keep only the last).
+RECORD_WAIT_SECS = CHECK_TIMEOUT_SECS
+
+
+def _lock_for(video_id: str) -> threading.Lock:
+    with _locks_guard:
+        return _locks.setdefault(video_id, threading.Lock())
+
+
+class _Recording:
+    """The per-video lock, waited for: a recorder queues behind a gate render
+    or another recorder instead of being refused, so parallel judges all land."""
+
+    def __init__(self, video_id: str):
+        self.video_id = video_id
+        self.lock = _lock_for(video_id)
+
+    def __enter__(self) -> None:
+        if not self.lock.acquire(timeout=RECORD_WAIT_SECS):
+            raise CartoonError(f"another Cartoon 3D tool has been running for {self.video_id} for over "
+                               f"{RECORD_WAIT_SECS} s; try again")
+
+    def __exit__(self, *exc) -> None:
+        self.lock.release()
 
 
 class CartoonError(Exception):
@@ -224,23 +250,20 @@ class _Staged:
         self.video_id = video_id
         self.dir = tjobs.job_dir(jobs_dir, video_id)
         self.jobs_dir = jobs_dir
+        self.lock = _lock_for(video_id)
 
     def __enter__(self) -> Path:
-        with _busy_lock:
-            if self.video_id in _busy:
-                raise CartoonError(f"another Cartoon 3D tool is still running for {self.video_id}; wait for it")
-            _busy.add(self.video_id)
+        if not self.lock.acquire(blocking=False):
+            raise CartoonError(f"another Cartoon 3D tool is still running for {self.video_id}; wait for it")
         try:
             _job_files(self.jobs_dir, self.video_id)
         except Exception:
-            with _busy_lock:
-                _busy.discard(self.video_id)
+            self.lock.release()
             raise
         return self.dir
 
     def __exit__(self, *exc) -> None:
-        with _busy_lock:
-            _busy.discard(self.video_id)
+        self.lock.release()
 
 
 # ── The tools ───────────────────────────────────────────────────────────────
@@ -356,7 +379,8 @@ def gate_record(jobs_dir, video_id: str, remotion_dir: Path, part: str, answers:
         json.dump(answers, fh)
         answers_file = fh.name
     try:
-        proc = run_cli(remotion_dir, "gate", [str(path), str(outdir), "--record", part, answers_file], timeout=CHECK_TIMEOUT_SECS)
+        with _Recording(video_id):
+            proc = run_cli(remotion_dir, "gate", [str(path), str(outdir), "--record", part, answers_file], timeout=CHECK_TIMEOUT_SECS)
     finally:
         os.unlink(answers_file)
     if proc.returncode not in (0, 2):
@@ -407,7 +431,9 @@ def beat_gate_record(jobs_dir, video_id: str, remotion_dir: Path, answers: dict)
         json.dump(answers, fh)
         answers_file = fh.name
     try:
-        with _Staged(jobs_dir, video_id, remotion_dir) as staged:
+        with _Recording(video_id):
+            _job_files(jobs_dir, video_id)
+            staged = tjobs.job_dir(jobs_dir, video_id)
             proc = run_cli(remotion_dir, "beatgate", [str(staged), str(outdir), "--record", answers_file],
                            timeout=CHECK_TIMEOUT_SECS, props=_props(video_id), public_dir=Path(jobs_dir))
             if proc.returncode not in (0, 2):

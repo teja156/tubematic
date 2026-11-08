@@ -196,7 +196,7 @@ and no obvious cause.
 | `read_scene_file` | `(scene_name, video_id="", source="generated")` | Accepts either the bare stem or the composed `"{video_id}/{scene_name}"` form |
 | `delete_scene_file` | `(scene_name, video_id="")` | Omit `video_id` only for a legacy flat scene. A given `video_id` has its shape checked before any path is built, and the target must stay inside `generated/` — this tool never looks the video up, so without that an absolute `video_id` replaced the scenes directory and could delete any `.tsx` the server can write |
 | `list_scene_files` | `(source="all", video_id="")` | |
-| `write_scene_config` | `(video_id, config)` | Writes `scene-config.json`. Validates the optional top-level `canvas` against the video's visual register: a contradicting value is rejected, an absent one is filled in. Under an unresolved `auto` the canvas is taken as the agent's choice and recorded. Also validates the optional top-level `subtitles` block — unknown keys are rejected rather than dropped, since a silently ignored one shows up only as a caption that does not look the way it was asked to, after a render. Returns `canvas`, `visual_style` and `subtitles_enabled` alongside the path |
+| `write_scene_config` | `(video_id, config)` | Writes `scene-config.json`. Validates the optional top-level `canvas` against the video's visual register: a contradicting value is rejected, an absent one is filled in. Under an unresolved `auto` the canvas is taken as the agent's choice and recorded. Also validates the optional top-level `subtitles` block — unknown keys are rejected rather than dropped, since a silently ignored one shows up only as a caption that does not look the way it was asked to, after a render. For a Cartoon 3D video it also requires exactly one `Cartoon3D` scene, a beat sheet that tiles the video in order from frame 0 to the last frame with no gap or overlap (a frame outside every beat is a frame no gate judges), and a scene kind that agrees with the video's renderer: a `Cartoon3D` scene only on a `cartoon_3d` video or an `auto` video resolved to `cartoon_3d` (an unresolved `auto` video is resolved here, under the same GPU gate as `update_video`), never a DOM scene on a video whose renderer is `cartoon_3d`. Returns `canvas`, `visual_style` and `subtitles_enabled` alongside the path |
 | `get_scene_config` | `(video_id)` | Reads it back |
 | `get_timeline` | `(video_id, include_words=False)` | Reads `timeline.json`. Word-level timings are opt-in because they are large |
 
@@ -232,7 +232,7 @@ The judge is the point of the design: the author never grades its own work. A ju
 subagent with no other context, given the prompt verbatim; it reads the stills through
 `cartoon_read_still` and records its own answers through the record tool, so the verdict never
 passes through the author's hands. Verdicts live under `<jobs>/<video_id>/cartoon/`, keyed by a
-hash of the spec (a part) or of world + beats + options (the beat sheet), so a changed thing is
+hash of the spec (a part) or of world + beats + options + the narration's words per beat (the beat sheet), so a changed thing is
 judged again and an unchanged one never is.
 
 The stills themselves are rendered by the render worker's stills server (`TUBEMATIC_STILLS_SERVER`,

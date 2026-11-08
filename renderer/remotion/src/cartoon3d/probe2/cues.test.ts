@@ -1,7 +1,7 @@
 // Gesture cues timed inside a beat (worldKit gestureAt) and the checker's refusal of cues and gestures the drawers
 // cannot make: an unknown gesture name is a crash in the middle of a render, so it is caught on the data.
 import { describe, expect, it } from "vitest";
-import { checkWorld } from "./qa";
+import { checkBeats, checkWorld } from "./qa";
 import { gestureAt, type BeatSpec, type WorldSpec } from "./worldKit";
 
 const LEAD = 2;
@@ -22,6 +22,25 @@ describe("gestureAt", () => {
     const r = role({ cues: [{ frame: 250, gesture: "wave" }, { frame: 300, headTurn: 1 }] });
     expect(gestureAt(r, 260, LEAD)).toMatchObject({ gesture: "wave", headTurn: 0.5, since: 250 });
     expect(gestureAt(r, 320, LEAD)).toMatchObject({ gesture: "wave", from: "wave", headTurn: 1, headFrom: 0.5, since: 300 });
+  });
+});
+
+describe("the checker on the beat sheet", () => {
+  const sheetOf = (ranges: [number, number][]): BeatSpec[] => ranges.map(([start, end]) => ({ start, end, shot: "w", cast: [] }));
+  const details = (ranges: [number, number][], total?: number) => checkBeats(sheetOf(ranges), total).map((f) => f.detail);
+
+  it("accepts ordered, contiguous beats from frame 0 to the last frame", () => {
+    expect(details([[0, 59], [60, 119]], 120)).toEqual([]);
+    expect(details([[0, 59]])).toEqual([]);   // length unknown: only the tiling is checked
+  });
+
+  it("blocks a gap, an overlap, a late start, an empty sheet and a sheet shorter than the video", () => {
+    expect(details([[0, 59], [61, 119]], 120)[0]).toMatch(/frame 60 is the first not yet covered/);
+    expect(details([[0, 59], [50, 119]], 120)[0]).toMatch(/frame 60 is the first not yet covered/);
+    expect(details([[5, 119]], 120)[0]).toMatch(/starts at frame 5/);
+    expect(details([], 120)[0]).toMatch(/empty/);
+    expect(details([[0, 99]], 120)[0]).toMatch(/must end at frame 119/);
+    expect(checkBeats(sheetOf([[0, 99]]), 120)[0]).toMatchObject({ kind: "bad-beats", gate: "block" });
   });
 });
 

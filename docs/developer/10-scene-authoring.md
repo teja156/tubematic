@@ -313,6 +313,12 @@ that data — a town plan with slots, parts placed in them, marks the cast walks
 camera glides through, water, fog and time of day per beat — and draws the cast as flat inked
 cut-outs on lit cards inside it. The agent never writes a component; it writes the world.
 
+`write_scene_config` refuses a config whose beats do not tile the video (in order, from frame 0 to the
+last frame, no gap, no overlap), one with more than that single scene, and one whose scene kind
+disagrees with the video's renderer (a `Cartoon3D` scene on a DOM-style video, or DOM scenes on a
+video that renders as Cartoon 3D). The beat gate's verdict is keyed by the world, the beats, the
+options and the narration's words per beat, so re-voicing the script re-opens it.
+
 The data is checked before it is rendered, and the checks are the reason the style can be trusted
 to an agent at all:
 

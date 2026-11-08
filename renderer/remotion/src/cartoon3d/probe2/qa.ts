@@ -46,7 +46,7 @@ export interface Finding {
   frame: number;
   beat: number;
   who: string;
-  kind: "offscreen" | "occluded" | "too-fast" | "inside" | "prop-in-building" | "tiny" | "bare" | "lens-clutter" | "sign-cropped" | "under-captions" | "bad-part";
+  kind: "offscreen" | "occluded" | "too-fast" | "inside" | "prop-in-building" | "tiny" | "bare" | "lens-clutter" | "sign-cropped" | "under-captions" | "bad-part" | "bad-beats";
   gate: "block" | "advise";
   detail: string;
 }
@@ -81,8 +81,28 @@ export const checkParts = (spec: WorldSpec): Finding[] => [
   ),
 ];
 
-export const checkWorld = (spec: WorldSpec, sheet: BeatSpec[], opts: SceneOpts = {}) => {
-  const bad = checkParts(spec);
+/** The beat sheet must tile the video in order with no gap and no overlap: the beat gate judges one still per
+ *  LISTED beat and this check walks to the LAST beat, so a frame outside every beat is a frame nobody gated.
+ *  `totalFrames`, when known, is the composition's length (the last beat must end at totalFrames - 1). */
+export const checkBeats = (sheet: BeatSpec[], totalFrames?: number): Finding[] => {
+  const bad = (detail: string, beat = -1, frame = 0): Finding => ({ frame, beat, who: "-", kind: "bad-beats", gate: "block", detail });
+  if (!sheet.length) return [bad("the beat sheet is empty")];
+  let expected = 0;
+  for (let i = 0; i < sheet.length; i++) {
+    const b = sheet[i];
+    if (!Number.isInteger(b.start) || !Number.isInteger(b.end)) return [bad(`beat ${i} needs integer start and end frames`, i)];
+    if (b.start !== expected) return [bad(`beat ${i} starts at frame ${b.start} but frame ${expected} is the first not yet covered: beats must be in order and contiguous from frame 0`, i, b.start)];
+    if (b.end < b.start) return [bad(`beat ${i} ends (frame ${b.end}) before it starts (frame ${b.start})`, i, b.start)];
+    expected = b.end + 1;
+  }
+  if (totalFrames !== undefined && expected !== totalFrames) {
+    return [bad(`the beats cover frames 0-${expected - 1} but the video has ${totalFrames} frames: the last beat must end at frame ${totalFrames - 1}`, sheet.length - 1, expected)];
+  }
+  return [];
+};
+
+export const checkWorld = (spec: WorldSpec, sheet: BeatSpec[], opts: SceneOpts = {}, totalFrames?: number) => {
+  const bad = [...checkParts(spec), ...checkBeats(sheet, totalFrames)];
   if (bad.length) return { findings: bad, counts: {} as Record<string, number> };
   // the SAME camera function the renderer uses, so every verdict is about a
   // frame that will actually be rendered

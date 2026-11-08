@@ -74,8 +74,11 @@ export const WorldView: React.FC<WorldViewProps> = ({ spec, beats, opts = {}, sh
       continueRender(handle);
       return;
     }
+    // a generated image arrives as the served URL (/public/<video_id>/images/<file>, the generate_image
+    // tool's public_path) and is used as-is; a bare name is a file under the project's public/
+    const file = spec.backdrop.file;
     new THREE.TextureLoader().load(
-      staticFile(spec.backdrop.file),
+      file.startsWith("/public/") ? file : staticFile(file),
       (t) => {
         setTex(t);
         continueRender(handle);

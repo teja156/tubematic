@@ -201,6 +201,31 @@ def test_a_second_tool_for_the_same_video_is_refused_while_one_runs(fake_node, j
         pass
 
 
+def test_a_recorder_waits_for_the_running_tool_instead_of_being_refused(fake_node, jobs, monkeypatch):
+    """Judges answer in parallel: two record calls for one video queue on the
+    video's lock so both verdicts land (two writers of one verdict.json keep
+    only the last), and a record call behind a gate render waits for it."""
+    import threading
+    plan, remotion, log = fake_node
+    plan({"gate --record": {"stdout": ""}})
+    monkeypatch.setattr(cartoon, "_gate_state", lambda *a: {"bollard": {"status": "pass"}})
+    (jobs / VID / "cartoon" / "gate").mkdir(parents=True)
+    answers = {"seen": "x", **{k: {"ok": True, "why": "y"} for k in ("recognisable", "grounded", "silhouette", "scale", "style")}}
+    started = threading.Event()
+    result = {}
+
+    def record():
+        started.set()
+        result["r"] = cartoon.gate_record(jobs, VID, remotion, "bollard", answers)
+
+    with cartoon._Staged(jobs, VID, remotion):          # a gate render holds the video
+        t = threading.Thread(target=record); t.start()
+        started.wait(5); t.join(0.5)
+        assert t.is_alive() and not _calls(log)            # the recorder is waiting, not refused, not written
+    t.join(10)
+    assert result["r"]["part"] == "bollard" and [c["key"] for c in _calls(log)] == ["gate --record"]
+
+
 def test_stills_keep_their_files_and_cap_the_frames(fake_node, jobs):
     plan, remotion, log = fake_node
     out = cartoon.cartoon_dir(jobs, VID) / "stills"

@@ -5781,7 +5781,7 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     _init_db()
     with _conn() as con:
         row = con.execute(
-            "SELECT id, visual_style, resolved_visual_style FROM videos WHERE id = ?",
+            "SELECT id, visual_style, resolved_visual_style, resolved_renderer FROM videos WHERE id = ?",
             (video_id,)).fetchone()
     # The path-traversal guard is the shape check at the top (_video_id_error).
     if not row:
@@ -5831,9 +5831,12 @@ def write_scene_config(video_id: str, config: dict) -> dict:
         if sub_err:
             return {"error": sub_err}
 
-    parts_err = _validate_cartoon_parts(scenes)  # TMDEV-181
+    parts_err = _validate_cartoon_parts(scenes, config["totalFrames"])  # TMDEV-181
     if parts_err:
         return {"error": parts_err}
+    renderer_err = _check_cartoon_renderer(video_id, row, scenes)  # TMDEV-179
+    if renderer_err:
+        return {"error": renderer_err}
 
     guard_err = _guard_scene_work(video_id)  # TMDEV-61
     if guard_err:
@@ -6282,14 +6285,47 @@ def _validate_part_spec(name, spec) -> str:
     return walk(prims, f"{where}.prims", 0)
 
 
-def _validate_cartoon_parts(scenes) -> str:
-    """Every Cartoon 3D scene's props.world.parts, if present. Returns "" if fine."""
-    for i, scene in enumerate(scenes):
-        if not isinstance(scene, dict) or scene.get("src") != CARTOON_SCENE_SRC:
-            continue
-        world = (scene.get("props") or {}).get("world") if isinstance(scene.get("props"), dict) else None
+def _validate_cartoon_beats(where: str, beats, total_frames: int) -> str:
+    """The beat sheet must tile the whole video, in order, with no gap and no
+    overlap: the beat gate judges one still per LISTED beat and the frame check
+    walks to the LAST beat, so a frame outside every beat is a frame nobody
+    gated. Returns "" if fine."""
+    if not isinstance(beats, list) or not beats:
+        return f"{where} must be a non-empty list of beats"
+    expected = 0
+    for i, b in enumerate(beats):
+        start, end = (b.get("start"), b.get("end")) if isinstance(b, dict) else (None, None)
+        if not (isinstance(start, int) and isinstance(end, int)) or isinstance(start, bool) or isinstance(end, bool):
+            return f"{where}[{i}] needs integer start and end frames"
+        if start != expected:
+            return (f"{where}[{i}] starts at frame {start} but frame {expected} is the first not yet covered: beats "
+                    f"must be in order and contiguous, from frame 0 to the last frame")
+        if end < start:
+            return f"{where}[{i}] ends (frame {end}) before it starts (frame {start})"
+        expected = end + 1
+    if expected != total_frames:
+        return (f"{where} covers frames 0-{expected - 1} but the video has {total_frames} frames: the last beat "
+                f"must end at frame {total_frames - 1}")
+    return ""
+
+
+def _validate_cartoon_parts(scenes, total_frames: int | None = None) -> str:
+    """Every Cartoon 3D scene: one per video, its props.world.parts if present,
+    and a beat sheet that tiles the video. Returns "" if fine."""
+    cartoon = [i for i, scene in enumerate(scenes) if isinstance(scene, dict) and scene.get("src") == CARTOON_SCENE_SRC]
+    if len(cartoon) > 1 or (cartoon and len(scenes) > 1):
+        return (f"a Cartoon 3D video is exactly one {CARTOON_SCENE_SRC} scene spanning the whole video (one world, one "
+                f"mount); this config has {len(scenes)} scenes")
+    for i in cartoon:
+        scene = scenes[i]
+        props = scene.get("props") if isinstance(scene.get("props"), dict) else {}
+        world = props.get("world")
         if not isinstance(world, dict):
             return f"scenes[{i}] ({CARTOON_SCENE_SRC}) needs props.world"
+        if total_frames is not None:
+            err = _validate_cartoon_beats(f"scenes[{i}].props.beats", props.get("beats"), total_frames)
+            if err:
+                return err
         parts = world.get("parts")
         if parts is None:
             continue
@@ -6299,6 +6335,36 @@ def _validate_cartoon_parts(scenes) -> str:
             err = _validate_part_spec(name, spec)
             if err:
                 return f"scenes[{i}].props.world.{err}"
+    return ""
+
+
+def _check_cartoon_renderer(video_id: str, row, scenes) -> str:
+    """The scene kind must agree with the video's renderer: a Cartoon3D scene
+    only on a cartoon_3d video or an auto video that resolved to cartoon_3d
+    (an unresolved auto video is resolved here, under the same GPU gate as
+    update_video, as the canvas backstop below records the canvas), and never
+    a DOM scene on a video whose renderer is cartoon_3d. Otherwise the worker
+    and the AI review would read the video one way and the scenes another, and
+    a revision could discard a half-built world. Returns "" if fine."""
+    is_cartoon = any(isinstance(sc, dict) and sc.get("src") == CARTOON_SCENE_SRC for sc in scenes)
+    style = row["visual_style"] or ""
+    resolved = row["resolved_renderer"] or ""
+    if is_cartoon:
+        if style not in ("auto", "cartoon_3d"):
+            return (f"this video's visual_style is {style!r}, which renders DOM scenes; a {CARTOON_SCENE_SRC} scene "
+                    f"needs visual_style 'cartoon_3d', or 'auto' resolved to cartoon_3d")
+        if style == "auto" and resolved and resolved != "cartoon_3d":
+            return (f"this video's 'auto' resolved to the {resolved!r} renderer, which is written once; a "
+                    f"{CARTOON_SCENE_SRC} scene cannot follow (a revision renders with the renderer the video already uses)")
+        if style == "auto" and not resolved:
+            gpu_err = _cartoon3d_gpu_error("cartoon_3d")
+            if gpu_err:
+                return gpu_err
+            _update_fields(video_id, resolved_renderer="cartoon_3d")
+        return ""
+    if style == "cartoon_3d" or resolved == "cartoon_3d":
+        return (f"this video renders as Cartoon 3D ({'visual_style' if style == 'cartoon_3d' else 'auto resolved to'} "
+                f"cartoon_3d), so its scene-config must be the single {CARTOON_SCENE_SRC} scene, not DOM scenes")
     return ""
 
 

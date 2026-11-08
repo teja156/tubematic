@@ -482,6 +482,62 @@ def test_a_project_default_of_cartoon_3d_is_refused_only_on_change(db):
 
 # ── resolved_renderer: what auto settled on, written once ───────────────────
 
+def _cartoon_config(total_frames=300, beats=None):
+    beats = beats if beats is not None else [{"start": 0, "end": total_frames - 1, "shot": "wide", "cast": []}]
+    return {
+        "totalFrames": total_frames, "fps": 30, "canvas": "dark",
+        "scenes": [{"type": "generated", "source": "installed", "src": "Cartoon3D", "startFrame": 0,
+                    "durationInFrames": total_frames, "props": {"world": {"name": "quay", "pieces": []}, "beats": beats}}],
+        "sfx": [],
+    }
+
+
+def test_a_cartoon_scene_must_agree_with_the_video_renderer(db):
+    """The worker reads the scene, the AI review and revisions read the
+    renderer: the two cannot disagree (Codex review of TMDEV-179)."""
+    _probe(db, configured=True, ok=True)
+    # a DOM style never takes a Cartoon3D scene (motion_graphics: a dark canvas, so the canvas check stays quiet)
+    _video("vid_c1", style="motion_graphics")
+    assert "needs visual_style 'cartoon_3d'" in server.write_scene_config("vid_c1", _cartoon_config())["error"]
+    # auto already resolved to dom: written once, so no
+    _video("vid_c2")
+    server.update_video("vid_c2", resolved_renderer="dom")
+    assert "written once" in server.write_scene_config("vid_c2", _cartoon_config())["error"]
+    # a cartoon video never takes DOM scenes
+    _video("vid_c3", style="cartoon_3d")
+    assert "single Cartoon3D scene" in server.write_scene_config("vid_c3", _config())["error"]
+    _video("vid_c4")
+    server.update_video("vid_c4", resolved_renderer="cartoon_3d")
+    assert "single Cartoon3D scene" in server.write_scene_config("vid_c4", _config())["error"]
+    # the matching cases write
+    assert "error" not in server.write_scene_config("vid_c3", _cartoon_config())
+    assert "error" not in server.write_scene_config("vid_c4", _cartoon_config())
+
+
+def test_an_unresolved_auto_video_is_resolved_by_its_cartoon_scene_under_the_gpu_gate(db):
+    _video("vid_c5")
+    assert server.write_scene_config("vid_c5", _cartoon_config()) == {"error": server.CARTOON3D_GPU_UNKNOWN}
+    assert _read("vid_c5", "resolved_renderer") == ""
+    _probe(db, configured=True, ok=True)
+    assert "error" not in server.write_scene_config("vid_c5", _cartoon_config())
+    assert _read("vid_c5", "resolved_renderer") == "cartoon_3d"
+
+
+def test_a_cartoon_video_is_one_scene_whose_beats_tile_it(db):
+    _probe(db, configured=True, ok=True)
+    _video("vid_c6", style="cartoon_3d")
+    two = _cartoon_config(); two["scenes"].append(dict(two["scenes"][0]))
+    assert "exactly one Cartoon3D scene" in server.write_scene_config("vid_c6", two)["error"]
+    gap = _cartoon_config(beats=[{"start": 0, "end": 99, "shot": "a", "cast": []}, {"start": 101, "end": 299, "shot": "b", "cast": []}])
+    assert "frame 100 is the first not yet covered" in server.write_scene_config("vid_c6", gap)["error"]
+    short = _cartoon_config(beats=[{"start": 0, "end": 250, "shot": "a", "cast": []}])
+    assert "must end at frame 299" in server.write_scene_config("vid_c6", short)["error"]
+    late = _cartoon_config(beats=[{"start": 5, "end": 299, "shot": "a", "cast": []}])
+    assert "starts at frame 5" in server.write_scene_config("vid_c6", late)["error"]
+    assert "error" not in server.write_scene_config("vid_c6", _cartoon_config(beats=[
+        {"start": 0, "end": 99, "shot": "a", "cast": []}, {"start": 100, "end": 299, "shot": "b", "cast": []}]))
+
+
 def test_resolved_renderer_is_written_once_under_auto(db):
     _probe(db, configured=True, ok=True)
     _video("vid_r1")

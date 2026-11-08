@@ -16,9 +16,10 @@ if (!file) {
   console.error("usage: qa-config <scene-config.json>");
   process.exit(1);
 }
-const { world, beats, opts } = cartoonScene(JSON.parse(fs.readFileSync(file, "utf8")));
+const config = JSON.parse(fs.readFileSync(file, "utf8")) as { totalFrames?: number };
+const { world, beats, opts } = cartoonScene(config);
 const t0 = Date.now();
-const { findings, counts } = checkWorld(world, beats, opts);
+const { findings, counts } = checkWorld(world, beats, opts, config.totalFrames);
 const blocking = findings.filter((f) => f.gate === "block").length;
 console.log(`=== ${world.name} === ${findings.length} findings (${blocking} blocking) in ${Date.now() - t0}ms, all ${beats[beats.length - 1].end + 1} frames`);
 console.log("  placed: " + Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(" "));

@@ -38,7 +38,11 @@ const { world, beats, opts } = has("world.json")
   ? { world: read("world.json") as unknown, beats: read("beats.json") as BeatRow[], opts: has("opts.json") ? read("opts.json") : {} }
   : (() => { const c = cartoonScene(read("scene-config.json")); return { world: c.world as unknown, beats: c.beats as unknown as BeatRow[], opts: c.opts }; })();
 const timeline = read("timeline.json") as { fps: number; words: { word: string; startFrame: number; endFrame: number }[] };
-const hash = createHash("sha256").update(JSON.stringify({ world, beats, opts })).digest("hex").slice(0, 12);
+const sentenceOf = (b: { start: number; end: number }) =>
+  timeline.words.filter((w) => w.startFrame <= b.end && w.endFrame >= b.start).map((w) => w.word).join(" ");
+// the verdict is about these frames showing THESE sentences: a revision that re-voices the narration over an
+// unchanged world and beat sheet changes the question, so the sentences are part of the key
+const hash = createHash("sha256").update(JSON.stringify({ world, beats, opts, sentences: beats.map(sentenceOf) })).digest("hex").slice(0, 12);
 fs.mkdirSync(outdir, { recursive: true });
 const verdictFile = path.join(outdir, "beat-verdict.json");
 type Verdict = { hash: string; at: string; pass: boolean; stage: "stills" | "judge"; answers?: BeatAnswer[]; stills: string[]; prompt?: string };
@@ -46,8 +50,6 @@ const verdicts: Verdict[] = fs.existsSync(verdictFile) ? JSON.parse(fs.readFileS
 const judgesFor = (h: string): JudgeRecord[] => verdicts.filter((v): v is Verdict & { answers: BeatAnswer[] } => v.hash === h && v.stage === "judge" && !!v.answers).map((v) => ({ at: v.at, answers: v.answers }));
 const status = () => beatGateStatus(judgesFor(hash), beats.length);
 
-const sentenceOf = (b: { start: number; end: number }) =>
-  timeline.words.filter((w) => w.startFrame <= b.end && w.endFrame >= b.start).map((w) => w.word).join(" ");
 const mids = beats.map((b) => Math.round((b.start + b.end) / 2));
 const stills = mids.map((m, i) => path.join(outdir, `beat${String(i).padStart(2, "0")}-f${String(m).padStart(4, "0")}.png`));
 
