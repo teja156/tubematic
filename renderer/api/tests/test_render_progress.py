@@ -1,5 +1,6 @@
 """The render watcher (TMDEV-179): Remotion's progress counters decide whether a
-render is alive, and a Cartoon 3D video renders on the GPU or not at all.
+render is alive, and a Cartoon 3D or mascot video renders on the GPU or not at
+all. A mascot video renders the mascot version it was written for.
 
 A timeout here is a crash detector, not a budget: a render whose counter
 stops advancing is killed in minutes whatever its length, and one that
@@ -228,6 +229,114 @@ def test_an_ordinary_video_renders_on_the_cpu_as_before(db_path, monkeypatch, tm
     argv = popen.call_args.args[0]
     assert "--concurrency=2" not in argv
     assert _video(db_path)[0]["status"] == "RENDERING"   # success handling was stubbed out
+
+
+# ── A mascot video needs the GPU, and renders the version it was written for ─────
+
+def _mascot_job(tmp_path, monkeypatch, db_path, mascot_version=1, versions=None, approved=1):
+    """An ordinary (DOM) video with mascot `m1` pinned at `mascot_version`.
+    `versions` maps a version number to its stored drawing code."""
+    _cartoon_job(tmp_path, monkeypatch, db_path, visual_style="auto", cartoon_config=False)
+    (tmp_path / "jobs" / "vid-1" / "scene-config.json").write_text(json.dumps(
+        {"scenes": [], "mascot": [{"frame": 0, "on": True, "x": 0.5, "y": 0.9}]}))
+    con = sqlite3.connect(db_path)
+    con.execute("INSERT INTO mascots (id, name, status, approved_version) VALUES ('m1', 'M', 'READY', ?)", (approved,))
+    for v, code in (versions if versions is not None else {1: "window.MASCOT = () => {}; // v1"}).items():
+        con.execute("INSERT INTO mascot_versions (mascot_id, version, code) VALUES ('m1', ?, ?)", (v, code))
+    con.execute("UPDATE videos SET mascot_id = 'm1', mascot_version = ? WHERE id = 'vid-1'", (mascot_version,))
+    con.commit()
+    con.close()
+
+
+def _working_gpu(db_path, monkeypatch):
+    _store_probe(db_path, {"configured": True, "ok": True})
+    monkeypatch.setenv("TUBEMATIC_GPU_UUID", "GPU-1")
+    monkeypatch.setattr(worker, "_gpu_verified", True)
+
+
+def _props(popen):
+    argv = popen.call_args.args[0]
+    return json.loads(argv[argv.index("--props") + 1])
+
+
+def test_a_mascot_video_without_a_working_gpu_fails_at_once_with_the_reason(db_path, monkeypatch, tmp_path):
+    """The same policy as Cartoon 3D: a mascot on the CPU would take hours,
+    so there is no fallback and no retry, and the comment says why."""
+    _mascot_job(tmp_path, monkeypatch, db_path)
+    _store_probe(db_path, {"configured": True, "ok": False, "error": "Chromium is rendering on another device: SwiftShader"})
+    with mock.patch("subprocess.Popen") as popen, mock.patch.object(worker, "_run_gpu_probe") as probe:
+        worker._stage_and_render("vid-1")
+    popen.assert_not_called()
+    probe.assert_not_called()
+    video, comments = _video(db_path)
+    assert video["status"] == "FAILED"
+    assert video["render_fail_count"] == 0
+    assert "has a mascot, which renders on the GPU only" in comments[-1]
+    assert "not_usable" in comments[-1] and "SwiftShader" in comments[-1] and "Test GPU" in comments[-1]
+    assert "Cartoon 3D" not in comments[-1]
+
+
+def test_a_mascot_video_on_an_unprobed_gpu_is_probed_before_judging(db_path, monkeypatch, tmp_path):
+    _mascot_job(tmp_path, monkeypatch, db_path)
+
+    def probe(reason):
+        _store_probe(db_path, {"configured": False, "ok": False})
+        return {}
+    with mock.patch("subprocess.Popen") as popen, \
+         mock.patch.object(worker, "_run_gpu_probe", side_effect=probe) as ran:
+        worker._stage_and_render("vid-1")
+    assert ran.call_args.kwargs["reason"] == "a mascot video needs the GPU"
+    popen.assert_not_called()
+    video, comments = _video(db_path)
+    assert video["status"] == "FAILED" and video["render_fail_count"] == 0
+    assert "not_configured" in comments[-1]
+
+
+def test_the_locked_mascot_version_is_staged_even_after_a_newer_one_is_approved(db_path, monkeypatch, tmp_path):
+    """A video renders the drawing it was authored against: approving v2
+    while the video is in flight must not change what it shows."""
+    _mascot_job(tmp_path, monkeypatch, db_path, mascot_version=1, approved=2,
+                versions={1: "window.MASCOT = () => {}; // v1", 2: "window.MASCOT = () => {}; // v2"})
+    _working_gpu(db_path, monkeypatch)
+    with mock.patch("subprocess.Popen", return_value=_exited()) as popen, \
+         mock.patch.object(worker, "_handle_render_success"):
+        worker._stage_and_render("vid-1")
+    staged = tmp_path / "remotion" / "public" / "vid-1" / "mascot.js"
+    assert staged.read_text() == "window.MASCOT = () => {}; // v1"
+    props = _props(popen)
+    assert props["mascotPath"] == "/public/vid-1/mascot.js"
+    assert "--gl=angle-egl" in popen.call_args.args[0]
+
+
+def test_a_video_without_a_mascot_gets_no_mascot_path(db_path, monkeypatch, tmp_path):
+    _cartoon_job(tmp_path, monkeypatch, db_path, visual_style="auto", cartoon_config=False)
+    with mock.patch("subprocess.Popen", return_value=_exited()) as popen, \
+         mock.patch.object(worker, "_handle_render_success"):
+        worker._stage_and_render("vid-1")
+    assert "mascotPath" not in _props(popen)
+    assert not (tmp_path / "remotion" / "public" / "vid-1" / "mascot.js").exists()
+
+
+def test_a_mascot_with_no_pinned_version_fails_with_a_comment(db_path, monkeypatch, tmp_path):
+    _mascot_job(tmp_path, monkeypatch, db_path, mascot_version=0)
+    _working_gpu(db_path, monkeypatch)
+    with mock.patch("subprocess.Popen") as popen:
+        worker._stage_and_render("vid-1")
+    popen.assert_not_called()
+    video, comments = _video(db_path)
+    assert video["status"] == "FAILED" and video["render_fail_count"] == 0
+    assert "m1" in comments[-1] and "version" in comments[-1]
+
+
+def test_a_mascot_version_with_no_code_fails_with_a_comment(db_path, monkeypatch, tmp_path):
+    _mascot_job(tmp_path, monkeypatch, db_path, mascot_version=3)
+    _working_gpu(db_path, monkeypatch)
+    with mock.patch("subprocess.Popen") as popen:
+        worker._stage_and_render("vid-1")
+    popen.assert_not_called()
+    video, comments = _video(db_path)
+    assert video["status"] == "FAILED" and video["render_fail_count"] == 0
+    assert "has no version 3" in comments[-1]
 
 
 # ── The AI review's contract ───────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import {
 import { TextRevealScene, TimelineWord } from "./scenes/TextRevealScene";
 import Subtitles, { SubtitleConfig } from "./scenes/installed/Subtitles";
 import Watermark from "./Watermark";
+import { MascotCue, MascotLayer } from "./mascot/MascotLayer";
 
 // ── Types (the shape of scene-config.json; docs/developer/09-remotion-project.md) ───
 
@@ -92,6 +93,11 @@ interface SceneConfigFile {
    */
   subtitles?: SubtitleConfig;
   music?: MusicConfig;
+  /**
+   * The mascot's cue track (a bare list), on a video that has a mascot. Data
+   * only: the drawing code comes from the mascotPath render prop.
+   */
+  mascot?: MascotCue[];
   scenes: SceneConfig[];
   sfx: SfxEntry[];
 }
@@ -116,6 +122,13 @@ interface CompositionBuilderProps {
    * scene-config.json key: that file is the agent's.
    */
   watermark?: boolean;
+  /**
+   * The video's mascot code, staged by the render worker under public/<id>/,
+   * only on a video that has a mascot. Like `watermark`, a render prop and
+   * never a scene-config.json key: the agent writes cues, never drawing code.
+   * The text audit never passes it, so it never boots the mascot's page.
+   */
+  mascotPath?: string;
 }
 
 // ── Crossfade wrapper ───────────────────────────────────────────────────────
@@ -214,6 +227,7 @@ export const CompositionBuilder: React.FC<CompositionBuilderProps> = ({
   timelinePath,
   audioPath,
   watermark,
+  mascotPath,
 }) => {
   const [sceneConfig, setSceneConfig] = useState<SceneConfigFile | null>(null);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
@@ -336,6 +350,14 @@ export const CompositionBuilder: React.FC<CompositionBuilderProps> = ({
 
         return null;
       })}
+
+      {/* ── Mascot ───────────────────────────────────────────────────────── */}
+      {/* Over every scene and under the captions, outside any Sequence (its
+          cue frames are absolute, like the word timings). Only when the
+          worker staged code AND the config has cues. */}
+      {mascotPath && Array.isArray(sceneConfig.mascot) && sceneConfig.mascot.length > 0 && (
+        <MascotLayer mascotPath={mascotPath} cues={sceneConfig.mascot} />
+      )}
 
       {/* ── Subtitles ────────────────────────────────────────────────────── */}
       {/*

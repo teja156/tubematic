@@ -3,20 +3,22 @@ import { AbsoluteFill, Composition } from "remotion";
 import { CompositionBuilder } from "./CompositionBuilder";
 import { PlaceholderComposition } from "./Composition";
 import { TextLayoutProbe } from "./audit/TextLayoutProbe";
+import { MascotSheetComposition } from "./mascot/MascotSheet";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
 // renders, plus a measurement probe. A separate composition rather than a prop
 // on CompositionBuilder, so the real render path stays untouched — the audit
 // runs pre-render from validate_job and must not be able to change what a
-// render produces.
+// render produces. The props are named, never spread: a mascotPath must not
+// reach the audit, which measures text and never boots the mascot's page.
 const TextLayoutAudit: React.FC<{
   sceneConfigPath: string;
   timelinePath: string;
   audioPath: string;
-}> = (props) => {
+}> = ({ sceneConfigPath, timelinePath, audioPath }) => {
   return (
     <AbsoluteFill>
-      <CompositionBuilder {...props} />
+      <CompositionBuilder sceneConfigPath={sceneConfigPath} timelinePath={timelinePath} audioPath={audioPath} />
       <TextLayoutProbe />
     </AbsoluteFill>
   );
@@ -80,6 +82,10 @@ export const RemotionRoot: React.FC = () => {
         calculateMetadata={durationFromTimeline}
       />
 
+      {/* A mascot's model sheet (turn, feels or act), rendered as a still by
+          mascot-tools/render-sheet.mjs through its own entry point
+          (src/mascot/sheet-index.ts); listed here so Studio can show it. */}
+      <MascotSheetComposition />
 
       {/* Phase 0 placeholder — smoke-test the container without real assets */}
       <Composition
