@@ -47,8 +47,6 @@ import html
 from fastmcp import FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
 
-import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
-import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 from fastmcp.server.middleware import Middleware
 from starlette.responses import JSONResponse
 
@@ -86,6 +84,12 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
     from tubematic_core import youtube as tyoutube
+
+# Sibling modules, imported only after the guard above: cartoon imports
+# tubematic_core itself, so importing it first broke the mcp/-only sys.path
+# that vqa/stage_script.py uses.
+import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
+import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
 JOBS_DIR     = Path(os.getenv("TUBEMATIC_JOBS_DIR", str(DATA_ROOT / "jobs")))

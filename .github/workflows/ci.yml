@@ -60,6 +60,7 @@ jobs:
           - onboard/tests
           - scripts/tests
           - vqa/tests
+          - renderer/remotion/cartoon-tools/audio/tests
     steps:
       - uses: actions/checkout@v6
 
