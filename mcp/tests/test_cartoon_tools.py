@@ -367,6 +367,21 @@ def test_a_symlink_under_the_job_is_refused_for_the_record_and_the_mix(fake_node
     with pytest.raises(cartoon.CartoonError, match="symlink"):
         cartoon.mix_file(jobs, VID)
     assert sorted(p.name for p in elsewhere.iterdir()) == ["keep.txt"]       # nothing published into, nothing removed from, the target
+    # the staging directory, the gate's and the stills' directories are leaves of their own
+    (jobs / VID / "cartoon" / "audio" / "mix").unlink()
+    (jobs / VID / "cartoon" / "audio" / "mix.new").symlink_to(elsewhere)
+    with pytest.raises(cartoon.CartoonError, match="symlink"):
+        cartoon.soundtrack(jobs, VID, remotion, GOOD_SPEC)
+    assert sorted(p.name for p in elsewhere.iterdir()) == ["keep.txt"]
+    (jobs / VID / "cartoon" / "beatgate").symlink_to(elsewhere)
+    with pytest.raises(cartoon.CartoonError, match="symlink"):
+        cartoon.beat_gate(jobs, VID, remotion, scenes)
+    with pytest.raises(cartoon.CartoonError, match="symlink"):
+        cartoon.readiness(jobs, VID, remotion, scenes)
+    (jobs / VID / "cartoon" / "stills").symlink_to(elsewhere)
+    with pytest.raises(cartoon.CartoonError, match="symlink"):
+        cartoon.stills(jobs, VID, remotion, [1])
+    assert sorted(p.name for p in elsewhere.iterdir()) == ["keep.txt"]
 
 
 def test_a_new_soundtrack_is_published_file_by_file_with_the_mix_last(fake_node, jobs, tmp_path):

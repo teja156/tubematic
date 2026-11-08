@@ -386,7 +386,7 @@ def stills(jobs_dir, video_id: str, remotion_dir: Path, frames: list[int]) -> li
         if isinstance(f, bool) or not isinstance(f, int) or f < 0 or f > MAX_FRAME:
             raise CartoonError(f"frames must be whole frame numbers, got {f!r}")
         clean.append(f)
-    outdir = cartoon_dir(jobs_dir, video_id) / STILLS_DIR
+    outdir = _below(jobs_dir, video_id, CARTOON_DIR, STILLS_DIR)
     with _Staged(jobs_dir, video_id, remotion_dir) as staged:
         proc = run_cli(remotion_dir, "still", [str(staged), str(outdir), *map(str, clean)],
                        timeout=CLI_TIMEOUT_SECS, props=_props(video_id), public_dir=Path(jobs_dir))
@@ -406,7 +406,7 @@ def _prompt_for_judge(text: str, jobs_dir, video_id: str, kind: str, record_call
 
 
 def _beatgate_outdir(jobs_dir, video_id: str) -> Path:
-    return cartoon_dir(jobs_dir, video_id) / BEATGATE_DIR
+    return _below(jobs_dir, video_id, CARTOON_DIR, BEATGATE_DIR)
 
 
 def _beat_args(jobs_dir, video_id: str, staged: Path, srcdir: Path, *extra: str) -> list[str]:
@@ -510,8 +510,11 @@ def soundtrack(jobs_dir, video_id: str, remotion_dir: Path, spec: dict) -> dict:
     adir = _below(jobs_dir, video_id, CARTOON_DIR, AUDIO_DIR)
     with _Staged(jobs_dir, video_id, remotion_dir):
         adir.mkdir(parents=True, exist_ok=True)
-        (adir / "audio-spec.json").write_text(json.dumps(spec, indent=1), encoding="utf-8")
-        voice = adir / "voice.wav"
+        # every leaf under audio/ is resolved with _below at its point of use: a
+        # link planted as any of them would carry the write to its target
+        spec_file = _below(jobs_dir, video_id, CARTOON_DIR, AUDIO_DIR, "audio-spec.json")
+        spec_file.write_text(json.dumps(spec, indent=1), encoding="utf-8")
+        voice = _below(jobs_dir, video_id, CARTOON_DIR, AUDIO_DIR, "voice.wav")
         try:
             conv = subprocess.run([ffmpeg, "-v", "error", "-y", "-i", str(audio), "-ar", "48000", "-ac", "1", str(voice)],
                                   capture_output=True, text=True, timeout=CHECK_TIMEOUT_SECS)
@@ -523,12 +526,14 @@ def soundtrack(jobs_dir, video_id: str, remotion_dir: Path, spec: dict) -> dict:
         # built beside the live mix and swapped in whole once it is complete: a
         # failed or interrupted run never leaves a partial mix.wav where the
         # worker would mux it, and the previous mix stays until the new one is
-        new = adir / f"{MIX_DIR}.new"
+        new = _below(jobs_dir, video_id, CARTOON_DIR, AUDIO_DIR, f"{MIX_DIR}.new")
+        if new.is_symlink():       # rmtree leaves a directory link in place, and the mixer would write through it
+            raise CartoonError(f"{new} is a symlink, refused")
         shutil.rmtree(new, ignore_errors=True)
         try:
             try:
                 proc = subprocess.run([python, "-I", str(mix_py), "--voice", str(voice), "--timeline", str(timeline),
-                                       "--spec", str(adir / "audio-spec.json"), "--out", str(new)],
+                                       "--spec", str(spec_file), "--out", str(new)],
                                       cwd=str(mix_py.parent), capture_output=True, text=True, timeout=SOUNDTRACK_TIMEOUT_SECS)
             except subprocess.TimeoutExpired:
                 raise CartoonError(f"the soundtrack did not finish within {SOUNDTRACK_TIMEOUT_SECS} s")
