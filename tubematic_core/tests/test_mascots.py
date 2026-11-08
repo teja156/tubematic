@@ -243,3 +243,77 @@ def test_walk_on_and_off_at_a_valid_height_pass():
 def test_walk_on_at_a_height_that_hits_the_band_is_refused():
     errs = _errs([{"frame": 30, "on": True, "x": 0.5, "y": 0.75, "scale": 0.5}])
     assert any("frame 30" in e for e in errs)
+
+
+def test_a_scale_jump_during_a_walk_that_leaves_the_safe_zone_is_refused():
+    cues = [{"frame": 0, "on": True, "x": .3, "y": .5, "scale": .4}, {"frame": 60, "x": .5, "scale": 1.2}]
+    assert any("frame 60" in e and "safe zone" in e for e in _errs(cues))
+
+
+def test_coming_on_screen_means_standing_in_view_not_just_an_on_cue():
+    assert _errs([{"frame": 299, "on": True, "x": .5, "y": .5}], total=300)
+    assert _errs([{"frame": 0, "on": True, "x": .5, "y": .5}], total=300) == []
+    assert _errs([{"frame": 0, "on": True, "x": .5, "y": .5}], total=30)   # walk-on eats the whole video
+
+
+def test_errors_name_the_cue_that_caused_them_not_a_later_one():
+    rest = [{"frame": 0, "on": True, "x": .5, "y": .5}, {"frame": 30, "y": .2, "scale": .4}]
+    base = _errs(rest + [{"frame": 40, "emotion": "sad"}])
+    plain = _errs(rest)
+    assert base == plain
+    cross = [{"frame": 0, "on": True, "x": 0.5, "y": 0.3, "scale": 0.4}, {"frame": 100, "x": 0.5, "y": 0.8}]
+    errs = _errs(cross + [{"frame": 110, "emotion": "sad"}], subtitles={"position": 0.5})
+    assert errs and all("frame 100" in e and "110" not in e for e in errs)
+    bad = _errs([{"frame": 0, "on": True, "x": .5, "y": .5}, {"frame": 30, "y": .72, "scale": .5},
+                 {"frame": 40, "emotion": "sad"}])
+    assert bad and all("frame 30" in e for e in bad) and not any("frame 40" in e for e in bad)
+
+
+def test_an_edge_walk_message_does_not_advise_staying_on_one_side():
+    errs = _errs([{"frame": 30, "on": True, "x": 0.5, "y": 0.75, "scale": 0.5}])
+    walk = [e for e in errs if "walk" in e]
+    assert walk and all("same side" not in e for e in walk)
+
+
+# ---------- agreement with the other copies ----------
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+
+def _read(rel):
+    return (ROOT / rel).read_text()
+
+
+def test_safe_zone_matches_text_audit():
+    m = re.search(r"^SAFE_ZONE = (\{[^}]*\})", _read("mcp/text_audit.py"), re.M)
+    assert eval(m.group(1)) == mascots.SAFE_ZONE
+    assert re.search(r"^FRAME_WIDTH = 1080$", _read("mcp/text_audit.py"), re.M)
+    assert re.search(r"^FRAME_HEIGHT = 1920$", _read("mcp/text_audit.py"), re.M)
+    assert (mascots.FRAME_WIDTH, mascots.FRAME_HEIGHT) == (1080, 1920)
+
+
+def test_fps_matches_root_and_mcp():
+    assert int(re.search(r"^FPS\s*=\s*(\d+)", _read("mcp/server.py"), re.M).group(1)) == mascots.FPS
+    assert {int(n) for n in re.findall(r"fps=\{(\d+)\}", _read("renderer/remotion/src/Root.tsx"))} == {mascots.FPS}
+
+
+def test_box_and_walk_constants_match_the_engine():
+    frame = _read("renderer/remotion/public/mascot/frame.html")
+    assert re.search(r"window\.KIT_W = SHEET \? \d+ : %d;" % mascots.BOX_W, frame)
+    assert re.search(r"window\.KIT_H = SHEET \? \d+ : %d;" % mascots.BOX_H, frame)
+    drv = _read("renderer/remotion/public/mascot/driver.js")
+    assert re.search(r"FEET_Y = H - %d\b" % (mascots.BOX_H - mascots.FEET_Y), drv)
+    assert int(re.search(r"WALK_PX_PER_S = (\d+)", drv).group(1)) == mascots.WALK_PX_PER_S
+    assert re.search(r"clamp\(d / WALK_PX_PER_S, \.5, 3\.2\)", drv)
+    assert (mascots.WALK_MIN_S, mascots.WALK_MAX_S) == (0.5, 3.2)
+    assert re.search(r"EDGE_PX = W / 2 \+ 40\b", drv) and mascots.EDGE_PX == mascots.BOX_W / 2 + 40
+    d = re.search(r"const st = \{ x: \.8, y: \.96, scale: 1,", drv)
+    assert d and (mascots.DEFAULT_STATE["x"], mascots.DEFAULT_STATE["y"]) == (.8, .96)
+
+
+def test_subtitle_defaults_match_subtitles_tsx():
+    src = _read("renderer/remotion/src/scenes/installed/Subtitles.tsx")
+    assert float(re.search(r"position = ([\d.]+),", src).group(1)) == mascots.SUBTITLE_POSITION
+    assert int(re.search(r"fontSize = (\d+),", src).group(1)) == mascots.SUBTITLE_FONT_SIZE
+    assert float(re.search(r"lineHeight: ([\d.]+),", src).group(1)) == mascots.SUBTITLE_LINE_HEIGHT
+    assert int(re.search(r'padding: "(\d+)px \d+px"', src).group(1)) == mascots.SUBTITLE_PAD_Y

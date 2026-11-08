@@ -177,6 +177,12 @@ SUBTITLE_LINE_HEIGHT, SUBTITLE_LINES, SUBTITLE_PAD_Y = 1.15, 2, 14
 CAPTION_SAFETY_MARGIN = 40
 
 
+# The mascot must stand in view (walk-on finished) for this long at least once:
+# a walk-on at the very end of the video would pass the "has an on cue" test
+# without a viewer ever seeing it.
+MIN_REST_FRAMES = FPS
+
+
 def _num(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
@@ -251,25 +257,22 @@ def _compile(cues, edge_dx=EDGE_PX / FRAME_WIDTH):
     st = dict(DEFAULT_STATE)
     states = [(-math.inf, dict(st), None)]
     moves = []
+    pos_cue = None
 
     def edge_x(x):
         return -edge_dx if x < 0.5 else 1 + edge_dx
 
     def moving_at(t):
-        m = None
-        for mv in moves:
-            if mv["t0"] <= t:
-                m = mv
-        if m is None or t >= m["t1"]:
-            return None
-        k = _ease((t - m["t0"]) / (m["t1"] - m["t0"]))
-        return (m["x0"] + (m["x1"] - m["x0"]) * k, m["y0"] + (m["y1"] - m["y0"]) * k)
+        m = _move_at(moves, t)
+        return None if m is None else _move_pos(m, t)
 
     for c in sorted(cues, key=lambda c: c["frame"]):
         t = c["frame"] / FPS
         prev = dict(st)
         for k in ("x", "y", "scale", "on"):
             if k in c:
+                if c[k] != st[k]:
+                    pos_cue = c["frame"]    # the cue that set the rest position, for error messages
                 st[k] = c[k]
         here = moving_at(t)
         x0 = y0 = None
@@ -284,9 +287,25 @@ def _compile(cues, edge_dx=EDGE_PX / FRAME_WIDTH):
         if x0 is not None:
             d = math.hypot((x1 - x0) * FRAME_WIDTH, (y1 - y0) * FRAME_HEIGHT)
             dur = min(WALK_MAX_S, max(WALK_MIN_S, d / WALK_PX_PER_S))
-            moves.append({"t0": t, "t1": t + dur, "x0": x0, "y0": y0, "x1": x1, "y1": y1})
-        states.append((t, dict(st), c["frame"]))
+            edge = any(v < 0 or v > 1 for v in (x0, x1))   # walks on or off across the frame edge
+            moves.append({"t0": t, "t1": t + dur, "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+                          "edge": edge, "cue": c["frame"]})
+        states.append((t, dict(st), pos_cue))
     return states, moves
+
+
+def _move_at(moves, t):
+    """The move in progress at time t (the last one started), or None."""
+    m = None
+    for mv in moves:
+        if mv["t0"] <= t:
+            m = mv
+    return m if m is not None and t < m["t1"] else None
+
+
+def _move_pos(m, t):
+    k = _ease((t - m["t0"]) / (m["t1"] - m["t0"]))
+    return (m["x0"] + (m["x1"] - m["x0"]) * k, m["y0"] + (m["y1"] - m["y0"]) * k)
 
 
 def _ease(k):
@@ -327,7 +346,6 @@ def cue_errors(cues, total_frames: int, subtitles=None) -> list:
 
     band = caption_band(subtitles)
     states, moves = _compile(good)
-    ordered = sorted(c["frame"] for c in good)
     reported = set()
 
     def report(frame, why):
@@ -336,35 +354,43 @@ def cue_errors(cues, total_frames: int, subtitles=None) -> list:
             errs.append(why)
 
     si = 0
+    rest_frames = 0
     for f in range(total_frames):
         t = f / FPS
         while si + 1 < len(states) and states[si + 1][0] <= t:
             si += 1
-        _, st, _cue_frame = states[si]
-        cue_frame = max((cf for cf in ordered if cf <= f), default=None)
-        if cue_frame is None:
-            continue
-        m = None
-        for mv in moves:
-            if mv["t0"] <= t:
-                m = mv
-        if m is not None and t < m["t1"]:
-            k = _ease((t - m["t0"]) / (m["t1"] - m["t0"]))
-            pos = {"x": m["x0"] + (m["x1"] - m["x0"]) * k, "y": m["y0"] + (m["y1"] - m["y0"]) * k, "scale": st["scale"]}
-            if _hits_band(box_at(pos), band):
-                report(cue_frame, f"the walk from the cue at frame {cue_frame} passes over the captions "
-                       f"(the band is y {band[0]:.0f}-{band[1]:.0f}): keep both positions on the same side of the "
-                       "captions, or walk the mascot off screen and back on above them")
+        _, st, state_cue = states[si]
+        m = _move_at(moves, t)
+        if m is not None:
+            x, y = _move_pos(m, t)
+            box = box_at({"x": x, "y": y, "scale": st["scale"]})
+            if _hits_band(box, band):
+                how = ("walk the mascot on or off at a height above the captions" if m["edge"] else
+                       "keep both positions on the same side of the captions, or walk the mascot off screen "
+                       "and back on above them")
+                report(m["cue"], f"the walk started by the cue at frame {m['cue']} passes over the captions "
+                       f"(the band is y {band[0]:.0f}-{band[1]:.0f}): {how}")
+            elif not m["edge"] and not _inside_safe_zone(box):
+                report(m["cue"], f"the walk started by the cue at frame {m['cue']} leaves the safe zone "
+                       f"(box x {box[0]:.0f}-{box[2]:.0f}, y {box[1]:.0f}-{box[3]:.0f}; it must stay within "
+                       f"x {SAFE_ZONE['left']}-{FRAME_WIDTH - SAFE_ZONE['right']}, "
+                       f"y {SAFE_ZONE['top']}-{FRAME_HEIGHT - SAFE_ZONE['bottom']}): a larger scale or a "
+                       "position near the edge makes the box too wide, so lower scale or keep x nearer the centre")
         elif st["on"]:
+            rest_frames += 1
             box = box_at(st)
             if _hits_band(box, band):
-                report(cue_frame, f"the cue at frame {cue_frame} puts the mascot over the captions "
+                report(state_cue, f"the cue at frame {state_cue} puts the mascot over the captions "
                        f"(box y {box[1]:.0f}-{box[3]:.0f}, caption band y {band[0]:.0f}-{band[1]:.0f}): "
                        "raise y or lower scale")
             elif not _inside_safe_zone(box):
-                report(cue_frame, f"the cue at frame {cue_frame} puts the mascot outside the safe zone "
+                report(state_cue, f"the cue at frame {state_cue} puts the mascot outside the safe zone "
                        f"(box x {box[0]:.0f}-{box[2]:.0f}, y {box[1]:.0f}-{box[3]:.0f}; it must stay within "
                        f"x {SAFE_ZONE['left']}-{FRAME_WIDTH - SAFE_ZONE['right']}, "
                        f"y {SAFE_ZONE['top']}-{FRAME_HEIGHT - SAFE_ZONE['bottom']}): move x or y toward the "
                        "centre, or lower scale")
+    if rest_frames < MIN_REST_FRAMES:
+        errs.append(f"the mascot is not on screen long enough: it must stand in view for at least "
+                    f"{MIN_REST_FRAMES} frames (1 second) after walking on, which takes 0.5-3.2 seconds. "
+                    "Bring it on earlier")
     return errs
