@@ -317,3 +317,25 @@ def test_subtitle_defaults_match_subtitles_tsx():
     assert int(re.search(r"fontSize = (\d+),", src).group(1)) == mascots.SUBTITLE_FONT_SIZE
     assert float(re.search(r"lineHeight: ([\d.]+),", src).group(1)) == mascots.SUBTITLE_LINE_HEIGHT
     assert int(re.search(r'padding: "(\d+)px \d+px"', src).group(1)) == mascots.SUBTITLE_PAD_Y
+
+
+# ---------- boxes_at_frames (the audit's view of where the mascot stands) ----------
+
+def test_boxes_at_frames_is_none_until_the_mascot_is_on_and_the_rest_box_after_the_walk():
+    cues = [{"frame": 30, "on": True, "x": 0.5, "y": 0.5}]
+    boxes = mascots.boxes_at_frames(cues, [0, 29, 600])
+    assert boxes[0] is None and boxes[29] is None
+    assert boxes[600] == mascots.box_at({"x": 0.5, "y": 0.5, "scale": 1.0})
+
+
+def test_boxes_at_frames_follows_the_walk_and_hides_the_mascot_after_it_leaves():
+    cues = [{"frame": 0, "on": True, "x": 0.5, "y": 0.5}, {"frame": 300, "on": False}]
+    mid = mascots.boxes_at_frames(cues, [310, 899])
+    assert mid[310] is not None and mid[310] != mascots.box_at({"x": 0.5, "y": 0.5})
+    assert mid[899] is None
+
+
+def test_boxes_at_frames_applies_the_cue_scale():
+    cues = [{"frame": 0, "on": True, "x": 0.5, "y": 0.5, "scale": 0.5}]
+    box = mascots.boxes_at_frames(cues, [800])[800]
+    assert box == mascots.box_at({"x": 0.5, "y": 0.5, "scale": 0.5})

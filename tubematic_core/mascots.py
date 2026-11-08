@@ -39,6 +39,13 @@ MASCOT_GPU_UNKNOWN = (
 )
 
 
+# Shown when a mascot is chosen for a Cartoon 3D video. Shared so the API and the
+# MCP server refuse in the same words.
+MASCOT_NOT_ON_CARTOON_3D = ("Mascots are not available in the Cartoon 3D style (its 3D world "
+                            "has no place for a flat watercolour character). Choose another "
+                            "visual style, or no mascot.")
+
+
 class MascotError(ValueError):
     """A mascot, version or path that cannot be used. The message says why."""
 
@@ -311,6 +318,30 @@ def _move_pos(m, t):
 def _ease(k):
     k = min(1.0, max(0.0, k))
     return k * k * (3 - 2 * k)
+
+
+def boxes_at_frames(cues, frames) -> dict:
+    """{frame: box} for each requested frame: where the mascot's canvas sits when
+    that frame renders (walking included), or None while it is off screen. `cues`
+    must already pass cue_errors. Used by the text-layout audit, which measures
+    text at a few frames and asks whether the mascot would stand over it."""
+    states, moves = _compile(cues)
+    out = {}
+    for f in frames:
+        t = f / FPS
+        st = states[0][1]
+        for s in states:
+            if s[0] <= t:
+                st = s[1]
+        m = _move_at(moves, t)
+        if m is not None:
+            x, y = _move_pos(m, t)
+            out[f] = box_at({"x": x, "y": y, "scale": st["scale"]})
+        elif st["on"]:
+            out[f] = box_at(st)
+        else:
+            out[f] = None
+    return out
 
 
 def cue_errors(cues, total_frames: int, subtitles=None) -> list:

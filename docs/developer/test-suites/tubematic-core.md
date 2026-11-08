@@ -175,4 +175,4 @@ caption band are refused), walking on or off the screen is allowed at a valid he
 caption band frees the space. `EMOTIONS` is checked against the engine's `sheet.js` so the two lists
 cannot drift. `resolve_default` pins `none` versus inherit, and that an archived or unapproved
 default becomes "no mascot" rather than silently falling back. The path helpers refuse bad ids and
-symlinks below the root.
+symlinks below the root. `boxes_at_frames` (where the text-layout audit asks whether the mascot stands over measured text) is pinned for off-screen frames, rest frames, a walk in progress and the cue scale.

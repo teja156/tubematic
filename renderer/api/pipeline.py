@@ -1315,9 +1315,7 @@ def _mascot_approval_error(con, mascot_id) -> str:
     return ""
 
 
-MASCOT_NOT_ON_CARTOON_3D = ("Mascots are not available in the Cartoon 3D style (its 3D world "
-                            "has no place for a flat watercolour character). Choose another "
-                            "visual style, or no mascot.")
+MASCOT_NOT_ON_CARTOON_3D = tmascots.MASCOT_NOT_ON_CARTOON_3D
 
 
 def _seed_mascot(con, project_id, visual_style: str) -> str:
