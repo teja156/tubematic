@@ -121,7 +121,7 @@ them every second, because nothing signals the supervisor when a process that is
 adoption and the heartbeat. It still takes the lock, so beside a live supervisor it exits at once
 like any other tick.
 
-## The three lanes
+## The four lanes
 
 Each pass fills four lanes:
 
