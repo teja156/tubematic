@@ -27,7 +27,14 @@ same frame must paint the same pixels.
 - Never use `Math.random()`, `Date.now()`, `performance.now()` or any state that survives between calls.
 - Before each separate part (body, each arm, each leg, eyes, mouth, emote…), call a seed function so a
   part's hand-drawn wobble is the same on every call and re-boils only when the engine's boil frame
-  changes: `const rs = part => boilSeed(\`mymascot ${id} ${part}\`); rs('body');`. Take `id` from
+  changes:
+
+  ```js
+  const rs = part => boilSeed('mymascot ' + id + ' ' + part);
+  rs('body');
+  ```
+
+  Take `id` from
   `o.boilKey ?? 1`, never from a counter that increments per call.
 - Do not cache drawn results in module variables between calls.
 
@@ -37,7 +44,8 @@ Honour all of these:
 
 - pose: `dx`, `dy` (in u; negative is up), `sq` (squash; negative stretches), `take`, `rot`, `flip`, `sx`, `sy`
 - arms: `aL`, `aR` (raise angle: 0 straight out, positive up, negative down)
-- legs: `walk` (a phase number while walking, `null` when standing), `noLegs`, `noShadow`
+- legs: `walk` (a phase number while walking, `null` when standing), `noShadow`; `noLegs` is an optional
+  convention (the engine never sets it): supporting it is good practice, not required
 - view: `o.view` is one of `front`, `q` (three-quarter), `side`, `back`. Each is a **separately
   drawn key view facing screen-right**; `flip` mirrors it (the three-quarter view, flipped, is also what a
   video shows while the mascot walks or faces left or right, so it must look good walking). Never fake a turn by squashing the front view. A
@@ -49,7 +57,8 @@ Honour all of these:
   tint them.
 - emote: draw the emote at the end with `emote(o.emote, ex, ey, u * .9, o.emoteK ?? 1, o.emoteAge ?? T)`.
   Kinds in `EMOTE_TOP` sit over the head, the others by its top corner. Place them near the head, not on it.
-- `o.draw`, when present, is a callback `(u, sw)` to call inside the body-local space after the face.
+- `o.draw` is an optional convention too (the engine never sets it); the shipped mascot calls it, when present, as
+  a callback `(u, sw)` inside the body-local space after the face. You may leave it out.
 
 ## The face
 

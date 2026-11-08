@@ -466,3 +466,13 @@ def test_a_failed_mascot_with_an_approved_version_is_still_pickable_and_seeds(db
     assert _create()["mascot_id"] == "moss"
     _video()
     assert "error" not in server.update_video(VID, mascot_id="moss")
+
+
+def test_write_scene_config_docstring_lists_every_cue_value():
+    """The agent learns the allowed values from the tool description, not from
+    refusals: a value added to the shared module must be named there too."""
+    doc = server.write_scene_config.fn.__doc__ if hasattr(server.write_scene_config, "fn") else server.write_scene_config.__doc__
+    for name in (*tmascots.EMOTIONS, *tmascots.LOOKS, *tmascots.FACINGS):
+        assert name in doc, name
+    assert str(tmascots.MIN_REST_FRAMES) in doc
+    assert str(tmascots.SCALE_MIN) in doc and str(tmascots.SCALE_MAX) in doc

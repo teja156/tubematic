@@ -6059,12 +6059,17 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     mascot: the cue track of the video's mascot, a list of cue objects (data,
             never drawing code), required when get_video's mascot is not null
             and refused when it is. A cue is {frame, and any of: emotion, x, y,
-            scale, look, facing, jump, on}; x and y are where the mascot's feet
-            stand as fractions of the frame, "on" true walks it in (false
-            walks it off). The mascot reacts to the narration and never speaks,
-            so there is no talk cue. It must stand in view for at least a
-            second, inside the safe zone and clear of the captions at rest and
-            while walking; a cue that breaks a rule is refused with the reason.
+            scale, look, facing, jump, on}. emotion is one of neutral, happy,
+            excited, thinking, idea, surprised, confused, sad, love, cool. look
+            is one of up, down, left, right, none; facing is one of left,
+            right, front. x and y (0 to 1) are where the mascot's feet stand
+            as fractions of the frame, scale is 0.4 to 1.2, jump is true or
+            false, "on" true walks it in (false walks it off). It starts off
+            screen. The mascot reacts to the narration and never speaks,
+            so there is no talk cue. It must stand in view for at least 30 frames
+            (one second) at rest, inside the safe zone (x 60-1020, y 150-1750)
+            and clear of the caption band, at rest and while walking (walking
+            across a frame edge excepted); a cue that breaks a rule is refused with the reason.
             The video is pinned to the mascot's approved version by the first
             write, and a revision keeps it.
 
@@ -7099,7 +7104,8 @@ def render_mascot_sheets(mascot_id: str, code: str, sheet: str):
 
     Works only while the mascot is BUILDING. sheet is "turn" (the character
     turning around), "feels" (the ten emotions) or "act" (its actions); call
-    once per sheet. code is the complete drawing code. Changing it discards the
+    once per sheet. code is the complete drawing code (at most 200,000
+    characters). Changing it discards the
     sheets rendered from the old code, so render all three again from the final
     code before submit_mascot. Every call counts toward a small per-attempt cap,
     a failed render too (get_mascot_job's renders_left).

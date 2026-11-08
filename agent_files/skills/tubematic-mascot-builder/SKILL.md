@@ -33,7 +33,8 @@ skill's directory. **Read it before writing a line.**
    - A fresh `new` with no `based_on_code` has no code to start from: build from the contract in the guide.
 2. Write the complete drawing code (one file's worth of JavaScript, as a string).
 3. Render and look. Call `render_mascot_sheets` with the code and **one** sheet name per call: `turn`,
-   `feels`, `act`. Every call returns a picture. **Look at every picture** with your image-viewing ability
+   `feels`, `act`. A successful call returns a picture; a failed render returns an error instead (read it, fix
+   the code, call again: the failure still cost a render). **Look at every picture** with your image-viewing ability
    before deciding anything. Code that runs is not a mascot that looks right. Judge it against the checklist
    below, fix the code, and render again.
 4. Mind the cap. Every render counts, a failed render too, and `renders_left` (in each result and in
@@ -70,4 +71,4 @@ skill's directory. **Read it before writing a line.**
   video, do not read or write other mascots, do not write files, do not run shell commands.
 - The code must not use the network, web fonts, images from a URL, `fetch`, `import`, or anything that names
   a character from another product. Draw everything with the helpers.
-- Do not exceed the code size limit the render tool states; keep the function lean.
+- Keep the function lean: the render tool states a maximum code size, and a tidy mascot is far below it.

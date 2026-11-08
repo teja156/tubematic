@@ -677,7 +677,7 @@ write **data only**: you never write drawing code for it, and you never pick or 
 
 - **`mascot` is `null`: never write a `mascot` key.** The tool refuses it.
 - **`mascot` is set: add a top-level `mascot` key to the scene-config, a plain list of cue objects, and write it
-  with `write_scene_config` like everything else.** The key names, value ranges and what each does are in
+  with `write_scene_config` like everything else.** The key names, allowed values and bounds are in
   that tool's description; the tool and `validate_job` return a message for every cue that breaks a rule, and
   a video with a mascot and no cues fails validation. Use `get_timeline(video_id, include_words=True)` to
   put each reaction on the word that earns it.
