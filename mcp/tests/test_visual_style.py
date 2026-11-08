@@ -595,14 +595,15 @@ def test_a_commit_that_fails_after_the_rename_puts_the_previous_config_back(db, 
     assert "error" not in server.write_scene_config("vid_c12", _cartoon_config(total_frames=300))
     path = server.tjobs.job_file(server.JOBS_DIR, "vid_c12", "scene-config.json")
     before = path.read_bytes()
-    real_commit = sqlite3.Connection.commit
+    real_replace = server.os.replace
 
-    def failing_commit(con):
+    def replace_then_fail(src, dst):          # the rename lands, then the transaction's commit fails
+        real_replace(src, dst)
         raise sqlite3.OperationalError("disk I/O error")
-    monkeypatch.setattr(sqlite3.Connection, "commit", failing_commit)
+    monkeypatch.setattr(server.os, "replace", replace_then_fail)
     result = server.write_scene_config("vid_c12", _cartoon_config(total_frames=300, beats=[
         {"start": 0, "end": 149, "shot": "a", "cast": []}, {"start": 150, "end": 299, "shot": "b", "cast": []}]))
-    monkeypatch.setattr(sqlite3.Connection, "commit", real_commit)
+    monkeypatch.setattr(server.os, "replace", real_replace)
     assert "could not be written" in result["error"] and "disk I/O error" in result["error"]
     assert path.read_bytes() == before
     assert not list(path.parent.glob("*.tmp"))
