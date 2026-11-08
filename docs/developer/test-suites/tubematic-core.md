@@ -3,7 +3,7 @@
 Covers `tubematic_core/` — the one Python package shared by every Tubematic process: schema
 migrations (`db.py`), structured JSONL logging (`logging.py`), the canonical version string
 (`version.py`), the spend ledger with its model prices (`usage.py`, `prices.py`), what each
-ElevenLabs model can speak (`voice_models.py`), which YouTube URLs mining accepts (`youtube.py`),
+ElevenLabs model can speak (`voice_models.py`), which on-screen mascot a video may use and whether its cue track is placeable (`mascots.py`), which YouTube URLs mining accepts (`youtube.py`),
 and the rules for ids that become paths and where a video's files live (`ids.py`, `jobfiles.py`).
 See [Database — Migrations](../03-database.md#migrations) and
 [Architecture — Duplication](../01-architecture.md#duplication-is-intentional) for what each module
@@ -161,3 +161,18 @@ shape of "a shell script sets a variable and forgets to fill it in" — which
 lookup rule is "the `VERSION` file beside the package directory," verified directly in
 `test_version_file_sits_beside_the_package`, because that is the same relationship the Dockerfile's
 `COPY VERSION /app/lib/VERSION` has to preserve for the in-container lookup to agree with the host.
+
+**`test_mascots_migration.py` guards that adding mascots changes nothing for an existing install.**
+Existing projects and videos must come out of the migration with no mascot, the only new row is the
+shipped Tubi (ready, version 1, with an empty `code` because builtin code lives in a versioned repo
+file, never in a shipped migration), and a second run must not overwrite anything.
+
+**`test_mascots.py` guards the rules every process shares.** `cue_errors` is the only thing between
+the per-video agent's cue track and a mascot standing on the captions in a finished video, so the
+tests use the engine's real box (the 560x640 canvas with the feet 50 above its bottom) and pin: a
+walk is checked along its path (two positions that are each clear but on opposite sides of the
+caption band are refused), walking on or off the screen is allowed at a valid height, and a hidden
+caption band frees the space. `EMOTIONS` is checked against the engine's `sheet.js` so the two lists
+cannot drift. `resolve_default` pins `none` versus inherit, and that an archived or unapproved
+default becomes "no mascot" rather than silently falling back. The path helpers refuse bad ids and
+symlinks below the root.
