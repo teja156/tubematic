@@ -423,3 +423,46 @@ def test_summarise_warns_once_per_text_with_the_mascot_cues():
     mascot = [w for w in warnings if "mascot" in w.lower()]
     assert len(mascot) == 1 and "Look here" in mascot[0] and "scene 0" in mascot[0]
     assert not [w for w in text_audit.summarise(out, cfg) if "mascot" in w.lower()]
+
+
+# ── the pin follows the mascot; focus checks ────────────────────────────────
+
+def test_a_different_mascot_or_none_resets_the_version_pin(db):
+    _gpu()
+    _mascot("moss")
+    _mascot("fern")
+    _video(mascot="moss", mver=3)
+    assert "error" not in server.update_video(VID, mascot_id="fern")
+    assert (_col("mascot_id"), _col("mascot_version")) == ("fern", 0)
+    with server._conn() as con:
+        con.execute("UPDATE videos SET mascot_version = 2 WHERE id = ?", (VID,))
+    server.update_video(VID, mascot_id="")
+    assert _col("mascot_version") == 0
+
+
+def test_echoing_the_same_mascot_keeps_its_pin_and_a_cartoon_switch_resets_it(db):
+    _gpu()
+    _mascot("moss")
+    _video(mascot="moss", mver=3)
+    server.update_video(VID, mascot_id="moss")
+    assert _col("mascot_version") == 3
+    server.update_video(VID, visual_style="cartoon_3d")
+    assert (_col("mascot_id"), _col("mascot_version")) == ("", 0)
+
+
+def test_a_never_approved_default_seeds_nothing(db):
+    _gpu()
+    _mascot(approved=0)
+    _project(default_mascot="moss")
+    assert _create()["mascot_id"] == ""
+
+
+def test_a_failed_mascot_with_an_approved_version_is_still_pickable_and_seeds(db):
+    _gpu()
+    _mascot()
+    with server._conn() as con:
+        con.execute("UPDATE mascots SET status = 'FAILED' WHERE id = 'moss'")
+    _project(default_mascot="moss")
+    assert _create()["mascot_id"] == "moss"
+    _video()
+    assert "error" not in server.update_video(VID, mascot_id="moss")

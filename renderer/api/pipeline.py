@@ -2734,6 +2734,10 @@ def create_pipeline_blueprint() -> Blueprint:
                 set_sql = [x for x in set_sql if not x.startswith("mascot_id")]
                 set_params = [fields[k] for k in fields]
                 set_sql.append("mascot_id = ''")
+            # The pin belongs to the mascot it was taken for: a different mascot
+            # (or none) starts unpinned, or it would inherit the old version number.
+            if will_be_cartoon or ("mascot_id" in fields and fields["mascot_id"] != stored_mascot):
+                set_sql.append("mascot_version = 0")
             # Any human status change is a human acting on the video, so it
             # releases a stuck flag and starts the no-progress count afresh
             # (TMDEV-129). Only a status change: renaming a stuck video is not

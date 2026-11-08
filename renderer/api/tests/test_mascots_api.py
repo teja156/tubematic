@@ -563,6 +563,25 @@ def test_switching_to_cartoon_3d_clears_the_mascot_in_the_same_update(client, db
     assert _mascot_of(db_path, vid) == ""
 
 
+def test_the_version_pin_follows_the_mascot_it_was_taken_for(client, db_path):
+    _gpu(db_path, "working")
+    _mascot(db_path, "fern")
+    vid = _proposed(client)
+    client.patch(f"/videos/{vid}", json={"mascot_id": "tubi"})
+    _sql(db_path, "UPDATE videos SET mascot_version = 1 WHERE id = ?", (vid,))
+    client.patch(f"/videos/{vid}", json={"mascot_id": "tubi", "title": "t"})      # echo keeps it
+    assert _sql(db_path, "SELECT mascot_version FROM videos WHERE id = ?", (vid,))[0][0] == 1
+    assert client.patch(f"/videos/{vid}", json={"mascot_id": "fern"}).status_code == 200
+    assert _sql(db_path, "SELECT mascot_version FROM videos WHERE id = ?", (vid,))[0][0] == 0
+    _sql(db_path, "UPDATE videos SET mascot_version = 1 WHERE id = ?", (vid,))
+    client.patch(f"/videos/{vid}", json={"mascot_id": ""})
+    assert _sql(db_path, "SELECT mascot_version FROM videos WHERE id = ?", (vid,))[0][0] == 0
+    client.patch(f"/videos/{vid}", json={"mascot_id": "tubi"})
+    _sql(db_path, "UPDATE videos SET mascot_version = 1 WHERE id = ?", (vid,))
+    client.patch(f"/videos/{vid}", json={"visual_style": "cartoon_3d"})
+    assert _sql(db_path, "SELECT mascot_id, mascot_version FROM videos WHERE id = ?", (vid,))[0] == ("", 0)
+
+
 def test_mascot_id_freezes_after_topic_proposed(client, db_path):
     _gpu(db_path, "working")
     vid = _proposed(client)

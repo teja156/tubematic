@@ -92,7 +92,23 @@ def test_a_change_job_names_the_request_and_hands_over_the_approved_code(db):
     job = server.get_mascot_job("moss")
     assert job["kind"] == "change"
     assert job["change_request"] == "make it blue" and job["description"] == "a tardigrade"
-    assert job["previous_code"] == "// approved v1"
+    assert job["previous_code"] == "// approved v1" and job["previous_version"] == 1
+
+
+def test_a_change_after_an_unapproved_draft_hands_over_that_draft(db):
+    _mascot(status="BUILDING", approved=0, versions=((1, "// reviewed v1", "a"), (2, "", "shorter legs")))
+    with server._conn() as con:
+        con.execute("UPDATE mascot_versions SET approved_at = '' WHERE mascot_id = 'moss'")
+    job = server.get_mascot_job("moss")
+    assert job["kind"] == "change"
+    assert (job["previous_code"], job["previous_version"], job["approved_version"]) == ("// reviewed v1", 1, 0)
+
+
+def test_a_change_after_a_reviewed_draft_of_an_approved_mascot_hands_over_the_draft_not_the_approved(db):
+    _mascot(status="BUILDING", approved=1,
+            versions=((1, "// approved v1", "a"), (2, "// reviewed v2", "b"), (3, "", "bluer")))
+    job = server.get_mascot_job("moss")
+    assert (job["previous_code"], job["previous_version"], job["approved_version"]) == ("// reviewed v2", 2, 1)
 
 
 def test_a_job_hands_over_the_code_of_the_mascot_it_is_based_on(db):

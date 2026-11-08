@@ -2582,6 +2582,7 @@ def update_video(
         gpu_err = _cartoon3d_gpu_error(visual_style)
         if gpu_err:
             return {"error": gpu_err}
+    stored_mascot_id = ""
     if mascot_id is not None or visual_style is not None:
         # Judged against the style the video will have once this lands. A pick
         # is checked on CHANGE only, so echoing the stored mascot is never
@@ -2595,6 +2596,7 @@ def update_video(
                                   (video_id,)).fetchone()
             if not cur_vid:
                 return {"error": f"Video not found: {video_id}"}
+            stored_mascot_id = cur_vid["mascot_id"] or ""
             will_be_cartoon = (visual_style if visual_style is not None
                                else cur_vid["visual_style"]) == "cartoon_3d"
             if mascot_id and mascot_id != (cur_vid["mascot_id"] or ""):
@@ -2647,6 +2649,10 @@ def update_video(
     agent_locked = [k for k in AGENT_CHECKPOINT_FIELDS if k in fields]
     set_sql = [f"{k} = ?" for k in fields]
     set_params = list(fields.values())
+    # The pin belongs to the mascot it was taken for: a different mascot (or
+    # none) starts unpinned. Keep in sync: renderer/api/pipeline.py's patch_video.
+    if "mascot_id" in fields and fields["mascot_id"] != stored_mascot_id:
+        set_sql.append("mascot_version = 0")
     where_sql, where_params = "", []
     checked_status = None
     if topic_locked or agent_locked:
@@ -7038,13 +7044,15 @@ def get_mascot_job(mascot_id: str) -> dict:
     """Read the brief for the mascot you are building.
 
     Returns {mascot_id, name, kind, description, change_request, previous_code,
-    based_on_code, emotions, sheets, renders_left}.
+    previous_version, approved_version, based_on_code, emotions, sheets,
+    renders_left}.
 
     kind "new": draw the character in description. "surprise": the human gave
     no description, so invent a character of your own. "change": a human
-    reviewed the approved version and asked for change_request; previous_code
-    is that approved version's code to start from, and the result is a new
-    version that replaces it only when a human approves it. based_on_code, when
+    reviewed a version and asked for change_request; previous_code
+    is the code of the version the human reviewed (previous_version: the last
+    version before this one that has code, approved or not) to start from, and
+    the result replaces the approved_version only when a human approves it. based_on_code, when
     not empty, is another mascot's approved code to start from.
     emotions are the ten faces the feels sheet must show. sheets says which of
     the turn, feels and act sheets are rendered for the code as it stands;
@@ -7059,7 +7067,14 @@ def get_mascot_job(mascot_id: str) -> dict:
         if draft is None:
             return {"error": f"mascot {mascot_id!r} has no change in progress"}
         version, _code, request = draft["version"], draft["code"], draft["change_request"]
-        previous = _mascot_code(con, mascot_id, row["approved_version"]) if row["approved_version"] else ""
+        # What the human reviewed: the highest version below the draft with code
+        # (the draft they asked changes to, approved or not), not the approved one.
+        prior = con.execute("SELECT version FROM mascot_versions WHERE mascot_id = ? AND version < ? "
+                            "AND code != '' ORDER BY version DESC LIMIT 1", (mascot_id, version)).fetchone()
+        if prior is None and row["approved_version"] and row["approved_version"] < version:
+            prior = {"version": row["approved_version"]}     # a builtin: its code is a repo file
+        previous_version = prior["version"] if prior else 0
+        previous = _mascot_code(con, mascot_id, previous_version) if previous_version else ""
         base = row["based_on"]
         base_row = con.execute("SELECT approved_version FROM mascots WHERE id = ?", (base,)).fetchone() if base else None
         based_on = _mascot_code(con, base, base_row["approved_version"]) if base_row and base_row["approved_version"] else ""
@@ -7070,7 +7085,8 @@ def get_mascot_job(mascot_id: str) -> dict:
     return {
         "mascot_id": mascot_id, "name": row["name"], "kind": kind,
         "description": row["description"], "change_request": request,
-        "previous_code": previous, "based_on_code": based_on,
+        "previous_code": previous, "previous_version": previous_version,
+        "approved_version": row["approved_version"], "based_on_code": based_on,
         "emotions": list(tmascots.EMOTIONS),
         "sheets": _mascot_sheet_state(mascot_id, version),
         "renders_left": max(0, tmascots.MAX_SHEET_RENDERS_PER_ATTEMPT - row["sheet_renders"]),
