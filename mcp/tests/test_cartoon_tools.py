@@ -342,6 +342,39 @@ def test_a_failed_soundtrack_leaves_the_previous_mix_in_place(fake_node, jobs, t
     assert sorted(p.name for p in good.parent.parent.iterdir()) == ["audio-spec.json", "mix", "voice.wav"]   # no mix.new
 
 
+def test_a_new_soundtrack_is_published_file_by_file_with_the_mix_last(fake_node, jobs, tmp_path):
+    """The live mix directory is never removed or emptied: each new file is
+    moved over its predecessor, mix.wav last and atomically, and only then
+    are files the new build did not produce taken away."""
+    _, remotion, _ = fake_node
+    (tmp_path / "bin" / "ffmpeg").write_text(f"#!{sys.executable}\nimport sys\nopen(sys.argv[-1], 'wb').write(b'RIFF')\n")
+    (tmp_path / "bin" / "ffmpeg").chmod(0o755)
+    audio_dir = remotion / "cartoon-tools" / "audio"
+    audio_dir.mkdir(parents=True)
+    (audio_dir / "mix.py").write_text("import os, sys\nout = sys.argv[sys.argv.index('--out') + 1]\nos.makedirs(out, exist_ok=True)\n"
+                                      "open(os.path.join(out, 'cues.md'), 'w').write('# new cues')\n"
+                                      "open(os.path.join(out, 'mix.wav'), 'wb').write(b'NEWMIX')\n")
+    good = cartoon.mix_file(jobs, VID)
+    good.parent.mkdir(parents=True)
+    good.write_bytes(b"GOOD")
+    (good.parent / "stem_voice.wav").write_bytes(b"OLDSTEM")
+    replaced = []
+    real_replace = os.replace
+
+    def watch(src, dst):
+        if os.path.basename(dst) == "mix.wav":
+            assert good.read_bytes() == b"GOOD" and (good.parent / "cues.md").read_text() == "# new cues"   # the mix goes last
+        replaced.append(os.path.basename(dst))
+        real_replace(src, dst)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(cartoon.os, "replace", watch)
+        result = cartoon.soundtrack(jobs, VID, remotion, GOOD_SPEC)
+    assert replaced == ["cues.md", "mix.wav"]
+    assert good.read_bytes() == b"NEWMIX" and result["cues"] == "# new cues"
+    assert sorted(p.name for p in good.parent.iterdir()) == ["cues.md", "mix.wav"]           # the stale stem is gone
+    assert sorted(p.name for p in good.parent.parent.iterdir()) == ["audio-spec.json", "mix", "voice.wav"]
+
+
 def test_a_failing_engine_is_reported_with_its_last_lines(fake_node, jobs, tmp_path):
     _, remotion, _ = fake_node
     (tmp_path / "bin" / "ffmpeg").write_text(f"#!{sys.executable}\nimport sys\nopen(sys.argv[-1], 'wb').write(b'RIFF')\n")

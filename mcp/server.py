@@ -4433,19 +4433,24 @@ def submit_render(video_id: str) -> dict:
 
     # A Cartoon 3D video that has not passed the beat gate does not render,
     # whether or not the agent remembered validate_job (TMDEV-185).
-    cartoon_err = _cartoon_block(video_id)
-    if cartoon_err:
-        return cartoon_err
+    # Under the video's source lock from the readiness check to the queue: no
+    # write_scene_file, delete_scene_file or cartoon_soundtrack can land
+    # between the beat gate's answer, the frozen fingerprint and the status
+    # that makes every later write refuse (TMDEV-185).
+    with _source_lock(video_id):
+        cartoon_err = _cartoon_block(video_id)
+        if cartoon_err:
+            return cartoon_err
 
-    # Atomically claim the VOICE_READY → RENDER_QUEUED transition — the guard
-    # is expressed in the UPDATE's own WHERE clause (not a separate
-    # SELECT-then-compare), closing the TOCTOU window a second concurrent
-    # call could otherwise also pass through.
-    if not _set_status(video_id, "RENDER_QUEUED", only_if="VOICE_READY"):
-        with _conn() as con:
-            cur_row = con.execute("SELECT status FROM videos WHERE id = ?", (video_id,)).fetchone()
-        current = cur_row["status"] if cur_row else "unknown"
-        return {"error": "status_mismatch", "current_status": current, "expected": "VOICE_READY"}
+        # Atomically claim the VOICE_READY → RENDER_QUEUED transition — the guard
+        # is expressed in the UPDATE's own WHERE clause (not a separate
+        # SELECT-then-compare), closing the TOCTOU window a second concurrent
+        # call could otherwise also pass through.
+        if not _set_status(video_id, "RENDER_QUEUED", only_if="VOICE_READY"):
+            with _conn() as con:
+                cur_row = con.execute("SELECT status FROM videos WHERE id = ?", (video_id,)).fetchone()
+            current = cur_row["status"] if cur_row else "unknown"
+            return {"error": "status_mismatch", "current_status": current, "expected": "VOICE_READY"}
 
     # The claim's job is done now that the video has left the window — release
     # it explicitly rather than relying on set_video_status's hook (this path
@@ -5008,6 +5013,36 @@ def _split_source_name(scene_name: str):
     return (m.group("dir"), m.group("stem"), m.group("ext") or ".tsx"), None
 
 
+_source_locks: dict = {}
+_source_locks_guard = threading.Lock()
+_FROZEN_STATUSES = ("RENDER_QUEUED", "RENDERING")
+
+
+def _source_lock(video_id: str) -> threading.Lock:
+    """One lock per video round everything that changes or freezes its
+    generated source: write_scene_file, delete_scene_file, cartoon_soundtrack
+    and submit_render's readiness-freeze-queue sequence. The MCP server is
+    the one process that writes the tree, so an in-process lock serialises
+    them: a write cannot land between the beat gate's answer and the queue,
+    and a write that saw VOICE_READY cannot land after the queue did."""
+    with _source_locks_guard:
+        return _source_locks.setdefault(video_id, threading.Lock())
+
+
+def _source_frozen_error(video_id: str) -> dict | None:
+    """The status_mismatch error when the video is queued or rendering, when
+    its generated source and soundtrack must not change: the worker bundles
+    the tree while it renders (a Cartoon 3D video once per segment) and muxes
+    the mix at the end. None otherwise, including for an unknown video."""
+    with _conn() as con:
+        row = con.execute("SELECT status FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if row and row["status"] in _FROZEN_STATUSES:
+        return {"error": "status_mismatch", "video_id": video_id, "current_status": row["status"],
+                "detail": "the video is queued or rendering, so its scene files and soundtrack cannot change now; "
+                          "wait for the render (REVISION_REQUESTED or VIDEO_READY) and change them then"}
+    return None
+
+
 def _module_target(scene_name: str, video_id: str):
     """((video_id, (dirname, stem, ext)), None) for a Cartoon 3D module name,
     or (None, error). list_scene_files hands modules out composed with their
@@ -5015,9 +5050,11 @@ def _module_target(scene_name: str, video_id: str):
     ('sets/street.ts') with a video_id, and read_scene_file and
     delete_scene_file take both through this one parser: a leading component
     is the video when the name is deeper than a module can be, when no
-    video_id is given, or when it is that video_id; a leading component that
-    is another video's source directory (and not a subdirectory of this
-    video's) is a conflict, never silently a subdirectory.
+    video_id is given, or when it is that video_id; with a video_id given, any
+    other two-component name is a module in a subdirectory of that video. The
+    grammar reads the two arguments only, never the filesystem, so a name means
+    the same thing whatever directories happen to exist; a three-component
+    name whose video differs from the video_id is a conflict error.
     """
     parts = scene_name.split("/")
     if len(parts) > 3 or "" in parts:
@@ -5031,14 +5068,6 @@ def _module_target(scene_name: str, video_id: str):
             return None, (f"conflicting video_id: scene_name '{scene_name}' names video '{head}' but video_id is "
                           f"'{video_id}' — pass one or the other")
         video_id, scene_name = head, rest
-    elif len(parts) == 2:
-        err = _video_id_error(video_id)
-        if err:
-            return None, err["error"]
-        head = parts[0]
-        if (tids.is_component(head) and (SCENES_DIR / head).is_dir() and not (SCENES_DIR / video_id / head).is_dir()):
-            return None, (f"conflicting video_id: scene_name '{scene_name}' names video '{head}' but video_id is "
-                          f"'{video_id}' — pass one or the other")
     if not video_id:
         return None, f"scene_name '{scene_name}' is a Cartoon 3D module, which belongs to a video: pass its video_id"
     err = _video_id_error(video_id)
@@ -5791,43 +5820,42 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
     # The useful check. The path-traversal guard is the shape check at the
     # top (_video_id_error).
     with _conn() as con:
-        row = con.execute("SELECT id, status FROM videos WHERE id = ?", (video_id,)).fetchone()
+        row = con.execute("SELECT id FROM videos WHERE id = ?", (video_id,)).fetchone()
     if not row:
         return {"error": f"Video not found: {video_id}"}
-    if row["status"] in ("RENDER_QUEUED", "RENDERING"):
-        # the worker bundles the generated tree while it renders (a Cartoon 3D
-        # video once per segment): what it renders must be what was validated
-        return {"error": "status_mismatch", "video_id": video_id, "current_status": row["status"],
-                "detail": "the video is queued or rendering, so its scene files cannot change now; "
-                          "wait for the render (REVISION_REQUESTED or VIDEO_READY) and write then"}
-
-    guard_err = _guard_scene_work(video_id)  # TMDEV-61
-    if guard_err:
-        return guard_err
-
     dirname, stem, ext = split
     try:
         path = _source_path(video_id, dirname, stem, ext)
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # written beside the file and moved over it: a short write, a full disk or
-    # a kill mid-write never leaves a truncated module where the last good one was
-    tmp = None
-    try:
-        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".", suffix=".tmp")
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(tsx_content)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, path)
-    except OSError as e:
+    # The status is read and the file replaced under the video's source lock,
+    # the one submit_render holds from the beat gate's answer to the queue:
+    # a write never lands on a queued or rendering video.
+    with _source_lock(video_id):
+        frozen = _source_frozen_error(video_id)
+        if frozen:
+            return frozen
+        guard_err = _guard_scene_work(video_id)  # TMDEV-61
+        if guard_err:
+            return guard_err
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # written beside the file and moved over it: a short write, a full disk or
+        # a kill mid-write never leaves a truncated module where the last good one was
+        tmp = None
         try:
-            if tmp:
-                os.unlink(tmp)
-        except OSError:
-            pass
-        return {"error": f"{video_id}/{scene_name} could not be written: {e}"}
+            fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".", suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(tsx_content)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        except OSError as e:
+            try:
+                if tmp:
+                    os.unlink(tmp)
+            except OSError:
+                pass
+            return {"error": f"{video_id}/{scene_name} could not be written: {e}"}
     is_scene = dirname is None and ext == ".tsx"
     result = {
         "video_id": video_id,
@@ -6337,9 +6365,20 @@ def delete_scene_file(scene_name: str, video_id: str = "") -> dict:
         path = _source_path(video_id, *split)
     except tjobs.UnsafePath as e:
         return {"error": f"{video_id}/{scene_name}: {e}"}
-    if not path.exists():
-        return {"error": "not found", "scene_name": scene_name, "video_id": video_id}
-    path.unlink()
+    if not video_id:
+        if not path.exists():
+            return {"error": "not found", "scene_name": scene_name, "video_id": video_id}
+        path.unlink()
+        return {"deleted": True, "scene_name": scene_name, "video_id": video_id}
+    # a queued or rendering video's tree is frozen for a delete as for a write
+    with _source_lock(video_id):
+        _init_db()
+        frozen = _source_frozen_error(video_id)
+        if frozen:
+            return frozen
+        if not path.exists():
+            return {"error": "not found", "scene_name": scene_name, "video_id": video_id}
+        path.unlink()
     return {"deleted": True, "scene_name": scene_name, "video_id": video_id}
 
 
@@ -6719,7 +6758,15 @@ def cartoon_soundtrack(video_id: str, spec: dict) -> dict:
     """
     if not isinstance(spec, dict):
         return {"error": "spec must be the soundtrack spec object"}
-    return _cartoon_call(video_id, cartoon.soundtrack, spec)
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    with _source_lock(video_id):
+        _init_db()
+        frozen = _source_frozen_error(video_id)
+        if frozen:
+            return frozen
+        return _cartoon_call(video_id, cartoon.soundtrack, spec)
 
 
 # ── Registered tool names ───────────────────────────────────────────────────

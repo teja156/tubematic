@@ -523,8 +523,18 @@ def soundtrack(jobs_dir, video_id: str, remotion_dir: Path, spec: dict) -> dict:
                 raise CartoonError(f"the soundtrack could not be mixed: {text}")
             if not (new / MIX_WAV).is_file():
                 raise CartoonError(f"mix.py finished but wrote no {MIX_WAV}: {_fail_text(proc)}")
-            shutil.rmtree(out, ignore_errors=True)
-            os.replace(new, out)
+            # published file by file into the live directory, the mix itself last and
+            # by an atomic replace: the last good mix.wav is never missing or partial,
+            # and a worker that already opened it keeps reading the file it opened
+            out.mkdir(parents=True, exist_ok=True)
+            fresh = sorted(p for p in new.iterdir() if p.is_file() and not p.is_symlink())
+            for p in fresh:
+                if p.name != MIX_WAV:
+                    os.replace(p, out / p.name)
+            os.replace(new / MIX_WAV, out / MIX_WAV)
+            for stale in out.iterdir():
+                if stale.is_file() and stale.name not in {p.name for p in fresh}:
+                    stale.unlink()
         finally:
             shutil.rmtree(new, ignore_errors=True)
         mix = out / MIX_WAV

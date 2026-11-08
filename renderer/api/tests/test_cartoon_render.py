@@ -76,6 +76,15 @@ def stubs(tmp_path, monkeypatch):
     voice = tmp_path / "jobs" / "vid-1" / "audio.mp3"
     voice.write_bytes(b"v")
     monkeypatch.setattr(worker, "REMOTION_DIR", tmp_path / "remotion")
+    # the frozen source every render is checked against: a one-file tree and its record
+    from tubematic_core import jobfiles as tjobs
+    generated = tmp_path / "generated"
+    (generated / "vid-1").mkdir(parents=True)
+    (generated / "vid-1" / "CartoonShort.tsx").write_text("export default () => null;")
+    monkeypatch.setattr(worker, "GENERATED_DIR", generated)
+    record = tmp_path / "jobs" / "vid-1" / "cartoon" / "source.json"
+    record.parent.mkdir(parents=True)
+    record.write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(generated / "vid-1"), "at": "now"}))
     calls = {"popen": [], "run": []}
     plan = {"fail_once": set(), "hang_always": set()}
 
@@ -200,13 +209,10 @@ def test_the_source_rendered_is_the_one_submit_render_froze(stubs, monkeypatch, 
     from tubematic_core import jobfiles as tjobs
     calls, _, voice, out = stubs
     generated = tmp_path / "generated"
-    monkeypatch.setattr(worker, "GENERATED_DIR", generated)
     src = generated / "vid-1"
     (src / "sets").mkdir(parents=True)
-    (src / "CartoonShort.tsx").write_text("export default () => null;")
     (src / "sets" / "street.ts").write_text("export const STREET = 1;")
     record = voice.parent / "cartoon" / "source.json"
-    record.parent.mkdir(parents=True)
     record.write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(src), "at": "now"}))
     assert worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)[0] == "ok"
 
@@ -220,22 +226,56 @@ def test_the_source_rendered_is_the_one_submit_render_froze(stubs, monkeypatch, 
     outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)
     assert outcome == "failed" and "symlink" in detail
 
-    # a source that changes under a running render is caught before the mux
+    # a source that changes under a running render is caught before the next segment bundles it
     (src / "evil.ts").unlink()
     record.write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(src), "at": "now"}))
+    real_popen = subprocess.Popen
+
+    def popen_and_edit(argv, **kw):
+        (src / "sets" / "street.ts").write_text("export const STREET = 3;")
+        return real_popen(argv, **kw)
+    monkeypatch.setattr(subprocess, "Popen", popen_and_edit)
+    calls["popen"].clear()
+    out.unlink()
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 1000, voice)
+    assert outcome == "failed" and "changed after the beat gate passed" in detail and not out.exists()
+    assert len(calls["popen"]) == 1               # the first segment rendered, the second was never started
+    monkeypatch.setattr(subprocess, "Popen", real_popen)
+
+    # no record, or a record that is not a plain file, is no render: only submit_render queues
+    # a Cartoon 3D video and it always writes the record
+    record.unlink()
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)
+    assert outcome == "failed" and detail.startswith("no record of the source that was queued")
+    record.symlink_to(voice)
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)
+    assert outcome == "failed" and "is a symlink" in detail
+    record.unlink()
+    record.write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(src), "at": "now"}))
+    assert worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)[0] == "ok"
+
+
+def test_ffmpeg_spends_what_is_left_of_the_same_deadline(stubs, monkeypatch):
+    """concat and mux get min(FFMPEG_TIMEOUT_SECS, what remains of
+    render_timeout_secs), so the whole render, ffmpeg included, stays under
+    the one ceiling; a deadline already spent is a hang, not a mux."""
+    calls, _, voice, out = stubs
+    timeouts = []
     real_run = subprocess.run
 
-    def run_and_edit(argv, **kw):
-        (src / "sets" / "street.ts").write_text("export const STREET = 3;")
+    def run(argv, **kw):
+        timeouts.append(kw.get("timeout"))
         return real_run(argv, **kw)
-    monkeypatch.setattr(subprocess, "run", run_and_edit)
-    out.unlink()
+    monkeypatch.setattr(subprocess, "run", run)
+    # the fake clock advances 100 per look: of the 1000 s, 400 are left at the concat and 300 at the mux
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 1000, 60, 100, voice)
+    assert outcome == "ok" and timeouts == [400, 300]
+    timeouts.clear()
     outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)
-    assert outcome == "failed" and "changed after the beat gate passed" in detail and not out.exists()
-    monkeypatch.setattr(subprocess, "run", real_run)
-
-    record.unlink()                            # a video queued before the record existed renders as before
-    assert worker._render_cartoon("vid-1", "{}", str(out), [], {}, 6000, 60, 100, voice)[0] == "ok"
+    assert outcome == "ok" and timeouts == [worker.FFMPEG_TIMEOUT_SECS, worker.FFMPEG_TIMEOUT_SECS]
+    timeouts.clear()
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 450, 60, 100, voice)
+    assert outcome == "hung" and detail == "joining the segments: the render ran past 450s in all" and not timeouts
 
 
 def test_a_render_that_raises_is_that_videos_failure_not_the_workers_exit(monkeypatch):

@@ -122,6 +122,15 @@ def _cartoon_job(tmp_path, monkeypatch, db_path, visual_style="cartoon_3d", cart
     scenes = ([{"type": "generated", "src": "vid-1/CartoonShort", "props": {"cartoon3d": {"beats": [{"start": 0, "end": 9, "shot": "x"}]}}}]
               if cartoon_config else [])
     (job / "scene-config.json").write_text(json.dumps({"scenes": scenes}))
+    if cartoon_config:
+        # the generated source and the record of it submit_render wrote: the worker renders that tree or nothing
+        from tubematic_core import jobfiles as tjobs
+        generated = tmp_path / "generated"
+        (generated / "vid-1").mkdir(parents=True)
+        (generated / "vid-1" / "CartoonShort.tsx").write_text("export default () => null;")
+        monkeypatch.setattr(worker, "GENERATED_DIR", generated)
+        (job / "cartoon").mkdir()
+        (job / "cartoon" / "source.json").write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(generated / "vid-1"), "at": "now"}))
     con = sqlite3.connect(db_path)
     con.execute("INSERT INTO videos (id, project_id, topic, strategy, producibility_score, status, "
                 "voice_file_path, timeline_path, scene_config_path, visual_style, created_at, updated_at) "
