@@ -184,3 +184,7 @@ caption band frees the space. `EMOTIONS` is checked against the engine's `sheet.
 cannot drift. `resolve_default` pins `none` versus inherit, and that an archived or unapproved
 default becomes "no mascot" rather than silently falling back. The path helpers refuse bad ids and
 symlinks below the root. `boxes_at_frames` (where the text-layout audit asks whether the mascot stands over measured text) is pinned for off-screen frames, rest frames, a walk in progress and the cue scale.
+
+The caption band is modelled with a line count derived from `maxWords` and `fontSize` (a deliberately wide estimate of a caption word against the 960 px text width), so large, many-word captions that wrap to three or four lines still keep the mascot off them; the default captions keep the two-line band. One bad walk is reported once per cue and kind of violation, not once per frame, so a single mistake cannot flood the agent with the same message.
+
+**`test_mascot_driver_agreement.py` runs the real driver.** `mascots.py` is a Python port of the engine's walk model so a track can be validated without a browser, and text pins on its constants cannot catch a change in the logic. The test runs `renderer/remotion/mascot-tools/driver-agreement.mjs`, which loads the engine's `driver.js` in a bare Node vm context, on fixed tracks (walk-on and off, a mid-walk retarget, a scale change, off then on from the other side) and compares where the feet stand at many frames with `boxes_at_frames`, within a pixel. It skips with a stated reason when `node` is not on PATH.

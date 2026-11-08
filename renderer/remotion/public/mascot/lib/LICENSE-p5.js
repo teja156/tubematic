@@ -1,3 +1,8 @@
+p5.js 2.3.1 (p5.min.js in this folder)
+Copyright (c) the p5.js contributors (Processing Foundation)
+Upstream: https://github.com/processing/p5.js
+Licensed under the GNU Lesser General Public License, version 2.1, reproduced below.
+
                     GNU LESSER GENERAL PUBLIC LICENSE
                        Version 2.1, February 1999
 

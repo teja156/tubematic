@@ -697,8 +697,8 @@ How to direct it:
   than one that is always there.
 - **At least one on-screen stretch of at least one second** after the walk-on has finished. A mascot that
   arrives at the very end, or that is only ever walking, is never seen standing; validation refuses it.
-- **Keep it out of the caption band and inside the safe zone** (the same safe zone as text), except while it
-  walks across an edge. Where it stands must not cover the burned-in captions or any text your scenes show at
+- **Keep it out of the caption band, and inside the safe zone** (the same safe zone as text). Only the safe
+  zone is waived, and only while it walks across a frame edge; the caption band is never waived. Where it stands must not cover the burned-in captions or any text your scenes show at
   that moment; the validator names the frame when it does. Put it in a corner or a margin the scene leaves
   empty, and move it (a cue with a new position) when a scene needs the space.
 - **Be consistent with the scenes.** Do not leave an empty spot for it that no one sees, and do not tell the

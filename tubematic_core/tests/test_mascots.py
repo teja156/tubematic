@@ -154,6 +154,16 @@ def test_caption_band_defaults_and_moves_with_the_subtitles():
     assert moved[0] < 0.3 * 1920 < moved[1] and (moved[1] - moved[0]) > (y1 - y0)
 
 
+def test_caption_band_covers_the_worst_case_line_count():
+    y0, y1 = mascots.caption_band({"position": 0.78, "fontSize": 120, "maxWords": 7})
+    # real captions at 120/7 wrap to 3-4 lines and span about y1208-1788
+    assert y0 <= 1208 and y1 >= 1788
+    # the default config is unchanged: two lines
+    d0, d1 = mascots.caption_band(None)
+    assert (d0, d1) == mascots.caption_band({"maxWords": 4, "fontSize": 62})
+    assert (d1 - d0) / 2 == pytest.approx(2 * 62 * 1.15 / 2 + 14 + 40)
+
+
 # ---------- cue_errors ----------
 
 def test_a_valid_track_passes():
@@ -226,6 +236,15 @@ def test_a_walk_whose_path_crosses_the_band_is_refused_though_both_ends_are_clea
     assert mascots.box_at({"x": .5, "y": .8, "scale": .4})[1] > band[1]
     errs = _errs([top, bottom], subtitles={"position": 0.5})
     assert any("frame 100" in e and "caption" in e for e in errs)
+
+
+def test_one_bad_walk_is_reported_once_per_kind_and_stays_short():
+    cues = [{"frame": 0, "on": True, "x": .3, "y": .5, "scale": .4}, {"frame": 60, "x": .5, "scale": 1.2}]
+    errs = _errs(cues)
+    assert len([e for e in errs if "frame 60" in e and "safe zone" in e]) == 1
+    assert sum(len(e) for e in errs) < 1500
+    rest = _errs([{"frame": 0, "on": True, "x": .02, "y": .5}])
+    assert len([e for e in rest if "safe zone" in e]) == 1
 
 
 def test_a_walk_between_clear_positions_on_one_side_passes():

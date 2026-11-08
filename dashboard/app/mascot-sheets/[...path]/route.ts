@@ -10,7 +10,7 @@ type Ctx = { params: Promise<{ path: string[] }> };
 // <id>/versions/<n>/sheets/<name> is the only thing this route serves: the
 // mascot sheets are PNG/JPEG, which /api/proxy (JSON only) cannot carry and
 // /stream (mp4/mp3 only) will not. Anything else is a 404 before Flask is asked.
-const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const VERSION = /^[0-9]{1,6}$/;
 const SHEETS = new Set(["turn", "feels", "act"]);
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg"]);

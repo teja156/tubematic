@@ -67,6 +67,14 @@ def test_licences_are_shipped():
         assert (ENGINE / rel).is_file() and (ENGINE / rel).read_text(encoding="utf-8").strip(), rel
 
 
+def test_licence_files_attribute_the_library_and_its_upstream():
+    p5 = (ENGINE / "lib/LICENSE-p5.js").read_text(encoding="utf-8")
+    assert p5.startswith("p5.js 2.3.1") and "Copyright (c) the p5.js contributors" in p5
+    assert "github.com/processing/p5.js" in p5 and "GNU LESSER GENERAL PUBLIC LICENSE" in p5
+    brush = (ENGINE / "lib/LICENSE-p5.brush").read_text(encoding="utf-8")
+    assert "github.com/acamposuribe/p5.brush" in brush and "Copyright (c) 2023-2026 Alejandro Campos Uribe" in brush
+
+
 def test_frame_loads_no_remote_url():
     frame = _text("frame.html")
     assert "http://" not in frame and "https://" not in frame

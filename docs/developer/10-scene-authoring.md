@@ -379,6 +379,8 @@ sentence per problem. It plays the track the way `driver.js` will, frame by fram
   walking. A walk is tested along its whole path, so two clear positions either side of the band are
   refused. Walking on or off across a frame edge is exempt from the **safe zone only**, never the band.
   With captions switched off there is no band.
+  The band is sized from the video's caption settings: its line count follows `maxWords` and `fontSize`,
+  so large many-word captions get a taller band than the default two lines.
 - **The safe zone.** At rest, and during a walk that does not cross an edge, the box must lie inside the
   same safe zone scenes use (x 60 to 1020, y 150 to 1750; see [Safe zones](09-remotion-project.md#safe-zones)).
 - **At least `MIN_REST_FRAMES` (one second) at rest on screen**, so a walk-on in the last second

@@ -182,6 +182,12 @@ SUBTITLE_LINE_HEIGHT, SUBTITLE_LINES, SUBTITLE_PAD_Y = 1.15, 2, 14
 # Words wrap, the agent can resize the band, and a reviewer measures it glyph-tight:
 # this much clear air above and below the two-line band keeps a box off it.
 CAPTION_SAFETY_MARGIN = 40
+SUBTITLE_MAX_WORDS = 4                      # Subtitles.tsx default maxWords; it clamps to 1..7
+CAPTION_TEXT_WIDTH = FRAME_WIDTH - 2 * 60   # Subtitles.tsx lays the text out within left/right 60
+# A caption word is estimated at 3.6 x fontSize wide (about 6.5 characters at 0.55 em, spaces
+# included): deliberately wide, so the line count errs high and the band errs large. At the
+# defaults (4 words at 62) that is one line of text, but the band always models at least two.
+CAPTION_WORD_WIDTH_EM = 3.6
 
 
 # The mascot must stand in view (walk-on finished) for this long at least once:
@@ -213,7 +219,10 @@ def caption_band(subtitles):
     size = sub.get("fontSize")
     pos = pos if _num(pos) else SUBTITLE_POSITION
     size = size if _num(size) else SUBTITLE_FONT_SIZE
-    half = (SUBTITLE_LINES * size * SUBTITLE_LINE_HEIGHT) / 2 + SUBTITLE_PAD_Y + CAPTION_SAFETY_MARGIN
+    words = sub.get("maxWords")
+    words = min(7, max(1, round(words))) if _num(words) else SUBTITLE_MAX_WORDS
+    lines = max(SUBTITLE_LINES, math.ceil(words * CAPTION_WORD_WIDTH_EM * size / CAPTION_TEXT_WIDTH))
+    half = (lines * size * SUBTITLE_LINE_HEIGHT) / 2 + SUBTITLE_PAD_Y + CAPTION_SAFETY_MARGIN
     centre = pos * FRAME_HEIGHT
     return (centre - half, centre + half)
 
@@ -379,9 +388,11 @@ def cue_errors(cues, total_frames: int, subtitles=None) -> list:
     states, moves = _compile(good)
     reported = set()
 
-    def report(frame, why):
-        if (frame, why) not in reported:
-            reported.add((frame, why))
+    def report(frame, kind, why):
+        # One message per cue per kind of violation: the message carries the first offending
+        # box, and a walk is tested every frame, so de-duplicating on the text would repeat it.
+        if (frame, kind) not in reported:
+            reported.add((frame, kind))
             errs.append(why)
 
     si = 0
@@ -399,10 +410,10 @@ def cue_errors(cues, total_frames: int, subtitles=None) -> list:
                 how = ("walk the mascot on or off at a height above the captions" if m["edge"] else
                        "keep both positions on the same side of the captions, or walk the mascot off screen "
                        "and back on above them")
-                report(m["cue"], f"the walk started by the cue at frame {m['cue']} passes over the captions "
+                report(m["cue"], "band", f"the walk started by the cue at frame {m['cue']} passes over the captions "
                        f"(the band is y {band[0]:.0f}-{band[1]:.0f}): {how}")
             elif not m["edge"] and not _inside_safe_zone(box):
-                report(m["cue"], f"the walk started by the cue at frame {m['cue']} leaves the safe zone "
+                report(m["cue"], "zone", f"the walk started by the cue at frame {m['cue']} leaves the safe zone "
                        f"(box x {box[0]:.0f}-{box[2]:.0f}, y {box[1]:.0f}-{box[3]:.0f}; it must stay within "
                        f"x {SAFE_ZONE['left']}-{FRAME_WIDTH - SAFE_ZONE['right']}, "
                        f"y {SAFE_ZONE['top']}-{FRAME_HEIGHT - SAFE_ZONE['bottom']}): a larger scale or a "
@@ -411,11 +422,11 @@ def cue_errors(cues, total_frames: int, subtitles=None) -> list:
             rest_frames += 1
             box = box_at(st)
             if _hits_band(box, band):
-                report(state_cue, f"the cue at frame {state_cue} puts the mascot over the captions "
+                report(state_cue, "band", f"the cue at frame {state_cue} puts the mascot over the captions "
                        f"(box y {box[1]:.0f}-{box[3]:.0f}, caption band y {band[0]:.0f}-{band[1]:.0f}): "
                        "raise y or lower scale")
             elif not _inside_safe_zone(box):
-                report(state_cue, f"the cue at frame {state_cue} puts the mascot outside the safe zone "
+                report(state_cue, "zone", f"the cue at frame {state_cue} puts the mascot outside the safe zone "
                        f"(box x {box[0]:.0f}-{box[2]:.0f}, y {box[1]:.0f}-{box[3]:.0f}; it must stay within "
                        f"x {SAFE_ZONE['left']}-{FRAME_WIDTH - SAFE_ZONE['right']}, "
                        f"y {SAFE_ZONE['top']}-{FRAME_HEIGHT - SAFE_ZONE['bottom']}): move x or y toward the "

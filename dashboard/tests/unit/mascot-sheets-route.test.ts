@@ -66,6 +66,14 @@ describe("GET /mascot-sheets", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("accepts an underscore in the id, like MASCOT_ID_RE", async () => {
+    const res = await GET(req(), ctx(["my_tubi", "versions", "1", "sheets", "turn"]));
+    expect(res.status).toBe(200);
+    expect(String(fetchSpy.mock.calls[0][0])).toMatch(/\/mascots\/my_tubi\//);
+    fetchSpy.mockClear();
+    expect((await GET(req(), ctx(["_tubi", "versions", "1", "sheets", "turn"]))).status).toBe(404);
+  });
+
   it("will not relay a non-image answer", async () => {
     fetchSpy.mockResolvedValue(upstream(200, "text/html", "<script>"));
     expect((await GET(req(), ctx(GOOD))).status).toBe(502);

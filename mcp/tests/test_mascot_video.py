@@ -181,6 +181,18 @@ def test_a_new_pick_is_refused_on_a_cartoon_3d_video(db):
     assert server.update_video(VID, mascot_id="moss") == {"error": tmascots.MASCOT_NOT_ON_CARTOON_3D}
 
 
+def test_auto_cannot_settle_on_cartoon_3d_while_a_mascot_is_chosen(db):
+    """Else write_scene_config refuses both scene kinds and the video is wedged."""
+    _gpu()
+    _mascot()
+    _video(style="auto", mascot="moss", mver=1)
+    assert server.update_video(VID, resolved_renderer="cartoon_3d") == {"error": tmascots.MASCOT_NOT_ON_CARTOON_3D}
+    assert _col("resolved_renderer") == ""
+    assert "error" not in server.update_video(VID, resolved_renderer="dom")
+    _video("vid_nomascot", style="auto")
+    assert "error" not in server.update_video("vid_nomascot", resolved_renderer="cartoon_3d")
+
+
 def test_switching_the_style_to_cartoon_3d_clears_the_mascot_in_the_same_write(db):
     _gpu()
     _mascot()

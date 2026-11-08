@@ -197,7 +197,7 @@ through **Pending**, **Building** and **In review**. Open it, look at the sheets
 - **Request changes** with a comment saying what to fix. The agent draws a new version.
 
 **A change request never disturbs what is already in use.** While a new version is being drawn, videos
-keep using the last approved one, and a video that has already been scripted stays on the version it
+keep using the last approved one, and a video whose scenes have been written stays on the version it
 was written for even after you approve a newer one. If a change attempt fails twice, the mascot shows
 **Failed** with the reason and the approved version stays in use.
 

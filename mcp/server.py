@@ -2748,10 +2748,12 @@ def update_video(
     if "resolved_renderer" in fields:
         with _conn() as con:
             row = con.execute(
-                "SELECT visual_style, resolved_renderer FROM videos WHERE id = ?",
+                "SELECT visual_style, resolved_renderer, mascot_id FROM videos WHERE id = ?",
                 (video_id,)).fetchone()
         if not row:
             return {"error": f"Video not found: {video_id}"}
+        if fields["resolved_renderer"] == "cartoon_3d" and (row["mascot_id"] or "") != "":
+            return {"error": tmascots.MASCOT_NOT_ON_CARTOON_3D}
         if (row["visual_style"] or DEFAULT_VISUAL_STYLE) != "auto":
             return {"error": f"resolved_renderer records the renderer 'auto' settled on, but this "
                              f"video's visual_style is {row['visual_style']!r}, which already names "

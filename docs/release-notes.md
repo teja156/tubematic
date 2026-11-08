@@ -49,7 +49,7 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 - **A Mascots page, under the Profiles tab.** Describe a character (or press **Surprise me**) and an
   agent draws it and renders three model sheets for you to review: a turnaround, its ten
   emotions and a strip of poses. Approve it, or ask for changes with a comment. While a changed
-  version is being drawn, videos keep using the last approved one, and a video already scripted stays
+  version is being drawn, videos keep using the last approved one, and a video whose scenes have been written stays
   on the version it was written for. Tubi cannot be edited, but you can ask for a variation of it.
   You can choose which agent, model and effort draws a mascot.
 - **Three places to choose a mascot.** A **Default mascot** in Settings → Rendering, a **default
