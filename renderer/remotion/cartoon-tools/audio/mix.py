@@ -103,12 +103,16 @@ def event_margins(C, gm, vI):
     music, which the cue sheet and loudness.json report: an effect the band
     covers is a fix for the author (raise its naive level, or quieten the section)."""
     Mm = momentary(gm)
+    last = len(Mm) - 1
     under = 0
     for c in C:
         if c.kind != "event" or c.measured is None:
             continue
-        i0, i1 = max(0, int((c.t - 0.2) / 0.01)), min(len(Mm) - 1, int((c.t + 0.4) / 0.01))
-        music = float(Mm[i0:i1 + 1].max()) if len(Mm) and i1 >= i0 else -np.inf
+        # the 400 ms windows start every 10 ms and the last one starts 400 ms before the end: both bounds are
+        # clamped into the windows there are, so an event in the final 200 ms is measured against the last window
+        i0 = min(max(0, int((c.t - 0.2) / 0.01)), max(last, 0))
+        i1 = min(max(i0, int((c.t + 0.4) / 0.01)), max(last, 0))
+        music = float(Mm[i0:i1 + 1].max()) if last >= 0 else -np.inf
         c.music = music
         c.over = float((vI + c.measured) - music) if np.isfinite(music) else float("inf")
         if c.over < 0:

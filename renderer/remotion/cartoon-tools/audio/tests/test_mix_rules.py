@@ -59,14 +59,15 @@ def test_the_music_ducks_under_an_event_and_the_sheet_says_what_the_band_covers(
     loud_band = {"music": {"tempo": 120, "key": "F", "seed": 7,
                            "sections": [{"name": "all", "start": 0, "end": 6, "style": "tutti", "level": -8}]},
                  "sfx": {"seed": 7, "cues": [{"t": 2.5, "gen": "hammer_hit", "naive": 0, "desc": "loud hit"},
-                                             {"t": 4.5, "gen": "hammer_hit", "naive": -18, "dist": 30, "desc": "buried hit"}]}}
+                                             {"t": 4.5, "gen": "hammer_hit", "naive": -18, "dist": 30, "desc": "buried hit"},
+                                             {"t": 5.9, "gen": "hammer_hit", "naive": -18, "dist": 30, "desc": "buried hit at the very end"}]}}
     out, loud, sheet = _run(tmp_path, loud_band)
-    assert loud["events"] == 2 and loud["events_under_music"] == 1
-    assert "| over music LU |" in sheet and "**1 under the music**" in sheet
+    assert loud["events"] == 3 and loud["events_under_music"] == 2
+    assert "| over music LU |" in sheet and "**2 under the music**" in sheet
     rows = [l for l in sheet.splitlines() if "| hammer_hit |" in l]
-    assert len(rows) == 2
-    over = [float(r.split("|")[9]) for r in rows]
-    assert over[0] > 0 and over[1] < 0, over
+    assert len(rows) == 3
+    over = [float(r.split("|")[9]) for r in rows]           # an "inf" here would fail float() for a reason: every event is measured
+    assert over[0] > 0 and over[1] < 0 and over[2] < 0, over   # the last event lies in the final 200 ms, past the last window's start
     # the music is ducked round the loud hit: the same score without the hit is louder at the hit's moment
     # and the same just before it
     quiet_band = {"music": loud_band["music"], "sfx": {"seed": 7, "cues": []}}
