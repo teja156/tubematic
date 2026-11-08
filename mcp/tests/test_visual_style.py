@@ -602,12 +602,19 @@ def test_a_commit_that_fails_after_the_rename_puts_the_previous_config_back(db, 
         real_replace(src, dst)
         renamed.append(dst)
 
+    class CommitFailsAfterRename:
+        """A connection whose commit fails once the rename has landed inside its transaction."""
+        def __init__(self, con): self._con = con
+        def __getattr__(self, name): return getattr(self._con, name)
+        def commit(self):
+            if renamed:
+                raise sqlite3.OperationalError("disk I/O error")
+            return self._con.commit()
+
     @contextmanager
     def conn_whose_commit_fails_after_a_rename():
         with real_conn() as con:
-            yield con
-            if renamed:                       # the rename landed inside this transaction: its commit now fails
-                raise sqlite3.OperationalError("disk I/O error")
+            yield CommitFailsAfterRename(con)
     monkeypatch.setattr(server.os, "replace", replace_noting)
     monkeypatch.setattr(server, "_conn", conn_whose_commit_fails_after_a_rename)
     result = server.write_scene_config("vid_c12", _cartoon_config(total_frames=300, beats=[

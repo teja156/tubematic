@@ -5890,13 +5890,15 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # without touching what a concurrent writer may have recorded, and a row
     # that changed under us (another process) is never overwritten; a config
     # that no longer agrees with what the row now says is refused unwritten.
-    # The previous config, kept until the transaction commits: a commit that
-    # fails after the rename (disk full, an I/O error) puts it back, so the
-    # file and the row never disagree. A write of a first config has none.
-    previous = path.read_bytes() if path.is_file() else None
-    replaced = False
+    # Snapshot, compare-and-set, rename and commit happen under ONE database
+    # write lock (BEGIN IMMEDIATE), and a commit that fails after the rename
+    # puts the previous file back BEFORE that lock is released: no other writer
+    # can slip a config in between the snapshot and the restore, so the file
+    # and the row never disagree. A first config has no previous file.
     try:
         with _conn() as con:
+            con.execute("BEGIN IMMEDIATE")
+            previous = path.read_bytes() if path.is_file() else None
             if resolve_renderer:
                 recorded = bool(con.execute(
                     "UPDATE videos SET resolved_renderer = ?, updated_at = ? WHERE id = ? AND resolved_renderer = ''",
@@ -5907,24 +5909,29 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
                     if now_resolved != resolve_renderer:
                         raise _RendererContradiction(now_resolved)
             os.replace(staged, path)
-            replaced = True
+            try:
+                con.commit()
+            except sqlite3.Error as e:
+                try:
+                    if previous is None:
+                        path.unlink(missing_ok=True)
+                    else:
+                        path.write_bytes(previous)
+                except OSError as restore_err:
+                    raise _WriteFailed(f"scene-config.json could not be written ({e}) and the previous file could not "
+                                       f"be put back ({restore_err}): check the data disk") from e
+                raise _WriteFailed(f"scene-config.json could not be written: {e}") from e
     except _RendererContradiction as c:
         staged.unlink(missing_ok=True)
         return {"error": f"this video's 'auto' resolved to the {c.resolved!r} renderer while this config was being "
                          f"checked; a {'Cartoon3D' if resolve_renderer == 'cartoon_3d' else 'DOM'} scene-config "
                          f"cannot follow (written once)"}
-    except (OSError, sqlite3.Error) as e:
-        # the transaction rolled back: the row is as it was; make the file so too
+    except _WriteFailed as w:
         staged.unlink(missing_ok=True)
-        if replaced:
-            try:
-                if previous is None:
-                    path.unlink(missing_ok=True)
-                else:
-                    path.write_bytes(previous)
-            except OSError as restore_err:
-                return {"error": f"scene-config.json could not be written ({e}) and the previous file could not be "
-                                 f"put back ({restore_err}): check the data disk"}
+        return {"error": str(w)}
+    except (OSError, sqlite3.Error) as e:
+        # before the rename: the transaction rolled back and the file is untouched
+        staged.unlink(missing_ok=True)
         return {"error": f"scene-config.json could not be written: {e}"}
 
     # str(path) is container-absolute (/jobs/<vid>/scene-config.json) purely
@@ -6411,6 +6418,10 @@ def _validate_cartoon_parts(scenes, total_frames: int | None = None) -> str:
             if err:
                 return f"scenes[{i}].props.world.{err}"
     return ""
+
+
+class _WriteFailed(Exception):
+    """The staged config could not be published (its message is the tool's error)."""
 
 
 class _RendererContradiction(Exception):
