@@ -1264,8 +1264,8 @@ def _auto_pilot_once() -> None:
 def _auto_pilot_block_reason(con, video: dict, settings: dict) -> str:
     """Why a dashboard approval of this video would be refused, or "".
 
-    Auto Pilot must not be a way around the two checks the approving PATCH
-    makes: approving here what the dashboard refuses would send the video on
+    Auto Pilot must not be a way around the checks the approving PATCH
+    makes (the OpenAI key, the voice and the mascot): approving here what the dashboard refuses would send the video on
     to fail later, after money was spent.
     """
     if video["status"] == "TOPIC_PROPOSED":
@@ -1273,6 +1273,10 @@ def _auto_pilot_block_reason(con, video: dict, settings: dict) -> str:
             return ("its visual style is illustrated, which needs an OpenAI API key and "
                     "none is stored. Add the key in Settings, or change the style and "
                     "approve the topic yourself.")
+        if video["visual_style"] != "cartoon_3d":
+            err = pipeline._mascot_approval_error(con, video.get("mascot_id") or "")
+            if err:
+                return err
     if video["status"] == "SCRIPT_READY":
         try:
             video["script_segments"] = json.loads(video["script_segments"] or "null")
@@ -1300,7 +1304,7 @@ def _auto_pilot_approve(settings: dict, config: dict, room=None) -> None:
     statuses = list(_AUTO_PILOT_APPROVALS)
     with db.conn(DB_PATH) as con:
         rows = [dict(r) for r in con.execute(
-            "SELECT id, status, updated_at, voice_id, visual_style, script, script_segments,"
+            "SELECT id, status, updated_at, voice_id, visual_style, mascot_id, script, script_segments,"
             " voice_file_path, auto_pilot_blocked FROM videos"
             " WHERE archived_at IS NULL AND status IN (%s) AND project_id IN (%s)"
             " ORDER BY updated_at ASC"

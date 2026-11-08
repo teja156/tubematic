@@ -385,8 +385,18 @@ def test_builtin_sheets_come_from_the_repo_dir_as_jpeg(client, db_path, tmp_path
     assert r.status_code == 200 and r.mimetype == "image/jpeg" and r.data == b"jpegbytes"
     assert client.get("/mascots/tubi/versions/1/sheets/feels").status_code == 404
     item = client.get("/mascots").get_json()[0]
-    assert item["sheets"]["approved"] == {"turn": "/mascots/tubi/versions/1/sheets/turn"} or \
-        list(item["sheets"]["approved"]) == ["turn"]
+    assert item["sheets"]["approved"] == {"turn": "/mascots/tubi/versions/1/sheets/turn"}
+
+
+def test_a_symlinked_builtin_sheet_is_refused(client, db_path, tmp_path, monkeypatch):
+    monkeypatch.setattr(pipeline, "REMOTION_DIR", tmp_path / "remotion")
+    d = tm.builtin_dir(tmp_path / "remotion", "tubi", 1)
+    d.mkdir(parents=True)
+    outside = tmp_path / "secret.jpg"
+    outside.write_bytes(b"secret")
+    (d / "turn.jpg").symlink_to(outside)
+    assert client.get("/mascots/tubi/versions/1/sheets/turn").status_code == 404
+    assert client.get("/mascots").get_json()[0]["sheets"]["approved"] is None
 
 
 # ---------- the install default ----------
@@ -587,3 +597,53 @@ def test_approving_with_a_seeded_then_archived_mascot_checks_the_stored_value(cl
 def test_agent_mascot_is_a_usage_operation():
     from tubematic_core import usage
     assert "agent_mascot" in usage.AGENT_OPERATIONS
+
+
+def test_switching_to_cartoon_3d_clears_an_echoed_mascot_too(client, db_path):
+    """The dashboard's approve PATCH re-sends the stored mascot."""
+    _gpu(db_path, "working")
+    vid = _proposed(client)
+    client.patch(f"/videos/{vid}", json={"mascot_id": "tubi"})
+    r = client.patch(f"/videos/{vid}", json={"visual_style": "cartoon_3d", "mascot_id": "tubi"})
+    assert r.status_code == 200 and r.get_json()["mascot_id"] == ""
+    assert _mascot_of(db_path, vid) == ""
+    # and a cartoon_3d video holding nothing can still be approved
+    assert client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED"}).status_code == 200
+
+
+def test_approve_loses_to_a_request_changes_that_landed_first(client, db_path, monkeypatch):
+    _mascot(db_path, "moss")
+    _draft(db_path, "moss", 2, status="IN_REVIEW")
+    _sheets(db_path, "moss", 2)
+    real = pipeline.tmascots.sheet_file
+
+    def racing(*a, **k):
+        # a request-changes commits between approve's reads and its writes
+        _sql(db_path, "UPDATE mascots SET status = 'PENDING' WHERE id = 'moss'")
+        return real(*a, **k)
+
+    monkeypatch.setattr(pipeline.tmascots, "sheet_file", racing)
+    assert client.post("/mascots/moss/approve").status_code == 409
+    assert _sql(db_path, "SELECT status, approved_version FROM mascots WHERE id='moss'"
+                )[0] == ("PENDING", 1)
+    assert _sql(db_path, "SELECT approved_at FROM mascot_versions WHERE mascot_id='moss'"
+                " AND version=2")[0][0] == ""
+
+
+@pytest.mark.parametrize("name", ["pending", "None", "!!!"])
+def test_a_generated_id_never_shadows_a_route_or_the_none_sentinel(client, name):
+    mid = client.post("/mascots", json={"name": name, "description": "x"}).get_json()["id"]
+    assert mid not in ("pending", "none")
+    assert client.get(f"/mascots/{mid}").get_json()["id"] == mid
+
+
+def test_an_abandoned_draft_is_not_reported_after_a_later_version_is_approved(client, db_path):
+    _mascot(db_path, "moss")
+    _draft(db_path, "moss", 2, code="old()")                  # abandoned
+    _sheets(db_path, "moss", 2)
+    _draft(db_path, "moss", 3, status="IN_REVIEW")
+    _sheets(db_path, "moss", 3)
+    assert client.post("/mascots/moss/approve").status_code == 200
+    item = {m["id"]: m for m in client.get("/mascots").get_json()}["moss"]
+    assert item["approved_version"] == 3
+    assert item["draft_version"] is None and item["sheets"]["draft"] is None
