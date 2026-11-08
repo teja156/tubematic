@@ -62,7 +62,9 @@ video's files are `/public/<video_id>/…` to the composition with nothing copie
 `TUBEMATIC_STILLS_PORT` (4455) on the Compose network only and is never published; the MCP
 container reaches it as `TUBEMATIC_STILLS_SERVER`, and when it does not answer the tools render
 their stills locally instead. Renders and stills share the GPU; the server renders one still at a
-time.
+time. It is also why the reaper that follows a killed render (`_kill_group_and_reap`) drains the
+killed group's orphans without blocking: a blocking wait on any child would sit on the healthy stills
+server forever, so it polls non-blocking until no child but the stills server is left.
 
 ## What a tick is
 

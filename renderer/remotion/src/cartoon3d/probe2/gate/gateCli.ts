@@ -42,6 +42,7 @@ import { codeFileHash, gateSpecs, type GateSpec } from "./codeSpecs";
 import { hashOf, QUESTIONS, readVerdicts, unpassed, type Answer, type Attempt, type Question, type Verdicts } from "./verdicts";
 import { cartoonScene } from "../video/sceneConfig";
 import { renderStills } from "./stills";
+import { writeAtomic } from "./atomic";
 
 const VIEWS = ["quarter", "end"] as const;
 /** a cast figure gets a third still: the figure alone, close, so a moustache or a cap brim can be seen */
@@ -77,7 +78,7 @@ const dimsOf = (spec: GateSpec) => (isFigure(spec) ? { w: 0.5, h: Math.round(fig
 fs.mkdirSync(outdir, { recursive: true });
 const verdictFile = path.join(outdir, "verdict.json");
 const verdicts: Verdicts = readVerdicts(verdictFile);
-const save = () => fs.writeFileSync(verdictFile, JSON.stringify(verdicts, null, 2));
+const save = () => writeAtomic(verdictFile, JSON.stringify(verdicts, null, 2));
 
 const stillProps = (spec: GateSpec, view: (typeof FIGURE_VIEWS)[number]) =>
   isFigure(spec) ? { figure: spec.figure, figureName: spec.name, view } : isCode(spec) ? { code: spec.name, view } : { spec, view };
@@ -108,7 +109,7 @@ const promote = (spec: GateSpec, still: string) => {
   if (isFigure(spec)) {
     const all = (fs.existsSync(CAST_PROMOTED_FILE) ? JSON.parse(fs.readFileSync(CAST_PROMOTED_FILE, "utf8")) : {}) as Record<string, unknown>;
     all[spec.name] = spec.figure;
-    fs.writeFileSync(CAST_PROMOTED_FILE, JSON.stringify(all, null, 2) + "\n");
+    writeAtomic(CAST_PROMOTED_FILE, JSON.stringify(all, null, 2) + "\n");
     fs.mkdirSync(PROMOTED_DIR, { recursive: true });
     fs.copyFileSync(still, path.join(PROMOTED_DIR, `${spec.name}.png`));
     return;
@@ -117,14 +118,14 @@ const promote = (spec: GateSpec, still: string) => {
     const raw = fs.existsSync(CODE_PROMOTED_FILE) ? JSON.parse(fs.readFileSync(CODE_PROMOTED_FILE, "utf8")) : {};
     const map = (Array.isArray(raw) ? Object.fromEntries((raw as string[]).map((n) => [n, codeFileHash(n, ROOT)])) : raw) as Record<string, string>;
     map[spec.name] = codeFileHash(spec.name, ROOT);
-    fs.writeFileSync(CODE_PROMOTED_FILE, JSON.stringify(map, null, 2) + "\n");
+    writeAtomic(CODE_PROMOTED_FILE, JSON.stringify(map, null, 2) + "\n");
     fs.mkdirSync(PROMOTED_DIR, { recursive: true });
     fs.copyFileSync(still, path.join(PROMOTED_DIR, `${spec.name}.png`));
     return;
   }
   const all = (fs.existsSync(PROMOTED_FILE) ? JSON.parse(fs.readFileSync(PROMOTED_FILE, "utf8")) : {}) as Record<string, PartSpec>;
   all[spec.name] = spec;
-  fs.writeFileSync(PROMOTED_FILE, JSON.stringify(all, null, 2) + "\n");
+  writeAtomic(PROMOTED_FILE, JSON.stringify(all, null, 2) + "\n");
   fs.mkdirSync(PROMOTED_DIR, { recursive: true });
   fs.copyFileSync(still, path.join(PROMOTED_DIR, `${spec.name}.png`));
 };

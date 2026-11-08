@@ -546,6 +546,24 @@ def test_a_refused_config_never_resolves_the_renderer(db, monkeypatch):
     assert _read("vid_c8", "resolved_renderer") == ""
 
 
+def test_a_row_resolved_under_the_check_refuses_a_contradicting_config(db, monkeypatch):
+    """The resolution is a compare-and-set: a row that changed between the
+    check and the write (another process) is never overwritten, and a config
+    that now contradicts it is not written."""
+    _probe(db, configured=True, ok=True)
+    _video("vid_c10")
+    real_guard = server._guard_scene_work
+
+    def guard_then_resolve_elsewhere(vid):
+        server._update_fields(vid, resolved_renderer="dom")   # as if another process got there first
+        return real_guard(vid)
+    monkeypatch.setattr(server, "_guard_scene_work", guard_then_resolve_elsewhere)
+    result = server.write_scene_config("vid_c10", _cartoon_config())
+    assert "resolved to the 'dom' renderer while this config was being checked" in result["error"]
+    assert _read("vid_c10", "resolved_renderer") == "dom"
+    assert _read("vid_c10", "scene_config_path") in ("", None)
+
+
 def test_the_cartoon_scene_spans_the_whole_video(db):
     _probe(db, configured=True, ok=True)
     _video("vid_c9", style="cartoon_3d")

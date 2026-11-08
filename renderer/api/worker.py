@@ -378,6 +378,35 @@ def _nvidia_smi(uuid_: str) -> dict:
             "memory_mib": int(parts[-1]) if parts[-1].isdigit() else None}
 
 
+# How long the reaper waits for a SIGKILLed render's orphans to finish exiting.
+# SIGKILL guarantees they do; a Chromium tearing down many threads takes
+# seconds, not minutes, so this only bounds a kernel that is not cooperating.
+REAP_TIMEOUT_SECS = 60
+
+
+def _other_children() -> set[int]:
+    """PIDs of this process's children other than the stills server, read
+    from /proc: the orphans a killed process group reparented to us."""
+    me = os.getpid()
+    skip = _stills_proc.pid if _stills_proc is not None else None
+    kids: set[int] = set()
+    try:
+        entries = os.listdir("/proc")
+    except OSError:
+        return kids
+    for d in entries:
+        if not d.isdigit() or int(d) == skip:
+            continue
+        try:
+            with open(f"/proc/{d}/stat") as fh:
+                after_comm = fh.read().rsplit(")", 1)[1].split()
+        except (OSError, IndexError):
+            continue
+        if len(after_comm) > 1 and after_comm[1] == str(me):
+            kids.add(int(d))
+    return kids
+
+
 def _kill_group_and_reap(proc: subprocess.Popen) -> None:
     """SIGKILL a start_new_session child's whole process group and reap
     everything it left behind. Shared by the render and the GPU probe, which
@@ -391,20 +420,25 @@ def _kill_group_and_reap(proc: subprocess.Popen) -> None:
     # follow-up): SIGKILL guarantees they'll all exit but not instantly --
     # heavier processes (a Chromium instance tearing down many threads) can
     # take noticeably longer to actually finish than the lightweight npx
-    # wrapper proc.wait() above already reaped. A non-blocking WNOHANG drain
-    # right here races ahead of that and finds nothing (confirmed live: the
-    # trivial `sh` link died fast enough to be caught, everything heavier
-    # didn't, and sat as permanent zombies since nothing ever revisited
-    # reaping). Block instead: wait() for each already-reparented child in
-    # turn -- bounded by SIGKILL itself guaranteeing they all eventually exit
-    # -- until none remain. Safe only because this worker is single-threaded
-    # and runs one subprocess at a time; see mcp/server.py's write_gif_script
-    # for why the same loop is wrong in a multi-threaded process.
-    try:
-        while True:
-            os.waitpid(-1, 0)
-    except ChildProcessError:
-        pass
+    # wrapper proc.wait() above already reaped. A single non-blocking drain
+    # races ahead of that and finds nothing (confirmed live), and a blocking
+    # waitpid(-1, 0) loop, which this used to be, would never return now that
+    # the stills server (TMDEV-179) is a long-lived child of ours: it would
+    # sit waiting for a healthy process. So: drain non-blocking, and keep
+    # draining while a child other than the stills server is still alive.
+    deadline = time.monotonic() + REAP_TIMEOUT_SECS
+    while time.monotonic() < deadline:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return
+        if pid:
+            continue
+        if not _other_children():
+            return
+        time.sleep(0.05)
+    log.warning("reaping the killed render's processes gave up after "
+                f"{REAP_TIMEOUT_SECS} s; {len(_other_children())} still alive")
 
 
 def _run_gpu_probe(reason: str) -> dict:

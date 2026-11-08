@@ -21,6 +21,7 @@ import * as path from "node:path";
 import { beatGateStatus, describeStatus, type BeatAnswer, type JudgeRecord } from "./beatVerdict";
 import { renderStills } from "./stills";
 import { cartoonScene } from "../video/sceneConfig";
+import { writeAtomic } from "./atomic";
 
 const args = process.argv.slice(2);
 const recordAt = args.indexOf("--record");
@@ -90,7 +91,7 @@ const main = async () => {
     if (dup) throw new Error(`these exact answers are already recorded for this world/beats (${dup.at}); a second judge is a different, fresh judge`);
     const v: Verdict = { hash, at: new Date().toISOString(), pass: answers.every((a) => a.shows), stage: "judge", answers, stills: prepared.stills };
     verdicts.push(v);
-    fs.writeFileSync(verdictFile, JSON.stringify(verdicts, null, 2));
+    writeAtomic(verdictFile, JSON.stringify(verdicts, null, 2));
     answers.forEach((a, i) => console.log(`${a.shows ? "yes" : "NO "} beat ${i}: ${a.why}${a.fix ? `  -> ${a.fix}` : ""}`));
     const s = status();
     console.log(`\n${describeStatus(s, beats.length)} (hash ${hash})`);
@@ -111,7 +112,7 @@ const main = async () => {
   const p = path.join(outdir, "beat-judge-prompt.md");
   fs.writeFileSync(p, prompt());
   verdicts.push({ hash, at: new Date().toISOString(), pass: false, stage: "stills", stills, prompt: p });
-  fs.writeFileSync(verdictFile, JSON.stringify(verdicts, null, 2));
+  writeAtomic(verdictFile, JSON.stringify(verdicts, null, 2));
   console.log(`${beats.length} beat stills in ${outdir}; look at them yourself first, then have TWO fresh judges answer ${p}, each stored with --record`);
   process.exit(2);
 };

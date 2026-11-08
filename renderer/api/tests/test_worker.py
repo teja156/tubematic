@@ -627,10 +627,33 @@ def test_stage_and_render_timeout_reaps_reparented_grandchildren(db_path, dirs, 
         worker._stage_and_render("vid-1")
 
     assert mock_waitpid.call_args_list == [
-        mock.call(-1, 0),
-        mock.call(-1, 0),
-        mock.call(-1, 0),
+        mock.call(-1, os.WNOHANG),
+        mock.call(-1, os.WNOHANG),
+        mock.call(-1, os.WNOHANG),
     ]
+
+
+def test_stage_and_render_timeout_reap_never_waits_on_the_stills_server(db_path, dirs, tmp_path, monkeypatch):
+    """The stills server (TMDEV-179) is a long-lived child of the worker, so a
+    blocking waitpid(-1) would sit on it forever after a timeout. The reaper
+    drains non-blocking and stops as soon as no child but the stills server
+    is left, polling only while an orphan of the killed group is still dying."""
+    audio, timeline, scene_config = _job_files(tmp_path)
+    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
+                timeline_path=timeline, scene_config_path=scene_config)
+    # waitpid: one orphan reaped, then "children exist but none exited" for as long as we ask
+    waitpid_results = [(19, 0), (0, 0), (0, 0), (0, 0)]
+    others = iter([{20}, set()])   # the second orphan is still dying, then gone; the stills server never counts
+    monkeypatch.setattr(worker, "_other_children", lambda: next(others, set()))
+    monkeypatch.setattr(worker.time, "sleep", lambda s: None)
+    with mock.patch("subprocess.Popen", return_value=_fake_popen_timeout()), \
+         mock.patch("os.getpgid", return_value=4242), \
+         mock.patch("os.killpg"), \
+         mock.patch("os.waitpid", side_effect=waitpid_results) as mock_waitpid:
+        worker._stage_and_render("vid-1")
+
+    assert mock_waitpid.call_args_list == [mock.call(-1, os.WNOHANG)] * 3
+    assert _read_video(db_path)["status"] == "RENDER_QUEUED"
 
 
 def test_stage_and_render_timeout_reap_stops_on_no_children(db_path, dirs, tmp_path):

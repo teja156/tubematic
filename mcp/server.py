@@ -5778,6 +5778,25 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     err = _video_id_error(video_id)
     if err:
         return err
+    # One write per video at a time, in this process: the renderer decision
+    # below and the file it is decided for are one operation, or two
+    # interleaved calls could leave a DOM config on a video resolved to
+    # cartoon_3d (or the reverse). Same shape as the Cartoon 3D tools' lock.
+    with _scene_config_lock(video_id):
+        return _write_scene_config_locked(video_id, config)
+
+
+_scene_config_locks: dict[str, threading.Lock] = {}
+_scene_config_locks_guard = threading.Lock()
+
+
+def _scene_config_lock(video_id: str) -> threading.Lock:
+    with _scene_config_locks_guard:
+        return _scene_config_locks.setdefault(video_id, threading.Lock())
+
+
+def _write_scene_config_locked(video_id: str, config: dict) -> dict:
+    """write_scene_config's body, under the video's lock."""
     _init_db()
     with _conn() as con:
         row = con.execute(
@@ -5858,6 +5877,23 @@ def write_scene_config(video_id: str, config: dict) -> dict:
         path = tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG)
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
+
+    # The renderer 'auto' settled on, recorded with the config that settled it
+    # and write-once from here on: a compare-and-set, so a row that changed
+    # under us (another process) is never overwritten, and a config that no
+    # longer agrees with what the row now says is refused before it is written.
+    if resolve_renderer:
+        with _conn() as con:
+            changed = con.execute(
+                "UPDATE videos SET resolved_renderer = ?, updated_at = ? WHERE id = ? AND resolved_renderer = ''",
+                (resolve_renderer, _now(), video_id)).rowcount
+            if not changed:
+                now_resolved = con.execute(
+                    "SELECT resolved_renderer FROM videos WHERE id = ?", (video_id,)).fetchone()["resolved_renderer"]
+        if not changed and now_resolved != resolve_renderer:
+            return {"error": f"this video's 'auto' resolved to the {now_resolved!r} renderer while this config was being "
+                             f"checked; a {'Cartoon3D' if resolve_renderer == 'cartoon_3d' else 'DOM'} scene-config "
+                             f"cannot follow (written once)"}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, indent=2), encoding="utf-8")
 
@@ -5866,10 +5902,6 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     # tubematic-api — never hardcode /jobs here. Same derivation generate_voice
     # uses for voice_file_path/timeline_path, so all three columns agree.
     _update_fields(video_id, scene_config_path=str(path))
-    # The renderer 'auto' settled on, recorded with the config that settled it
-    # (write-once from here on), never for a config that was refused above.
-    if resolve_renderer:
-        _update_fields(video_id, resolved_renderer=resolve_renderer)
 
     return {
         "video_id": video_id,
