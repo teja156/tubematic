@@ -5885,33 +5885,30 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     staged.write_text(json.dumps(config, indent=2), encoding="utf-8")
 
     # The renderer 'auto' settled on, recorded with the config that settled it
-    # and write-once from here on: a compare-and-set, so a row that changed
-    # under us (another process) is never overwritten, and a config that no
-    # longer agrees with what the row now says is refused before it lands.
-    recorded = False
-    if resolve_renderer:
-        with _conn() as con:
-            recorded = bool(con.execute(
-                "UPDATE videos SET resolved_renderer = ?, updated_at = ? WHERE id = ? AND resolved_renderer = ''",
-                (resolve_renderer, _now(), video_id)).rowcount)
-            if not recorded:
-                now_resolved = con.execute(
-                    "SELECT resolved_renderer FROM videos WHERE id = ?", (video_id,)).fetchone()["resolved_renderer"]
-        if not recorded and now_resolved != resolve_renderer:
-            staged.unlink(missing_ok=True)
-            return {"error": f"this video's 'auto' resolved to the {now_resolved!r} renderer while this config was being "
-                             f"checked; a {'Cartoon3D' if resolve_renderer == 'cartoon_3d' else 'DOM'} scene-config "
-                             f"cannot follow (written once)"}
+    # and write-once from here on. The compare-and-set and the rename into
+    # place share ONE transaction: a rename that fails rolls the row back
+    # without touching what a concurrent writer may have recorded, and a row
+    # that changed under us (another process) is never overwritten; a config
+    # that no longer agrees with what the row now says is refused unwritten.
     try:
-        os.replace(staged, path)
-    except OSError as e:
-        # the config never landed: undo the resolution this call made, so a
-        # retry may still choose either renderer
+        with _conn() as con:
+            if resolve_renderer:
+                recorded = bool(con.execute(
+                    "UPDATE videos SET resolved_renderer = ?, updated_at = ? WHERE id = ? AND resolved_renderer = ''",
+                    (resolve_renderer, _now(), video_id)).rowcount)
+                if not recorded:
+                    now_resolved = con.execute(
+                        "SELECT resolved_renderer FROM videos WHERE id = ?", (video_id,)).fetchone()["resolved_renderer"]
+                    if now_resolved != resolve_renderer:
+                        raise _RendererContradiction(now_resolved)
+            os.replace(staged, path)
+    except _RendererContradiction as c:
         staged.unlink(missing_ok=True)
-        if recorded:
-            with _conn() as con:
-                con.execute("UPDATE videos SET resolved_renderer = '', updated_at = ? WHERE id = ? AND resolved_renderer = ?",
-                            (_now(), video_id, resolve_renderer))
+        return {"error": f"this video's 'auto' resolved to the {c.resolved!r} renderer while this config was being "
+                         f"checked; a {'Cartoon3D' if resolve_renderer == 'cartoon_3d' else 'DOM'} scene-config "
+                         f"cannot follow (written once)"}
+    except OSError as e:
+        staged.unlink(missing_ok=True)   # the transaction rolled back: the row is as it was
         return {"error": f"scene-config.json could not be written: {e}"}
 
     # str(path) is container-absolute (/jobs/<vid>/scene-config.json) purely
@@ -6398,6 +6395,15 @@ def _validate_cartoon_parts(scenes, total_frames: int | None = None) -> str:
             if err:
                 return f"scenes[{i}].props.world.{err}"
     return ""
+
+
+class _RendererContradiction(Exception):
+    """Raised inside the config write's transaction when the row resolved to
+    the other renderer under the check; carries what it resolved to."""
+
+    def __init__(self, resolved: str):
+        super().__init__(resolved)
+        self.resolved = resolved
 
 
 def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
