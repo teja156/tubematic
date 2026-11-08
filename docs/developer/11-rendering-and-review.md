@@ -269,7 +269,12 @@ which never gets a GPU, and it measures text, which comes out the same on either
 
 ### The timeout, and why it is more than a kill
 
-`render_timeout_secs` (default 2400) bounds one render. On expiry the worker:
+Two settings bound one render. `render_stall_timeout_secs` (default 600) is the one that matters: the
+worker reads Remotion's progress counters (`Bundling N%`, `Rendered N/M`, `Encoded N/M`) from the
+render's own output as it runs, and a render whose count stops advancing for that long is judged
+hung, whatever its style or length — the number must advance, since real logs repeat a line.
+`render_timeout_secs` (default 10800) is the absolute ceiling, for a render that advances
+pathologically slowly. On either the worker:
 
 1. `SIGKILL`s the whole **process group** — one signal reaches every descendant.
 2. Reaps the direct child.
@@ -488,6 +493,8 @@ before a render happens. `mcp/text_audit.py` holds the decision layer; the Remot
   not trigger a React re-render on its own.
 - `renderer/remotion/audit/run-text-layout-audit.mjs` bundles the project, selects the
   `TextLayoutAudit` composition, and samples frames.
+
+A Cartoon 3D video skips the audit: its one scene is a painted canvas with no text rects to measure (the captions are drawn by the composition, not the scene), so its checks are the typecheck and the beat gate in `mcp/cartoon.py`.
 
 Every threshold lives in Python: an opacity floor of 0.9, a minimum overlap of 15% of the smaller
 box's area, five samples per scene, a 45-frame allowance at scene start before anything counts as

@@ -1,11 +1,15 @@
-import type { Video, VisualStyle } from "./types";
+import type { GpuStatus, Video, VisualStyle } from "./types";
 
 /**
  * Labels for the visual register (TMDEV-101), and the one place that decides
  * how a video's style reads once the choice is frozen.
  *
- * These are permission sets, not looks: each named option RESTRICTS what the
- * agent may draw from, and "Auto" is the absence of a restriction.
+ * Four of these are permission sets, not looks: each named option RESTRICTS
+ * what the agent may draw from within the one scene system (React components
+ * on a canvas). Cartoon 3D is the exception: it REPLACES that system with one
+ * painted 3D world authored as data, so it is a different renderer rather than
+ * a narrower vocabulary. "Auto" is the absence of a restriction — the agent
+ * picks the register, the renderer included.
  * Keep in sync: mcp/server.py and renderer/api/pipeline.py's VISUAL_STYLES.
  */
 export const VISUAL_STYLE_OPTIONS: { value: VisualStyle; label: string }[] = [
@@ -13,6 +17,7 @@ export const VISUAL_STYLE_OPTIONS: { value: VisualStyle; label: string }[] = [
   { value: "motion_graphics", label: "Motion Graphics" },
   { value: "stick", label: "Stick Explainer" },
   { value: "illustrated", label: "Illustrated" },
+  { value: "cartoon_3d", label: "Cartoon 3D (experimental)" },
 ];
 
 /**
@@ -35,16 +40,38 @@ export function illustratedAvailable(
   return (settings.openai_api_key ?? "") !== "";
 }
 
+/**
+ * Whether the Cartoon 3D style can be produced on this install: only while
+ * the renderer's GPU probe says "working". The API refuses the style on every
+ * other status, so, as with illustratedAvailable, a page that has not loaded
+ * GET /render/gpu counts it as available and leaves the refusal to the API.
+ * "unknown" (the worker has not tested its GPU yet) is a different fix from
+ * "no GPU", so the picker says which.
+ */
+export function cartoon3dAvailable(gpu: Pick<GpuStatus, "status"> | null | undefined): boolean {
+  if (!gpu) return true;
+  return gpu.status === "working";
+}
+
 /** The picker's options, with Illustrated disabled and saying why when no
- *  OpenAI key is stored. A video already holding "illustrated" still shows it
- *  selected, labelled, so the human can see why its approval is refused. */
+ *  OpenAI key is stored, and Cartoon 3D disabled and saying why while the
+ *  renderer's GPU is not working. A video already holding a disabled style
+ *  still shows it selected, labelled, so the human can see why its approval
+ *  is refused. `gpu` omitted or null = not loaded = available. */
 export function styleOptions(
   canIllustrate: boolean,
+  gpu?: Pick<GpuStatus, "status"> | null,
 ): { value: VisualStyle; label: string; disabled: boolean }[] {
-  return VISUAL_STYLE_OPTIONS.map((o) =>
-    o.value === "illustrated" && !canIllustrate
-      ? { ...o, label: `${o.label} (needs an OpenAI key)`, disabled: true }
-      : { ...o, disabled: false });
+  return VISUAL_STYLE_OPTIONS.map((o) => {
+    if (o.value === "illustrated" && !canIllustrate) {
+      return { ...o, label: `${o.label} (needs an OpenAI key)`, disabled: true };
+    }
+    if (o.value === "cartoon_3d" && !cartoon3dAvailable(gpu)) {
+      const why = gpu?.status === "unknown" ? "GPU not tested yet" : "needs a working GPU";
+      return { ...o, label: `${o.label} (${why})`, disabled: true };
+    }
+    return { ...o, disabled: false };
+  });
 }
 
 const LABELS: Record<string, string> = Object.fromEntries(
@@ -74,9 +101,12 @@ const CANVAS_LABELS: Record<string, string> = {
  * different, which is the whole reason the resolution is recorded at all.
  * Before the agent has chosen, it says so rather than implying one.
  */
-export function videoStyleLabel(video: Pick<Video, "visual_style" | "resolved_visual_style">): string {
+export function videoStyleLabel(video: Pick<Video, "visual_style" | "resolved_visual_style" | "resolved_renderer">): string {
   const chosen = video.visual_style ?? "auto";
   if (chosen !== "auto") return styleLabel(chosen);
+  // The renderer is the first thing auto settles (before any scene exists);
+  // a Cartoon 3D world has no canvas worth naming.
+  if (video.resolved_renderer === "cartoon_3d") return "Auto — Cartoon 3D (experimental)";
   const resolved = video.resolved_visual_style ?? "";
   if (!resolved) return "Auto (not yet chosen)";
   return CANVAS_LABELS[resolved] ?? `Auto — ${resolved}`;

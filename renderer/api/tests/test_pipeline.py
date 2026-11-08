@@ -1202,7 +1202,8 @@ def test_get_settings_returns_all_defaults(client):
     assert data["image_model"] == "gpt-image-2.5-flare"
     # Retired with the Gemini image provider (TMDEV-165).
     assert "image_provider" not in data
-    assert data["render_timeout_secs"] == 2400
+    assert data["render_timeout_secs"] == 10800
+    assert data["render_stall_timeout_secs"] == 600
 
 
 def test_post_settings_persists_int(client):
@@ -1769,7 +1770,7 @@ def test_post_settings_render_timeout_secs_below_floor_returns_400(client):
     r = client.post("/settings", json={"render_timeout_secs": 30})
     assert r.status_code == 400
     assert "render_timeout_secs" in json.loads(r.data)["error"]
-    assert json.loads(client.get("/settings").data)["render_timeout_secs"] == 2400  # unchanged
+    assert json.loads(client.get("/settings").data)["render_timeout_secs"] == 10800  # unchanged
 
 
 def test_post_settings_render_timeout_secs_at_floor_is_accepted(client):
@@ -2646,7 +2647,7 @@ def test_user_preferences_with_a_nul_are_rejected(client, db_path):
 
 def test_agent_model_is_no_longer_a_settings_key(client):
     assert "agent_model" not in pipeline.SETTINGS_SPEC
-    assert len(pipeline.SETTINGS_SPEC) == 40
+    assert len(pipeline.SETTINGS_SPEC) == 41
     assert "agent_model" not in json.loads(client.get("/settings").data)
 
 

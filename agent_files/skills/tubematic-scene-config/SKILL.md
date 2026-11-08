@@ -204,9 +204,14 @@ renders. Reference the result the same way as a freshly-authored scene (`source`
 
 ## Visual Registers
 
-`visual_style` on the video is a **permission set**, not a look. It says which vocabularies you
-may draw from, and which canvas the video is painted on. It does *not* decide any beat's
-treatment — that still follows the beat's subject, exactly as it always has.
+`visual_style` on the video is, for four of its five values, a **permission set**, not a look. It
+says which vocabularies you may draw from, and which canvas the video is painted on. It does *not*
+decide any beat's treatment — that still follows the beat's subject, exactly as it always has.
+
+The fifth value is different in kind. `cartoon_3d` does not restrict the scene system, it
+**replaces** it: the whole video is one painted 3D world written as code for that video against the renderer's kit, with no scene components
+at all. It is not this skill's work. A video at `cartoon_3d` is authored by the **tubematic-cartoon3d**
+skill; stop here and invoke it.
 
 Read `visual_style` from `get_video`:
 
@@ -215,9 +220,11 @@ Read `visual_style` from `get_video`:
 | `motion_graphics` | Dark | Vector animation, full-bleed generated imagery. **No figures.** |
 | `stick` | Light | **Hand-drawn** `StickFigure` line art, line-art diagrams, generated imagery **in panels**. |
 | `illustrated` | **You choose** | Characters are **generated illustrated assets** (`generate_character`) rather than line art. You pick the drawing style *and* the canvas from the topic. |
-| `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery. |
+| `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
+| `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery, **or the Cartoon 3D world**. |
 
-The two named options are restrictions. `auto` is the absence of one.
+The three named DOM options are restrictions; `cartoon_3d` is another renderer. `auto` is the
+absence of a restriction: **you pick the register, the renderer included.**
 
 ### A permission is not an instruction
 
@@ -263,8 +270,29 @@ the render — a black figure on a dark canvas is a silhouette of nothing.
 
 ### Resolving `auto`
 
-Under `auto` you choose **the canvas**, once, and record it. Nothing else is fixed: every beat
-still picks its own treatment.
+Under `auto` you first choose **the renderer**, once, before any scene exists, and then, on the
+scene renderer, **the canvas**, once. Nothing else is fixed: every beat still picks its own
+treatment.
+
+**The renderer first.** Ask what carries the video:
+
+| The video is carried by | Renderer | Why |
+|---|---|---|
+| **A place and people moving through it** — a story, a walkthrough with a protagonist, anything where *where this happens* matters | **Cartoon 3D** (`cartoon_3d`) | A world with depth, a camera moving through it, characters that walk and react. Nothing else here does continuous motion |
+| **Recurring characters the viewer must recognise**, but no place | Scenes (`dom`), generated character art, canvas from the topic | Recognition across scenes is what the image calls buy |
+| **Real, specific subjects the viewer came to see** — screenshots, products, people, places as images | Scenes (`dom`), full-bleed imagery, dark canvas | What `motion_graphics` gives |
+| **Mechanism** — how a thing works, processes, architecture, data flow | Scenes (`dom`), diagrams and line art, light canvas | What `stick` gives. A 3D world adds nothing to a packet diagram |
+
+**Choosing Cartoon 3D is an instruction, not a permission.** It commits the whole video, and
+reversing it costs every scene. Choose it when the spine is genuinely a place, not because it is
+the most capable option, and never part-way through. Before choosing it read `cartoon_3d_available`
+from the `get_video` result you already have: when it is `false` the renderer's GPU is not working
+and the world cannot be rendered, so take the scene renderer whatever the table says, and say in
+the handback that a world was wanted but the install cannot render one.
+
+Record the renderer with `update_video(video_id, resolved_renderer="cartoon_3d" | "dom")`
+**before** you author anything; it is written once. For `cartoon_3d`, stop here and invoke the
+**tubematic-cartoon3d** skill, which authors the world. For `dom`, continue:
 
 1. Classify every segment by subject as usual (see **Images**), allowing STICK for role beats.
 2. Choose the canvas by asking **what carries this video**:
@@ -767,7 +795,7 @@ entirely.
 | `fontFamily` | container default | A CSS family, or one of `Inter`, `Oswald`, `Roboto`, `Montserrat` |
 | `fontSize` | `62` | 28–120 |
 | `color` | `null` | `null` follows the canvas — black on light, white on dark. Set one only for a real reason |
-| `background` | `"pill"` | `"pill"`, `"shadow"` or `"none"`. `"pill"` is the safe choice over busy imagery |
+| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"` or `"none"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes |
 | `position` | `0.78` | Vertical centre as a fraction of frame height |
 | `uppercase` | `false` | |
 

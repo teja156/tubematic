@@ -3,9 +3,11 @@
 How to let the renderer use an NVIDIA graphics card, how to tell whether it really is, and what
 happens when it cannot.
 
-**This is optional.** Without a GPU every video renders on the CPU, exactly as before, and nothing
-on this page needs doing. **Only NVIDIA GPUs are supported.** Intel and AMD GPUs, integrated or not,
-are never used.
+**This is optional for every style but one.** Without a GPU every video renders on the CPU, exactly
+as before, and nothing on this page needs doing — except that the **Cartoon 3D (experimental)** visual style cannot
+be chosen: it draws a 3D world for every frame, which takes about an hour per Short on a CPU, so
+it is offered only while the renderer's GPU is working. **Only NVIDIA GPUs are supported.** Intel
+and AMD GPUs, integrated or not, are never used.
 
 ---
 
@@ -179,6 +181,7 @@ rendering down, but never fails a video. How this works is in
 | The `gpu` step says Docker has no `nvidia` runtime | The Container Toolkit is missing, or `nvidia-ctk runtime configure` was not run | Step 2, including the Docker restart |
 | **Rendering on the CPU** although you chose a GPU (and `service.py status` warns about it) | The renderer was recreated without the GPU, usually by a bare `docker compose up` | `python3 scripts/service.py start tubematic-renderer` |
 | Red, and **Why** says Chromium could not create a WebGL context | The container has the GPU but not its graphics libraries: a driver/library mismatch after a driver update, or an old Container Toolkit | Reboot after a driver update; update the Container Toolkit |
+| Red, **Why** says Chromium could not create a WebGL context, and `docker exec tubematic-renderer ls /usr/share/glvnd/egl_vendor.d/` lists no `10_nvidia.json` | The Container Toolkit mounted the driver libraries but not the NVIDIA EGL vendor file, so Chromium fell back to Mesa. Seen with Docker running inside another container | Switch the toolkit to CDI mode: `sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`, `sudo nvidia-ctk config --set nvidia-container-runtime.mode=cdi --in-place`, then `python3 scripts/service.py start tubematic-renderer` |
 | Red, and **Chromium sees** names another device (Intel, Mesa, `llvmpipe`) | Chromium picked a different graphics device than the GPU | Report it with `python3 scripts/collect_diagnostics.py` (see [Troubleshooting](08-troubleshooting.md)) |
 | `upgrade.py` refuses, naming `compose.gpu.json` | The chosen GPU or the Container Toolkit is gone | `python3 onboard.py --step gpu`, then upgrade again |
 

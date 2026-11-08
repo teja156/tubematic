@@ -17,9 +17,9 @@ from onboard.executor import Executor, NullReporter
 
 # ── The field itself ──────────────────────────────────────────────────────────
 
-def test_field_asks_in_minutes_defaulting_to_40():
+def test_field_asks_in_minutes_defaulting_to_180():
     field = FIELDS_BY_KEY["render_timeout_mins"]
-    assert field.default == "40"
+    assert field.default == "180"  # 10800 s, the SETTINGS_SPEC default (TMDEV-179)
     assert field.source == "settings"
 
 
@@ -58,7 +58,7 @@ def test_prefill_converts_stored_seconds_to_minutes(tmp_path):
 
 def test_prefill_falls_back_to_default_when_unset(tmp_path):
     values = _values_with_settings_row(tmp_path, "render_timeout_secs", None)
-    assert values["render_timeout_mins"] == "40"
+    assert values["render_timeout_mins"] == "180"
 
 
 def test_prefill_floors_at_one_minute_for_a_sub_60s_stored_value(tmp_path):
@@ -70,7 +70,7 @@ def test_prefill_floors_at_one_minute_for_a_sub_60s_stored_value(tmp_path):
 
 def test_prefill_ignores_corrupt_stored_value(tmp_path):
     values = _values_with_settings_row(tmp_path, "render_timeout_secs", "not-a-number")
-    assert values["render_timeout_mins"] == "40"  # falls back to the field default
+    assert values["render_timeout_mins"] == "180"  # falls back to the field default
 
 
 # ── Write boundary: minutes (answered) -> seconds (seeded) ───────────────────
@@ -95,9 +95,9 @@ def test_seeds_render_timeout_secs_from_minutes(tmp_path, monkeypatch):
     assert rows["render_timeout_secs"] == "2700"
 
 
-def test_seeds_default_40_minutes_when_unanswered(tmp_path, monkeypatch):
+def test_seeds_default_180_minutes_when_unanswered(tmp_path, monkeypatch):
     rows = _seed_and_read(tmp_path, {})
-    assert rows["render_timeout_secs"] == "2400"
+    assert rows["render_timeout_secs"] == "10800"
 
 
 @pytest.mark.parametrize("raw", ["0", "-10"])
@@ -115,4 +115,4 @@ def test_seeding_falls_back_to_the_default_when_unparseable(tmp_path, monkeypatc
     itself reject (< 60s) — this is the same clamp-don't-crash philosophy
     every other int setting in this function already uses."""
     rows = _seed_and_read(tmp_path, {"render_timeout_mins": raw})
-    assert rows["render_timeout_secs"] == "2400"
+    assert rows["render_timeout_secs"] == "10800"

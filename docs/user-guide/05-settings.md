@@ -42,7 +42,8 @@ verified, the bookkeeping rows that share their table, and how to add one are on
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `render_timeout_secs` | int | `2400` | Wall clock for one Remotion render. Minimum 60 |
+| `render_timeout_secs` | int | `10800` | The absolute ceiling on one Remotion render, a crash detector of last resort rather than a budget: three hours covers a three-minute Short on the CPU with headroom. A slow CPU rendering an over-length video may need it raised. Minimum 60 |
+| `render_stall_timeout_secs` | int | `600` | How long the render's progress counter may stand still before the render is judged hung and retried. Remotion reports every frame it renders and encodes; a healthy render advances every few seconds, a wedged browser never does, so this catches a hang in minutes whatever the video's length. Minimum 60; neither setting needs a restart |
 | `max_render_retries` | int | `1` | Render **crash and timeout** retries only. A worker restart mid-render counts as a failure |
 | `text_layout_audit_enabled` | bool | `true` | Kill switch for the advisory text-overlap and safe-zone audit inside `validate_job` |
 | `watermark_enabled` | bool | `true` | Burns the "Made with tubematic.ai" mark into every render. Read by the worker when a render starts, so it affects later renders only. **A setting rather than a `scene-config.json` key on purpose** — see [Watermark](../developer/09-remotion-project.md#watermark) |

@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { Agent, LogRecord, LogsResponse, ScriptProfile, Video, VideoPublication, Voice } from "@/lib/types";
+import type { Agent, GpuStatus, LogRecord, LogsResponse, ScriptProfile, Video, VideoPublication, Voice } from "@/lib/types";
 import { isScored, videoStreamUrl } from "@/lib/utils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReviseDialog } from "@/components/ReviseDialog";
@@ -67,6 +67,9 @@ interface VideoModalProps {
    *  picker. Defaults true, unlike publishingEnabled — the API refuses the
    *  style without a key anyway, so the safe default is to let it say so. */
   illustratedAvailable?: boolean;
+  /** GET /render/gpu, or null while unloaded: Cartoon 3D is disabled in the
+   *  style picker unless the renderer's GPU is working. Null = available. */
+  gpu?: GpuStatus | null;
   onClose: () => void;
   onAction: (videoId: string, action: string, video: Video, extra?: Record<string, unknown>) => void;
 }
@@ -325,7 +328,7 @@ const reviewToggleStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-export function VideoModal({ video: seed, initialTab, openRevise = false, initialPicks, voices = [], defaultVoiceId = "", scriptProfiles = [], agents, publishingEnabled = false, illustratedAvailable = true, onClose, onAction }: VideoModalProps) {
+export function VideoModal({ video: seed, initialTab, openRevise = false, initialPicks, voices = [], defaultVoiceId = "", scriptProfiles = [], agents, publishingEnabled = false, illustratedAvailable = true, gpu = null, onClose, onAction }: VideoModalProps) {
   const { timeZone, label: tzLabel } = useTimeZone();
   const [video, setVideo] = useState<Video | null>(null);
   const [reviseOpen, setReviseOpen] = useState(false);
@@ -1194,7 +1197,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           title="Visual register for this video"
                           className="w-full rounded border border-[#2a2a42] bg-[#131325] px-3 py-2 text-sm text-[#f0f0ff]"
                         >
-                          {styleOptions(illustratedAvailable).map((o) => (
+                          {styleOptions(illustratedAvailable, gpu).map((o) => (
                             <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
                           ))}
                         </select>

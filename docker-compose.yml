@@ -169,6 +169,10 @@ services:
       - TUBEMATIC_JOBS_DIR=/jobs
       - MCP_PORT=4100
       - TUBEMATIC_SECRETS_DIR=/run/secrets
+      # The Cartoon 3D tools post their gate and preview stills to the render
+      # worker's stills server, on the GPU when there is one (TMDEV-179);
+      # unreachable, they render on this container's CPU instead.
+      - TUBEMATIC_STILLS_SERVER=http://tubematic-renderer:4455
     secrets:
       - mcp_token
     healthcheck:
@@ -219,6 +223,9 @@ services:
       - OUTPUT_BASE_PATH=/output_videos
       - TUBEMATIC_DB=/data/tubematic.db
       - TUBEMATIC_JOBS_DIR=/jobs
+      # The stills server the worker runs beside its renders, for the MCP
+      # container's Cartoon 3D tools. Compose network only, never published.
+      - TUBEMATIC_STILLS_PORT=4455
     shm_size: '2gb'
     depends_on:
       tubematic-api:

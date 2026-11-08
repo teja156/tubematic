@@ -19,7 +19,7 @@ each pass decides is on the page that owns that subject, linked from the table b
 
 ```mermaid
 flowchart TD
-    S[startup: migrate the database,<br/>requeue or fail rows stuck at RENDERING,<br/>test the GPU] --> P
+    S[startup: migrate the database,<br/>requeue or fail rows stuck at RENDERING,<br/>test the GPU, start the stills server] --> P
     P[1 · publishing: release due scheduled posts,<br/>settle posts in flight] --> A
     A[2 · Auto Pilot: approve checkpoints,<br/>start one post] --> M
     M[3 · analytics poll — hourly] --> PR
@@ -44,9 +44,58 @@ flowchart TD
 | 7 | Stalled-voicing check | `_sweep_stalled_voicing` | every tick | the pipeline is not paused | [The Pipeline](02-pipeline.md#script_ready--the-money-checkpoint) |
 | 0b | GPU test | `_run_gpu_probe` | once, at start, before any render | — (also runs on a CPU install, to report what Chromium gets) | [Rendering and Review](11-rendering-and-review.md#the-gl-renderer) |
 | 8 | GPU test on request | `_sweep_gpu_probe` | every tick | the dashboard's **Test GPU** asked after the last test started | [Rendering and Review](11-rendering-and-review.md#the-gl-renderer) |
+| 8b | Stills server | `_ensure_stills_server` | at start and every tick | `TUBEMATIC_STILLS_PORT` is set (it is, in Compose); starts the server once, again when it has died (at most once a minute) or when a GPU test moved renders between the GPU and the CPU | [below](#the-stills-server) |
 | 9 | Render | `_claim_next`, `_stage_and_render` | every tick | a video is at `RENDER_QUEUED` | [Rendering and Review](11-rendering-and-review.md) |
 
 The loop itself is `worker.py::main`.
+
+### The stills server
+
+The MCP container's Cartoon 3D tools (`cartoon_beat_gate`, `cartoon_still`) need stills of a
+video's composition, and this is the one container with the GPU. So the worker runs
+`renderer/remotion/cartoon-tools/stills-server.mjs` as a child process beside its renders: the
+project is bundled once, one Chromium stays open, and a still takes a few seconds instead of the
+25 to 30 seconds a cold software-GL still costs in the MCP container. It is started with exactly
+the GL options a render gets (`_gl_options`), so a passing GPU test moves it onto the GPU and a
+failing one moves it back, and it serves the shared `/jobs` volume as its public directory, so a
+video's files are `/public/<video_id>/…` to the composition with nothing copied. It listens on
+`TUBEMATIC_STILLS_PORT` (4455) on the Compose network only and is never published; the MCP
+container reaches it as `TUBEMATIC_STILLS_SERVER`, and when it does not answer the tools render
+their stills locally instead. Renders and stills share the GPU; the server renders one still at a
+time. It is also why the reaper that follows a killed render (`_kill_group_and_reap`) drains the
+killed group's orphans without blocking: a blocking wait on any child would sit on the healthy stills
+server forever, so it polls non-blocking until no child but the stills server is left. The generated
+source tree (`src/scenes/generated/`, the agents' per-video TypeScript) is part of the bundle, so before
+every still the server compares a stamp of that tree (every file's path, size and mtime) with the one its
+bundle was made from and re-bundles when it differs: an edit to a video's code is seen by its next still
+(about twenty seconds, once), an unchanged tree costs a directory walk.
+
+### Segmented Cartoon 3D renders
+
+A Cartoon 3D video is not rendered as one `remotion render`: a long single render of one hung silently
+part way on the GPU (most likely GPU memory, as every tab accumulates every set's textures and a
+crossfade opens a second WebGL context). `_render_cartoon` renders segments of `CARTOON_CHUNK_FRAMES`
+(450) frames, each its own Remotion process with a fresh browser, `--frames=a-b --muted` and
+`--concurrency=2`, under the same stall watcher as any render; a segment that stalls or fails is tried
+once more, fresh, and a second failure is the render's (a stall is reported as a timeout is, requeued
+and the GPU re-tested; an error goes to the agent). The segments are joined with ffmpeg's concat
+demuxer without re-encoding, and the soundtrack is muxed on: the synthesised mix
+(`<jobs>/<video_id>/cartoon/audio/mix/mix.wav`, written by the MCP server's `cartoon_soundtrack`)
+when it exists and is at least as new as the voice, else `audio.mp3` alone. The work directory beside
+the output is removed either way.
+
+`render_timeout_secs` caps the whole segmented render, every segment, retry and ffmpeg step included, as it
+caps an ordinary render: each segment gets what is left of the one deadline, and the concat and the mux get
+the lesser of what is left and `FFMPEG_TIMEOUT_SECS`. Every segment bundles the generated
+source tree afresh, so what is rendered has to be what the beat gate judged: `submit_render` recorded that
+tree's fingerprint under `<jobs>/<video_id>/cartoon/source.json`, and the worker compares the live tree
+with it before every segment and again before the join. A tree that differs (edited after the gate) or
+holds a symlink fails the render to the agent with the reason, and so does a missing or symlinked record
+(the record's and the mix's paths are built with `join_below`, so a link in any component on the way is
+refused too): only `submit_render` queues a Cartoon 3D video, and it always writes one. A render that cannot run at all (no `npx`, a full disk) is that video's failure, not an
+exception out of the worker: `_render_claimed` is the per-video boundary round `_stage_and_render`, and
+whatever escapes it is recorded with `_handle_render_failure` and requeued, so a row never stays
+`RENDERING` with the worker gone.
 
 ## What a tick is
 
@@ -56,7 +105,8 @@ A tick is one trip round the loop. How long it takes depends on step 9:
   round again. So an idle worker runs every pass about every 20 seconds. The interval is a plain
   environment variable, not a settings row.
 - **A video to render:** the render runs inside the loop and holds it until it finishes: typically
-  around twenty minutes, and at most `render_timeout_secs` (default 40 minutes) plus the AI review.
+  around twenty minutes on the CPU and a few on the GPU; a render that stops advancing is killed after
+  `render_stall_timeout_secs` (default 10 minutes), and `render_timeout_secs` (default 3 hours) caps the whole render.
   There is no sleep afterwards; the next tick starts at once.
 
 **So every pass waits behind a running render.** A post that falls due, a checkpoint Auto Pilot

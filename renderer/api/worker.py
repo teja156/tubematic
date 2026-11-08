@@ -13,6 +13,8 @@ Run: python3 worker.py
 import calendar
 import datetime as dt
 import json
+import re
+import threading
 import logging
 import os
 import shutil
@@ -40,6 +42,7 @@ from tubematic_core import usage as tusage
 DB_PATH = os.getenv("TUBEMATIC_DB", "/data/tubematic.db")
 OUTPUT_DIR = Path(os.getenv("OUTPUT_BASE_PATH", "/output_videos"))
 REMOTION_DIR = Path("/app/remotion")
+JOBS_DIR = os.getenv("TUBEMATIC_JOBS_DIR", "/jobs")   # the volume the stills server serves as /public/
 LOG_DIR = Path(os.getenv("TUBEMATIC_LOG_DIR", "/logs"))
 CHROMIUM_BIN = os.getenv("CHROMIUM_BIN", "/usr/bin/chromium")
 
@@ -136,10 +139,296 @@ def _max_ai_review_loops() -> int:
 
 
 def _render_timeout_secs() -> int:
+    """The absolute ceiling on one render. Keep the default in sync with
+    pipeline.py SETTINGS_SPEC."""
     try:
-        return int(_setting("render_timeout_secs", "2400"))
+        return int(_setting("render_timeout_secs", "10800"))
     except (ValueError, TypeError):
-        return 2400
+        return 10800
+
+
+def _render_stall_timeout_secs() -> int:
+    """How long Remotion's progress counter may stand still before the render
+    is judged hung. Keep the default in sync with pipeline.py SETTINGS_SPEC."""
+    try:
+        return int(_setting("render_stall_timeout_secs", "600"))
+    except (ValueError, TypeError):
+        return 600
+
+
+# ── Render progress (TMDEV-179) ─────────────────────────────────────────────
+#
+# A timeout here is a crash detector, not a budget. Total elapsed time is a
+# poor proxy for "hung": a legitimate long render on a slow machine looks the
+# same as a Chromium wedged at frame 3, and the old 40-minute ceiling made the
+# wedged one burn 40 minutes, retry, and burn 40 more. Remotion prints a
+# monotonic counter per phase to a plain pipe (newline-terminated, no carriage
+# returns, verified on captured logs):
+#
+#   Bundling 6% … Bundling 100%
+#   Rendered 0/60 … Rendered 60/60
+#   Encoded 17/60 … Encoded 60/60
+#
+# so the render is alive while (phase, count) strictly increases. The NUMBER
+# must advance, not merely a line arrive: real logs repeat "Rendered 8/60", so
+# a stalled render that reprints its count would otherwise read as healthy.
+_PROGRESS_RE = re.compile(r"\b(Bundling|Rendered|Encoded)\s+(\d+)")
+_PHASE_RANK = {"Bundling": 0, "Rendered": 1, "Encoded": 2}
+
+
+def _progress_of(line: str):
+    """(phase rank, count) when `line` carries one of Remotion's progress
+    counters, else None."""
+    m = _PROGRESS_RE.search(line)
+    if not m:
+        return None
+    return (_PHASE_RANK[m.group(1)], int(m.group(2)))
+
+
+# Indirections so the loop below can be driven by a test clock.
+_clock = time.monotonic
+_sleep = time.sleep
+_POLL_SECS = 0.5
+
+
+def _wait_for_render(proc, timeout_secs: int, stall_secs: int) -> tuple[str, str, str]:
+    """Drain both of `proc`'s pipes while it runs and watch its progress.
+
+    Returns (stdout, stderr, outcome): outcome "exited" when the process
+    ended by itself, "stall" when the progress counter did not advance for
+    stall_secs, "timeout" when timeout_secs elapsed in all. On "stall" and
+    "timeout" the process is still running: the caller kills its group.
+
+    Both pipes are read on threads of their own: a hand-rolled read of stdout
+    alone deadlocks the moment a chatty render fills the stderr pipe, and
+    communicate() hands both over only at the end, which is why it could not
+    see progress. The full output is kept: _handle_render_failure records it.
+    """
+    out_lines: list[str] = []
+    err_lines: list[str] = []
+    state = {"progress": (-1, -1), "advanced_at": _clock()}
+    lock = threading.Lock()
+
+    def pump(stream, sink):
+        for line in iter(stream.readline, ""):
+            sink.append(line)
+            p = _progress_of(line)
+            if p is None:
+                continue
+            with lock:
+                if p > state["progress"]:
+                    state["progress"] = p
+                    state["advanced_at"] = _clock()
+        stream.close()
+
+    threads = [threading.Thread(target=pump, args=(proc.stdout, out_lines), daemon=True),
+               threading.Thread(target=pump, args=(proc.stderr, err_lines), daemon=True)]
+    for t in threads:
+        t.start()
+    started = _clock()
+    outcome = "exited"
+    while proc.poll() is None:
+        now = _clock()
+        if now - started > timeout_secs:
+            outcome = "timeout"
+            break
+        with lock:
+            quiet = now - state["advanced_at"]
+        if quiet > stall_secs:
+            outcome = "stall"
+            break
+        _sleep(_POLL_SECS)
+    if outcome == "exited":
+        for t in threads:
+            t.join()
+    return "".join(out_lines), "".join(err_lines), outcome
+
+
+def _scene_config_is_cartoon3d(scene_config_path) -> bool:
+    """Whether the written scene-config renders a Cartoon 3D world: one
+    generated scene whose props carry `cartoon3d` (the beats). Keep the key
+    in sync with mcp/cartoon.py's CARTOON_PROPS."""
+    try:
+        config = json.loads(Path(scene_config_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    scenes = config.get("scenes") if isinstance(config, dict) else None
+    return isinstance(scenes, list) and any(
+        isinstance(s, dict) and isinstance(s.get("props"), dict) and isinstance(s["props"].get("cartoon3d"), dict)
+        for s in scenes)
+
+
+# ── Cartoon 3D: a segmented render (TMDEV-185) ──────────────────────────────
+#
+# One `remotion render` of a whole Cartoon 3D Short hung silently part way on
+# the GPU (the spike: a long render at ~1/3, most likely GPU memory as every
+# tab accumulates every set's textures and a crossfade opens a second WebGL
+# context). So a Cartoon 3D video renders in segments of CARTOON_CHUNK_FRAMES
+# frames, each its own Remotion process with a fresh browser and the same
+# stall watcher as any render, video only; the segments are joined without
+# re-encoding and the soundtrack is muxed on afterwards: the synthesised mix
+# (mcp/cartoon.py's cartoon_soundtrack, under the job's cartoon/ directory)
+# when it is there and newer than the voice, else the voice alone.
+CARTOON_CHUNK_FRAMES = 450          # 15 s at 30 fps
+CARTOON_CHUNK_ATTEMPTS = 2          # a segment that hangs or fails is tried once more, fresh
+CARTOON_MIX = ("cartoon", "audio", "mix", "mix.wav")
+CARTOON_SOURCE = ("cartoon", "source.json")          # what submit_render froze: mcp/cartoon.py's SOURCE_RECORD
+GENERATED_DIR = REMOTION_DIR / "src" / "scenes" / "generated"   # keep in sync with mcp/cartoon.py's mix_file
+FFMPEG_TIMEOUT_SECS = 900
+
+
+def _cartoon_chunks(total_frames: int, size: int = CARTOON_CHUNK_FRAMES) -> list:
+    """Inclusive frame ranges tiling [0, total_frames). A short tail (under a
+    third of a segment) joins the segment before it rather than costing a
+    browser of its own."""
+    if total_frames <= 0:
+        return []
+    starts = list(range(0, total_frames, size))
+    if len(starts) > 1 and total_frames - starts[-1] < size / 3:
+        starts.pop()
+    return [(a, (starts[i + 1] - 1) if i + 1 < len(starts) else total_frames - 1) for i, a in enumerate(starts)]
+
+
+def _soundtrack_for(video_id: str, voice_path: Path) -> Path:
+    """The audio to mux: the synthesised mix when it exists and is at least as
+    new as the voice (a re-voiced video makes an older mix stale), else the voice."""
+    try:
+        # join_below refuses a symlink in any component on the way
+        mix = tjobs.join_below(tjobs.job_dir(pipeline.JOBS_DIR, video_id), *CARTOON_MIX)
+        if mix.is_file() and not mix.is_symlink() and mix.stat().st_mtime >= voice_path.stat().st_mtime:
+            return mix
+    except (OSError, tjobs.UnsafePath):
+        pass
+    return voice_path
+
+
+def _cartoon_source_error(video_id: str) -> str | None:
+    """Why the video's generated source is not the tree submit_render froze
+    (its fingerprint under the job, written when the beat gate had passed):
+    it was edited since, a non-regular file sits in it, or there is no record
+    at all (only submit_render queues a Cartoon 3D video, and it always
+    writes one: a missing or replaced record is not rendered). None when the
+    live tree is the frozen one."""
+    try:
+        # join_below refuses a symlink in any component on the way (a planted
+        # `cartoon` link would redirect the record itself)
+        record = tjobs.join_below(tjobs.job_dir(pipeline.JOBS_DIR, video_id), *CARTOON_SOURCE)
+        if record.is_symlink():
+            return f"{'/'.join(CARTOON_SOURCE)} is a symlink; the record of the queued source must be a plain file"
+        if not record.is_file():
+            return (f"no record of the source that was queued ({'/'.join(CARTOON_SOURCE)} is missing): "
+                    "the video must be queued by submit_render")
+        frozen = json.loads(record.read_text(encoding="utf-8")).get("fingerprint")
+        live = tjobs.source_fingerprint(tjobs.scene_dir(GENERATED_DIR, video_id))
+    except tjobs.UnsafePath as e:
+        return f"the generated source cannot be rendered: {e}"
+    except (OSError, ValueError, AttributeError) as e:
+        return f"the generated source could not be checked against the one that was queued: {e}"
+    if not isinstance(frozen, str) or frozen != live:
+        return ("the generated source changed after the beat gate passed and the video was queued; "
+                "run cartoon_beat_gate again on the new source, then submit_render")
+    return None
+
+
+def _render_cartoon(video_id: str, props: str, output_path: str, gl_argv: list, gl_env: dict,
+                    timeout_secs: int, stall_secs: int, total_frames: int, voice_path: Path) -> tuple:
+    """Render a Cartoon 3D video in segments and mux its soundtrack. Returns
+    (outcome, detail): outcome "ok", "hung" (a segment stalled, or the whole
+    render ran past timeout_secs: environmental, retried by the caller as a
+    timeout is) or "failed" (Remotion or ffmpeg reported an error, the source
+    is not the one that was queued, or the render could not be run at all).
+    timeout_secs caps the whole render, every segment and retry included,
+    as it caps an ordinary render."""
+    out_file = Path(output_path)
+    work = out_file.parent / f".{video_id}.segments"
+    tmp_out = out_file.with_name(f"{out_file.name}.tmp.mp4")
+    deadline = _clock() + timeout_secs
+    chunks = _cartoon_chunks(total_frames)
+    if not chunks:
+        return "failed", f"timeline.json has no frames to render (totalFrames {total_frames})"
+    segments = []
+    try:
+        shutil.rmtree(work, ignore_errors=True)
+        work.mkdir(parents=True, exist_ok=True)
+        for a, b in chunks:
+            # every segment bundles the live tree afresh: checked round each one
+            err = _cartoon_source_error(video_id)
+            if err:
+                return "failed", err
+            seg = work / f"seg_{a:05d}-{b:05d}.mp4"
+            last_err, hung = "", False
+            for attempt in range(1, CARTOON_CHUNK_ATTEMPTS + 1):
+                remaining = deadline - _clock()
+                if remaining <= 0:
+                    return "hung", f"frames {a}-{b}: the render ran past {timeout_secs}s in all"
+                log.info(f"[{video_id}] rendering frames {a}-{b} (attempt {attempt}/{CARTOON_CHUNK_ATTEMPTS})",
+                         extra={"video_id": video_id})
+                proc = subprocess.Popen(
+                    ["npx", "remotion", "render", "Composition", str(seg), "--props", props,
+                     "--browser-executable-path", CHROMIUM_BIN, *gl_argv,
+                     # two tabs: the post stack hung at the default concurrency on one shared GPU
+                     "--concurrency=2", f"--frames={a}-{b}", "--muted"],
+                    cwd=str(REMOTION_DIR), env={**os.environ, **gl_env},
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+                stdout, stderr, outcome = _wait_for_render(proc, remaining, stall_secs)
+                if outcome != "exited":
+                    _kill_group_and_reap(proc)
+                    hung = True
+                    last_err = (f"frames {a}-{b}: no progress for {stall_secs}s" if outcome == "stall"
+                                else f"frames {a}-{b}: the render ran past {timeout_secs}s in all")
+                    log.warning(f"[{video_id}] {last_err}", extra={"video_id": video_id})
+                    continue
+                if proc.returncode == 0 and seg.is_file() and seg.stat().st_size > 0:
+                    segments.append(seg)
+                    break
+                hung = False
+                last_err = f"frames {a}-{b}: " + ((stderr or stdout or "remotion exited %d" % proc.returncode).strip()[-2000:])
+                log.warning(f"[{video_id}] segment failed: {last_err[-300:]}", extra={"video_id": video_id})
+            else:
+                return ("hung" if hung else "failed"), last_err
+        err = _cartoon_source_error(video_id)
+        if err:
+            return "failed", err
+        # ffmpeg spends what is left of the same deadline, FFMPEG_TIMEOUT_SECS at most
+        remaining = deadline - _clock()
+        if remaining <= 0:
+            return "hung", f"joining the segments: the render ran past {timeout_secs}s in all"
+        list_file = work / "segments.txt"
+        list_file.write_text("".join(f"file '{p.name}'\n" for p in segments), encoding="utf-8")
+        silent = work / "video.mp4"
+        joined = subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
+                                 "-c", "copy", str(silent)], cwd=str(work), capture_output=True, text=True,
+                                timeout=min(FFMPEG_TIMEOUT_SECS, remaining))
+        if joined.returncode != 0 or not silent.is_file():
+            return "failed", f"joining the {len(segments)} segments failed: {(joined.stderr or joined.stdout).strip()[-800:]}"
+        remaining = deadline - _clock()
+        if remaining <= 0:
+            return "hung", f"muxing the soundtrack: the render ran past {timeout_secs}s in all"
+        audio = _soundtrack_for(video_id, voice_path)
+        muxed = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(silent), "-i", str(audio),
+                                "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+                                "-shortest", "-movflags", "+faststart", str(tmp_out)],
+                               capture_output=True, text=True, timeout=min(FFMPEG_TIMEOUT_SECS, remaining))
+        if muxed.returncode != 0 or not tmp_out.is_file():
+            tmp_out.unlink(missing_ok=True)
+            return "failed", f"muxing the soundtrack failed: {(muxed.stderr or muxed.stdout).strip()[-800:]}"
+        os.replace(tmp_out, out_file)
+        return "ok", (f"{len(segments)} segments, "
+                      + ("the synthesised soundtrack" if audio != voice_path else "the voice alone"))
+    except subprocess.TimeoutExpired as e:
+        if deadline - _clock() <= 0:
+            return "hung", f"ffmpeg: the render ran past {timeout_secs}s in all"
+        return "failed", f"ffmpeg did not finish: {e}"
+    except OSError as e:
+        # a missing executable, a full or vanished disk: a reportable failure
+        # of this render, not the end of the worker
+        return "failed", f"the render could not be run: {e}"
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+        try:
+            tmp_out.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 # ── GPU rendering (TMDEV-178) ───────────────────────────────────────────────
@@ -264,6 +553,35 @@ def _nvidia_smi(uuid_: str) -> dict:
             "memory_mib": int(parts[-1]) if parts[-1].isdigit() else None}
 
 
+# How long the reaper waits for a SIGKILLed render's orphans to finish exiting.
+# SIGKILL guarantees they do; a Chromium tearing down many threads takes
+# seconds, not minutes, so this only bounds a kernel that is not cooperating.
+REAP_TIMEOUT_SECS = 60
+
+
+def _other_children() -> set[int]:
+    """PIDs of this process's children other than the stills server, read
+    from /proc: the orphans a killed process group reparented to us."""
+    me = os.getpid()
+    skip = _stills_proc.pid if _stills_proc is not None else None
+    kids: set[int] = set()
+    try:
+        entries = os.listdir("/proc")
+    except OSError:
+        return kids
+    for d in entries:
+        if not d.isdigit() or int(d) == skip:
+            continue
+        try:
+            with open(f"/proc/{d}/stat") as fh:
+                after_comm = fh.read().rsplit(")", 1)[1].split()
+        except (OSError, IndexError):
+            continue
+        if len(after_comm) > 1 and after_comm[1] == str(me):
+            kids.add(int(d))
+    return kids
+
+
 def _kill_group_and_reap(proc: subprocess.Popen) -> None:
     """SIGKILL a start_new_session child's whole process group and reap
     everything it left behind. Shared by the render and the GPU probe, which
@@ -277,20 +595,25 @@ def _kill_group_and_reap(proc: subprocess.Popen) -> None:
     # follow-up): SIGKILL guarantees they'll all exit but not instantly --
     # heavier processes (a Chromium instance tearing down many threads) can
     # take noticeably longer to actually finish than the lightweight npx
-    # wrapper proc.wait() above already reaped. A non-blocking WNOHANG drain
-    # right here races ahead of that and finds nothing (confirmed live: the
-    # trivial `sh` link died fast enough to be caught, everything heavier
-    # didn't, and sat as permanent zombies since nothing ever revisited
-    # reaping). Block instead: wait() for each already-reparented child in
-    # turn -- bounded by SIGKILL itself guaranteeing they all eventually exit
-    # -- until none remain. Safe only because this worker is single-threaded
-    # and runs one subprocess at a time; see mcp/server.py's write_gif_script
-    # for why the same loop is wrong in a multi-threaded process.
-    try:
-        while True:
-            os.waitpid(-1, 0)
-    except ChildProcessError:
-        pass
+    # wrapper proc.wait() above already reaped. A single non-blocking drain
+    # races ahead of that and finds nothing (confirmed live), and a blocking
+    # waitpid(-1, 0) loop, which this used to be, would never return now that
+    # the stills server (TMDEV-179) is a long-lived child of ours: it would
+    # sit waiting for a healthy process. So: drain non-blocking, and keep
+    # draining while a child other than the stills server is still alive.
+    deadline = time.monotonic() + REAP_TIMEOUT_SECS
+    while time.monotonic() < deadline:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return
+        if pid:
+            continue
+        if not _other_children():
+            return
+        time.sleep(0.05)
+    log.warning("reaping the killed render's processes gave up after "
+                f"{REAP_TIMEOUT_SECS} s; {len(_other_children())} still alive")
 
 
 def _run_gpu_probe(reason: str) -> dict:
@@ -397,6 +720,91 @@ def _sweep_gpu_probe() -> None:
             _run_gpu_probe(reason="requested from the dashboard")
     except Exception:
         log.exception("GPU probe sweep failed")
+
+
+# ── The stills server (TMDEV-179) ───────────────────────────────────────────
+#
+# The MCP container's Cartoon 3D tools need stills of a video's composition
+# (the part gate, the beat gate, the author's own previews), and this is the
+# one container with the GPU. So the worker runs cartoon-tools/stills-server.mjs
+# beside its renders: bundled once, one browser, a still in a few seconds
+# instead of the ~30 s a cold software-GL still costs in the MCP container.
+# It gets exactly the GL options a render gets (_gl_options), so a passing
+# probe moves it onto the GPU and a failing one moves it back, and it serves
+# the shared /jobs volume as its public directory so a video's files are
+# /public/<vid>/... with nothing staged. Compose-network only; never published.
+STILLS_SERVER_PORT = int(os.getenv("TUBEMATIC_STILLS_PORT", "0") or "0")   # 0: do not run one
+STILLS_SERVER_SCRIPT = "cartoon-tools/stills-server.mjs"
+STILLS_SERVER_HOST = "0.0.0.0"
+# A server that dies is started again, but not in a tight loop: a Chromium
+# that cannot open is retried every so often, not every pass of the loop.
+STILLS_SERVER_RETRY_SECS = 60
+
+_stills_proc = None
+_stills_on_gpu: bool | None = None
+_stills_started_at = 0.0
+
+
+def _stills_server_argv(on_gpu: bool) -> tuple[list, dict]:
+    """The command and environment for one GL path: the same options as a
+    render's, spelled as the server's flags."""
+    options, env = _gl_options(on_gpu)
+    argv = ["node", STILLS_SERVER_SCRIPT, "--port", str(STILLS_SERVER_PORT), "--host", STILLS_SERVER_HOST,
+            "--public", JOBS_DIR, "--gl", options["gl"], "--chrome-mode", options["chromeMode"],
+            "--multiprocess", "1" if options["enableMultiprocessOnLinux"] else "0"]
+    if options.get("browserExecutable"):
+        argv += ["--browser-executable", options["browserExecutable"]]
+    return argv, env
+
+
+def _stop_stills_server() -> None:
+    global _stills_proc
+    proc = _stills_proc
+    _stills_proc = None
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        proc.wait(timeout=15)
+    except Exception:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except Exception:
+            pass
+
+
+def _ensure_stills_server(now: float | None = None) -> None:
+    """Start the server, or start it again when it has died or when the GL
+    path it was started on no longer matches what renders use. One pass of the
+    worker loop, so never blocking."""
+    global _stills_proc, _stills_on_gpu, _stills_started_at
+    if not STILLS_SERVER_PORT:
+        return
+    now = time.monotonic() if now is None else now
+    on_gpu = _render_on_gpu()
+    alive = _stills_proc is not None and _stills_proc.poll() is None
+    if alive and _stills_on_gpu == on_gpu:
+        return
+    if alive:
+        log.info(f"stills server: GL path changed ({'GPU' if on_gpu else 'CPU'}), starting it again")
+        _stop_stills_server()
+    elif _stills_proc is not None:
+        log.warning(f"stills server exited with {_stills_proc.returncode}; starting it again")
+        _stills_proc = None
+    if now - _stills_started_at < STILLS_SERVER_RETRY_SECS and _stills_on_gpu == on_gpu:
+        return
+    argv, extra_env = _stills_server_argv(on_gpu)
+    try:
+        _stills_proc = subprocess.Popen(
+            argv, cwd=str(REMOTION_DIR), env={**os.environ, **extra_env},
+            stdin=subprocess.DEVNULL, stdout=None, stderr=None, start_new_session=True)
+    except Exception:
+        log.exception("stills server could not start")
+        _stills_proc = None
+    _stills_on_gpu = on_gpu
+    _stills_started_at = now
+    if _stills_proc is not None:
+        log.info(f"stills server started on the {'GPU' if on_gpu else 'CPU'} path, port {STILLS_SERVER_PORT}")
 
 
 # ── Publishing (TMDEV-83) ───────────────────────────────────────────────────
@@ -1683,7 +2091,8 @@ def _stage_and_render(video_id: str) -> None:
     files into the Remotion public dir, invoke Remotion, then run the tail."""
     with db.conn(DB_PATH) as con:
         row = con.execute(
-            "SELECT project_id, voice_file_path, timeline_path, scene_config_path FROM videos WHERE id = ?",
+            "SELECT project_id, voice_file_path, timeline_path, scene_config_path, "
+            "visual_style, resolved_renderer FROM videos WHERE id = ?",
             (video_id,),
         ).fetchone()
     if not row:
@@ -1752,7 +2161,59 @@ def _stage_and_render(video_id: str) -> None:
     })
 
     timeout_secs = _render_timeout_secs()
+    stall_secs = _render_stall_timeout_secs()
+
+    # Cartoon 3D renders on the GPU only (TMDEV-179): policy, decided where the
+    # style is chosen, and enforced here for a video approved before its GPU
+    # went away. Never judged on an unprobed GPU: the worker probes after
+    # every start, so a video claimed first simply triggers that probe. No
+    # CPU fallback and no retry: straight to FAILED, bypassing the render
+    # retry counter, since neither a requeue nor the agent can bring a GPU
+    # back, and the comment is the only thing the human gets.
+    cartoon = (_scene_config_is_cartoon3d(scene_config_path)
+               or (row["visual_style"] or "") == "cartoon_3d"
+               or (row["resolved_renderer"] or "") == "cartoon_3d")
+    if cartoon and not _render_on_gpu():
+        if pipeline.gpu_probe_status(_setting("gpu_probe_result", "")) == "unknown":
+            _run_gpu_probe(reason="a Cartoon 3D video needs the GPU")
+    if cartoon and not _render_on_gpu():
+        probe = json.loads(_setting("gpu_probe_result", "") or "null") or {}
+        status = pipeline.gpu_probe_status(_setting("gpu_probe_result", ""))
+        why = (probe.get("error") or "").strip() if isinstance(probe, dict) else ""
+        db.add_comment(DB_PATH, video_id, "agent", _truncate_comment(
+            f"Not rendered, moved to FAILED: this video is Cartoon 3D, which renders on the GPU "
+            f"only, and the renderer's GPU is {status}" + (f" — {why}" if why else "") +
+            ". Configure or fix the GPU (python onboard.py --step gpu; Test GPU on the dashboard "
+            "Settings page), then create the video again."))
+        db.set_status(DB_PATH, video_id, "FAILED", only_if="RENDERING")
+        return
+
     log.info(f"[{video_id}] rendering -> {output_path}", extra={"video_id": video_id})
+    if cartoon:
+        on_gpu = _render_on_gpu()
+        gl_argv, gl_env = _gl_args(on_gpu)
+        try:
+            total_frames = int(json.loads(timeline_path.read_text(encoding="utf-8")).get("totalFrames", 0))
+        except (OSError, ValueError, TypeError, AttributeError):
+            total_frames = 0
+        outcome, detail = _render_cartoon(video_id, props, output_path, gl_argv, gl_env, timeout_secs, stall_secs,
+                                          total_frames, audio_path)
+        if outcome == "ok":
+            log.info(f"[{video_id}] render complete ({detail}) -> {output_path}", extra={"video_id": video_id})
+            _handle_render_success(video_id, output_path)
+            return
+        if outcome == "hung":
+            # environmental, as a timeout of a single render is: requeue rather
+            # than bounce to the agent, and re-test a GPU that may have wedged
+            what = f"Render stalled: {detail}"
+            log.error(f"[{video_id}] {what}", extra={"video_id": video_id})
+            _handle_render_failure(video_id, what, retry_status="RENDER_QUEUED")
+        else:
+            log.error(f"[{video_id}] render failed: {detail}", extra={"video_id": video_id})
+            _handle_render_failure(video_id, detail)
+        if on_gpu:
+            _run_gpu_probe(reason="a Cartoon 3D render on the GPU " + ("stalled" if outcome == "hung" else "failed"))
+        return
     try:
         # start_new_session=True puts npx and everything it spawns (node,
         # Chromium, ffmpeg) in one new process group. subprocess.run's own
@@ -1781,20 +2242,21 @@ def _stage_and_render(video_id: str) -> None:
             text=True,
             start_new_session=True,
         )
-        try:
-            stdout, stderr = proc.communicate(timeout=timeout_secs)
-        except subprocess.TimeoutExpired:
+        stdout, stderr, outcome = _wait_for_render(proc, timeout_secs, stall_secs)
+        if outcome != "exited":
             _kill_group_and_reap(proc)
-            raise
+            raise subprocess.TimeoutExpired(proc.args, stall_secs if outcome == "stall" else timeout_secs)
         result = subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
-    except subprocess.TimeoutExpired:
-        log.error(f"[{video_id}] render timed out after {timeout_secs}s", extra={"video_id": video_id})
+    except subprocess.TimeoutExpired as hung:
+        stalled = hung.timeout == stall_secs and stall_secs != timeout_secs
+        what = (f"Render stalled: no progress for {stall_secs}s" if stalled
+                else f"Render timed out after {timeout_secs}s")
+        log.error(f"[{video_id}] {what}", extra={"video_id": video_id})
         # A hung Chromium is environmental, not something the agent can fix
         # by revising the scene — auto-retry via RENDER_QUEUED (same terminal
         # choice as the crash-reconcile path above) rather than bouncing to
         # the agent as REVISION_REQUESTED.
-        _handle_render_failure(video_id, f"Render timed out after {timeout_secs}s",
-                                retry_status="RENDER_QUEUED")
+        _handle_render_failure(video_id, what, retry_status="RENDER_QUEUED")
         if on_gpu:
             # Same reason as a failed render below: if the GPU hung, the retry
             # this just queued should run on the CPU.
@@ -1837,7 +2299,7 @@ def _handle_render_success(video_id: str, output_path: str) -> None:
             )
             row = con.execute(
                 "SELECT ai_review_count, script, tts_text, visual_style, "
-                "resolved_visual_style FROM videos WHERE id = ?", (video_id,)
+                "resolved_visual_style, resolved_renderer FROM videos WHERE id = ?", (video_id,)
             ).fetchone()
             new_count = row["ai_review_count"] if row else 1
             # VQA-6: the review's pronunciation reference. script is the
@@ -1861,6 +2323,10 @@ def _handle_render_success(video_id: str, output_path: str) -> None:
             # generated artwork, so the reviewer must not be told that simple
             # line art is intended there.
             has_line_art = pipeline.line_art_allowed(raw_style)
+            # A Cartoon 3D video (chosen, or what "auto" settled on) is judged
+            # against its own look: ink, blur and grading are the style.
+            is_cartoon_3d = raw_style == "cartoon_3d" or (
+                (row["resolved_renderer"] if row else "") or "") == "cartoon_3d"
 
         over_cap = new_count > max_review_loops
 
@@ -1886,7 +2352,8 @@ def _handle_render_success(video_id: str, output_path: str) -> None:
                                                  api_key=gemini_api_key,
                                                  canvas=canvas,
                                                  figures=has_figures,
-                                                 line_art=has_line_art)
+                                                 line_art=has_line_art,
+                                                 cartoon_3d=is_cartoon_3d)
         # Every paid review is recorded — a second loop costs a second row, and
         # a reply that failed to parse was still billed (TMDEV-107).
         review_usage = result_review.get("usage")
@@ -1989,6 +2456,7 @@ def main() -> None:
     # and every container start (which is when a GPU change applies) leaves
     # a fresh answer for the dashboard.
     _run_gpu_probe(reason="the worker started")
+    _ensure_stills_server()
 
     while True:
         # Both passes are non-blocking and run before the render claim, so
@@ -2005,12 +2473,25 @@ def main() -> None:
         _sweep_notifications()
         _sweep_stalled_voicing()
         _sweep_gpu_probe()
+        _ensure_stills_server()
 
         video_id = _claim_next()
         if video_id:
-            _stage_and_render(video_id)
+            _render_claimed(video_id)
         else:
             time.sleep(POLL_INTERVAL_SECS)
+
+
+def _render_claimed(video_id: str) -> None:
+    """One claimed video, with a boundary: whatever _stage_and_render lets
+    escape (an OSError from a disk or an executable, a bug) is this video's
+    failure, recorded and retried as a stall is, never the worker's exit with
+    the row left RENDERING until the container restarts."""
+    try:
+        _stage_and_render(video_id)
+    except Exception as exc:  # noqa: BLE001 — the boundary itself
+        log.exception(f"[{video_id}] the render raised: {exc}", extra={"video_id": video_id})
+        _handle_render_failure(video_id, f"The worker hit an error: {exc}", retry_status="RENDER_QUEUED")
 
 
 if __name__ == "__main__":

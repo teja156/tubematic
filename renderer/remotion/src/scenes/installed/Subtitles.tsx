@@ -95,7 +95,9 @@ const DEFAULT_FONT = "system-ui, sans-serif";
 /** What a container-local family is drawn at; no file is fetched for it. */
 const DEFAULT_WEIGHT = 800;
 
-export type SubtitleBackground = "pill" | "shadow" | "none";
+/** "outline": bold text with a thick dark stroke and no plate — the standard
+ *  look of narrated cartoon Shorts, readable over any picture. */
+export type SubtitleBackground = "pill" | "shadow" | "outline" | "none";
 
 export interface SubtitleConfig {
   enabled?: boolean;
@@ -272,6 +274,14 @@ export default function Subtitles({
           ...(background === "shadow"
             ? { textShadow: canvas === "light" ? "0 2px 10px rgba(255,255,255,0.9)" : "0 2px 12px rgba(0,0,0,0.85)" }
             : {}),
+          ...(background === "outline"
+            ? {
+                WebkitTextStroke: `${Math.round(fontSize * 0.16)}px ${canvas === "light" ? "#ffffff" : "#101010"}`,
+                paintOrder: "stroke fill",
+                textShadow: canvas === "light" ? "0 3px 10px rgba(255,255,255,0.6)" : "0 4px 10px rgba(0,0,0,0.45)",
+                letterSpacing: "0.01em",
+              }
+            : {}),
         }}
       >
         {chunk.map((w, i) => {
@@ -284,7 +294,9 @@ export default function Subtitles({
           return (
             <span
               key={`${i}-${w.word}`}
-              style={{ opacity: active ? 1 : spoken ? 0.62 : 0.42 }}
+              // outlined words have no plate behind them, so a dimmed word
+              // reads as a muddy grey: keep them near full strength there
+              style={{ opacity: active ? 1 : background === "outline" ? (spoken ? 0.92 : 0.8) : spoken ? 0.62 : 0.42 }}
             >
               {w.word}
             </span>

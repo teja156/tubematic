@@ -39,6 +39,26 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
 ### Added
 
+- **The render worker runs a stills server for Cartoon 3D authoring.** The gate and preview stills
+  the agent's tools ask for are rendered inside `tubematic-renderer`, on the GPU, by a server that
+  keeps the project bundled and one browser open, so a still takes seconds instead of the half
+  minute a cold software render costs in the MCP container. It listens on the Compose network only
+  (port 4455) and the tools fall back to rendering locally when it does not answer.
+- **Credits.** The Cartoon 3D kit descends from [mromidev/claude-animated-shorts](https://github.com/mromidev/claude-animated-shorts)
+  (MIT License, Copyright (c) 2026 Mr omi): the runner, cast, lights, world, toon shader and build helpers
+  are adapted from its bridge template, the camera grammar from its motion study, and the soundtrack
+  engine from its synthesis library. Every ported file names its origin in its header. Its reference
+  frames and sheets are not included.
+- **A new visual style, Cartoon 3D (experimental).** Flat cartoon characters with ink outlines standing in a painted
+  3D world — a street, a wharf, a clearing — with a camera that glides through it, a sun that moves
+  with the story and fog when the story needs it. The agent writes the world the topic calls for as
+  code for that one video (its sets, who stands where, a camera that follows the words) against a
+  fixed kit that carries the look, casts the people in it, and times every shot to the narration;
+  before anything renders, it looks at every shot, a look verifier scores the frames, and two
+  independent judges confirm that each beat's picture shows what the narrator says. The soundtrack
+  is synthesised to a spec the agent writes: music by mood, sound effects on the things the picture
+  shows, mixed under the voice. It needs a working GPU (see below). Choose it at the topic, or leave
+  the style on Auto and let the agent choose it for a story carried by a place.
 - **Videos can render on an NVIDIA GPU.** With the NVIDIA driver and the NVIDIA Container Toolkit
   installed, a new onboarding step lists the machine's NVIDIA GPUs and hands the one you pick to the
   renderer. On a GTX 1650 an ordinary video rendered about three times faster than on the CPU, and
@@ -52,8 +72,28 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   never fails a video. Settings → Rendering shows which GPU is in use, the driver, and the reason
   when it is not being used.
 
+### Changed
+
+- **A render that stops making progress is now killed within ten minutes** instead of forty, and
+  the ceiling on a whole render is three hours instead of forty minutes. The worker reads the
+  renderer's own progress as it runs, so a hung browser is caught quickly whatever the video's
+  length, while a long render that is still advancing is left alone. Two settings control this:
+  `render_stall_timeout_secs` (new, default 600) and `render_timeout_secs` (default raised from 2400
+  to 10800). Neither needs a restart.
+
 ### Upgrade notes
 
+- **Cartoon 3D needs a working GPU.** The style is greyed out on the dashboard and refused by the
+  API until the renderer's GPU test passes (Settings → Rendering → Test GPU). A Cartoon 3D video
+  approved before its GPU stopped working is not rendered on the CPU: it fails with a comment
+  saying why, and is created again once the GPU is back.
+- **Reinstalling the agent picks up the new skill.** The upgrade redeploys every installed agent's
+  skills, so `tubematic-cartoon3d` arrives with it; an agent you install by hand gets it from
+  `python3 onboard.py --install-agent <agent>` as usual.
+- **The render timeout defaults changed, for new installs.** Onboarding now seeds
+  `render_timeout_secs` at 10800 (180 minutes). An upgraded install keeps whatever value its
+  settings table holds, usually the old 2400, so raise it on Settings → Rendering if your renders
+  run longer than forty minutes. `render_stall_timeout_secs` starts at 600 on every install.
 - **Nothing changes unless you turn GPU rendering on.** After upgrading, install the NVIDIA driver
   and the NVIDIA Container Toolkit (see [GPU rendering](user-guide/10-gpu-rendering.md)), then run
   `python3 onboard.py --step gpu` from the install directory. Your choice is kept in

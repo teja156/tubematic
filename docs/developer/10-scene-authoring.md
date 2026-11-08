@@ -82,7 +82,7 @@ Rules that come out of the frame model:
 
 ## Visual registers
 
-A video is produced in one of three registers, pinned per video and chosen by a human at the topic
+A video is produced in one of four registers, pinned per video and chosen by a human at the topic
 checkpoint (`videos.visual_style`, frozen there — see [Frozen
 choices](02-pipeline.md#frozen-choices)):
 
@@ -90,11 +90,16 @@ choices](02-pipeline.md#frozen-choices)):
 |---|---|---|
 | **Motion graphics** | Dark | Generated imagery with continuous camera moves, animated vector diagrams. Image-led |
 | **Stick explainer** | White | Black **hand-drawn** line art, figures with attire overlays and standardised faces, discrete poses. Animation-led |
+| **Cartoon 3D** | Dark (never visible) | Flat inked cartoon characters in a **painted 3D world** with a gliding camera, written as code for that one video against the renderer's kit — see [Cartoon 3D](#cartoon-3d). Unlike the other three it does not restrict the scene system, it **replaces** it. Renders on the GPU only, so it is refused where it is chosen unless the renderer's GPU probe says working: a policy, since software WebGL does render it at about an hour a Short |
 | **Illustrated** | Agent's choice | Characters are **generated illustrated assets** rather than hand-drawn line art, held consistent across scenes by editing every pose from one canonical character sheet. It fixes neither the drawing style nor the canvas: the agent picks cartoon or rendered, and light or dark, from the topic. Costs an image call per pose, and needs an OpenAI key — see [Settings](../user-guide/05-settings.md#images) for why there is no Gemini fallback. Without one the style cannot be chosen |
 
-A third value, `auto`, defers the choice: the agent classifies every beat and picks the register
-once, video-wide, then records it in `resolved_visual_style` so the dashboard can say what a video
-actually is. It never re-decides — see [Frozen choices](02-pipeline.md#frozen-choices).
+A fifth value, `auto`, defers the choice: the agent classifies every beat and picks the register
+once, video-wide. It records two things, each once: `resolved_renderer` (`dom` or `cartoon_3d`,
+before any scene is authored, because flipping the renderer later would discard every scene) and,
+on the DOM renderer, `resolved_visual_style` (the canvas), so the dashboard can say what a video
+actually is. It never re-decides — see [Frozen choices](02-pipeline.md#frozen-choices). Under `auto`
+the agent may choose Cartoon 3D only while `cartoon_3d_available` is true, and it says in its
+handback when a world was wanted but the install could not render one.
 
 **A permission is not an instruction.** `auto` says which vocabularies are *available*; each beat's
 treatment is still decided by its subject. A video that uses every vocabulary because it was
@@ -296,6 +301,47 @@ On the incremental path, every other config entry must be written back **byte-id
 > `scene_config_path` alone.** A pronunciation fix re-voices and returns with that field still
 > populated — keying on it would route every re-voice down the incremental path and leave the whole
 > video misaligned against a timeline that changed length.
+
+---
+
+## Cartoon 3D
+
+A Cartoon 3D video is **code written for that one video**: a `CartoonShort` scene spanning the whole
+video and the TypeScript modules beside it under `scenes/generated/<video_id>/` (the shots timed to the
+narration and the camera built from the grammar in `story.ts`; the sets as three.js code in `sets/*.ts`;
+who stands where doing what in `scenes.ts` and `stage/*.ts`; the `VideoDef` that ties them in `index.ts`),
+all written against the renderer's frozen kit under `renderer/remotion/src/cartoon3d/` (`video.ts` the
+contract, `camera.ts` the grammar, `CartoonShort.tsx` the runner, `kit/` the figure drawer, the lit cards,
+the builders, the painters, the lights and the water, `post/` the ink, lens blur and grade). The kit is the
+look; the video is the story. Its scene-config entry is one generated scene, `src` `<video_id>/CartoonShort`,
+`startFrame` 0 and `durationInFrames` equal to `totalFrames`, whose props carry `cartoon3d: {beats}`: the
+shots as beats, which is the only per-video data. The worked example the skill points at is
+`src/cartoon3d/examples/chicago/`, the spike that decided this design (TMDEV-184/185) over the earlier
+data-driven world.
+
+`write_scene_config` refuses a config whose beats do not tile the video (in order, from frame 0 to the
+last frame, no gap, no overlap, each with a `shot` note), one whose scene does not start at frame 0 and
+span `totalFrames`, one with more than that single scene, one whose `src` is not this video's
+`CartoonShort`, and one whose scene kind disagrees with the video's renderer (a Cartoon 3D scene on a
+DOM-style video, or DOM scenes on a video that renders as Cartoon 3D).
+
+The code is checked before it is rendered:
+
+- **The typecheck** `validate_job` runs over the whole Remotion project covers the video's modules: a
+  file that does not compile renders nothing, and the agent is told the file and line.
+- **The beat gate** (`src/cartoon3d/gate/beatGateCli.ts`): one frame from the middle of every beat beside
+  the sentence the narrator speaks during it; two fresh judges say whether the picture shows the
+  sentence, a third breaks a split. Keyed by a hash of every source file of the video, the beats and the
+  narration per beat, so any edit is judged again and re-voicing re-opens it.
+- **The look verifier** is the skill's own step, not a gate: a fresh subagent scores eight areas of the
+  look against the measured targets and lists fixes.
+
+The author never grades its own work: a judge is a separate model call with no other context. The
+MCP tools that show the kit, render the stills, run the gate, keep the verdict, synthesise the soundtrack
+and refuse an ungated render are described in [MCP server — Cartoon 3D
+authoring](06-mcp-server.md#cartoon-3d-authoring); the agent's workflow and the kit's API are the
+`tubematic-cartoon3d` skill (see [the agent layer](07-agent-layer.md#the-skills)). The render itself is
+segmented ([The Worker](12-the-worker.md#segmented-cartoon-3d-renders)).
 
 ---
 

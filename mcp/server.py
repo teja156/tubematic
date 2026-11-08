@@ -32,6 +32,7 @@ import random
 import re
 import sqlite3
 import subprocess
+import tempfile
 import sys
 import threading
 import time
@@ -45,6 +46,8 @@ import html
 
 from fastmcp import FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
+
+import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
 from fastmcp.server.middleware import Middleware
 from starlette.responses import JSONResponse
 
@@ -251,7 +254,7 @@ MINING_NEEDS_GEMINI_KEY = (
 # why auto can produce a video neither named option could: white-line-art
 # figures for the role beats of an otherwise image-led, dark-canvas video.
 # Keep in sync: the other copy of this block, and dashboard/lib/types.ts.
-VISUAL_STYLES = ("auto", "motion_graphics", "stick", "illustrated")
+VISUAL_STYLES = ("auto", "motion_graphics", "stick", "illustrated", "cartoon_3d")
 DEFAULT_VISUAL_STYLE = "auto"
 
 # "illustrated" draws its characters with OpenAI, the only provider with a
@@ -280,7 +283,9 @@ ILLUSTRATED_NEEDS_OPENAI_KEY = (
 # Keep in sync: the other copy of this block and
 # renderer/remotion/src/CompositionBuilder.tsx.
 VALID_CANVASES = ("dark", "light")
-CANVAS_BY_STYLE = {"motion_graphics": "dark", "stick": "light"}
+# cartoon_3d fills the frame, so its canvas is never visible, but the field must
+# hold a legal value: dark, the default, so an uncovered pixel cannot flash white.
+CANVAS_BY_STYLE = {"motion_graphics": "dark", "stick": "light", "cartoon_3d": "dark"}
 DEFAULT_CANVAS = "dark"
 
 # What videos.resolved_visual_style holds: the canvas "auto" settled on, and
@@ -288,6 +293,60 @@ DEFAULT_CANVAS = "dark"
 # stores is a canvas, because the canvas is the only thing "auto" must fix for
 # the life of the video. Everything else stays free per beat.
 RESOLVED_VISUAL_STYLES = VALID_CANVASES
+
+# Cartoon 3D renders on the GPU only. POLICY, not impossibility: software WebGL
+# (swangle) renders the style, at about 1.1 s a frame, so a 90-second Short takes
+# ~50 minutes and a long one over two hours. With the GPU onboarding step, the
+# dashboard panel and its Test button the refusal names something a person can
+# do. Gate on the probe's "working" status, never on "configured": a configured
+# GPU whose renders fall back to the CPU is the case the gate must catch, and the
+# worker's _render_on_gpu() asks the same question of the same probe.
+# Keep in sync: the other copy of this block (pinned by an agreement test).
+CARTOON3D_NEEDS_GPU = (
+    "Cartoon 3D renders on the GPU only (on the CPU a 90-second Short takes about 50 minutes). "
+    "The renderer has no working GPU: configure one with `python onboard.py --step gpu`, test it "
+    "on the dashboard Settings page under GPU, or choose another visual style."
+)
+CARTOON3D_GPU_UNKNOWN = (
+    "Cartoon 3D renders on the GPU only, and the renderer has not tested its GPU yet (it does so "
+    "when it starts, and on Test GPU on the dashboard Settings page). Test it first, then choose "
+    "the style."
+)
+# What videos.resolved_renderer holds: which renderer "auto" settled on, written
+# once by the agent before any scene is authored. The DOM styles need no such
+# record (per-beat freedom is the design); the renderer is the one thing a
+# revision round must not flip, since flipping it discards every scene.
+RENDERERS = ("dom", "cartoon_3d")
+
+
+def gpu_probe_status(raw_probe) -> str:
+    """The renderer's GPU state from the worker's stored probe (the settings
+    row gpu_probe_result, JSON): "unknown" (never probed), "not_configured"
+    (no GPU override), "working" (configured and the last probe passed) or
+    "not_usable" (configured, but renders fall back to the CPU).
+    Keep in sync: the other copy (pinned by an agreement test)."""
+    import json as _json_
+    try:
+        probe = _json_.loads(raw_probe or "null")
+    except ValueError:
+        probe = None
+    if not isinstance(probe, dict):
+        return "unknown"
+    if not probe.get("configured"):
+        return "not_configured"
+    return "working" if probe.get("ok") else "not_usable"
+
+
+def cartoon_3d_gpu_error(visual_style: str, gpu_status: str) -> str:
+    """Why `visual_style` may not be chosen on a renderer whose GPU is in
+    `gpu_status`, or "". Only "cartoon_3d" is gated and only "working" passes;
+    "unknown" gets its own message, since its fix is a test, not an install.
+    Keep in sync: the other copy (pinned by an agreement test)."""
+    if (visual_style or "").strip() != "cartoon_3d":
+        return ""
+    if gpu_status == "working":
+        return ""
+    return CARTOON3D_GPU_UNKNOWN if gpu_status == "unknown" else CARTOON3D_NEEDS_GPU
 
 # ── Agent effort (TMDEV-106) ─────────────────────────────────────────────────
 # The effort level the agent CLI runs at, the sibling of its model: an
@@ -330,7 +389,7 @@ AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
 # one word at a time is a deliberate style, not a mistake.
 # Keep in sync: renderer/remotion/src/scenes/installed/Subtitles.tsx (which
 # holds the defaults — they are NOT repeated here, so there is nothing to drift).
-SUBTITLE_BACKGROUNDS = ("pill", "shadow", "none")
+SUBTITLE_BACKGROUNDS = ("pill", "shadow", "outline", "none")
 SUBTITLE_NUMERIC_RANGES = {
     "maxWords": (1, 7),
     "fontSize": (28, 120),
@@ -1057,6 +1116,18 @@ def _gemini_key() -> str:
     return _get_setting("gemini_api_key", "") or os.getenv("GEMINI_API_KEY", "")
 
 
+def _gpu_probe_status() -> str:
+    """The renderer's GPU state from the worker's stored probe. The settings
+    row is pipeline.GPU_PROBE_RESULT_KEY, read raw here because this server
+    cannot import the API (keep the key in sync)."""
+    return gpu_probe_status(_get_setting("gpu_probe_result", ""))
+
+
+def _cartoon3d_gpu_error(style: str) -> str:
+    """Keep in sync: renderer/api/pipeline.py's _cartoon3d_gpu_error."""
+    return cartoon_3d_gpu_error(style, _gpu_probe_status())
+
+
 def _openai_key() -> str:
     return _get_setting("openai_api_key", "") or os.getenv("OPENAI_API_KEY", "")
 
@@ -1254,6 +1325,12 @@ def get_video(video_id: str) -> dict:
     "auto" visual style before choosing generated character art; under
     "illustrated" the style itself is the permission and there is nothing to
     check first.
+
+    cartoon_3d_available is true while the renderer's GPU probe says the GPU
+    is working. Cartoon 3D renders on the GPU only, so under "auto" read it
+    here before resolving the renderer to cartoon_3d; when it is false, author
+    the video with the scene components and say in the handback that a world
+    was wanted but the install cannot render one.
     """
     _init_db()
     with _conn() as con:
@@ -1267,6 +1344,9 @@ def get_video(video_id: str) -> dict:
     video["elevenlabs_model_id"] = model_id
     video["pronunciation_mode"] = _pronunciation_mode_for_model(model_id)
     video["illustrated_available"] = bool(_openai_key())
+    # Under "auto" the skill reads this before choosing the renderer, as it
+    # reads illustrated_available before choosing generated art.
+    video["cartoon_3d_available"] = _gpu_probe_status() == "working"
     return video
 
 
@@ -2167,6 +2247,7 @@ def update_video(
     script_profile_id: str | None = None,
     visual_style: str | None = None,
     resolved_visual_style: str | None = None,
+    resolved_renderer: str | None = None,
     publish_title: str | None = None,
     publish_description: str | None = None,
 ) -> dict:
@@ -2218,7 +2299,17 @@ def update_video(
     Write it once, when you choose the canvas while authoring the scene config,
     and never again: a revision round must render on the canvas the video
     already uses. Writable only when the style does not already fix a canvas —
-    that is "auto" and "illustrated"; "motion_graphics" and "stick" fix theirs.
+    that is "auto" and "illustrated"; "motion_graphics", "stick" and
+    "cartoon_3d" fix theirs.
+
+    resolved_renderer: under "auto", which renderer you settled on — "dom"
+    (the scene components) or "cartoon_3d" (one Cartoon 3D world, written as
+    code per video by the tubematic-cartoon3d skill).
+    Write it BEFORE authoring any scene and never again: a revision round
+    renders with the renderer the video already uses, and flipping it would
+    discard every scene. "cartoon_3d" is refused while the renderer's GPU is
+    not working (get_video's cartoon_3d_available), with the reason. Not
+    writable when visual_style already names the renderer.
 
     agent_id: which installed agent does this video's next piece of work — the
     id of a live agent from get_pipeline_status's `agents`. A video is dealt
@@ -2424,6 +2515,17 @@ def update_video(
         # Keep in sync with renderer/api/pipeline.py's patch_video.
         if visual_style == "illustrated" and not _openai_key():
             return {"error": ILLUSTRATED_NEEDS_OPENAI_KEY}
+        gpu_err = _cartoon3d_gpu_error(visual_style)
+        if gpu_err:
+            return {"error": gpu_err}
+    if resolved_renderer is not None:
+        resolved_renderer = resolved_renderer.strip()
+        if resolved_renderer not in RENDERERS:
+            return {"error": f"Invalid resolved_renderer '{resolved_renderer}'. Must be one of: "
+                             f"{sorted(RENDERERS)} — it records which renderer 'auto' settled on"}
+        gpu_err = _cartoon3d_gpu_error(resolved_renderer)
+        if gpu_err:
+            return {"error": gpu_err}
     if resolved_visual_style is not None:
         resolved_visual_style = resolved_visual_style.strip()
         if resolved_visual_style not in RESOLVED_VISUAL_STYLES:
@@ -2440,6 +2542,7 @@ def update_video(
         "script_profile_id": script_profile_id,
         "visual_style": visual_style,
         "resolved_visual_style": resolved_visual_style,
+        "resolved_renderer": resolved_renderer,
         "publish_title": publish_title, "publish_description": publish_description,
     }.items() if v is not None}
     if script_segments is not None:
@@ -2546,6 +2649,23 @@ def update_video(
         if already and already != fields["resolved_visual_style"]:
             return {"error": f"resolved_visual_style is already {already!r} and is written once; "
                              "a revision renders at the register the video already uses"}
+    # resolved_renderer: the same write-once rule, for the one choice a revision
+    # round must never flip (flipping the renderer discards every scene).
+    if "resolved_renderer" in fields:
+        with _conn() as con:
+            row = con.execute(
+                "SELECT visual_style, resolved_renderer FROM videos WHERE id = ?",
+                (video_id,)).fetchone()
+        if not row:
+            return {"error": f"Video not found: {video_id}"}
+        if (row["visual_style"] or DEFAULT_VISUAL_STYLE) != "auto":
+            return {"error": f"resolved_renderer records the renderer 'auto' settled on, but this "
+                             f"video's visual_style is {row['visual_style']!r}, which already names "
+                             "it — there is nothing to resolve"}
+        already = row["resolved_renderer"] or ""
+        if already and already != fields["resolved_renderer"]:
+            return {"error": f"resolved_renderer is already {already!r} and is written once; a "
+                             "revision renders with the renderer the video already uses"}
     # TMDEV-84: frozen once archived, for the same reason as set_video_status.
     # Checked in the UPDATE's own WHERE rather than inside _update_fields: its
     # other two callers (generate_voice, write_scene_config) run only at
@@ -2796,6 +2916,10 @@ def upsert_project(
         if (default_visual_style == "illustrated" and not _openai_key()
                 and not (existing and existing["default_visual_style"] == "illustrated")):
             return {"error": ILLUSTRATED_NEEDS_OPENAI_KEY}
+        if not (existing and existing["default_visual_style"] == default_visual_style):
+            gpu_err = _cartoon3d_gpu_error(default_visual_style)
+            if gpu_err:
+                return {"error": gpu_err}
         will_be_seed = seed if seed is not None else (existing["is_curriculum_seed"] if existing else 0)
         if not will_be_seed:
             if status == "paused":
@@ -4177,6 +4301,18 @@ def validate_job(video_id: str) -> dict:
     except Exception as e:
         errors.append(f"Image reference check failed: {e}")
 
+    # Cartoon 3D readiness (TMDEV-185). A Cartoon 3D video renders only once
+    # its generated source exists and two fresh judges have passed the beat
+    # sheet for that exact source (the verdict is keyed by a hash of the
+    # video's files, beats and narration). write_scene_config writes the
+    # config freely (the gate reads it from there); this is where an ungated
+    # video is stopped, and submit_render asks the same question.
+    try:
+        if "scene_config" in dir() and isinstance(scene_config, dict) and cartoon.is_cartoon(scene_config):
+            errors.extend(cartoon.readiness(JOBS_DIR, video_id, REPO_ROOT / "remotion", SCENES_DIR))
+    except Exception as e:
+        errors.append(f"Cartoon 3D readiness could not be checked: {e}")
+
     # TypeScript typecheck — fail-loud: broken TSX degrades to silent black
     # during render, which is very hard to diagnose. Catching it here is much better.
     try:
@@ -4212,6 +4348,12 @@ def validate_job(video_id: str) -> dict:
     # hard gate is a deliberate later step, once it's been seen clean across real
     # videos — a geometric check that blocks renders on a false positive is worse
     # than no check.
+    #
+    # Not for a Cartoon 3D video: its one scene is a painted canvas whose only
+    # text is the captions, so there are no text rects to measure, and the
+    # audit's first frame on software GL (this container has no GPU) exceeds
+    # Remotion's 30 s initial-render timeout anyway. Its check is the beat
+    # gate (mcp/cartoon.py, step 8 above).
     warnings: list[str] = []
     try:
         if (
@@ -4219,6 +4361,7 @@ def validate_job(video_id: str) -> dict:
             and _get_setting("text_layout_audit_enabled", "true").lower() == "true"
             and "scene_config" in dir()
             and isinstance(scene_config, dict)
+            and not cartoon.is_cartoon(scene_config)
         ):
             from text_audit import audit_text_layout
             warnings = audit_text_layout(
@@ -4229,6 +4372,33 @@ def validate_job(video_id: str) -> dict:
         warnings = [f"Text-layout audit could not run ({e}) — text layout was not checked"]
 
     return {"passed": len(errors) == 0, "errors": errors, "warnings": warnings}
+
+
+def _cartoon_block(video_id: str) -> dict | None:
+    """Why a Cartoon 3D video may not be queued, as a tool error; None for a
+    video that is not Cartoon 3D, has no scene-config yet (validate_job's
+    report), or is ready."""
+    try:
+        path = tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG)
+        if path.is_symlink() or not path.is_file():
+            return None
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not cartoon.is_cartoon(config):
+        return None
+    try:
+        errors = cartoon.readiness(JOBS_DIR, video_id, REPO_ROOT / "remotion", SCENES_DIR)
+        if not errors:
+            # the worker renders exactly this tree: a write after the gate is
+            # refused by write_scene_file once the video is queued, and a tree
+            # that differs from this record fails the render
+            cartoon.freeze_source(JOBS_DIR, video_id, SCENES_DIR)
+    except Exception as e:
+        errors = [f"Cartoon 3D readiness could not be checked: {e}"]
+    if errors:
+        return {"error": "cartoon_not_ready", "errors": errors}
+    return None
 
 
 @mcp.tool
@@ -4261,15 +4431,26 @@ def submit_render(video_id: str) -> dict:
     if guard_err:
         return guard_err
 
-    # Atomically claim the VOICE_READY → RENDER_QUEUED transition — the guard
-    # is expressed in the UPDATE's own WHERE clause (not a separate
-    # SELECT-then-compare), closing the TOCTOU window a second concurrent
-    # call could otherwise also pass through.
-    if not _set_status(video_id, "RENDER_QUEUED", only_if="VOICE_READY"):
-        with _conn() as con:
-            cur_row = con.execute("SELECT status FROM videos WHERE id = ?", (video_id,)).fetchone()
-        current = cur_row["status"] if cur_row else "unknown"
-        return {"error": "status_mismatch", "current_status": current, "expected": "VOICE_READY"}
+    # A Cartoon 3D video that has not passed the beat gate does not render,
+    # whether or not the agent remembered validate_job (TMDEV-185).
+    # Under the video's source lock from the readiness check to the queue: no
+    # write_scene_file, delete_scene_file or cartoon_soundtrack can land
+    # between the beat gate's answer, the frozen fingerprint and the status
+    # that makes every later write refuse (TMDEV-185).
+    with _source_lock(video_id):
+        cartoon_err = _cartoon_block(video_id)
+        if cartoon_err:
+            return cartoon_err
+
+        # Atomically claim the VOICE_READY → RENDER_QUEUED transition — the guard
+        # is expressed in the UPDATE's own WHERE clause (not a separate
+        # SELECT-then-compare), closing the TOCTOU window a second concurrent
+        # call could otherwise also pass through.
+        if not _set_status(video_id, "RENDER_QUEUED", only_if="VOICE_READY"):
+            with _conn() as con:
+                cur_row = con.execute("SELECT status FROM videos WHERE id = ?", (video_id,)).fetchone()
+            current = cur_row["status"] if cur_row else "unknown"
+            return {"error": "status_mismatch", "current_status": current, "expected": "VOICE_READY"}
 
     # The claim's job is done now that the video has left the window — release
     # it explicitly rather than relying on set_video_status's hook (this path
@@ -4404,6 +4585,7 @@ def get_pipeline_status() -> dict:
         "agents": agents,
         "user_preferences": _get_setting("user_preferences", ""),
         "illustrated_available": bool(_openai_key()),
+        "cartoon_3d_available": _gpu_probe_status() == "working",
     }
 
 
@@ -4810,6 +4992,106 @@ def _check_scene_name(scene_name: str) -> str | None:
     if not _VALID_SCENE_NAME.match(scene_name):
         return f"scene_name '{scene_name}' must contain only alphanumeric characters and hyphens"
     return None
+
+
+# A generated source name (TMDEV-185): a scene is a bare stem ('intro-hook',
+# a .tsx); a Cartoon 3D module names its extension and may sit one directory
+# deep ('story.ts', 'sets/street.ts'). 'CartoonShort.tsx' and 'CartoonShort'
+# are the same file. Each component is the scene-name alphabet.
+_SOURCE_NAME_RE = re.compile(r'^(?:(?P<dir>[a-zA-Z0-9][a-zA-Z0-9\-]*)/)?(?P<stem>[a-zA-Z0-9][a-zA-Z0-9\-]*)(?P<ext>\.tsx?)?$')
+
+
+def _split_source_name(scene_name: str):
+    """((dirname | None, stem, ext), None) for a usable generated source name,
+    or (None, error). A plain scene name splits to (None, stem, '.tsx')."""
+    if not scene_name:
+        return None, "scene_name must not be empty"
+    m = _SOURCE_NAME_RE.match(scene_name)
+    if not m or (m.group("dir") and not m.group("ext")):
+        return None, (f"scene_name '{scene_name}' must be a scene name (alphanumeric characters and hyphens) or a "
+                      f"Cartoon 3D module like 'story.ts' or 'sets/street.ts' (one directory deep, .ts or .tsx)")
+    return (m.group("dir"), m.group("stem"), m.group("ext") or ".tsx"), None
+
+
+_source_locks: dict = {}
+_source_locks_guard = threading.Lock()
+_FROZEN_STATUSES = ("RENDER_QUEUED", "RENDERING")
+
+
+def _source_lock(video_id: str) -> threading.Lock:
+    """One lock per video round everything that changes or freezes its
+    generated source: write_scene_file, delete_scene_file, cartoon_soundtrack
+    and submit_render's readiness-freeze-queue sequence. The MCP server is
+    the one process that writes the tree, so an in-process lock serialises
+    them: a write cannot land between the beat gate's answer and the queue,
+    and a write that saw VOICE_READY cannot land after the queue did."""
+    with _source_locks_guard:
+        return _source_locks.setdefault(video_id, threading.Lock())
+
+
+def _source_frozen_error(video_id: str) -> dict | None:
+    """The status_mismatch error when the video is queued or rendering, when
+    its generated source and soundtrack must not change: the worker bundles
+    the tree while it renders (a Cartoon 3D video once per segment) and muxes
+    the mix at the end. None otherwise, including for an unknown video."""
+    with _conn() as con:
+        row = con.execute("SELECT status FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if row and row["status"] in _FROZEN_STATUSES:
+        return {"error": "status_mismatch", "video_id": video_id, "current_status": row["status"],
+                "detail": "the video is queued or rendering, so its scene files and soundtrack cannot change now; "
+                          "wait for the render (REVISION_REQUESTED or VIDEO_READY) and change them then"}
+    return None
+
+
+def _module_target(scene_name: str, video_id: str):
+    """((video_id, (dirname, stem, ext)), None) for a Cartoon 3D module name,
+    or (None, error). list_scene_files hands modules out composed with their
+    video ('<video_id>/sets/street.ts'), the skill writes them bare
+    ('sets/street.ts') with a video_id, and read_scene_file and
+    delete_scene_file take both through this one parser: a leading component
+    is the video when the name is deeper than a module can be, when no
+    video_id is given, or when it is that video_id; with a video_id given, any
+    other two-component name is a module in a subdirectory of that video. The
+    grammar reads the two arguments only, never the filesystem, so a name means
+    the same thing whatever directories happen to exist; a three-component
+    name whose video differs from the video_id is a conflict error.
+    """
+    parts = scene_name.split("/")
+    if len(parts) > 3 or "" in parts:
+        return None, (f"scene_name '{scene_name}' must be a Cartoon 3D module like 'story.ts' or 'sets/street.ts', "
+                      f"optionally composed with its video ('<video_id>/sets/street.ts')")
+    if len(parts) == 3 or (len(parts) == 2 and (not video_id or parts[0] == video_id)):
+        head, rest = parts[0], "/".join(parts[1:])
+        if not tids.is_component(head):
+            return None, f"scene_name '{scene_name}' names an invalid video '{head}'"
+        if video_id and head != video_id:
+            return None, (f"conflicting video_id: scene_name '{scene_name}' names video '{head}' but video_id is "
+                          f"'{video_id}' — pass one or the other")
+        video_id, scene_name = head, rest
+    if not video_id:
+        return None, f"scene_name '{scene_name}' is a Cartoon 3D module, which belongs to a video: pass its video_id"
+    err = _video_id_error(video_id)
+    if err:
+        return None, err["error"]
+    split, err = _split_source_name(scene_name)
+    if err:
+        return None, err
+    return (video_id, split), None
+
+
+def _source_path(video_id: str, dirname, stem: str, ext: str):
+    """The file a split source name means, or raises tjobs.UnsafePath."""
+    if dirname is None and ext == ".tsx":
+        return tjobs.scene_file(SCENES_DIR, video_id, stem)
+    if not video_id:
+        raise tjobs.UnsafePath("a Cartoon 3D module belongs to a video: pass its video_id")
+    if dirname == video_id:
+        # '<video_id>/story.ts' is the composed name of the video's own root
+        # module (what list_scene_files hands out), so a module directory of
+        # that name could never be read or deleted again by its own name
+        raise tjobs.UnsafePath(f"a module directory cannot be named after its video ({video_id!r}): "
+                               f"'{video_id}/{stem}{ext}' names the root module {stem}{ext}")
+    return tjobs.source_file(SCENES_DIR, video_id, dirname, stem, ext)
 
 
 def _image_pixel_size(path) -> tuple:
@@ -5493,7 +5775,15 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
                  would then render with the wrong scene.
     scene_name:  filename stem without extension (e.g. 'intro-hook').
                  Only alphanumeric characters and hyphens are allowed.
-    tsx_content: complete TypeScript/React source for the scene component.
+                 **Cartoon 3D modules** (the tubematic-cartoon3d skill) name
+                 their extension and may sit one directory deep: 'story.ts',
+                 'scenes.ts', 'sets/street.ts', 'stage/river.ts'. They are
+                 plain TypeScript the video's 'CartoonShort' scene imports
+                 (`import { SHOTS } from "./story"`), not scenes: the
+                 response carries `module` instead of `src`, and nothing in
+                 scene-config.json names them.
+    tsx_content: complete TypeScript/React source for the scene component
+                 (or the module's TypeScript).
 
     Writes to /app/remotion/src/scenes/generated/{video_id}/{scene_name}.tsx,
     bind-mounted to mounted/scenes/generated/{video_id}/ on the host — the
@@ -5528,7 +5818,7 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
     err = _video_id_error(video_id)
     if err:
         return err
-    err = _check_scene_name(scene_name)
+    split, err = _split_source_name(scene_name)
     if err:
         return {"error": err}
 
@@ -5539,25 +5829,50 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
         row = con.execute("SELECT id FROM videos WHERE id = ?", (video_id,)).fetchone()
     if not row:
         return {"error": f"Video not found: {video_id}"}
-
-    guard_err = _guard_scene_work(video_id)  # TMDEV-61
-    if guard_err:
-        return guard_err
-
+    dirname, stem, ext = split
     try:
-        path = tjobs.scene_file(SCENES_DIR, video_id, scene_name)
+        path = _source_path(video_id, dirname, stem, ext)
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(tsx_content, encoding="utf-8")
-    src = f"{video_id}/{scene_name}"
-    return {
+    # The status is read and the file replaced under the video's source lock,
+    # the one submit_render holds from the beat gate's answer to the queue:
+    # a write never lands on a queued or rendering video.
+    with _source_lock(video_id):
+        frozen = _source_frozen_error(video_id)
+        if frozen:
+            return frozen
+        guard_err = _guard_scene_work(video_id)  # TMDEV-61
+        if guard_err:
+            return guard_err
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # written beside the file and moved over it: a short write, a full disk or
+        # a kill mid-write never leaves a truncated module where the last good one was
+        tmp = None
+        try:
+            fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".", suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(tsx_content)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        except OSError as e:
+            try:
+                if tmp:
+                    os.unlink(tmp)
+            except OSError:
+                pass
+            return {"error": f"{video_id}/{scene_name} could not be written: {e}"}
+    is_scene = dirname is None and ext == ".tsx"
+    result = {
         "video_id": video_id,
         "scene_name": scene_name,
-        "src": src,
+        "src": f"{video_id}/{stem}" if is_scene else None,
         "path": str(path),
         "size_bytes": path.stat().st_size,
     }
+    if not is_scene:
+        result["module"] = f"{dirname}/{stem}{ext}" if dirname else f"{stem}{ext}"
+    return result
 
 
 @mcp.tool
@@ -5574,7 +5889,9 @@ def write_scene_config(video_id: str, config: dict) -> dict:
             {"enabled": false} only when you can say why this video is better
             without them. Optional keys: maxWords (1-7, how many words are on
             screen at once), fontFamily, fontSize, color (null follows the
-            canvas), background ("pill"/"shadow"/"none"), position (fraction of
+            canvas), background ("pill"/"shadow"/"outline"/"none"; "outline"
+            is bold text with a thick dark stroke and no plate, the look of
+            narrated cartoon Shorts), position (fraction of
             frame height), uppercase. Because the narration is captioned, a
             scene should not also spell it out: put text in a scene only when
             the text is the thing being shown.
@@ -5606,14 +5923,41 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     err = _video_id_error(video_id)
     if err:
         return err
+    # One write per video at a time, in this process: the renderer decision
+    # below and the file it is decided for are one operation, or two
+    # interleaved calls could leave a DOM config on a video resolved to
+    # cartoon_3d (or the reverse). Same shape as the Cartoon 3D tools' lock.
+    # Under the source lock too (TMDEV-185): the beat gate's verdict is keyed by
+    # the config's beats and the worker reads the live config to choose the
+    # render path, so a queued or rendering video's config is frozen with its
+    # source. Always source lock first, then config lock; nothing takes them
+    # the other way round.
+    with _source_lock(video_id), _scene_config_lock(video_id):
+        return _write_scene_config_locked(video_id, config)
+
+
+_scene_config_locks: dict[str, threading.Lock] = {}
+_scene_config_locks_guard = threading.Lock()
+
+
+def _scene_config_lock(video_id: str) -> threading.Lock:
+    with _scene_config_locks_guard:
+        return _scene_config_locks.setdefault(video_id, threading.Lock())
+
+
+def _write_scene_config_locked(video_id: str, config: dict) -> dict:
+    """write_scene_config's body, under the video's lock."""
     _init_db()
     with _conn() as con:
         row = con.execute(
-            "SELECT id, visual_style, resolved_visual_style FROM videos WHERE id = ?",
+            "SELECT id, visual_style, resolved_visual_style, resolved_renderer FROM videos WHERE id = ?",
             (video_id,)).fetchone()
     # The path-traversal guard is the shape check at the top (_video_id_error).
     if not row:
         return {"error": f"Video not found: {video_id}"}
+    frozen = _source_frozen_error(video_id)
+    if frozen:
+        return frozen
 
     if not isinstance(config, dict):
         return {"error": "config must be an object"}
@@ -5659,6 +6003,13 @@ def write_scene_config(video_id: str, config: dict) -> dict:
         if sub_err:
             return {"error": sub_err}
 
+    scene_err = _validate_cartoon_scene(scenes, config["totalFrames"], video_id)  # TMDEV-185
+    if scene_err:
+        return {"error": scene_err}
+    renderer_err, resolve_renderer = _check_cartoon_renderer(row, scenes)  # TMDEV-179
+    if renderer_err:
+        return {"error": renderer_err}
+
     guard_err = _guard_scene_work(video_id)  # TMDEV-61
     if guard_err:
         return guard_err
@@ -5679,8 +6030,62 @@ def write_scene_config(video_id: str, config: dict) -> dict:
         path = tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG)
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
+
+    # Stage the file first, so every failure that can happen on the way to a
+    # written config happens before anything is recorded about it.
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    staged = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    staged.write_text(json.dumps(config, indent=2), encoding="utf-8")
+
+    # The renderer 'auto' settled on, recorded with the config that settled it
+    # and write-once from here on. The compare-and-set and the rename into
+    # place share ONE transaction: a rename that fails rolls the row back
+    # without touching what a concurrent writer may have recorded, and a row
+    # that changed under us (another process) is never overwritten; a config
+    # that no longer agrees with what the row now says is refused unwritten.
+    # Snapshot, compare-and-set, rename and commit happen under ONE database
+    # write lock (BEGIN IMMEDIATE), and a commit that fails after the rename
+    # puts the previous file back BEFORE that lock is released: no other writer
+    # can slip a config in between the snapshot and the restore, so the file
+    # and the row never disagree. A first config has no previous file.
+    try:
+        with _conn() as con:
+            con.execute("BEGIN IMMEDIATE")
+            previous = path.read_bytes() if path.is_file() else None
+            if resolve_renderer:
+                recorded = bool(con.execute(
+                    "UPDATE videos SET resolved_renderer = ?, updated_at = ? WHERE id = ? AND resolved_renderer = ''",
+                    (resolve_renderer, _now(), video_id)).rowcount)
+                if not recorded:
+                    now_resolved = con.execute(
+                        "SELECT resolved_renderer FROM videos WHERE id = ?", (video_id,)).fetchone()["resolved_renderer"]
+                    if now_resolved != resolve_renderer:
+                        raise _RendererContradiction(now_resolved)
+            os.replace(staged, path)
+            try:
+                con.commit()
+            except sqlite3.Error as e:
+                try:
+                    if previous is None:
+                        path.unlink(missing_ok=True)
+                    else:
+                        path.write_bytes(previous)
+                except OSError as restore_err:
+                    raise _WriteFailed(f"scene-config.json could not be written ({e}) and the previous file could not "
+                                       f"be put back ({restore_err}): check the data disk") from e
+                raise _WriteFailed(f"scene-config.json could not be written: {e}") from e
+    except _RendererContradiction as c:
+        staged.unlink(missing_ok=True)
+        return {"error": f"this video's 'auto' resolved to the {c.resolved!r} renderer while this config was being "
+                         f"checked; a {'Cartoon 3D' if resolve_renderer == 'cartoon_3d' else 'DOM'} scene-config "
+                         f"cannot follow (written once)"}
+    except _WriteFailed as w:
+        staged.unlink(missing_ok=True)
+        return {"error": str(w)}
+    except (OSError, sqlite3.Error) as e:
+        # before the rename: the transaction rolled back and the file is untouched
+        staged.unlink(missing_ok=True)
+        return {"error": f"scene-config.json could not be written: {e}"}
 
     # str(path) is container-absolute (/jobs/<vid>/scene-config.json) purely
     # because compose sets TUBEMATIC_JOBS_DIR=/jobs and this server runs inside
@@ -5860,7 +6265,16 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
     if source not in ("generated", "installed"):
         return {"error": f"invalid source '{source}' — must be 'generated' or 'installed'"}
 
-    if "/" in scene_name:
+    # A Cartoon 3D module ('sets/street.ts', or composed '<video_id>/sets/street.ts')
+    # is told apart from a scene by its extension or its depth (TMDEV-185).
+    is_module = source == "generated" and (scene_name.endswith((".ts", ".tsx")) or scene_name.count("/") > 1)
+    if is_module:
+        target, err = _module_target(scene_name, video_id)
+        if err:
+            return {"error": err}
+        video_id, split = target
+        scene_name = "/".join(filter(None, (split[0], split[1] + split[2])))
+    elif "/" in scene_name:
         # The composed form. _check_scene_src is validate_job's existing
         # validator for exactly this shape — reused rather than reimplemented,
         # so both places agree on what a legal src looks like.
@@ -5876,10 +6290,12 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
             return {"error": f"conflicting video_id: scene_name '{scene_name}' names video "
                              f"'{name_video_id}' but video_id is '{video_id}' — pass one or the other"}
         video_id, scene_name = name_video_id, stem
+        split = (None, stem, ".tsx")
     else:
         err = _check_scene_name(scene_name)
         if err:
             return {"error": err}
+        split = (None, scene_name, ".tsx")
 
     if source == "installed":
         path, src, video_id = INSTALLED_DIR / f"{scene_name}.tsx", scene_name, ""
@@ -5892,14 +6308,14 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
             row = con.execute("SELECT id FROM videos WHERE id = ?", (video_id,)).fetchone()
         if not row:
             return {"error": f"Video not found: {video_id}"}
-        src = f"{video_id}/{scene_name}"
+        src = f"{video_id}/{scene_name}" if not is_module else f"{video_id}/{scene_name}"
     else:
         # Legacy flat file, written before scenes were namespaced per video —
         # the same allowance delete_scene_file makes for an omitted video_id.
         src = scene_name
     if source != "installed":
         try:
-            path = tjobs.scene_file(SCENES_DIR, video_id, scene_name)
+            path = _source_path(video_id, *split)
         except tjobs.UnsafePath as e:
             return {"error": str(e)}
 
@@ -5926,7 +6342,8 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
 def delete_scene_file(scene_name: str, video_id: str = "") -> dict:
     """Delete a generated scene TSX file.
 
-    scene_name: filename stem without extension (e.g. 'intro-hook').
+    scene_name: filename stem without extension (e.g. 'intro-hook'), or a
+                Cartoon 3D module with its extension ('sets/street.ts').
     video_id:   the video the scene belongs to — deletes
                 generated/{video_id}/{scene_name}.tsx. Every scene written by
                 the current write_scene_file needs this. Omit only to delete
@@ -5938,9 +6355,16 @@ def delete_scene_file(scene_name: str, video_id: str = "") -> dict:
     Returns {deleted: True, scene_name, video_id} or
     {error: "not found", scene_name, video_id}.
     """
-    err = _check_scene_name(scene_name)
-    if err:
-        return {"error": err}
+    if scene_name.endswith((".ts", ".tsx")) or scene_name.count("/") > 1:
+        # a Cartoon 3D module, bare or as list_scene_files composed it
+        target, err = _module_target(scene_name, video_id)
+        if err:
+            return {"error": err}
+        video_id, split = target
+    else:
+        split, err = _split_source_name(scene_name)
+        if err:
+            return {"error": err}
     # Checked before the path is built (TMDEV-161): this tool never looks the
     # video up, and an absolute video_id would replace SCENES_DIR outright, so
     # without it any .tsx the server can write was deletable.
@@ -5949,14 +6373,26 @@ def delete_scene_file(scene_name: str, video_id: str = "") -> dict:
         if err:
             return err
     # An empty video_id is the legacy flat file. A symlink on the way
-    # (generated/vid_a -> vid_b, or one leading out) is refused.
+    # (generated/vid_a -> vid_b, or one leading out) is refused. A Cartoon 3D
+    # module ('sets/street.ts') deletes the same way, under its video.
     try:
-        path = tjobs.scene_file(SCENES_DIR, video_id, scene_name)
+        path = _source_path(video_id, *split)
     except tjobs.UnsafePath as e:
         return {"error": f"{video_id}/{scene_name}: {e}"}
-    if not path.exists():
-        return {"error": "not found", "scene_name": scene_name, "video_id": video_id}
-    path.unlink()
+    if not video_id:
+        if not path.exists():
+            return {"error": "not found", "scene_name": scene_name, "video_id": video_id}
+        path.unlink()
+        return {"deleted": True, "scene_name": scene_name, "video_id": video_id}
+    # a queued or rendering video's tree is frozen for a delete as for a write
+    with _source_lock(video_id):
+        _init_db()
+        frozen = _source_frozen_error(video_id)
+        if frozen:
+            return frozen
+        if not path.exists():
+            return {"error": "not found", "scene_name": scene_name, "video_id": video_id}
+        path.unlink()
     return {"deleted": True, "scene_name": scene_name, "video_id": video_id}
 
 
@@ -5988,7 +6424,10 @@ def list_scene_files(source: str = "all", video_id: str = "") -> dict:
     by path across them.
 
     A generated entry's `name` is exactly what read_scene_file and a
-    scene-config `src` take, so it can be passed straight through.
+    scene-config `src` take, so it can be passed straight through. A Cartoon
+    3D video's modules ('{video_id}/sets/street.ts') are listed with their
+    extension: read_scene_file and delete_scene_file take them, a scene-config
+    never names them.
 
     Returns {"scenes": [{"name": str, "source": "generated"|"installed"}, ...]}
     (plus "truncated": true when the uncapped generated list is longer than
@@ -6001,13 +6440,19 @@ def list_scene_files(source: str = "all", video_id: str = "") -> dict:
     scenes = []
     truncated = False
     if source in ("all", "generated") and SCENES_DIR.exists():
+        # a scene is listed by its stem; a Cartoon 3D module (a .ts, or any
+        # file one directory deeper) by its path with its extension, which is
+        # what read_scene_file and delete_scene_file take for it
         generated = [
             {
-                "name": p.relative_to(SCENES_DIR).with_suffix("").as_posix(),
+                "name": (p.relative_to(SCENES_DIR).with_suffix("").as_posix()
+                         if p.suffix == ".tsx" and len(p.relative_to(SCENES_DIR).parts) <= 2
+                         else p.relative_to(SCENES_DIR).as_posix()),
                 "source": "generated",
                 "_mtime": p.stat().st_mtime,
             }
-            for p in SCENES_DIR.rglob("*.tsx")
+            for p in SCENES_DIR.rglob("*")
+            if p.is_file() and p.suffix in tjobs.SOURCE_EXTS
         ]
         if video_id:
             generated = [s for s in generated if s["name"].startswith(f"{video_id}/")]
@@ -6045,6 +6490,297 @@ async def health(request):
     the server process is accepting connections, nothing more.
     """
     return JSONResponse({"status": "ok"})
+
+
+# ── Cartoon 3D scene (TMDEV-185) ────────────────────────────────────────────
+# A Cartoon 3D video is one generated scene spanning the whole video: the
+# `<video_id>/CartoonShort` the agent wrote (it mounts the renderer's runner
+# with the video's own TypeScript), whose props carry `cartoon3d: {beats}`,
+# the shots as beats for the beat gate. The code itself is checked by the
+# typecheck validate_job runs and judged by the beat gate; this is only the
+# shape the config must have, so a slip is refused here with a reason instead
+# of failing a render later. Keep in sync: mcp/cartoon.py, the renderer's
+# gate/sceneConfig.ts and worker.py's _scene_config_is_cartoon3d.
+
+
+def _cartoon_props(scene) -> dict | None:
+    props = scene.get("props") if isinstance(scene, dict) else None
+    c3d = props.get(cartoon.CARTOON_PROPS) if isinstance(props, dict) else None
+    return c3d if isinstance(c3d, dict) else None
+
+
+def _validate_cartoon_beats(where: str, beats, total_frames: int) -> str:
+    """The beat sheet must tile the whole video, in order, with no gap and no
+    overlap: the beat gate judges one still per LISTED beat, so a frame
+    outside every beat is a frame nobody gated. Each beat says in a few words
+    what its frame shows (`shot`), for the author and the judges' log.
+    Returns "" if fine."""
+    if not isinstance(beats, list) or not beats:
+        return f"{where} must be a non-empty list of beats"
+    expected = 0
+    for i, b in enumerate(beats):
+        start, end = (b.get("start"), b.get("end")) if isinstance(b, dict) else (None, None)
+        if not (isinstance(start, int) and isinstance(end, int)) or isinstance(start, bool) or isinstance(end, bool):
+            return f"{where}[{i}] needs integer start and end frames"
+        if not isinstance(b.get("shot"), str) or not b["shot"].strip():
+            return f"{where}[{i}] needs a 'shot': a few words saying what the frame shows"
+        if start != expected:
+            return (f"{where}[{i}] starts at frame {start} but frame {expected} is the first not yet covered: beats "
+                    f"must be in order and contiguous, from frame 0 to the last frame")
+        if end < start:
+            return f"{where}[{i}] ends (frame {end}) before it starts (frame {start})"
+        expected = end + 1
+    if expected != total_frames:
+        return (f"{where} covers frames 0-{expected - 1} but the video has {total_frames} frames: the last beat "
+                f"must end at frame {total_frames - 1}")
+    return ""
+
+
+def _validate_cartoon_scene(scenes, total_frames: int | None = None, video_id: str | None = None) -> str:
+    """A config with a Cartoon 3D scene: exactly that one scene, generated,
+    named `<video_id>/CartoonShort`, spanning the video, with a beat sheet that
+    tiles it. A config without one is not looked at. Returns "" if fine."""
+    found = [i for i, sc in enumerate(scenes) if _cartoon_props(sc) is not None]
+    if not found:
+        return ""
+    if len(found) > 1 or len(scenes) > 1:
+        return (f"a Cartoon 3D video is exactly one generated scene spanning the whole video (one world, one "
+                f"mount); this config has {len(scenes)} scenes")
+    i = found[0]
+    scene = scenes[i]
+    if scene.get("type", "generated") != "generated" or scene.get("source", "generated") != "generated":
+        return f"scenes[{i}]: a Cartoon 3D scene is this video's own generated scene, not an installed one"
+    src = scene.get("src")
+    want = f"{video_id}/{cartoon.ENTRY_SCENE}" if video_id else f"<video_id>/{cartoon.ENTRY_SCENE}"
+    if not isinstance(src, str) or (video_id and src != want) or (not video_id and src.split("/")[-1] != cartoon.ENTRY_SCENE):
+        return (f"scenes[{i}].src must be '{want}', the scene write_scene_file wrote for this video "
+                f"(it mounts CartoonShort with the video's VideoDef), got {src!r}")
+    if total_frames is not None:
+        # the one scene spans the whole video: CompositionBuilder would leave
+        # blank frames around a shorter one and rebase its clock, while the
+        # beat gate counts from frame 0
+        start, duration = scene.get("startFrame", 0), scene.get("durationInFrames")
+        if start != 0 or isinstance(start, bool):
+            return f"scenes[{i}] (Cartoon 3D) must start at frame 0 (startFrame is {start!r}): one world spans the whole video"
+        if duration != total_frames or isinstance(duration, bool):
+            return (f"scenes[{i}] (Cartoon 3D) must span the whole video: durationInFrames is {duration!r}, "
+                    f"totalFrames is {total_frames}")
+        err = _validate_cartoon_beats(f"scenes[{i}].props.{cartoon.CARTOON_PROPS}.beats", _cartoon_props(scene).get("beats"), total_frames)
+        if err:
+            return err
+    return ""
+
+
+class _WriteFailed(Exception):
+    """The staged config could not be published (its message is the tool's error)."""
+
+
+class _RendererContradiction(Exception):
+    """Raised inside the config write's transaction when the row resolved to
+    the other renderer under the check; carries what it resolved to."""
+
+    def __init__(self, resolved: str):
+        super().__init__(resolved)
+        self.resolved = resolved
+
+
+def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
+    """The scene kind must agree with the video's renderer: a Cartoon 3D scene
+    only on a cartoon_3d video or an auto video that resolved to cartoon_3d,
+    and never a DOM scene on a video whose renderer is cartoon_3d. Otherwise
+    the worker and the AI review would read the video one way and the scenes
+    another, and a revision could discard a half-built world.
+
+    Returns (error, resolve_to): error is "" when the config may be written;
+    resolve_to names the renderer an unresolved 'auto' video settles on with
+    this config ("cartoon_3d" under the same GPU gate as update_video, "dom"
+    for DOM scenes, "" when nothing is to record). The caller records it only
+    after the scene-work guard and the write have succeeded, so a refused call
+    never freezes the renderer. Same backstop pattern as the canvas."""
+    is_cartoon = any(_cartoon_props(sc) is not None for sc in scenes)
+    style = row["visual_style"] or ""
+    resolved = row["resolved_renderer"] or ""
+    unresolved_auto = style == "auto" and not resolved
+    if is_cartoon:
+        if style not in ("auto", "cartoon_3d"):
+            return (f"this video's visual_style is {style!r}, which renders DOM scenes; a Cartoon 3D scene "
+                    f"needs visual_style 'cartoon_3d', or 'auto' resolved to cartoon_3d"), ""
+        if style == "auto" and resolved and resolved != "cartoon_3d":
+            return (f"this video's 'auto' resolved to the {resolved!r} renderer, which is written once; a "
+                    f"Cartoon 3D scene cannot follow (a revision renders with the renderer the video already uses)"), ""
+        if unresolved_auto:
+            gpu_err = _cartoon3d_gpu_error("cartoon_3d")
+            if gpu_err:
+                return gpu_err, ""
+            return "", "cartoon_3d"
+        return "", ""
+    if style == "cartoon_3d" or resolved == "cartoon_3d":
+        return (f"this video renders as Cartoon 3D ({'visual_style' if style == 'cartoon_3d' else 'auto resolved to'} "
+                f"cartoon_3d), so its scene-config must be the single Cartoon 3D scene (its props carry "
+                f"{cartoon.CARTOON_PROPS}), not DOM scenes"), ""
+    return "", ("dom" if unresolved_auto else "")
+
+
+# ── Group 9: Cartoon 3D authoring (TMDEV-185) ───────────────────────────────
+# A Cartoon 3D video is TypeScript the agent writes per video against the
+# renderer's frozen kit, plus one scene-config entry with the beats. These
+# tools are the kit source it reads, the stills it looks at, the beat gate
+# that judges the result, and the soundtrack; the real work is the renderer's
+# command lines (mcp/cartoon.py says how). None takes the scene-work claim:
+# they read the written files and write only under the job's cartoon/
+# directory, and the record tool is called by judge subagents, which may be
+# other sessions.
+
+_CARTOON_REMOTION = REPO_ROOT / "remotion"
+
+
+def _cartoon_call(video_id: str, fn, *args):
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    try:
+        return fn(JOBS_DIR, video_id, _CARTOON_REMOTION, *args)
+    except cartoon.CartoonError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def cartoon_kit_list() -> dict:
+    """The files of the Cartoon 3D kit a video's code is written against, by
+    path under renderer/remotion/src/cartoon3d/: `video.ts` (the VideoDef
+    contract), `camera.ts` (the camera grammar), `CartoonShort.tsx` (the
+    runner), `kit/*` (cast, sets, blocks, paint, lights, water), `post/*`
+    and the worked example under `examples/chicago/`. Read them with
+    cartoon_kit_read; the tubematic-cartoon3d skill says which first.
+
+    Returns {root, files: [path, ...]}.
+    """
+    try:
+        return {"root": "renderer/remotion/src/cartoon3d", "files": cartoon.list_kit(_CARTOON_REMOTION)}
+    except cartoon.CartoonError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def cartoon_kit_read(path: str) -> dict:
+    """One kit file's source, by a path cartoon_kit_list printed (for example
+    "kit/cast.ts" or "examples/chicago/story.ts"). The kit is frozen in the
+    renderer image: read it, import from it, never copy it into a video.
+
+    Returns {path, content} or {error}.
+    """
+    try:
+        return {"path": path, "content": cartoon.read_kit(_CARTOON_REMOTION, path)}
+    except cartoon.CartoonError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def cartoon_still(video_id: str, frames: list[int]):
+    """Look at frames of the Cartoon 3D video as the render will show them:
+    the world, the captions, the voice timing. One to six frame numbers per
+    call; use each beat's middle frame. Looking is the authoring loop: write
+    the code, look, fix. The pictures are returned at half size and kept as
+    stills/fNNNN.png for cartoon_read_still. The stills render the source as
+    it is on disk at the call (an edit is seen by the next still).
+
+    Returns a text block naming the stills, then the pictures.
+    """
+    result = _cartoon_call(video_id, cartoon.stills, frames)
+    if isinstance(result, dict):
+        return result
+    from fastmcp.utilities.types import Image as MCPImage
+    out = [json.dumps({"video_id": video_id, "stills": [p.name for p in result]})]
+    for p in result:
+        out.append(MCPImage(data=p.read_bytes(), format="png"))
+    return out
+
+
+@mcp.tool
+def cartoon_read_still(video_id: str, kind: str, name: str):
+    """One still by name: kind "beatgate" (one frame per beat:
+    beatNN-fNNNN.png) or "stills" (frames cartoon_still rendered). This is
+    how a judge sees what it judges: the prompt names the stills and this
+    call shows them. A pure read.
+
+    Returns a text block and the picture, or {error}.
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    try:
+        path = cartoon.still_file(JOBS_DIR, video_id, kind, name)
+    except cartoon.CartoonError as e:
+        return {"error": str(e)}
+    if path.is_symlink() or not path.is_file():
+        return {"error": f"no {kind} still named {name!r} for {video_id}"}
+    from fastmcp.utilities.types import Image as MCPImage
+    return [json.dumps({"video_id": video_id, "kind": kind, "name": name}), MCPImage(data=path.read_bytes(), format="png")]
+
+
+@mcp.tool
+def cartoon_beat_gate(video_id: str) -> dict:
+    """The BEAT GATE: does the frame at the middle of every beat show what the
+    narrator says during it? Renders one still per beat (the real frame,
+    captions burned in) and writes the judges' prompt with each beat's
+    sentence. Keyed by the video's source files, beats and narration, so a
+    changed shot is judged again and an unchanged one is not.
+
+    TWO fresh judges answer the same prompt, each a separate subagent with no
+    other context, given judge_prompt verbatim; a beat they split on goes to
+    a third. Each judge reads the stills with cartoon_read_still and records
+    its own answers with cartoon_beat_gate_record. The status says which
+    judge is still owed. Look at the stills yourself first (cartoon_read_still,
+    kind "beatgate") and fix what you can see before spending a judge.
+    validate_job and submit_render refuse a video without a PASS.
+
+    Returns {passed, need, judges, tie, fails, summary, beats, stills,
+    judge_prompt?}.
+    """
+    return _cartoon_call(video_id, cartoon.beat_gate, SCENES_DIR)
+
+
+@mcp.tool
+def cartoon_beat_gate_record(video_id: str, answers: dict) -> dict:
+    """Record one judge's answers for the current source and beat sheet.
+    Called by the JUDGE subagent that cartoon_beat_gate's prompt was given
+    to, with the JSON the prompt asked for: {beats: [{beat, seen, shows, why,
+    fix?}, ...]}, one entry per beat in order. Identical answers are refused:
+    the second judge is a different, fresh judge.
+
+    Returns the gate's status after this record: {passed, need, judges, tie,
+    fails, summary, recorded: [one line per beat]}.
+    """
+    return _cartoon_call(video_id, cartoon.beat_gate_record, SCENES_DIR, answers)
+
+
+@mcp.tool
+def cartoon_soundtrack(video_id: str, spec: dict) -> dict:
+    """Synthesise the video's soundtrack from a spec and mix it under the
+    voice: music sections (a style, a level and a span per mood, optional
+    hits and dips) and sound-effect cues (a generator, a time in seconds or
+    a frame, a level, a pan, a distance), every sound synthesised, nothing
+    sampled. The mix is exactly the video's length at -14 LUFS, ducked under
+    every spoken word; the render muxes it in place of the bare voice. The
+    spec's shape, the styles and the generators are in the
+    tubematic-cartoon3d skill's reference/soundtrack.md. Call it after the
+    beat gate passes (the shots are final then) and before submit_render;
+    calling it again replaces the mix. Takes about a minute.
+
+    Returns {mix, cues (the cue sheet with every level), loudness, log} or
+    {error} naming the cue or section that is wrong.
+    """
+    if not isinstance(spec, dict):
+        return {"error": "spec must be the soundtrack spec object"}
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    with _source_lock(video_id):
+        _init_db()
+        frozen = _source_frozen_error(video_id)
+        if frozen:
+            return frozen
+        return _cartoon_call(video_id, cartoon.soundtrack, spec)
 
 
 # ── Registered tool names ───────────────────────────────────────────────────

@@ -68,8 +68,11 @@ a later Flask crash does not stop it, and Flask never depends on MCP in either d
 ### `tubematic-renderer`
 
 The same image, no `build:` section, `command: python3 /app/api/worker.py`. Same six volumes and the
-same timezone mounts, no exposed ports, `shm_size: 2gb` for Chromium, and
-`depends_on: tubematic-api: service_healthy`.
+same timezone mounts, no published ports, `shm_size: 2gb` for Chromium, and
+`depends_on: tubematic-api: service_healthy`. It runs one child process beside the worker: the
+Cartoon 3D stills server on `TUBEMATIC_STILLS_PORT` (4455), reachable on the Compose network only,
+which the MCP container's gate and preview tools use so their stills render on this container's GPU
+(see [The Worker](12-the-worker.md#the-stills-server)).
 
 Its `command:` is the bare interpreter, so unlike the other two it **never runs `entrypoint.sh`** —
 which is why it applies its own umask at startup rather than inheriting one.
@@ -344,6 +347,7 @@ migration ran, so the services that come back up will migrate it forward again o
 | 3000 | Dashboard — all interfaces in a checkout, `127.0.0.1` in a release install; behind its login either way |
 | 4000 | Flask API — `127.0.0.1` only |
 | 4100 | MCP server — `127.0.0.1` only |
+| 4455 | The render worker's stills server — Compose network only, never published |
 | 3001 / 4001 | The end-to-end test stack |
 
 Container names are fixed, so two checkouts cannot run their stacks simultaneously.

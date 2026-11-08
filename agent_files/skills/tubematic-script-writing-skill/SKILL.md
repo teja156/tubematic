@@ -321,15 +321,16 @@ at the topic checkpoint and frozen there, which is precisely so that it is knowa
 changing it after the script exists invalidates every brief below and means a rewrite, not a
 re-render.
 
-It is a permission set, not a look, and there are two branches, not three. **Figures are
-permitted** under `"stick"`, `"illustrated"` and `"auto"`; under `"motion_graphics"` they are
-not — excluding them
-is that option's entire purpose:
+It is a permission set, not a look, and there are two branches, not three — plus one style that
+is a different renderer. **Figures are permitted** under `"stick"`, `"illustrated"`, `"cartoon_3d"`
+and `"auto"`; under `"motion_graphics"` they are not — excluding them is that option's entire
+purpose:
 
 | `visual_style` | A beat about a generic **role** gets |
 |---|---|
 | `motion_graphics` | a diagrammatic brief, or a photographic one if the beat genuinely needs a person shown |
 | `stick`, `illustrated`, `auto` | a **pose** brief — what the figure is doing and feeling |
+| `cartoon_3d` | a **scene** brief — where this happens, who is there and what they do, what thing is on screen. The video is one 3D world with people walking through it, so every beat's brief names a place and an action, never a diagram |
 
 Note what this does *not* depend on: the canvas. Under `"auto"` the canvas is chosen later, after
 voicing, and a figure works on either — black line art on light, white on dark. So a pose brief is

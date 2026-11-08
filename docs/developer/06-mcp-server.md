@@ -94,7 +94,7 @@ next tool call use it, with no restart.
 
 ---
 
-## The 38 tools
+## The 45 tools
 
 ### Pipeline state
 
@@ -104,7 +104,7 @@ next tool call use it, with no restart.
 | `get_video` | `(video_id)` | Full row plus `comments[]`, parsed `script_segments`, the scene-claim fields `claimed_by` / `claim_expires_in_secs`, the `publish_title` / `publish_description` written with the script, and the video's voice: `voice` (`{voice_id, name, model_id, source}` or `null`) with the `elevenlabs_model_id` and `pronunciation_mode` that follow from it — what the script is written for. Also `illustrated_available`, the same flag `get_pipeline_status` reports |
 | `create_video` | `(project_id, topic, strategy, producibility_score, title="", voice_id="")` | Lands at `TOPIC_PROPOSED`. Rejects a score below 5, an unknown strategy, a `voice_id` not on the roster, or a paused or expired `project_id` unless `strategy` is `manual` (see [Domain pause](02-pipeline.md#domain-pause) and [Topic cap](02-pipeline.md#topic-cap)). With no `voice_id`, the video starts with its project's `default_voice_id`, whatever the strategy, while that voice is on the roster. A `curriculum` video also starts with its project's `default_visual_style` and `default_script_profile_id` (the latter only while that profile is `READY` and not deleted). An over-length `title` is **clipped with a warning**, not rejected. The result carries `agent_id`, the agent the video is pinned to — see [Assignment](07-agent-layer.md#assignment) — and the `voice_id`, `visual_style` and `script_profile_id` it was given |
 | `set_video_status` | `(video_id, new_status, only_if_current_status=None)` | Guarded status write. Releases the scene claim when the video leaves the claim window. Refuses an archived video with `video_archived`, and `TOPIC_REJECTED` or `SCHEDULED` with `human_only_status` — rejecting a topic is the human's decision, and a scheduled video needs a post held at postforme, which no tool can create |
-| `update_video` | `(video_id, title=…, script=…, script_segments=…, youtube_url=…, video_version=…, gemini_feedback=…, voice_id=…, agent_id=…, agent_model=…, agent_effort=…, script_profile_id=…, visual_style=…, resolved_visual_style=…, publish_title=…, publish_description=…)` | Partial update. Any write of `script_segments` or `script` must also carry both `publish_title` (at most 100 characters, YouTube's limit) and `publish_description` (at most 2000, which keeps the combined caption under Instagram's 2200), non-blank — including a pronunciation-only fix, which resends the stored pair (or, on a video scripted before the pair existed, where it is blank, writes one). Required rather than optional because an optional pair is one the agent eventually forgets, and the dialog would then open on the bare topic with nothing to say so. `script_segments` is validated against the model of the video's voice and the flat `script` is derived from it; writing a script pins the voice it resolved to onto a video that had none (or was passed `voice_id=""`). `<phoneme>` tags are refused for a voice whose model would strip them. A `voice_id` whose model cannot speak the stored script is refused, except at `TOPIC_PROPOSED`, where the script is still to be rewritten; to move a scripted video to such a voice, pass it together with the rewritten `script_segments` (and the publish pair they require) in one call. An over-length `title` is **rejected**, unlike on create. Refuses an archived video with `video_archived`. Takes none of the four job-path columns: `generate_voice`, `write_scene_config` and the render worker write those, and FastMCP refuses a call that passes one as an unexpected argument, so nothing is applied — see [Path columns](03-database.md#videos) |
+| `update_video` | `(video_id, title=…, script=…, script_segments=…, youtube_url=…, video_version=…, gemini_feedback=…, voice_id=…, agent_id=…, agent_model=…, agent_effort=…, script_profile_id=…, visual_style=…, resolved_visual_style=…, resolved_renderer=…, publish_title=…, publish_description=…)` | Partial update. `visual_style="cartoon_3d"` is refused unless the renderer's GPU probe says `working`, with a message naming the fix (the GPU step, or Test GPU when the worker has not probed yet). `resolved_renderer` records which renderer `auto` settled on (`dom` or `cartoon_3d`) and is **write-once**, like `resolved_visual_style`; it is refused when `visual_style` already names the renderer, and `cartoon_3d` needs the same working GPU. Any write of `script_segments` or `script` must also carry both `publish_title` (at most 100 characters, YouTube's limit) and `publish_description` (at most 2000, which keeps the combined caption under Instagram's 2200), non-blank — including a pronunciation-only fix, which resends the stored pair (or, on a video scripted before the pair existed, where it is blank, writes one). Required rather than optional because an optional pair is one the agent eventually forgets, and the dialog would then open on the bare topic with nothing to say so. `script_segments` is validated against the model of the video's voice and the flat `script` is derived from it; writing a script pins the voice it resolved to onto a video that had none (or was passed `voice_id=""`). `<phoneme>` tags are refused for a voice whose model would strip them. A `voice_id` whose model cannot speak the stored script is refused, except at `TOPIC_PROPOSED`, where the script is still to be rewritten; to move a scripted video to such a voice, pass it together with the rewritten `script_segments` (and the publish pair they require) in one call. An over-length `title` is **rejected**, unlike on create. Refuses an archived video with `video_archived`. Takes none of the four job-path columns: `generate_voice`, `write_scene_config` and the render worker write those, and FastMCP refuses a call that passes one as an unexpected argument, so nothing is applied — see [Path columns](03-database.md#videos) |
 | `add_comment` | `(video_id, author, text)` | `author` must be `"agent"`; anything else is refused. A human-signed comment is how a person approves or asks for changes, and the next session reads the thread, so an agent steered by injected text must not be able to forge one. People comment on the dashboard, over HTTP |
 
 `script_profile_id` and `visual_style` are writable through `update_video` **only while the video
@@ -192,11 +192,11 @@ and no obvious cause.
 
 | Tool | Signature | Notes |
 |---|---|---|
-| `write_scene_file` | `(video_id, scene_name, tsx_content)` | Writes a generated scene, namespaced under the video |
-| `read_scene_file` | `(scene_name, video_id="", source="generated")` | Accepts either the bare stem or the composed `"{video_id}/{scene_name}"` form |
-| `delete_scene_file` | `(scene_name, video_id="")` | Omit `video_id` only for a legacy flat scene. A given `video_id` has its shape checked before any path is built, and the target must stay inside `generated/` — this tool never looks the video up, so without that an absolute `video_id` replaced the scenes directory and could delete any `.tsx` the server can write |
+| `write_scene_file` | `(video_id, scene_name, tsx_content)` | Writes a generated scene, namespaced under the video. A Cartoon 3D video's TypeScript modules go through it too: a `scene_name` with its extension, one directory deep at most (`story.ts`, `sets/street.ts`), lands beside the video's `CartoonShort` scene and is answered with `module` instead of `src`. Every file is written beside its target and moved over it, so a failed write leaves the last good file; a video that is `RENDER_QUEUED` or `RENDERING` is refused with `status_mismatch`, because the worker bundles the generated tree while it renders |
+| `read_scene_file` | `(scene_name, video_id="", source="generated")` | Accepts either the bare stem or the composed `"{video_id}/{scene_name}"` form. A Cartoon 3D module is taken bare with its `video_id` (`sets/street.ts`) or composed as `list_scene_files` lists it (`<video_id>/sets/street.ts`), through the one parser `delete_scene_file` uses; the grammar reads the two arguments only, never the directories on disk: a three-component name's first component is the video and must agree with an explicit `video_id` (else a conflict error); a two-component name with a `video_id` is a subdirectory of that video unless its first component *is* that `video_id`; without a `video_id` the first component is the video. A module directory named after its own video is refused by `write_scene_file`, since that composed name already means the video's root module |
+| `delete_scene_file` | `(scene_name, video_id="")` | Omit `video_id` only for a legacy flat scene. Refused with `status_mismatch` while the video is queued or rendering, as `write_scene_file` and `cartoon_soundtrack` are. A given `video_id` has its shape checked before any path is built, and the target must stay inside `generated/` — this tool never looks the video up, so without that an absolute `video_id` replaced the scenes directory and could delete any `.tsx` the server can write |
 | `list_scene_files` | `(source="all", video_id="")` | |
-| `write_scene_config` | `(video_id, config)` | Writes `scene-config.json`. Validates the optional top-level `canvas` against the video's visual register: a contradicting value is rejected, an absent one is filled in. Under an unresolved `auto` the canvas is taken as the agent's choice and recorded. Also validates the optional top-level `subtitles` block — unknown keys are rejected rather than dropped, since a silently ignored one shows up only as a caption that does not look the way it was asked to, after a render. Returns `canvas`, `visual_style` and `subtitles_enabled` alongside the path |
+| `write_scene_config` | `(video_id, config)` | Writes `scene-config.json`. Validates the optional top-level `canvas` against the video's visual register: a contradicting value is rejected, an absent one is filled in. Under an unresolved `auto` the canvas is taken as the agent's choice and recorded. Also validates the optional top-level `subtitles` block — unknown keys are rejected rather than dropped, since a silently ignored one shows up only as a caption that does not look the way it was asked to, after a render. For a Cartoon 3D video it also requires exactly one `Cartoon3D` scene starting at frame 0 and spanning `totalFrames`, a beat sheet that tiles the video in order from frame 0 to the last frame with no gap or overlap (a frame outside every beat is a frame no gate judges), and a scene kind that agrees with the video's renderer: a `Cartoon3D` scene only on a `cartoon_3d` video or an `auto` video resolved to `cartoon_3d` never a DOM scene on a video whose renderer is `cartoon_3d`. An unresolved `auto` video is resolved by the first config written for it, to `cartoon_3d` (under the same GPU gate as `update_video`) or to `dom`, recorded as a compare-and-set in the same transaction as the rename of the staged file into place, under one database write lock from the snapshot of the previous file to the commit (a rename that fails rolls the row back, never touching what another writer recorded; a commit that fails after the rename puts the previous file back before the lock is released); writes for one video are serialised in the server, so the decision and the file it was made for are one operation. Returns `canvas`, `visual_style` and `subtitles_enabled` alongside the path |
 | `get_scene_config` | `(video_id)` | Reads it back |
 | `get_timeline` | `(video_id, include_words=False)` | Reads `timeline.json`. Word-level timings are opt-in because they are large |
 
@@ -205,7 +205,43 @@ and no obvious cause.
 | Tool | Signature | Notes |
 |---|---|---|
 | `validate_job` | `(video_id)` | Returns `{passed, errors[], warnings[]}`. See below |
-| `submit_render` | `(video_id)` | A pure database write: `VOICE_READY → RENDER_QUEUED`. It does **not** render, and does not wait |
+| `submit_render` | `(video_id)` | A pure database write: `VOICE_READY → RENDER_QUEUED`. It does **not** render, and does not wait. A Cartoon 3D video is refused with `cartoon_not_ready` while any of its gates is open (see below) |
+
+### Cartoon 3D authoring
+
+A Cartoon 3D video is **code written for that video** against the renderer's frozen kit
+(`renderer/remotion/src/cartoon3d/`): a `CartoonShort` scene plus the `.ts` modules beside it (shots and
+camera, sets, staging) under `scenes/generated/<video_id>/`, written with `write_scene_file`, and one
+scene-config entry whose props carry `cartoon3d: {beats}` (see
+[Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d)). These tools are the kit source the
+author reads, the stills it looks at, the beat gate that judges the result, and the soundtrack; the verdict
+the gate keeps is what `validate_job` and `submit_render` read. The rendering ones run the renderer's own
+command lines (`renderer/remotion/cartoon-tools/`); none takes the scene-work claim, because the record
+tool is called by judge subagents, which may be other sessions.
+
+| Tool | Signature | Notes |
+|---|---|---|
+| `cartoon_kit_list` | `()` | Every file of the kit, by path under `src/cartoon3d/`: the `VideoDef` contract, the camera grammar, the runner, `kit/*`, `post/*` and the worked example under `examples/chicago/`. Tests and the gate's own code are left out |
+| `cartoon_kit_read` | `(path)` | One kit file's source, by a listed path only |
+| `cartoon_still` | `(video_id, frames)` | One to six frames as the render will show them, returned as pictures and kept under the job for `cartoon_read_still`. Renders the source as it is on disk |
+| `cartoon_read_still` | `(video_id, kind, name)` | One still by name, `kind` one of `beatgate`, `stills`. The name is a plain file name under the video's `cartoon/` directory and nothing else. This is how a judge sees what it judges |
+| `cartoon_beat_gate` | `(video_id)` | The **beat gate**: one still at the middle of every beat and a prompt with each beat's sentence. Two fresh judges answer; a beat they split on goes to a third. Run over the video's source tree, which keys the verdict |
+| `cartoon_beat_gate_record` | `(video_id, answers)` | One judge's per-beat answers; identical answers are refused, since the second judge must be a different one |
+| `cartoon_soundtrack` | `(video_id, spec)` | Synthesises the soundtrack from a spec (music sections by style and level, hits, dips; sound-effect cues by generator, time, level, pan and distance) and mixes it under the voice to −14 LUFS at the video's length (`cartoon-tools/audio/mix.py`, numpy and scipy). The spec's shape is checked here; the engine refuses an unknown generator or style by name. The music ducks under every spoken word and every effect, and the returned cue sheet gives each event's level against the music at its moment (`loudness.events_under_music` counts the covered ones, which the skill treats as a fix). The render muxes the mix when it is newer than the voice |
+
+The judge is the point of the design: the author never grades its own work. A judge is a fresh
+subagent with no other context, given the prompt verbatim; it reads the stills through
+`cartoon_read_still` and records its own answers through the record tool, so the verdict never
+passes through the author's hands. Verdicts live under `<jobs>/<video_id>/cartoon/`, keyed by a
+hash of **every source file of the video**, its beats and the narration's words per beat, so an edit to
+the code is judged again and an unchanged video never is.
+
+The stills themselves are rendered by the render worker's stills server (`TUBEMATIC_STILLS_SERVER`,
+`http://tubematic-renderer:4455`), the one container with the GPU, which serves the shared jobs
+volume as the composition's public directory, so a video's files are `/public/<video_id>/…` and
+nothing is staged, and which re-bundles the project when the generated source tree changes, so an
+edit is seen by the next still. When that server does not answer, the tool renders the stills in this
+container on software GL, over the same directory. See [The Worker](12-the-worker.md#the-stills-server).
 
 ### Configuration and scheduling
 
@@ -238,7 +274,10 @@ the same text in its prompt; this field is how an interactive session gets it. S
 [the agent layer](07-agent-layer.md#user-preferences).
 
 It returns `mining_available` (see [Configuration and scheduling](#configuration-and-scheduling)).
-And it returns `illustrated_available` — `true` when an OpenAI key is stored, never the key itself.
+And it returns `illustrated_available` — `true` when an OpenAI key is stored, never the key itself —
+and `cartoon_3d_available`, `true` while the renderer's GPU probe (see [Cartoon 3D authoring](#cartoon-3d-authoring))
+says `working`; `get_video` returns both, and the scene-config skill reads the second under `auto`
+before resolving the renderer to Cartoon 3D.
 `get_video` returns the same flag, and that is where the scene-config skill reads it before choosing
 generated character art under `auto`: when it is `false`, characters are line art and
 `generate_character` is never called. It is on `get_video` because a scheduled session is scoped to
@@ -256,7 +295,7 @@ as stored. See [HTTP API — Mining sources](05-http-api.md#mining-sources) for 
 
 ## `validate_job` — the pre-render gate
 
-The agent is expected to call this before `submit_render`. It runs nine checks in order and returns
+The agent is expected to call this before `submit_render`. It runs ten checks in order and returns
 `{passed, errors, warnings}`, where **`passed` depends only on `errors`**.
 
 1. `audio.mp3`, `timeline.json` and `scene-config.json` exist in `<jobs>/<video_id>/`. The location
@@ -275,11 +314,24 @@ The agent is expected to call this before `submit_render`. It runs nine checks i
    `source`. A stale bare `src` that collides with a newer namespaced file is caught here.
 7. **Image references resolve.** Every image-shaped string in a scene's props must be of the form
    `/public/<video_id>/images/…` and must exist on disk, inside that video's `images/` directory.
-8. **TypeScript typechecks.** `npx tsc --noEmit` over the whole Remotion project, 60-second timeout.
+8. **Cartoon 3D readiness**, for a config with a Cartoon 3D scene only: the video's generated
+   source exists, and two fresh judges have passed the beat sheet (or a third has broken their tie)
+   for exactly the source on disk. An open gate is one error naming the tool that closes it.
+   `submit_render` asks the same question, so an ungated video cannot be queued by skipping this
+   call, and when it queues the video it records the source's fingerprint (`<jobs>/<video_id>/cartoon/source.json`):
+   the worker renders exactly that tree or fails the render back to the agent. The readiness check, the
+   record and the status change happen under one per-video lock that `write_scene_file`,
+   `delete_scene_file`, `write_scene_config` and `cartoon_soundtrack` also take, and all four refuse the
+   video with `status_mismatch` while it is queued or rendering, so no change to the source, the beats or
+   the mix can land between the gate's answer and the queue, or after it. Every path under the job's
+   `cartoon/` directory (the record, the stills, the mix) is built with `join_below`, so a symlink planted
+   anywhere on the way is refused rather than followed. A symlink anywhere in the source tree fails the
+   check outright. See [Cartoon 3D authoring](#cartoon-3d-authoring).
+9. **TypeScript typechecks.** `npx tsc --noEmit` over the whole Remotion project, 60-second timeout.
    The first 20 lines of any failure are reported as a hard error. Silently skipped if `npx` is
    unavailable. This runs for *every* video, so a type error anywhere in the project blocks every
    render, not just the one that introduced it.
-9. **Text-layout audit** — advisory only, and only when the checks above found no errors. See
+10. **Text-layout audit** — advisory only, only when the checks above found no errors, and never for a Cartoon 3D video (a painted canvas has no text rects to measure; its checks are step 8's). See
    [Rendering and Review](11-rendering-and-review.md#the-text-layout-audit). Its findings land in
    `warnings` and can never change `passed`.
 

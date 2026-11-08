@@ -80,6 +80,7 @@ export const RemotionRoot: React.FC = () => {
         calculateMetadata={durationFromTimeline}
       />
 
+
       {/* Phase 0 placeholder — smoke-test the container without real assets */}
       <Composition
         id="Placeholder"

@@ -19,6 +19,7 @@ suite that covers a change without grepping for it.
 | **[`vqa/tests`](vqa.md)** | pytest | The VQA utilities shipped in the VQA Kasm image |
 | **[`dashboard/tests/unit`](dashboard-unit.md)** | vitest | React components, route handlers, date/timezone helpers |
 | **[`dashboard/tests/e2e`](dashboard-e2e.md)** | Playwright | The dashboard driven in a real browser against a real stack |
+| **[`renderer/remotion`](renderer-remotion.md)** | vitest | Pure helpers of the Remotion project: the Cartoon 3D camera grammar and the beat gate's verdict rule |
 
 Two typecheck gates are not test suites but are run the same way — see [Typechecks](#typechecks).
 
@@ -56,6 +57,9 @@ it applies.
 cd dashboard
 npm test                 # vitest
 npm run test:e2e         # Playwright — builds the Docker test stack first
+
+cd renderer/remotion
+npm test                 # vitest
 ```
 
 The Playwright suite's global setup runs `docker compose -f docker-compose.test.yml up -d --build

@@ -105,9 +105,16 @@ docker compose logs -f tubematic-renderer
 | `missing job file(s)` | The named file is not in `/jobs/<video_id>/`, or its path column is still empty because that step never finished. The worker looks only there — it derives the location from the id and ignores the stored path, so host paths in the database are harmless. A script driving the MCP server from a host shell must write into the same jobs volume (`~/.tubematic-data/jobs`, the default outside a container) |
 | `Render refused, moved to FAILED` | The video's id, or its project's id, cannot be used as a file path — for example a project id of `..`, which would put the render outside `/output_videos`. New ids are checked when created, so this means a row from before that check. No route changes a video's project, so the fix is an edit to the row in the database, or deleting the video |
 
-**A video bounces between `RENDER_QUEUED` and `RENDERING`.** It is timing out. Raise
-`render_timeout_secs`, or look for a scene doing something expensive — a full-bleed blur across
-hundreds of frames is the classic case.
+**A video bounces between `RENDER_QUEUED` and `RENDERING`.** The render is being killed: its
+comment says whether it stalled (no progress for `render_stall_timeout_secs`, a hung browser) or hit
+the `render_timeout_secs` ceiling (a render that advances, but too slowly). Raise the one named, or
+look for a scene doing something expensive — a full-bleed blur across hundreds of frames is the
+classic case.
+
+**A Cartoon 3D video went straight to `FAILED` with "renders on the GPU only".** The style is
+refused unless the renderer's GPU works, but a video approved before the GPU went away reaches the
+worker anyway. Fix the GPU (Settings → Rendering → Test GPU, or `python onboard.py --step gpu`)
+and create the video again; the failed one is not retried.
 
 **Renders are slow although the machine has an NVIDIA GPU.** Open Settings → Rendering. Red means a
 GPU is chosen but the renderer could not use it, with the reason; grey **Rendering on the CPU**

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Project, ProjectStatus, ScriptProfile, Voice } from "@/lib/types";
+import type { GpuStatus, Project, ProjectStatus, ScriptProfile, Voice } from "@/lib/types";
 import { voiceLabel } from "@/lib/voices";
 import { illustratedAvailable, styleLabel, styleOptions } from "@/lib/visualStyles";
 import { codePoints } from "@/lib/utils";
@@ -175,6 +175,7 @@ function DomainRow({
   onProfileChange,
   onCapChange,
   canIllustrate,
+  gpu,
   voices,
   profiles,
 }: {
@@ -186,6 +187,7 @@ function DomainRow({
   onProfileChange: (id: string, next: string) => void;
   onCapChange: (id: string, next: number) => void;
   canIllustrate: boolean;
+  gpu: GpuStatus | null;
   voices: Voice[];
   profiles: ScriptProfile[];
 }) {
@@ -257,7 +259,7 @@ function DomainRow({
           }}
         >
           <option value="">No style</option>
-          {styleOptions(canIllustrate).map((o) => (
+          {styleOptions(canIllustrate, gpu).map((o) => (
             <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
           ))}
         </select>
@@ -389,8 +391,8 @@ function DomainRow({
 
 // ── Add domain form ───────────────────────────────────────────────────────────
 
-function AddDomainForm({ onAdded, canIllustrate, voices, profiles }: {
-  onAdded: () => void; canIllustrate: boolean; voices: Voice[]; profiles: ScriptProfile[];
+function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles }: {
+  onAdded: () => void; canIllustrate: boolean; gpu: GpuStatus | null; voices: Voice[]; profiles: ScriptProfile[];
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -545,7 +547,7 @@ function AddDomainForm({ onAdded, canIllustrate, voices, profiles }: {
             style={{ fontFamily: "var(--mono)", fontSize: 11, padding: "6px 8px", background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--border-2)" }}
           >
             <option value="">No preference</option>
-            {styleOptions(canIllustrate).map((o) => (
+            {styleOptions(canIllustrate, gpu).map((o) => (
               <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
             ))}
           </select>
@@ -685,6 +687,7 @@ export default function TopicsPage() {
   // Fetched apart from loadAll so a failed settings read changes nothing but
   // this: the API refuses the style itself, so true is the safe fallback.
   const [canIllustrate, setCanIllustrate] = useState(true);
+  const [gpu, setGpu] = useState<GpuStatus | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [profiles, setProfiles] = useState<ScriptProfile[]>([]);
 
@@ -729,6 +732,10 @@ export default function TopicsPage() {
         setCanIllustrate(illustratedAvailable(s));
         setVoices(Array.isArray(s.elevenlabs_voices) ? s.elevenlabs_voices : []);
       })
+      .catch(() => {});
+    apiFetch("/render/gpu")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((g) => setGpu(g && typeof g.status === "string" ? (g as GpuStatus) : null))
       .catch(() => {});
   }, []);
 
@@ -899,7 +906,7 @@ export default function TopicsPage() {
         <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: "var(--mute)", marginBottom: 10 }}>
           Curriculum Seed Domains
         </div>
-        <AddDomainForm onAdded={loadAll} canIllustrate={canIllustrate} voices={voices} profiles={profiles} />
+        <AddDomainForm onAdded={loadAll} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} />
       </section>
 
       {/* Seed domains list */}
@@ -917,7 +924,7 @@ export default function TopicsPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 24 }}>
           {seedDomains.map((p) => (
-            <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onCapChange={handleDomainCap} canIllustrate={canIllustrate} voices={voices} profiles={profiles} />
+            <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} />
           ))}
         </div>
       )}
@@ -930,7 +937,7 @@ export default function TopicsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {otherDomains.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onCapChange={handleDomainCap} canIllustrate={canIllustrate} voices={voices} profiles={profiles} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} />
             ))}
           </div>
         </section>

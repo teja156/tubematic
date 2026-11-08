@@ -288,7 +288,7 @@ The shape is documented here and nowhere else; there is no schema file to valida
 |---|---|
 | `totalFrames` | Positive integer. Enforced against the timeline by `write_scene_config` and `validate_job` |
 | `canvas` | `"dark"` or `"light"` — the ground painted under every scene, from the video's [visual register](10-scene-authoring.md#visual-registers). **A whole-video property, deliberately not a per-scene one:** scenes that disagree about the canvas flash, and a viewer reads that as a broken render rather than a style. `write_scene_config` rejects a value contradicting the register and fills in an absent one, so an omitted key is safe but never meaningful |
-| `subtitles` | Burned-in captions of the narration — see [Captions](#captions). **Absent means enabled**, which is the only reason the default reaches a config written before the key existed; opting out is an explicit `{"enabled": false}`. Keys: `enabled`, `maxWords` (1–7), `fontFamily`, `fontSize` (28–120), `color` (`null` follows the canvas), `background` (`"pill"`/`"shadow"`/`"none"`), `position`, `uppercase`. `write_scene_config` rejects an unknown key rather than dropping it, and does **not** write the defaults into the file — materialising them would freeze them at whatever they were the day the config was authored |
+| `subtitles` | Burned-in captions of the narration — see [Captions](#captions). **Absent means enabled**, which is the only reason the default reaches a config written before the key existed; opting out is an explicit `{"enabled": false}`. Keys: `enabled`, `maxWords` (1–7), `fontFamily`, `fontSize` (28–120), `color` (`null` follows the canvas), `background` (`"pill"`/`"shadow"`/`"outline"`/`"none"`; `"outline"` is bold text with a thick dark stroke and no plate, the usual look of narrated cartoon Shorts), `position`, `uppercase`. `write_scene_config` rejects an unknown key rather than dropping it, and does **not** write the defaults into the file — materialising them would freeze them at whatever they were the day the config was authored |
 | `scenes[].src` | Filename stem. `"name"` or `"video_id/name"`, nothing deeper. Matches `^[a-zA-Z0-9][a-zA-Z0-9-]*$` per part |
 | `scenes[].source` | `"generated"` (default) or `"installed"` |
 | `scenes[].props` | Forwarded verbatim to the component |
@@ -402,6 +402,29 @@ stay clear of the head circle. The head is filled and drawn **after** the arms, 
 behind it renders as a severed forearm rather than as an arm passing behind.
 
 ---
+
+## The Cartoon 3D kit
+
+`renderer/remotion/src/cartoon3d/` is not a scene but the frozen kit a Cartoon 3D video's own code is
+written against: `video.ts` (the `VideoDef` contract), `camera.ts` (the camera grammar: glides, pushes,
+kicks, the lens table), `CartoonShort.tsx` (the runner: one three.js world built from a `VideoDef`, posed
+per frame, with the post chain of ink, lens blur, bloom, neutral tone map and grade), `kit/` (the bean-head
+figure drawer and the lit cards it is drawn on, the batch builders, the painted textures, the light
+presets, the water shader), `post/` (ink, lens blur, grade) and `examples/chicago/` (the worked example
+the skill points at, typechecked with the project). The agent writes its `CartoonShort` scene and modules
+under `src/scenes/generated/<video_id>/` and imports the kit from there; see
+[Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d). The beat gate and the stills command
+lines under `gate/` are bundled by `cartoon-tools/build.mjs` for the MCP server; `cartoon-tools/audio/`
+is the soundtrack engine (Python) and `cartoon-tools/stills-server.mjs` the worker's stills server.
+
+The style is offered as **Cartoon 3D (experimental)**: every video is code the agent writes, and the look,
+the gate and the kit are still settling. **Credits:** the kit descends from
+[mromidev/claude-animated-shorts](https://github.com/mromidev/claude-animated-shorts) (MIT License,
+Copyright (c) 2026 Mr omi). `CartoonShort.tsx`, `kit/cast.ts`, `kit/lights.ts`, `kit/world.ts`,
+`kit/toon.ts` and `kit/build.ts` are adapted from its bridge template, `camera.ts` from its motion study,
+and `cartoon-tools/audio/` (`dsp.py`, `instruments.py`, `sfx_gen.py`, and the generalised `band.py`,
+`cues.py`, `mix.py`) from its synthesis library; each file's header names its origin. The repository's
+reference frames and sheets are not vendored.
 
 ## Building and checking
 

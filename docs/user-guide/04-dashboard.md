@@ -197,7 +197,7 @@ pickers, since videos submitted in a row usually share them.
 
   A default voice that has left the roster shows as "(removed)", and a default profile that has
   been deleted as "Unavailable profile". **Illustrated** is greyed out until an OpenAI key is
-  stored.
+  stored, and **Cartoon 3D (experimental)** until the renderer's GPU is working (Settings → Rendering).
 
 ### Script Profiles
 
@@ -253,7 +253,8 @@ pickers are stacked, and at Video Ready they serve Request Revision, since appro
 nothing to an agent. Each picker has a small caption naming it.
 
 - **Script profile and visual style are fixed once the topic is approved.** Pick them at the topic.
-  **Illustrated** needs an OpenAI key and is greyed out without one.
+  **Illustrated** needs an OpenAI key and is greyed out without one; **Cartoon 3D (experimental)** needs a working
+  GPU (see [GPU rendering](10-gpu-rendering.md)) and is greyed out without one.
 - **Pick the voice at the topic if it uses a different ElevenLabs model.** The script is written for
   its voice's model, so each voice is labelled with its model. At Topic Proposed every voice is
   offered; leave the picker alone and the video keeps the voice it already has — its domain's default
@@ -296,7 +297,7 @@ work differently, noted below.
   comments to see whether a review ran.
 - **Images** — the OpenAI model for scene images and the one for the Illustrated style's characters.
   There is no provider choice: every image comes from OpenAI.
-- **Rendering** — besides its settings, a **GPU** section that says whether videos render on an
+- **Rendering** — the two render timeouts (the stall timeout that catches a hung render, the ceiling on a whole one), the retry count and the watermark, and a **GPU** section that says whether videos render on an
   NVIDIA GPU or the CPU, names the GPU and the graphics device Chromium actually gets, and says why
   when a chosen GPU is not being used. With a GPU chosen, **Test GPU** has the renderer check again;
   it answers within about a minute, or after the render in progress. The GPU is chosen on the host, not here — see

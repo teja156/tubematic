@@ -264,6 +264,24 @@ _LINE_ART_BLOCK = """\
   or in need of detail.
 """
 
+# Cartoon 3D (TMDEV-179) replaces the scene system rather than restricting it,
+# so its contract replaces the canvas and figure clauses outright: the ink, the
+# blur, the grading and the continuous camera are the style, and every one of
+# them reads as a defect to a reviewer told nothing.
+_CARTOON3D_BLOCK = """\
+- This video is a Cartoon 3D short: flat cartoon characters standing in a painted 3D world. The
+  black ink outlines on every object, the soft depth-of-field blur on whatever is not the subject,
+  the warm or cool colour grading that changes with the time of day (a golden-hour or night scene is
+  deliberately tinted), the visible film grain and the slightly dark vignette are all the intended,
+  approved look. Do NOT report any of them as a rendering fault, low quality, blur, noise or wrong
+  colour, and do not suggest removing them.
+- The characters are flat cut-outs: a bean-shaped head, a rounded body, single-stroke arms and legs
+  with dot hands and feet, and painted clothes. They always face the camera. That is the house style,
+  not a missing model; do not report it as unfinished, two-dimensional or low detail.
+- The camera glides continuously, creeps in on every held shot, and may kick on an impact or roll a
+  few degrees. Continuous motion is correct here; report only a frame that is frozen, black or white.
+"""
+
 _STILL_JUDGE = """\
 Still judge, normally and strictly: legibility, text inside the safe zone, whether each scene
 communicates the beat its narration is making, sync, audio, and any element that is genuinely
@@ -271,7 +289,8 @@ misplaced, overlapping or cut off.
 """
 
 
-def _register_block(canvas: str, figures: bool = False, line_art: bool = False) -> str:
+def _register_block(canvas: str, figures: bool = False, line_art: bool = False,
+                    cartoon_3d: bool = False) -> str:
     """The style contract for what this video was deliberately produced as.
 
     Empty for an unknown canvas rather than guessing: a wrong contract here is
@@ -282,6 +301,9 @@ def _register_block(canvas: str, figures: bool = False, line_art: bool = False) 
     permissions: an illustrated video has figures but no line art. See the
     blocks above for why collapsing them is not safe in either direction.
     """
+    if cartoon_3d:
+        return ("INTENDED VISUAL STYLE — read this before judging any visual.\n"
+                + _CARTOON3D_BLOCK + _STILL_JUDGE + "\n")
     body = _CANVAS_BLOCKS.get((canvas or "").strip())
     if not body:
         return ""
@@ -481,7 +503,7 @@ def run_ai_review(video_path: str, scene_config: dict, *,
                    script_text: str = "", tts_text: str = "",
                    model: str = "", fps=0, api_key: str = "",
                    canvas: str = "", figures: bool = False,
-                   line_art: bool = False) -> dict:
+                   line_art: bool = False, cartoon_3d: bool = False) -> dict:
     """Run a Gemini quality review on a rendered video.
 
     Args:
@@ -616,7 +638,7 @@ def run_ai_review(video_path: str, scene_config: dict, *,
         top=SAFE_ZONE_TOP,
         bottom=SAFE_ZONE_BOTTOM,
         sampled_fps=sampling_fps or 1,
-        register_block=_register_block(canvas, figures, line_art),
+        register_block=_register_block(canvas, figures, line_art, cartoon_3d),
         scene_config_json=json.dumps(scene_config, indent=2),
         reference_text_block=_reference_text_block(script_text, tts_text),
     )

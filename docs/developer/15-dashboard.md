@@ -300,7 +300,10 @@ browser display a different voice. The Pipeline and Projects pages hand the moda
 Library does not, because it only lists videos past both voice checkpoints.
 
 **The visual-style picker disables Illustrated when no OpenAI key is stored**, labelled *needs an
-OpenAI key*. The page reads that from `GET /settings`, whose masked `openai_api_key` is `""` exactly
+OpenAI key*, and **Cartoon 3D while the renderer's GPU is not working**, labelled *needs a working
+GPU* — or *GPU not tested yet* when `GET /render/gpu` says `unknown`, since that has a different
+fix (Test GPU). Each page that offers the picker reads `GET /render/gpu` once beside `GET /settings`;
+until it answers, or if it fails, Cartoon 3D stays enabled and the API refuses it with the reason. The page reads that from `GET /settings`, whose masked `openai_api_key` is `""` exactly
 when no key is set, so the key itself never reaches the browser. The API refuses the style either
 way, so a page that has not loaded settings leaves the option enabled rather than greying out a
 choice that may be valid. A video that already holds `illustrated` still shows it, so the human can

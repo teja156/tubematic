@@ -291,7 +291,7 @@ const TABS = [
   { key: "images", label: "Images",
     fields: ["image_model", "character_model"] },
   { key: "rendering", label: "Rendering",
-    fields: ["render_timeout_secs", "max_render_retries", "watermark_enabled"] },
+    fields: ["render_stall_timeout_secs", "render_timeout_secs", "max_render_retries", "watermark_enabled"] },
   { key: "logs", label: "Logs", fields: ["log_retention_days"] },
   { key: "retention", label: "Retention", fields: ["retention_days", "unpublished_retention_days"] },
   { key: "api-keys", label: "API Keys",
@@ -809,13 +809,25 @@ export default function SettingsPage() {
       {/* ── Rendering ── */}
       <SectionLabel label="Rendering" />
       <Row
+        label="Render stall timeout"
+        note="How long the render's progress counter may stand still before the worker kills the render and retries — the check that catches a hung browser in minutes rather than hours. Shown in minutes; stored as render_stall_timeout_secs."
+      >
+        <NumInput
+          value={Math.round(val("render_stall_timeout_secs") / 60)}
+          min={1}
+          max={120}
+          testId="input-render-stall-timeout-mins"
+          onCommit={(mins) => edit({ render_stall_timeout_secs: mins * 60 })}
+        />
+      </Row>
+      <Row
         label="Render timeout"
-        note="How long a single render attempt may run before the worker kills it and retries. Shown in minutes; stored as render_timeout_secs — same key onboard.py's wizard writes."
+        note="The ceiling on one render attempt, whatever its progress, before the worker kills it and retries. Only a render that keeps advancing but pathologically slowly reaches it; raise it on a slow CPU rendering over-length videos. Shown in minutes; stored as render_timeout_secs — same key onboard.py's wizard writes."
       >
         <NumInput
           value={Math.round(val("render_timeout_secs") / 60)}
           min={1}
-          max={120}
+          max={600}
           testId="input-render-timeout-mins"
           onCommit={(mins) => edit({ render_timeout_secs: mins * 60 })}
         />

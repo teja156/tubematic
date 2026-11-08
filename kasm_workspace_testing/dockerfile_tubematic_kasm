@@ -36,6 +36,45 @@ RUN apt-get update \
         cron \
     && rm -rf /var/lib/apt/lists/*
 
+# NVIDIA Container Toolkit, so the NESTED dockerd can hand a GPU to
+# tubematic-renderer (onboard.py's `gpu` step writes the Compose override, and
+# refuses when Docker has no `nvidia` runtime). The driver itself is not
+# installed here: Kasm injects the host's driver libraries and /dev/nvidia*
+# into the session when the workspace entry has a GPU attached (gpu_count 1);
+# without one, the toolkit sits idle and onboarding says "no NVIDIA GPU found".
+# `nvidia-ctk runtime configure` edits /etc/docker/daemon.json in place and
+# keeps the base image's fuse-overlayfs storage driver. Two settings differ
+# from a plain host, both checked live on 2026-11-07:
+# - libnvidia-container keeps its default of managing the device cgroup: with
+#   no-cgroups=true the nested container gets the driver libraries but NVML
+#   fails ("Failed to initialize NVML: Unknown Error").
+# - CDI mode, with the spec generated at session start by the supervisord
+#   program below. In legacy mode the nested toolkit mounts the driver
+#   libraries but not /usr/share/glvnd/egl_vendor.d/10_nvidia.json (in this
+#   container that file is itself a bind mount from the real host), so
+#   Chromium in tubematic-renderer falls back to Mesa and the worker's probe
+#   says "Chromium could not create a WebGL context". The CDI generator lists
+#   the file and the container gets it.
+RUN curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+        | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+    && curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+        | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+        > /etc/apt/sources.list.d/nvidia-container-toolkit.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nvidia-container-toolkit \
+    && rm -rf /var/lib/apt/lists/* \
+    && nvidia-ctk runtime configure --runtime=docker \
+    && nvidia-ctk config --set nvidia-container-runtime.mode=cdi --in-place \
+    && grep -q '"nvidia"' /etc/docker/daemon.json \
+    && grep -q fuse-overlayfs /etc/docker/daemon.json
+
+# The CDI spec can only be generated once the session exists (Kasm injects the
+# GPU devices and driver files at container creation), so a one-shot
+# supervisord program writes it at start. Without a GPU attached nvidia-smi is
+# absent, the program exits and onboarding's gpu step says no GPU was found.
+RUN printf '[program:nvidia-cdi]\ncommand=/bin/sh -c "command -v nvidia-smi >/dev/null && mkdir -p /etc/cdi && nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml"\nautostart=true\nautorestart=false\nstartsecs=0\nstderr_logfile=/var/log/nvidia-cdi.err.log\nstdout_logfile=/var/log/nvidia-cdi.out.log\n' \
+    > /etc/supervisor/conf.d/nvidia-cdi.conf
+
 # docker compose v2 (plugin) is required by onboard.py's prerequisite check.
 # Only install it if the base image doesn't already ship it.
 RUN docker compose version >/dev/null 2>&1 || \

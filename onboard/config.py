@@ -556,10 +556,12 @@ SECTIONS = [
         # (onboard/actions.py's apply_pipeline_settings) — this field's own key
         # is never itself a settings-table key.
         Field("render_timeout_mins", "Render timeout (minutes)", source="settings",
-              kind="int", default="40", validator=_render_timeout_mins, advanced=True,
-              help="How long the render worker waits for a single video before giving up and "
-                   "auto-retrying. Videos that use generated images render markedly slower than "
-                   "pure-animation ones — raise this if renders are timing out."),
+              kind="int", default="180", validator=_render_timeout_mins, advanced=True,
+              help="The ceiling on one render attempt before the worker kills it and retries. A "
+                   "render that stops making progress is killed far sooner, by "
+                   "render_stall_timeout_secs (10 minutes by default, on the Settings dashboard); "
+                   "this ceiling only catches a render that keeps advancing but pathologically "
+                   "slowly. Raise it on a slow CPU rendering over-length videos."),
     ]),
     Section("logs", "Logs", [
         Field("log_retention_days", "Keep logs for (days)", source="settings",

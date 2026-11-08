@@ -310,3 +310,26 @@ def test_an_image_file_too_long_with_its_suffix_is_refused(tmp_path):
     assert jobfiles.image_file(tmp_path, "vid_1", FITS + ".png").name == FITS + ".png"
     with pytest.raises(jobfiles.UnsafePath):
         jobfiles.image_file(tmp_path, "vid_1", TOO_LONG + ".png")
+
+
+def test_source_fingerprint_is_the_tree_and_refuses_a_symlink(tmp_path):
+    """The Cartoon 3D source fingerprint (TMDEV-185): the same bytes at the
+    same relative paths give the same value, any edit or move changes it, and
+    a symlink anywhere in the tree is refused rather than followed."""
+    src = tmp_path / "vid"
+    (src / "sets").mkdir(parents=True)
+    (src / "CartoonShort.tsx").write_text("a")
+    (src / "sets" / "street.ts").write_text("b")
+    fp = jobfiles.source_fingerprint(src)
+    assert len(fp) == 16 and fp == jobfiles.source_fingerprint(src)
+    other = tmp_path / "other"
+    shutil.copytree(src, other)
+    assert jobfiles.source_fingerprint(other) == fp                 # the directory's own name is not part of it
+    (other / "sets" / "street.ts").write_text("c")
+    assert jobfiles.source_fingerprint(other) != fp
+    (other / "sets" / "street.ts").write_text("b")
+    (other / "sets" / "street.ts").rename(other / "street.ts")
+    assert jobfiles.source_fingerprint(other) != fp                 # the same bytes at another path
+    (src / "stage.ts").symlink_to(tmp_path / "elsewhere.ts")
+    with pytest.raises(jobfiles.UnsafePath, match="stage.ts is a symlink"):
+        jobfiles.source_fingerprint(src)

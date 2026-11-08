@@ -6,3 +6,9 @@ fastmcp>=3.0,<4
 starlette
 httpx>=0.27.0
 pillow>=10.0.0
+
+# The Cartoon 3D soundtrack engine (renderer/remotion/cartoon-tools/audio/mix.py),
+# run by the MCP server's cartoon_soundtrack tool (TMDEV-185): every sound is
+# synthesised with numpy, filtered and resampled with scipy.
+numpy>=1.26
+scipy>=1.11

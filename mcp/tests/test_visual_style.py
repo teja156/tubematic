@@ -20,6 +20,8 @@ Run from repo root: pytest mcp/tests/
 
 from datetime import datetime, timezone
 
+import json
+
 import pytest
 
 import server
@@ -431,3 +433,244 @@ def test_a_legacy_video_still_writes_a_dark_canvas(db):
     video that predates the feature does."""
     _video("vid_s", status="VOICE_READY", style="motion_graphics")
     assert server.write_scene_config("vid_s", _config())["canvas"] == "dark"
+
+
+# ── Cartoon 3D needs a working GPU (TMDEV-179) ───────────────────────────────
+
+def _probe(db, **probe):
+    server._set_setting("gpu_probe_result", json.dumps(probe))
+
+
+def test_cartoon_3d_is_a_value_while_the_gpu_works(db):
+    _probe(db, configured=True, ok=True)
+    _video("vid_c3")
+    assert "error" not in server.update_video("vid_c3", visual_style="cartoon_3d")
+    assert _read("vid_c3", "visual_style") == "cartoon_3d"
+
+
+def test_cartoon_3d_is_refused_without_a_working_gpu_with_the_state_named(db):
+    """Policy, not impossibility: software WebGL renders the style, at about
+    an hour a Short. The refusal names what to do, and tells an untested GPU
+    apart from a missing one, since their fixes differ."""
+    _video("vid_c4")
+    assert server.update_video("vid_c4", visual_style="cartoon_3d") == {"error": server.CARTOON3D_GPU_UNKNOWN}
+    _probe(db, configured=False, ok=False)
+    assert server.update_video("vid_c4", visual_style="cartoon_3d") == {"error": server.CARTOON3D_NEEDS_GPU}
+    _probe(db, configured=True, ok=False, error="Chromium is rendering on another device")
+    assert server.update_video("vid_c4", visual_style="cartoon_3d") == {"error": server.CARTOON3D_NEEDS_GPU}
+    assert _read("vid_c4", "visual_style") == "auto"
+    assert "onboard.py --step gpu" in server.CARTOON3D_NEEDS_GPU and "Test GPU" in server.CARTOON3D_GPU_UNKNOWN
+
+
+def test_the_gpu_flag_is_reported_where_the_key_flag_is(db):
+    _video("vid_c5")
+    assert server.get_video("vid_c5")["cartoon_3d_available"] is False
+    assert server.get_pipeline_status()["cartoon_3d_available"] is False
+    _probe(db, configured=True, ok=True)
+    assert server.get_video("vid_c5")["cartoon_3d_available"] is True
+    assert server.get_pipeline_status()["cartoon_3d_available"] is True
+
+
+def test_a_project_default_of_cartoon_3d_is_refused_only_on_change(db):
+    _probe(db, configured=True, ok=True)
+    assert "error" not in server.upsert_project("dom3d", "Worlds", default_visual_style="cartoon_3d")
+    _probe(db, configured=True, ok=False)
+    # the stored default is re-sent by every row edit: not refused
+    assert "error" not in server.upsert_project("dom3d", "Worlds renamed", default_visual_style="cartoon_3d")
+    assert server.upsert_project("dom3d2", "New", default_visual_style="cartoon_3d") == {"error": server.CARTOON3D_NEEDS_GPU}
+
+
+# ── resolved_renderer: what auto settled on, written once ───────────────────
+
+def _cartoon_config(vid, total_frames=300, beats=None):
+    """A Cartoon 3D config (TMDEV-185): the video's own generated CartoonShort
+    scene spanning the video, its props carrying the beats."""
+    beats = beats if beats is not None else [{"start": 0, "end": total_frames - 1, "shot": "wide"}]
+    return {
+        "totalFrames": total_frames, "fps": 30, "canvas": "dark",
+        "scenes": [{"type": "generated", "src": f"{vid}/CartoonShort", "startFrame": 0,
+                    "durationInFrames": total_frames, "props": {"cartoon3d": {"beats": beats}}}],
+        "sfx": [],
+    }
+
+
+def test_a_cartoon_scene_must_agree_with_the_video_renderer(db):
+    """The worker reads the scene, the AI review and revisions read the
+    renderer: the two cannot disagree (Codex review of TMDEV-179)."""
+    _probe(db, configured=True, ok=True)
+    # a DOM style never takes a Cartoon 3D scene (motion_graphics: a dark canvas, so the canvas check stays quiet)
+    _video("vid_c1", style="motion_graphics")
+    assert "needs visual_style 'cartoon_3d'" in server.write_scene_config("vid_c1", _cartoon_config("vid_c1"))["error"]
+    # auto already resolved to dom: written once, so no
+    _video("vid_c2")
+    server.update_video("vid_c2", resolved_renderer="dom")
+    assert "written once" in server.write_scene_config("vid_c2", _cartoon_config("vid_c2"))["error"]
+    # a cartoon video never takes DOM scenes
+    _video("vid_c3", style="cartoon_3d")
+    assert "single Cartoon 3D scene" in server.write_scene_config("vid_c3", _config())["error"]
+    _video("vid_c4")
+    server.update_video("vid_c4", resolved_renderer="cartoon_3d")
+    assert "single Cartoon 3D scene" in server.write_scene_config("vid_c4", _config())["error"]
+    # the matching cases write
+    assert "error" not in server.write_scene_config("vid_c3", _cartoon_config("vid_c3"))
+    assert "error" not in server.write_scene_config("vid_c4", _cartoon_config("vid_c4"))
+
+
+def test_an_unresolved_auto_video_is_resolved_by_its_cartoon_scene_under_the_gpu_gate(db):
+    _video("vid_c5")
+    assert server.write_scene_config("vid_c5", _cartoon_config("vid_c5")) == {"error": server.CARTOON3D_GPU_UNKNOWN}
+    assert _read("vid_c5", "resolved_renderer") == ""
+    _probe(db, configured=True, ok=True)
+    assert "error" not in server.write_scene_config("vid_c5", _cartoon_config("vid_c5"))
+    assert _read("vid_c5", "resolved_renderer") == "cartoon_3d"
+
+
+def test_a_dom_config_resolves_an_unresolved_auto_video_to_dom(db):
+    """Otherwise a later Cartoon 3D config could resolve it to cartoon_3d and
+    throw away the DOM scenes already authored."""
+    _probe(db, configured=True, ok=True)
+    _video("vid_c7")
+    assert "error" not in server.write_scene_config("vid_c7", _config())
+    assert _read("vid_c7", "resolved_renderer") == "dom"
+    assert "written once" in server.write_scene_config("vid_c7", _cartoon_config("vid_c7"))["error"]
+    assert "error" not in server.write_scene_config("vid_c7", _config())   # more DOM scenes: fine
+
+
+def test_a_refused_config_never_resolves_the_renderer(db, monkeypatch):
+    """The scene-work guard runs after the renderer check: a caller another
+    session's claim turns away must not freeze the renderer on the way out."""
+    _probe(db, configured=True, ok=True)
+    _video("vid_c8")
+    monkeypatch.setattr(server, "_guard_scene_work", lambda vid: {"error": "scene_work_claimed"})
+    assert server.write_scene_config("vid_c8", _cartoon_config("vid_c8")) == {"error": "scene_work_claimed"}
+    assert _read("vid_c8", "resolved_renderer") == ""
+    assert server.write_scene_config("vid_c8", _config()) == {"error": "scene_work_claimed"}
+    assert _read("vid_c8", "resolved_renderer") == ""
+
+
+def test_a_row_resolved_under_the_check_refuses_a_contradicting_config(db, monkeypatch):
+    """The resolution is a compare-and-set: a row that changed between the
+    check and the write (another process) is never overwritten, and a config
+    that now contradicts it is not written."""
+    _probe(db, configured=True, ok=True)
+    _video("vid_c10")
+    real_guard = server._guard_scene_work
+
+    def guard_then_resolve_elsewhere(vid):
+        server._update_fields(vid, resolved_renderer="dom")   # as if another process got there first
+        return real_guard(vid)
+    monkeypatch.setattr(server, "_guard_scene_work", guard_then_resolve_elsewhere)
+    result = server.write_scene_config("vid_c10", _cartoon_config("vid_c10"))
+    assert "resolved to the 'dom' renderer while this config was being checked" in result["error"]
+    assert _read("vid_c10", "resolved_renderer") == "dom"
+    assert _read("vid_c10", "scene_config_path") in ("", None)
+
+
+def test_a_failed_write_leaves_the_renderer_unresolved(db, monkeypatch):
+    """The resolution is recorded for a config that landed, never for one that
+    did not: a write that fails after the compare-and-set is compensated."""
+    _probe(db, configured=True, ok=True)
+    _video("vid_c11")
+
+    real_replace = server.os.replace
+
+    def refuse(src, dst):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(server.os, "replace", refuse)
+    result = server.write_scene_config("vid_c11", _cartoon_config("vid_c11"))
+    assert "could not be written" in result["error"]
+    assert _read("vid_c11", "resolved_renderer") == ""
+    assert _read("vid_c11", "scene_config_path") in ("", None)
+    job_dir = server.tjobs.job_dir(server.JOBS_DIR, "vid_c11")
+    assert not (job_dir / "scene-config.json").exists() and not list(job_dir.glob("*.tmp"))
+    monkeypatch.setattr(server.os, "replace", real_replace)
+    assert "error" not in server.write_scene_config("vid_c11", _config())   # the retry may still pick DOM
+    assert _read("vid_c11", "resolved_renderer") == "dom"
+
+
+def test_a_commit_that_fails_after_the_rename_puts_the_previous_config_back(db, monkeypatch):
+    """The file and the row never disagree: a commit failing after the rename
+    restores the previous config (or removes a first one) and reports it."""
+    import sqlite3
+    _probe(db, configured=True, ok=True)
+    _video("vid_c12", style="cartoon_3d")
+    assert "error" not in server.write_scene_config("vid_c12", _cartoon_config("vid_c12", total_frames=300))
+    path = server.tjobs.job_file(server.JOBS_DIR, "vid_c12", "scene-config.json")
+    before = path.read_bytes()
+    from contextlib import contextmanager
+    real_conn, real_replace, renamed = server._conn, server.os.replace, []
+
+    def replace_noting(src, dst):
+        real_replace(src, dst)
+        renamed.append(dst)
+
+    class CommitFailsAfterRename:
+        """A connection whose commit fails once the rename has landed inside its transaction."""
+        def __init__(self, con): self._con = con
+        def __getattr__(self, name): return getattr(self._con, name)
+        def commit(self):
+            if renamed:
+                raise sqlite3.OperationalError("disk I/O error")
+            return self._con.commit()
+
+    @contextmanager
+    def conn_whose_commit_fails_after_a_rename():
+        with real_conn() as con:
+            yield CommitFailsAfterRename(con)
+    monkeypatch.setattr(server.os, "replace", replace_noting)
+    monkeypatch.setattr(server, "_conn", conn_whose_commit_fails_after_a_rename)
+    result = server.write_scene_config("vid_c12", _cartoon_config("vid_c12", total_frames=300, beats=[
+        {"start": 0, "end": 149, "shot": "a", "cast": []}, {"start": 150, "end": 299, "shot": "b", "cast": []}]))
+    monkeypatch.setattr(server, "_conn", real_conn)
+    monkeypatch.setattr(server.os, "replace", real_replace)
+    assert "could not be written" in result["error"] and "disk I/O error" in result["error"]
+    assert path.read_bytes() == before
+    assert not list(path.parent.glob("*.tmp"))
+
+
+def test_the_cartoon_scene_spans_the_whole_video(db):
+    _probe(db, configured=True, ok=True)
+    _video("vid_c9", style="cartoon_3d")
+    late = _cartoon_config("vid_c9"); late["scenes"][0]["startFrame"] = 10
+    assert "must start at frame 0" in server.write_scene_config("vid_c9", late)["error"]
+    short = _cartoon_config("vid_c9"); short["scenes"][0]["durationInFrames"] = 200
+    assert "must span the whole video" in server.write_scene_config("vid_c9", short)["error"]
+    absent = _cartoon_config("vid_c9"); del absent["scenes"][0]["durationInFrames"]
+    assert "must span the whole video" in server.write_scene_config("vid_c9", absent)["error"]
+
+
+def test_a_cartoon_video_is_one_scene_whose_beats_tile_it(db):
+    _probe(db, configured=True, ok=True)
+    _video("vid_c6", style="cartoon_3d")
+    two = _cartoon_config("vid_c6"); two["scenes"].append(dict(two["scenes"][0]))
+    assert "exactly one generated scene" in server.write_scene_config("vid_c6", two)["error"]
+    gap = _cartoon_config("vid_c6", beats=[{"start": 0, "end": 99, "shot": "a"}, {"start": 101, "end": 299, "shot": "b"}])
+    assert "frame 100 is the first not yet covered" in server.write_scene_config("vid_c6", gap)["error"]
+    short = _cartoon_config("vid_c6", beats=[{"start": 0, "end": 250, "shot": "a"}])
+    assert "must end at frame 299" in server.write_scene_config("vid_c6", short)["error"]
+    late = _cartoon_config("vid_c6", beats=[{"start": 5, "end": 299, "shot": "a"}])
+    assert "starts at frame 5" in server.write_scene_config("vid_c6", late)["error"]
+    assert "error" not in server.write_scene_config("vid_c6", _cartoon_config("vid_c6", beats=[
+        {"start": 0, "end": 99, "shot": "a"}, {"start": 100, "end": 299, "shot": "b"}]))
+
+
+def test_resolved_renderer_is_written_once_under_auto(db):
+    _probe(db, configured=True, ok=True)
+    _video("vid_r1")
+    assert "error" not in server.update_video("vid_r1", resolved_renderer="cartoon_3d")
+    assert _read("vid_r1", "resolved_renderer") == "cartoon_3d"
+    assert "error" not in server.update_video("vid_r1", resolved_renderer="cartoon_3d")   # the same again is fine
+    result = server.update_video("vid_r1", resolved_renderer="dom")
+    assert "written once" in result["error"]
+    assert _read("vid_r1", "resolved_renderer") == "cartoon_3d"
+    assert "Invalid resolved_renderer" in server.update_video("vid_r1", resolved_renderer="css")["error"]
+
+
+def test_resolved_renderer_needs_the_gpu_too_and_only_auto_resolves(db):
+    _video("vid_r2")
+    assert server.update_video("vid_r2", resolved_renderer="cartoon_3d") == {"error": server.CARTOON3D_GPU_UNKNOWN}
+    _video("vid_r3", style="stick")
+    assert "nothing to resolve" in server.update_video("vid_r3", resolved_renderer="dom")["error"]
+    _video("vid_r4")
+    assert "error" not in server.update_video("vid_r4", resolved_renderer="dom")
+    assert server.get_video("vid_r4")["resolved_renderer"] == "dom"
