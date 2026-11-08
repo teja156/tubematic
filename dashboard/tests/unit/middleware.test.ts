@@ -38,7 +38,7 @@ describe("middleware", () => {
     const [pattern] = config.matcher;
     const re = new RegExp(`^${pattern}$`);
     for (const p of ["/", "/settings", "/library", "/new-video"]) expect(re.test(p)).toBe(true);
-    for (const p of ["/api/proxy/settings", "/api/auth/login", "/stream/a.mp4", "/_next/static/x.js",
+    for (const p of ["/api/proxy/settings", "/api/auth/login", "/stream/a.mp4", "/mascot-sheets/tubi/versions/1/sheets/turn", "/_next/static/x.js",
                      "/login", "/favicon.svg", "/logo-mark.svg"]) {
       expect(re.test(p)).toBe(false);
     }

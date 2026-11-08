@@ -19,7 +19,7 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Pages only. The API routes and /stream answer 401 themselves, and a
+  // Pages only. The API routes, /stream and /mascot-sheets answer 401 themselves, and a
   // redirect there would hand a fetch() or a <video> an HTML page instead.
-  matcher: ["/((?!api/|stream/|_next/|login$|.*\\..*).*)"],
+  matcher: ["/((?!api/|stream/|mascot-sheets/|_next/|login$|.*\\..*).*)"],
 };
