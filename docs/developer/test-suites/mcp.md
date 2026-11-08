@@ -28,7 +28,7 @@ unreachable from the agent sandbox. These tools are the only way it sees its own
 | `test_get_scene_config.py` | `get_scene_config` — the only way to read a video's current `scene-config.json`. Added once the incremental revision work found the revision path was write-only |
 | `test_read_scene_file.py` | `read_scene_file` — the read half of the scene TSX pair. `write_scene_file` existed from the start; nothing ever read a scene back |
 | `test_get_timeline.py` | `get_timeline` — the only correct way to read `timeline.json` |
-| `test_read_image.py` | `read_image` — the only tool returning non-text content. Pins that reading **never** writes the coordinate grid back to disk: the file under `mounted/jobs/` is the real render input, so annotating in place would bake a grid into the finished video. A 251-character name is read (a character asset's `.png` is a 255-byte file name) and a 252-character one, which fits no extension, is refused |
+| `test_read_image.py` | `read_image` — reads an image file already on disk and returns it as image content (`cartoon_still` and `render_mascot_sheets` return images too, each tested in its own file). Pins that reading **never** writes the coordinate grid back to disk: the file under `mounted/jobs/` is the real render input, so annotating in place would bake a grid into the finished video. A 251-character name is read (a character asset's `.png` is a 255-byte file name) and a 252-character one, which fits no extension, is refused |
 
 ## Generation
 

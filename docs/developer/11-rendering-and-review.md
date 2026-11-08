@@ -387,6 +387,17 @@ neither is its absence on a video rendered with the mark switched off. This is a
 of the same kind as the captions clause. The mark is on every video, so without the paragraph every
 review returns a finding and every video loops.
 
+The prompt likewise states that a video's **mascot** is intentional: a small watercolour character drawn
+over the picture, reacting to the narration with emotions and emotes, never speaking. Its presence,
+position, size, art style, walking on and off, emotions and emotes, and the captions and watermark
+being drawn over it are not to be reported, and neither is a mouth that does not move with the words
+(it has no lip sync, by design) or a video without a mascot. Only a mascot that covers something the
+viewer needs (on-screen text, or the subject being narrated), or whose reaction clearly contradicts
+the narration (a delighted mascot during a tragedy), is reported. This is a negative control of
+the same kind as the captions and watermark clauses: a reviewer that read a mascot as stray artwork
+would return a finding on every mascot video, and any finding routes the video to a revision round,
+so the video would loop.
+
 An unknown canvas produces **no** style contract at all rather than a guessed one, because a wrong
 contract tells the reviewer to accept defects the video has no licence to contain.
 
@@ -514,6 +525,14 @@ These are the reason the probe looks the way it does.
 3. **Remotion's stdout is not a usable data channel.** It forwards every browser console line to its
    own stdout, and the probe communicates *through* console logs. The driver writes its result to a
    file; an earlier version printed JSON to stdout and it could never be parsed back out.
+
+### Text under a mascot
+
+For a video with a mascot, the audit also computes the mascot's box from the cue track
+(`tubematic_core/mascots.py::boxes_at_frames`) at the sampled frames and reports measured text that
+sits beneath it (`text_audit.py::mascot_overlaps`), as the warning "Mascot over text". The box is the
+engine's whole canvas, emote headroom included, so the warning says the text *may* be covered. The
+audit never boots the mascot itself, which is why the cue track, not a rendered frame, is the source.
 
 ### It is advisory, on purpose
 

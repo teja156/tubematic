@@ -390,12 +390,12 @@ whole tree, the same reason `DELETE` refuses to remove one. See [Retention](11-r
 ## Settings
 
 ### `GET /settings`
-Returns all 40 declared keys, coerced to their types, with `secret` keys masked. See
+Returns all 42 declared keys, coerced to their types, with `secret` keys masked. See
 [Settings](../user-guide/05-settings.md). There is no install-wide model or pronunciation mode: each voice in
 `elevenlabs_voices` carries its own `model_id`.
 
 ### `POST /settings`
-Body: any subset of the 40 keys.
+Body: any subset of the 42 keys.
 
 - An unknown key returns `400 {"error": "Unknown settings: [...]. Valid: [...]"}`.
 - **The whole write is atomic.** Every value is coerced first; the first failure returns `400` with

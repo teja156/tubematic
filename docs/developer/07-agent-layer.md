@@ -708,7 +708,7 @@ video pinned to an uninstalled agent still resolves it.
 ## Scheduling
 
 Scheduled runs are started by `scripts/poll.py`, the cron entry point. It has its own page:
-[The Poller](13-the-poller.md) covers the supervisor loop, the three lanes, one stage per session,
+[The Poller](13-the-poller.md) covers the supervisor loop, the four lanes, one stage per session,
 how success is judged, timeouts and orphaned sessions, and the logs.
 
 ### User preferences

@@ -188,7 +188,7 @@ and no obvious cause.
 |---|---|---|
 | `generate_image` | `(video_id, image_name, prompt, aspect_ratio="9:16")` | OpenAI, with the model from `image_model`. `aspect_ratio` is one of `9:16`, `1:1`, `16:9`. Returns the on-disk path and the `/public/…` path a scene must reference |
 | `generate_character` | `(video_id, character_name, prompt, reference="", size="portrait")` | A **transparent** character cut-out for the illustrated register, written beside the scene images. OpenAI, with the model from `character_model`. With a `reference` it edits an existing asset into a new pose, which is what keeps it the same character |
-| `read_image` | `(video_id, image_name, grid=True)` | **The only tool that returns image bytes rather than text.** Optionally overlays a UV coordinate grid so the agent can read off anchor points |
+| `read_image` | `(video_id, image_name, grid=True)` | **Returns an image rather than text** (as do `cartoon_still` and `render_mascot_sheets`; `read_image` is the one that reads a file already on disk). Optionally overlays a UV coordinate grid so the agent can read off anchor points |
 
 ### Scene files
 
@@ -219,7 +219,7 @@ drawing code, only the cue track above.
 | Tool | Signature | Notes |
 |---|---|---|
 | `get_mascot_job` | `(mascot_id)` | The brief for the version being built (the highest unapproved one): `{mascot_id, name, kind, description, change_request, previous_code, based_on_code, emotions, sheets, renders_left}`. `kind` is `change` for any version above 1, else `surprise` when there is no description and `new` when there is. `previous_code` is the approved version's code, `based_on_code` the approved code of the mascot it is based on (a builtin's is read from its repo file) |
-| `render_mascot_sheets` | `(mascot_id, code, sheet)` | Only while `BUILDING`. Stores `code` on the draft version and renders **one** of the `turn`, `feels` or `act` sheets with `mcp/mascot_sheets.py::render_sheet`, which runs `renderer/remotion/mascot-tools/render-sheet.mjs` on software GL in this container (the GPU stays free for videos). The PNG lands under `<data>/mascots/<id>/v<N>/`. Changed code deletes the sheets rendered from the old code. The count rises before the render and is capped per attempt (`MAX_SHEET_RENDERS_PER_ATTEMPT`), failed renders included. Returns the picture, downscaled for viewing, after a JSON block |
+| `render_mascot_sheets` | `(mascot_id, code, sheet)` | Only while `BUILDING`. Stores `code` on the draft version and renders **one** of the `turn`, `feels` or `act` sheets with `mcp/mascot_sheets.py::render_sheet`, which runs `renderer/remotion/mascot-tools/render-sheet.mjs` on software GL in this container (the GPU stays free for videos). The PNG lands in the database's directory, at `<data root>/data/mascots/<id>/v<N>/<sheet>.png` (`tubematic_core/mascots.py::sheet_file`), where the API's sheet route and the dashboard read it. Changed code deletes the sheets rendered from the old code. The count rises before the render and is capped per attempt (`tubematic_core/mascots.py::MAX_SHEET_RENDERS_PER_ATTEMPT`, 6), failed renders included. Returns the picture, downscaled for viewing, after a JSON block |
 | `submit_mascot` | `(mascot_id, notes="")` | Only while `BUILDING`, and only when all three sheets exist for the code as it stands; moves the mascot to `IN_REVIEW` with a status-bound update. `notes` goes to the log and the result, not the database |
 
 ### Cartoon 3D authoring
@@ -342,11 +342,11 @@ The agent is expected to call this before `submit_render`. It runs eleven checks
    `cartoon/` directory (the record, the stills, the mix) is built with `join_below`, so a symlink planted
    anywhere on the way is refused rather than followed. A symlink anywhere in the source tree fails the
    check outright. See [Cartoon 3D authoring](#cartoon-3d-authoring).
-9. **TypeScript typechecks.** `npx tsc --noEmit` over the whole Remotion project, 60-second timeout.
+9. **Mascot cues**, for a video that has a mascot only: the scene-config must carry a non-empty `mascot` cue list, or one error says so. The cues themselves were already checked by `write_scene_config` (see [the `mascot` key](10-scene-authoring.md#mascots)). `submit_render` asks the same question.
+10. **TypeScript typechecks.** `npx tsc --noEmit` over the whole Remotion project, 60-second timeout.
    The first 20 lines of any failure are reported as a hard error. Silently skipped if `npx` is
    unavailable. This runs for *every* video, so a type error anywhere in the project blocks every
    render, not just the one that introduced it.
-10. **Mascot cues**, for a video that has a mascot only: the scene-config must carry a non-empty `mascot` cue list, or one error says so. `submit_render` asks the same question.
 11. **Text-layout audit** — advisory only, only when the checks above found no errors, and never for a Cartoon 3D video (a painted canvas has no text rects to measure; its checks are step 8's). See
    [Rendering and Review](11-rendering-and-review.md#the-text-layout-audit). Its findings land in
    `warnings` and can never change `passed`. For a mascot video it also reports measured text that sits under the mascot's box at a sampled frame (the box is the engine's whole canvas, emote headroom included, so the warning says *may*).

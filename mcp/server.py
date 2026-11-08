@@ -6068,8 +6068,9 @@ def write_scene_config(video_id: str, config: dict) -> dict:
             screen. The mascot reacts to the narration and never speaks,
             so there is no talk cue. It must stand in view for at least 30 frames
             (one second) at rest, inside the safe zone (x 60-1020, y 150-1750)
-            and clear of the caption band, at rest and while walking (walking
-            across a frame edge excepted); a cue that breaks a rule is refused with the reason.
+            and clear of the caption band, at rest and while walking (a walk
+            on or off across a frame edge is exempt from the safe zone only,
+            never from the caption band); a cue that breaks a rule is refused with the reason.
             The video is pinned to the mascot's approved version by the first
             write, and a revision keeps it.
 

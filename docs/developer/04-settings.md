@@ -30,6 +30,14 @@ to `[]` on its own (a corrupt stored list falls back to its default), and a writ
 check would then reject the *next unrelated* settings save with an error about voices. Do not add
 one to `post_settings`.
 
+### The default mascot is checked on read and on write
+
+`default_mascot_id` names a row in `mascots`, which a settings coercion cannot see (`_coerce_setting` has
+no database). So `_read_all_settings` blanks the value when the mascot is no longer pickable (archived,
+or never approved), and `post_settings` refuses a new value that is not pickable, **on change only**:
+refusing a re-sent stored value would block every unrelated settings save once its mascot is archived.
+The same split as the default voice, for the same reason. `''` always passes.
+
 ### Derived: `pronunciation_mode`
 
 `pronunciation_mode` is **not stored and not writable** — posting it is an unknown-key error. It

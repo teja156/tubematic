@@ -70,6 +70,25 @@ every still the server compares a stamp of that tree (every file's path, size an
 bundle was made from and re-bundles when it differs: an edit to a video's code is seen by its next still
 (about twenty seconds, once), an unchanged tree costs a directory walk.
 
+### Videos that render on the GPU only
+
+A Cartoon 3D video and a video with a mascot are both **GPU-only by policy**, not because the CPU path
+cannot draw them: a mascot adds about a tenth of a second of drawing to every frame, which on software
+GL would turn a 90-second Short into hours. The choice is refused where it is made (the dashboard, the
+API and the MCP server) unless the GPU test passed, so the worker's check is for a video approved
+*before* its GPU stopped working. If the video needs the GPU and `_render_on_gpu()` is false the
+worker runs the GPU test first when the result is still unknown, and otherwise moves the video
+**straight to `FAILED`** with a comment naming the live GPU status. It bypasses `max_render_retries`:
+a requeue would fail the same way, and sending it to `REVISION_REQUESTED` would hand it to an agent
+that cannot repair a GPU. The video is created again once the GPU works.
+
+A mascot video is rendered with the version pinned in `videos.mascot_version`, never the mascot's
+current approved version. The worker reads that version's code (`tubematic_core/mascots.py::code_for`),
+stages it as `public/<video_id>/mascot.js` and passes `mascotPath` as a render prop (see
+[the Remotion project](09-remotion-project.md#the-mascot-layer)). A version of `0` (never pinned) or a
+version with no code fails the video the same way, with a comment saying the drawing code cannot be
+read. A mascot recorded on a Cartoon 3D video is ignored rather than drawn over the 3D world.
+
 ### Segmented Cartoon 3D renders
 
 A Cartoon 3D video is not rendered as one `remotion render`: a long single render of one hung silently
