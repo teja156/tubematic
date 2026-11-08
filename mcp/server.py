@@ -5834,7 +5834,7 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     parts_err = _validate_cartoon_parts(scenes, config["totalFrames"])  # TMDEV-181
     if parts_err:
         return {"error": parts_err}
-    renderer_err = _check_cartoon_renderer(video_id, row, scenes)  # TMDEV-179
+    renderer_err, resolve_renderer = _check_cartoon_renderer(row, scenes)  # TMDEV-179
     if renderer_err:
         return {"error": renderer_err}
 
@@ -5866,6 +5866,10 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     # tubematic-api — never hardcode /jobs here. Same derivation generate_voice
     # uses for voice_file_path/timeline_path, so all three columns agree.
     _update_fields(video_id, scene_config_path=str(path))
+    # The renderer 'auto' settled on, recorded with the config that settled it
+    # (write-once from here on), never for a config that was refused above.
+    if resolve_renderer:
+        _update_fields(video_id, resolved_renderer=resolve_renderer)
 
     return {
         "video_id": video_id,
@@ -6323,6 +6327,15 @@ def _validate_cartoon_parts(scenes, total_frames: int | None = None) -> str:
         if not isinstance(world, dict):
             return f"scenes[{i}] ({CARTOON_SCENE_SRC}) needs props.world"
         if total_frames is not None:
+            # the one scene spans the whole video: CompositionBuilder would leave
+            # blank frames around a shorter one and rebase its clock, while the
+            # frame check and the beat gate count from frame 0
+            start, duration = scene.get("startFrame", 0), scene.get("durationInFrames")
+            if start != 0 or isinstance(start, bool):
+                return f"scenes[{i}] ({CARTOON_SCENE_SRC}) must start at frame 0 (startFrame is {start!r}): one world spans the whole video"
+            if duration != total_frames or isinstance(duration, bool):
+                return (f"scenes[{i}] ({CARTOON_SCENE_SRC}) must span the whole video: durationInFrames is {duration!r}, "
+                        f"totalFrames is {total_frames}")
             err = _validate_cartoon_beats(f"scenes[{i}].props.beats", props.get("beats"), total_frames)
             if err:
                 return err
@@ -6338,34 +6351,40 @@ def _validate_cartoon_parts(scenes, total_frames: int | None = None) -> str:
     return ""
 
 
-def _check_cartoon_renderer(video_id: str, row, scenes) -> str:
+def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
     """The scene kind must agree with the video's renderer: a Cartoon3D scene
-    only on a cartoon_3d video or an auto video that resolved to cartoon_3d
-    (an unresolved auto video is resolved here, under the same GPU gate as
-    update_video, as the canvas backstop below records the canvas), and never
-    a DOM scene on a video whose renderer is cartoon_3d. Otherwise the worker
-    and the AI review would read the video one way and the scenes another, and
-    a revision could discard a half-built world. Returns "" if fine."""
+    only on a cartoon_3d video or an auto video that resolved to cartoon_3d,
+    and never a DOM scene on a video whose renderer is cartoon_3d. Otherwise
+    the worker and the AI review would read the video one way and the scenes
+    another, and a revision could discard a half-built world.
+
+    Returns (error, resolve_to): error is "" when the config may be written;
+    resolve_to names the renderer an unresolved 'auto' video settles on with
+    this config ("cartoon_3d" under the same GPU gate as update_video, "dom"
+    for DOM scenes, "" when nothing is to record). The caller records it only
+    after the scene-work guard and the write have succeeded, so a refused call
+    never freezes the renderer. Same backstop pattern as the canvas."""
     is_cartoon = any(isinstance(sc, dict) and sc.get("src") == CARTOON_SCENE_SRC for sc in scenes)
     style = row["visual_style"] or ""
     resolved = row["resolved_renderer"] or ""
+    unresolved_auto = style == "auto" and not resolved
     if is_cartoon:
         if style not in ("auto", "cartoon_3d"):
             return (f"this video's visual_style is {style!r}, which renders DOM scenes; a {CARTOON_SCENE_SRC} scene "
-                    f"needs visual_style 'cartoon_3d', or 'auto' resolved to cartoon_3d")
+                    f"needs visual_style 'cartoon_3d', or 'auto' resolved to cartoon_3d"), ""
         if style == "auto" and resolved and resolved != "cartoon_3d":
             return (f"this video's 'auto' resolved to the {resolved!r} renderer, which is written once; a "
-                    f"{CARTOON_SCENE_SRC} scene cannot follow (a revision renders with the renderer the video already uses)")
-        if style == "auto" and not resolved:
+                    f"{CARTOON_SCENE_SRC} scene cannot follow (a revision renders with the renderer the video already uses)"), ""
+        if unresolved_auto:
             gpu_err = _cartoon3d_gpu_error("cartoon_3d")
             if gpu_err:
-                return gpu_err
-            _update_fields(video_id, resolved_renderer="cartoon_3d")
-        return ""
+                return gpu_err, ""
+            return "", "cartoon_3d"
+        return "", ""
     if style == "cartoon_3d" or resolved == "cartoon_3d":
         return (f"this video renders as Cartoon 3D ({'visual_style' if style == 'cartoon_3d' else 'auto resolved to'} "
-                f"cartoon_3d), so its scene-config must be the single {CARTOON_SCENE_SRC} scene, not DOM scenes")
-    return ""
+                f"cartoon_3d), so its scene-config must be the single {CARTOON_SCENE_SRC} scene, not DOM scenes"), ""
+    return "", ("dom" if unresolved_auto else "")
 
 
 # ── Group 9: Cartoon 3D authoring (TMDEV-181) ───────────────────────────────

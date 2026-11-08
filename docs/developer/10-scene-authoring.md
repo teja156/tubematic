@@ -314,7 +314,8 @@ camera glides through, water, fog and time of day per beat — and draws the cas
 cut-outs on lit cards inside it. The agent never writes a component; it writes the world.
 
 `write_scene_config` refuses a config whose beats do not tile the video (in order, from frame 0 to the
-last frame, no gap, no overlap), one with more than that single scene, and one whose scene kind
+last frame, no gap, no overlap), one whose scene does not start at frame 0 and span `totalFrames`,
+one with more than that single scene, and one whose scene kind
 disagrees with the video's renderer (a `Cartoon3D` scene on a DOM-style video, or DOM scenes on a
 video that renders as Cartoon 3D). The beat gate's verdict is keyed by the world, the beats, the
 options and the narration's words per beat, so re-voicing the script re-opens it.

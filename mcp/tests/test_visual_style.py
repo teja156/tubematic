@@ -523,6 +523,40 @@ def test_an_unresolved_auto_video_is_resolved_by_its_cartoon_scene_under_the_gpu
     assert _read("vid_c5", "resolved_renderer") == "cartoon_3d"
 
 
+def test_a_dom_config_resolves_an_unresolved_auto_video_to_dom(db):
+    """Otherwise a later Cartoon3D config could resolve it to cartoon_3d and
+    throw away the DOM scenes already authored."""
+    _probe(db, configured=True, ok=True)
+    _video("vid_c7")
+    assert "error" not in server.write_scene_config("vid_c7", _config())
+    assert _read("vid_c7", "resolved_renderer") == "dom"
+    assert "written once" in server.write_scene_config("vid_c7", _cartoon_config())["error"]
+    assert "error" not in server.write_scene_config("vid_c7", _config())   # more DOM scenes: fine
+
+
+def test_a_refused_config_never_resolves_the_renderer(db, monkeypatch):
+    """The scene-work guard runs after the renderer check: a caller another
+    session's claim turns away must not freeze the renderer on the way out."""
+    _probe(db, configured=True, ok=True)
+    _video("vid_c8")
+    monkeypatch.setattr(server, "_guard_scene_work", lambda vid: {"error": "scene_work_claimed"})
+    assert server.write_scene_config("vid_c8", _cartoon_config()) == {"error": "scene_work_claimed"}
+    assert _read("vid_c8", "resolved_renderer") == ""
+    assert server.write_scene_config("vid_c8", _config()) == {"error": "scene_work_claimed"}
+    assert _read("vid_c8", "resolved_renderer") == ""
+
+
+def test_the_cartoon_scene_spans_the_whole_video(db):
+    _probe(db, configured=True, ok=True)
+    _video("vid_c9", style="cartoon_3d")
+    late = _cartoon_config(); late["scenes"][0]["startFrame"] = 10
+    assert "must start at frame 0" in server.write_scene_config("vid_c9", late)["error"]
+    short = _cartoon_config(); short["scenes"][0]["durationInFrames"] = 200
+    assert "must span the whole video" in server.write_scene_config("vid_c9", short)["error"]
+    absent = _cartoon_config(); del absent["scenes"][0]["durationInFrames"]
+    assert "must span the whole video" in server.write_scene_config("vid_c9", absent)["error"]
+
+
 def test_a_cartoon_video_is_one_scene_whose_beats_tile_it(db):
     _probe(db, configured=True, ok=True)
     _video("vid_c6", style="cartoon_3d")
