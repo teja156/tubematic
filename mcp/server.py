@@ -5878,24 +5878,41 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
 
+    # Stage the file first, so every failure that can happen on the way to a
+    # written config happens before anything is recorded about it.
+    path.parent.mkdir(parents=True, exist_ok=True)
+    staged = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    staged.write_text(json.dumps(config, indent=2), encoding="utf-8")
+
     # The renderer 'auto' settled on, recorded with the config that settled it
     # and write-once from here on: a compare-and-set, so a row that changed
     # under us (another process) is never overwritten, and a config that no
-    # longer agrees with what the row now says is refused before it is written.
+    # longer agrees with what the row now says is refused before it lands.
+    recorded = False
     if resolve_renderer:
         with _conn() as con:
-            changed = con.execute(
+            recorded = bool(con.execute(
                 "UPDATE videos SET resolved_renderer = ?, updated_at = ? WHERE id = ? AND resolved_renderer = ''",
-                (resolve_renderer, _now(), video_id)).rowcount
-            if not changed:
+                (resolve_renderer, _now(), video_id)).rowcount)
+            if not recorded:
                 now_resolved = con.execute(
                     "SELECT resolved_renderer FROM videos WHERE id = ?", (video_id,)).fetchone()["resolved_renderer"]
-        if not changed and now_resolved != resolve_renderer:
+        if not recorded and now_resolved != resolve_renderer:
+            staged.unlink(missing_ok=True)
             return {"error": f"this video's 'auto' resolved to the {now_resolved!r} renderer while this config was being "
                              f"checked; a {'Cartoon3D' if resolve_renderer == 'cartoon_3d' else 'DOM'} scene-config "
                              f"cannot follow (written once)"}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    try:
+        os.replace(staged, path)
+    except OSError as e:
+        # the config never landed: undo the resolution this call made, so a
+        # retry may still choose either renderer
+        staged.unlink(missing_ok=True)
+        if recorded:
+            with _conn() as con:
+                con.execute("UPDATE videos SET resolved_renderer = '', updated_at = ? WHERE id = ? AND resolved_renderer = ?",
+                            (_now(), video_id, resolve_renderer))
+        return {"error": f"scene-config.json could not be written: {e}"}
 
     # str(path) is container-absolute (/jobs/<vid>/scene-config.json) purely
     # because compose sets TUBEMATIC_JOBS_DIR=/jobs and this server runs inside

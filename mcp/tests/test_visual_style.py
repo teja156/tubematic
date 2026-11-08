@@ -564,6 +564,28 @@ def test_a_row_resolved_under_the_check_refuses_a_contradicting_config(db, monke
     assert _read("vid_c10", "scene_config_path") in ("", None)
 
 
+def test_a_failed_write_leaves_the_renderer_unresolved(db, monkeypatch):
+    """The resolution is recorded for a config that landed, never for one that
+    did not: a write that fails after the compare-and-set is compensated."""
+    _probe(db, configured=True, ok=True)
+    _video("vid_c11")
+
+    real_replace = server.os.replace
+
+    def refuse(src, dst):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(server.os, "replace", refuse)
+    result = server.write_scene_config("vid_c11", _cartoon_config())
+    assert "could not be written" in result["error"]
+    assert _read("vid_c11", "resolved_renderer") == ""
+    assert _read("vid_c11", "scene_config_path") in ("", None)
+    job_dir = server.tjobs.job_dir(server.JOBS_DIR, "vid_c11")
+    assert not (job_dir / "scene-config.json").exists() and not list(job_dir.glob("*.tmp"))
+    monkeypatch.setattr(server.os, "replace", real_replace)
+    assert "error" not in server.write_scene_config("vid_c11", _config())   # the retry may still pick DOM
+    assert _read("vid_c11", "resolved_renderer") == "dom"
+
+
 def test_the_cartoon_scene_spans_the_whole_video(db):
     _probe(db, configured=True, ok=True)
     _video("vid_c9", style="cartoon_3d")
