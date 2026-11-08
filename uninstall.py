@@ -34,6 +34,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-script-writing-skill",
     "tubematic-troubleshooting",
     "tubematic-cartoon3d",
+    "tubematic-mascot-builder",
 ]
 
 # Skills an earlier release deployed and this one no longer ships, so an install

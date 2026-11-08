@@ -217,7 +217,7 @@ Read `visual_style` from `get_video`:
 
 | `visual_style` | Canvas | You may use |
 |---|---|---|
-| `motion_graphics` | Dark | Vector animation, full-bleed generated imagery. **No figures.** |
+| `motion_graphics` | Dark | Vector animation, full-bleed generated imagery. **No figures in the scenes' own content** (a mascot, when the video has one, is a separate overlay layer, see *Mascot*). |
 | `stick` | Light | **Hand-drawn** `StickFigure` line art, line-art diagrams, generated imagery **in panels**. |
 | `illustrated` | **You choose** | Characters are **generated illustrated assets** (`generate_character`) rather than line art. You pick the drawing style *and* the canvas from the topic. |
 | `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
@@ -289,6 +289,9 @@ the most capable option, and never part-way through. Before choosing it read `ca
 from the `get_video` result you already have: when it is `false` the renderer's GPU is not working
 and the world cannot be rendered, so take the scene renderer whatever the table says, and say in
 the handback that a world was wanted but the install cannot render one.
+
+**A video with a mascot (`get_video().mascot` is set) never takes Cartoon 3D under `auto`:** the mascot is a flat
+overlay and has no place in a 3D world, so choose `dom` whatever the table says.
 
 Record the renderer with `update_video(video_id, resolved_renderer="cartoon_3d" | "dom")`
 **before** you author anything; it is written once. For `cartoon_3d`, stop here and invoke the
@@ -663,6 +666,43 @@ const step = Math.floor(interpolate(frame, [0, durationInFrames], [0, 3], { extr
 Props are for genuinely distinct **content** (e.g. `props: { title: "…", items: […] }`), not to substitute for animation.
 
 ---
+
+## Mascot
+
+Read `mascot` from the `get_video` result you already have. It is `null` for most videos; when it is set
+(`{id, name, version}`) the video carries an on-screen **mascot**: a flat watercolour character, drawn by the
+renderer on top of your scenes and under the captions. It is a separate overlay layer, so it does not change
+what your scenes may contain, in any visual style, and it needs nothing from you but a list of cues. You
+write **data only**: you never write drawing code for it, and you never pick or change the mascot.
+
+- **`mascot` is `null`: never write a `mascot` key.** The tool refuses it.
+- **`mascot` is set: add a top-level `mascot` key to the scene-config, a plain list of cue objects, and write it
+  with `write_scene_config` like everything else.** The key names, value ranges and what each does are in
+  that tool's description; the tool and `validate_job` return a message for every cue that breaks a rule, and
+  a video with a mascot and no cues fails validation. Use `get_timeline(video_id, include_words=True)` to
+  put each reaction on the word that earns it.
+
+How to direct it:
+
+- **It reacts; it is never the narrator.** It is not telling the story and it does not speak: there is no
+  talking, no mouth syncing, no speech bubble. It shows how someone watching feels about what is being said:
+  surprised at the number, thinking at the question, happy at the payoff. A reaction lands on the word that
+  causes it (word timings are for timing reactions, nothing else), not on every sentence.
+- **Vary it, and let it rest.** Emotion changes, a look toward something, a hop, a walk to the other side.
+  A change every few seconds at most; between reactions it simply stays in the last emotion. A mascot that
+  changes face on every line is noise.
+- **You decide when it walks on and when it walks off.** It starts off screen and walks on when you turn it
+  on, and walks off when you turn it off (an `on` cue). It does not have to be there for the whole video: a
+  mascot that arrives at the hook, reacts at the turns and leaves before the closing line can read better
+  than one that is always there.
+- **At least one on-screen stretch of at least one second** after the walk-on has finished. A mascot that
+  arrives at the very end, or that is only ever walking, is never seen standing; validation refuses it.
+- **Keep it out of the caption band and inside the safe zone** (the same safe zone as text), except while it
+  walks across an edge. Where it stands must not cover the burned-in captions or any text your scenes show at
+  that moment; the validator names the frame when it does. Put it in a corner or a margin the scene leaves
+  empty, and move it (a cue with a new position) when a scene needs the space.
+- **Be consistent with the scenes.** Do not leave an empty spot for it that no one sees, and do not tell the
+  scenes' content about it (no "the mascot points at this").
 
 ## Scene Frequency
 
@@ -1161,7 +1201,8 @@ Before handing back to the operator:
       `ImageFX`; any `StepFlowDiagram` entry passes `theme: "light"`
 - [ ] No named, specific person, creature or place drawn as a stick figure — that is still a
       generated image, full-bleed on dark or panel-framed on light
-- [ ] Under a forced `motion_graphics`: no figures anywhere
+- [ ] Under a forced `motion_graphics`: no figures anywhere in the scenes' own content (the mascot overlay, if the video has one, is not a scene figure)
+- [ ] `get_video().mascot` set: a `mascot` cue list is in the config (reactions timed to the narration, one on-screen stretch of at least a second, clear of the captions); `mascot` null: no `mascot` key
 - [ ] **Every vocabulary used is one a beat's subject required.** Nothing was added for variety,
       pacing or visual interest; no treatment appears in exactly one beat without a reason you
       could state in one sentence. Under `auto` especially — a permission is not an instruction
