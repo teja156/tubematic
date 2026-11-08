@@ -494,7 +494,7 @@ before a render happens. `mcp/text_audit.py` holds the decision layer; the Remot
 - `renderer/remotion/audit/run-text-layout-audit.mjs` bundles the project, selects the
   `TextLayoutAudit` composition, and samples frames.
 
-A Cartoon 3D video skips the audit: its one scene is a painted canvas with no text rects to measure (the captions are drawn by the composition, not the scene), so its checks are the frame check and the two gates in `mcp/cartoon.py`.
+A Cartoon 3D video skips the audit: its one scene is a painted canvas with no text rects to measure (the captions are drawn by the composition, not the scene), so its checks are the typecheck and the beat gate in `mcp/cartoon.py`.
 
 Every threshold lives in Python: an opacity floor of 0.9, a minimum overlap of 15% of the smaller
 box's area, five samples per scene, a 45-frame allowance at scene start before anything counts as

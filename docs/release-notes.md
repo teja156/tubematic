@@ -46,11 +46,13 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   (port 4455) and the tools fall back to rendering locally when it does not answer.
 - **A new visual style, Cartoon 3D.** Flat cartoon characters with ink outlines standing in a painted
   3D world — a street, a wharf, a clearing — with a camera that glides through it, a sun that moves
-  with the story and fog when the story needs it. The agent builds the world the topic calls for,
-  casts the people in it, and times every beat to the narration; before anything renders, the
-  pipeline checks every frame for a hidden or cropped character, has an independent judge look at
-  every invented prop and character, and has two independent judges confirm that each beat's picture
-  shows what the narrator says. It needs a working GPU (see below). Choose it at the topic, or leave
+  with the story and fog when the story needs it. The agent writes the world the topic calls for as
+  code for that one video (its sets, who stands where, a camera that follows the words) against a
+  fixed kit that carries the look, casts the people in it, and times every shot to the narration;
+  before anything renders, it looks at every shot, a look verifier scores the frames, and two
+  independent judges confirm that each beat's picture shows what the narrator says. The soundtrack
+  is synthesised to a spec the agent writes: music by mood, sound effects on the things the picture
+  shows, mixed under the voice. It needs a working GPU (see below). Choose it at the topic, or leave
   the style on Auto and let the agent choose it for a story carried by a place.
 - **Videos can render on an NVIDIA GPU.** With the NVIDIA driver and the NVIDIA Container Toolkit
   installed, a new onboarding step lists the machine's NVIDIA GPUs and hands the one you pick to the

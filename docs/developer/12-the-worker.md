@@ -51,8 +51,8 @@ The loop itself is `worker.py::main`.
 
 ### The stills server
 
-The MCP container's Cartoon 3D tools (`cartoon_gate`, `cartoon_beat_gate`, `cartoon_still`) need
-stills of a video's composition, and this is the one container with the GPU. So the worker runs
+The MCP container's Cartoon 3D tools (`cartoon_beat_gate`, `cartoon_still`) need stills of a
+video's composition, and this is the one container with the GPU. So the worker runs
 `renderer/remotion/cartoon-tools/stills-server.mjs` as a child process beside its renders: the
 project is bundled once, one Chromium stays open, and a still takes a few seconds instead of the
 25 to 30 seconds a cold software-GL still costs in the MCP container. It is started with exactly
@@ -64,7 +64,25 @@ container reaches it as `TUBEMATIC_STILLS_SERVER`, and when it does not answer t
 their stills locally instead. Renders and stills share the GPU; the server renders one still at a
 time. It is also why the reaper that follows a killed render (`_kill_group_and_reap`) drains the
 killed group's orphans without blocking: a blocking wait on any child would sit on the healthy stills
-server forever, so it polls non-blocking until no child but the stills server is left.
+server forever, so it polls non-blocking until no child but the stills server is left. The generated
+source tree (`src/scenes/generated/`, the agents' per-video TypeScript) is part of the bundle, so before
+every still the server compares a stamp of that tree (every file's path, size and mtime) with the one its
+bundle was made from and re-bundles when it differs: an edit to a video's code is seen by its next still
+(about twenty seconds, once), an unchanged tree costs a directory walk.
+
+### Segmented Cartoon 3D renders
+
+A Cartoon 3D video is not rendered as one `remotion render`: a long single render of one hung silently
+part way on the GPU (most likely GPU memory, as every tab accumulates every set's textures and a
+crossfade opens a second WebGL context). `_render_cartoon` renders segments of `CARTOON_CHUNK_FRAMES`
+(450) frames, each its own Remotion process with a fresh browser, `--frames=a-b --muted` and
+`--concurrency=2`, under the same stall watcher as any render; a segment that stalls or fails is tried
+once more, fresh, and a second failure is the render's (a stall is reported as a timeout is, requeued
+and the GPU re-tested; an error goes to the agent). The segments are joined with ffmpeg's concat
+demuxer without re-encoding, and the soundtrack is muxed on: the synthesised mix
+(`<jobs>/<video_id>/cartoon/audio/mix/mix.wav`, written by the MCP server's `cartoon_soundtrack`)
+when it exists and is at least as new as the voice, else `audio.mp3` alone. The work directory beside
+the output is removed either way.
 
 ## What a tick is
 

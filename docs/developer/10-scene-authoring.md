@@ -90,7 +90,7 @@ choices](02-pipeline.md#frozen-choices)):
 |---|---|---|
 | **Motion graphics** | Dark | Generated imagery with continuous camera moves, animated vector diagrams. Image-led |
 | **Stick explainer** | White | Black **hand-drawn** line art, figures with attire overlays and standardised faces, discrete poses. Animation-led |
-| **Cartoon 3D** | Dark (never visible) | Flat inked cartoon characters in a **painted 3D world** with a gliding camera, authored as data rather than scenes — see [Cartoon 3D](#cartoon-3d). Unlike the other three it does not restrict the scene system, it **replaces** it. Renders on the GPU only, so it is refused where it is chosen unless the renderer's GPU probe says working: a policy, since software WebGL does render it at about an hour a Short |
+| **Cartoon 3D** | Dark (never visible) | Flat inked cartoon characters in a **painted 3D world** with a gliding camera, written as code for that one video against the renderer's kit — see [Cartoon 3D](#cartoon-3d). Unlike the other three it does not restrict the scene system, it **replaces** it. Renders on the GPU only, so it is refused where it is chosen unless the renderer's GPU probe says working: a policy, since software WebGL does render it at about an hour a Short |
 | **Illustrated** | Agent's choice | Characters are **generated illustrated assets** rather than hand-drawn line art, held consistent across scenes by editing every pose from one canonical character sheet. It fixes neither the drawing style nor the canvas: the agent picks cartoon or rendered, and light or dark, from the topic. Costs an image call per pose, and needs an OpenAI key — see [Settings](../user-guide/05-settings.md#images) for why there is no Gemini fallback. Without one the style cannot be chosen |
 
 A fifth value, `auto`, defers the choice: the agent classifies every beat and picks the register
@@ -306,41 +306,42 @@ On the incremental path, every other config entry must be written back **byte-id
 
 ## Cartoon 3D
 
-A Cartoon 3D video is **data, not TSX**: one installed `Cartoon3D` scene spanning the whole
-video, whose props carry the world (`world`), the beat sheet (`beats`) and the scene options
-(`opts`). The renderer under `renderer/remotion/src/cartoon3d/` builds a painted 3D world from
-that data — a town plan with slots, parts placed in them, marks the cast walks between, shots the
-camera glides through, water, fog and time of day per beat — and draws the cast as flat inked
-cut-outs on lit cards inside it. The agent never writes a component; it writes the world.
+A Cartoon 3D video is **code written for that one video**: a `CartoonShort` scene spanning the whole
+video and the TypeScript modules beside it under `scenes/generated/<video_id>/` (the shots timed to the
+narration and the camera built from the grammar in `story.ts`; the sets as three.js code in `sets/*.ts`;
+who stands where doing what in `scenes.ts` and `stage/*.ts`; the `VideoDef` that ties them in `index.ts`),
+all written against the renderer's frozen kit under `renderer/remotion/src/cartoon3d/` (`video.ts` the
+contract, `camera.ts` the grammar, `CartoonShort.tsx` the runner, `kit/` the figure drawer, the lit cards,
+the builders, the painters, the lights and the water, `post/` the ink, lens blur and grade). The kit is the
+look; the video is the story. Its scene-config entry is one generated scene, `src` `<video_id>/CartoonShort`,
+`startFrame` 0 and `durationInFrames` equal to `totalFrames`, whose props carry `cartoon3d: {beats}`: the
+shots as beats, which is the only per-video data. The worked example the skill points at is
+`src/cartoon3d/examples/chicago/`, the spike that decided this design (TMDEV-184/185) over the earlier
+data-driven world.
 
 `write_scene_config` refuses a config whose beats do not tile the video (in order, from frame 0 to the
-last frame, no gap, no overlap), one whose scene does not start at frame 0 and span `totalFrames`,
-one with more than that single scene, and one whose scene kind
-disagrees with the video's renderer (a `Cartoon3D` scene on a DOM-style video, or DOM scenes on a
-video that renders as Cartoon 3D). The beat gate's verdict is keyed by the world, the beats, the
-options and the narration's words per beat, so re-voicing the script re-opens it.
+last frame, no gap, no overlap, each with a `shot` note), one whose scene does not start at frame 0 and
+span `totalFrames`, one with more than that single scene, one whose `src` is not this video's
+`CartoonShort`, and one whose scene kind disagrees with the video's renderer (a Cartoon 3D scene on a
+DOM-style video, or DOM scenes on a video that renders as Cartoon 3D).
 
-The data is checked before it is rendered, and the checks are the reason the style can be trusted
-to an agent at all:
+The code is checked before it is rendered:
 
-- **The frame check** (`probe2/qa.ts::checkWorld`) runs headless over every frame: a head hidden by
-  a wall, a body in a crate, a sign cut by the frame edge, feet that would have to slide, a cast
-  member under the captions, a cue outside its beat. It uses the same `layout()` the renderer draws
-  from, so what it reasons about is what is drawn.
-- **The part gate** (`probe2/gate/gateCli.ts`): a part or character the agent invents in the part
-  grammar (`probe2/partGrammar.ts`, `kit/Figure.ts`) must pass a deterministic check and then a
-  fresh judge's five questions over renders of it beside a townsman and a crate. Two judged
-  attempts per name.
-- **The beat gate** (`probe2/gate/beatGateCli.ts`): one frame from the middle of every beat beside
+- **The typecheck** `validate_job` runs over the whole Remotion project covers the video's modules: a
+  file that does not compile renders nothing, and the agent is told the file and line.
+- **The beat gate** (`src/cartoon3d/gate/beatGateCli.ts`): one frame from the middle of every beat beside
   the sentence the narrator speaks during it; two fresh judges say whether the picture shows the
-  sentence, a third breaks a split. Keyed by a hash of the data, so a changed shot is judged again.
+  sentence, a third breaks a split. Keyed by a hash of every source file of the video, the beats and the
+  narration per beat, so any edit is judged again and re-voicing re-opens it.
+- **The look verifier** is the skill's own step, not a gate: a fresh subagent scores eight areas of the
+  look against the measured targets and lists fixes.
 
 The author never grades its own work: a judge is a separate model call with no other context. The
-MCP tools that run these checks, keep the verdicts and refuse an ungated render are described in
-[MCP server — Cartoon 3D authoring](06-mcp-server.md#cartoon-3d-authoring); the agent's workflow
-is the `tubematic-cartoon3d` skill (see [the agent layer](07-agent-layer.md#the-skills)). The
-renderer's own notes on the grammar and the gate are in
-`renderer/remotion/src/cartoon3d/probe2/gate/README.md`.
+MCP tools that show the kit, render the stills, run the gate, keep the verdict, synthesise the soundtrack
+and refuse an ungated render are described in [MCP server — Cartoon 3D
+authoring](06-mcp-server.md#cartoon-3d-authoring); the agent's workflow and the kit's API are the
+`tubematic-cartoon3d` skill (see [the agent layer](07-agent-layer.md#the-skills)). The render itself is
+segmented ([The Worker](12-the-worker.md#segmented-cartoon-3d-renders)).
 
 ---
 

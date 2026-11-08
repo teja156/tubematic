@@ -118,8 +118,9 @@ def _cartoon_job(tmp_path, monkeypatch, db_path, visual_style="cartoon_3d", cart
     job = tmp_path / "jobs" / "vid-1"
     job.mkdir(parents=True)
     (job / "audio.mp3").write_bytes(b"x")
-    (job / "timeline.json").write_text("{}")
-    scenes = [{"src": "Cartoon3D", "source": "installed", "props": {}}] if cartoon_config else []
+    (job / "timeline.json").write_text(json.dumps({"totalFrames": 10, "fps": 30, "words": []}))
+    scenes = ([{"type": "generated", "src": "vid-1/CartoonShort", "props": {"cartoon3d": {"beats": [{"start": 0, "end": 9, "shot": "x"}]}}}]
+              if cartoon_config else [])
     (job / "scene-config.json").write_text(json.dumps({"scenes": scenes}))
     con = sqlite3.connect(db_path)
     con.execute("INSERT INTO videos (id, project_id, topic, strategy, producibility_score, status, "
@@ -184,13 +185,16 @@ def test_an_unprobed_gpu_is_probed_before_judging(db_path, monkeypatch, tmp_path
         monkeypatch.setattr(worker, "_gpu_verified", True)
         return {}
     monkeypatch.setenv("TUBEMATIC_GPU_UUID", "GPU-1")
-    with mock.patch("subprocess.Popen", return_value=_exited()) as popen, \
+    # a fresh fake process per call: the segmented render starts one per attempt
+    with mock.patch("subprocess.Popen", side_effect=lambda *a, **k: _exited()) as popen, \
          mock.patch.object(worker, "_run_gpu_probe", side_effect=probe) as ran, \
          mock.patch.object(worker, "_handle_render_success"):
         worker._stage_and_render("vid-1")
-    assert ran.call_args.kwargs["reason"] == "a Cartoon 3D video needs the GPU"
-    argv = popen.call_args.args[0]
+    assert ran.call_args_list[0].kwargs["reason"] == "a Cartoon 3D video needs the GPU"
+    # the first segment of the segmented render (TMDEV-185), on the GPU flags, two tabs, video only
+    argv = popen.call_args_list[0].args[0]
     assert "--concurrency=2" in argv and "--gl=angle-egl" in argv
+    assert "--frames=0-9" in argv and "--muted" in argv
 
 
 def test_a_cartoon_scene_config_counts_even_under_auto(db_path, monkeypatch, tmp_path):

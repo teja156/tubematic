@@ -35,5 +35,7 @@ def test_nothing_in_mcp_imports_the_gif_toolkit_or_its_dependencies():
 
 def test_the_requirements_no_longer_pull_in_the_gif_dependencies():
     reqs = (MCP_DIR / "requirements.txt").read_text().lower()
-    assert "imageio" not in reqs and "numpy" not in reqs
+    assert "imageio" not in reqs
     assert "pillow" in reqs   # read_image and generate_character still need it
+    # numpy is back since TMDEV-185, for the Cartoon 3D soundtrack engine, not for GIFs
+    assert "soundtrack" in reqs and "numpy" in reqs

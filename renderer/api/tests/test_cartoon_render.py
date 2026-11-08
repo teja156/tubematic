@@ -1,0 +1,171 @@
+"""The worker's segmented Cartoon 3D render (TMDEV-185): how a video is cut
+into segments, which audio is muxed, and the render itself over a stub
+Remotion and a stub ffmpeg.
+
+One whole-video `remotion render` of a Cartoon 3D Short hung silently part
+way on the GPU, so the worker renders segments of CARTOON_CHUNK_FRAMES frames,
+each in a fresh process with the stall watcher, joins them without
+re-encoding and muxes the soundtrack on: the synthesised mix when it is there
+and at least as new as the voice, else the voice. Pins the segment plan, the
+audio choice, that a stalled segment is tried again fresh and reported as
+"hung" (requeued by the caller), that a failed segment is "failed", and the
+ffmpeg commands.
+"""
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from unittest import mock
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import pipeline  # noqa: E402
+import worker  # noqa: E402
+
+
+def test_the_segment_plan_tiles_the_video_and_folds_a_short_tail():
+    assert worker._cartoon_chunks(0) == []
+    assert worker._cartoon_chunks(10) == [(0, 9)]
+    assert worker._cartoon_chunks(450) == [(0, 449)]
+    assert worker._cartoon_chunks(900) == [(0, 449), (450, 899)]
+    assert worker._cartoon_chunks(1000) == [(0, 449), (450, 999)]        # a 100-frame tail joins the segment before it
+    assert worker._cartoon_chunks(1100) == [(0, 449), (450, 899), (900, 1099)]
+    plan = worker._cartoon_chunks(3614)
+    assert plan[0][0] == 0 and plan[-1][1] == 3613
+    assert all(plan[i][1] + 1 == plan[i + 1][0] for i in range(len(plan) - 1))
+
+
+def test_the_scene_config_marker_is_the_cartoon3d_props(tmp_path):
+    p = tmp_path / "scene-config.json"
+    p.write_text(json.dumps({"scenes": [{"src": "v/CartoonShort", "props": {"cartoon3d": {"beats": []}}}]}))
+    assert worker._scene_config_is_cartoon3d(p)
+    p.write_text(json.dumps({"scenes": [{"src": "Cartoon3D", "source": "installed", "props": {"world": {}}}]}))
+    assert not worker._scene_config_is_cartoon3d(p)          # the data-driven marker of 2.0 is not one any more
+    p.write_text(json.dumps({"scenes": [{"src": "v/intro", "props": {"cartoon3d": "yes"}}]}))
+    assert not worker._scene_config_is_cartoon3d(p)
+    p.write_text("not json")
+    assert not worker._scene_config_is_cartoon3d(p)
+
+
+def test_the_mix_is_muxed_only_when_it_is_at_least_as_new_as_the_voice(tmp_path, monkeypatch):
+    monkeypatch.setattr(pipeline, "JOBS_DIR", tmp_path / "jobs")
+    job = tmp_path / "jobs" / "vid-1"
+    job.mkdir(parents=True)
+    voice = job / "audio.mp3"
+    voice.write_bytes(b"v")
+    assert worker._soundtrack_for("vid-1", voice) == voice                 # no mix
+    mix = job / "cartoon" / "audio" / "mix" / "mix.wav"
+    mix.parent.mkdir(parents=True)
+    mix.write_bytes(b"m")
+    os.utime(mix, (1_000, 1_000))
+    os.utime(voice, (2_000, 2_000))
+    assert worker._soundtrack_for("vid-1", voice) == voice                 # a re-voiced video: the old mix is stale
+    os.utime(mix, (3_000, 3_000))
+    assert worker._soundtrack_for("vid-1", voice) == mix
+
+
+@pytest.fixture
+def stubs(tmp_path, monkeypatch):
+    """Popen renders a segment by writing its output file (or hangs / fails
+    per the plan), subprocess.run stands in for ffmpeg; both are logged."""
+    monkeypatch.setattr(pipeline, "JOBS_DIR", tmp_path / "jobs")
+    (tmp_path / "jobs" / "vid-1").mkdir(parents=True)
+    voice = tmp_path / "jobs" / "vid-1" / "audio.mp3"
+    voice.write_bytes(b"v")
+    monkeypatch.setattr(worker, "REMOTION_DIR", tmp_path / "remotion")
+    calls = {"popen": [], "run": []}
+    plan = {"fail_once": set(), "hang_always": set()}
+
+    class FakeProc:
+        def __init__(self, argv):
+            import io
+            self.args = argv
+            self.pid = 4242
+            frames = next(a for a in argv if a.startswith("--frames=")).split("=")[1]
+            out = Path(argv[argv.index("Composition") + 1])
+            self.hang = frames in plan["hang_always"]
+            if frames in plan["fail_once"]:
+                plan["fail_once"].discard(frames)
+                self.returncode, text = 1, "Error: a shader failed to compile"
+            elif self.hang:
+                self.returncode, text = None, "Rendered 1/450"
+            else:
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(b"mp4")
+                self.returncode, text = 0, "Rendered 450/450\nEncoded 450/450"
+            self.stdout = io.StringIO(text)
+            self.stderr = io.StringIO("")
+
+        def poll(self):
+            return self.returncode
+
+    def popen(argv, **kw):
+        calls["popen"].append(argv)
+        return FakeProc(argv)
+
+    def run(argv, **kw):
+        calls["run"].append(argv)
+        Path(argv[-1]).write_bytes(b"out")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(worker, "_kill_group_and_reap", lambda proc: calls.setdefault("killed", []).append(proc.args))
+    # a stall is detected at once: the fake clock jumps past stall_secs on every look
+    ticks = iter(range(0, 10_000, 100))
+    monkeypatch.setattr(worker, "_clock", lambda: next(ticks))
+    monkeypatch.setattr(worker, "_sleep", lambda s: None)
+    return calls, plan, voice, tmp_path / "out" / "vid-1.mp4"
+
+
+def test_a_segmented_render_joins_the_segments_and_muxes_the_voice(stubs):
+    calls, _, voice, out = stubs
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), ["--gl=angle-egl"], {}, 600, 60, 1000, voice)
+    assert outcome == "ok" and detail == "2 segments, the voice alone"
+    assert [next(a for a in argv if a.startswith("--frames=")) for argv in calls["popen"]] == ["--frames=0-449", "--frames=450-999"]
+    for argv in calls["popen"]:
+        assert argv[:4] == ["npx", "remotion", "render", "Composition"] and "--muted" in argv and "--concurrency=2" in argv and "--gl=angle-egl" in argv
+    concat, mux = calls["run"]
+    assert concat[0] == "ffmpeg" and "concat" in concat and concat[-3:-1] == ["-c", "copy"]
+    assert mux[0] == "ffmpeg" and str(voice) in mux and "-c:v" in mux and mux[mux.index("-c:a") + 1] == "aac" and mux[-1].endswith(".tmp.mp4")
+    assert out.is_file() and not (out.parent / ".vid-1.segments").exists()   # the work directory is gone
+
+
+def test_the_synthesised_mix_is_muxed_when_present(stubs):
+    calls, _, voice, out = stubs
+    mix = voice.parent / "cartoon" / "audio" / "mix" / "mix.wav"
+    mix.parent.mkdir(parents=True)
+    mix.write_bytes(b"m")
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 600, 60, 100, voice)
+    assert outcome == "ok" and detail == "1 segments, the synthesised soundtrack"
+    assert str(mix) in calls["run"][1]
+
+
+def test_a_failed_segment_is_tried_once_more_and_then_reported(stubs):
+    calls, plan, voice, out = stubs
+    plan["fail_once"].add("450-999")
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 600, 60, 1000, voice)
+    assert outcome == "ok"
+    assert len(calls["popen"]) == 3          # segment two failed once and rendered on its second attempt
+    plan["fail_once"].update({"0-449"})
+    calls["popen"].clear()
+    # a segment that fails twice (fail_once refills itself here) is the render's failure
+    class AlwaysFail(set):
+        def discard(self, x): pass
+    plan["fail_once"] = AlwaysFail({"0-449"})
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 600, 60, 1000, voice)
+    assert outcome == "failed" and "frames 0-449" in detail and "shader failed" in detail
+    assert len(calls["popen"]) == 2
+
+
+def test_a_stalled_segment_is_killed_tried_again_and_reported_as_hung(stubs):
+    calls, plan, voice, out = stubs
+    plan["hang_always"].add("0-449")
+    outcome, detail = worker._render_cartoon("vid-1", "{}", str(out), [], {}, 600, 60, 1000, voice)
+    assert outcome == "hung" and detail == "frames 0-449: no progress for 60s"
+    assert len(calls["popen"]) == 2 and len(calls["killed"]) == 2
+    assert not calls["run"]                 # nothing joined, nothing muxed
+    assert not (out.parent / ".vid-1.segments").exists()

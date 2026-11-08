@@ -3,7 +3,6 @@ import { AbsoluteFill, Composition } from "remotion";
 import { CompositionBuilder } from "./CompositionBuilder";
 import { PlaceholderComposition } from "./Composition";
 import { TextLayoutProbe } from "./audit/TextLayoutProbe";
-import { PartGate } from "./cartoon3d/probe2/gallery/PartGate";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
 // renders, plus a measurement probe. A separate composition rather than a prop
@@ -81,9 +80,6 @@ export const RemotionRoot: React.FC = () => {
         calculateMetadata={durationFromTimeline}
       />
 
-      {/* Cartoon 3D part gate: one agent-made part or cast figure beside a townsman and a crate, rendered by
-          cartoon3d/probe2/gate/gateCli.ts for a judge (never part of a video) */}
-      <Composition id="Cartoon3DPartGate" component={PartGate} durationInFrames={1} fps={30} width={1080} height={1920} defaultProps={{ view: "quarter" }} />
 
       {/* Phase 0 placeholder — smoke-test the container without real assets */}
       <Composition

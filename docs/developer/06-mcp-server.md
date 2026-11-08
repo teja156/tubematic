@@ -94,7 +94,7 @@ next tool call use it, with no restart.
 
 ---
 
-## The 46 tools
+## The 45 tools
 
 ### Pipeline state
 
@@ -192,7 +192,7 @@ and no obvious cause.
 
 | Tool | Signature | Notes |
 |---|---|---|
-| `write_scene_file` | `(video_id, scene_name, tsx_content)` | Writes a generated scene, namespaced under the video |
+| `write_scene_file` | `(video_id, scene_name, tsx_content)` | Writes a generated scene, namespaced under the video. A Cartoon 3D video's TypeScript modules go through it too: a `scene_name` with its extension, one directory deep at most (`story.ts`, `sets/street.ts`), lands beside the video's `CartoonShort` scene and is answered with `module` instead of `src` |
 | `read_scene_file` | `(scene_name, video_id="", source="generated")` | Accepts either the bare stem or the composed `"{video_id}/{scene_name}"` form |
 | `delete_scene_file` | `(scene_name, video_id="")` | Omit `video_id` only for a legacy flat scene. A given `video_id` has its shape checked before any path is built, and the target must stay inside `generated/` — this tool never looks the video up, so without that an absolute `video_id` replaced the scenes directory and could delete any `.tsx` the server can write |
 | `list_scene_files` | `(source="all", video_id="")` | |
@@ -209,37 +209,39 @@ and no obvious cause.
 
 ### Cartoon 3D authoring
 
-A Cartoon 3D video is one installed `Cartoon3D` scene whose props carry the world, the beat
-sheet and the scene options as data (see [Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d)).
-The author writes that data with `write_scene_config` like any other config; these tools are the
-checks and gates of the data, and the verdicts they keep are what `validate_job` and
-`submit_render` read. All of them run the renderer's own command lines
-(`renderer/remotion/cartoon-tools/`) on the written file; none takes the scene-work claim, because
-the record tools are called by judge subagents, which may be other sessions.
+A Cartoon 3D video is **code written for that video** against the renderer's frozen kit
+(`renderer/remotion/src/cartoon3d/`): a `CartoonShort` scene plus the `.ts` modules beside it (shots and
+camera, sets, staging) under `scenes/generated/<video_id>/`, written with `write_scene_file`, and one
+scene-config entry whose props carry `cartoon3d: {beats}` (see
+[Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d)). These tools are the kit source the
+author reads, the stills it looks at, the beat gate that judges the result, and the soundtrack; the verdict
+the gate keeps is what `validate_job` and `submit_render` read. The rendering ones run the renderer's own
+command lines (`renderer/remotion/cartoon-tools/`); none takes the scene-work claim, because the record
+tool is called by judge subagents, which may be other sessions.
 
 | Tool | Signature | Notes |
 |---|---|---|
-| `cartoon_catalog` | `()` | Every part a world may name, with footprint and blurb, plus the gestures, hats, holds and coats the cast grammar knows |
-| `cartoon_qa` | `(video_id)` | The deterministic check over every frame: occlusion, collisions, cropped signs, feet that would slide, a cast member under the captions, a cue outside its beat. `BLOCK` findings stop the render; `ADVISE` findings are thresholds |
-| `cartoon_still` | `(video_id, frames)` | One to six frames as the render will show them, returned as pictures and kept under the job for `cartoon_read_still` |
-| `cartoon_read_still` | `(video_id, kind, name)` | One still by name, `kind` one of `gate`, `beatgate`, `stills`. The name is a plain file name under the video's `cartoon/` directory and nothing else. This is how a judge sees what it judges |
-| `cartoon_gate` | `(video_id)` | The **part gate** for the world's own parts and cast figures: the deterministic check, renders beside a townsman and a crate, and a judge prompt per part. A part with a PASS for its current spec is not rendered again; two judged attempts per name |
-| `cartoon_gate_record` | `(video_id, part, answers)` | A judge's five answers for a part's current spec. Called by the judge subagent, never by the author |
-| `cartoon_beat_gate` | `(video_id)` | The **beat gate**: one still at the middle of every beat and a prompt with each beat's sentence. Two fresh judges answer; a beat they split on goes to a third |
+| `cartoon_kit_list` | `()` | Every file of the kit, by path under `src/cartoon3d/`: the `VideoDef` contract, the camera grammar, the runner, `kit/*`, `post/*` and the worked example under `examples/chicago/`. Tests and the gate's own code are left out |
+| `cartoon_kit_read` | `(path)` | One kit file's source, by a listed path only |
+| `cartoon_still` | `(video_id, frames)` | One to six frames as the render will show them, returned as pictures and kept under the job for `cartoon_read_still`. Renders the source as it is on disk |
+| `cartoon_read_still` | `(video_id, kind, name)` | One still by name, `kind` one of `beatgate`, `stills`. The name is a plain file name under the video's `cartoon/` directory and nothing else. This is how a judge sees what it judges |
+| `cartoon_beat_gate` | `(video_id)` | The **beat gate**: one still at the middle of every beat and a prompt with each beat's sentence. Two fresh judges answer; a beat they split on goes to a third. Run over the video's source tree, which keys the verdict |
 | `cartoon_beat_gate_record` | `(video_id, answers)` | One judge's per-beat answers; identical answers are refused, since the second judge must be a different one |
+| `cartoon_soundtrack` | `(video_id, spec)` | Synthesises the soundtrack from a spec (music sections by style and level, hits, dips; sound-effect cues by generator, time, level, pan and distance) and mixes it under the voice to −14 LUFS at the video's length (`cartoon-tools/audio/mix.py`, numpy and scipy). The spec's shape is checked here; the engine refuses an unknown generator or style by name. The render muxes the mix when it is newer than the voice |
 
 The judge is the point of the design: the author never grades its own work. A judge is a fresh
 subagent with no other context, given the prompt verbatim; it reads the stills through
 `cartoon_read_still` and records its own answers through the record tool, so the verdict never
 passes through the author's hands. Verdicts live under `<jobs>/<video_id>/cartoon/`, keyed by a
-hash of the spec (a part) or of world + beats + options + the narration's words per beat (the beat sheet), so a changed thing is
-judged again and an unchanged one never is.
+hash of **every source file of the video**, its beats and the narration's words per beat, so an edit to
+the code is judged again and an unchanged video never is.
 
 The stills themselves are rendered by the render worker's stills server (`TUBEMATIC_STILLS_SERVER`,
 `http://tubematic-renderer:4455`), the one container with the GPU, which serves the shared jobs
 volume as the composition's public directory, so a video's files are `/public/<video_id>/…` and
-nothing is staged. When that server does not answer, the tool renders the stills in this container
-on software GL, over the same directory. See [The Worker](12-the-worker.md#the-stills-server).
+nothing is staged, and which re-bundles the project when the generated source tree changes, so an
+edit is seen by the next still. When that server does not answer, the tool renders the stills in this
+container on software GL, over the same directory. See [The Worker](12-the-worker.md#the-stills-server).
 
 ### Configuration and scheduling
 
@@ -312,12 +314,11 @@ The agent is expected to call this before `submit_render`. It runs ten checks in
    `source`. A stale bare `src` that collides with a newer namespaced file is caught here.
 7. **Image references resolve.** Every image-shaped string in a scene's props must be of the form
    `/public/<video_id>/images/…` and must exist on disk, inside that video's `images/` directory.
-8. **Cartoon 3D readiness**, for a config with a `Cartoon3D` scene only: every agent-made
-   part and cast figure holds a judge's PASS for the spec the world carries now, two fresh judges
-   have passed the beat sheet (or a third has broken their tie), and the deterministic frame check
-   blocks nothing. Each open gate is one error naming the tool that closes it. `submit_render`
-   asks the same question, so an ungated world cannot be queued by skipping this call. See
-   [Cartoon 3D authoring](#cartoon-3d-authoring).
+8. **Cartoon 3D readiness**, for a config with a Cartoon 3D scene only: the video's generated
+   source exists, and two fresh judges have passed the beat sheet (or a third has broken their tie)
+   for exactly the source on disk. An open gate is one error naming the tool that closes it.
+   `submit_render` asks the same question, so an ungated video cannot be queued by skipping this
+   call. See [Cartoon 3D authoring](#cartoon-3d-authoring).
 9. **TypeScript typechecks.** `npx tsc --noEmit` over the whole Remotion project, 60-second timeout.
    The first 20 lines of any failure are reported as a hard error. Silently skipped if `npx` is
    unavailable. This runs for *every* video, so a type error anywhere in the project blocks every

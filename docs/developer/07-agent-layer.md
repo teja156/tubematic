@@ -27,7 +27,7 @@ Seven ship in `agent_files/skills/`.
 | `tubematic-script-writing-skill` | `TOPIC_APPROVED`, or a script revision | The whole scripting contract — segments, length budget, pronunciation, pause markup, and each beat's visual brief |
 | `tubematic-create-script-writing-skill` | A script profile is queued at `PENDING` | Extracts a creator's *style* from transcripts into profile markdown |
 | `tubematic-scene-config` | `VOICE_READY`, and the revision path | Turns a voiced script and timeline into images, scene TSX, and `scene-config.json` |
-| `tubematic-cartoon3d` | `VOICE_READY` for a video that is to be a Cartoon 3D Short, and its revision path | Writes the world, the cast and the beat sheet as data, and takes them through the frame check, the part gate and the beat gate (fresh judge subagents) with the `cartoon_*` tools — see [Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d) |
+| `tubematic-cartoon3d` | `VOICE_READY` for a video that is to be a Cartoon 3D Short, and its revision path | Writes the video's shots, camera, sets and cast as TypeScript against the renderer's kit, looks at it, takes it through the beat gate (fresh judge subagents) with the `cartoon_*` tools and gives it a synthesised soundtrack — see [Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d) |
 | `tubematic-troubleshooting` | Only when a person asks for it by name | Triages a broken install with that person, runs the diagnostics collector, and drafts a redacted bug report for them to file |
 
 Remotion's own best-practice skills are **not vendored here**. `onboard.py --install-agent`

@@ -14,6 +14,10 @@
 // Requests: POST /still  {"composition": "Composition", "frame": 83, "props": {...}, "out": "/abs/path.png", "scale": 0.5}
 //           POST /stills {"composition", "props", "frames": [83, 200], "outDir": "/abs/dir", "scale", "prefix": "f"}
 //           POST /rebundle                 (after the project's own source changes; public files need none)
+// The generated source tree (src/scenes/generated/, the agent's per-video TypeScript) is bundled into the serve
+// URL, so every request first compares a stamp of that tree (every file's path, size and mtime) with the one the
+// current bundle was made from, and re-bundles when it differs: an edit to a video's code is seen by its next still
+// (~20 s once), an unchanged tree costs a directory walk.
 //           GET  /health                   {ok, bundled, browser, public, gl, chromeMode}
 // Responses: JSON {ok, out | outs, ms, logs}. Browser console lines are collected per request and returned as
 // `logs` (what `npx remotion still` never shows).
@@ -42,16 +46,47 @@ const TIMEOUT_MS = 120_000;
 const chromiumOptions = { gl: GL, enableMultiProcessOnLinux: MULTI, disableWebSecurity: false };
 const browserOptions = { chromiumOptions, chromeMode: CHROME_MODE, browserExecutable: BROWSER, logLevel: "error" };
 
+const GENERATED = path.join(ROOT, "src/scenes/generated");
+
 let serveUrl = null;
+let bundledStamp = null;
 let browser = null;
 let busy = Promise.resolve();
 
+/** a stamp of the generated source tree: every file's path, size and mtime, in a fixed order */
+export const treeStamp = (dir) => {
+  const rows = [];
+  const walk = (d) => {
+    let entries;
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile()) { try { const st = fs.statSync(p); rows.push(`${path.relative(dir, p)}:${st.size}:${st.mtimeMs}`); } catch { /* vanished */ } }
+    }
+  };
+  walk(dir);
+  return rows.join("\n");
+};
+
 const rebundle = async () => {
   const t = Date.now();
+  const stamp = treeStamp(GENERATED);
   // remotion.config.ts does not apply to the Node API: the Tailwind override and the public dir are passed here,
   // and the public dir is symlinked so files added under it later are served without another bundle
+  const previous = serveUrl;
   serveUrl = await bundle({ entryPoint: ENTRY, publicDir: PUBLIC, webpackOverride: enableTailwind, symlinkPublicDir: true, onProgress: () => {} });
+  bundledStamp = stamp;
+  if (previous && previous !== serveUrl) fs.rmSync(previous, { recursive: true, force: true });
   console.log(`[stills] bundled in ${Date.now() - t} ms: ${serveUrl} (public ${PUBLIC})`);
+};
+
+/** re-bundle when the generated source tree changed since the current bundle */
+const freshen = async () => {
+  if (treeStamp(GENERATED) !== bundledStamp) {
+    console.log("[stills] generated source changed: re-bundling");
+    await rebundle();
+  }
 };
 
 const ensureBrowser = async () => {
@@ -102,6 +137,7 @@ const server = http.createServer(async (req, res) => {
       const comp = b.composition ?? "Composition";
       const props = b.props ?? {};
       const work = async () => {
+        await freshen();
         if (req.url === "/still") {
           fs.mkdirSync(path.dirname(b.out), { recursive: true });
           const logs = await one(comp, props, b.frame ?? 0, b.out, scale);

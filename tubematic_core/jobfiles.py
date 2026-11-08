@@ -118,6 +118,34 @@ def scene_file(scenes_dir, video_id, scene_name) -> Path:
     return join_below(scenes_dir, video_id, f"{scene_name}.tsx")
 
 
+SOURCE_EXTS = (".ts", ".tsx")
+
+
+def scene_dir(scenes_dir, video_id) -> Path:
+    """`<scenes_dir>/<video_id>`, a video's generated source tree, refusing a
+    symlink on the way."""
+    _check_video_id(video_id)
+    return join_below(scenes_dir, video_id)
+
+
+def source_file(scenes_dir, video_id, dirname, stem, ext) -> Path:
+    """`<scenes_dir>/<video_id>/[<dirname>/]<stem><ext>`, one TypeScript module
+    of a video's generated source (TMDEV-185): a Cartoon 3D video is several
+    `.ts` files beside the `.tsx` scene that mounts them, at most one directory
+    deep (`sets/street.ts`). Every component is checked as scene_file checks
+    its one, and a symlink on the way is refused for the same reason.
+    """
+    if ext not in SOURCE_EXTS:
+        raise UnsafePath(f"a generated source file ends in one of {SOURCE_EXTS}, not {ext!r}")
+    if not ids.is_component(stem):
+        raise UnsafePath(f"file name {stem!r} cannot be used as a file name")
+    if dirname is not None and not ids.is_component(dirname):
+        raise UnsafePath(f"directory name {dirname!r} cannot be used as a directory name")
+    _check_video_id(video_id)
+    parts = (video_id, dirname, f"{stem}{ext}") if dirname is not None else (video_id, f"{stem}{ext}")
+    return join_below(scenes_dir, *parts)
+
+
 def ignore_symlinks(directory, names):
     """A shutil.copytree `ignore=` that drops symlinks.
 

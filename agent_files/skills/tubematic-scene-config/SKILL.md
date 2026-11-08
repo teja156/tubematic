@@ -209,7 +209,7 @@ says which vocabularies you may draw from, and which canvas the video is painted
 decide any beat's treatment — that still follows the beat's subject, exactly as it always has.
 
 The fifth value is different in kind. `cartoon_3d` does not restrict the scene system, it
-**replaces** it: the whole video is one painted 3D world authored as data, with no scene components
+**replaces** it: the whole video is one painted 3D world written as code for that video against the renderer's kit, with no scene components
 at all. It is not this skill's work. A video at `cartoon_3d` is authored by the **tubematic-cartoon3d**
 skill; stop here and invoke it.
 
@@ -220,7 +220,7 @@ Read `visual_style` from `get_video`:
 | `motion_graphics` | Dark | Vector animation, full-bleed generated imagery. **No figures.** |
 | `stick` | Light | **Hand-drawn** `StickFigure` line art, line-art diagrams, generated imagery **in panels**. |
 | `illustrated` | **You choose** | Characters are **generated illustrated assets** (`generate_character`) rather than line art. You pick the drawing style *and* the canvas from the topic. |
-| `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as data, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
+| `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
 | `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery, **or the Cartoon 3D world**. |
 
 The three named DOM options are restrictions; `cartoon_3d` is another renderer. `auto` is the

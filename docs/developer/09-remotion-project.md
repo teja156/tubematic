@@ -395,7 +395,6 @@ them paints a background: the canvas is painted once for the whole video from `s
 | `StickFigure` | Wrapper | The figure itself. `pose`, `expression`, `attire`, `headwear`, `x`, `y`, `scale`, `flip`. Its geometry is a **joint table**, not hand-drawn paths — every pose is a set of elbow/hand/knee/foot coordinates in one local box, so any two poses share a head, a torso and a stroke weight, which is what makes a swap read as one character moving rather than two drawings. It never interpolates: change `pose` on a frame threshold and the swap is instant, which is the register, not a shortcut |
 | `StickScene` | Wrapper | White-ground scaffold — optional comic banner title, optional panel frame. Takes your content as children |
 | `Entrances` | Helpers | Named exports `PopIn` (6-frame scale pop), `SlideIn` (8-frame single-axis slide) and `Swap` (1-frame replacement). The register's only three arrivals |
-| `Cartoon3D` | Scene | One painted 3D world for the whole video, authored as data: its props carry `world`, `beats` and `opts` (see [Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d)). One entry spanning every frame, never one per beat: the world is one `ThreeCanvas` mount, and remounting it per beat re-arms a renderer bug that froze shadows after frame 1 and breaks the continuity of lights and positions. The captions, the watermark and the audio sit above it as on any scene. Renders on the GPU only (the worker fails the video otherwise) with two concurrent tabs |
 | `PanelImage` | Scene | A generated image contained in a bordered panel on the canvas, referenced from `scene-config` like `KenBurnsImage`. This is how a light-canvas video shows a real, specific subject: full-bleed would replace the canvas and the video would cut between two different-looking worlds. **A panel crops** — `objectFit: cover` trims from the centre — so size the panel to the image's real pixel ratio, or pass `focus` |
 
 `StickFigure` has a deliberate constraint worth knowing before editing its pose table: a hand must
@@ -403,6 +402,20 @@ stay clear of the head circle. The head is filled and drawn **after** the arms, 
 behind it renders as a severed forearm rather than as an arm passing behind.
 
 ---
+
+## The Cartoon 3D kit
+
+`renderer/remotion/src/cartoon3d/` is not a scene but the frozen kit a Cartoon 3D video's own code is
+written against: `video.ts` (the `VideoDef` contract), `camera.ts` (the camera grammar: glides, pushes,
+kicks, the lens table), `CartoonShort.tsx` (the runner: one three.js world built from a `VideoDef`, posed
+per frame, with the post chain of ink, lens blur, bloom, neutral tone map and grade), `kit/` (the bean-head
+figure drawer and the lit cards it is drawn on, the batch builders, the painted textures, the light
+presets, the water shader), `post/` (ink, lens blur, grade) and `examples/chicago/` (the worked example
+the skill points at, typechecked with the project). The agent writes its `CartoonShort` scene and modules
+under `src/scenes/generated/<video_id>/` and imports the kit from there; see
+[Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d). The beat gate and the stills command
+lines under `gate/` are bundled by `cartoon-tools/build.mjs` for the MCP server; `cartoon-tools/audio/`
+is the soundtrack engine (Python) and `cartoon-tools/stills-server.mjs` the worker's stills server.
 
 ## Building and checking
 

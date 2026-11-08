@@ -46,7 +46,7 @@ import html
 from fastmcp import FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
 
-import cartoon  # the Cartoon 3D gates and checks (TMDEV-181); a sibling module like text_audit
+import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
 from fastmcp.server.middleware import Middleware
 from starlette.responses import JSONResponse
 
@@ -2302,7 +2302,8 @@ def update_video(
     "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer you settled on — "dom"
-    (the scene components) or "cartoon_3d" (one Cartoon 3D world as data).
+    (the scene components) or "cartoon_3d" (one Cartoon 3D world, written as
+    code per video by the tubematic-cartoon3d skill).
     Write it BEFORE authoring any scene and never again: a revision round
     renders with the renderer the video already uses, and flipping it would
     discard every scene. "cartoon_3d" is refused while the renderer's GPU is
@@ -4299,15 +4300,15 @@ def validate_job(video_id: str) -> dict:
     except Exception as e:
         errors.append(f"Image reference check failed: {e}")
 
-    # Cartoon 3D readiness (TMDEV-181). A Cartoon 3D world renders only once
-    # every agent-made part and cast figure holds a judge's PASS for its
-    # current spec, two fresh judges have passed the beat sheet, and the
-    # deterministic frame check blocks nothing. write_scene_config writes the
-    # world freely (the gates read it from there); this is where an ungated
-    # world is stopped, and submit_render asks the same question.
+    # Cartoon 3D readiness (TMDEV-185). A Cartoon 3D video renders only once
+    # its generated source exists and two fresh judges have passed the beat
+    # sheet for that exact source (the verdict is keyed by a hash of the
+    # video's files, beats and narration). write_scene_config writes the
+    # config freely (the gate reads it from there); this is where an ungated
+    # video is stopped, and submit_render asks the same question.
     try:
         if "scene_config" in dir() and isinstance(scene_config, dict) and cartoon.is_cartoon(scene_config):
-            errors.extend(cartoon.readiness(JOBS_DIR, video_id, REPO_ROOT / "remotion"))
+            errors.extend(cartoon.readiness(JOBS_DIR, video_id, REPO_ROOT / "remotion", SCENES_DIR))
     except Exception as e:
         errors.append(f"Cartoon 3D readiness could not be checked: {e}")
 
@@ -4350,8 +4351,8 @@ def validate_job(video_id: str) -> dict:
     # Not for a Cartoon 3D video: its one scene is a painted canvas whose only
     # text is the captions, so there are no text rects to measure, and the
     # audit's first frame on software GL (this container has no GPU) exceeds
-    # Remotion's 30 s initial-render timeout anyway. Its checks are the frame
-    # check, the part gate and the beat gate (mcp/cartoon.py, step 8 above).
+    # Remotion's 30 s initial-render timeout anyway. Its check is the beat
+    # gate (mcp/cartoon.py, step 8 above).
     warnings: list[str] = []
     try:
         if (
@@ -4386,7 +4387,7 @@ def _cartoon_block(video_id: str) -> dict | None:
     if not cartoon.is_cartoon(config):
         return None
     try:
-        errors = cartoon.readiness(JOBS_DIR, video_id, REPO_ROOT / "remotion")
+        errors = cartoon.readiness(JOBS_DIR, video_id, REPO_ROOT / "remotion", SCENES_DIR)
     except Exception as e:
         errors = [f"Cartoon 3D readiness could not be checked: {e}"]
     if errors:
@@ -4424,8 +4425,8 @@ def submit_render(video_id: str) -> dict:
     if guard_err:
         return guard_err
 
-    # A Cartoon 3D world that has not passed its gates does not render, whether
-    # or not the agent remembered validate_job (TMDEV-181).
+    # A Cartoon 3D video that has not passed the beat gate does not render,
+    # whether or not the agent remembered validate_job (TMDEV-185).
     cartoon_err = _cartoon_block(video_id)
     if cartoon_err:
         return cartoon_err
@@ -4980,6 +4981,34 @@ def _check_scene_name(scene_name: str) -> str | None:
     if not _VALID_SCENE_NAME.match(scene_name):
         return f"scene_name '{scene_name}' must contain only alphanumeric characters and hyphens"
     return None
+
+
+# A generated source name (TMDEV-185): a scene is a bare stem ('intro-hook',
+# a .tsx); a Cartoon 3D module names its extension and may sit one directory
+# deep ('story.ts', 'sets/street.ts'). 'CartoonShort.tsx' and 'CartoonShort'
+# are the same file. Each component is the scene-name alphabet.
+_SOURCE_NAME_RE = re.compile(r'^(?:(?P<dir>[a-zA-Z0-9][a-zA-Z0-9\-]*)/)?(?P<stem>[a-zA-Z0-9][a-zA-Z0-9\-]*)(?P<ext>\.tsx?)?$')
+
+
+def _split_source_name(scene_name: str):
+    """((dirname | None, stem, ext), None) for a usable generated source name,
+    or (None, error). A plain scene name splits to (None, stem, '.tsx')."""
+    if not scene_name:
+        return None, "scene_name must not be empty"
+    m = _SOURCE_NAME_RE.match(scene_name)
+    if not m or (m.group("dir") and not m.group("ext")):
+        return None, (f"scene_name '{scene_name}' must be a scene name (alphanumeric characters and hyphens) or a "
+                      f"Cartoon 3D module like 'story.ts' or 'sets/street.ts' (one directory deep, .ts or .tsx)")
+    return (m.group("dir"), m.group("stem"), m.group("ext") or ".tsx"), None
+
+
+def _source_path(video_id: str, dirname, stem: str, ext: str):
+    """The file a split source name means, or raises tjobs.UnsafePath."""
+    if dirname is None and ext == ".tsx":
+        return tjobs.scene_file(SCENES_DIR, video_id, stem)
+    if not video_id:
+        raise tjobs.UnsafePath("a Cartoon 3D module belongs to a video: pass its video_id")
+    return tjobs.source_file(SCENES_DIR, video_id, dirname, stem, ext)
 
 
 def _image_pixel_size(path) -> tuple:
@@ -5663,7 +5692,15 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
                  would then render with the wrong scene.
     scene_name:  filename stem without extension (e.g. 'intro-hook').
                  Only alphanumeric characters and hyphens are allowed.
-    tsx_content: complete TypeScript/React source for the scene component.
+                 **Cartoon 3D modules** (the tubematic-cartoon3d skill) name
+                 their extension and may sit one directory deep: 'story.ts',
+                 'scenes.ts', 'sets/street.ts', 'stage/river.ts'. They are
+                 plain TypeScript the video's 'CartoonShort' scene imports
+                 (`import { SHOTS } from "./story"`), not scenes: the
+                 response carries `module` instead of `src`, and nothing in
+                 scene-config.json names them.
+    tsx_content: complete TypeScript/React source for the scene component
+                 (or the module's TypeScript).
 
     Writes to /app/remotion/src/scenes/generated/{video_id}/{scene_name}.tsx,
     bind-mounted to mounted/scenes/generated/{video_id}/ on the host — the
@@ -5698,7 +5735,7 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
     err = _video_id_error(video_id)
     if err:
         return err
-    err = _check_scene_name(scene_name)
+    split, err = _split_source_name(scene_name)
     if err:
         return {"error": err}
 
@@ -5714,20 +5751,24 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
     if guard_err:
         return guard_err
 
+    dirname, stem, ext = split
     try:
-        path = tjobs.scene_file(SCENES_DIR, video_id, scene_name)
+        path = _source_path(video_id, dirname, stem, ext)
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(tsx_content, encoding="utf-8")
-    src = f"{video_id}/{scene_name}"
-    return {
+    is_scene = dirname is None and ext == ".tsx"
+    result = {
         "video_id": video_id,
         "scene_name": scene_name,
-        "src": src,
+        "src": f"{video_id}/{stem}" if is_scene else None,
         "path": str(path),
         "size_bytes": path.stat().st_size,
     }
+    if not is_scene:
+        result["module"] = f"{dirname}/{stem}{ext}" if dirname else f"{stem}{ext}"
+    return result
 
 
 @mcp.tool
@@ -5850,9 +5891,9 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         if sub_err:
             return {"error": sub_err}
 
-    parts_err = _validate_cartoon_parts(scenes, config["totalFrames"])  # TMDEV-181
-    if parts_err:
-        return {"error": parts_err}
+    scene_err = _validate_cartoon_scene(scenes, config["totalFrames"], video_id)  # TMDEV-185
+    if scene_err:
+        return {"error": scene_err}
     renderer_err, resolve_renderer = _check_cartoon_renderer(row, scenes)  # TMDEV-179
     if renderer_err:
         return {"error": renderer_err}
@@ -5900,7 +5941,7 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         if not recorded and now_resolved != resolve_renderer:
             staged.unlink(missing_ok=True)
             return {"error": f"this video's 'auto' resolved to the {now_resolved!r} renderer while this config was being "
-                             f"checked; a {'Cartoon3D' if resolve_renderer == 'cartoon_3d' else 'DOM'} scene-config "
+                             f"checked; a {'Cartoon 3D' if resolve_renderer == 'cartoon_3d' else 'DOM'} scene-config "
                              f"cannot follow (written once)"}
     try:
         os.replace(staged, path)
@@ -6092,7 +6133,20 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
     if source not in ("generated", "installed"):
         return {"error": f"invalid source '{source}' — must be 'generated' or 'installed'"}
 
-    if "/" in scene_name:
+    # A Cartoon 3D module ('sets/street.ts', or composed '<video_id>/sets/street.ts')
+    # is told apart from a scene by its extension or its depth (TMDEV-185).
+    is_module = source == "generated" and (scene_name.endswith((".ts", ".tsx")) or scene_name.count("/") > 1)
+    if is_module:
+        if "/" in scene_name and (not video_id or scene_name.startswith(f"{video_id}/")):
+            head, rest = scene_name.split("/", 1)
+            if tids.is_component(head) and (not video_id or head == video_id) and _split_source_name(rest)[1] is None:
+                video_id, scene_name = head, rest
+        if not video_id:
+            return {"error": f"scene_name '{scene_name}' is a Cartoon 3D module, which belongs to a video: pass its video_id"}
+        split, err = _split_source_name(scene_name)
+        if err:
+            return {"error": err}
+    elif "/" in scene_name:
         # The composed form. _check_scene_src is validate_job's existing
         # validator for exactly this shape — reused rather than reimplemented,
         # so both places agree on what a legal src looks like.
@@ -6108,10 +6162,12 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
             return {"error": f"conflicting video_id: scene_name '{scene_name}' names video "
                              f"'{name_video_id}' but video_id is '{video_id}' — pass one or the other"}
         video_id, scene_name = name_video_id, stem
+        split = (None, stem, ".tsx")
     else:
         err = _check_scene_name(scene_name)
         if err:
             return {"error": err}
+        split = (None, scene_name, ".tsx")
 
     if source == "installed":
         path, src, video_id = INSTALLED_DIR / f"{scene_name}.tsx", scene_name, ""
@@ -6124,14 +6180,14 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
             row = con.execute("SELECT id FROM videos WHERE id = ?", (video_id,)).fetchone()
         if not row:
             return {"error": f"Video not found: {video_id}"}
-        src = f"{video_id}/{scene_name}"
+        src = f"{video_id}/{scene_name}" if not is_module else f"{video_id}/{scene_name}"
     else:
         # Legacy flat file, written before scenes were namespaced per video —
         # the same allowance delete_scene_file makes for an omitted video_id.
         src = scene_name
     if source != "installed":
         try:
-            path = tjobs.scene_file(SCENES_DIR, video_id, scene_name)
+            path = _source_path(video_id, *split)
         except tjobs.UnsafePath as e:
             return {"error": str(e)}
 
@@ -6158,7 +6214,8 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
 def delete_scene_file(scene_name: str, video_id: str = "") -> dict:
     """Delete a generated scene TSX file.
 
-    scene_name: filename stem without extension (e.g. 'intro-hook').
+    scene_name: filename stem without extension (e.g. 'intro-hook'), or a
+                Cartoon 3D module with its extension ('sets/street.ts').
     video_id:   the video the scene belongs to — deletes
                 generated/{video_id}/{scene_name}.tsx. Every scene written by
                 the current write_scene_file needs this. Omit only to delete
@@ -6170,7 +6227,7 @@ def delete_scene_file(scene_name: str, video_id: str = "") -> dict:
     Returns {deleted: True, scene_name, video_id} or
     {error: "not found", scene_name, video_id}.
     """
-    err = _check_scene_name(scene_name)
+    split, err = _split_source_name(scene_name)
     if err:
         return {"error": err}
     # Checked before the path is built (TMDEV-161): this tool never looks the
@@ -6181,9 +6238,10 @@ def delete_scene_file(scene_name: str, video_id: str = "") -> dict:
         if err:
             return err
     # An empty video_id is the legacy flat file. A symlink on the way
-    # (generated/vid_a -> vid_b, or one leading out) is refused.
+    # (generated/vid_a -> vid_b, or one leading out) is refused. A Cartoon 3D
+    # module ('sets/street.ts') deletes the same way, under its video.
     try:
-        path = tjobs.scene_file(SCENES_DIR, video_id, scene_name)
+        path = _source_path(video_id, *split)
     except tjobs.UnsafePath as e:
         return {"error": f"{video_id}/{scene_name}: {e}"}
     if not path.exists():
@@ -6220,7 +6278,10 @@ def list_scene_files(source: str = "all", video_id: str = "") -> dict:
     by path across them.
 
     A generated entry's `name` is exactly what read_scene_file and a
-    scene-config `src` take, so it can be passed straight through.
+    scene-config `src` take, so it can be passed straight through. A Cartoon
+    3D video's modules ('{video_id}/sets/street.ts') are listed with their
+    extension: read_scene_file and delete_scene_file take them, a scene-config
+    never names them.
 
     Returns {"scenes": [{"name": str, "source": "generated"|"installed"}, ...]}
     (plus "truncated": true when the uncapped generated list is longer than
@@ -6233,13 +6294,19 @@ def list_scene_files(source: str = "all", video_id: str = "") -> dict:
     scenes = []
     truncated = False
     if source in ("all", "generated") and SCENES_DIR.exists():
+        # a scene is listed by its stem; a Cartoon 3D module (a .ts, or any
+        # file one directory deeper) by its path with its extension, which is
+        # what read_scene_file and delete_scene_file take for it
         generated = [
             {
-                "name": p.relative_to(SCENES_DIR).with_suffix("").as_posix(),
+                "name": (p.relative_to(SCENES_DIR).with_suffix("").as_posix()
+                         if p.suffix == ".tsx" and len(p.relative_to(SCENES_DIR).parts) <= 2
+                         else p.relative_to(SCENES_DIR).as_posix()),
                 "source": "generated",
                 "_mtime": p.stat().st_mtime,
             }
-            for p in SCENES_DIR.rglob("*.tsx")
+            for p in SCENES_DIR.rglob("*")
+            if p.is_file() and p.suffix in tjobs.SOURCE_EXTS
         ]
         if video_id:
             generated = [s for s in generated if s["name"].startswith(f"{video_id}/")]
@@ -6279,70 +6346,29 @@ async def health(request):
     return JSONResponse({"status": "ok"})
 
 
-# ── Cartoon 3D agent-made parts (TMDEV-181) ─────────────────────────────────
-# A Cartoon 3D world (an installed "Cartoon3D" scene) may carry parts the
-# agent wrote in the part grammar under props.world.parts. The grammar and its
-# real checks (sizes, materials, nothing floating, the vision judge) live in
-# the renderer (src/cartoon3d/probe2/partGrammar.ts and gate/gateCli.ts);
-# this is only the shape a file must have to be worth handing to them, so a
-# typo is refused here with a reason instead of failing a render later.
-# Keep in sync: partGrammar.ts PRIM_KINDS / PART_LIMITS.
-CARTOON_SCENE_SRC = "Cartoon3D"
-PART_PRIM_KINDS = ("box", "cylinder", "rod", "sphere", "torus", "lathe", "shape", "plane", "card", "group")
-PART_NAME_RE = re.compile(r"^[a-z][A-Za-z0-9]{1,31}$")
-PART_MAX_PRIMS = 160
+# ── Cartoon 3D scene (TMDEV-185) ────────────────────────────────────────────
+# A Cartoon 3D video is one generated scene spanning the whole video: the
+# `<video_id>/CartoonShort` the agent wrote (it mounts the renderer's runner
+# with the video's own TypeScript), whose props carry `cartoon3d: {beats}`,
+# the shots as beats for the beat gate. The code itself is checked by the
+# typecheck validate_job runs and judged by the beat gate; this is only the
+# shape the config must have, so a slip is refused here with a reason instead
+# of failing a render later. Keep in sync: mcp/cartoon.py, the renderer's
+# gate/sceneConfig.ts and worker.py's _scene_config_is_cartoon3d.
 
 
-def _validate_part_spec(name, spec) -> str:
-    """Shape check of one agent-made part. Returns an error string, or ""."""
-    where = f"parts[{name!r}]"
-    if not PART_NAME_RE.match(str(name)):
-        return f"{where}: a part name is lowerCamelCase, 2-32 characters"
-    if not isinstance(spec, dict):
-        return f"{where} must be an object"
-    if spec.get("name") != name:
-        return f"{where}.name must equal its key ({name!r}), got {spec.get('name')!r}"
-    blurb = spec.get("blurb")
-    if not isinstance(blurb, str) or not blurb.strip():
-        return f"{where}.blurb must say what the part is"
-    prims = spec.get("prims")
-    if not isinstance(prims, list) or not prims:
-        return f"{where}.prims must be a non-empty list of primitives"
-
-    count = 0
-
-    def walk(items, path, depth):
-        nonlocal count
-        for i, p in enumerate(items):
-            here = f"{path}[{i}]"
-            if not isinstance(p, dict) or p.get("kind") not in PART_PRIM_KINDS:
-                return f"{here}.kind must be one of {list(PART_PRIM_KINDS)}"
-            rep = p.get("repeat")
-            n = rep.get("n") if isinstance(rep, dict) else 1
-            if isinstance(n, bool) or not isinstance(n, int) or n < 1:
-                return f"{here}.repeat.n must be a whole number >= 1"
-            count += n
-            if count > PART_MAX_PRIMS:
-                return f"{where} has more than {PART_MAX_PRIMS} primitives after repeats"
-            if p["kind"] == "group":
-                if depth >= 4:
-                    return f"{here}: groups nest deeper than 4"
-                items2 = p.get("items")
-                if not isinstance(items2, list) or not items2:
-                    return f"{here}.items must be a non-empty list"
-                err = walk(items2, f"{here}.items", depth + 1)
-                if err:
-                    return err
-        return ""
-
-    return walk(prims, f"{where}.prims", 0)
+def _cartoon_props(scene) -> dict | None:
+    props = scene.get("props") if isinstance(scene, dict) else None
+    c3d = props.get(cartoon.CARTOON_PROPS) if isinstance(props, dict) else None
+    return c3d if isinstance(c3d, dict) else None
 
 
 def _validate_cartoon_beats(where: str, beats, total_frames: int) -> str:
     """The beat sheet must tile the whole video, in order, with no gap and no
-    overlap: the beat gate judges one still per LISTED beat and the frame check
-    walks to the LAST beat, so a frame outside every beat is a frame nobody
-    gated. Returns "" if fine."""
+    overlap: the beat gate judges one still per LISTED beat, so a frame
+    outside every beat is a frame nobody gated. Each beat says in a few words
+    what its frame shows (`shot`), for the author and the judges' log.
+    Returns "" if fine."""
     if not isinstance(beats, list) or not beats:
         return f"{where} must be a non-empty list of beats"
     expected = 0
@@ -6350,6 +6376,8 @@ def _validate_cartoon_beats(where: str, beats, total_frames: int) -> str:
         start, end = (b.get("start"), b.get("end")) if isinstance(b, dict) else (None, None)
         if not (isinstance(start, int) and isinstance(end, int)) or isinstance(start, bool) or isinstance(end, bool):
             return f"{where}[{i}] needs integer start and end frames"
+        if not isinstance(b.get("shot"), str) or not b["shot"].strip():
+            return f"{where}[{i}] needs a 'shot': a few words saying what the frame shows"
         if start != expected:
             return (f"{where}[{i}] starts at frame {start} but frame {expected} is the first not yet covered: beats "
                     f"must be in order and contiguous, from frame 0 to the last frame")
@@ -6362,46 +6390,43 @@ def _validate_cartoon_beats(where: str, beats, total_frames: int) -> str:
     return ""
 
 
-def _validate_cartoon_parts(scenes, total_frames: int | None = None) -> str:
-    """Every Cartoon 3D scene: one per video, its props.world.parts if present,
-    and a beat sheet that tiles the video. Returns "" if fine."""
-    cartoon = [i for i, scene in enumerate(scenes) if isinstance(scene, dict) and scene.get("src") == CARTOON_SCENE_SRC]
-    if len(cartoon) > 1 or (cartoon and len(scenes) > 1):
-        return (f"a Cartoon 3D video is exactly one {CARTOON_SCENE_SRC} scene spanning the whole video (one world, one "
+def _validate_cartoon_scene(scenes, total_frames: int | None = None, video_id: str | None = None) -> str:
+    """A config with a Cartoon 3D scene: exactly that one scene, generated,
+    named `<video_id>/CartoonShort`, spanning the video, with a beat sheet that
+    tiles it. A config without one is not looked at. Returns "" if fine."""
+    found = [i for i, sc in enumerate(scenes) if _cartoon_props(sc) is not None]
+    if not found:
+        return ""
+    if len(found) > 1 or len(scenes) > 1:
+        return (f"a Cartoon 3D video is exactly one generated scene spanning the whole video (one world, one "
                 f"mount); this config has {len(scenes)} scenes")
-    for i in cartoon:
-        scene = scenes[i]
-        props = scene.get("props") if isinstance(scene.get("props"), dict) else {}
-        world = props.get("world")
-        if not isinstance(world, dict):
-            return f"scenes[{i}] ({CARTOON_SCENE_SRC}) needs props.world"
-        if total_frames is not None:
-            # the one scene spans the whole video: CompositionBuilder would leave
-            # blank frames around a shorter one and rebase its clock, while the
-            # frame check and the beat gate count from frame 0
-            start, duration = scene.get("startFrame", 0), scene.get("durationInFrames")
-            if start != 0 or isinstance(start, bool):
-                return f"scenes[{i}] ({CARTOON_SCENE_SRC}) must start at frame 0 (startFrame is {start!r}): one world spans the whole video"
-            if duration != total_frames or isinstance(duration, bool):
-                return (f"scenes[{i}] ({CARTOON_SCENE_SRC}) must span the whole video: durationInFrames is {duration!r}, "
-                        f"totalFrames is {total_frames}")
-            err = _validate_cartoon_beats(f"scenes[{i}].props.beats", props.get("beats"), total_frames)
-            if err:
-                return err
-        parts = world.get("parts")
-        if parts is None:
-            continue
-        if not isinstance(parts, dict):
-            return f"scenes[{i}].props.world.parts must be an object keyed by part name"
-        for name, spec in parts.items():
-            err = _validate_part_spec(name, spec)
-            if err:
-                return f"scenes[{i}].props.world.{err}"
+    i = found[0]
+    scene = scenes[i]
+    if scene.get("type", "generated") != "generated" or scene.get("source", "generated") != "generated":
+        return f"scenes[{i}]: a Cartoon 3D scene is this video's own generated scene, not an installed one"
+    src = scene.get("src")
+    want = f"{video_id}/{cartoon.ENTRY_SCENE}" if video_id else f"<video_id>/{cartoon.ENTRY_SCENE}"
+    if not isinstance(src, str) or (video_id and src != want) or (not video_id and src.split("/")[-1] != cartoon.ENTRY_SCENE):
+        return (f"scenes[{i}].src must be '{want}', the scene write_scene_file wrote for this video "
+                f"(it mounts CartoonShort with the video's VideoDef), got {src!r}")
+    if total_frames is not None:
+        # the one scene spans the whole video: CompositionBuilder would leave
+        # blank frames around a shorter one and rebase its clock, while the
+        # beat gate counts from frame 0
+        start, duration = scene.get("startFrame", 0), scene.get("durationInFrames")
+        if start != 0 or isinstance(start, bool):
+            return f"scenes[{i}] (Cartoon 3D) must start at frame 0 (startFrame is {start!r}): one world spans the whole video"
+        if duration != total_frames or isinstance(duration, bool):
+            return (f"scenes[{i}] (Cartoon 3D) must span the whole video: durationInFrames is {duration!r}, "
+                    f"totalFrames is {total_frames}")
+        err = _validate_cartoon_beats(f"scenes[{i}].props.{cartoon.CARTOON_PROPS}.beats", _cartoon_props(scene).get("beats"), total_frames)
+        if err:
+            return err
     return ""
 
 
 def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
-    """The scene kind must agree with the video's renderer: a Cartoon3D scene
+    """The scene kind must agree with the video's renderer: a Cartoon 3D scene
     only on a cartoon_3d video or an auto video that resolved to cartoon_3d,
     and never a DOM scene on a video whose renderer is cartoon_3d. Otherwise
     the worker and the AI review would read the video one way and the scenes
@@ -6413,17 +6438,17 @@ def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
     for DOM scenes, "" when nothing is to record). The caller records it only
     after the scene-work guard and the write have succeeded, so a refused call
     never freezes the renderer. Same backstop pattern as the canvas."""
-    is_cartoon = any(isinstance(sc, dict) and sc.get("src") == CARTOON_SCENE_SRC for sc in scenes)
+    is_cartoon = any(_cartoon_props(sc) is not None for sc in scenes)
     style = row["visual_style"] or ""
     resolved = row["resolved_renderer"] or ""
     unresolved_auto = style == "auto" and not resolved
     if is_cartoon:
         if style not in ("auto", "cartoon_3d"):
-            return (f"this video's visual_style is {style!r}, which renders DOM scenes; a {CARTOON_SCENE_SRC} scene "
+            return (f"this video's visual_style is {style!r}, which renders DOM scenes; a Cartoon 3D scene "
                     f"needs visual_style 'cartoon_3d', or 'auto' resolved to cartoon_3d"), ""
         if style == "auto" and resolved and resolved != "cartoon_3d":
             return (f"this video's 'auto' resolved to the {resolved!r} renderer, which is written once; a "
-                    f"{CARTOON_SCENE_SRC} scene cannot follow (a revision renders with the renderer the video already uses)"), ""
+                    f"Cartoon 3D scene cannot follow (a revision renders with the renderer the video already uses)"), ""
         if unresolved_auto:
             gpu_err = _cartoon3d_gpu_error("cartoon_3d")
             if gpu_err:
@@ -6432,17 +6457,20 @@ def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
         return "", ""
     if style == "cartoon_3d" or resolved == "cartoon_3d":
         return (f"this video renders as Cartoon 3D ({'visual_style' if style == 'cartoon_3d' else 'auto resolved to'} "
-                f"cartoon_3d), so its scene-config must be the single {CARTOON_SCENE_SRC} scene, not DOM scenes"), ""
+                f"cartoon_3d), so its scene-config must be the single Cartoon 3D scene (its props carry "
+                f"{cartoon.CARTOON_PROPS}), not DOM scenes"), ""
     return "", ("dom" if unresolved_auto else "")
 
 
-# ── Group 9: Cartoon 3D authoring (TMDEV-181) ───────────────────────────────
-# A Cartoon 3D video is one installed "Cartoon3DProbe" scene whose props carry
-# the world, the beat sheet and the scene options as data. These tools are the
-# gates and checks of that data; the real work is the renderer's command lines
-# (mcp/cartoon.py says how). None takes the scene-work claim: they read the
-# written scene-config and write only under the job's cartoon/ directory, and
-# the record tools are called by judge subagents, which may be other sessions.
+# ── Group 9: Cartoon 3D authoring (TMDEV-185) ───────────────────────────────
+# A Cartoon 3D video is TypeScript the agent writes per video against the
+# renderer's frozen kit, plus one scene-config entry with the beats. These
+# tools are the kit source it reads, the stills it looks at, the beat gate
+# that judges the result, and the soundtrack; the real work is the renderer's
+# command lines (mcp/cartoon.py says how). None takes the scene-work claim:
+# they read the written files and write only under the job's cartoon/
+# directory, and the record tool is called by judge subagents, which may be
+# other sessions.
 
 _CARTOON_REMOTION = REPO_ROOT / "remotion"
 
@@ -6458,33 +6486,34 @@ def _cartoon_call(video_id: str, fn, *args):
 
 
 @mcp.tool
-def cartoon_catalog() -> dict:
-    """Every part a Cartoon 3D world may name, with its footprint in metres and
-    what it is: the kit kinds, the promoted agent-made parts, the code parts
-    with their acts, the promoted cast, and the gestures, hats, holds and
-    coats the cast grammar knows. Read it before writing a world; a world that
-    names a part not in this list is refused by the frame check.
+def cartoon_kit_list() -> dict:
+    """The files of the Cartoon 3D kit a video's code is written against, by
+    path under renderer/remotion/src/cartoon3d/: `video.ts` (the VideoDef
+    contract), `camera.ts` (the camera grammar), `CartoonShort.tsx` (the
+    runner), `kit/*` (cast, sets, blocks, paint, lights, water), `post/*`
+    and the worked example under `examples/chicago/`. Read them with
+    cartoon_kit_read; the tubematic-cartoon3d skill says which first.
 
-    Returns {catalog: markdown}.
+    Returns {root, files: [path, ...]}.
     """
     try:
-        return {"catalog": cartoon.catalog(_CARTOON_REMOTION)}
+        return {"root": "renderer/remotion/src/cartoon3d", "files": cartoon.list_kit(_CARTOON_REMOTION)}
     except cartoon.CartoonError as e:
         return {"error": str(e)}
 
 
 @mcp.tool
-def cartoon_qa(video_id: str) -> dict:
-    """The deterministic frame check over EVERY frame of the Cartoon 3D
-    scene-config written for this video: a head hidden by a wall, a body
-    standing in a crate, a sign cut by the frame edge, feet that would slide,
-    a cast member under the captions, a cue outside its beat, a part the world
-    does not carry. BLOCK findings stop the render (validate_job repeats this
-    check); ADVISE findings are thresholds worth a look. Fast, no render.
+def cartoon_kit_read(path: str) -> dict:
+    """One kit file's source, by a path cartoon_kit_list printed (for example
+    "kit/cast.ts" or "examples/chicago/story.ts"). The kit is frozen in the
+    renderer image: read it, import from it, never copy it into a video.
 
-    Returns {passed, blocking, advisories, findings: [{gate, detail}], summary}.
+    Returns {path, content} or {error}.
     """
-    return _cartoon_call(video_id, cartoon.qa)
+    try:
+        return {"path": path, "content": cartoon.read_kit(_CARTOON_REMOTION, path)}
+    except cartoon.CartoonError as e:
+        return {"error": str(e)}
 
 
 @mcp.tool
@@ -6492,8 +6521,9 @@ def cartoon_still(video_id: str, frames: list[int]):
     """Look at frames of the Cartoon 3D video as the render will show them:
     the world, the captions, the voice timing. One to six frame numbers per
     call; use each beat's middle frame. Looking is the authoring loop: write
-    the world, check, look, fix. The pictures are returned at half size and
-    kept as stills/fNNNN.png for cartoon_read_still.
+    the code, look, fix. The pictures are returned at half size and kept as
+    stills/fNNNN.png for cartoon_read_still. The stills render the source as
+    it is on disk at the call (an edit is seen by the next still).
 
     Returns a text block naming the stills, then the pictures.
     """
@@ -6509,11 +6539,10 @@ def cartoon_still(video_id: str, frames: list[int]):
 
 @mcp.tool
 def cartoon_read_still(video_id: str, kind: str, name: str):
-    """One still by name: kind "gate" (a part's renders: <part>-quarter.png,
-    <part>-end.png, <part>-close.png for a cast figure), "beatgate" (one frame
-    per beat: beatNN-fNNNN.png) or "stills" (frames cartoon_still rendered).
-    This is how a judge sees what it judges: the prompts name the stills and
-    this call shows them. A pure read.
+    """One still by name: kind "beatgate" (one frame per beat:
+    beatNN-fNNNN.png) or "stills" (frames cartoon_still rendered). This is
+    how a judge sees what it judges: the prompt names the stills and this
+    call shows them. A pure read.
 
     Returns a text block and the picture, or {error}.
     """
@@ -6531,47 +6560,12 @@ def cartoon_read_still(video_id: str, kind: str, name: str):
 
 
 @mcp.tool
-def cartoon_gate(video_id: str) -> dict:
-    """The PART GATE for the agent-made parts and cast figures the written
-    world carries (props.world.parts and props.world.cast): the deterministic
-    check (shape, size, materials, nothing floating), then renders of each
-    one beside a townsman and a crate, and a judge prompt per part. A part
-    with a PASS for its current spec is not rendered again.
-
-    The judge is NOT you. For every part whose status is "awaiting judge",
-    spawn a FRESH subagent with no other context, give it the part's
-    judge_prompt verbatim and nothing else, and let it answer: it reads the
-    stills with cartoon_read_still and records its own verdict with
-    cartoon_gate_record. A part gets two judged attempts (two specs under
-    one name); the third is refused — fall back to a kit or promoted part.
-    validate_job and submit_render refuse a world with an unpassed part.
-
-    Returns {passed, summary, parts: {name: {status, attempts, errors,
-    stills, answers?, seen?, judge_prompt?}}}.
-    """
-    return _cartoon_call(video_id, cartoon.gate)
-
-
-@mcp.tool
-def cartoon_gate_record(video_id: str, part: str, answers: dict) -> dict:
-    """Record a judge's answers for one part's current spec. Called by the
-    JUDGE subagent that cartoon_gate's prompt was given to, with the JSON the
-    prompt asked for: {seen, recognisable: {ok, why}, grounded: {ok, why},
-    silhouette: {ok, why}, scale: {ok, why}, style: {ok, why}}. Pass = all
-    five ok. A spec already judged is refused; change the spec instead.
-
-    Returns the part's verdict: {part, passed, status, attempts, answers, seen}.
-    """
-    return _cartoon_call(video_id, cartoon.gate_record, part, answers)
-
-
-@mcp.tool
 def cartoon_beat_gate(video_id: str) -> dict:
     """The BEAT GATE: does the frame at the middle of every beat show what the
     narrator says during it? Renders one still per beat (the real frame,
     captions burned in) and writes the judges' prompt with each beat's
-    sentence. Keyed by the written world, beats and options, so a changed
-    shot is judged again and an unchanged one is not.
+    sentence. Keyed by the video's source files, beats and narration, so a
+    changed shot is judged again and an unchanged one is not.
 
     TWO fresh judges answer the same prompt, each a separate subagent with no
     other context, given judge_prompt verbatim; a beat they split on goes to
@@ -6584,21 +6578,42 @@ def cartoon_beat_gate(video_id: str) -> dict:
     Returns {passed, need, judges, tie, fails, summary, beats, stills,
     judge_prompt?}.
     """
-    return _cartoon_call(video_id, cartoon.beat_gate)
+    return _cartoon_call(video_id, cartoon.beat_gate, SCENES_DIR)
 
 
 @mcp.tool
 def cartoon_beat_gate_record(video_id: str, answers: dict) -> dict:
-    """Record one judge's answers for the current beat sheet. Called by the
-    JUDGE subagent that cartoon_beat_gate's prompt was given to, with the JSON
-    the prompt asked for: {beats: [{beat, seen, shows, why, fix?}, ...]}, one
-    entry per beat in order. Identical answers are refused: the second judge
-    is a different, fresh judge.
+    """Record one judge's answers for the current source and beat sheet.
+    Called by the JUDGE subagent that cartoon_beat_gate's prompt was given
+    to, with the JSON the prompt asked for: {beats: [{beat, seen, shows, why,
+    fix?}, ...]}, one entry per beat in order. Identical answers are refused:
+    the second judge is a different, fresh judge.
 
     Returns the gate's status after this record: {passed, need, judges, tie,
     fails, summary, recorded: [one line per beat]}.
     """
-    return _cartoon_call(video_id, cartoon.beat_gate_record, answers)
+    return _cartoon_call(video_id, cartoon.beat_gate_record, SCENES_DIR, answers)
+
+
+@mcp.tool
+def cartoon_soundtrack(video_id: str, spec: dict) -> dict:
+    """Synthesise the video's soundtrack from a spec and mix it under the
+    voice: music sections (a style, a level and a span per mood, optional
+    hits and dips) and sound-effect cues (a generator, a time in seconds or
+    a frame, a level, a pan, a distance), every sound synthesised, nothing
+    sampled. The mix is exactly the video's length at -14 LUFS, ducked under
+    every spoken word; the render muxes it in place of the bare voice. The
+    spec's shape, the styles and the generators are in the
+    tubematic-cartoon3d skill's reference/soundtrack.md. Call it after the
+    beat gate passes (the shots are final then) and before submit_render;
+    calling it again replaces the mix. Takes about a minute.
+
+    Returns {mix, cues (the cue sheet with every level), loudness, log} or
+    {error} naming the cue or section that is wrong.
+    """
+    if not isinstance(spec, dict):
+        return {"error": "spec must be the soundtrack spec object"}
+    return _cartoon_call(video_id, cartoon.soundtrack, spec)
 
 
 # ── Registered tool names ───────────────────────────────────────────────────

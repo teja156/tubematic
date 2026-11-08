@@ -246,14 +246,127 @@ def _wait_for_render(proc, timeout_secs: int, stall_secs: int) -> tuple[str, str
 
 def _scene_config_is_cartoon3d(scene_config_path) -> bool:
     """Whether the written scene-config renders a Cartoon 3D world: one
-    installed `Cartoon3D` scene. Keep the name in sync with mcp/cartoon.py."""
+    generated scene whose props carry `cartoon3d` (the beats). Keep the key
+    in sync with mcp/cartoon.py's CARTOON_PROPS."""
     try:
         config = json.loads(Path(scene_config_path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
     scenes = config.get("scenes") if isinstance(config, dict) else None
     return isinstance(scenes, list) and any(
-        isinstance(s, dict) and s.get("src") == "Cartoon3D" for s in scenes)
+        isinstance(s, dict) and isinstance(s.get("props"), dict) and isinstance(s["props"].get("cartoon3d"), dict)
+        for s in scenes)
+
+
+# ── Cartoon 3D: a segmented render (TMDEV-185) ──────────────────────────────
+#
+# One `remotion render` of a whole Cartoon 3D Short hung silently part way on
+# the GPU (the spike: a long render at ~1/3, most likely GPU memory as every
+# tab accumulates every set's textures and a crossfade opens a second WebGL
+# context). So a Cartoon 3D video renders in segments of CARTOON_CHUNK_FRAMES
+# frames, each its own Remotion process with a fresh browser and the same
+# stall watcher as any render, video only; the segments are joined without
+# re-encoding and the soundtrack is muxed on afterwards: the synthesised mix
+# (mcp/cartoon.py's cartoon_soundtrack, under the job's cartoon/ directory)
+# when it is there and newer than the voice, else the voice alone.
+CARTOON_CHUNK_FRAMES = 450          # 15 s at 30 fps
+CARTOON_CHUNK_ATTEMPTS = 2          # a segment that hangs or fails is tried once more, fresh
+CARTOON_MIX = ("cartoon", "audio", "mix", "mix.wav")   # keep in sync with mcp/cartoon.py's mix_file
+FFMPEG_TIMEOUT_SECS = 900
+
+
+def _cartoon_chunks(total_frames: int, size: int = CARTOON_CHUNK_FRAMES) -> list:
+    """Inclusive frame ranges tiling [0, total_frames). A short tail (under a
+    third of a segment) joins the segment before it rather than costing a
+    browser of its own."""
+    if total_frames <= 0:
+        return []
+    starts = list(range(0, total_frames, size))
+    if len(starts) > 1 and total_frames - starts[-1] < size / 3:
+        starts.pop()
+    return [(a, (starts[i + 1] - 1) if i + 1 < len(starts) else total_frames - 1) for i, a in enumerate(starts)]
+
+
+def _soundtrack_for(video_id: str, voice_path: Path) -> Path:
+    """The audio to mux: the synthesised mix when it exists and is at least as
+    new as the voice (a re-voiced video makes an older mix stale), else the voice."""
+    try:
+        mix = tjobs.job_dir(pipeline.JOBS_DIR, video_id).joinpath(*CARTOON_MIX)
+        if mix.is_file() and not mix.is_symlink() and mix.stat().st_mtime >= voice_path.stat().st_mtime:
+            return mix
+    except (OSError, tjobs.UnsafePath):
+        pass
+    return voice_path
+
+
+def _render_cartoon(video_id: str, props: str, output_path: str, gl_argv: list, gl_env: dict,
+                    timeout_secs: int, stall_secs: int, total_frames: int, voice_path: Path) -> tuple:
+    """Render a Cartoon 3D video in segments and mux its soundtrack. Returns
+    (outcome, detail): outcome "ok", "hung" (a segment stalled or timed out
+    twice: environmental, retried by the caller as a timeout is) or "failed"
+    (Remotion or ffmpeg reported an error)."""
+    out_file = Path(output_path)
+    work = out_file.parent / f".{video_id}.segments"
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True, exist_ok=True)
+    chunks = _cartoon_chunks(total_frames)
+    if not chunks:
+        return "failed", f"timeline.json has no frames to render (totalFrames {total_frames})"
+    segments = []
+    try:
+        for a, b in chunks:
+            seg = work / f"seg_{a:05d}-{b:05d}.mp4"
+            last_err, hung = "", False
+            for attempt in range(1, CARTOON_CHUNK_ATTEMPTS + 1):
+                log.info(f"[{video_id}] rendering frames {a}-{b} (attempt {attempt}/{CARTOON_CHUNK_ATTEMPTS})",
+                         extra={"video_id": video_id})
+                proc = subprocess.Popen(
+                    ["npx", "remotion", "render", "Composition", str(seg), "--props", props,
+                     "--browser-executable-path", CHROMIUM_BIN, *gl_argv,
+                     # two tabs: the post stack hung at the default concurrency on one shared GPU
+                     "--concurrency=2", f"--frames={a}-{b}", "--muted"],
+                    cwd=str(REMOTION_DIR), env={**os.environ, **gl_env},
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+                stdout, stderr, outcome = _wait_for_render(proc, timeout_secs, stall_secs)
+                if outcome != "exited":
+                    _kill_group_and_reap(proc)
+                    hung = True
+                    last_err = (f"frames {a}-{b}: no progress for {stall_secs}s" if outcome == "stall"
+                                else f"frames {a}-{b}: timed out after {timeout_secs}s")
+                    log.warning(f"[{video_id}] {last_err}", extra={"video_id": video_id})
+                    continue
+                if proc.returncode == 0 and seg.is_file() and seg.stat().st_size > 0:
+                    segments.append(seg)
+                    break
+                hung = False
+                last_err = f"frames {a}-{b}: " + ((stderr or stdout or "remotion exited %d" % proc.returncode).strip()[-2000:])
+                log.warning(f"[{video_id}] segment failed: {last_err[-300:]}", extra={"video_id": video_id})
+            else:
+                return ("hung" if hung else "failed"), last_err
+        list_file = work / "segments.txt"
+        list_file.write_text("".join(f"file '{p.name}'\n" for p in segments), encoding="utf-8")
+        silent = work / "video.mp4"
+        joined = subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
+                                 "-c", "copy", str(silent)], cwd=str(work), capture_output=True, text=True,
+                                timeout=FFMPEG_TIMEOUT_SECS)
+        if joined.returncode != 0 or not silent.is_file():
+            return "failed", f"joining the {len(segments)} segments failed: {(joined.stderr or joined.stdout).strip()[-800:]}"
+        audio = _soundtrack_for(video_id, voice_path)
+        tmp_out = out_file.with_name(f"{out_file.name}.tmp.mp4")
+        muxed = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(silent), "-i", str(audio),
+                                "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+                                "-shortest", "-movflags", "+faststart", str(tmp_out)],
+                               capture_output=True, text=True, timeout=FFMPEG_TIMEOUT_SECS)
+        if muxed.returncode != 0 or not tmp_out.is_file():
+            tmp_out.unlink(missing_ok=True)
+            return "failed", f"muxing the soundtrack failed: {(muxed.stderr or muxed.stdout).strip()[-800:]}"
+        os.replace(tmp_out, out_file)
+        return "ok", (f"{len(segments)} segments, "
+                      + ("the synthesised soundtrack" if audio != voice_path else "the voice alone"))
+    except subprocess.TimeoutExpired as e:
+        return "failed", f"ffmpeg did not finish: {e}"
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 # ── GPU rendering (TMDEV-178) ───────────────────────────────────────────────
@@ -2014,6 +2127,31 @@ def _stage_and_render(video_id: str) -> None:
         return
 
     log.info(f"[{video_id}] rendering -> {output_path}", extra={"video_id": video_id})
+    if cartoon:
+        on_gpu = _render_on_gpu()
+        gl_argv, gl_env = _gl_args(on_gpu)
+        try:
+            total_frames = int(json.loads(timeline_path.read_text(encoding="utf-8")).get("totalFrames", 0))
+        except (OSError, ValueError, TypeError, AttributeError):
+            total_frames = 0
+        outcome, detail = _render_cartoon(video_id, props, output_path, gl_argv, gl_env, timeout_secs, stall_secs,
+                                          total_frames, audio_path)
+        if outcome == "ok":
+            log.info(f"[{video_id}] render complete ({detail}) -> {output_path}", extra={"video_id": video_id})
+            _handle_render_success(video_id, output_path)
+            return
+        if outcome == "hung":
+            # environmental, as a timeout of a single render is: requeue rather
+            # than bounce to the agent, and re-test a GPU that may have wedged
+            what = f"Render stalled: {detail}"
+            log.error(f"[{video_id}] {what}", extra={"video_id": video_id})
+            _handle_render_failure(video_id, what, retry_status="RENDER_QUEUED")
+        else:
+            log.error(f"[{video_id}] render failed: {detail}", extra={"video_id": video_id})
+            _handle_render_failure(video_id, detail)
+        if on_gpu:
+            _run_gpu_probe(reason="a Cartoon 3D render on the GPU " + ("stalled" if outcome == "hung" else "failed"))
+        return
     try:
         # start_new_session=True puts npx and everything it spawns (node,
         # Chromium, ffmpeg) in one new process group. subprocess.run's own
@@ -2028,17 +2166,12 @@ def _stage_and_render(video_id: str) -> None:
         # on a failure below, whether the GPU is re-tested.
         on_gpu = _render_on_gpu()
         gl_argv, gl_env = _gl_args(on_gpu)
-        # The Cartoon 3D post stack hung at Remotion's default concurrency on
-        # the GPU (one shared GPU, several tabs); two tabs measured fine, and
-        # software showed no gain above one.
-        extra_argv = ["--concurrency=2"] if cartoon else []
         proc = subprocess.Popen(
             [
                 "npx", "remotion", "render", "Composition", output_path,
                 "--props", props,
                 "--browser-executable-path", CHROMIUM_BIN,
                 *gl_argv,
-                *extra_argv,
             ],
             cwd=str(REMOTION_DIR),
             env={**os.environ, **gl_env},

@@ -1,6 +1,7 @@
 // Ported from mromidev/claude-animated-shorts (templates/bridge/toon.ts), MIT License, Copyright (c) 2026 Mr omi.
-// Verbatim: the bean-head figure drawer (Pen, heads, faces, bodies, outfits, effects). Our cast grammar (kit/Figure.ts)
-// draws data-defined figures through it; the carrington newsboy and operator keep their own drawers.
+// Verbatim: the bean-head figure drawer (Pen, heads, faces, bodies, outfits, effects), with Tubematic's held props
+// (kit/toon.ts). Chicago adds: beards, work tools and hand props (shovel, trowel, whistle, basket, valise, cloth to
+// the face, teacup, plan), a cartoon horse, and the street effects (mud splat, flies, dirt, whistle blast, steam).
 
 // Our own flat 2D cartoon cast (riflemen, officer, townsfolk, kid, parent) + 2D effects, drawn on a canvas.
 // Construction v2 (characters.md, our own cast): superellipse heads (pointed crown 1.75 / full jaw 2.3, chin taper,
@@ -31,6 +32,8 @@ export type Outfit = {
   heldColor?: string;
   /** a frock coat's tails over the legs, or a long coat */
   coat?: "tails" | "long";
+  /** a full beard (Pullman) in this colour */
+  beard?: string;
 };
 type P2 = [number, number];
 
@@ -437,7 +440,7 @@ const hatOn = (p: Pen, o: Outfit, hp: P2[], H: Blob, cx: number, hc: number, lig
 // ---------------- bodies ----------------
 export type Arms = [P2[], P2[]];
 /** held prop; for the hammer the number is the strike 0 (raised) .. 1 (struck) */
-export type Prop = null | "icecream" | "shako" | ["hammer", number];
+export type Prop = null | "icecream" | "shako" | ["hammer", number] | ["shovel", number] | ["trowel", number] | "whistle" | "basket" | "valise" | "cloth" | "teacup" | "point";
 
 const BUILD: Record<Build, { a: number; torso: number; legs: number; tw: number }> = {
   adult: { a: 118, torso: 1.1, legs: 1.4, tw: 0.8 },
@@ -536,6 +539,15 @@ export const bodyFront = (p: Pen, o: Outfit, opts: FrontOpts) => {
     } else if (prop === "icecream") {
       const S = sh(1);
       arms.push({ pts: [S, [tcx + 1.05 * T.a + 4 * u, S[1] + 0.45 * HH], [tcx + 0.5 * T.a, S[1] + 0.4 * HH]], front: true });
+    } else if (prop === "whistle" || prop === "cloth" || prop === "teacup") {
+      // the hand at the mouth (whistle, a cloth held to the nose) or the cup raised before the chin
+      const S = sh(1), hy = prop === "teacup" ? chin + 0.08 * HH : chin - 0.12 * HH;
+      arms.push({ pts: [S, [tcx + 1.05 * T.a + 6 * u, S[1] + 0.32 * HH], [300 + 9 * u, hy]], front: true });
+    } else if (prop === "point") {
+      const S = sh(1);
+      arms.push({ pts: [S, [tcx + 1.15 * T.a + 14 * u, S[1] - 0.05 * HH], [tcx + 1.35 * T.a + 34 * u, S[1] - 0.22 * HH]], front: true });
+    } else if (prop === "basket" || prop === "valise") {
+      arms.push({ pts: hang(1, 0), front: true });
     } else if (Array.isArray(prop)) {
       const S = sh(1), k = clamp(prop[1], 0, 1);
       const E = lerp2([tcx + 1.1 * T.a + 10 * u, S[1] - 0.15 * HH], [tcx + 1.2 * T.a + 10 * u, S[1] + 0.3 * HH], k);
@@ -622,11 +634,47 @@ export const bodyFront = (p: Pen, o: Outfit, opts: FrontOpts) => {
       p.poly([[hx - 8 * u, hy - 12 * u], [hx + 8 * u, hy - 12 * u], [hx, hy + 7 * u]], "#e0a35a", 1.8 * u);
       p.ell(hx, hy - 19 * u, 11 * u, 10 * u, "#f7c6d9", 2.2 * u);
       p.dot(hx, hy, 5.5 * u);
-    } else if (Array.isArray(prop)) {
+    } else if (Array.isArray(prop) && prop[0] === "hammer") {
       const ang = rad(-70 + 105 * clamp(prop[1], 0, 1));
       const Rh = (pts: P2[]) => rotPts(pts, ang, hx, hy);
       p.band(Rh([[hx, hy + 12 * u], [hx, hy - 44 * u]]), "#8a5a34", 5 * u, 1.5 * u, "round");
       p.poly(Rh([[hx - 12 * u, hy - 58 * u], [hx + 20 * u, hy - 58 * u], [hx + 20 * u, hy - 42 * u], [hx - 12 * u, hy - 42 * u]]), "#7d848c", 2.2 * u);
+      p.dot(hx, hy, 5.5 * u);
+    } else if (prop === "whistle") {
+      p.poly(rrect(hx - 4 * u, hy - 6 * u, hx + 14 * u, hy + 4 * u, 3 * u), "#c9ccd2", 1.8 * u);
+      p.dot(hx, hy, 5.5 * u);
+    } else if (prop === "cloth") {
+      p.poly([[hx - 20 * u, hy - 10 * u], [hx + 16 * u, hy - 14 * u], [hx + 20 * u, hy + 14 * u], [hx - 14 * u, hy + 18 * u]], o.heldColor ?? "#f1ead8", 2 * u);
+      p.stroke([[hx - 10 * u, hy - 4 * u], [hx + 10 * u, hy - 6 * u]], 1.5 * u, "#b8ae98");
+      p.dot(hx, hy + 6 * u, 5.5 * u);
+    } else if (prop === "teacup") {
+      p.ell(hx, hy + 9 * u, 15 * u, 3.5 * u, "#f4f0e6", 1.8 * u);
+      p.poly([[hx - 10 * u, hy - 6 * u], [hx + 10 * u, hy - 6 * u], [hx + 7 * u, hy + 7 * u], [hx - 7 * u, hy + 7 * u]], "#f4f0e6", 1.8 * u);
+      p.dot(hx, hy, 5.5 * u);
+    } else if (prop === "point") {
+      p.dot(hx, hy, 5.5 * u);
+      p.stroke([[hx, hy], [hx + 9 * u, hy - 3 * u]], 3.4 * u, INK);
+    } else if (prop === "basket") {
+      p.arc(hx, hy + 14 * u, 14 * u, 16 * u, 180, 360, 3 * u, "#7a4f2a");
+      p.poly([[hx - 20 * u, hy + 14 * u], [hx + 20 * u, hy + 14 * u], [hx + 15 * u, hy + 38 * u], [hx - 15 * u, hy + 38 * u]], "#c79a5a", 2 * u);
+      for (let i = 0; i < 3; i++) p.stroke([[hx - 17 * u, hy + 20 * u + i * 6 * u], [hx + 17 * u, hy + 20 * u + i * 6 * u]], 1.5 * u, "#8a6234");
+      p.ell(hx - 6 * u, hy + 12 * u, 7 * u, 6 * u, "#d0453a", 1.5 * u); p.ell(hx + 7 * u, hy + 11 * u, 8 * u, 5 * u, "#e8dcb0", 1.5 * u);
+      p.dot(hx, hy, 5.5 * u);
+    } else if (prop === "valise") {
+      p.poly(rrect(hx - 26 * u, hy + 6 * u, hx + 26 * u, hy + 44 * u, 5 * u), o.heldColor ?? "#7a3f2a", 2.2 * u);
+      p.stroke([[hx - 26 * u, hy + 22 * u], [hx + 26 * u, hy + 22 * u]], 2 * u, "#c9a24e");
+      p.arc(hx, hy + 6 * u, 8 * u, 6 * u, 180, 360, 3 * u, "#3a2a20");
+      p.dot(hx, hy, 5.5 * u);
+    } else if (Array.isArray(prop) && (prop[0] === "shovel" || prop[0] === "trowel")) {
+      const k = clamp(prop[1], 0, 1), ang = rad(prop[0] === "shovel" ? 150 - 70 * k : 120 - 40 * k);
+      const Rh = (pts: P2[]) => rotPts(pts, ang, hx, hy);
+      if (prop[0] === "shovel") {
+        p.band(Rh([[hx, hy - 16 * u], [hx, hy + 62 * u]]), "#8a5a34", 4.5 * u, 1.4 * u, "round");
+        p.poly(Rh([[hx - 11 * u, hy + 60 * u], [hx + 11 * u, hy + 60 * u], [hx + 9 * u, hy + 86 * u], [hx, hy + 92 * u], [hx - 9 * u, hy + 86 * u]]), "#7d848c", 2.2 * u);
+      } else {
+        p.band(Rh([[hx, hy - 6 * u], [hx, hy + 10 * u]]), "#8a5a34", 4 * u, 1.3 * u, "round");
+        p.poly(Rh([[hx - 7 * u, hy + 10 * u], [hx + 7 * u, hy + 10 * u], [hx, hy + 32 * u]]), "#9aa0a8", 2 * u);
+      }
       p.dot(hx, hy, 5.5 * u);
     } else if (o.holds === "paper") {
       const Rp = (pts: P2[]) => rotPts(pts, rad(-12), hx, hy);
@@ -663,6 +711,12 @@ export const bodyFront = (p: Pen, o: Outfit, opts: FrontOpts) => {
   p.shadedFill(hp, skin, mul(skin, SH_SKIN), light, H.a);
   p.inkRing(hp, ow, thick);
   hatOn(p, o, hp, H, 300, hc, light, seed, facing, false);
+  if (o.beard) p.clip(hp, () => { // a neat full beard along the jaw, under the mouth (Pullman)
+    const bp = blobPts(300 + 2 * u * facing, hc + 0.78 * H.b, { a: 0.92 * H.a, b: 0.5 * H.b, nTop: 2.4, nBot: 2.0, egg: -0.1, asym: 0, rot: 0, noise: 0.004, seed: seed + 3 });
+    p.poly(bp, o.beard!, 0);
+    p.poly(blobPts(300 + 2 * u * facing, hc + 0.5 * H.b, { a: 0.42 * H.a, b: 0.2 * H.b, nTop: 2, nBot: 2, egg: 0, asym: 0, rot: 0, noise: 0.004, seed: seed + 4 }), mix(skin, o.beard!, 0.1), 0);
+  });
+  if (o.beard) p.inkRing(hp, ow, thick);
   const brim = !!o.hat && o.hat !== "hair" && o.hat !== "bonnet" && o.hat !== "cap";
   faceFront(p, 300, hc, W, expr, facing, look, lid, brim, skin, o.moustache, o.build === "stout");
   p.rot = null;
@@ -970,4 +1024,91 @@ export const fxBlob = (p: Pen, col: string) => {
   const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
   for (const [r, k] of [[0, 0], [0.5, 0.04], [0.64, 0.18], [0.76, 0.42], [0.87, 0.72], [0.95, 0.92], [1, 1]] as const) gr.addColorStop(r, mix(col, WHITE, k));
   g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+};
+
+
+// ---------------- Chicago: the horse and the street effects ----------------
+/** cartoon draught horse in profile facing screen-right, 1000 x 700 design canvas, hooves at y = 680.
+ *  strain 0..1 = head down and pulling; step = leg phase 0..1 (a stuck horse paws: small steps) */
+export const horseSide = (p: Pen, o: { strain?: number; step?: number; col?: string; blink?: number; light?: number } = {}) => {
+  const st = o.strain ?? 0, ph = o.step ?? 0, col = o.col ?? "#9a6238", dk = mul(col, SH_CLOTH), light = o.light ?? DEF_LIGHT, u = 1;
+  const legCol = shade(col, 0.82), hoof = "#2e2226", mane = "#3a2a24";
+  const bx = 470, by = 360, ba = 250, bb = 120;
+  // far legs (darker) then body then near legs
+  const leg = (x: number, swing: number, near: boolean) => {
+    const top: P2 = [x, by + 40], knee: P2 = [x + swing * 18, by + 170], foot: P2 = [x + swing * 30, 672 - Math.max(0, swing) * 20];
+    p.stroke(curve(top, knee, foot), 34, near ? legCol : shade(legCol, 0.78));
+    p.ell(foot[0], foot[1] + 4, 24, 12, hoof, 4);
+  };
+  const s1 = Math.sin(ph * Math.PI * 2), s2 = Math.sin(ph * Math.PI * 2 + Math.PI);
+  leg(bx - 160, 0.4 * s2, false); leg(bx + 170, 0.5 * s1, false);
+  const body = blobPts(bx, by, { a: ba, b: bb, nTop: 2.2, nBot: 2.4, egg: 0.08, asym: 0, rot: 0, noise: 0.004, seed: 11 });
+  p.gradFill(body, col, dk, light); p.inkRing(body, 6, thickAngle(light));
+  p.ell(bx - 10, by + 60, 170, 40, mix(col, "#f0dcc0", 0.25), 0, 0, 180); // lighter belly
+  // tail
+  p.band([[bx - ba + 10, by - 40], [bx - ba - 50, by + 40], [bx - ba - 40, by + 150]], mane, 22, 4, "round");
+  // neck + head: lowered and forward when straining
+  const nb: P2 = [bx + ba - 60, by - 50], hd: P2 = [bx + ba + 110 + 30 * st, by - 170 + 80 * st];
+  const neck: P2[] = [[nb[0] - 40, nb[1] + 60], [nb[0] - 30, nb[1] - 40], [hd[0] - 50, hd[1] - 40], [hd[0] - 20, hd[1] + 40], [nb[0] + 60, nb[1] + 80]];
+  p.gradFill(neck, col, dk, light); p.inkRing(neck, 6, thickAngle(light));
+  const head = blobPts(hd[0] + 40, hd[1] + 30, { a: 95, b: 52, nTop: 2.2, nBot: 2.2, egg: -0.25, asym: 0, rot: 0.5 + 0.5 * st, noise: 0.004, seed: 13 });
+  p.gradFill(head, col, dk, light); p.inkRing(head, 6, thickAngle(light));
+  p.ell(hd[0] - 18, hd[1] - 38, 16, 30, col, 5, 0, 360, -20); // ear
+  p.band([[nb[0] - 30, nb[1] - 30], [hd[0] - 50, hd[1] - 45]], mane, 26, 4, "round"); // mane
+  const ex = hd[0] + 20, ey = hd[1] + 8;
+  if ((o.blink ?? 0) > 0.5) p.stroke([[ex - 9, ey], [ex + 9, ey]], 5, INK); else { p.ell(ex, ey, 11, 13, WHITE, 3); p.dot(ex + 3, ey + 2, 6); }
+  p.dot(hd[0] + 112 + 10 * st, hd[1] + 50 + 30 * st, 5); // nostril
+  // harness: collar and a strap back along the body
+  p.band([[nb[0] - 20, nb[1] - 50], [nb[0] + 30, nb[1] + 90]], "#5a3424", 26, 4);
+  p.band([[nb[0] + 10, nb[1] + 40], [bx - ba + 60, by + 10]], "#5a3424", 12, 3);
+  leg(bx - 120, 0.4 * s1, true); leg(bx + 210, 0.5 * s2, true);
+  void u;
+};
+/** mud thrown up by a boot or a wheel: brown blobs on arcs, t 0..1 */
+export const fxMud = (p: Pen, t: number) => {
+  const e = 1 - (1 - t) ** 2;
+  for (let i = 0; i < 9; i++) {
+    const a = rad(200 + i * 17), d = 40 + 170 * e * (0.7 + 0.3 * (i % 3) / 2), r = (20 + 8 * (i % 3)) * (1 - 0.5 * t);
+    const x = 250 + d * Math.cos(a), y = 330 + d * Math.sin(a) + 260 * t * t;
+    p.ell(x, y, r, r * 0.85, i % 2 ? "#5e4331" : "#4a3426", 4);
+  }
+  if (t < 0.6) p.ell(250, 330, 90 * (0.6 + t), 26, "#5e4331", 4);
+};
+/** flies over the sewage: three dots on loops with tiny wing marks */
+export const fxFlies = (p: Pen, t: number) => {
+  for (let i = 0; i < 4; i++) {
+    const a = t * 6.28 * (1 + i * 0.3) + i * 1.7, x = 150 + 80 * Math.cos(a) + 30 * Math.sin(a * 2.3), y = 140 + 50 * Math.sin(a * 1.3);
+    p.dot(x, y, 7, "#1d1b22");
+    p.ell(x - 6, y - 8, 7, 4, "rgba(230,240,255,0.85)", 2, 0, 360, -30); p.ell(x + 6, y - 8, 7, 4, "rgba(230,240,255,0.85)", 2, 0, 360, 30);
+  }
+  for (let i = 0; i < 3; i++) p.arc(150, 140 + i * 6, 40 + i * 16, 12 + i * 4, 200 + 40 * Math.sin(t * 6 + i), 260 + 40 * Math.sin(t * 6 + i), 3, "rgba(40,30,40,0.6)");
+};
+/** a shovelful of dirt flying (t 0..1), clumps on a parabola */
+export const fxDirt = (p: Pen, t: number) => {
+  for (let i = 0; i < 8; i++) {
+    const x = 80 + 300 * t + 22 * Math.sin(i * 2.1), y = 300 - 380 * t + 420 * t * t + 18 * Math.cos(i * 1.7), r = 16 + 7 * (i % 3);
+    p.ell(x, y, r, r * 0.8, i % 2 ? "#a0805a" : "#8a6a48", 4);
+  }
+};
+/** whistle blast: three bold strokes fanning out with a ring, t 0..1 */
+export const fxBlast = (p: Pen, t: number) => {
+  const e = 1 - (1 - t) ** 2;
+  for (let i = -1; i <= 1; i++) {
+    const a = rad(i * 24), r0 = 40 + 60 * e, r1 = 120 + 110 * e;
+    p.stroke([[60 + r0 * Math.cos(a), 150 + r0 * Math.sin(a)], [60 + r1 * Math.cos(a), 150 + r1 * Math.sin(a)]], 14 * (1 - 0.5 * t), "#1d1b22");
+  }
+  p.arc(60, 150, 40 + 160 * e, 40 + 160 * e, -40, 40, 6 * (1 - t), "rgba(29,27,34,0.7)");
+};
+/** steam curl from a cup, t 0..1 loop */
+export const fxSteam = (p: Pen, t: number) => {
+  for (let k = 0; k < 2; k++) {
+    const pts: P2[] = [];
+    for (let i = 0; i <= 16; i++) { const y = 380 - i * 20, x = 100 + k * 50 + 18 * Math.sin(i * 0.6 + t * 6.28 + k); pts.push([x, y]); }
+    p.stroke(pts, 9, "rgba(255,255,255,0.75)");
+  }
+};
+/** concentric trembling rings on tea (a top view), t 0..1 loop */
+export const fxTremble = (p: Pen, t: number) => {
+  p.ell(150, 150, 120, 120, "#b5703a", 0);
+  for (let i = 0; i < 3; i++) { const r = ((t + i / 3) % 1) * 110; p.ell(150, 150, r, r, null, 0); p.arc(150, 150, r, r, 0, 360, 4, "rgba(255,230,200,0.7)"); }
 };

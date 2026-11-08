@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds the Cartoon 3D command lines (TypeScript under src/cartoon3d/probe2) into cartoon-tools/dist/*.mjs
+// Builds the Cartoon 3D command lines (TypeScript under src/cartoon3d/gate) into cartoon-tools/dist/*.mjs
 // for Node, so the MCP server and the authoring scripts can run them without a TypeScript loader. The Remotion
 // packages stay external (they load from node_modules beside this directory); everything else is bundled.
 //
@@ -13,15 +13,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SRC = path.join(ROOT, "src/cartoon3d/probe2");
+const SRC = path.join(ROOT, "src/cartoon3d");
 const DIST = path.join(ROOT, "cartoon-tools/dist");
 export const CLIS = {
-  gate: "gate/gateCli.ts",
   beatgate: "gate/beatGateCli.ts",
-  "stage-config": "video/stage-config.ts",
-  "qa-config": "video/qa-config.ts",
-  catalog: "video/catalog.ts",
-  still: "video/stillCli.ts",
+  still: "gate/stillCli.ts",
 };
 
 fs.mkdirSync(DIST, { recursive: true });

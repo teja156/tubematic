@@ -6,7 +6,7 @@ Skills are agent-agnostic instruction sets. Load the relevant skill at the start
 |---|---|
 | Run the pipeline / advance statuses | `tubematic-operator/SKILL.md` |
 | Generate a `scene-config.json` | `tubematic-scene-config/SKILL.md` |
-| Author a Cartoon 3D Short as data and take it through its gates | `tubematic-cartoon3d/SKILL.md` |
+| Author a Cartoon 3D Short as code against the renderer's kit and take it through the beat gate | `tubematic-cartoon3d/SKILL.md` |
 | Research and propose topics | `tubematic-topic-research/SKILL.md` |
 | Write a video script | `tubematic-script-writing-skill/SKILL.md` |
 | Build a script profile from transcripts | `tubematic-create-script-writing-skill/SKILL.md` |
