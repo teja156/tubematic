@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Agent, Mascot, Settings, PipelineStatus, RetentionBacklog, Voice } from "@/lib/types";
+import type { Agent, GpuStatus, Mascot, Settings, PipelineStatus, RetentionBacklog, Voice } from "@/lib/types";
 import { SectionLabel } from "@/components/SectionLabel";
 import { AutoPilotPanel } from "@/components/AutoPilotPanel";
 import { GpuPanel } from "@/components/GpuPanel";
@@ -12,6 +12,7 @@ import { useTimeZone } from "@/components/TimeZoneProvider";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { formatDate, formatDateTime, formatRelative } from "@/lib/datetime";
 import { AGENT_EFFORTS } from "@/lib/agents";
+import { mascotGate, mascotGateNote, mascotOptions } from "@/lib/mascots";
 import { codePoints } from "@/lib/utils";
 
 const STATUS_POLL_MS = 30_000;
@@ -390,6 +391,7 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<TabKey>(TABS[0].key);
   const { toasts, push, dismiss } = useToasts();
   const [mascots, setMascots] = useState<Mascot[]>([]);
+  const [gpu, setGpu] = useState<GpuStatus | null>(null);
 
   async function load() {
     const r = await apiFetch("/settings");
@@ -425,6 +427,9 @@ export default function SettingsPage() {
     // Best effort; the picker only needs the pickable ones.
     apiFetch("/mascots").then((r) => r.json())
       .then((rows) => setMascots(Array.isArray(rows) ? rows : []))
+      .catch(() => {});
+    apiFetch("/render/gpu").then((r) => (r.ok ? r.json() : null))
+      .then((g) => setGpu(g && typeof g.status === "string" ? (g as GpuStatus) : null))
       .catch(() => {});
     const id = setInterval(loadStatus, STATUS_POLL_MS);
     return () => clearInterval(id);
@@ -883,6 +888,7 @@ export default function SettingsPage() {
       >
         <select
           data-testid="select-default-mascot"
+          title={mascotGateNote(mascotGate(gpu)) || undefined}
           value={val("default_mascot_id") ?? ""}
           onChange={(e) => edit({ default_mascot_id: e.target.value })}
           style={{
@@ -890,9 +896,8 @@ export default function SettingsPage() {
             background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--border-2)",
           }}
         >
-          <option value="">No mascot</option>
-          {mascots.filter((m) => m.pickable).map((m) => (
-            <option key={m.id} value={m.id}>{m.name}</option>
+          {mascotOptions(mascots, gpu, val("default_mascot_id") ?? "").map((o) => (
+            <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
           ))}
         </select>
       </Row>

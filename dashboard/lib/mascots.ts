@@ -42,7 +42,8 @@ export interface MascotOption {
 
 /**
  * A per-video picker's options: None, then each pickable mascot (disabled and
- * saying why while the GPU is not working). A value the video holds that is
+ * saying why while the GPU is not working). `leading` are the always-selectable
+ * non-mascot choices (None; for a default, also "use the install default"). A value the video holds that is
  * not offered shows as "Unavailable mascot" rather than silently reading as
  * None, so the human can see why its approval is refused.
  */
@@ -50,11 +51,12 @@ export function mascotOptions(
   mascots: Pick<Mascot, "id" | "name" | "pickable">[],
   gpu: Pick<GpuStatus, "status"> | null | undefined,
   current: string,
+  leading: { value: string; label: string }[] = [{ value: "", label: "No mascot" }],
 ): MascotOption[] {
   const note = mascotGateNote(mascotGate(gpu));
   const pickable = mascots.filter((m) => m.pickable);
-  const out: MascotOption[] = [{ value: "", label: "No mascot", disabled: false }];
-  if (current !== "" && !pickable.some((m) => m.id === current)) {
+  const out: MascotOption[] = leading.map((o) => ({ ...o, disabled: false }));
+  if (!leading.some((o) => o.value === current) && !pickable.some((m) => m.id === current)) {
     const name = mascots.find((m) => m.id === current)?.name;
     out.push({ value: current, label: name ? `${name} (unavailable)` : "Unavailable mascot", disabled: true });
   }

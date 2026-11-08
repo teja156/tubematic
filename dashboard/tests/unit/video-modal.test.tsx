@@ -1685,6 +1685,17 @@ describe("VideoModal — mascot picker", () => {
       expect(tubi.textContent).toBe(label);
     });
 
+  it.each(["working", "not_usable"] as const)(
+    "re-sends an untouched held mascot on approve (GPU %s)", async (status) => {
+      const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
+      mockFetchFor(video);
+      const onAction = vi.fn();
+      render(<VideoModal video={video} mascots={MASCOTS} gpu={gpu(status)} onClose={() => {}} onAction={onAction} />);
+      await screen.findByTestId("video-modal-mascot-select");
+      fireEvent.click(screen.getByText("Approve Topic"));
+      expect(onAction.mock.calls[0][3]).toMatchObject({ mascot_id: "tubi" });
+    });
+
   it("clears and disables the picker when Cartoon 3D is chosen", async () => {
     const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
     mockFetchFor(video);

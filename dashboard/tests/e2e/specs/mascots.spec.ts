@@ -38,11 +38,16 @@ test.describe("Mascots", () => {
   });
 
   test("creating a mascot files it as PENDING, and it can be archived", async ({ page }) => {
+    // A unique name per run (and retry): the id is a slug of the name, so a
+    // retried attempt must not collide with a mascot a failed one left behind.
+    const name = `E2E Pip ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     await page.goto("/mascots");
-    await page.getByTestId("mascot-name").fill("E2E Pip");
+    await page.getByTestId("mascot-name").fill(name);
     await page.getByTestId("mascot-description").fill("a small round robot with a visor");
+    const created = page.waitForResponse((r) => r.url().endsWith("/api/proxy/mascots") && r.request().method() === "POST");
     await page.getByTestId("mascot-create").click();
-    const row = page.getByTestId("mascot-row-e2e-pip");
+    const { id } = await (await created).json();
+    const row = page.getByTestId(`mascot-row-${id}`);
     await expect(row).toBeVisible();
     await expect(row).toContainText("PENDING");
     await expect(page.getByTestId("mascot-detail")).toContainText("Queued");

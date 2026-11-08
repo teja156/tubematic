@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { GpuStatus, Mascot, Project, ProjectStatus, ScriptProfile, Voice } from "@/lib/types";
+import { mascotGate, mascotGateNote, mascotOptions } from "@/lib/mascots";
 import { voiceLabel } from "@/lib/voices";
 import { illustratedAvailable, styleLabel, styleOptions } from "@/lib/visualStyles";
 import { codePoints } from "@/lib/utils";
@@ -52,21 +53,20 @@ function DomainVoiceSelect({ testId, value, voices, onChange }: {
 // ── Default mascot picker ─────────────────────────────────────────────────────
 
 // "" inherits the install's default mascot, "none" pins no mascot even when the
-// install has one. Not gated on the GPU: the API checks only that the mascot
-// can be chosen, and a video seeded with one simply gets none while the GPU is
-// not working.
-function DomainMascotSelect({ testId, value, mascots, onChange }: {
-  testId: string; value: string; mascots: Mascot[]; onChange: (next: string) => void;
+// install has one. Gated on the GPU like the per-video picker: the mascots are
+// disabled (saying why) unless it is working, and fail closed while the status
+// loads; the non-mascot choices and a held value stay selectable, so an
+// unrelated edit re-sends the stored default untouched.
+function DomainMascotSelect({ testId, value, mascots, gpu, onChange }: {
+  testId: string; value: string; mascots: Mascot[]; gpu: GpuStatus | null; onChange: (next: string) => void;
 }) {
-  const pickable = mascots.filter((m) => m.pickable);
-  const stale = value !== "" && value !== "none" && !pickable.some((m) => m.id === value);
-  const staleName = mascots.find((m) => m.id === value)?.name;
+  const note = mascotGateNote(mascotGate(gpu));
   return (
     <select
       data-testid={testId}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      title="Mascot this domain's new videos start with"
+      title={note || "Mascot this domain's new videos start with"}
       style={{
         fontFamily: "var(--mono)",
         fontSize: 10.5,
@@ -79,10 +79,10 @@ function DomainMascotSelect({ testId, value, mascots, onChange }: {
         maxWidth: 150,
       }}
     >
-      <option value="">Use install default</option>
-      <option value="none">None</option>
-      {stale && <option value={value}>{staleName ? `${staleName} (unavailable)` : "Unavailable mascot"}</option>}
-      {pickable.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+      {mascotOptions(mascots, gpu, value, [
+        { value: "", label: "Use install default" },
+        { value: "none", label: "None" },
+      ]).map((o) => <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>)}
     </select>
   );
 }
@@ -336,6 +336,7 @@ function DomainRow({
           testId={`domain-mascot-${project.id}`}
           value={project.default_mascot_id ?? ""}
           mascots={mascots}
+          gpu={gpu}
           onChange={(next) => onMascotChange(project.id, next)}
         />
       </DomainField>
@@ -630,7 +631,7 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots 
         >
           Mascot
           <DomainMascotSelect testId="domain-mascot-select" value={defaultMascot}
-                              mascots={mascots} onChange={setDefaultMascot} />
+                              mascots={mascots} gpu={gpu} onChange={setDefaultMascot} />
         </label>
 
         <button

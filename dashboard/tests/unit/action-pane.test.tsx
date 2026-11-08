@@ -1181,6 +1181,40 @@ describe("ActionPane — mascot picker", () => {
     vi.useRealTimers();
   });
 
+  it.each(["working", "not_usable"] as const)(
+    "re-sends an untouched held mascot on approve (GPU %s)", async (status) => {
+      vi.useFakeTimers({ toFake: ["setTimeout"] });
+      const onAction = vi.fn();
+      const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
+      render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith(status)} onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
+      fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+      expect(onAction.mock.calls[0][3]).toMatchObject({ mascot_id: "tubi" });
+      await act(async () => { vi.advanceTimersByTime(600); });
+      vi.useRealTimers();
+    });
+
+  it("brings the row back when the approval is refused, so the pick can be changed", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const onAction = vi.fn().mockResolvedValue(false);
+    const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
+    render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await act(async () => { vi.advanceTimersByTime(600); });
+    expect(screen.getByTestId(`mascot-select-${video.id}`)).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it("still hides the row once an approval succeeds", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const onAction = vi.fn().mockResolvedValue(true);
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await act(async () => { vi.advanceTimersByTime(600); });
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    vi.useRealTimers();
+  });
+
   it("shows a held mascot that can no longer be picked as unavailable", () => {
     const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "moss" };
     render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} {...base} />);

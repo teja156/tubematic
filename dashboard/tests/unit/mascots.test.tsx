@@ -225,6 +225,21 @@ describe("MascotsPage", () => {
     await waitFor(() => expect(screen.queryByTestId("mascot-detail")).toBeNull());
   });
 
+  it("a refused archive shows the API's error and keeps the mascot selected", async () => {
+    const real = mockFetch();
+    render(<MascotsPage />);
+    await openRow("moss");
+    real.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const ok = (b: unknown, s = 200) => Promise.resolve({ ok: s < 400, status: s, json: () => Promise.resolve(b) } as Response);
+      if ((init?.method ?? "GET") === "DELETE") return ok({ error: "mascot is in use" }, 409);
+      if (/\/mascots\/[^/]+$/.test(url.toString())) return ok(mascot());
+      return ok([mascot()]);
+    });
+    fireEvent.click(screen.getByTestId("mascot-archive"));
+    await waitFor(() => expect(screen.getByTestId("mascot-action-error").textContent).toBe("mascot is in use"));
+    expect(screen.getByTestId("mascot-detail")).toBeTruthy();
+  });
+
   it("offers nothing for an archived mascot", async () => {
     const gone = mascot({ archived: true, status: "IN_REVIEW", draft_version: 2 });
     mockFetch({ list: [gone], detail: gone });

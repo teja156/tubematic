@@ -53,7 +53,9 @@ interface ActionPaneProps {
   /** GET /mascots. The Mascot picker shows when one can be picked (or the
    *  video already holds one); it is disabled until the GPU is working. */
   mascots?: Mascot[];
-  onAction: (videoId: string, action: string, video: Video, extra?: Record<string, unknown>) => void;
+  /** May return a promise resolving to false when the API REFUSED the action:
+   *  the row is then brought back so the human can change a pick and retry. */
+  onAction: (videoId: string, action: string, video: Video, extra?: Record<string, unknown>) => void | Promise<boolean | void>;
   /** `revise` opens the modal straight into its Request Revision dialog —
    *  the only place a human comment can be added. `picks` carries the row's
    *  agent choices into it, present only when the human touched one, so a
@@ -685,12 +687,21 @@ export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = []
   function handleAction(videoId: string, action: string, video: Video, extra?: Record<string, unknown>) {
     const kind = action.includes("reject") ? "reject" : "approve";
     setFlashing((p) => ({ ...p, [videoId]: kind }));
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setHidden((s) => new Set(s).add(videoId));
       setFlashing((p) => { const { [videoId]: _, ...rest } = p; return rest; });
     }, 550);
-    if (extra !== undefined) onAction(videoId, action, video, extra);
-    else onAction(videoId, action, video);
+    const result = extra !== undefined
+      ? onAction(videoId, action, video, extra)
+      : onAction(videoId, action, video);
+    // A refused action (the caller already alerted the API's message) leaves
+    // the video where it was, so the row must stay to be re-picked and retried.
+    Promise.resolve(result).then((ok) => {
+      if (ok !== false) return;
+      clearTimeout(timer);
+      setHidden((s) => { const n = new Set(s); n.delete(videoId); return n; });
+      setFlashing((p) => { const { [videoId]: _, ...rest } = p; return rest; });
+    }).catch(() => {});
   }
 
   const visible = videos.filter((v) => !hidden.has(v.id));

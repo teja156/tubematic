@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TopicsPage from "@/app/topics/page";
 
 const MINING_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
@@ -440,6 +440,8 @@ describe("TopicsPage — default script profile", () => {
 // must re-send it.
 describe("TopicsPage — default mascot", () => {
   afterEach(() => vi.restoreAllMocks());
+  let gpuStatus = "working";
+  beforeEach(() => { gpuStatus = "working"; });
 
   const MASCOTS = [
     { id: "tubi", name: "Tubi", pickable: true },
@@ -458,6 +460,7 @@ describe("TopicsPage — default mascot", () => {
       const ok = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
       if (urlStr.endsWith("/projects") && !init?.method) return ok([domain]);
       if (urlStr.endsWith("/mascots")) return ok(MASCOTS);
+      if (urlStr.endsWith("/render/gpu")) return ok({ status: gpuStatus });
       if (urlStr.includes("/settings")) return ok({ elevenlabs_voices: [], elevenlabs_voice_id: "", openai_api_key: "" });
       if (urlStr.includes("/research/strategies")) return ok({ strategies: [] });
       if (urlStr.includes("/research/mining-sources")) return ok({ youtube_urls: [] });
@@ -516,6 +519,53 @@ describe("TopicsPage — default mascot", () => {
     mockDomains({ ...DOMAIN, default_mascot_id: "moss" });
     render(<TopicsPage />);
     await waitFor(() => expect(screen.getByRole("option", { name: "Moss (unavailable)" })).toBeTruthy());
+  });
+
+  it.each([
+    ["not_usable", "Tubi (Mascots need a working GPU)"],
+    ["not_configured", "Tubi (Mascots need a working GPU)"],
+    ["unknown", "Tubi (GPU not tested yet)"],
+  ])("disables the mascots, not the non-mascot choices, while the GPU is %s", async (status, label) => {
+    gpuStatus = status;
+    mockDomains({ ...DOMAIN, default_mascot_id: "" });
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect([...select.options].find((o) => o.value === "tubi")?.textContent).toBe(label));
+    const by = (v: string) => [...select.options].find((o) => o.value === v)!;
+    expect(by("tubi").disabled).toBe(true);
+    expect(by("").disabled).toBe(false);
+    expect(by("none").disabled).toBe(false);
+    const add = screen.getByTestId("domain-mascot-select") as HTMLSelectElement;
+    expect([...add.options].find((o) => o.value === "tubi")!.disabled).toBe(true);
+  });
+
+  it("a held default stays shown and is re-sent untouched while the GPU is not working", async () => {
+    gpuStatus = "not_usable";
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect(select.value).toBe("tubi"));
+    expect([...select.options].find((o) => o.value === "tubi")!.disabled).toBe(false);
+    fireEvent.change(screen.getByTestId("domain-style-seed-1"), { target: { value: "auto" } });
+    await waitFor(() => expect(postedProject(spy).default_mascot_id).toBe("tubi"));
+  });
+
+  it("fails closed before the GPU status has loaded", async () => {
+    vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request) => {
+      const u = url.toString();
+      const ok = (b: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(b) } as Response);
+      if (u.endsWith("/render/gpu")) return new Promise<Response>(() => {});
+      if (u.endsWith("/projects")) return ok([{ ...DOMAIN, default_mascot_id: "" }]);
+      if (u.endsWith("/mascots")) return ok(MASCOTS);
+      if (u.includes("/settings")) return ok({ elevenlabs_voices: [], elevenlabs_voice_id: "", openai_api_key: "" });
+      if (u.includes("/research/strategies")) return ok({ strategies: [] });
+      if (u.includes("/research/mining-sources")) return ok({ youtube_urls: [] });
+      return ok([]);
+    });
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect([...select.options].find((o) => o.value === "tubi")?.disabled).toBe(true));
   });
 
   it("the add-domain form sends the picked mascot", async () => {

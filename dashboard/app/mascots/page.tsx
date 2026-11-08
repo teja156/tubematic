@@ -197,7 +197,18 @@ export default function MascotsPage() {
 
   async function archive(m: Mascot) {
     if (!confirm(`Archive "${m.name}"? Videos already using it keep it; it can no longer be picked.`)) return;
-    await apiFetch(`/mascots/${m.id}`, { method: "DELETE" });
+    setDetailError("");
+    try {
+      const r = await apiFetch(`/mascots/${m.id}`, { method: "DELETE" });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        setDetailError(data?.error ?? "Could not archive the mascot.");
+        return;
+      }
+    } catch (e) {
+      setDetailError(e instanceof Error ? e.message : "Could not archive the mascot.");
+      return;
+    }
     if (selectedId === m.id) { setSelectedId(null); setDetail(null); }
     load();
   }

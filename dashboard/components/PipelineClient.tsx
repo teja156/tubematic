@@ -174,8 +174,11 @@ export function PipelineClient() {
           await deleteVideo(videoId);
         }
         await fetchAll();
+        return true;
       } catch (e) {
         alert(e instanceof Error ? e.message : "Action failed");
+        // Tells the Quick Actions row the action was refused, so it comes back.
+        return false;
       }
     },
     [fetchAll],
