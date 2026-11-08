@@ -586,6 +586,28 @@ def test_a_failed_write_leaves_the_renderer_unresolved(db, monkeypatch):
     assert _read("vid_c11", "resolved_renderer") == "dom"
 
 
+def test_a_commit_that_fails_after_the_rename_puts_the_previous_config_back(db, monkeypatch):
+    """The file and the row never disagree: a commit failing after the rename
+    restores the previous config (or removes a first one) and reports it."""
+    import sqlite3
+    _probe(db, configured=True, ok=True)
+    _video("vid_c12", style="cartoon_3d")
+    assert "error" not in server.write_scene_config("vid_c12", _cartoon_config(total_frames=300))
+    path = server.tjobs.job_file(server.JOBS_DIR, "vid_c12", "scene-config.json")
+    before = path.read_bytes()
+    real_commit = sqlite3.Connection.commit
+
+    def failing_commit(con):
+        raise sqlite3.OperationalError("disk I/O error")
+    monkeypatch.setattr(sqlite3.Connection, "commit", failing_commit)
+    result = server.write_scene_config("vid_c12", _cartoon_config(total_frames=300, beats=[
+        {"start": 0, "end": 149, "shot": "a", "cast": []}, {"start": 150, "end": 299, "shot": "b", "cast": []}]))
+    monkeypatch.setattr(sqlite3.Connection, "commit", real_commit)
+    assert "could not be written" in result["error"] and "disk I/O error" in result["error"]
+    assert path.read_bytes() == before
+    assert not list(path.parent.glob("*.tmp"))
+
+
 def test_the_cartoon_scene_spans_the_whole_video(db):
     _probe(db, configured=True, ok=True)
     _video("vid_c9", style="cartoon_3d")
