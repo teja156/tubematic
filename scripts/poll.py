@@ -410,13 +410,14 @@ class _Session:
     """
 
     def __init__(self, lane: str, label: str, *, video_id: str = "", start_status: str = "",
-                 profile_id: str = "", agent_id: str = "", model: str = "",
-                 operation: str = "", attribution=(), deadline: float | None = None):
+                 profile_id: str = "", mascot_id: str = "", agent_id: str = "",
+                 model: str = "", operation: str = "", attribution=(), deadline: float | None = None):
         self.lane = lane
         self.label = label
         self.video_id = video_id
         self.start_status = start_status
         self.profile_id = profile_id
+        self.mascot_id = mascot_id
         self.agent_id = agent_id
         self.model = model
         self.operation = operation
@@ -512,6 +513,7 @@ def _registry_add(pid: int, session: "_Session", out_path: Path, err_path: Path)
              "session_key": session.key, "usage_done": False, "lane": session.lane,
              "label": session.label, "video_id": session.video_id,
              "start_status": session.start_status, "profile_id": session.profile_id,
+             "mascot_id": session.mascot_id,
              "agent_id": session.agent_id, "model": session.model,
              "operation": session.operation, "attribution": session.attribution,
              "deadline": session.deadline, "stdout": str(out_path), "stderr": str(err_path)}
@@ -1067,6 +1069,77 @@ def _record_profile_attempt(profile_id: str, dry_run: bool = False) -> str:
         return ""
 
 
+def _fetch_pending_mascots() -> list:
+    """GET /mascots/pending. Returns [] on any error (fail open), like the
+    profile fetch: an empty list only means no mascot is built this tick."""
+    import urllib.request
+    import json as _json
+    try:
+        with urllib.request.urlopen(f"{RENDERER_URL}/mascots/pending", timeout=10) as r:
+            return _json.loads(r.read())
+    except Exception as e:
+        log.warning("Could not fetch pending mascots: %s", e)
+        return []
+
+
+def _record_mascot_attempt(mascot_id: str, dry_run: bool = False) -> str:
+    """POST /mascots/<id>/record-attempt right before invoking the agent.
+
+    Returns "BUILDING" to proceed, "FAILED" when the attempt cap is exhausted
+    (the server marks the row), or "" when the request failed (including a
+    409 for a mascot that is no longer buildable). Fails CLOSED, like
+    _record_profile_attempt: no agent session runs with its attempt uncounted.
+    """
+    if dry_run:
+        log.info("[DRY RUN] Would POST /mascots/%s/record-attempt", mascot_id)
+        return "BUILDING"
+    import urllib.request
+    import json as _json
+    try:
+        req = urllib.request.Request(
+            f"{RENDERER_URL}/mascots/{mascot_id}/record-attempt",
+            method="POST", data=b"{}",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return _json.loads(resp.read()).get("status", "")
+    except Exception as e:
+        log.error("Could not record mascot attempt — skipping mascot %s "
+                  "this tick: %s", mascot_id, e)
+        return ""
+
+
+def build_mascot_prompt(mascot_id: str, name: str = "", preferences: str = "") -> str:
+    """The prompt that builds (or revises) one mascot's drawing code.
+
+    Carries only the mascot id: the brief, any change request and the sheets
+    all travel over MCP, never through poll.py.
+    """
+    return "\n".join([
+        f"[TUBEMATIC MASCOT — {_now_iso()}]",
+        "",
+        "Invoke the tubematic-mascot-builder skill and build one mascot.",
+        "",
+        f"Mascot id: {mascot_id}" + (f"  (name: {name})" if name else ""),
+        "",
+        "Use the tubematic MCP tools to:",
+        f"  1. Call get_mascot_job(\"{mascot_id}\") to read the brief, any change request and the previous version",
+        "  2. Write the drawing code per the skill, then loop: call "
+        f"render_mascot_sheets(\"{mascot_id}\", code, sheet) for the \"turn\", \"feels\" and "
+        "\"act\" sheets (one sheet per call, the renders per attempt are capped), look at each "
+        "sheet and fix what is wrong",
+        f"  3. Call submit_mascot(\"{mascot_id}\", notes) once the sheets are right",
+        "",
+        "Do not advance any video, research any topic, or write any file during this run.",
+        "",
+        *_preferences_block(preferences, "building a mascot's drawing code"),
+        "IMPORTANT: Skip the operator skill setup checks (docker/curl health checks).",
+        "The poller has already verified the renderer is reachable before invoking you.",
+        "",
+        f"Poll logs are available at {LOG_DIR / 'poll.log'} (and dated rotations in the same directory).",
+        "If you encounter an unexpected error, read recent log entries for context.",
+    ])
+
+
 def build_script_profile_prompt(profile_id: str, name: str = "",
                                 preferences: str = "") -> str:
     """The prompt that turns one profile's transcripts into style markdown.
@@ -1279,6 +1352,7 @@ def _finish_orphan(entries: list, agents_by_id: dict) -> str:
                        video_id=first.get("video_id") or "",
                        start_status=first.get("start_status") or "",
                        profile_id=first.get("profile_id") or "",
+                       mascot_id=first.get("mascot_id") or "",
                        agent_id=first.get("agent_id") or "", model=first.get("model") or "",
                        operation=first.get("operation") or "agent_pipeline",
                        attribution=first.get("attribution") or ())
@@ -1600,6 +1674,7 @@ class _Supervisor:
             return settings().get("user_preferences", "") or ""
 
         self._profiles(status, default, timeout, preferences)
+        self._mascots(status, agents_by_id, default, timeout, preferences)
         self.paused = bool(status.get("paused"))
         if self.paused:
             self._once("paused", logging.INFO, "Pipeline is paused — starting no pipeline or "
@@ -1638,6 +1713,37 @@ class _Supervisor:
                 continue
             # "" — the attempt could not be recorded. Fail closed: no session
             # runs without its attempt counted.
+            return
+
+    def _mascots(self, status, agents_by_id, default, timeout, preferences) -> None:
+        # Above the pause guard, like profiles: building a mascot spends no
+        # ElevenLabs credit and produces no video.
+        if self._lane_busy("mascot") or not status.get("pending_mascots"):
+            return
+        for mascot in _fetch_pending_mascots():
+            mid = mascot["id"]
+            # Same rule as a video: a pinned agent that is gone is skipped
+            # loudly, never rerouted to another agent.
+            agent = _video_agent(mascot, agents_by_id, default, quiet=f"agent:{mid}" in self.said)
+            self.said.add(f"agent:{mid}")
+            if agent is None:
+                continue
+            outcome = _record_mascot_attempt(mid, dry_run=self.dry_run)
+            if outcome == "BUILDING":
+                model = (mascot.get("agent_model") or "").strip() or _default_model(agent)
+                effort = (mascot.get("agent_effort") or "").strip() or _default_effort(agent)
+                log.info("Building mascot %s (%r) — attempt recorded", mid, mascot.get("name", ""))
+                session = _Session("mascot", f"mascot={mid}", mascot_id=mid,
+                                   agent_id=agent.get("id", ""), model=model,
+                                   operation="agent_mascot")
+                self._start("mascot", session,
+                            build_mascot_prompt(mid, mascot.get("name", ""),
+                                                preferences=preferences()),
+                            agent, model, effort, timeout())
+                return
+            if outcome == "FAILED":
+                log.warning("Mascot %s exhausted its attempts and was marked FAILED", mid)
+                continue
             return
 
     def _pipeline(self, status, agents_by_id, default, settings, timeout, preferences) -> None:

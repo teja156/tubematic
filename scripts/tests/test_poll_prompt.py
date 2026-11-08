@@ -252,3 +252,23 @@ def test_every_workable_status_has_a_stage():
     block = pipeline_src.split("WORKABLE_STATUSES = [", 1)[1].split("]", 1)[0]
     workable = set(re.findall(r'"([A-Z_]+)"', block))
     assert workable == set(poll.STAGES)
+
+
+# ── Mascot build prompt ──────────────────────────────────────────────────────
+
+def test_mascot_prompt_names_the_skill_id_steps_and_scope():
+    import poll
+    from poll import build_mascot_prompt
+    prompt = build_mascot_prompt("mas-1", "Moss", preferences=PREFS)
+    assert "tubematic-mascot-builder" in prompt
+    assert "mas-1" in prompt and "Moss" in prompt
+    for tool in ("get_mascot_job", "render_mascot_sheets", "submit_mascot"):
+        assert tool in prompt
+    assert "Do not advance any video" in prompt
+    assert "=== USER PREFERENCES" in prompt and PREFS in prompt
+    assert str(poll.LOG_DIR / "poll.log") in prompt
+
+
+def test_mascot_prompt_without_preferences_has_no_block():
+    from poll import build_mascot_prompt
+    assert "USER PREFERENCES" not in build_mascot_prompt("mas-1")

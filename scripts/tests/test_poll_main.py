@@ -352,3 +352,112 @@ def test_an_idle_pass_never_reads_the_settings(monkeypatch):
         poll.main()
     invoke.assert_not_called()
     assert fetches == []
+
+
+# ── Mascots ──────────────────────────────────────────────────────────────────
+
+def _mascot(mid="mas-1", name="Moss", **kw) -> dict:
+    return {"id": mid, "name": name, "status": "PENDING", "agent_id": "",
+            "agent_model": "", "agent_effort": "", **kw}
+
+
+def test_a_pending_mascot_runs_on_the_default_agent_and_its_defaults():
+    with patch("poll._fetch_pipeline_status", return_value=_status(pending_mascots=1)), \
+         patch("poll._fetch_pending_mascots", side_effect=_once([_mascot()])), \
+         patch("poll._record_mascot_attempt", return_value="BUILDING") as record, \
+         patch("poll.invoke_agent") as invoke:
+        poll.main()
+    record.assert_called_once_with("mas-1", dry_run=False)
+    assert invoke.call_count == 1
+    assert "TUBEMATIC MASCOT" in invoke.call_args[0][0]
+    assert "mas-1" in invoke.call_args[0][0]
+    assert invoke.call_args.args[1] is AGENT
+    assert invoke.call_args.kwargs["model"] == "opus"
+
+
+def test_a_pinned_mascot_agent_model_and_effort_are_used(monkeypatch):
+    other = {"id": "codex", "binary": "codex", "run_path": "/tmp/ws2",
+             "models": ["gpt-x", "gpt-y"], "is_default": False, "archived_at": None}
+    monkeypatch.setattr(poll, "_fetch_agents", lambda: [AGENT, other])
+    mascot = _mascot(agent_id="codex", agent_model="gpt-y", agent_effort="high")
+    with patch("poll._fetch_pipeline_status", return_value=_status(pending_mascots=1)), \
+         patch("poll._fetch_pending_mascots", side_effect=_once([mascot])), \
+         patch("poll._record_mascot_attempt", return_value="BUILDING"), \
+         patch("poll.invoke_agent") as invoke:
+        poll.main()
+    assert invoke.call_args.args[1] is other
+    assert invoke.call_args.kwargs["model"] == "gpt-y"
+    assert invoke.call_args.kwargs["effort"] == "high"
+
+
+def test_a_pinned_agent_that_is_gone_is_skipped_never_rerouted(caplog):
+    mascot = _mascot(agent_id="ghost")
+    with patch("poll._fetch_pipeline_status", return_value=_status(pending_mascots=1)), \
+         patch("poll._fetch_pending_mascots", side_effect=_once([mascot])), \
+         patch("poll._record_mascot_attempt", return_value="BUILDING") as record, \
+         patch("poll.invoke_agent") as invoke:
+        poll.main()
+    record.assert_not_called()
+    invoke.assert_not_called()
+    assert "ghost" in caplog.text
+
+
+def test_a_mascot_is_built_even_while_the_pipeline_is_paused():
+    with patch("poll._fetch_pipeline_status",
+               return_value=_status(paused=True, pending_mascots=1)), \
+         patch("poll._fetch_pending_mascots", side_effect=_once([_mascot()])), \
+         patch("poll._record_mascot_attempt", return_value="BUILDING"), \
+         patch("poll.invoke_agent") as invoke:
+        poll.main()
+    assert invoke.call_count == 1
+    assert "TUBEMATIC MASCOT" in invoke.call_args[0][0]
+
+
+def test_one_mascot_per_pass():
+    with patch("poll._fetch_pipeline_status", return_value=_status(pending_mascots=2)), \
+         patch("poll._fetch_pending_mascots",
+               side_effect=_once([_mascot("m-a"), _mascot("m-b")])), \
+         patch("poll._record_mascot_attempt", return_value="BUILDING") as record, \
+         patch("poll.invoke_agent") as invoke:
+        poll.main()
+    assert record.call_count == 1
+    assert invoke.call_count == 1
+
+
+def test_a_capped_out_mascot_is_skipped_and_the_next_is_tried():
+    with patch("poll._fetch_pipeline_status", return_value=_status(pending_mascots=2)), \
+         patch("poll._fetch_pending_mascots",
+               side_effect=_once([_mascot("m-dead"), _mascot("m-live")])), \
+         patch("poll._record_mascot_attempt", side_effect=["FAILED", "BUILDING"]), \
+         patch("poll.invoke_agent") as invoke:
+        poll.main()
+    assert invoke.call_count == 1
+    assert "m-live" in invoke.call_args[0][0]
+
+
+def test_an_unrecordable_mascot_attempt_starts_nothing():
+    with patch("poll._fetch_pipeline_status", return_value=_status(pending_mascots=1)), \
+         patch("poll._fetch_pending_mascots", return_value=[_mascot()]), \
+         patch("poll._record_mascot_attempt", return_value=""), \
+         patch("poll.invoke_agent") as invoke:
+        poll.main()
+    invoke.assert_not_called()
+
+
+def test_no_pending_mascots_never_fetches_the_list():
+    with patch("poll._fetch_pipeline_status", return_value=_status(pending_mascots=0)), \
+         patch("poll._fetch_pending_mascots") as fetch, \
+         patch("poll.invoke_agent"):
+        poll.main()
+    fetch.assert_not_called()
+
+
+def test_a_failed_mascot_fetch_fails_open():
+    import urllib.request
+    with patch("urllib.request.urlopen", side_effect=OSError("down")):
+        assert poll._fetch_pending_mascots() == []
+
+
+def test_a_mascot_session_is_registered_with_its_id_and_operation():
+    session = poll._Session("mascot", "mascot=m", mascot_id="m", operation="agent_mascot")
+    assert session.mascot_id == "m"
