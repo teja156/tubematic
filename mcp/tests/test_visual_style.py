@@ -594,7 +594,7 @@ def test_a_commit_that_fails_after_the_rename_puts_the_previous_config_back(db, 
     import sqlite3
     _probe(db, configured=True, ok=True)
     _video("vid_c12", style="cartoon_3d")
-    assert "error" not in server.write_scene_config("vid_c12", _cartoon_config(total_frames=300))
+    assert "error" not in server.write_scene_config("vid_c12", _cartoon_config("vid_c12", total_frames=300))
     path = server.tjobs.job_file(server.JOBS_DIR, "vid_c12", "scene-config.json")
     before = path.read_bytes()
     from contextlib import contextmanager
@@ -619,7 +619,7 @@ def test_a_commit_that_fails_after_the_rename_puts_the_previous_config_back(db, 
             yield CommitFailsAfterRename(con)
     monkeypatch.setattr(server.os, "replace", replace_noting)
     monkeypatch.setattr(server, "_conn", conn_whose_commit_fails_after_a_rename)
-    result = server.write_scene_config("vid_c12", _cartoon_config(total_frames=300, beats=[
+    result = server.write_scene_config("vid_c12", _cartoon_config("vid_c12", total_frames=300, beats=[
         {"start": 0, "end": 149, "shot": "a", "cast": []}, {"start": 150, "end": 299, "shot": "b", "cast": []}]))
     monkeypatch.setattr(server, "_conn", real_conn)
     monkeypatch.setattr(server.os, "replace", real_replace)
