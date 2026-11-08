@@ -405,7 +405,7 @@ raises: bookkeeping must not fail a video, but a failure to record is always log
 | Column | Meaning |
 |---|---|
 | `service` / `model` | `gemini`, `openai`, `anthropic`, `elevenlabs`, … and the model id the call used |
-| `operation` | `voice`, `voice_preview`, `ai_review`, `mining`, `publish_metadata` (only on rows from before the agent wrote the publish metadata), `image`, `character`, `agent_pipeline`, `agent_research`, `agent_profile`, and `agent_unscoped` on rows from before the poller ran one video per session |
+| `operation` | `voice`, `voice_preview`, `ai_review`, `mining`, `publish_metadata` (only on rows from before the agent wrote the publish metadata), `image`, `character`, `agent_pipeline`, `agent_research`, `agent_profile`, `agent_mascot`, and `agent_unscoped` on rows from before the poller ran one video per session |
 | `units` | Normalised counts: `input`, `input_audio`, `input_image`, `output`, `reasoning`, `output_image`, `cache_read`, `cache_write`, `cache_write_1h` tokens, or ElevenLabs `credits` |
 | `raw_usage` | The provider's own usage object, verbatim — what makes re-pricing possible later |
 | `request_id` | ElevenLabs' `request-id` response header on voice and preview rows, for matching a row to the provider's own history. `NULL` elsewhere |

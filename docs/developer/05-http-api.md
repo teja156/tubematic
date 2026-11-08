@@ -248,7 +248,7 @@ and the dashboard has no business overwriting it.
 | `400` | Any of `voice_file_path`, `timeline_path`, `scene_config_path`, `video_path` present, with nothing applied; unknown-only body (`No updatable fields provided`); `status` not one of the 15 valid values; non-string or over-70-character `title`; `agent_id` blank, non-string, unknown or uninstalled (unless it is the video's current agent); `agent_model` containing a space or leading `-`; `agent_model` not one of the video's agent's models, or that agent uninstalled or not installed; `voice_id` not on the roster; `script_profile_id` not a non-archived `READY` profile; `visual_style` not one of `auto` / `motion_graphics` / `stick` / `illustrated`; `visual_style` of `illustrated` while no OpenAI key is stored; `agent_effort` not one of `low` / `medium` / `high` / `xhigh` / `max` or blank; `script` without both `publish_title` and `publish_description`; either of those non-string, blank, or over its cap (100 / 2000) — the same rule as MCP `update_video`, see [Publishing](14-publishing.md#schema) |
 | `404` | Video not found |
 | `409` | The video is archived — an archived row is frozen, so a `PATCH` cannot move it back into the pipeline |
-| `409` | `script_profile_id` or `visual_style` present while the video is past `TOPIC_PROPOSED` |
+| `409` | `script_profile_id`, `visual_style` or `mascot_id` present while the video is past `TOPIC_PROPOSED`; an approving `PATCH` while the video's mascot is archived |
 | `409` | `agent_id`, `agent_model` or `agent_effort` present while the video is not at a human checkpoint (`TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY`) |
 | `409` | A model was written on its own and the video's agent changed while the request was in flight |
 | `409` | `onlyIfCurrentStatus` did not match — `{"error": "Status precondition failed", "current", "expected"}`. The same shape, with `expected` set to the status the freeze was checked at, when a frozen field was sent and the video changed status mid-request |
@@ -494,7 +494,7 @@ the row, so every video pinned to the agent keeps resolving it. See
 database access, so it parses each run's JSON output and posts it here. Body
 `{session_id, operation, agent, videos: [{video_id, stage}], events: [{service, model, units,
 raw, reported_cost_usd, estimated}]}`; `operation` must be `agent_pipeline`, `agent_research`,
-`agent_profile` or `agent_unscoped`. Every event is recorded against every listed video. The poller
+`agent_profile`, `agent_mascot` or `agent_unscoped`. Every event is recorded against every listed video. The poller
 lists exactly one video for a pipeline session; several videos, and `agent_unscoped`, appear only
 in sessions recorded before it ran one video per session, and are still accepted. Returns
 `200 {recorded, events}`, or `400` for an unknown operation, an empty `events` list or a missing
@@ -552,6 +552,35 @@ and logged — see [Database](03-database.md#settings).
 
 `POST /script-profiles` fetches every transcript **synchronously inside the request**, one at a
 time, with no delay between calls. Per-URL failures are collected rather than aborting the batch.
+
+### Mascots
+
+A mascot is a library entry whose drawing code an agent writes once and a human approves; versions
+are immutable once approved. The request loop lives in the version rows: creating inserts version 1
+(its `change_request` is the description), and every request-changes inserts a new draft version, so
+the draft is always the highest version without `approved_at`. A mascot is *pickable* once a version
+is approved and until it is archived, so a failed or pending revision never takes the working version
+away.
+
+| Route | Behaviour |
+|---|---|
+| `GET /mascots` | Non-archived mascots, built-ins first. Each carries `pickable`, `draft_version` and `sheets` (`approved` and `draft`, each `null` or the API-relative URLs of the model sheets that exist) |
+| `GET /mascots/pending` | `PENDING` and `BUILDING` mascots, oldest first, each with the draft's `change_request`. Polled by cron |
+| `GET /mascots/<id>` | One mascot plus its `versions` (never their code). **Serves archived rows too** |
+| `GET /mascots/<id>/versions/<v>/sheets/<turn\|feels\|act>` | The sheet image: a built-in's from its shipped files (JPEG), any other's from the data directory (PNG). `404` when missing; a symlink is refused |
+| `POST /mascots` | Body `{description, name, surprise?, agent_id?, agent_model?, agent_effort?, based_on?}`. `name` is required unless `surprise` is true (then it defaults to "Surprise mascot", and the description may be empty); `based_on` must be a pickable mascot; the agent picks are checked as on `POST /videos/manual`. `201` |
+| `POST /mascots/<id>/approve` | Only from `IN_REVIEW`, and only when the draft has code and all three sheets exist. Publishes the draft and sets `READY` |
+| `POST /mascots/<id>/request-changes` | Body `{comment}`. From `IN_REVIEW`, `READY` or `FAILED`; a built-in is `400` (ask for a variation instead), a mascot an agent holds is `409`. Adds a draft version and goes to `PENDING` with a fresh attempt budget |
+| `POST /mascots/<id>/record-attempt` | Claims an attempt (`BUILDING`) and resets the sheet-render count, or fails the mascot once the cap is hit, naming the approved version still in use |
+| `DELETE /mascots/<id>` | Archives; a built-in too. Never a real delete |
+
+The install default (`default_mascot_id` setting) and a project's `default_mascot_id` take `''`
+(inherit; none at install level), `none` (project only: no mascot even if the install has one) or a
+pickable id, checked only when they change. A new video is seeded from them, for every strategy, only
+while the renderer's GPU is `working` and never on a `cartoon_3d` video. `PATCH /videos/<id>` sets
+`mascot_id` only at `TOPIC_PROPOSED`; a change is refused without a working GPU, for an unpickable
+mascot and on a Cartoon 3D video, switching a video to Cartoon 3D clears it in the same update, and
+the approving `PATCH` is `409` when the video's mascot has since been archived.
 
 | Status | Cause |
 |---|---|
@@ -612,7 +641,7 @@ The system's single status readout. Returns:
 `paused` · `workable_count` · `proposed_count` · `video_counts` · `last_research_at` ·
 `active_strategies` · `mining_available` · `research_pending_cap` · `research_runs_today` ·
 `max_research_runs_per_day` · `research_window_resets_at` · `timezone` · `timezone_label` ·
-`pending_script_profiles` · `version` · `github_repo`
+`pending_script_profiles` · `pending_mascots` · `version` · `github_repo`
 
 `active_strategies` leaves `mining` out while no Gemini key is stored, and `mining_available` says
 so; the scheduled poller builds its research prompt from this list, so a run is never told to mine

@@ -28,7 +28,7 @@ import zoneinfo
 from contextlib import contextmanager
 from pathlib import Path
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, Response, g, jsonify, request
 
 import discord_notify
 import hosttz
@@ -46,6 +46,7 @@ import transcripts
 # we do not have to is the cheapest way to keep that question closed.
 try:
     from tubematic_core import logging as tlog
+    from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
@@ -57,6 +58,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
     from tubematic_core import logging as tlog
+    from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
@@ -95,6 +97,11 @@ SETTINGS_SPEC = {
     # the voice (TMDEV-121). There is no install-wide model any more —
     # migration 0006 stamped every voice with the one the install was using.
     "elevenlabs_voices":      ("voice_list", "[]"),
+    # The mascot new videos start with when their domain has no preference of its
+    # own: "" (none) or the id of a pickable mascot. Like elevenlabs_voice_id, the
+    # invariant is enforced on read (_read_all_settings) and on write
+    # (post_settings), not by _coerce_setting, which has no database.
+    "default_mascot_id":      ("str",       ""),
     "pronunciation_lexicon":  ("lexicon",   "[]"),
     # Scene images; OpenAI is the only provider (TMDEV-165).
     # Keep in sync: mcp/server.py and onboard/config.py DEFAULT_IMAGE_MODEL.
@@ -216,6 +223,8 @@ MAX_VOICES = 10
 # setting — nobody asked for it to be configurable, and it would need a
 # fourth "keep in sync" copy alongside MAX_VOICES above.
 OUTPUT_DIR = Path(os.getenv("OUTPUT_BASE_PATH", "/output_videos"))
+# Where a builtin mascot's versioned files ship (renderer/remotion/mascot-builtin/).
+REMOTION_DIR = Path(os.getenv("TUBEMATIC_REMOTION_DIR", "/app/remotion"))
 VOICE_PREVIEW_SAMPLE_TEXT = (
     "Here's a quick preview of this voice, narrating a short animated explainer "
     "the way it would sound in a real Tubematic video."
@@ -249,6 +258,10 @@ MAX_PROFILE_ATTEMPTS = 2
 # videos, and each URL is a sequential network fetch inside one request.
 MAX_PROFILE_URLS = 10
 SCRIPT_PROFILE_STATUSES = ("PENDING", "GENERATING", "READY", "FAILED")
+# Mascots (tubematic_core.mascots owns the statuses and MAX_MASCOT_ATTEMPTS).
+MASCOT_NAME_MAX_LEN = 60
+MASCOT_DESCRIPTION_MAX_LEN = 2000
+SURPRISE_MASCOT_NAME = "Surprise mascot"
 
 # How much of gemini_feedback a LIST payload carries (VQA-7). The stored value
 # is uncapped, and GET /videos returns every row, so the list ships a preview
@@ -1273,6 +1286,41 @@ def _active_strategies(con) -> list:
     return [s for s in _stored_strategies(con) if s != "mining" or mining_available]
 
 
+def _mascot_pickable(con, mascot_id: str) -> bool:
+    """Whether `mascot_id` is an approved, unarchived mascot (tubematic_core.mascots.pickable)."""
+    row = con.execute("SELECT approved_version, archived FROM mascots WHERE id = ?",
+                      (mascot_id,)).fetchone()
+    return row is not None and tmascots.pickable(row)
+
+
+def _mascot_pick_error(con, mascot_id) -> str:
+    """Why `mascot_id` cannot be chosen as a default or a video's mascot, or "".
+    "" (no mascot) is the caller's to allow."""
+    if not isinstance(mascot_id, str):
+        return "mascot_id must be a string"
+    if not _mascot_pickable(con, mascot_id):
+        return (f"mascot_id {mascot_id!r} is not a mascot that can be chosen: it must exist, "
+                "be approved and not be archived. Pick one from GET /mascots.")
+    return ""
+
+
+MASCOT_NOT_ON_CARTOON_3D = ("Mascots are not available in the Cartoon 3D style (its 3D world "
+                            "has no place for a flat watercolour character). Choose another "
+                            "visual style, or no mascot.")
+
+
+def _seed_mascot(con, project_id, visual_style: str) -> str:
+    """The mascot a new video starts with: the project's default (or the install's),
+    but only while the renderer's GPU is working and never on a Cartoon 3D video.
+    Anything else is "": seeding is a convenience and must never refuse a video."""
+    if visual_style == "cartoon_3d" or gpu_status(con)["status"] != "working":
+        return ""
+    prow = con.execute("SELECT default_mascot_id FROM projects WHERE id = ?",
+                       (project_id,)).fetchone() if project_id else None
+    install = _read_all_settings(con)["default_mascot_id"]
+    return tmascots.resolve_default(con, (prow["default_mascot_id"] if prow else "") or "", install)
+
+
 def _cartoon3d_gpu_error(con, style: str) -> str:
     """Why `style` may not be chosen on this install's renderer, or "": only
     cartoon_3d is gated, on the worker's GPU probe (gpu_status). Keep in sync:
@@ -1405,6 +1453,11 @@ def _read_all_settings(con) -> dict:
     roster_ids = {v["voice_id"] for v in result["elevenlabs_voices"]}
     if result["elevenlabs_voice_id"] and result["elevenlabs_voice_id"] not in roster_ids:
         result["elevenlabs_voice_id"] = ""
+    # Same reasoning for the install's default mascot: one archived (or never
+    # approved) since it was chosen reads as none, so no reader seeds from it
+    # and an unrelated settings save is never blocked by it.
+    if result["default_mascot_id"] and not _mascot_pickable(con, result["default_mascot_id"]):
+        result["default_mascot_id"] = ""
     return result
 
 # Keep in sync with mcp/server.py's equivalent research-run-window helper.
@@ -1461,7 +1514,7 @@ ACTIONABLE_STATUSES = {"TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY"}
 # frozen only while an agent or the renderer holds the video.
 # Keep in sync: mcp/server.py's TOPIC_ONLY_FIELDS, AGENT_CHECKPOINT_FIELDS and
 # HUMAN_CHECKPOINT_STATUSES.
-TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style")
+TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id")
 AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
 # VIDEO_APPROVED is deliberately absent (TMDEV-83): publishing is never agent
 # work — a human does it from the dashboard, or Auto Pilot's worker pass does
@@ -2439,8 +2492,13 @@ def create_pipeline_blueprint() -> Blueprint:
             "status", "title", "script", "video_version", "youtube_url",
             "gemini_feedback", "voice_id", "agent_id", "agent_model", "agent_effort",
             "script_profile_id", "visual_style", "publish_title", "publish_description",
+            "mascot_id",
         }
         fields = {k: v for k, v in body.items() if k in allowed}
+        if "mascot_id" in fields:
+            if not isinstance(fields["mascot_id"], str):
+                return jsonify({"error": "mascot_id must be a string"}), 400
+            fields["mascot_id"] = fields["mascot_id"].strip()
         # A human may hand a video to another agent at any human checkpoint
         # (TMDEV-110) — checked further down, after the freeze. There is no
         # blank: NULL means "the default at dispatch time", which is only ever
@@ -2599,6 +2657,36 @@ def create_pipeline_blueprint() -> Blueprint:
                 if gpu_err:
                     return jsonify({"error": gpu_err}), 400
 
+            # The mascot: a pick is checked on CHANGE only, so a client echoing
+            # the stored value (the approving PATCH always may) is not refused for
+            # a GPU that has gone since. It is judged against the style the video
+            # will have once this PATCH lands, and a switch TO cartoon_3d clears
+            # it in the same UPDATE (below) rather than leaving a mascot on a
+            # style that cannot draw one. Clearing is always allowed.
+            cur_vid = con.execute("SELECT mascot_id, visual_style FROM videos WHERE id = ?",
+                                  (video_id,)).fetchone()
+            stored_mascot = cur_vid["mascot_id"] or ""
+            if fields.get("mascot_id") and fields["mascot_id"] != stored_mascot:
+                err = _mascot_pick_error(con, fields["mascot_id"])
+                if err:
+                    return jsonify({"error": err}), 400
+                err = tmascots.mascot_gpu_error(gpu_status(con)["status"])
+                if err:
+                    return jsonify({"error": err}), 400
+                if fields.get("visual_style", cur_vid["visual_style"]) == "cartoon_3d":
+                    return jsonify({"error": MASCOT_NOT_ON_CARTOON_3D}), 400
+            # The approving PATCH is the last chance to catch a mascot archived
+            # since it was seeded or picked: the video is about to be authored
+            # against it, and nothing downstream would refuse.
+            if (fields.get("status") == "TOPIC_APPROVED" and row["status"] == "TOPIC_PROPOSED"
+                    and fields.get("mascot_id", stored_mascot)):
+                err = _mascot_pick_error(con, fields.get("mascot_id", stored_mascot))
+                if err:
+                    return jsonify({"error": f"This video's mascot {stored_mascot!r} can no "
+                                             "longer be used (it was archived or withdrawn). "
+                                             "Choose another mascot or none, then approve "
+                                             "again."}), 409
+
             # The per-video choices freeze in two groups, and both are checked
             # against the *current* status — the UPDATE has not run yet — so the
             # PATCH that approves or revises can carry them while a later edit
@@ -2632,6 +2720,8 @@ def create_pipeline_blueprint() -> Blueprint:
             # (TMDEV-90); a second race test keys on this one's (TMDEV-110).
             set_sql = [f"{k} = ?" for k in fields]
             set_params = list(fields.values())
+            if fields.get("visual_style") == "cartoon_3d" and "mascot_id" not in fields:
+                set_sql.append("mascot_id = ''")
             # Any human status change is a human acting on the video, so it
             # releases a stuck flag and starts the no-progress count afresh
             # (TMDEV-129). Only a status change: renaming a stuck video is not
@@ -2970,6 +3060,9 @@ def create_pipeline_blueprint() -> Blueprint:
                 seeded = (prow["default_script_profile_id"] if prow else "") or ""
                 if seeded and not _script_profile_error(con, seeded):
                     script_profile_id = seeded
+            # A project's default mascot seeds EVERY video, whatever the strategy,
+            # like its default voice; see _seed_mascot for when it seeds nothing.
+            mascot_id = _seed_mascot(con, body.get("project_id"), visual_style)
             # The check above runs outside any transaction, so a pause or another
             # session's topic committed since then would be missed; the INSERT
             # re-checks both itself.
@@ -2977,12 +3070,12 @@ def create_pipeline_blueprint() -> Blueprint:
                 f"""INSERT INTO videos
                    (id, project_id, title, topic, strategy, producibility_score,
                     status, video_version, voice_id, agent_id, visual_style,
-                    script_profile_id, created_at, updated_at)
-                   SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', 1, ?, ?, ?, ?, ?, ?
+                    script_profile_id, mascot_id, created_at, updated_at)
+                   SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', 1, ?, ?, ?, ?, ?, ?, ?
                    WHERE {_DOMAIN_OPEN_GUARD}""",
                 (vid, body.get("project_id"), title,
                  body["topic"], body["strategy"], body["producibility_score"], voice_id,
-                 _pick_agent_id(con), visual_style, script_profile_id, now, now,
+                 _pick_agent_id(con), visual_style, script_profile_id, mascot_id, now, now,
                  body["strategy"], body.get("project_id")),
             )
             if cur.rowcount == 0:
@@ -3110,14 +3203,15 @@ def create_pipeline_blueprint() -> Blueprint:
             if not voice_id:
                 voice_id = _project_default_voice(con, MANUAL_PROJECT_ID,
                                                   _read_all_settings(con))
+            mascot_id = _seed_mascot(con, MANUAL_PROJECT_ID, visual_style)
             con.execute(
                 """INSERT INTO videos
                    (id, project_id, title, topic, strategy, producibility_score, status,
                     video_version, voice_id, agent_id, agent_model, agent_effort,
-                    script_profile_id, visual_style, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, 'manual', 0, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    script_profile_id, visual_style, mascot_id, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 'manual', 0, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (vid, MANUAL_PROJECT_ID, title, topic, status, voice_id, agent_id,
-                 agent_model, agent_effort, profile_id, visual_style, now, now),
+                 agent_model, agent_effort, profile_id, visual_style, mascot_id, now, now),
             )
             video = _video_with_comments(con, vid)
         return jsonify(video), 201
@@ -3179,6 +3273,14 @@ def create_pipeline_blueprint() -> Blueprint:
         if not isinstance(default_profile, str):
             return jsonify({"error": "default_script_profile_id must be a string"}), 400
         default_profile = default_profile.strip()
+        # "" inherits the install's default mascot, "none" means no mascot even
+        # if the install has a default, anything else must be a pickable id.
+        default_mascot = body.get("default_mascot_id")
+        if default_mascot is None:
+            default_mascot = ""
+        if not isinstance(default_mascot, str):
+            return jsonify({"error": "default_mascot_id must be a string"}), 400
+        default_mascot = default_mascot.strip()
         # Absent and null mean the default, which on this full replace is what
         # omission means. A cap below what the domain already holds is allowed:
         # it expires the domain at once, which is the human's call to make.
@@ -3198,7 +3300,7 @@ def create_pipeline_blueprint() -> Blueprint:
             # harmless: seeding never rewrites, and the approval PATCH refuses.
             prev = con.execute(
                 "SELECT description, default_visual_style, default_voice_id, "
-                "default_script_profile_id FROM projects WHERE id = ?",
+                "default_script_profile_id, default_mascot_id FROM projects WHERE id = ?",
                 (pid,)).fetchone()
             # The id names the domain's output directory, so a NEW one must be a
             # plain path segment (TMDEV-158). Only a new one: this is an upsert
@@ -3243,11 +3345,19 @@ def create_pipeline_blueprint() -> Blueprint:
                 err = _script_profile_error(con, default_profile)
                 if err:
                     return jsonify({"error": err}), 400
+            # The default mascot follows the same rule: checked only when it
+            # changes, so one archived since does not block every other edit.
+            mascot_unchanged = prev is not None and (prev["default_mascot_id"] or "") == default_mascot
+            if default_mascot not in ("", "none") and not mascot_unchanged:
+                err = _mascot_pick_error(con, default_mascot)
+                if err:
+                    return jsonify({"error": err.replace("mascot_id", "default_mascot_id")}), 400
             con.execute(
                 """INSERT INTO projects (id, name, description, is_curriculum_seed, status,
                                          default_visual_style, default_voice_id,
-                                         default_script_profile_id, topic_cap, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                         default_script_profile_id, default_mascot_id,
+                                         topic_cap, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                      name=excluded.name,
                      description=excluded.description,
@@ -3256,9 +3366,11 @@ def create_pipeline_blueprint() -> Blueprint:
                      default_visual_style=excluded.default_visual_style,
                      default_voice_id=excluded.default_voice_id,
                      default_script_profile_id=excluded.default_script_profile_id,
+                     default_mascot_id=excluded.default_mascot_id,
                      topic_cap=excluded.topic_cap""",
                 (pid, body["name"], description, is_seed, status,
-                 default_style, default_voice, default_profile, topic_cap, _now()),
+                 default_style, default_voice, default_profile, default_mascot,
+                 topic_cap, _now()),
             )
             row = con.execute(f"{_PROJECT_SELECT} WHERE p.id = ?", (pid,)).fetchone()
         return jsonify(_project_out(row)), 201
@@ -3367,6 +3479,15 @@ def create_pipeline_blueprint() -> Blueprint:
             # stores the URL anyway. Refusing on an unreachable Discord would
             # make Settings un-saveable for reasons that have nothing to do
             # with what was typed.
+            # The install's default mascot must be pickable, checked only when it
+            # changes (like the project default) so an unrelated save is never
+            # blocked by one archived since.
+            if coerced.get("default_mascot_id") and \
+                    coerced["default_mascot_id"] != current["default_mascot_id"]:
+                err = _mascot_pick_error(con, coerced["default_mascot_id"])
+                if err:
+                    return jsonify({"error": err.replace("mascot_id", "default_mascot_id")}), 400
+
             webhook = coerced.get("discord_webhook_url")
             if webhook:
                 verdict, detail = discord_notify.verify_webhook(webhook)
@@ -4622,6 +4743,313 @@ def create_pipeline_blueprint() -> Blueprint:
             "attempt_count": row["attempt_count"] + 1,
         })
 
+    # ── /mascots ──────────────────────────────────────────────────────────────
+    # The mascot library. A mascot's drawing code is authored by an agent
+    # (poll.py's mascot lane, through MCP's render_mascot_sheets) and approved by
+    # a human here; versions are immutable once approved, so a video pins one.
+    # The request loop is modelled in the version rows: creating inserts v1 and
+    # every request-changes inserts a new draft version, so the draft is always
+    # the highest version without approved_at. Archive, never DELETE, for the
+    # same reason as script profiles.
+
+    def _mascot_sheet_urls(db_dir, row, version) -> dict | None:
+        """API-relative URLs of the sheet files that exist for one version, or
+        None when none do. A builtin ships jpegs in the repo; the rest are PNGs."""
+        if not version:
+            return None
+        urls = {}
+        for sheet in tmascots.SHEETS:
+            try:
+                path = _mascot_sheet_path(db_dir, row["id"], bool(row["builtin"]), version, sheet)
+            except (tmascots.MascotError, tjobs.UnsafePath):
+                continue
+            if path.is_file():
+                urls[sheet] = f"/mascots/{row['id']}/versions/{version}/sheets/{sheet}"
+        return urls or None
+
+    def _mascot_sheet_path(db_dir, mascot_id, builtin, version, sheet):
+        if builtin:
+            if sheet not in tmascots.SHEETS:
+                raise tmascots.MascotError(f"sheet {sheet!r} is not one of {tmascots.SHEETS}")
+            return tmascots.builtin_dir(REMOTION_DIR, mascot_id, version) / f"{sheet}.jpg"
+        return tmascots.sheet_file(db_dir, mascot_id, version, sheet)
+
+    def _draft_version(con, mascot_id):
+        row = con.execute("SELECT MAX(version) AS v FROM mascot_versions "
+                          "WHERE mascot_id = ? AND approved_at = ''", (mascot_id,)).fetchone()
+        return row["v"]
+
+    def _mascot_out(con, row, full=False, with_request=False) -> dict:
+        db_dir = Path(db_path).parent
+        draft = _draft_version(con, row["id"])
+        out = {k: row[k] for k in (
+            "id", "name", "description", "based_on", "status", "approved_version",
+            "agent_id", "agent_model", "agent_effort", "attempt_count", "error",
+            "created_at", "updated_at")}
+        out["builtin"] = bool(row["builtin"])
+        out["archived"] = bool(row["archived"])
+        out["pickable"] = tmascots.pickable(row)
+        out["draft_version"] = draft
+        out["sheets"] = {
+            "approved": _mascot_sheet_urls(db_dir, row, row["approved_version"]),
+            # A builtin has no draft: its versions ship in the repo.
+            "draft": None if row["builtin"] else _mascot_sheet_urls(db_dir, row, draft),
+        }
+        if with_request:
+            # What the agent is being asked for now: the draft's change request.
+            req = con.execute("SELECT change_request FROM mascot_versions "
+                              "WHERE mascot_id = ? AND version = ?", (row["id"], draft)
+                              ).fetchone() if draft else None
+            out["change_request"] = req["change_request"] if req else ""
+        if full:
+            out["versions"] = [
+                {"version": v["version"], "change_request": v["change_request"],
+                 "created_at": v["created_at"], "approved_at": v["approved_at"],
+                 "has_code": bool(v["code"].strip()) or bool(row["builtin"])}
+                for v in con.execute("SELECT version, change_request, created_at, approved_at, "
+                                     "code FROM mascot_versions WHERE mascot_id = ? "
+                                     "ORDER BY version", (row["id"],))]
+        return out
+
+    def _mascot_row(con, mascot_id):
+        return con.execute("SELECT * FROM mascots WHERE id = ?", (mascot_id,)).fetchone()
+
+    @bp.get("/mascots")
+    def list_mascots():
+        with _conn() as con:
+            rows = con.execute("SELECT * FROM mascots WHERE archived = 0 "
+                               "ORDER BY builtin DESC, created_at DESC, id").fetchall()
+            return jsonify([_mascot_out(con, r) for r in rows])
+
+    @bp.get("/mascots/pending")
+    def pending_mascots():
+        # BUILDING is included on purpose, like GENERATING for profiles: a
+        # crashed agent session leaves it there and it must be retried; the
+        # attempt cap (record-attempt) is what stops that repeating forever.
+        with _conn() as con:
+            rows = con.execute("SELECT * FROM mascots WHERE archived = 0 "
+                               "AND status IN ('PENDING','BUILDING') "
+                               "ORDER BY created_at ASC, id").fetchall()
+            return jsonify([_mascot_out(con, r, with_request=True) for r in rows])
+
+    @bp.get("/mascots/<mascot_id>")
+    def get_mascot(mascot_id: str):
+        with _conn() as con:
+            row = _mascot_row(con, mascot_id)
+            if not row:
+                return jsonify({"error": "Mascot not found"}), 404
+            return jsonify(_mascot_out(con, row, full=True, with_request=True))
+
+    @bp.get("/mascots/<mascot_id>/versions/<int:version>/sheets/<sheet>")
+    def get_mascot_sheet(mascot_id: str, version: int, sheet: str):
+        with _conn() as con:
+            row = _mascot_row(con, mascot_id)
+        if not row or sheet not in tmascots.SHEETS:
+            return jsonify({"error": "Sheet not found"}), 404
+        try:
+            path = _mascot_sheet_path(Path(db_path).parent, mascot_id, bool(row["builtin"]),
+                                      version, sheet)
+            data = path.read_bytes() if path.is_file() else None
+        except (tmascots.MascotError, tjobs.UnsafePath, OSError):
+            data = None
+        if data is None:
+            return jsonify({"error": "Sheet not found"}), 404
+        resp = Response(data, mimetype="image/jpeg" if row["builtin"] else "image/png")
+        # A draft version's sheets are re-rendered under the same URL.
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+    def _mascot_slug(con, name: str) -> str:
+        base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:48].strip("-") or "mascot"
+        mid, n = base, 1
+        while con.execute("SELECT 1 FROM mascots WHERE id = ?", (mid,)).fetchone():
+            n += 1
+            mid = f"{base}-{n}"
+        return mid
+
+    @bp.post("/mascots")
+    def create_mascot():
+        body = request.get_json(force=True) or {}
+        surprise = body.get("surprise", False)
+        if not isinstance(surprise, bool):
+            return jsonify({"error": "surprise must be true or false"}), 400
+        description = body.get("description", "")
+        if description is None:
+            description = ""
+        if not isinstance(description, str):
+            return jsonify({"error": "description must be a string"}), 400
+        description = description.strip()
+        if len(description) > MASCOT_DESCRIPTION_MAX_LEN:
+            return jsonify({"error": f"description is {len(description)} characters; at most "
+                                     f"{MASCOT_DESCRIPTION_MAX_LEN}."}), 400
+        if not description and not surprise:
+            return jsonify({"error": "description is required (or ask for a surprise)"}), 400
+        name = body.get("name")
+        if name is not None and not isinstance(name, str):
+            return jsonify({"error": "name must be a string"}), 400
+        name = (name or "").strip()
+        if not name and surprise:
+            name = SURPRISE_MASCOT_NAME
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+        if len(name) > MASCOT_NAME_MAX_LEN:
+            return jsonify({"error": f"name is {len(name)} characters; at most "
+                                     f"{MASCOT_NAME_MAX_LEN}."}), 400
+        picks = {}
+        for key in ("agent_id", "agent_model", "agent_effort", "based_on"):
+            raw = body.get(key)
+            if raw is not None and not isinstance(raw, str):
+                return jsonify({"error": f"{key} must be a string"}), 400
+            picks[key] = (raw or "").strip()
+        agent_model, agent_effort = picks["agent_model"], picks["agent_effort"]
+        if agent_model and (" " in agent_model or agent_model.startswith("-")):
+            return jsonify({"error": f"agent_model must be a model alias (sonnet, opus, ...) or "
+                                     f"full ID with no spaces, or blank for the agent's default "
+                                     f"model, got {agent_model!r}"}), 400
+        if agent_effort not in ("",) + AGENT_EFFORTS:
+            return jsonify({"error": f"agent_effort must be one of {list(AGENT_EFFORTS)}, or "
+                                     f"blank for the agent's own effort, got {agent_effort!r}"}), 400
+        now = _now()
+        with _conn() as con:
+            if picks["agent_id"]:
+                err = _agent_id_error(con, None, picks["agent_id"])
+                if err:
+                    return jsonify({"error": err}), 400
+            if agent_model:
+                err = _agent_model_error(con, picks["agent_id"] or None, agent_model)
+                if err:
+                    return jsonify({"error": err}), 400
+            if picks["based_on"]:
+                err = _mascot_pick_error(con, picks["based_on"])
+                if err:
+                    return jsonify({"error": err.replace("mascot_id", "based_on")}), 400
+            mid = _mascot_slug(con, name)
+            con.execute(
+                """INSERT INTO mascots (id, name, description, status, based_on, agent_id,
+                                        agent_model, agent_effort, created_at, updated_at)
+                   VALUES (?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?)""",
+                (mid, name, description, picks["based_on"], picks["agent_id"], agent_model,
+                 agent_effort, now, now))
+            con.execute(
+                "INSERT INTO mascot_versions (mascot_id, version, change_request, created_at) "
+                "VALUES (?, 1, ?, ?)", (mid, description, now))
+            return jsonify(_mascot_out(con, _mascot_row(con, mid), full=True)), 201
+
+    @bp.post("/mascots/<mascot_id>/approve")
+    def approve_mascot(mascot_id: str):
+        with _conn() as con:
+            row = _mascot_row(con, mascot_id)
+            if not row or row["archived"]:
+                return jsonify({"error": "Mascot not found"}), 404
+            if row["status"] != "IN_REVIEW":
+                return jsonify({"error": f"Only a mascot in review can be approved "
+                                         f"(this one is {row['status']})"}), 409
+            draft = _draft_version(con, mascot_id)
+            code = con.execute("SELECT code FROM mascot_versions WHERE mascot_id = ? "
+                               "AND version = ?", (mascot_id, draft)).fetchone() if draft else None
+            if code is None or not code["code"].strip():
+                return jsonify({"error": "The draft has no drawing code yet, so there is "
+                                         "nothing to approve."}), 409
+            db_dir = Path(db_path).parent
+            for sheet in tmascots.SHEETS:
+                try:
+                    ok = tmascots.sheet_file(db_dir, mascot_id, draft, sheet).is_file()
+                except (tmascots.MascotError, tjobs.UnsafePath):
+                    ok = False
+                if not ok:
+                    return jsonify({"error": f"The draft's {sheet} sheet has not been rendered, "
+                                             "so it cannot be approved."}), 409
+            now = _now()
+            cur = con.execute(
+                "UPDATE mascot_versions SET approved_at = ? WHERE mascot_id = ? AND version = ? "
+                "AND approved_at = ''", (now, mascot_id, draft))
+            if cur.rowcount == 0:
+                return jsonify({"error": "The draft changed while approving; reload."}), 409
+            con.execute("UPDATE mascots SET approved_version = ?, status = 'READY', error = '', "
+                        "updated_at = ? WHERE id = ?", (draft, now, mascot_id))
+            return jsonify(_mascot_out(con, _mascot_row(con, mascot_id), full=True))
+
+    @bp.post("/mascots/<mascot_id>/request-changes")
+    def request_mascot_changes(mascot_id: str):
+        body = request.get_json(force=True) or {}
+        comment = body.get("comment")
+        if not isinstance(comment, str) or not comment.strip():
+            return jsonify({"error": "comment is required: say what to change"}), 400
+        comment = comment.strip()
+        if len(comment) > MASCOT_DESCRIPTION_MAX_LEN:
+            return jsonify({"error": f"comment is {len(comment)} characters; at most "
+                                     f"{MASCOT_DESCRIPTION_MAX_LEN}."}), 400
+        with _conn() as con:
+            row = _mascot_row(con, mascot_id)
+            if not row or row["archived"]:
+                return jsonify({"error": "Mascot not found"}), 404
+            if row["builtin"]:
+                return jsonify({"error": "A built-in mascot cannot be changed: ask for a "
+                                         "variation instead (create a new mascot based on it)."}), 400
+            if row["status"] not in ("IN_REVIEW", "READY", "FAILED"):
+                return jsonify({"error": f"An agent is working on this mascot "
+                                         f"({row['status']}); wait for it to finish."}), 409
+            now = _now()
+            # Bound to the status checked, so two clicks cannot add two versions.
+            cur = con.execute(
+                "UPDATE mascots SET status = 'PENDING', attempt_count = 0, sheet_renders = 0, "
+                "error = '', updated_at = ? WHERE id = ? AND status = ?",
+                (now, mascot_id, row["status"]))
+            if cur.rowcount == 0:
+                return jsonify({"error": "This mascot changed while the request was in flight; "
+                                         "reload."}), 409
+            top = con.execute("SELECT MAX(version) AS v FROM mascot_versions WHERE mascot_id = ?",
+                              (mascot_id,)).fetchone()["v"] or 0
+            con.execute("INSERT INTO mascot_versions (mascot_id, version, change_request, "
+                        "created_at) VALUES (?, ?, ?, ?)", (mascot_id, top + 1, comment, now))
+            return jsonify(_mascot_out(con, _mascot_row(con, mascot_id), full=True,
+                                       with_request=True))
+
+    @bp.post("/mascots/<mascot_id>/record-attempt")
+    def record_mascot_attempt(mascot_id: str):
+        """Called by poll.py right before it invokes a mascot-building agent;
+        recorded before the invoke for the reason record_script_profile_attempt
+        gives. Starts the attempt's sheet-render budget afresh. Over the cap the
+        mascot FAILS but approved_version is untouched: a failed revision never
+        takes the working version away."""
+        now = _now()
+        with _conn() as con:
+            row = _mascot_row(con, mascot_id)
+            if not row or row["archived"]:
+                return jsonify({"error": "Mascot not found"}), 404
+            if row["status"] not in ("PENDING", "BUILDING"):
+                return jsonify({"id": mascot_id, "status": row["status"],
+                                "attempt_count": row["attempt_count"]}), 409
+            if row["attempt_count"] >= tmascots.MAX_MASCOT_ATTEMPTS:
+                error = (f"Mascot generation did not complete after "
+                         f"{tmascots.MAX_MASCOT_ATTEMPTS} agent session(s).")
+                if row["approved_version"]:
+                    error += (f" Version {row['approved_version']} is still in use. You can "
+                              "request changes again.")
+                else:
+                    error += " Delete this mascot and create a new one."
+                con.execute("UPDATE mascots SET status = 'FAILED', error = ?, updated_at = ? "
+                            "WHERE id = ?", (error, now, mascot_id))
+                return jsonify({"id": mascot_id, "status": "FAILED",
+                                "attempt_count": row["attempt_count"], "error": error})
+            con.execute("UPDATE mascots SET status = 'BUILDING', "
+                        "attempt_count = attempt_count + 1, sheet_renders = 0, updated_at = ? "
+                        "WHERE id = ?", (now, mascot_id))
+            return jsonify({"id": mascot_id, "status": "BUILDING",
+                            "attempt_count": row["attempt_count"] + 1,
+                            "draft_version": _draft_version(con, mascot_id)})
+
+    @bp.delete("/mascots/<mascot_id>")
+    def delete_mascot(mascot_id: str):
+        # Archive, never DELETE: a video that pinned this mascot keeps a
+        # resolvable id and version. A builtin can be archived too.
+        with _conn() as con:
+            cur = con.execute("UPDATE mascots SET archived = 1, updated_at = ? WHERE id = ?",
+                              (_now(), mascot_id))
+            if cur.rowcount == 0:
+                return jsonify({"error": "Mascot not found"}), 404
+        return jsonify({"ok": True, "archived": True})
+
     # ── /agents ───────────────────────────────────────────────────────────────
     # Installed coding agents (TMDEV-90). Read-mostly: rows are created,
     # uninstalled (archived_at set, never deleted, so every video pinned to an
@@ -4797,6 +5225,12 @@ def create_pipeline_blueprint() -> Blueprint:
             ).fetchone()
             pending_script_profiles = profile_row["cnt"] if profile_row else 0
 
+            mascot_row = con.execute(
+                "SELECT COUNT(*) AS cnt FROM mascots "
+                "WHERE archived = 0 AND status IN ('PENDING','BUILDING')"
+            ).fetchone()
+            pending_mascots = mascot_row["cnt"] if mascot_row else 0
+
         proposed_count = video_counts.get("TOPIC_PROPOSED", 0)
         workable_count = sum(video_counts.get(s, 0) for s in WORKABLE_STATUSES)
 
@@ -4814,6 +5248,7 @@ def create_pipeline_blueprint() -> Blueprint:
             "max_research_runs_per_day": max_research_runs_per_day,
             "research_window_resets_at": research_window_resets_at,
             "pending_script_profiles": pending_script_profiles,
+            "pending_mascots": pending_mascots,
             "timezone": tz["timezone"],
             "timezone_label": tz["timezone_label"],
             "version": tversion.version(),
