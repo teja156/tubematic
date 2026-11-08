@@ -76,7 +76,7 @@ function DomainMascotSelect({ testId, value, mascots, gpu, onChange }: {
         border: "1px solid var(--border-2)",
         flexShrink: 0,
         width: "100%",
-        maxWidth: 150,
+        maxWidth: 120,
       }}
     >
       {mascotOptions(mascots, gpu, value, [
@@ -186,9 +186,12 @@ function DomainCapInput({ testId, value, onCommit }: {
 // The fixed width matters: a select is as wide as its longest option (243px for
 // the style picker's "needs an OpenAI key" one), and three at that width
 // crushed a seed row's domain name to ~70px at 1280px. The select stretches to
-// the field, and its open list still shows every option in full. 150px, not
-// 170, is what lets a seed row keep its pause button on one line at 1280px
-// alongside the topic cap. A field without a width sizes to its content.
+// the field, and its open list still shows every option in full. 120px (it was
+// 150, and 170 before that) is what lets a seed row keep its pause button on one
+// line at 1280px with four pickers (style, voice, profile, mascot) beside the
+// topic cap: measured, the row's inner width is 1184px, and the fixed items
+// (four pickers, cap, count, badge, the 190px pause button, the gaps) must leave
+// the name its 160px minimum. A field without a width sizes to its content.
 function DomainField({ label, width, children }: {
   label: string; width?: number; children: React.ReactNode;
 }) {
@@ -245,10 +248,11 @@ function DomainRow({
         display: "flex",
         alignItems: "center",
         // Wraps rather than overlaps on a narrow screen: a seed row carries
-        // three pickers, a count, a badge and the pause button, and without
-        // wrapping the name shrank to nothing under them at 1024px.
+        // four pickers, a count, a badge and the pause button, and without
+        // wrapping the name shrank to nothing under them at 1024px. The 10px
+        // gap (was 16) is part of what keeps it on one line at 1280px.
         flexWrap: "wrap",
-        gap: 16,
+        gap: 10,
         padding: "12px 16px",
         background: "var(--panel)",
         border: "1px solid var(--border)",
@@ -284,7 +288,7 @@ function DomainRow({
           dashboard, so without this a domain created before the register
           existed could never be pinned to one. POST /projects is the upsert
           path, so this needs no new endpoint. */}
-      <DomainField label="Visual style" width={150}>
+      <DomainField label="Visual style" width={120}>
         <select
           data-testid={`domain-style-${project.id}`}
           value={project.default_visual_style ?? ""}
@@ -311,7 +315,7 @@ function DomainRow({
           whatever its sourcing mode, starts with it. A voice since removed
           from the roster stays visible as "(removed)" rather than silently
           reading as the install default — the API seeds nothing for it. */}
-      <DomainField label="Default voice" width={150}>
+      <DomainField label="Default voice" width={120}>
         <DomainVoiceSelect
           testId={`domain-voice-${project.id}`}
           value={project.default_voice_id ?? ""}
@@ -322,7 +326,7 @@ function DomainRow({
 
       {/* Default script profile: seeds this domain's curriculum videos only,
           like the visual style. A human can still pick another at the topic. */}
-      <DomainField label="Script profile" width={150}>
+      <DomainField label="Script profile" width={120}>
         <DomainProfileSelect
           testId={`domain-profile-${project.id}`}
           value={project.default_script_profile_id ?? ""}
@@ -331,7 +335,7 @@ function DomainRow({
         />
       </DomainField>
 
-      <DomainField label="Mascot" width={150}>
+      <DomainField label="Mascot" width={120}>
         <DomainMascotSelect
           testId={`domain-mascot-${project.id}`}
           value={project.default_mascot_id ?? ""}
