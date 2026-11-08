@@ -1642,3 +1642,60 @@ describe("VideoModal — scheduled publishing (TMDEV-133)", () => {
     expect(screen.queryByText("Delete Video")).toBeNull();
   });
 });
+
+// ── Mascot picker (topic checkpoint) ─────────────────────────────────────────
+
+describe("VideoModal — mascot picker", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const MASCOTS = [{ id: "tubi", name: "Tubi", pickable: true }] as never[];
+  const gpu = (status: "working" | "not_usable" | "unknown") => ({
+    status, rendering_on: "cpu", configured: true, gpu: null, host_gpus: [], probe: null,
+    requested_at: null, pending: false, waiting_for_render: false,
+  }) as never;
+
+  it("shows no picker when there is nothing to pick", async () => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    await screen.findByText("Approve Topic");
+    expect(screen.queryByTestId("video-modal-mascot-select")).toBeNull();
+  });
+
+  it("sends the picked mascot_id with approve-topic", async () => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    mockFetchFor(video);
+    const onAction = vi.fn();
+    render(<VideoModal video={video} mascots={MASCOTS} gpu={gpu("working")} onClose={() => {}} onAction={onAction} />);
+    const select = (await screen.findByTestId("video-modal-mascot-select")) as HTMLSelectElement;
+    expect(within(select.closest("label") as HTMLElement).getByText("Mascot")).toBeTruthy();
+    fireEvent.change(select, { target: { value: "tubi" } });
+    fireEvent.click(screen.getByText("Approve Topic"));
+    expect(onAction.mock.calls[0][3]).toMatchObject({ mascot_id: "tubi" });
+  });
+
+  it.each([["not_usable", "Tubi (Mascots need a working GPU)"], ["unknown", "Tubi (GPU not tested yet)"]] as const)(
+    "disables the mascot while the GPU is %s", async (status, label) => {
+      const video = makeVideo("TOPIC_PROPOSED");
+      mockFetchFor(video);
+      render(<VideoModal video={video} mascots={MASCOTS} gpu={gpu(status)} onClose={() => {}} onAction={() => {}} />);
+      const select = (await screen.findByTestId("video-modal-mascot-select")) as HTMLSelectElement;
+      const tubi = [...select.options].find((o) => o.value === "tubi")!;
+      expect(tubi.disabled).toBe(true);
+      expect(tubi.textContent).toBe(label);
+    });
+
+  it("clears and disables the picker when Cartoon 3D is chosen", async () => {
+    const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
+    mockFetchFor(video);
+    const onAction = vi.fn();
+    render(<VideoModal video={video} mascots={MASCOTS} gpu={gpu("working")} onClose={() => {}} onAction={onAction} />);
+    const select = (await screen.findByTestId("video-modal-mascot-select")) as HTMLSelectElement;
+    expect(select.value).toBe("tubi");
+    fireEvent.change(screen.getByTestId("video-modal-style-select"), { target: { value: "cartoon_3d" } });
+    expect(select.value).toBe("");
+    expect(select.disabled).toBe(true);
+    fireEvent.click(screen.getByText("Approve Topic"));
+    expect(onAction.mock.calls[0][3]).toMatchObject({ visual_style: "cartoon_3d", mascot_id: "" });
+  });
+});

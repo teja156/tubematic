@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Agent, Settings, PipelineStatus, RetentionBacklog, Voice } from "@/lib/types";
+import type { Agent, Mascot, Settings, PipelineStatus, RetentionBacklog, Voice } from "@/lib/types";
 import { SectionLabel } from "@/components/SectionLabel";
 import { AutoPilotPanel } from "@/components/AutoPilotPanel";
 import { GpuPanel } from "@/components/GpuPanel";
@@ -291,7 +291,8 @@ const TABS = [
   { key: "images", label: "Images",
     fields: ["image_model", "character_model"] },
   { key: "rendering", label: "Rendering",
-    fields: ["render_stall_timeout_secs", "render_timeout_secs", "max_render_retries", "watermark_enabled"] },
+    fields: ["render_stall_timeout_secs", "render_timeout_secs", "max_render_retries", "watermark_enabled",
+             "default_mascot_id"] },
   { key: "logs", label: "Logs", fields: ["log_retention_days"] },
   { key: "retention", label: "Retention", fields: ["retention_days", "unpublished_retention_days"] },
   { key: "api-keys", label: "API Keys",
@@ -388,6 +389,7 @@ export default function SettingsPage() {
   const [draft, setDraft] = useState<Partial<Settings>>({});
   const [tab, setTab] = useState<TabKey>(TABS[0].key);
   const { toasts, push, dismiss } = useToasts();
+  const [mascots, setMascots] = useState<Mascot[]>([]);
 
   async function load() {
     const r = await apiFetch("/settings");
@@ -416,6 +418,14 @@ export default function SettingsPage() {
     load();
     loadStatus();
     loadBacklog();
+    // /settings?tab=rendering lands on that tab (the Mascots page links here).
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    const found = TABS.find((t) => t.key === wanted);
+    if (found) setTab(found.key);
+    // Best effort; the picker only needs the pickable ones.
+    apiFetch("/mascots").then((r) => r.json())
+      .then((rows) => setMascots(Array.isArray(rows) ? rows : []))
+      .catch(() => {});
     const id = setInterval(loadStatus, STATUS_POLL_MS);
     return () => clearInterval(id);
   }, []);
@@ -866,6 +876,25 @@ export default function SettingsPage() {
         >
           {val("watermark_enabled") ? "ON" : "OFF"}
         </button>
+      </Row>
+      <Row
+        label="Default mascot"
+        note="The mascot new videos start with, unless their domain has its own. Off by default. A video only gets one while the GPU is working, and never on Cartoon 3D. Draw and approve mascots on the Profiles tab."
+      >
+        <select
+          data-testid="select-default-mascot"
+          value={val("default_mascot_id") ?? ""}
+          onChange={(e) => edit({ default_mascot_id: e.target.value })}
+          style={{
+            fontFamily: "var(--mono)", fontSize: 11, padding: "7px 8px", maxWidth: 260,
+            background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--border-2)",
+          }}
+        >
+          <option value="">No mascot</option>
+          {mascots.filter((m) => m.pickable).map((m) => (
+            <option key={m.id} value={m.id}>{m.name}</option>
+          ))}
+        </select>
       </Row>
           <SaveBar tabKey="rendering" count={dirtyFields("rendering").length} saving={saving} onSave={saveTab} />
           <GpuPanel />

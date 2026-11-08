@@ -1090,3 +1090,102 @@ describe("ActionPane — grouping and filter", () => {
     expect(screen.queryByTestId("action-group-VIDEO_READY")).toBeNull();
   });
 });
+
+// ── Mascot picker (topic checkpoint) ─────────────────────────────────────────
+
+describe("ActionPane — mascot picker", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const MASCOTS = [
+    { id: "tubi", name: "Tubi", pickable: true },
+    { id: "moss", name: "Moss", pickable: false },
+  ] as never[];
+  const gpuWith = (status: GpuStatus["status"]): GpuStatus => ({
+    status, rendering_on: "cpu", configured: true, gpu: null, host_gpus: [], probe: null,
+    requested_at: null, pending: false, waiting_for_render: false,
+  });
+  const base = { onAction: () => {}, onOpenModal: () => {}, ...NO_VOICES };
+
+  it("shows no picker when nothing can be picked and the video holds none", () => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} mascots={[MASCOTS[1]]} {...base} />);
+    expect(screen.queryByTestId(`mascot-select-${video.id}`)).toBeNull();
+  });
+
+  it("offers None and each pickable mascot, with a Mascot caption", () => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} {...base} />);
+    const select = screen.getByLabelText("Mascot") as HTMLSelectElement;
+    expect(select).toBe(screen.getByTestId(`mascot-select-${video.id}`));
+    expect([...select.options].map((o) => o.value)).toEqual(["", "tubi"]);
+    expect(select.style.maxWidth).toBe("140px");
+  });
+
+  it.each([
+    ["not_usable", "Tubi (Mascots need a working GPU)"],
+    ["unknown", "Tubi (GPU not tested yet)"],
+    ["not_configured", "Tubi (Mascots need a working GPU)"],
+  ] as const)("disables the mascot while the GPU is %s, but None stays selectable", (status, label) => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith(status)} {...base} />);
+    const select = screen.getByTestId(`mascot-select-${video.id}`) as HTMLSelectElement;
+    const tubi = [...select.options].find((o) => o.value === "tubi")!;
+    expect(tubi.disabled).toBe(true);
+    expect(tubi.textContent).toBe(label);
+    expect([...select.options].find((o) => o.value === "")!.disabled).toBe(false);
+  });
+
+  it("fails closed while the GPU status has not loaded", () => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={null} {...base} />);
+    const select = screen.getByTestId(`mascot-select-${video.id}`) as HTMLSelectElement;
+    expect([...select.options].find((o) => o.value === "tubi")!.disabled).toBe(true);
+  });
+
+  it("sends the picked mascot_id with approve-topic", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const onAction = vi.fn();
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
+    fireEvent.change(screen.getByTestId(`mascot-select-${video.id}`), { target: { value: "tubi" } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onAction.mock.calls[0][3]).toMatchObject({ mascot_id: "tubi" });
+    await act(async () => { vi.advanceTimersByTime(600); });
+    vi.useRealTimers();
+  });
+
+  it("leaves mascot_id out of the payload when no picker is shown", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const onAction = vi.fn();
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect("mascot_id" in onAction.mock.calls[0][3]).toBe(false);
+    await act(async () => { vi.advanceTimersByTime(600); });
+    vi.useRealTimers();
+  });
+
+  it("clears and disables the picker when Cartoon 3D is chosen, and sends an empty mascot", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const onAction = vi.fn();
+    const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
+    render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
+    const select = screen.getByTestId(`mascot-select-${video.id}`) as HTMLSelectElement;
+    expect(select.value).toBe("tubi");
+    fireEvent.change(screen.getByTestId(`style-select-${video.id}`), { target: { value: "cartoon_3d" } });
+    expect(select.value).toBe("");
+    expect(select.disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onAction.mock.calls[0][3]).toMatchObject({ visual_style: "cartoon_3d", mascot_id: "" });
+    await act(async () => { vi.advanceTimersByTime(600); });
+    vi.useRealTimers();
+  });
+
+  it("shows a held mascot that can no longer be picked as unavailable", () => {
+    const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "moss" };
+    render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} {...base} />);
+    const select = screen.getByTestId(`mascot-select-${video.id}`) as HTMLSelectElement;
+    expect(select.value).toBe("moss");
+    expect(screen.getByRole("option", { name: "Moss (unavailable)" })).toBeTruthy();
+  });
+});

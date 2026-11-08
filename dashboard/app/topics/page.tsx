@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { GpuStatus, Project, ProjectStatus, ScriptProfile, Voice } from "@/lib/types";
+import type { GpuStatus, Mascot, Project, ProjectStatus, ScriptProfile, Voice } from "@/lib/types";
 import { voiceLabel } from "@/lib/voices";
 import { illustratedAvailable, styleLabel, styleOptions } from "@/lib/visualStyles";
 import { codePoints } from "@/lib/utils";
@@ -45,6 +45,44 @@ function DomainVoiceSelect({ testId, value, voices, onChange }: {
       <option value="">Install default voice</option>
       {stale && <option value={value}>{value} (removed)</option>}
       {voices.map((v) => <option key={v.voice_id} value={v.voice_id}>{voiceLabel(v)}</option>)}
+    </select>
+  );
+}
+
+// ── Default mascot picker ─────────────────────────────────────────────────────
+
+// "" inherits the install's default mascot, "none" pins no mascot even when the
+// install has one. Not gated on the GPU: the API checks only that the mascot
+// can be chosen, and a video seeded with one simply gets none while the GPU is
+// not working.
+function DomainMascotSelect({ testId, value, mascots, onChange }: {
+  testId: string; value: string; mascots: Mascot[]; onChange: (next: string) => void;
+}) {
+  const pickable = mascots.filter((m) => m.pickable);
+  const stale = value !== "" && value !== "none" && !pickable.some((m) => m.id === value);
+  const staleName = mascots.find((m) => m.id === value)?.name;
+  return (
+    <select
+      data-testid={testId}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      title="Mascot this domain's new videos start with"
+      style={{
+        fontFamily: "var(--mono)",
+        fontSize: 10.5,
+        padding: "5px 6px",
+        background: "var(--bg)",
+        color: "var(--ink-2)",
+        border: "1px solid var(--border-2)",
+        flexShrink: 0,
+        width: "100%",
+        maxWidth: 150,
+      }}
+    >
+      <option value="">Use install default</option>
+      <option value="none">None</option>
+      {stale && <option value={value}>{staleName ? `${staleName} (unavailable)` : "Unavailable mascot"}</option>}
+      {pickable.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
     </select>
   );
 }
@@ -173,11 +211,13 @@ function DomainRow({
   onStyleChange,
   onVoiceChange,
   onProfileChange,
+  onMascotChange,
   onCapChange,
   canIllustrate,
   gpu,
   voices,
   profiles,
+  mascots,
 }: {
   project: Project;
   videoCounts: Record<string, number>;
@@ -185,11 +225,13 @@ function DomainRow({
   onStyleChange: (id: string, next: string) => void;
   onVoiceChange: (id: string, next: string) => void;
   onProfileChange: (id: string, next: string) => void;
+  onMascotChange: (id: string, next: string) => void;
   onCapChange: (id: string, next: number) => void;
   canIllustrate: boolean;
   gpu: GpuStatus | null;
   voices: Voice[];
   profiles: ScriptProfile[];
+  mascots: Mascot[];
 }) {
   const isPaused = project.status === "paused";
   const isExpired = project.expired === true;
@@ -286,6 +328,15 @@ function DomainRow({
           value={project.default_script_profile_id ?? ""}
           profiles={profiles}
           onChange={(next) => onProfileChange(project.id, next)}
+        />
+      </DomainField>
+
+      <DomainField label="Mascot" width={150}>
+        <DomainMascotSelect
+          testId={`domain-mascot-${project.id}`}
+          value={project.default_mascot_id ?? ""}
+          mascots={mascots}
+          onChange={(next) => onMascotChange(project.id, next)}
         />
       </DomainField>
 
@@ -391,8 +442,8 @@ function DomainRow({
 
 // ── Add domain form ───────────────────────────────────────────────────────────
 
-function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles }: {
-  onAdded: () => void; canIllustrate: boolean; gpu: GpuStatus | null; voices: Voice[]; profiles: ScriptProfile[];
+function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots }: {
+  onAdded: () => void; canIllustrate: boolean; gpu: GpuStatus | null; voices: Voice[]; profiles: ScriptProfile[]; mascots: Mascot[];
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -402,6 +453,7 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles }: {
   const [defaultStyle, setDefaultStyle] = useState("");
   const [defaultVoice, setDefaultVoice] = useState("");
   const [defaultProfile, setDefaultProfile] = useState("");
+  const [defaultMascot, setDefaultMascot] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -415,7 +467,7 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles }: {
       const r = await apiFetch("/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: slug, name: name.trim(), description: description.trim(), is_curriculum_seed: isSeed, status: "active", default_visual_style: defaultStyle, default_voice_id: defaultVoice, default_script_profile_id: defaultProfile }),
+        body: JSON.stringify({ id: slug, name: name.trim(), description: description.trim(), is_curriculum_seed: isSeed, status: "active", default_visual_style: defaultStyle, default_voice_id: defaultVoice, default_script_profile_id: defaultProfile, default_mascot_id: defaultMascot }),
       });
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
@@ -428,6 +480,7 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles }: {
       setDefaultStyle("");
       setDefaultVoice("");
       setDefaultProfile("");
+      setDefaultMascot("");
       onAdded();
     } finally {
       setBusy(false);
@@ -571,6 +624,15 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles }: {
                                profiles={profiles} onChange={setDefaultProfile} />
         </label>
 
+        <label
+          data-testid="domain-mascot-label"
+          style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.06em", color: "var(--ink-2)" }}
+        >
+          Mascot
+          <DomainMascotSelect testId="domain-mascot-select" value={defaultMascot}
+                              mascots={mascots} onChange={setDefaultMascot} />
+        </label>
+
         <button
           data-testid="add-domain-submit"
           type="submit"
@@ -690,6 +752,7 @@ export default function TopicsPage() {
   const [gpu, setGpu] = useState<GpuStatus | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [profiles, setProfiles] = useState<ScriptProfile[]>([]);
+  const [mascots, setMascots] = useState<Mascot[]>([]);
 
   async function loadAll() {
     const [projRes, vidRes, stratRes, miningRes] = await Promise.all([
@@ -746,6 +809,10 @@ export default function TopicsPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((rows) => { if (Array.isArray(rows)) setProfiles(rows); })
       .catch(() => {});
+    apiFetch("/mascots")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rows) => { if (Array.isArray(rows)) setMascots(rows); })
+      .catch(() => {});
   }, []);
 
   async function handleToggleDomain(id: string, next: ProjectStatus) {
@@ -785,6 +852,9 @@ export default function TopicsPage() {
         default_visual_style: next.default_visual_style ?? "",
         default_voice_id: next.default_voice_id ?? "",
         default_script_profile_id: next.default_script_profile_id ?? "",
+        // A full replace: an omitted default_mascot_id would reset to
+        // "use the install default".
+        default_mascot_id: next.default_mascot_id ?? "",
         topic_cap: next.topic_cap,
       }),
     });
@@ -812,6 +882,10 @@ export default function TopicsPage() {
 
   function handleDomainProfile(id: string, next: string) {
     return saveDomain(id, { default_script_profile_id: next }, "script profile");
+  }
+
+  function handleDomainMascot(id: string, next: string) {
+    return saveDomain(id, { default_mascot_id: next }, "mascot");
   }
 
   // Expiry comes back with the saved row, against the count as it is now.
@@ -906,7 +980,7 @@ export default function TopicsPage() {
         <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: "var(--mute)", marginBottom: 10 }}>
           Curriculum Seed Domains
         </div>
-        <AddDomainForm onAdded={loadAll} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} />
+        <AddDomainForm onAdded={loadAll} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} mascots={mascots} />
       </section>
 
       {/* Seed domains list */}
@@ -924,7 +998,7 @@ export default function TopicsPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 24 }}>
           {seedDomains.map((p) => (
-            <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} />
+            <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onMascotChange={handleDomainMascot} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} mascots={mascots} />
           ))}
         </div>
       )}
@@ -937,7 +1011,7 @@ export default function TopicsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {otherDomains.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onMascotChange={handleDomainMascot} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} mascots={mascots} />
             ))}
           </div>
         </section>

@@ -278,7 +278,7 @@ describe("TopicsPage — default voice", () => {
     await waitFor(() => expect(postedProject(spy)).toEqual({
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "r1",
-      default_script_profile_id: "", topic_cap: 300 }));
+      default_script_profile_id: "", default_mascot_id: "", topic_cap: 300 }));
   });
 
   it("changing the style keeps the default voice", async () => {
@@ -386,7 +386,7 @@ describe("TopicsPage — default script profile", () => {
     await waitFor(() => expect(postedProject(spy)).toEqual({
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "",
-      default_script_profile_id: "", topic_cap: 300 }));
+      default_script_profile_id: "", default_mascot_id: "", topic_cap: 300 }));
   });
 
   it("changing the style keeps the default profile", async () => {
@@ -432,6 +432,101 @@ describe("TopicsPage — default script profile", () => {
     fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
     fireEvent.click(screen.getByTestId("add-domain-submit"));
     await waitFor(() => expect(postedProject(spy).default_script_profile_id).toBe("p-ready"));
+  });
+});
+
+// A domain's default mascot: "" inherits the install default, "none" pins no
+// mascot. It rides the same full-replace POST /projects, so every other edit
+// must re-send it.
+describe("TopicsPage — default mascot", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const MASCOTS = [
+    { id: "tubi", name: "Tubi", pickable: true },
+    { id: "moss", name: "Moss", pickable: false },
+  ];
+  const DOMAIN = {
+    id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: 1,
+    status: "active", default_visual_style: "stick", default_voice_id: "",
+    default_script_profile_id: "", default_mascot_id: "tubi", topic_cap: 300, topic_count: 12,
+    expired: false, created_at: "2026-01-01T00:00:00Z",
+  };
+
+  function mockDomains(domain: object = DOMAIN) {
+    return vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      const ok = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+      if (urlStr.endsWith("/projects") && !init?.method) return ok([domain]);
+      if (urlStr.endsWith("/mascots")) return ok(MASCOTS);
+      if (urlStr.includes("/settings")) return ok({ elevenlabs_voices: [], elevenlabs_voice_id: "", openai_api_key: "" });
+      if (urlStr.includes("/research/strategies")) return ok({ strategies: [] });
+      if (urlStr.includes("/research/mining-sources")) return ok({ youtube_urls: [] });
+      return ok([]);
+    });
+  }
+
+  function postedProject(spy: ReturnType<typeof mockDomains>) {
+    const call = spy.mock.calls.find(([u, i]) => u.toString().endsWith("/projects")
+      && (i as RequestInit | undefined)?.method === "POST");
+    return JSON.parse(String((call![1] as RequestInit).body));
+  }
+
+  it("offers install default, None and each pickable mascot", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect([...select.options].map((o) => o.value)).toEqual(["", "none", "tubi"]));
+    expect(select.value).toBe("tubi");
+    expect(screen.getByLabelText("Mascot", { selector: "[data-testid='domain-mascot-seed-1']" })).toBe(select);
+    expect(screen.getAllByRole("option", { name: "Use install default" }).length).toBe(2);
+  });
+
+  it("changing the mascot re-sends every other field", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1"));
+    await waitFor(() => expect((select as HTMLSelectElement).value).toBe("tubi"));
+    fireEvent.change(select, { target: { value: "none" } });
+    await waitFor(() => expect(postedProject(spy)).toEqual({
+      id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
+      status: "active", default_visual_style: "stick", default_voice_id: "",
+      default_script_profile_id: "", default_mascot_id: "none", topic_cap: 300 }));
+  });
+
+  it("another edit re-sends the stored default mascot (POST /projects is a full replace)", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
+    fireEvent.change(select, { target: { value: "auto" } });
+    await waitFor(() => expect(postedProject(spy).default_mascot_id).toBe("tubi"));
+  });
+
+  it("a domain with no mascot set re-sends an empty string, never omits the field", async () => {
+    const spy = mockDomains({ ...DOMAIN, default_mascot_id: undefined });
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
+    fireEvent.change(select, { target: { value: "auto" } });
+    await waitFor(() => expect(postedProject(spy)).toHaveProperty("default_mascot_id", ""));
+  });
+
+  it("keeps a held default that is no longer pickable visible as unavailable", async () => {
+    mockDomains({ ...DOMAIN, default_mascot_id: "moss" });
+    render(<TopicsPage />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "Moss (unavailable)" })).toBeTruthy());
+  });
+
+  it("the add-domain form sends the picked mascot", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await waitFor(() => expect(screen.getAllByRole("option", { name: "Tubi" }).length).toBe(2));
+    fireEvent.change(screen.getByTestId("domain-mascot-select"), { target: { value: "tubi" } });
+    fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
+    fireEvent.click(screen.getByTestId("add-domain-submit"));
+    await waitFor(() => expect(postedProject(spy).default_mascot_id).toBe("tubi"));
   });
 });
 
@@ -502,7 +597,7 @@ describe("TopicsPage — topic cap", () => {
     await waitFor(() => expect(projectPosts(spy)).toEqual([{
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "", default_voice_id: "",
-      default_script_profile_id: "", topic_cap: 250 }]));
+      default_script_profile_id: "", default_mascot_id: "", topic_cap: 250 }]));
   });
 
   it.each(["24", "751", "abc", "100.5", ""])("reverts %j without saving", async (bad) => {

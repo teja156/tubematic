@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Agent, GpuStatus, ScriptProfile, Stats, Video, Voice } from "@/lib/types";
+import type { Agent, GpuStatus, Mascot, ScriptProfile, Stats, Video, Voice } from "@/lib/types";
 import { SummaryStrip } from "@/components/SummaryStrip";
 import { ActionPane } from "@/components/ActionPane";
 import { KanbanBoard } from "@/components/KanbanBoard";
@@ -40,6 +40,7 @@ export function PipelineClient() {
   // null until GET /render/gpu answers (and on failure): the picker then leaves
   // Cartoon 3D enabled and the API refuses it with the reason.
   const [gpu, setGpu] = useState<GpuStatus | null>(null);
+  const [mascots, setMascots] = useState<Mascot[]>([]);
   const [autoPilot, setAutoPilot] = useState(false);
   // null on the server and on first client render, so SSR and the initial CSR
   // pass match exactly ("Updated —"); the clock only starts ticking once
@@ -112,6 +113,15 @@ export function PipelineClient() {
     fetch("/api/proxy/script-profiles", NO_CACHE)
       .then((r) => r.json())
       .then((data: ScriptProfile[]) => setScriptProfiles(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  // The mascot library, for the topic checkpoint's Mascot picker. Not polled,
+  // like the profiles above.
+  useEffect(() => {
+    fetch("/api/proxy/mascots", NO_CACHE)
+      .then((r) => r.json())
+      .then((data: Mascot[]) => setMascots(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
 
@@ -213,7 +223,7 @@ export function PipelineClient() {
           review. Change it in Settings → Auto Pilot.
         </div>
       )}
-      <ActionPane videos={actionable} voices={voices} defaultVoiceId={defaultVoiceId} scriptProfiles={scriptProfiles} agents={agents} illustratedAvailable={canIllustrate} gpu={gpu} onAction={handleAction} onOpenModal={handleOpenModal} />
+      <ActionPane videos={actionable} voices={voices} defaultVoiceId={defaultVoiceId} scriptProfiles={scriptProfiles} agents={agents} illustratedAvailable={canIllustrate} gpu={gpu} mascots={mascots} onAction={handleAction} onOpenModal={handleOpenModal} />
 
       <SectionLabel label="Pipeline — Kanban" count={`${Object.values(stats).reduce((a, b) => a + b, 0)} Items`} />
       <KanbanBoard videos={videos} onAction={handleAction} onOpenModal={handleOpenModal} />
@@ -230,6 +240,7 @@ export function PipelineClient() {
         publishingEnabled={publishingEnabled}
         illustratedAvailable={canIllustrate}
         gpu={gpu}
+        mascots={mascots}
         onClose={() => setSelectedVideo(null)}
         onAction={handleAction}
       />

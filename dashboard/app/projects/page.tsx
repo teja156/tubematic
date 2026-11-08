@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Agent, GpuStatus, Project, Video, VideoStatus, Voice } from "@/lib/types";
+import type { Agent, GpuStatus, Mascot, Project, Video, VideoStatus, Voice } from "@/lib/types";
 import { VideoModal } from "@/components/VideoModal";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTimeZone } from "@/components/TimeZoneProvider";
@@ -41,6 +41,7 @@ export default function ProjectsPage() {
   const [agents, setAgents]                 = useState<Agent[] | undefined>(undefined);
   const [canIllustrate, setCanIllustrate]   = useState(true);
   const [gpu, setGpu] = useState<GpuStatus | null>(null);
+  const [mascots, setMascots] = useState<Mascot[]>([]);
   const [publishingEnabled, setPublishingEnabled] = useState(false);
   const [voices, setVoices]                 = useState<Voice[]>([]);
   const [defaultVoiceId, setDefaultVoiceId] = useState("");
@@ -95,6 +96,10 @@ export default function ProjectsPage() {
     apiFetch("/render/gpu")
       .then((r) => (r.ok ? r.json() : null))
       .then((g) => setGpu(g && typeof g.status === "string" ? (g as GpuStatus) : null))
+      .catch(() => {});
+    apiFetch("/mascots")
+      .then((r) => r.json())
+      .then((rows) => setMascots(Array.isArray(rows) ? rows : []))
       .catch(() => {});
   }, []);
 
@@ -347,6 +352,7 @@ export default function ProjectsPage() {
         defaultVoiceId={defaultVoiceId}
         illustratedAvailable={canIllustrate}
         gpu={gpu}
+        mascots={mascots}
         publishingEnabled={publishingEnabled}
         onClose={() => { setSelectedVideo(null); setInitialTab("overview"); }}
         onAction={(id, action, video, extra) => handleAction(id, action, video, extra)}
