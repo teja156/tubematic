@@ -167,6 +167,14 @@ Existing projects and videos must come out of the migration with no mascot, the 
 shipped Tubi (ready, version 1, with an empty `code` because builtin code lives in a versioned repo
 file, never in a shipped migration), and a second run must not overwrite anything.
 
+**`test_builtin_tubi.py` guards the files that seeded row points at.** Every install's default mascot
+is read from `renderer/remotion/mascot-builtin/tubi/v1/`, so the test migrates a real database and
+checks that `code_for` returns that directory's `mascot.js` for the approved version, that the three
+model sheets are there as JPEGs (the form the API serves a builtin's sheets in), and that the code
+registers `window.MASCOT`. It also checks that every view's face record carries `bx`: the engine's
+`blush()` reads it, and a face without it turns every blush into NaN with no error. Version 1 is
+immutable; a changed drawing ships as a new version directory with a migration.
+
 **`test_mascots.py` guards the rules every process shares.** `cue_errors` is the only thing between
 the per-video agent's cue track and a mascot standing on the captions in a finished video, so the
 tests use the engine's real box (the 560x640 canvas with the feet 50 above its bottom) and pin: a
