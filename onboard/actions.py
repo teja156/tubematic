@@ -1482,7 +1482,8 @@ def _refresh_disk_snapshot(rep: Reporter) -> None:
     measurement. Never fails the step."""
     from tubematic_core import disk_usage
     try:
-        disk_usage.refresh_snapshot(DATA_ROOT, REPO_ROOT)
+        with rep.spinner("Measuring disk use for the dashboard…"):
+            disk_usage.refresh_snapshot(DATA_ROOT, REPO_ROOT)
     except OSError as e:
         rep.warn(f"Could not record disk usage for the dashboard: {e}. "
                  "The poller retries within the hour.")

@@ -203,7 +203,8 @@ def _finish_images(ex, rep, data_root, *, healthy: bool, dry_run: bool,
         return
     _remove_old_images(ex, rep, find=find, total=total)
     try:
-        (refresh or disk_usage.refresh_snapshot)(data_root, REPO_ROOT)
+        with rep.spinner("Measuring disk use for the dashboard…"):
+            (refresh or disk_usage.refresh_snapshot)(data_root, REPO_ROOT)
     except OSError as e:
         rep.warn(f"Could not update the dashboard's disk-usage figure: {e}. "
                  "The poller retries within the hour.")

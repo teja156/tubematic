@@ -1400,27 +1400,38 @@ def _touch_heartbeat() -> None:
 # or the install folder, so the host measures them and leaves a snapshot in the
 # data folder for the API. Hourly is plenty: images only change when someone
 # upgrades, re-onboards or rebuilds, and upgrade.py and onboarding re-measure
-# right after they do.
+# right after they do. The measurement runs in a detached process: on a slow
+# storage driver Docker takes minutes to size containers, and a tick must not
+# wait for that.
 DISK_SNAPSHOT_MAX_AGE_SECS = 3600
+DISK_SNAPSHOT_LOG = POLL_LOG_DIR / "disk-usage.log"
 _disk_snapshot_retry_at = 0.0
 
 
 def _refresh_disk_snapshot() -> None:
-    """Re-measure when the snapshot is an hour old. Never raises: a failure
-    here must not cost a tick. An unwritable data folder is logged and left
-    alone for an hour rather than re-measured every pass."""
+    """Start a measurement when the snapshot is an hour old, at most once an
+    hour per supervisor. Never raises and never waits: a failure here must
+    not cost a tick. The measurement's own errors go to disk-usage.log."""
     global _disk_snapshot_retry_at
     if time.monotonic() < _disk_snapshot_retry_at:
         return
     try:
-        if disk_usage.refresh_snapshot(DATA_ROOT, SCRIPTS_DIR.parent,
-                                       max_age=DISK_SNAPSHOT_MAX_AGE_SECS):
-            log.debug("Disk-usage snapshot refreshed")
-    except Exception as e:  # noqa: BLE001 - bookkeeping, never fatal
+        age = disk_usage.snapshot_age(DATA_ROOT)
+        if age is not None and 0 <= age < DISK_SNAPSHOT_MAX_AGE_SECS:
+            return
         _disk_snapshot_retry_at = time.monotonic() + DISK_SNAPSHOT_MAX_AGE_SECS
-        log.warning("Could not write the disk-usage snapshot in %s: %s. The dashboard's "
-                    "disk figure leaves out images and the install folder until it can.",
-                    disk_usage.snapshot_path(DATA_ROOT).parent, e)
+        DISK_SNAPSHOT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(DISK_SNAPSHOT_LOG, "a") as err:
+            subprocess.Popen(
+                [sys.executable, "-m", "tubematic_core.disk_usage",
+                 "--data-root", str(DATA_ROOT), "--install-dir", str(SCRIPTS_DIR.parent),
+                 "--max-age", str(DISK_SNAPSHOT_MAX_AGE_SECS)],
+                cwd=SCRIPTS_DIR.parent, stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=err, start_new_session=True)
+        log.debug("Disk-usage measurement started")
+    except Exception as e:  # noqa: BLE001 - bookkeeping, never fatal
+        log.warning("Could not start the disk-usage measurement: %s. The dashboard's disk "
+                    "figure leaves out images and the install folder until it can.", e)
 
 
 def _check_heartbeat() -> None:

@@ -17,11 +17,14 @@ next upgrade removes them stays true.
 Docker is only ever read here. Removing an image is upgrade.py's job, through
 its Executor, so --dry-run stays honest.
 """
+import argparse
+import fcntl
 import json
 import os
 import re
 import stat
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -44,7 +47,11 @@ _OUR_REPOSITORY = re.compile(
     r"^(ghcr\.io/[^/]+/tubematic-(backend|dashboard)"
     r"|tubematic-renderer-image|tubematic-tubematic-dashboard)$")
 
-DOCKER_TIMEOUT_SECS = 60
+# Generous on purpose: Docker computes container and image sizes by walking
+# their layers, which took 42 s for five containers on a nested Docker's
+# fuse-overlayfs (under a second on overlay2). poll.py runs the measurement in
+# a detached process, so a slow one never holds up a tick.
+DOCKER_TIMEOUT_SECS = 300
 
 # Docker prints sizes through go-units' HumanSize: decimal units.
 _SIZE_RE = re.compile(r"^\s*([0-9]+(?:\.[0-9]+)?)\s*([kKMGTP]?)B\s*$")
@@ -334,18 +341,54 @@ def read_snapshot(path) -> dict | None:
     return doc
 
 
+def snapshot_age(data_root) -> float | None:
+    """Seconds since the snapshot was written; None when there is none."""
+    try:
+        return datetime.now().timestamp() - snapshot_path(data_root).stat().st_mtime
+    except OSError:
+        return None
+
+
 def refresh_snapshot(data_root, install_dir, *, max_age=None, run=_default_run) -> bool:
     """Measure the host and write the snapshot. With `max_age` (seconds),
     leave a snapshot younger than that alone. Returns True when it wrote.
     A failure to write (an unwritable data folder) raises OSError for the
     caller to report; Docker being unavailable never raises."""
-    path = snapshot_path(data_root)
     if max_age is not None:
-        try:
-            age = datetime.now().timestamp() - path.stat().st_mtime
-        except OSError:
-            age = None
+        age = snapshot_age(data_root)
         if age is not None and 0 <= age < max_age:
             return False
-    write_snapshot(path, measure_host(install_dir, run=run))
+    write_snapshot(snapshot_path(data_root), measure_host(install_dir, run=run))
     return True
+
+
+def main(argv=None) -> int:
+    """`python3 -m tubematic_core.disk_usage`: what poll.py starts, detached,
+    so the measurement never holds up a tick. One measurement at a time: a
+    second start while one runs exits at once."""
+    parser = argparse.ArgumentParser(prog="python3 -m tubematic_core.disk_usage")
+    parser.add_argument("--data-root", default=str(Path.home() / ".tubematic-data"))
+    parser.add_argument("--install-dir", default=str(Path(__file__).resolve().parent.parent))
+    parser.add_argument("--max-age", type=float, default=None)
+    args = parser.parse_args(argv)
+    lock_path = snapshot_path(args.data_root).with_name(".disk-usage.lock")
+    try:
+        lock = open(lock_path, "w")
+    except OSError as e:
+        print(f"disk-usage: cannot open {lock_path}: {e}", file=sys.stderr)
+        return 1
+    with lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return 0
+        try:
+            refresh_snapshot(args.data_root, args.install_dir, max_age=args.max_age)
+        except OSError as e:
+            print(f"disk-usage: cannot write the snapshot: {e}", file=sys.stderr)
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

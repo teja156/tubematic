@@ -913,7 +913,7 @@ empty, then tells you the path so you can finish by hand.
   `python3 tubematic_remote_renderer.py remove` on each one (see
   [Remote renderers — Removing a renderer](11-remote-renderers.md#removing-a-renderer)).
 - **Docker images** — the built or pulled images stay cached, and a later install reuses them.
-  (While Tubematic is installed, each successful upgrade removes the previous version's images.)
+  While Tubematic is installed, each successful upgrade removes the previous version's images.
 - **The install directory itself** — delete it by hand.
 
 ### Removing everything
@@ -939,7 +939,7 @@ cd .. && rm -rf tubematic
 
 | To… | Run |
 |---|---|
-| See what is taking up disk | The disk-usage badge in the dashboard's top bar ([The top bar](04-dashboard.md#the-top-bar)) |
+| See what is taking up disk | The disk-usage figure in the dashboard's top bar ([The top bar](04-dashboard.md#the-top-bar)) |
 | Stop the containers, keeping everything | `python3 scripts/service.py stop` |
 | Remove only the cron entry | `crontab -e`, and delete the `# Tubematic` comment and the `poll.py` line |
 | Clear videos from the database (interactive: delete videos, reset statuses, or a full wipe) | `.venv/bin/python scripts/clear_db.py` — source checkout only |

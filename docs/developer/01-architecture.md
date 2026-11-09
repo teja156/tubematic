@@ -155,8 +155,8 @@ Pipeline data lives at a fixed absolute path **outside the checkout**:
 ~/.tubematic-data/
 ├── data/tubematic.db              # state machine, settings, credentials
 ├── data/disk-usage.json           # the host's measurement of images and the install folder,
-                                   # for the dashboard's disk-usage badge (written by poll.py,
-                                   # upgrade.py and onboarding; no container can see Docker)
+                                   # for the dashboard's disk-usage figure (written by poll.py,
+                                   # upgrade.py and onboarding, since no container sees Docker)
 ├── jobs/<video_id>/               # audio.mp3, timeline.json, scene-config.json, images/
 ├── scenes/generated/<video_id>/   # agent-authored scene TSX
 ├── output_videos/<project_id>/    # rendered mp4s, and voice-previews/
@@ -255,9 +255,9 @@ renderer rules (`renderers.py` — which renderer may take which video, whether 
 works, credentials and enrollment tokens: the gateway, the worker's sweeps and the API's and the MCP
 server's GPU gates must all agree, or a style the dashboard offers would be one no renderer is handed;
 see [Rendering and Review](11-rendering-and-review.md)), and what counts as an old Docker image
-(`disk_usage.py` — `upgrade.py` deletes by that rule and the dashboard's disk-usage badge promises the
-next upgrade removes what it counts, so two copies disagreeing would either delete an image in use or
-leave the badge's promise false; see [Infrastructure — Old images](16-infrastructure.md#old-images)).
+(`disk_usage.py`: `upgrade.py` deletes by that rule and the dashboard says the next upgrade removes
+what it counts, so a second copy that drifted would delete an image in use or make that statement
+false; see [Infrastructure: Old images](16-infrastructure.md#old-images)).
 The dashboard keeps a TypeScript copy of the model sets, pinned by a source-text test. It is not a general home
 for anything two processes happen to share — the copies below stay copies.
 

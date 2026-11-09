@@ -362,3 +362,43 @@ def test_refresh_into_an_unwritable_folder_raises_oserror(tmp_path):
     # No data/ folder: the write fails, and the caller decides how to report it.
     with pytest.raises(OSError):
         disk_usage.refresh_snapshot(tmp_path, tmp_path, run=_release_install())
+
+
+# --- the detached measurement poll.py starts ---------------------------------
+
+def test_the_module_runs_as_poll_starts_it(tmp_path):
+    r = subprocess.run([sys.executable, "-m", "tubematic_core.disk_usage", "--help"],
+                       cwd=REPO_ROOT, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0 and "--max-age" in r.stdout
+
+
+@pytest.fixture
+def fake_measure(monkeypatch):
+    calls = []
+    def measure(install_dir, run=None):
+        calls.append(install_dir)
+        return {"images": None, "install_bytes": 1}
+    monkeypatch.setattr(disk_usage, "measure_host", measure)
+    return calls
+
+
+def test_main_writes_the_snapshot(tmp_path, fake_measure):
+    (tmp_path / "data").mkdir()
+    assert disk_usage.main(["--data-root", str(tmp_path), "--install-dir", "/x"]) == 0
+    assert fake_measure == ["/x"]
+    assert disk_usage.read_snapshot(disk_usage.snapshot_path(tmp_path))["install_bytes"] == 1
+
+
+def test_a_second_measurement_while_one_runs_does_nothing(tmp_path, fake_measure):
+    import fcntl
+    (tmp_path / "data").mkdir()
+    with open(tmp_path / "data" / ".disk-usage.lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert disk_usage.main(["--data-root", str(tmp_path)]) == 0
+    assert fake_measure == []
+    assert disk_usage.read_snapshot(disk_usage.snapshot_path(tmp_path)) is None
+
+
+def test_main_reports_an_unwritable_data_folder(tmp_path, fake_measure, capsys):
+    assert disk_usage.main(["--data-root", str(tmp_path / "missing")]) == 1
+    assert "disk-usage:" in capsys.readouterr().err

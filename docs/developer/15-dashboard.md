@@ -587,29 +587,29 @@ the existing way to override the string if you want one.
 
 ## Disk usage
 
-The top bar's disk-usage badge (`components/DiskUsage.tsx`) shows how much disk Tubematic takes
-up and opens a breakdown on click (a `@base-ui/react` Popover); what a user reads from it is in
+The top bar's disk-usage figure (`components/DiskUsage.tsx`) shows how much disk Tubematic takes up
+and opens a breakdown on click, in a `@base-ui/react` Popover. What a user reads from it is in
 [the user guide](../user-guide/04-dashboard.md#the-top-bar). It reads
-[`GET /storage`](05-http-api.md#get-storage).
+[`GET /storage`](05-http-api.md#get-storage) every 5 minutes and when the popup opens.
 
-**Two halves, because no container can see Docker.** The API measures the six data folders it
-mounts. Images, the containers' own writable layers and the install folder exist only on the host,
-so the poller (hourly), `upgrade.py` and onboarding measure them and leave a snapshot,
-`~/.tubematic-data/data/disk-usage.json`, which the API passes on as `host`. Giving the dashboard
-or the API the Docker socket instead would hand every container root on the machine for the sake
-of a number. `tubematic_core/disk_usage.py` holds both halves and the one rule for "old image",
-which `upgrade.py`'s clean-up uses too, so the popup's "the next upgrade removes them" stays true.
+The figure has two halves because no container can see Docker. The API measures the six data
+folders it mounts. Images, the containers' writable layers and the install folder exist on the host,
+so the poller (hourly), `upgrade.py` and onboarding measure them into
+`~/.tubematic-data/data/disk-usage.json`, which the API passes on as `host`. Giving a container the
+Docker socket would give it root on the machine, which is too high a price for a disk figure.
+`tubematic_core/disk_usage.py` holds the host measurement and the rule for "old image" that
+`upgrade.py` deletes by, so the popup's "the next upgrade removes them" stays true.
 
-**Until a snapshot exists the badge shows the data alone**, and the popup says the Docker half is
-not measured yet rather than presenting a smaller number as the whole. A host figure Docker could
-not give reads "unknown", never `0 B`. With two or more old images their figure is a floor (layers
-only they share are in no per-image size), and so is the total that includes it: both show "≥". Docker's build cache is listed on a source install but kept
-out of the total, because BuildKit's cache is shared with anything else built on the machine.
+Until a snapshot exists, the figure is the data alone and the popup says the Docker half is not
+measured yet. A host figure Docker could not give reads "unknown". With two or more old images, their
+size is a floor (layers that only they share are in no single image's size), and so is the total
+that includes it, so both show "≥". A source install also lists Docker's build cache, which stays
+out of the total because anything else built on the machine shares BuildKit's cache.
 
-**Nothing is rendered when the answer is not the expected shape**, the same rule as the version
-badge: an older API during an upgrade (a `404`), a network error, or any other body. The badge sits
-first in the right-hand cluster, so a test that sequences `fetch` answers for another badge must
-answer `/storage` separately (`tests/unit/topbar-version.test.tsx::besideDiskUsage`).
+The component renders nothing when `/storage` answers with anything other than the expected shape:
+a `404` from an older API during an upgrade, a network error, or any other body. It sits first in
+the right-hand cluster, so a test that sequences `fetch` answers for another badge answers `/storage`
+separately (`tests/unit/topbar-version.test.tsx::besideDiskUsage`).
 
 ---
 

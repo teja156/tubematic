@@ -143,16 +143,15 @@ the steps in the order that keeps your data safe:
    and the pipeline would stall while looking healthy. Fix the cause it names, then
    `python3 onboard.py --install-agent <agent>`.
 8. Reports the version, the database schema, the cron entry and each container's health.
-9. **Removes the previous version's images**, once everything above has succeeded. That is every
-   Tubematic image no Tubematic container uses: the older `tubematic-backend` and
-   `tubematic-dashboard` tags on a release install, and the untagged images earlier builds left on a
-   source install. It reports how much space that freed, measured as the drop in Docker's total for
-   all images, and then re-measures disk use for the dashboard's
-   [disk-usage badge](04-dashboard.md#the-top-bar). Images are removed one at a time and never
-   forced. If Docker refuses one, for example because a container still uses it, the upgrade warns
-   and still succeeds. An upgrade that needs attention (a failed health check, an agent left without
-   its MCP registration) **keeps the old images**, so going back costs nothing; the next successful
-   upgrade removes them. Docker's build cache is left alone.
+9. Removes the previous version's images once everything above has succeeded. These are the
+   Tubematic images that no Tubematic container uses: the older `tubematic-backend` and
+   `tubematic-dashboard` tags on a release install, and the untagged images that earlier builds left
+   on a source install. It removes them one at a time without forcing, reports the space freed (the
+   drop in Docker's total for all images), and measures disk use again for the dashboard's
+   [disk-usage figure](04-dashboard.md#the-top-bar). If Docker refuses an image because a container
+   still uses it, the upgrade warns and still succeeds. An upgrade that needs attention (a failed
+   health check, or an agent left without its MCP registration) keeps the old images, so going back
+   costs nothing, and the next successful upgrade removes them. Docker's build cache stays.
 
 | Flag | What it does |
 |---|---|
@@ -411,8 +410,8 @@ The supported path back to an older version is:
 3. **Go back to the prior code.** Source install: `git checkout v<old>`. Release install: use the
    prior version's extracted directory, if you kept it, or extract its tarball afresh. From 2.1.0
    a successful upgrade removes the previous version's images (step 9 above), so the older version's
-   images are probably gone. That costs time, not a step: step 4 pulls them again (release) or
-   rebuilds them (source).
+   images are probably gone. Step 4 pulls them again on a release install and rebuilds them on a
+   source install, which takes time and needs nothing more from you.
 4. **Bring the stack back up from that older install**, which also points cron back at it. Going
    back to a version before 2.0.0 does need step 2: 2.0.0 adds migrations, starting at `0013`
    (the per-domain topic cap), and the older `upgrade.py` refuses to start against a database a newer version has

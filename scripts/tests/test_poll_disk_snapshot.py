@@ -3,8 +3,9 @@
 The supervisor re-measures the host half of the dashboard's disk figure
 (images, container layers, the install folder) at most hourly. What matters:
 it runs before the pass, so a paused pipeline, a down API or a missing agent
-still gets a fresh figure; a dry run never touches Docker; and a failure never
-costs a tick, nor turns into a re-measure on every pass.
+still gets a fresh figure; the measurement runs detached, so a slow Docker
+never holds up a tick; a dry run never measures; and a failure never costs a
+tick, nor turns into a new attempt on every pass.
 """
 import logging
 import os
@@ -21,44 +22,67 @@ _REAL = poll._refresh_disk_snapshot
 
 
 @pytest.fixture
-def snap(tmp_path, monkeypatch):
-    calls = []
-    def refresh(data_root, install_dir, *, max_age=None):
-        calls.append((data_root, install_dir, max_age))
-        return True
+def spawn(tmp_path, monkeypatch):
+    started = []
+    class FakePopen:
+        def __init__(self, argv, **kw):
+            started.append((argv, kw))
     monkeypatch.setattr(poll, "DATA_ROOT", tmp_path / "data-root")
-    monkeypatch.setattr(poll.disk_usage, "refresh_snapshot", refresh)
+    monkeypatch.setattr(poll, "DISK_SNAPSHOT_LOG", tmp_path / "logs" / "disk-usage.log")
+    monkeypatch.setattr(poll.subprocess, "Popen", FakePopen)
     monkeypatch.setattr(poll, "_disk_snapshot_retry_at", 0.0)
-    return calls
+    return started
 
 
-def test_it_asks_for_an_hourly_refresh_of_this_install(snap, tmp_path):
+def test_a_missing_snapshot_starts_a_detached_measurement_of_this_install(spawn, tmp_path):
     _REAL()
-    assert snap == [(tmp_path / "data-root", poll.SCRIPTS_DIR.parent, 3600)]
+    assert len(spawn) == 1
+    argv, kw = spawn[0]
+    assert argv[1:4] == ["-m", "tubematic_core.disk_usage", "--data-root"]
+    assert argv[4] == str(tmp_path / "data-root")
+    assert argv[argv.index("--install-dir") + 1] == str(poll.SCRIPTS_DIR.parent)
+    assert argv[argv.index("--max-age") + 1] == "3600"
+    # detached: it outlives the supervisor and never holds up a tick
+    assert kw["start_new_session"] is True
+    assert kw["cwd"] == poll.SCRIPTS_DIR.parent
 
 
-def test_a_failure_is_logged_once_and_not_retried_every_pass(tmp_path, monkeypatch, caplog):
-    calls = []
-    def refresh(*a, **kw):
-        calls.append(a)
-        raise PermissionError("data/ is root-owned")
+def test_a_fresh_snapshot_starts_nothing(spawn, tmp_path):
+    path = tmp_path / "data-root" / "data" / "disk-usage.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{}")
+    _REAL()
+    assert spawn == []
+
+
+def test_it_starts_at_most_once_an_hour_per_supervisor(spawn):
+    _REAL()
+    _REAL()
+    _REAL()
+    assert len(spawn) == 1
+
+
+def test_a_stale_snapshot_starts_a_measurement(spawn, tmp_path):
+    path = tmp_path / "data-root" / "data" / "disk-usage.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{}")
+    old = path.stat().st_mtime - 7200
+    os.utime(path, (old, old))
+    _REAL()
+    assert len(spawn) == 1
+
+
+def test_a_failed_start_is_logged_and_swallowed(tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(poll, "DATA_ROOT", tmp_path)
-    monkeypatch.setattr(poll.disk_usage, "refresh_snapshot", refresh)
+    monkeypatch.setattr(poll, "DISK_SNAPSHOT_LOG", tmp_path / "disk-usage.log")
     monkeypatch.setattr(poll, "_disk_snapshot_retry_at", 0.0)
+    def boom(*a, **kw):
+        raise OSError("no python")
+    monkeypatch.setattr(poll.subprocess, "Popen", boom)
     with caplog.at_level(logging.WARNING, logger="poll"):
         _REAL()
         _REAL()
-        _REAL()
-    assert len(calls) == 1
-    assert sum("disk-usage snapshot" in r.getMessage() for r in caplog.records) == 1
-
-
-def test_any_exception_is_swallowed(tmp_path, monkeypatch):
-    monkeypatch.setattr(poll, "DATA_ROOT", tmp_path)
-    monkeypatch.setattr(poll.disk_usage, "refresh_snapshot",
-                        lambda *a, **kw: (_ for _ in ()).throw(ValueError("odd docker output")))
-    monkeypatch.setattr(poll, "_disk_snapshot_retry_at", 0.0)
-    _REAL()  # no raise
+    assert sum("disk-usage measurement" in r.getMessage() for r in caplog.records) == 1
 
 
 def _supervise(monkeypatch, *, dry_run, status):
