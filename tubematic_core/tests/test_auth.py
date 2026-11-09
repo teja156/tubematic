@@ -225,6 +225,51 @@ def test_an_incomplete_pair_is_made_again_as_a_pair(sdir, damage):
             == _cert(sdir).public_key().public_bytes(serialization.Encoding.DER, pub))
 
 
+@pytest.mark.parametrize("missing", [auth.TLS_KEY_NAME, auth.TLS_CERT_NAME])
+def test_an_interrupted_repair_never_leaves_a_pair_that_looks_whole(sdir, monkeypatch, missing):
+    """The repair renames the half still present first, so stopping between
+    the two renames leaves the missing name missing: the next ensure makes
+    the pair again, rather than a new half beside an old one that nothing
+    would ever repair."""
+    auth.ensure_secrets(sdir)
+    (sdir / missing).unlink()
+    real = os.replace
+    done = []
+
+    def stop_after_one(src, dst):
+        if done:
+            raise OSError("interrupted")
+        done.append(dst)
+        real(src, dst)
+    monkeypatch.setattr(os, "replace", stop_after_one)
+    with pytest.raises(OSError):
+        auth.ensure_secrets(sdir)
+    with pytest.raises(auth.SecretMissing):
+        auth.read_secret(missing, sdir)
+    monkeypatch.setattr(os, "replace", real)
+
+    assert sorted(auth.ensure_secrets(sdir)) == sorted(auth.TLS_NAMES)
+    pub = serialization.PublicFormat.SubjectPublicKeyInfo
+    assert (_key(sdir).public_key().public_bytes(serialization.Encoding.DER, pub)
+            == _cert(sdir).public_key().public_bytes(serialization.Encoding.DER, pub))
+    assert sorted(p.name for p in sdir.iterdir()) == sorted(auth.SECRET_NAMES + auth.TLS_NAMES)   # no temp left
+    for name in auth.TLS_NAMES:
+        assert _mode(sdir / name) == 0o644
+
+
+def test_a_whole_pair_that_does_not_load_is_never_replaced(sdir, tmp_path):
+    """Two non-empty files are left alone even when they are not a pair: a
+    new certificate is a new pin, so it is never made silently (the gateway
+    refuses to start and says how to recover)."""
+    auth.ensure_secrets(sdir)
+    other = tmp_path / "other"
+    auth.ensure_secrets(other)
+    (sdir / auth.TLS_CERT_NAME).write_text((other / auth.TLS_CERT_NAME).read_text())
+    before = {n: (sdir / n).read_text() for n in auth.TLS_NAMES}
+    assert auth.ensure_secrets(sdir) == []
+    assert {n: (sdir / n).read_text() for n in auth.TLS_NAMES} == before
+
+
 def test_the_tls_pair_is_never_rotated(sdir):
     auth.ensure_secrets(sdir)
     before = {n: (sdir / n).read_text() for n in auth.TLS_NAMES}

@@ -46,8 +46,10 @@ and any older than six hours that no upload is writing are deleted whenever an u
 Only `*.upload` files are ever deleted there, and nothing in it is followed; a symlink in place of
 the directory itself is refused (every upload then fails, and the gateway logs why). Keeping these
 files out of the project directories is what keeps them away from everything that lists videos.
-When the TLS pair is missing the gateway does not start and logs an error saying so; the API still
-serves the dashboard, and renderers cannot reach it until the secrets exist and the API is restarted.
+When the TLS pair is missing, or its two files are not a usable pair, the gateway does not start
+and logs an error saying so; the API still serves the dashboard, and no renderer (the built-in one
+included) can reach it until the pair is put right and the API is restarted — see
+[The secrets directory](#the-secrets-directory).
 
 **4443 is not published by `docker-compose.yml`.** The built-in renderer reaches it as
 `https://tubematic-api:4443` over the Compose network, which needs no published port. A renderer on
@@ -351,10 +353,9 @@ value; the last two are the render gateway's TLS pair:
 The TLS pair is made by `tubematic_core.auth.ensure_secrets` with the `cryptography` package, which is
 why onboarding's and the upgrade's own dependency bootstrap (`onboard/bootstrap.py::ensure_deps`)
 installs it: a single `--step` run, or an upgrade, reaches the secrets before `python_deps` has run.
-The pair is created together whenever either file is missing or empty, and never replaced once whole.
-
 Onboarding's `auth` step creates them, and so does any stack start or upgrade that finds one missing.
-Nothing ever replaces an existing one except `onboard.py --rotate-tokens`. Compose mounts each file
+**The four tokens are the only secrets that are ever replaced**, and only by `onboard.py
+--rotate-tokens`, which rewrites them in place and never touches the TLS pair. Compose mounts each file
 read-only at `/run/secrets/<name>` (a top-level `secrets:` block with `file:` sources), so no secret
 is ever an environment variable and `docker inspect` shows none. A missing file stops `up` with "bind
 source path does not exist": the stack fails closed rather than starting open.
@@ -367,6 +368,35 @@ only `tubematic-api` mounts it.
 
 **A rotation rewrites each file in place.** A bind mount pins the inode it was started with, so an
 atomic rename would leave every running container reading the old value until it was recreated.
+
+**The TLS pair is made again only as a pair, and a new pair is a new pin.** When either file is
+missing or empty, `tubematic_core/auth.py::_ensure_tls` writes a fresh key *and* certificate: a
+lone half is useless without its partner. Each half is written to a temporary file and renamed into
+place, the half still present first, so an interrupted repair leaves the missing name missing and
+the next start simply makes the pair again; it never leaves two files that look whole but do not
+belong together. (A rename is fine here, unlike for a rotated token: the gateway loads the pair only
+when it starts, so a new pair needs `tubematic-api` and `tubematic-renderer` restarted anyway, and a
+restarted container mounts the new file.) The new certificate has a new
+[pin](05-http-api.md#tls-and-the-certificate-pin), so after it:
+
+- the built-in renderer follows on its own once both containers are restarted (it reads the
+  certificate from the same directory);
+- every enrollment token issued before is useless — it carries the old pin, and a renderer enrolling
+  with it refuses the new certificate before sending anything — so discard them and issue new ones;
+- every remote renderer is cut off, since it trusts only the certificate it was enrolled with, and
+  must be [enrolled again](05-http-api.md#enrollment) with a new token. Re-enrolling the same
+  machine keeps its renderer row (its id, its enabled switch and its render timings): the renderer
+  keeps its machine id in its state directory, and `renderers.py::enroll` updates the row with that
+  machine id instead of adding one.
+
+Two non-empty files are never replaced, **even when they are not a usable pair** — a key and a
+certificate restored from different backups, or a truncated file — because replacing them would
+change the pin silently. The gateway then logs `render gateway not started: its TLS key and
+certificate cannot be used as a pair` and does not start, while the API serves the dashboard as
+usual. To recover, either restore `render_tls_key` and `render_tls_cert` together from the same
+backup (the pin is unchanged and nothing needs enrolling again), or delete both and run
+`python3 scripts/service.py start` to make a new pair (a new pin, with the consequences above);
+then restart `tubematic-api` and `tubematic-renderer`.
 
 The admin password is not a file: its scrypt hash is a `settings` row (`admin_password_hash`) that is
 outside the settings API, so `GET /settings` never returns it and `POST /settings` cannot write it.

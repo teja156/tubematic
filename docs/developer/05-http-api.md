@@ -885,12 +885,29 @@ An upload has no total limit on purpose: a long video over a slow home link take
 takes, and the upload caps above already bound how many there are. A renderer whose upload stalls is
 cut off after 60 seconds of silence and simply tries again.
 
-Two caps bound how many requests can be waiting on a body at once:
+Three caps bound how much the gateway holds at once (constants in `render_gateway.py`, all fixed):
 
 | Cap | Value | Answer past it |
 |---|---|---|
-| Enrollment bodies being read at once — the only body the gateway reads for a caller it does not know | 4 | `503 busy`, `Retry-After: 10`, before a byte is read |
-| Requests one renderer has in the gateway at once (a renderer makes at most three: its heartbeat, one job request, and a retry overlapping an upload still being received) | 8 | `503 busy`, `Retry-After: 10` |
+| Connections, across every client, from accept to close (`MAX_CONNECTIONS`) | 128 | The connection is closed at once, before a thread is made for it |
+| Enrollment bodies being read at once — the only body the gateway reads for a caller it does not know (`MAX_ENROLL_READERS`) | 4 | `503 busy`, `Retry-After: 10`, before a byte is read |
+| Requests one renderer has in the gateway at once (`MAX_REQUESTS_PER_RENDERER`; a renderer makes at most three: its heartbeat, one job request, and a retry overlapping an upload still being received) | 8 | `503 busy`, `Retry-After: 10` |
+
+**The connection cap is what bounds threads.** The werkzeug server under the gateway makes a thread
+for every connection as soon as it is accepted — before its TLS handshake, before any other cap can
+see it — so without a cap a client opening connections faster than the 30 s head bound ends them
+could grow threads without limit inside `tubematic-api`, the dashboard's API included. The slot is
+taken in the accept loop (`render_gateway.py::_server_class`) and given back when the connection's
+thread ends. werkzeug closes every connection after one request, so a connection is one request or
+one still arriving; 128 leaves room for 15 renderers each at their own cap of 8, plus the
+enrollment readers. A client holding every slot only delays renderers — each held slot ends within
+the head bound, and a renderer retries a refused connection — it cannot take the API down.
+
+**A renderer's request counts until its reply is sent and its body drained**, not only while its
+route runs: a bundle streams after the route has returned, and after an early answer (a `413`, a
+`403`) werkzeug drains the unread body. So the count is released when werkzeug closes the response
+(`render_gateway.py::_bounded_app`), or, if the connection ends without that close (a client gone
+mid-drain), when the connection's handler finishes — once either way.
 
 **Why a port of its own, and why renderer credentials work only here.** Port 4000 is bound to
 loopback and takes the API token, which can change any setting, approve paid work and publish. A renderer on another machine needs a port it can reach, and must be
@@ -940,6 +957,10 @@ into DER (`ssl.PEM_cert_to_DER_cert`) but not take a certificate apart. The cost
 certificate is a new pin, so **the TLS pair is never rotated**: `--rotate-tokens` leaves it alone and
 `rotate_secrets` refuses it, because a new certificate would cut every enrolled renderer off until it
 was enrolled again. Its key is mounted only into `tubematic-api`; renderers get the certificate.
+An incomplete pair (either file missing or empty) is made again as a whole new pair, which is a new
+pin, and a pair whose two files do not load together is left alone and keeps the gateway from
+starting; both cases, and how to recover, are in
+[Infrastructure — the secrets directory](16-infrastructure.md#the-secrets-directory).
 
 ### Enrollment
 

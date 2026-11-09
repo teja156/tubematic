@@ -35,7 +35,8 @@ Two rules here look odd and are load-bearing:
   certificate alone.
 * Rotation rewrites a file in place. A bind mount pins the inode it was given
   at start, so an atomic rename would leave every running container reading
-  the old value until it was recreated.
+  the old value until it was recreated. (The TLS pair, which is never
+  rotated, is the one thing written by rename: see _ensure_tls.)
 
 The admin password is not a file: its scrypt hash is a bare `settings` row
 outside SETTINGS_SPEC, so `GET /settings` can never return it and
@@ -135,10 +136,39 @@ def _tls_pair() -> tuple[str, str]:
     return key_pem, cert.public_bytes(serialization.Encoding.PEM).decode()
 
 
+def _write_synced(path: Path, value: str) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w") as f:
+        f.write(value)
+        f.flush()
+        os.fsync(f.fileno())
+    os.chmod(path, 0o644)
+
+
+def _fsync_dir(d: Path) -> None:
+    fd = os.open(d, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _ensure_tls(d: Path) -> list[str]:
     """Create the gateway's key and certificate together when either is
-    missing or empty; never replace a complete pair. A lone key or certificate
-    is useless without its partner, so both are written fresh."""
+    missing or empty; never replace a complete pair (not even one that does
+    not load: replacing it would change the pin silently, see the module
+    docstring). A lone key or certificate is useless without its partner, so
+    both are written fresh.
+
+    Written so that no interruption leaves a pair that looks whole but is not
+    (two non-empty files that do not belong together, which nothing here
+    would ever repair): each half goes to a temporary file, synced, and is
+    renamed into place, the half that is still present first. Until the last
+    rename one name stays missing or empty, so an interrupted repair is simply
+    made again by the next ensure; after it the pair is whole and matching.
+    A rename is fine here, unlike for a rotated token: the gateway loads the
+    pair only when it starts, so a new pair needs the containers restarted
+    anyway, and a restarted container mounts the new file."""
     present = []
     for name in TLS_NAMES:
         try:
@@ -148,9 +178,12 @@ def _ensure_tls(d: Path) -> list[str]:
             pass
     if len(present) == len(TLS_NAMES):
         return []
-    key_pem, cert_pem = _tls_pair()
-    _write_in_place(d / TLS_KEY_NAME, key_pem)
-    _write_in_place(d / TLS_CERT_NAME, cert_pem)
+    pems = dict(zip((TLS_KEY_NAME, TLS_CERT_NAME), _tls_pair()))
+    for name in TLS_NAMES:
+        _write_synced(d / f".{name}.new", pems[name])
+    for name in sorted(TLS_NAMES, key=lambda n: n not in present):
+        os.replace(d / f".{name}.new", d / name)
+        _fsync_dir(d)
     return list(TLS_NAMES)
 
 

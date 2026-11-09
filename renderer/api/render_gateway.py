@@ -51,7 +51,10 @@ handshake, request line and headers must all arrive within REQUEST_HEAD_SECS;
 a JSON body within JSON_BODY_SECS (408 body_timeout). A protected route is
 authenticated from its headers before a byte of its body is read, so only
 the open enroll route reads a body for a caller nobody knows, and at most
-MAX_ENROLL_READERS do at once (503 busy). An upload has no total deadline,
+MAX_ENROLL_READERS do at once (503 busy); one renderer has at most
+MAX_REQUESTS_PER_RENDERER requests in the gateway, each counted until its
+reply is sent and drained; and the process holds at most MAX_CONNECTIONS
+connections, refused before a thread is made for one past it. An upload has no total deadline,
 only the idle one: a slow home link is a legitimate reason for a long
 upload, and the per-claim and global upload caps bound how many there are.
 
@@ -160,10 +163,26 @@ DRAIN_SECS = 5
 # Unauthenticated bodies being read at once (the enroll route): past it, 503
 # busy before a byte is read.
 MAX_ENROLL_READERS = 4
-# Requests one renderer may have in the gateway at once. A renderer makes at
+# Requests one renderer may have in the gateway at once, each counted from
+# its authentication until its reply has been sent and what was left of its
+# body drained (a streamed bundle until its last byte). A renderer makes at
 # most three (its heartbeat, and one job request from its loop, or a retry
 # overlapping one the gateway is still finishing); past it, 503 busy.
 MAX_REQUESTS_PER_RENDERER = 8
+# Connections the gateway holds at once, across every client, each counted
+# from its accept to its close: past it a connection is closed at once,
+# before a thread is made for it. werkzeug's threaded server makes a thread
+# for every connection before its TLS handshake, before any cap above can
+# see it, so without this a client opening connections faster than
+# REQUEST_HEAD_SECS ends them could grow threads without limit in the API's
+# process (the dashboard's API included). werkzeug closes every connection
+# after one request, so a connection is one request or one still arriving.
+# 128 leaves room for 15 renderers each at MAX_REQUESTS_PER_RENDERER plus
+# MAX_ENROLL_READERS (a renderer really makes at most three at once), while
+# its threads cost little. A client holding every slot only delays
+# renderers (each held slot ends by REQUEST_HEAD_SECS, and a renderer retries
+# a refused connection); it cannot take the API down.
+MAX_CONNECTIONS = 128
 # Where uploads are written before they are renamed into place: a directory
 # of the gateway's own on the output filesystem (os.replace stays a rename).
 # Its leftovers (a crash mid-upload) are cleared when the gateway starts, and
@@ -176,6 +195,12 @@ UPLOAD_ORPHAN_SECS = 6 * 3600
 # The connection's bounded reader, in the WSGI environ, so a route can set
 # its body's deadline (absent under a test client).
 READER_KEY = "tubematic.gateway_reader"
+# Where a request's release of its per-renderer count waits, in the WSGI
+# environ, when the app is served by make_gateway_server: called once the
+# response is closed (after werkzeug's drain), or when the connection ends
+# without that close (absent under Flask's test client, which releases at
+# teardown).
+RELEASE_KEY = "tubematic.gateway_release"
 _TAR_BLOCK = tarfile.BLOCKSIZE          # 512
 _TAR_RECORD = tarfile.RECORDSIZE        # 10240
 
@@ -491,6 +516,24 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
     counts_lock = threading.Lock()
     in_flight = {}
     enroll_readers = [0]
+    app.extensions["render_gateway.in_flight"] = in_flight     # read by the tests
+
+    def releaser(rid):
+        """Gives back one request of renderer `rid`, however often it is
+        called: the release is reached from more than one place."""
+        done = [False]
+
+        def release():
+            with counts_lock:
+                if done[0]:
+                    return
+                done[0] = True
+                left = in_flight.get(rid, 1) - 1
+                if left > 0:
+                    in_flight[rid] = left
+                else:
+                    in_flight.pop(rid, None)
+        return release
 
     @app.before_request
     def _authenticate():
@@ -518,13 +561,23 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
         if row is None:
             log.warning(f"gateway: {request.method} {request.path} refused: unknown credential")
             return _err(401, "unauthorized")
+        release = releaser(row["id"])
         with counts_lock:
             if in_flight.get(row["id"], 0) >= MAX_REQUESTS_PER_RENDERER:
                 busy = True
             else:
                 busy = False
                 in_flight[row["id"]] = in_flight.get(row["id"], 0) + 1
-                g.counted = row["id"]
+                # Served for real, the count is held until the response is
+                # closed — after a streamed bundle's last byte and the drain
+                # of an unread body, both of which come after this request's
+                # teardown (see _bounded_app). Under Flask's test client
+                # there is no such close, so it goes at teardown.
+                waiting = request.environ.get(RELEASE_KEY)
+                if waiting is not None:
+                    waiting.append(release)
+                else:
+                    g.release = release
         if busy:
             log.warning(f"gateway: {request.method} {request.path} from renderer {row['id']} refused: "
                         f"it already has {MAX_REQUESTS_PER_RENDERER} requests in the gateway")
@@ -534,14 +587,9 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
 
     @app.teardown_request
     def _uncount(_exc):
-        rid = g.pop("counted", None)
-        if rid is not None:
-            with counts_lock:
-                left = in_flight.get(rid, 1) - 1
-                if left > 0:
-                    in_flight[rid] = left
-                else:
-                    in_flight.pop(rid, None)
+        release = g.pop("release", None)
+        if release is not None:
+            release()
 
     @app.before_request
     def _bound_json_body():
@@ -1294,6 +1342,7 @@ def _handler_class():
         def make_environ(self):
             environ = super().make_environ()
             environ[READER_KEY] = self.rfile
+            environ[RELEASE_KEY] = []
             return environ
 
         def run_wsgi(self):
@@ -1301,35 +1350,101 @@ def _handler_class():
             # for an upload), and writes get the idle bound.
             self.rfile.deadline = None
             self.connection.settimeout(self.timeout)
-            super().run_wsgi()
+            try:
+                super().run_wsgi()
+            finally:
+                # werkzeug closes the response only when its drain ended
+                # without an error: a client that reset the connection
+                # mid-drain would otherwise keep its renderer's count for
+                # ever. A release already made is not made twice.
+                _release(getattr(self, "environ", None))
 
     return _GatewayRequestHandler
+
+
+def _release(environ) -> None:
+    """Give back the per-renderer counts a request is holding (RELEASE_KEY)."""
+    for release in (environ or {}).get(RELEASE_KEY) or ():
+        release()
 
 
 def _bounded_app(app):
     """The gateway app, wrapped so that once a reply starts, the connection's
     reader gives werkzeug's drain of an unread body DRAIN_SECS, and a body
-    deadline a route left behind no longer applies."""
+    deadline a route left behind no longer applies; and so that a request's
+    per-renderer count is released only when werkzeug closes the response,
+    which it does after sending all of it (a bundle streams after the
+    request's teardown) and after draining an unread body — or at once when
+    the app fails before there is a response to close."""
+    from werkzeug.wsgi import ClosingIterator
+
     def wsgi(environ, start_response):
         reader = environ.get(READER_KEY)
+        environ.setdefault(RELEASE_KEY, [])
 
         def started(status, headers, exc_info=None):
             if reader is not None:
                 reader.reply_started(DRAIN_SECS)
             return start_response(status, headers, exc_info)
-        return app(environ, started)
+        try:
+            body = app(environ, started)
+        except BaseException:
+            _release(environ)
+            raise
+        return ClosingIterator(body, lambda: _release(environ))
     return wsgi
+
+
+def _server_class():
+    from werkzeug.serving import ThreadedWSGIServer
+
+    class _GatewayServer(ThreadedWSGIServer):
+        """werkzeug's threaded server with MAX_CONNECTIONS: a slot is taken
+        when a connection is accepted, before its thread is made, and given
+        back when that thread ends (the connection closed). With no slot the
+        connection is closed at once and no thread is made."""
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.connection_slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
+            self._refused_logged = None
+
+        def process_request(self, request, client_address):
+            if not self.connection_slots.acquire(blocking=False):
+                # Logged at most once a minute: a flood would fill the log.
+                now = time.monotonic()
+                if self._refused_logged is None or now - self._refused_logged >= 60:
+                    self._refused_logged = now
+                    log.warning(f"gateway: a connection refused: {MAX_CONNECTIONS} connections are "
+                                "already open")
+                self.shutdown_request(request)
+                return
+            try:
+                super().process_request(request, client_address)
+            except BaseException:
+                # No thread started (socketserver closes the connection).
+                self.connection_slots.release()
+                raise
+
+        def process_request_thread(self, request, client_address):
+            try:
+                super().process_request_thread(request, client_address)
+            finally:
+                self.connection_slots.release()
+
+    return _GatewayServer
 
 
 def make_gateway_server(app, host: str, port: int, secrets_dir=None):
     """A threaded werkzeug server for the gateway over TLS, not yet serving
-    (the caller runs serve_forever in a thread). None, with an error logged,
-    when the TLS pair is missing: the API must still serve the dashboard.
+    (the caller runs serve_forever in a thread), holding at most
+    MAX_CONNECTIONS connections. None, with an error logged, when the TLS
+    pair is missing or cannot be loaded: the API must still serve the
+    dashboard.
 
     The listening socket is wrapped here rather than by werkzeug, with
     do_handshake_on_connect=False, so the handshake happens in each
     connection's thread under its time bound (see _handler_class)."""
-    from werkzeug.serving import make_server
     try:
         ctx = tls_context(secrets_dir)
     except SecretMissing as e:
@@ -1337,7 +1452,19 @@ def make_gateway_server(app, host: str, port: int, secrets_dir=None):
                   "Renderers cannot reach the API until the secrets exist "
                   "(python3 -m tubematic_core.auth ensure) and the API is restarted.")
         return None
-    server = make_server(host, port, _bounded_app(app), threaded=True, request_handler=_handler_class())
+    except (ssl.SSLError, ValueError, OSError) as e:
+        # Both files are there but are not a usable pair (a key and a
+        # certificate restored from different backups, a truncated file).
+        # Never replaced here: a new certificate is a new pin.
+        log.error(f"render gateway not started: its TLS key and certificate cannot be used as a pair ({e}). "
+                  "The API still serves the dashboard, but no renderer, the built-in one included, can "
+                  "reach it. To recover, restore render_tls_key and render_tls_cert together from the same "
+                  "backup (the certificate pin stays the same), or delete both and run "
+                  "python3 scripts/service.py start to make a new pair, which changes the pin: every remote "
+                  "renderer must then be enrolled again with a new token. Then restart tubematic-api and "
+                  "tubematic-renderer.")
+        return None
+    server = _server_class()(host, port, _bounded_app(app), _handler_class())
     server.socket = ctx.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
     # werkzeug reads it for the environ's https scheme and its SSL error log
     server.ssl_context = ctx
