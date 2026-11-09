@@ -39,6 +39,29 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
 ### Added
 
+- **Mascots: a small character that reacts to your video.** A mascot is a watercolour-style
+  character that appears over a Short, walks on and off, and reacts to what the narration says: it
+  looks surprised, has an idea, hops, glances at something. It is never the narrator and does not move
+  its mouth with the words; its face only shows how it feels. Mascots are off by default, work with
+  every visual style except Cartoon 3D, and need a working GPU (see below).
+- **Tubi, the Tubematic mascot, comes ready to use.** Tubi is a small retro terminal whose screen is
+  its face. It is already approved: pick it and nothing else needs setting up.
+- **A Mascots page, under the Profiles tab.** Describe a character (or press **Surprise me**) and an
+  agent draws it and renders three model sheets for you to review: a turnaround, its ten
+  emotions and a strip of poses. Approve it, or ask for changes with a comment. While a changed
+  version is being drawn, videos keep using the last approved one, and a video whose scenes have been written stays
+  on the version it was written for. Tubi cannot be edited, but you can ask for a variation of it.
+  You can choose which agent, model and effort draws a mascot.
+- **Three places to choose a mascot.** A **Default mascot** in Settings → Rendering, a **default
+  mascot** on each domain in Topics, and a mascot picker with the other choices when you approve a
+  topic. Each overrides the one before it, a domain can opt out with *None*, and the choice is
+  fixed once the topic is approved.
+- **Credits.** The mascot engine descends from
+  [JohnHeibel/ClaudeAnimationBase](https://github.com/JohnHeibel/ClaudeAnimationBase) (MIT License) and
+  ships [p5.js](https://p5js.org/) (LGPL-2.1) and [p5.brush](https://github.com/acamposuribe/p5.brush)
+  (MIT License), with their licenses kept beside them in the source. None of ClaudeAnimationBase's own
+  characters are included.
+
 - **The render worker runs a stills server for Cartoon 3D authoring.** The gate and preview stills
   the agent's tools ask for are rendered inside `tubematic-renderer`, on the GPU, by a server that
   keeps the project bundled and one browser open, so a still takes seconds instead of the half
@@ -83,10 +106,24 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
 ### Upgrade notes
 
+- **Nothing turns on by itself.** Every existing video, domain and setting is unchanged by the upgrade:
+  no mascot is chosen anywhere until you choose one.
+- **Mascots need a working GPU.** The pickers, the default mascots included, are greyed out until the
+  renderer's GPU test passes (Settings → Rendering → Test GPU; see
+  [GPU rendering](user-guide/10-gpu-rendering.md)), and the API refuses a new choice then too. A video
+  with a mascot whose GPU stops working, before or during its render, is not rendered on the CPU or
+  handed back to the agent: it fails with a comment saying why, and is created again once the GPU is
+  back.
+- **Restart open agent sessions after upgrading.** The upgrade redeploys every installed agent's
+  skills, which adds the mascot-drawing skill, and re-registers the MCP server, whose tools changed.
+  An agent session that was already open keeps the old tools until you restart it.
+- **Going back to 2.0.0 needs the automatic backup restored.** The database gains new tables, and
+  2.0.0 refuses a newer database. Restoring the backup that the upgrade takes before changing the
+  database is the way back; mascots made since are lost with it.
 - **Cartoon 3D needs a working GPU.** The style is greyed out on the dashboard and refused by the
   API until the renderer's GPU test passes (Settings → Rendering → Test GPU). A Cartoon 3D video
-  approved before its GPU stopped working is not rendered on the CPU: it fails with a comment
-  saying why, and is created again once the GPU is back.
+  whose GPU stops working, before or during its render, is not rendered on the CPU or handed back to
+  the agent: it fails with a comment saying why, and is created again once the GPU is back.
 - **Reinstalling the agent picks up the new skill.** The upgrade redeploys every installed agent's
   skills, so `tubematic-cartoon3d` arrives with it; an agent you install by hand gets it from
   `python3 onboard.py --install-agent <agent>` as usual.

@@ -83,8 +83,15 @@ const MOCK_BACKLOG: RetentionBacklog = {
  * must not be misrouted to the settings/status branches below and receive a
  * settings object back. A null backlog answers that route with a 500. */
 function stubFetch(settings = MOCK_SETTINGS, status = MOCK_STATUS, agents: Agent[] = [],
-                   backlog: RetentionBacklog | null = MOCK_BACKLOG) {
+                   backlog: RetentionBacklog | null = MOCK_BACKLOG, mascots: unknown[] = [],
+                   gpuStatus = "working") {
   vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => {
+    if (url.endsWith("/render/gpu")) {
+      return Promise.resolve({ ok: true, json: async () => ({ status: gpuStatus }) });
+    }
+    if (url.endsWith("/mascots")) {
+      return Promise.resolve({ ok: true, json: async () => mascots });
+    }
     if (url.endsWith("/retention/backlog")) {
       return Promise.resolve(backlog
         ? { ok: true, json: async () => backlog }
@@ -803,6 +810,48 @@ describe("SettingsPage", () => {
         body: JSON.stringify({ watermark_enabled: false }),
       }),
     );
+  });
+
+  it("the default mascot picker lists only pickable mascots and patches default_mascot_id", async () => {
+    stubFetch(MOCK_SETTINGS, MOCK_STATUS, [], MOCK_BACKLOG, [
+      { id: "tubi", name: "Tubi", pickable: true },
+      { id: "moss", name: "Moss", pickable: false },
+    ]);
+    const fetchMock = vi.mocked(fetch);
+    render(<SettingsPage />);
+    await waitFor(() => screen.getByTestId("tab-rendering"));
+    await openTab("rendering");
+    const select = (await waitFor(() => screen.getByTestId("select-default-mascot"))) as HTMLSelectElement;
+    await waitFor(() => expect([...select.options].map((o) => o.value)).toEqual(["", "tubi"]));
+    expect(select.value).toBe("");
+    fireEvent.change(select, { target: { value: "tubi" } });
+    await clickSave("rendering");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/settings"),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ default_mascot_id: "tubi" }) }),
+    );
+  });
+
+  it.each([
+    ["not_usable", "Tubi (Mascots need a working GPU)"],
+    ["unknown", "Tubi (GPU not tested yet)"],
+  ])("disables the default-mascot choices while the GPU is %s, keeping No mascot and a held value", async (status, label) => {
+    stubFetch({ ...MOCK_SETTINGS, default_mascot_id: "tubi" }, MOCK_STATUS, [], MOCK_BACKLOG, [
+      { id: "tubi", name: "Tubi", pickable: true },
+      { id: "pip", name: "Pip", pickable: true },
+    ], status);
+    render(<SettingsPage />);
+    await waitFor(() => screen.getByTestId("tab-rendering"));
+    await openTab("rendering");
+    const select = (await waitFor(() => screen.getByTestId("select-default-mascot"))) as HTMLSelectElement;
+    await waitFor(() => expect([...select.options].find((o) => o.value === "pip")?.textContent)
+      .toBe(label.replace("Tubi", "Pip")));
+    const by = (v: string) => [...select.options].find((o) => o.value === v)!;
+    expect(by("pip").disabled).toBe(true);
+    expect(by("").disabled).toBe(false);
+    // The held default stays shown and selectable, so it is never stripped.
+    expect(select.value).toBe("tubi");
+    expect(by("tubi").disabled).toBe(false);
   });
 
   it("committing render timeout in minutes patches render_timeout_secs", async () => {

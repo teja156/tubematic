@@ -86,13 +86,13 @@ no banner shows and nothing else is affected. There is no setting to switch it o
 | **Archive** | Videos whose files were deleted, by you or by the [retention setting](05-settings.md#video-retention). Each keeps its title, project, status, archive date, total views and post links; opening one shows its window read-only |
 | **Topics** | Where topics come from: which research modes are on, the mining URL list, and every project domain with its settings. See [Topics](#topics) |
 | **Projects** | Pick a domain on the left, see and act on its videos on the right. A domain at its topic cap carries an "expired" badge |
-| **Script Profiles** | Teach the pipeline a writing style from YouTube videos. See [Script Profiles](#script-profiles) |
+| **Profiles** | Two pages under one tab. **Script profiles** teach the pipeline a writing style from YouTube videos ([Script Profiles](#script-profiles)); **Mascots** is the library of on-screen characters ([Mascots](#mascots)) |
 | **Socials** | Connect publishing accounts and choose which ones Tubematic may post to. Does nothing until publishing is enabled |
 | **Analytics** | Two tabs. **Videos**: views, likes, comments and shares of published videos. **Spend**: what the install has spent. See [Analytics](#analytics) |
 | **Logs** | Structured logs from every service, filtered by service, minimum level, text and number of rows. Logs refresh when a filter changes or you press the refresh button; there is no live tail |
 | **Settings** | Every install setting, in tabs, plus the pipeline pause switch. See [The settings page](#the-settings-page) |
 
-The Pipeline, Library, Projects and Script Profiles pages refresh themselves every 5 seconds, so you
+The Pipeline, Library, Projects, Script Profiles and Mascots pages refresh themselves every 5 seconds, so you
 can leave one open.
 
 ### The pipeline board
@@ -174,6 +174,55 @@ Every submission lands in a domain called **Manual Videos** and is not scored. W
 shows the reason and keeps what you typed; a successful one clears the title and topic but keeps the
 pickers, since videos submitted in a row usually share them.
 
+### Mascots
+
+A mascot is a small character that appears over a video, walks on and off, and **reacts** to what the
+narration says: it looks surprised, has an idea, hops, glances at something. It is never the narrator
+and never lip-syncs; its face shows only the emotion. Mascots are **off by default** everywhere, and
+a video has one only if you pick it. They are drawn on the GPU, so **a mascot can only be chosen while
+the renderer's GPU is working** (Settings → Rendering → **Test GPU**; see
+[GPU rendering](10-gpu-rendering.md)). A mascot is not available in the Cartoon 3D style.
+
+**Tubi** ships with Tubematic, ready to use: a small retro terminal whose screen is its face. Choose it and
+nothing else is needed.
+
+To make your own, open **Profiles → Mascots** and give it a name and a description of the character
+(what it is, how it looks, how it carries itself), or press **Surprise me** and let the agent invent
+one. Optionally pick the agent, model and effort that should draw it; without a pick the default agent
+does. The next agent session (even while the pipeline is paused) writes the drawing code and renders
+three model sheets of it: a turnaround, its ten emotions and a strip of poses. The mascot moves
+through **Pending**, **Building** and **In review**. Open it, look at the sheets, and either:
+
+- **Approve** it, which makes it pickable; or
+- **Request changes** with a comment saying what to fix. The agent draws a new version.
+
+**A change request never disturbs what is already in use.** While a new version is being drawn, videos
+keep using the last approved one, and a video whose scenes have been written stays on the version it
+was written for even after you approve a newer one. If a change attempt fails twice, the mascot shows
+**Failed** with the reason and the approved version stays in use.
+
+Tubi cannot be edited. Instead, **Ask for a variation** creates a new mascot drawn from it, with a name
+and a description of how it should differ. **Archive** removes a mascot from every picker (Tubi too). A topic that is still waiting for approval
+with an archived mascot cannot be approved until you pick another or none (nor can a Cartoon 3D topic
+that somehow still holds a mascot); videos already past that
+checkpoint keep rendering with it.
+
+You choose a mascot at three levels, each overriding the one before:
+
+1. **Settings → Rendering → Default mascot**: the install-wide default. Empty means none.
+2. **Topics**: each domain's **default mascot**. *Use install default* follows level 1, *None* means no
+   mascot in this domain even when the install has a default.
+
+A default can only be set to a mascot while the renderer's GPU works (the API refuses it otherwise,
+as the dashboard's greyed pickers do). One set earlier stays set if the GPU goes, but seeds nothing
+until the GPU works again.
+3. **The topic checkpoint**: a mascot picker beside the other choices when you approve a topic. It is
+   fixed once the topic is approved.
+
+The agent decides when the mascot walks on and off and what it reacts to. How that works is in
+[Scene authoring — Mascots](../developer/10-scene-authoring.md#mascots) and how a mascot is built in
+[Mascot authoring](../developer/06-mcp-server.md#mascot-authoring).
+
 ### Topics
 
 - **Research modes** — curriculum, trending and mining, each switched on or off. Mining needs a Gemini
@@ -190,6 +239,7 @@ pickers, since videos submitted in a row usually share them.
   Every row has:
   - a **default visual style** and **default script profile**, which preselect those choices on the
     domain's curriculum videos
+  - a **default mascot**, which every new video in the domain starts with
   - a **default voice**, which every new video in the domain starts with
   - a **Topic cap** (25–750) with "N filed" beside it — every topic the domain has ever had,
     archived and rejected ones included. A domain at its cap shows **EXPIRED** and receives no more
@@ -247,12 +297,12 @@ checkpoint is which, and why each exists, is in
 | Most statuses | **Delete** | Asks first, then deletes the video's files and moves it to the Archive. Not offered while something is working on the video, nor while it is scheduled, publishing, at Voice Ready or at Revision Requested |
 
 **The choices that ride with an approval.** A Topic Proposed row carries a script-profile picker, a
-visual-style picker, a voice picker with a preview button, and agent, model and effort pickers.
+visual-style picker, a mascot picker (shown once at least one mascot is approved; greyed out without a working GPU), a voice picker with a preview button, and agent, model and effort pickers.
 Script Ready carries the voice, agent, model and effort pickers. In the video's window the same
 pickers are stacked, and at Video Ready they serve Request Revision, since approving a video hands
 nothing to an agent. Each picker has a small caption naming it.
 
-- **Script profile and visual style are fixed once the topic is approved.** Pick them at the topic.
+- **Script profile, visual style and mascot are fixed once the topic is approved.** Pick them at the topic.
   **Illustrated** needs an OpenAI key and is greyed out without one; **Cartoon 3D (experimental)** needs a working
   GPU (see [GPU rendering](10-gpu-rendering.md)) and is greyed out without one.
 - **Pick the voice at the topic if it uses a different ElevenLabs model.** The script is written for
@@ -297,7 +347,7 @@ work differently, noted below.
   comments to see whether a review ran.
 - **Images** — the OpenAI model for scene images and the one for the Illustrated style's characters.
   There is no provider choice: every image comes from OpenAI.
-- **Rendering** — the two render timeouts (the stall timeout that catches a hung render, the ceiling on a whole one), the retry count and the watermark, and a **GPU** section that says whether videos render on an
+- **Rendering** — the two render timeouts (the stall timeout that catches a hung render, the ceiling on a whole one), the retry count, the watermark and the **default mascot**, and a **GPU** section that says whether videos render on an
   NVIDIA GPU or the CPU, names the GPU and the graphics device Chromium actually gets, and says why
   when a chosen GPU is not being used. With a GPU chosen, **Test GPU** has the renderer check again;
   it answers within about a minute, or after the render in progress. The GPU is chosen on the host, not here — see

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { Agent, GpuStatus, Project, ScriptProfile, Video, VisualStyle, Voice } from "@/lib/types";
 import { SectionLabel } from "@/components/SectionLabel";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
-import { AGENT_EFFORTS, effortOptionLabel, isUsable } from "@/lib/agents";
+import { AgentPickers, Field, resolvePickedModel, selectStyle } from "@/components/AgentPickers";
 import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
 import { voiceLabel } from "@/lib/voices";
 
@@ -31,30 +31,6 @@ const inputStyle = {
   ...mono, fontSize: 12, width: "100%", padding: "8px 10px",
   background: "var(--panel)", border: "1px solid var(--border-2)", color: "var(--ink)",
 } as const;
-
-const selectStyle = {
-  ...mono, fontSize: 11, padding: "7px 8px", width: "100%",
-  background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--border-2)",
-} as const;
-
-/** A captioned control. A <label>, so the caption is the control's accessible
- *  name — the same shape as ActionPane's PickerField. The note sits outside
- *  the label, or it would become part of that name. */
-function Field({ label, note, children }: { label: string; note?: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <span style={{
-          ...mono, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--dim)",
-        }}>
-          {label}
-        </span>
-        {children}
-      </label>
-      {note && <span style={{ ...mono, fontSize: 10, color: "var(--mute)" }}>{note}</span>}
-    </div>
-  );
-}
 
 export default function NewVideoPage() {
   // undefined until /agents answers, and left so if it never does.
@@ -126,9 +102,7 @@ export default function NewVideoPage() {
   // Under Automatic the agent is not known until the API deals it, so the
   // model stays "" (its default). A picked agent's model is pinned, as
   // approving a topic pins it, so the row records which model made the video.
-  const resolvedModel = isUsable(picked)
-    ? (model !== null && picked.models.includes(model) ? model : picked.models[0])
-    : "";
+  const resolvedModel = resolvePickedModel(picked, model);
   const readyProfiles = profiles.filter((p) => p.status === "READY");
   // What "Default" resolves to: the manual domain's voice while it is still in
   // the roster (the API skips a stale one the same way), else the install's.
@@ -141,12 +115,6 @@ export default function NewVideoPage() {
   // submit for a title the API accepts.
   const titleLen = Array.from(title.trim()).length;
   const canSubmit = titleLen > 0 && titleLen <= TITLE_MAX && topic.trim() !== "" && !submitting;
-
-  const agentNote = agentsFailed
-    ? "Agent list not loaded — the video will be dealt an agent automatically."
-    : agents !== undefined && liveAgents.length === 0
-      ? "No agents installed. Install one on the host with onboard.py --install-agent."
-      : undefined;
 
   async function submit() {
     if (!canSubmit) return;
@@ -219,46 +187,17 @@ export default function NewVideoPage() {
         </Field>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-          <Field label="Agent" note={agentNote}>
-            <select
-              data-testid="new-video-agent"
-              value={agentId}
-              disabled={liveAgents.length === 0}
-              onChange={(e) => { setAgentId(e.target.value); setModel(null); }}
-              style={selectStyle}
-            >
-              <option value="">Automatic (dealt by weight)</option>
-              {liveAgents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </Field>
-
-          <Field label="Model">
-            <select
-              data-testid="new-video-model"
-              value={resolvedModel}
-              disabled={!isUsable(picked)}
-              onChange={(e) => setModel(e.target.value)}
-              style={selectStyle}
-            >
-              {isUsable(picked)
-                ? picked.models.map((m, i) => (
-                    <option key={m} value={m}>{i === 0 ? `${m} (default)` : m}</option>
-                  ))
-                : <option value="">Agent default</option>}
-            </select>
-          </Field>
-
-          <Field label="Effort">
-            <select
-              data-testid="new-video-effort"
-              value={effort}
-              onChange={(e) => setEffort(e.target.value)}
-              style={selectStyle}
-            >
-              <option value="">{effortOptionLabel(picked)}</option>
-              {AGENT_EFFORTS.map((e) => <option key={e} value={e}>{e}</option>)}
-            </select>
-          </Field>
+          <AgentPickers
+            agents={agents}
+            agentsFailed={agentsFailed}
+            agentId={agentId}
+            model={model}
+            effort={effort}
+            onAgent={(id) => { setAgentId(id); setModel(null); }}
+            onModel={setModel}
+            onEffort={setEffort}
+            testIdPrefix="new-video"
+          />
 
           <Field label="Script profile">
             <select

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Agent, GpuStatus, ScriptProfile, Video, Voice } from "@/lib/types";
+import type { Agent, GpuStatus, Mascot, ScriptProfile, Video, Voice } from "@/lib/types";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
@@ -13,6 +13,8 @@ import {
   pickedAgent, resolvedModel, topicApprovalPayload,
 } from "@/lib/agents";
 import { styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { MascotPicker } from "@/components/MascotPicker";
+import { approvalMascot, showMascotPicker } from "@/lib/mascots";
 
 const STATUS_ACCENT: Partial<Record<string, string>> = {
   TOPIC_PROPOSED: "var(--amber)",
@@ -48,7 +50,12 @@ interface ActionPaneProps {
   /** GET /render/gpu, or null while unloaded: Cartoon 3D is disabled in the
    *  picker unless the renderer's GPU is working. Null = available, as above. */
   gpu?: GpuStatus | null;
-  onAction: (videoId: string, action: string, video: Video, extra?: Record<string, unknown>) => void;
+  /** GET /mascots. The Mascot picker shows when one can be picked (or the
+   *  video already holds one); it is disabled until the GPU is working. */
+  mascots?: Mascot[];
+  /** May return a promise resolving to false when the API REFUSED the action:
+   *  the row is then brought back so the human can change a pick and retry. */
+  onAction: (videoId: string, action: string, video: Video, extra?: Record<string, unknown>) => void | Promise<boolean | void>;
   /** `revise` opens the modal straight into its Request Revision dialog —
    *  the only place a human comment can be added. `picks` carries the row's
    *  agent choices into it, present only when the human touched one, so a
@@ -124,7 +131,7 @@ function PickerField({ label, readOnly, children }: {
   );
 }
 
-function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], agents, illustratedAvailable = true, gpu = null, onAction, onOpenModal }: {
+function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], agents, illustratedAvailable = true, gpu = null, mascots = [], onAction, onOpenModal }: {
   video: Video;
   voices: Voice[];
   defaultVoiceId: string;
@@ -132,6 +139,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
   agents?: Agent[];
   illustratedAvailable?: boolean;
   gpu?: GpuStatus | null;
+  mascots?: Mascot[];
   onAction: ActionPaneProps["onAction"];
   onOpenModal: ActionPaneProps["onOpenModal"];
 }) {
@@ -146,6 +154,9 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
   // Frozen after TOPIC_PROPOSED like the two above, so this select is the only
   // moment a human gets to choose the register.
   const [selectedStyle, setSelectedStyle] = useState(video.visual_style ?? "auto");
+  // The mascot the topic starts with (a domain or install default may have
+  // seeded one). Cleared and locked while the style is Cartoon 3D.
+  const [selectedMascot, setSelectedMascot] = useState(video.mascot_id ?? "");
   // A dropdown of the video's own agent's models — the installer validated
   // that list against the real binary, and the API rejects anything outside
   // it. null = untouched, so the shown value tracks initialModel() until the
@@ -332,6 +343,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
   // may have been deleted since (TMDEV-145). It is shown as unavailable rather
   // than reading as "No profile" while being sent, and the picker stays up
   // even with no READY profile left, so the human can clear it.
+  const mascotShown = showMascotPicker(mascots, video.mascot_id ?? "");
   const staleProfile = selectedProfile !== "" && !readyProfiles.some((p) => p.id === selectedProfile);
   // The list omits deleted profiles, so there is usually no name to show, and
   // the id is a UUID: say what it is instead.
@@ -373,7 +385,11 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
           <select
             data-testid={`style-select-${video.id}`}
             value={selectedStyle}
-            onChange={(e) => setSelectedStyle(e.target.value as typeof selectedStyle)}
+            onChange={(e) => {
+              const next = e.target.value as typeof selectedStyle;
+              setSelectedStyle(next);
+              if (next === "cartoon_3d") setSelectedMascot("");
+            }}
             title="Visual register for this video"
             style={{
               fontFamily: "var(--mono)",
@@ -394,12 +410,25 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
             ))}
           </select>
         </PickerField>
+        {mascotShown && (
+          <PickerField label="Mascot">
+            <MascotPicker
+              testId={`mascot-select-${video.id}`}
+              mascots={mascots}
+              gpu={gpu}
+              value={selectedMascot}
+              locked={selectedStyle === "cartoon_3d"}
+              onChange={setSelectedMascot}
+            />
+          </PickerField>
+        )}
         {voicePickers}
         {agentPickers}
         <button
           className="tm-btn"
           onClick={() => onAction(video.id, "approve-topic", video, {
             script_profile_id: selectedProfile, visual_style: selectedStyle,
+            ...(mascotShown ? { mascot_id: approvalMascot(selectedStyle, selectedMascot) } : {}),
             ...topicVoicePayload(pickedVoice),
             ...topicApprovalPayload(video, agentList, picks),
           })}
@@ -648,7 +677,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
   return null;
 }
 
-export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = [], agents, illustratedAvailable = true, gpu = null, onAction, onOpenModal }: ActionPaneProps) {
+export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = [], agents, illustratedAvailable = true, gpu = null, mascots = [], onAction, onOpenModal }: ActionPaneProps) {
   const [flashing, setFlashing] = useState<Record<string, "approve" | "reject">>({});
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   // Statuses the human switched off. Stored as the excluded set, so every
@@ -658,12 +687,21 @@ export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = []
   function handleAction(videoId: string, action: string, video: Video, extra?: Record<string, unknown>) {
     const kind = action.includes("reject") ? "reject" : "approve";
     setFlashing((p) => ({ ...p, [videoId]: kind }));
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setHidden((s) => new Set(s).add(videoId));
       setFlashing((p) => { const { [videoId]: _, ...rest } = p; return rest; });
     }, 550);
-    if (extra !== undefined) onAction(videoId, action, video, extra);
-    else onAction(videoId, action, video);
+    const result = extra !== undefined
+      ? onAction(videoId, action, video, extra)
+      : onAction(videoId, action, video);
+    // A refused action (the caller already alerted the API's message) leaves
+    // the video where it was, so the row must stay to be re-picked and retried.
+    Promise.resolve(result).then((ok) => {
+      if (ok !== false) return;
+      clearTimeout(timer);
+      setHidden((s) => { const n = new Set(s); n.delete(videoId); return n; });
+      setFlashing((p) => { const { [videoId]: _, ...rest } = p; return rest; });
+    }).catch(() => {});
   }
 
   const visible = videos.filter((v) => !hidden.has(v.id));
@@ -802,7 +840,7 @@ export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = []
                 {/* flex-end, not center: the pickers carry a caption above them, so
                     centring would float every button halfway up a caption. */}
                 <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", rowGap: 10 }}>
-                  <ActionButtons video={video} voices={voices} defaultVoiceId={defaultVoiceId} scriptProfiles={scriptProfiles} agents={agents} illustratedAvailable={illustratedAvailable} gpu={gpu} onAction={handleAction} onOpenModal={onOpenModal} />
+                  <ActionButtons video={video} voices={voices} defaultVoiceId={defaultVoiceId} scriptProfiles={scriptProfiles} agents={agents} illustratedAvailable={illustratedAvailable} gpu={gpu} mascots={mascots} onAction={handleAction} onOpenModal={onOpenModal} />
                 </div>
               </div>
             );

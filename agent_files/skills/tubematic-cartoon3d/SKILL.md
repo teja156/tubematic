@@ -8,7 +8,9 @@ description: Author a Cartoon 3D narrated Short as TypeScript written for this o
 **Invoke this skill when:** a video is at `VOICE_READY` (`generate_voice` has produced its timeline) and it is
 a **Cartoon 3D** Short: its `visual_style` is `cartoon_3d`, or it is `auto` and the `tubematic-scene-config`
 skill has just resolved the renderer to `cartoon_3d` (`resolved_renderer` on `get_video`). Every other video
-takes the `tubematic-scene-config` skill. Also take this skill, on its **Revising an existing video** branch,
+takes the `tubematic-scene-config` skill. A video with a mascot (`mascot` on `get_video` is set) is never a
+Cartoon 3D Short, so it never reaches this skill: under `auto` the scene-config skill resolves it to the scene
+renderer. Also take this skill, on its **Revising an existing video** branch,
 for a `REVISION_REQUESTED` video whose scene-config carries a Cartoon 3D scene (`props.cartoon3d`). The style
 renders on the GPU only: `cartoon_3d_available` on `get_video` is true while it can; the pipeline refused the
 style otherwise.

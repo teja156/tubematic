@@ -258,7 +258,8 @@ change it now?" What every setting means, with its default, is in [Settings](05-
 | Uninstall an agent | `python onboard.py --uninstall-agent <agent>` — removes the skills, commands and MCP registration it deployed and keeps its workspace and logs. `python onboard.py --list-agents` shows what is installed |
 | A video's agent, model or effort | At any checkpoint on the dashboard (Topic Proposed, Script Ready, Video Ready). Changing the agent resets the model to that agent's default. A new video is given an agent automatically, by the shares on **Settings → Agents** |
 | A video's voice | It starts with its domain's default voice, or the install default. Change it on the dashboard at Topic Proposed (any voice) or Script Ready (only a voice whose model can speak the written script) |
-| A domain's default voice, visual style and script profile, and its topic cap | Its row on the **Topics** page |
+| A domain's default voice, visual style, script profile and mascot, and its topic cap | Its row on the **Topics** page |
+| The default mascot, and the mascots themselves (create, review, archive) | **Settings → Rendering** for the default; **Profiles → Mascots** for the library. Off by default; needs a working GPU. See [Mascots](04-dashboard.md#mascots) |
 | Dashboard password | `python onboard.py --set-password` on the host. Changing it signs every browser out. There is no reset on the dashboard |
 | The service tokens (API, MCP, session signing) | `python onboard.py --rotate-tokens`. Replaces all three, restarts the containers that hold them and signs every browser out. See [Infrastructure](../developer/16-infrastructure.md#changing-the-password-and-rotating-tokens) |
 | MCP port | `python onboard.py --step install_config`. Not on the dashboard, because only onboarding rewrites the agents' MCP registration that uses it |

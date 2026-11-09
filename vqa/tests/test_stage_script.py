@@ -203,7 +203,11 @@ class TestRealMcpServerIntegration:
         (isolated / "vqa").mkdir(parents=True)
         (isolated / "mcp").mkdir(parents=True)
         shutil.copy2(REPO_ROOT / "vqa" / "stage_script.py", isolated / "vqa" / "stage_script.py")
-        shutil.copy2(REPO_ROOT / "mcp" / "server.py", isolated / "mcp" / "server.py")
+        # server.py and the sibling modules it imports at load time (cartoon,
+        # mascot_sheets, text_audit, ...): the real mcp/ directory is what
+        # stage_script.py puts on sys.path, so the copy must carry all of them.
+        for module in (REPO_ROOT / "mcp").glob("*.py"):
+            shutil.copy2(module, isolated / "mcp" / module.name)
         # The shared tubematic_core package. An isolated tree has to bring it
         # like any other import: in the container it arrives on PYTHONPATH
         # (/app/lib), which this reconstruction deliberately does not have.

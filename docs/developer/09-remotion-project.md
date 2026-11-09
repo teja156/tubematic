@@ -259,6 +259,9 @@ The shape is documented here and nowhere else; there is no schema file to valida
   "subtitles": {              // optional; OMITTED MEANS ENABLED
     "maxWords": 4, "fontSize": 62, "background": "pill", "position": 0.78
   },
+  "mascot": [                 // optional; only on a video that has a mascot
+    { "frame": 0, "on": true, "x": 0.5, "y": 0.62, "emotion": "happy" }
+  ],
   "music": {                  // optional
     "src": "…", "volume": 0.15, "startFrame": 0, "fadeOutFrames": 30
   },
@@ -289,6 +292,7 @@ The shape is documented here and nowhere else; there is no schema file to valida
 | `totalFrames` | Positive integer. Enforced against the timeline by `write_scene_config` and `validate_job` |
 | `canvas` | `"dark"` or `"light"` — the ground painted under every scene, from the video's [visual register](10-scene-authoring.md#visual-registers). **A whole-video property, deliberately not a per-scene one:** scenes that disagree about the canvas flash, and a viewer reads that as a broken render rather than a style. `write_scene_config` rejects a value contradicting the register and fills in an absent one, so an omitted key is safe but never meaningful |
 | `subtitles` | Burned-in captions of the narration — see [Captions](#captions). **Absent means enabled**, which is the only reason the default reaches a config written before the key existed; opting out is an explicit `{"enabled": false}`. Keys: `enabled`, `maxWords` (1–7), `fontFamily`, `fontSize` (28–120), `color` (`null` follows the canvas), `background` (`"pill"`/`"shadow"`/`"outline"`/`"none"`; `"outline"` is bold text with a thick dark stroke and no plate, the usual look of narrated cartoon Shorts), `position`, `uppercase`. `write_scene_config` rejects an unknown key rather than dropping it, and does **not** write the defaults into the file — materialising them would freeze them at whatever they were the day the config was authored |
+| `mascot` | The mascot's **cue track**: a bare list of cue objects, not an object. Present exactly when the video has a mascot (`write_scene_config` refuses it on a video without one, and `validate_job` and `submit_render` refuse a mascot video without it). It holds data only; the drawing code is never in the config. See [the mascot layer](#the-mascot-layer) and [Scene authoring — Mascots](10-scene-authoring.md#mascots) |
 | `scenes[].src` | Filename stem. `"name"` or `"video_id/name"`, nothing deeper. Matches `^[a-zA-Z0-9][a-zA-Z0-9-]*$` per part |
 | `scenes[].source` | `"generated"` (default) or `"installed"` |
 | `scenes[].props` | Forwarded verbatim to the component |
@@ -425,6 +429,42 @@ Copyright (c) 2026 Mr omi). `CartoonShort.tsx`, `kit/cast.ts`, `kit/lights.ts`, 
 and `cartoon-tools/audio/` (`dsp.py`, `instruments.py`, `sfx_gen.py`, and the generalised `band.py`,
 `cues.py`, `mix.py`) from its synthesis library; each file's header names its origin. The repository's
 reference frames and sheets are not vendored.
+
+## The mascot layer
+
+A video with a mascot gets one extra layer from `CompositionBuilder`, `src/mascot/MascotLayer.tsx`. It sits
+**above the scenes and below the captions** (so the watermark and the captions are always drawn over it)
+and renders only when two things are true: the worker passed the `mascotPath` render prop, and the
+scene-config carries a non-empty `mascot` cue list.
+
+`mascotPath` is a **render prop set by the worker alone**, like `watermark`: it points at the
+version of the mascot's drawing code staged beside the job's other files
+(`/public/<video_id>/mascot.js`), and it is never a `scene-config.json` key, so an agent cannot name a
+file to load. The text-layout audit's composition names the props it takes one by one instead of
+spreading them, so it never receives `mascotPath` and **never boots a mascot**: the audit measures
+text, which comes out the same with or without the mascot, and the mascot's p5.js engine would only
+slow it down. The audit reports text that sits under the mascot's box from the cue track instead
+([Rendering and Review](11-rendering-and-review.md#the-text-layout-audit)).
+
+The engine is `renderer/remotion/public/mascot/`: `frame.html` hosts the drawing code in an iframe
+(560 by 640, transparent), `driver.js` plays the cue track (walks, emotions, looks, hops; it is the
+ground truth for cue semantics, walk speed and where the box lands), and `kit/` is the shared drawing
+kit, a p5.js and p5.brush watercolour look with a paper-edged outline so the character reads over
+video. The layer draws one frame per `delayRender` and hides the iframe while the mascot is off screen.
+**There is no lip sync, on purpose.** The mascot is never presented as the narrator; it reacts to what
+is said, so the layer is given no timeline and no words, and the mouth shows only the emotion.
+
+The same engine renders a mascot's three model sheets (`turn`, `feels`, `act`) for review, through the
+`MascotSheet` composition and `renderer/remotion/mascot-tools/render-sheet.mjs`. It has its own bundle
+entry point (`src/mascot/sheet-index.ts`), for the reason the GPU probe has: the main entry bundles every
+agent-written scene, so one broken scene would fail every sheet render. The MCP container runs it on
+software GL, so building a mascot never takes the GPU from a render.
+
+**Credits.** The engine descends from
+[JohnHeibel/ClaudeAnimationBase](https://github.com/JohnHeibel/ClaudeAnimationBase) (MIT License; its
+license is kept at `public/mascot/kit/LICENSE-ClaudeAnimationBase`) and ships p5.js (LGPL-2.1) and
+p5.brush (MIT), with their licenses beside them in `public/mascot/lib/`. The shipped mascot, Tubi, is
+original; none of the source's own characters are included.
 
 ## Building and checking
 
