@@ -286,7 +286,7 @@ treatment.
 **Choosing Cartoon 3D is an instruction, not a permission.** It commits the whole video, and
 reversing it costs every scene. Choose it when the spine is genuinely a place, not because it is
 the most capable option, and never part-way through. Before choosing it read `cartoon_3d_available`
-from the `get_video` result you already have: when it is `false` the renderer's GPU is not working
+from the `get_video` result you already have: when it is `false` no renderer's GPU is working
 and the world cannot be rendered, so take the scene renderer whatever the table says, and say in
 the handback that a world was wanted but the install cannot render one.
 

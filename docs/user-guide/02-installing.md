@@ -284,7 +284,8 @@ python3 onboard.py
 
 **You do not need to create a virtualenv yourself.** The wizard bootstraps itself before it does
 anything else: it creates `.venv` in the install directory (if missing), re-executes into it, and
-installs the three packages it needs to run (`rich`, `questionary`, `httpx`). This happens even for
+installs the four packages it needs to run (`rich`, `questionary`, `httpx`, and `cryptography`,
+which creates the render gateway's TLS certificate). This happens even for
 `--help`, and it is why the wizard works on a fresh clone with no prior setup. It matters beyond
 convenience: Ubuntu and Debian mark the system Python as externally managed, so a bare `pip install`
 fails outside a venv, and the cron entry is written with whichever interpreter ran the cron step —
@@ -310,7 +311,7 @@ container steps are always last and ask nothing, so no prompt ever interleaves b
 | 2 | `python_deps` | Installs `scripts/requirements.txt` into `.venv` — in both modes, since the poller runs on the host either way |
 | 3 | `directories` | Creates `~/.tubematic-data/{jobs,data,output_videos,scenes/generated,logs,backups}` |
 | 4 | `database` | Creates the SQLite file, if needed, and runs any pending schema migrations |
-| 5 | `auth` | Creates the three service tokens in `~/.tubematic-data/secrets/` (keeps any that exist) and asks for the dashboard password — twice, hidden, at least 12 characters — when none is set. It cannot be skipped |
+| 5 | `auth` | Creates the four service tokens (API, MCP, dashboard session, built-in renderer) and the render gateway's TLS key and certificate in `~/.tubematic-data/secrets/` (keeps any that exist) and asks for the dashboard password — twice, hidden, at least 12 characters — when none is set. It cannot be skipped |
 | 6 | `install_config` | Stores the API keys (**each verified live** as it is typed), the publishing switch and whether AI review is on. Advanced-only: MCP port, render retry budget, pending-topic cap |
 | 7 | `pipeline_settings` | Seeds the rest of the dashboard-editable settings. Asked by default: the image model. Advanced-only: the ElevenLabs voice roster (each voice with the model it speaks with) and default voice, which a new install pre-loads with Teja (`eleven_v4`, the default) and Adam (`eleven_v3`); per-run topic caps, trending sources, the research run cap, the render timeout, log and video retention, the AI review model, sampling rate and loop cap, and Auto Pilot |
 | 8 | `cron` | Asks for the poll interval (default 30 minutes) and writes one cron entry to your user crontab. See [Manual cron setup](#manual-cron-setup) |
@@ -381,7 +382,7 @@ current values before anything is asked.
 | `--uninstall-agent <name>` | Remove what an agent install deployed and mark the agent uninstalled. See [Uninstall an agent](#uninstall-an-agent) |
 | `--list-agents` | List the supported agents and the installed ones, then exit. Pipeable |
 | `--set-password` | Set or change the dashboard password. A change signs every browser out. Safe to run before an upgrade from 1.2.x |
-| `--rotate-tokens` | Replace the three service tokens and restart the services that hold them. Waits for in-flight work; `--force` proceeds anyway |
+| `--rotate-tokens` | Replace the four service tokens and restart the services that hold them (never the TLS key and certificate, which would cut off every renderer). Waits for in-flight work; `--force` proceeds anyway |
 
 Two notes on `--disable-verification`. It does **not** skip the local malformed-paste guard, which
 protects what gets *stored* and is not a network check. And it records keys as `UNKNOWN`, never

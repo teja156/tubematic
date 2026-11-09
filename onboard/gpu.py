@@ -1,14 +1,14 @@
-"""NVIDIA GPU passthrough for the render worker.
+"""NVIDIA GPU passthrough for the built-in renderer.
 
 The GPU is handed to `tubematic-renderer` by a Compose override file that the
 `gpu` onboarding step writes and `_compose()` loads when it exists. Everything
-here is host-side; the worker decides per render whether the GPU actually
+here is host-side; the renderer decides per render whether the GPU actually
 works (renderer/api/render_agent.py::_gl_args), so a stale or bypassed override
 falls back to CPU rendering rather than failing a video.
 
 Why an override file, and why under the data root:
 - Passthrough is a property of how the container is created, so it has to be
-  in the Compose configuration. It cannot be a settings row the worker reads.
+  in the Compose configuration. It cannot be a settings row the renderer reads.
 - `docker-compose.yml` is the same file on every install. A GPU reservation in
   it would stop every install without the NVIDIA runtime from starting
   ("could not select device driver").
@@ -32,7 +32,7 @@ RENDERER_SERVICE = "tubematic-renderer"
 # graphics: the EGL/OpenGL driver libraries Chromium's WebGL needs. Toolkit 1.20
 # injects them for any `--gpus` request, but older toolkits default to
 # `compute,utility` and leave them out, so this is stated rather than assumed.
-# utility: nvidia-smi inside the container, which the worker's probe reports.
+# utility: nvidia-smi inside the container, which the renderer's probe reports.
 DRIVER_CAPABILITIES = "graphics,utility"
 
 STEP_HINT = "python3 onboard.py --step gpu"
@@ -184,7 +184,11 @@ def override_problems(path: Path = None, *, run=None) -> list[str]:
     return []
 
 
-PROBE_RESULT_KEY = "gpu_probe_result"  # keep in sync with renderer/api/pipeline.py
+# The built-in renderer's row in the renderers table, where the render gateway
+# stores the GPU probe that renderer reports (keep in sync with
+# tubematic_core/renderers.py BUILTIN_ID). Spelled here, not imported, so this
+# read-only report never depends on more than sqlite3.
+BUILTIN_RENDERER_ID = "builtin"
 RENDER_HOLD_KEY = "render_claim_hold_until"  # keep in sync with renderer/api/pipeline.py
 # A ceiling, not the expected time: the hold is cleared as soon as the
 # recreate returns, and only a crashed run leaves it to expire.
@@ -193,8 +197,9 @@ RENDER_HOLD_SECS = 600
 
 def report_lines(db_path: Path) -> list[tuple[str, str]]:
     """(level, text) for `upgrade.py --check` / `service.py status`, where level
-    is "ok", "warn" or "info". Read-only: the override, then the worker's last
-    probe from the settings table."""
+    is "ok", "warn" or "info". Read-only: the override, then the built-in
+    renderer's last probe (renderers.gpu_probe). A database from before the
+    renderers table reads as no probe yet."""
     import sqlite3
     lines = []
     try:
@@ -213,8 +218,8 @@ def report_lines(db_path: Path) -> list[tuple[str, str]]:
         try:
             con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
             try:
-                row = con.execute("SELECT value FROM settings WHERE key = ?",
-                                  (PROBE_RESULT_KEY,)).fetchone()
+                row = con.execute("SELECT gpu_probe FROM renderers WHERE id = ?",
+                                  (BUILTIN_RENDERER_ID,)).fetchone()
             finally:
                 con.close()
             probe = json.loads(row[0]) if row and row[0] else None
@@ -244,5 +249,5 @@ def report_lines(db_path: Path) -> list[tuple[str, str]]:
         lines.append(("ok", f"Rendering on {current['name']} ({probe.get('renderer', '')})"))
     else:
         lines.append(("warn", f"GPU {current['name']} is chosen but not usable — rendering on "
-                              f"the CPU: {probe.get('error') or 'see the worker log'}"))
+                              f"the CPU: {probe.get('error') or 'see the renderer log'}"))
     return lines

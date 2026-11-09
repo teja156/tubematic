@@ -10,8 +10,9 @@ queue — the database *is* the queue, the state machine, and the configuration 
 | Foreign keys | ON |
 | Access | Raw `sqlite3` from Python, no ORM |
 
-Four containers open it concurrently — `tubematic-api`, `tubematic-mcp`, `tubematic-worker` and
-`tubematic-renderer`. WAL mode is what makes that safe, and it is also why the file cannot be made
+Three containers open it concurrently — `tubematic-api`, `tubematic-mcp` and `tubematic-worker`.
+A renderer never does: it reaches the database only through the render gateway in `tubematic-api`
+(see [Rendering and Review](11-rendering-and-review.md)). WAL mode is what makes that safe, and it is also why the file cannot be made
 unreadable to the host user: WAL requires write access to the `-shm` sidecar even for readers.
 
 Schema creation and evolution is no longer something concurrency merely tolerates — it is made safe
@@ -38,8 +39,10 @@ still hand-duplicated is the `agents` table, in `onboard/agent_install.py::AGENT
 Besides those implied by primary keys, the indexes are `idx_video_publications_video`,
 `idx_video_metrics_publication`, the usage ledger's four (migration `0005`: `idx_usage_events_created_at`, `idx_usage_events_model`,
 the unique `idx_usage_events_event_key` and `idx_usage_event_videos_video_id`) and
-`idx_videos_project_id` (migration `0013`). The last one exists because the
-[topic cap](02-pipeline.md#topic-cap) counts a domain's videos on every insert.
+`idx_videos_project_id` (migration `0013`) and `idx_render_timings_renderer` (migration `0019`).
+`idx_videos_project_id` exists because the [topic cap](02-pipeline.md#topic-cap) counts a domain's
+videos on every insert; `idx_render_timings_renderer` because every claim reads each renderer's
+last few timings per kind.
 
 ---
 
@@ -57,6 +60,9 @@ erDiagram
     mascots    ||--o{ mascot_versions : "has"
     mascots    ||--o{ videos : "appears in"
     usage_events ||--o{ usage_event_videos : "was for"
+    renderers  ||--o{ videos : "holds the lease on"
+    renderers  ||--o{ render_timings : "timed by"
+    renderer_enrollments |o--o| renderers : "enrolled"
 
     agents {
         TEXT    id PK
@@ -118,6 +124,11 @@ erDiagram
         TEXT    gemini_feedback
         INTEGER ai_review_count
         INTEGER render_fail_count
+        TEXT    renderer_id
+        TEXT    render_lease_until
+        TEXT    render_started_at
+        TEXT    render_uploaded_at
+        TEXT    render_claim_id
         TEXT    youtube_url
         TEXT    publish_title
         TEXT    publish_description
@@ -218,6 +229,32 @@ erDiagram
         INTEGER user_override
         INTEGER tiered
     }
+    renderers {
+        TEXT    id PK
+        TEXT    name
+        INTEGER builtin
+        INTEGER enabled
+        TEXT    machine_id
+        TEXT    credential_hash
+        TEXT    version
+        TEXT    gpu_probe
+        INTEGER gpu_verified
+        TEXT    last_heartbeat_at
+        TEXT    removed_at
+    }
+    renderer_enrollments {
+        TEXT    secret_hash PK
+        TEXT    expires_at
+        TEXT    used_at
+        TEXT    renderer_id
+    }
+    render_timings {
+        INTEGER id PK
+        TEXT    renderer_id
+        TEXT    kind
+        INTEGER frames
+        REAL    seconds
+    }
 ```
 
 ---
@@ -228,7 +265,7 @@ The central table. One row per video, from proposed topic to published file.
 
 | Column | Type | Default | Meaning |
 |---|---|---|---|
-| `id` | TEXT PK | | `vid_<hex>` from MCP, a UUID from `POST /videos`. A caller-chosen id must be letters, digits, `_` and `-`, not starting with `-`, at most 128 characters, because it names the video's job directory. That is checked only when the row is created. Every use of an existing id as a path checks only that it is one component (no separator, not `.` or `..`, no control character, at most 255 bytes, the longest file name the filesystem allows), so a video filed earlier under an id with a dot, a space or more than 128 characters still renders. The render itself is written as `<id>.mp4`, so the id must also leave four bytes for that suffix: one of 252 to 255 bytes names a working job directory but no possible output file, and the renderer moves it to `FAILED` with a comment before staging anything, rather than failing part-way through the render |
+| `id` | TEXT PK | | `vid_<hex>` from MCP, a UUID from `POST /videos`. A caller-chosen id must be letters, digits, `_` and `-`, not starting with `-`, at most 128 characters, because it names the video's job directory. That is checked only when the row is created. Every use of an existing id as a path checks only that it is one component (no separator, not `.` or `..`, no control character, at most 255 bytes, the longest file name the filesystem allows), so a video filed earlier under an id with a dot, a space or more than 128 characters still renders. The render itself is written as `<id>.mp4`, so the id must also leave four bytes for that suffix: one of 252 to 255 bytes names a working job directory but no possible output file, and the render gateway moves it to `FAILED` with a comment when a renderer would claim it, rather than letting it fail part-way through the render |
 | `project_id` | TEXT → `projects.id` | | The domain this video files into |
 | `topic` | TEXT NOT NULL | | The **full brief** — what the video is about, up to a few thousand characters |
 | `title` | TEXT NOT NULL | `''` | A **short display name**, capped at 70 characters. Legacy rows hold `''`; the UI falls back to `topic` |
@@ -255,11 +292,16 @@ The central table. One row per video, from proposed topic to published file.
 | `voice_file_path` | TEXT NOT NULL | `''` | Where `generate_voice` wrote `audio.mp3`. Server-written; see the path columns note below |
 | `timeline_path` | TEXT NOT NULL | `''` | Where `generate_voice` wrote `timeline.json`. Server-written |
 | `scene_config_path` | TEXT NOT NULL | `''` | Where `write_scene_config` wrote `scene-config.json`. Server-written |
-| `video_path` | TEXT NOT NULL | `''` | Where the renderer wrote the mp4. Server-written |
+| `video_path` | TEXT NOT NULL | `''` | Where the render gateway stored the renderer's uploaded mp4. Server-written |
 | `video_version` | INTEGER NOT NULL | `1` | Bumped on each re-render |
 | `gemini_feedback` | TEXT NOT NULL | `''` | The AI reviewer's full findings. Stored uncapped |
 | `ai_review_count` | INTEGER | `0` | Reviews run so far. Capped by `ai_review_max_loops` |
-| `render_fail_count` | INTEGER | `0` | Render crashes so far. Capped by `max_render_retries` |
+| `render_fail_count` | INTEGER | `0` | Render failures so far — crashes, stalls, timeouts, and renders lost to a renderer restart or an expired lease. Capped by `max_render_retries` |
+| `renderer_id` | TEXT NOT NULL | `''` | The [renderer](#renderers-renderer_enrollments-and-render_timings) holding the video's render lease while it is `RENDERING`. `''` when none does, which is also what a row left `RENDERING` by a renderer from before migration `0019` holds: the worker's lease sweep reads that as expired and re-queues it. Cleared when the render's result arrives |
+| `render_lease_until` | TEXT NOT NULL | `''` | When the lease runs out unless the renderer's heartbeat extends it, UTC. See [Leases](11-rendering-and-review.md#leases-restarts-and-lost-renderers) |
+| `render_started_at` | TEXT NOT NULL | `''` | When the current render was claimed; the scheduler's "time spent so far" for a busy renderer |
+| `render_uploaded_at` | TEXT NOT NULL | `''` | When the render's mp4 arrived. A `RENDERING` row with this set is waiting for the worker's AI review, and is never re-queued |
+| `render_claim_id` | TEXT NOT NULL | `''` | The current claim's id: random, new on every claim, handed to the renderer with the claim. The bundle, the upload and the result must name it, and a heartbeat extends the lease only when it names it too, so a renderer whose lease ran out cannot act for — or keep alive — a later claim of the same video, its own included. Cleared with `renderer_id` — see [Leases](11-rendering-and-review.md#leases-restarts-and-lost-renderers) |
 | `youtube_url` | TEXT NOT NULL | `''` | Legacy single-URL publish target. Retired as a *read* path — publications live in their own table |
 | `publish_title` | TEXT NOT NULL | `''` | What the video is posted with, written by the agent with the script; distinct from `title` |
 | `publish_description` | TEXT NOT NULL | `''` | The post's description, written by the agent with the script |
@@ -273,12 +315,13 @@ The central table. One row per video, from proposed topic to published file.
 | `cost_cents_claude` | INTEGER NOT NULL | `0` | **Unused**, as above |
 | `created_at` / `updated_at` | TEXT NOT NULL | | ISO-8601 UTC |
 
-**`updated_at` is load-bearing.** It is the FIFO ordering key for the renderer's atomic claim.
+**`updated_at` is load-bearing.** It is the FIFO ordering key for the render gateway's atomic claim.
 Anything that writes to it changes render order.
 
 **The four path columns are written only by the code that writes the files, and no reader trusts
-them.** `generate_voice`, `write_scene_config` and the renderer fill them in; `PATCH` and MCP
-`update_video` refuse them. Every reader — the renderer's staging, `validate_job`, archive and
+them.** `generate_voice`, `write_scene_config` and the render gateway (for an uploaded render) fill
+them in; `PATCH` and MCP `update_video` refuse them. Every reader — the gateway's claim checks and
+bundle, `validate_job`, archive and
 retention, publishing, the publish dialog's duration — derives the location from the ids instead:
 `<jobs>/<video_id>/audio.mp3`, `timeline.json` and `scene-config.json`, and
 `<output>/<project_id>/<video_id>.mp4` (`tubematic_core/jobfiles.py`). A symlink in any component
@@ -549,13 +592,56 @@ migration may never be edited. Videos pinned to `v1` keep rendering with `v1`.
 The rendered model sheets of a non-built-in mascot are files, not rows: `<data root>/data/mascots/<id>/v<N>/<turn|feels|act>.png`,
 beside the database file.
 
+## `renderers`, `renderer_enrollments` and `render_timings`
+
+The machines that render, how a new one proves it was invited, and how long each takes. All three
+are read and written by `tubematic-api` (the render gateway and the GPU gates) and the worker, never by
+a renderer. Migration `0019` adds them. How they are used is on
+[Rendering and Review](11-rendering-and-review.md) and
+[HTTP API — The render gateway](05-http-api.md#the-render-gateway).
+
+| `renderers` | Type | Default |
+|---|---|---|
+| `id` | TEXT PK | `builtin` for the built-in renderer, `r_<12 hex>` for an enrolled one |
+| `name`, `host` | TEXT | `name` required; `host` `''` |
+| `builtin` | INTEGER NOT NULL | `0`. `1` for the one row the migration creates (the API re-creates it at start if it is ever missing) |
+| `enabled` | INTEGER NOT NULL | `1`. A disabled renderer still authenticates and is told so, and gets no work |
+| `machine_id` | TEXT NOT NULL | `''`. A random id the renderer keeps in its state file; enrolling the same machine again updates its row instead of adding one |
+| `credential_hash`, `previous_credential_hash` | TEXT NOT NULL | `''`. sha256 of the current credential, and of the one it replaced while a rotation is undelivered. Always `''` for the built-in renderer, whose credential is the `builtin_renderer_token` secret file, so rotating that file needs no row update |
+| `credential_issued_at`, `credential_expires_at` | TEXT NOT NULL | `''`. `''` expiry means never (the built-in renderer) |
+| `version` | TEXT NOT NULL | `''`. The version the renderer last reported; anything but main's means it gets no work |
+| `compute` | TEXT NOT NULL | `'{}'`. JSON `{cpus, memory_bytes, gpus: [{name, uuid, memory_mb}]}`, as reported |
+| `gpu_probe` | TEXT NOT NULL | `''`. The renderer's last GPU test, as JSON (when it ran and why, the configured GPU, the host's GPU list, Chromium's WebGL renderer and vendor strings, `ok`, the reason when not, `nvidia-smi`'s view). `''` until it has tested |
+| `gpu_verified` | INTEGER NOT NULL | `0`. `1` exactly when the last probe's `ok` was true. What makes a renderer GPU-capable |
+| `gpu_probe_requested_at` | TEXT NOT NULL | `''`. The dashboard's last Test request (microseconds, compared as a string with the probe's start) |
+| `last_heartbeat_at` | TEXT NOT NULL | `''`. Online means within the last 120 seconds |
+| `state`, `current_video_id` | TEXT NOT NULL | `idle`, `''`. What the renderer last reported |
+| `last_error` | TEXT NOT NULL | `''`. The renderer's own last problem, as reported, or "credential expired — re-enroll" |
+| `created_at` | TEXT NOT NULL | |
+| `removed_at` | TEXT | `NULL` = active. The built-in renderer is never removed |
+
+| `renderer_enrollments` | Type | Notes |
+|---|---|---|
+| `secret_hash` | TEXT PK | sha256 of the one-time enrollment secret; the secret itself is never stored |
+| `name` | TEXT NOT NULL | `''`. The name the renderer will get, when the token was issued with one |
+| `created_at`, `expires_at` | TEXT NOT NULL | One hour apart |
+| `used_at`, `renderer_id` | TEXT | `NULL` until redeemed, which happens once |
+
+| `render_timings` | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK AUTOINCREMENT | Orders a renderer's timings |
+| `renderer_id`, `kind` | TEXT NOT NULL | `kind` is `dom`, `cartoon_3d` or `mascot` |
+| `on_gpu` | INTEGER NOT NULL | Whether that render ran on the GPU |
+| `frames`, `seconds` | INTEGER, REAL NOT NULL | One row per successful render; the scheduler uses the median seconds per frame of the last five per renderer and kind |
+| `created_at` | TEXT NOT NULL | |
+
 ---
 
 ## Migrations
 
 Every table, column and one-time data fixup above is defined by a numbered migration file in
 `tubematic_core/migrations/`, applied by `tubematic_core.db.migrate()`. This is the one schema
-authority for the whole project — `renderer/api/pipeline.py`, `mcp/server.py`, the worker, the renderer,
+authority for the whole project — `renderer/api/pipeline.py`, `mcp/server.py`, the worker,
 `onboard.py`, `scripts/clear_db.py`, and the VQA seed-database generator all call `migrate()` rather
 than defining or asserting a schema of their own.
 
@@ -603,6 +689,15 @@ about an existing project or video changes by applying it, and the feature stays
 picks a mascot. The Tubi insert uses literal values only, because a shipped migration must do the same
 thing forever. It is one-way in the usual sense: rolling back to a release that predates it needs the
 automatic pre-migration backup restored.
+
+`0019_renderers.sql` is plain SQL and additive too: the three renderer tables, the five lease
+columns on `videos` (the claim id among them, all defaulting to `''`) and the built-in renderer's row. A row that was
+`RENDERING` when it was applied keeps `renderer_id = ''`, which the worker's lease sweep reads as an
+expired lease and re-queues, counting a retry, with the comment "Render interrupted by the upgrade".
+From this migration on a renderer has no database, so `upgrade.py` refuses `--no-stop` while it is
+pending: recreated one at a time, an old renderer would keep claiming straight from the database
+beside the gateway, with no lease. Rolling back to a release that predates it needs the automatic
+pre-migration backup restored.
 
 Baked into `0001` are several one-time fixups worth knowing about, because they explain rows an old
 database might still be missing: the `VIDEO_REVISION_REQUESTED → REVISION_REQUESTED`,

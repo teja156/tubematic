@@ -11,6 +11,7 @@ Run from renderer/api/: pytest tests/test_gpu_rendering.py
 import io
 import json
 import os
+import re
 import signal
 import sqlite3
 import subprocess
@@ -23,6 +24,8 @@ os.environ.setdefault("TUBEMATIC_DB", ":memory:")
 
 import pipeline
 import render_agent
+
+from .builtin_gpu import store_builtin_probe
 
 NVIDIA = "ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1650/PCIe/SSE2, OpenGL ES 3.2)"
 # Measured in this image (Plane TMDEV-178): the CPU default, and what an
@@ -37,7 +40,6 @@ LLVMPIPE = "ANGLE (Mesa, llvmpipe (LLVM 15.0.6, 256 bits), OpenGL 4.5)"
 def db_path(tmp_path, monkeypatch):
     p = str(tmp_path / "test.db")
     pipeline._init_db(p)
-    monkeypatch.setattr(render_agent, "DB_PATH", p)
     return p
 
 
@@ -101,14 +103,6 @@ def _driver(answer, stderr=""):
         return proc
     factory.calls = calls
     return factory
-
-
-def _stored(db_path):
-    con = sqlite3.connect(db_path)
-    row = con.execute("SELECT value FROM settings WHERE key = ?",
-                      (pipeline.GPU_PROBE_RESULT_KEY,)).fetchone()
-    con.close()
-    return json.loads(row[0]) if row else None
 
 
 def _probe(db_path, answer, smi_ok=True, stderr=""):
@@ -200,14 +194,17 @@ def test_no_probe_answer_fails():
 
 # ── The probe ────────────────────────────────────────────────────────────────
 
-def test_a_passing_probe_verifies_the_gpu_and_stores_the_result(db_path, configured):
+def test_a_passing_probe_verifies_the_gpu_and_returns_the_result(db_path, configured):
+    """The result travels in the next heartbeat; the gateway stores it on the
+    renderer's row in exactly this shape (GET /render/gpu reads it)."""
     result, _ = _probe(db_path, _answer(NVIDIA))
     assert result["ok"] is True and render_agent._gpu_verified is True
-    stored = _stored(db_path)
-    assert stored["renderer"] == NVIDIA and stored["configured"] is True
-    assert stored["smi"] == {"name": "NVIDIA GeForce GTX 1650", "driver": "595.91.07",
+    assert result["renderer"] == NVIDIA and result["configured"] is True
+    assert result["smi"] == {"name": "NVIDIA GeForce GTX 1650", "driver": "595.91.07",
                              "memory_mib": 4096}
-    assert [g["uuid"] for g in stored["host_gpus"]] == ["GPU-aaaa"]
+    assert [g["uuid"] for g in result["host_gpus"]] == ["GPU-aaaa"]
+    # "at" is pipeline.now_precise's format: compared as a string with a Test request's stamp
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z", result["at"])
 
 
 def test_the_probe_runs_with_exactly_the_options_a_render_gets(db_path, configured):
@@ -244,7 +241,7 @@ def test_a_probe_on_the_wrong_device_leaves_rendering_on_the_cpu(db_path, config
     result, _ = _probe(db_path, _answer(renderer))
     assert result["ok"] is False and render_agent._gpu_verified is False
     assert render_agent._render_on_gpu() is False
-    assert _stored(db_path)["renderer"] == renderer
+    assert result["renderer"] == renderer
 
 
 def test_a_failing_probe_withdraws_an_earlier_verification(db_path, configured, monkeypatch):
@@ -293,111 +290,41 @@ def test_a_probe_that_cannot_start_never_raises(db_path, configured):
     with mock.patch("subprocess.Popen", side_effect=FileNotFoundError("npx")):
         result = render_agent._run_gpu_probe(reason="test")
     assert result["ok"] is False and "could not run" in result["error"]
-    assert _stored(db_path) is not None
-
-
-# ── Requests from the dashboard ──────────────────────────────────────────────
-
-def _request(db_path, at):
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-                (pipeline.GPU_PROBE_REQUEST_KEY, at))
-    con.commit()
-    con.close()
-
-
-def test_a_request_newer_than_the_last_probe_runs_one(db_path):
-    _request(db_path, "2026-11-05T10:00:00.000002Z")
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES (?, ?)",
-                (pipeline.GPU_PROBE_RESULT_KEY, json.dumps({"at": "2026-11-05T10:00:00.000001Z"})))
-    con.commit()
-    con.close()
-    with mock.patch.object(render_agent, "_run_gpu_probe") as probe:
-        render_agent._sweep_gpu_probe()
-    probe.assert_called_once()
-
-
-def test_a_request_already_answered_runs_nothing(db_path):
-    _request(db_path, "2026-11-05T10:00:00.000001Z")
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES (?, ?)",
-                (pipeline.GPU_PROBE_RESULT_KEY, json.dumps({"at": "2026-11-05T10:00:00.000002Z"})))
-    con.commit()
-    con.close()
-    with mock.patch.object(render_agent, "_run_gpu_probe") as probe:
-        render_agent._sweep_gpu_probe()
-    probe.assert_not_called()
-
-
-def test_no_request_runs_nothing(db_path):
-    with mock.patch.object(render_agent, "_run_gpu_probe") as probe:
-        render_agent._sweep_gpu_probe()
-    probe.assert_not_called()
+    assert result["at"] and result["secs"] is not None
 
 
 # ── The render ───────────────────────────────────────────────────────────────
+# A dashboard Test request reaches the renderer as the heartbeat's probe_now;
+# that, and the re-test after a failed GPU render, are in test_render_agent.py.
 
-def _job(tmp_path, monkeypatch, db_path):
-    remotion_dir = tmp_path / "remotion"
-    (remotion_dir / "public").mkdir(parents=True)
-    (tmp_path / "out").mkdir()
-    monkeypatch.setattr(render_agent, "REMOTION_DIR", remotion_dir)
-    monkeypatch.setattr(render_agent, "OUTPUT_DIR", tmp_path / "out")
-    monkeypatch.setattr(pipeline, "JOBS_DIR", tmp_path / "jobs")
-    job = tmp_path / "jobs" / "vid-1"
-    job.mkdir(parents=True)
-    (job / "audio.mp3").write_bytes(b"x")
-    (job / "timeline.json").write_text("{}")
-    (job / "scene-config.json").write_text('{"scenes": []}')
-    con = sqlite3.connect(db_path)
-    # The columns only have to say each file was written; paths come from the id.
-    con.execute("INSERT INTO videos (id, project_id, topic, strategy, producibility_score, status, "
-                "voice_file_path, timeline_path, scene_config_path, created_at, updated_at) "
-                "VALUES ('vid-1', 'p', 't', 'manual', 8, 'RENDERING', 'a', 't', 's', "
-                "'2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
-    con.commit()
-    con.close()
+@pytest.fixture
+def client_env(tmp_path, monkeypatch):
+    from .render_client_env import make_env
+    e = make_env(tmp_path, monkeypatch)
+    e.seed()
+    e.start()
+    return e
 
 
-def test_a_verified_gpu_render_gets_the_gpu_flags(db_path, configured, monkeypatch, tmp_path):
-    _job(tmp_path, monkeypatch, db_path)
+def test_a_verified_gpu_render_gets_the_gpu_flags(client_env, configured, monkeypatch):
+    from .render_client_env import FakeRemotion
     monkeypatch.setattr(render_agent, "_gpu_verified", True)
-    with mock.patch("subprocess.Popen", return_value=_popen()) as popen, \
-         mock.patch.object(render_agent, "_handle_render_success"):
-        render_agent._stage_and_render("vid-1")
-    assert "--gl=angle-egl" in popen.call_args.args[0]
-    assert popen.call_args.kwargs["env"]["__EGL_VENDOR_LIBRARY_FILENAMES"].endswith("10_nvidia.json")
+    remotion = FakeRemotion()
+    with mock.patch("subprocess.Popen", side_effect=remotion):
+        render_agent._loop_once()
+    argv, kw = remotion.calls[0]
+    assert "--gl=angle-egl" in argv
+    assert kw["env"]["__EGL_VENDOR_LIBRARY_FILENAMES"].endswith("10_nvidia.json")
 
 
-def test_an_unverified_gpu_render_gets_no_gpu_flags(db_path, configured, monkeypatch, tmp_path):
-    _job(tmp_path, monkeypatch, db_path)
-    with mock.patch("subprocess.Popen", return_value=_popen()) as popen, \
-         mock.patch.object(render_agent, "_handle_render_success"):
-        render_agent._stage_and_render("vid-1")
-    argv = popen.call_args.args[0]
+def test_an_unverified_gpu_render_gets_no_gpu_flags(client_env, configured):
+    from .render_client_env import FakeRemotion
+    remotion = FakeRemotion()
+    with mock.patch("subprocess.Popen", side_effect=remotion):
+        render_agent._loop_once()
+    argv, kw = remotion.calls[0]
     assert not any(a.startswith(("--gl", "--chrome-mode")) for a in argv)
-    assert "__EGL_VENDOR_LIBRARY_FILENAMES" not in popen.call_args.kwargs["env"]
-
-
-def test_a_failed_gpu_render_retests_the_gpu(db_path, configured, monkeypatch, tmp_path):
-    """So the next render falls back to the CPU if the GPU is what broke."""
-    _job(tmp_path, monkeypatch, db_path)
-    monkeypatch.setattr(render_agent, "_gpu_verified", True)
-    with mock.patch("subprocess.Popen", return_value=_popen(stderr="boom", returncode=1)), \
-         mock.patch.object(render_agent, "_handle_render_failure"), \
-         mock.patch.object(render_agent, "_run_gpu_probe") as probe:
-        render_agent._stage_and_render("vid-1")
-    probe.assert_called_once()
-
-
-def test_a_failed_cpu_render_does_not_probe(db_path, monkeypatch, tmp_path):
-    _job(tmp_path, monkeypatch, db_path)
-    with mock.patch("subprocess.Popen", return_value=_popen(stderr="boom", returncode=1)), \
-         mock.patch.object(render_agent, "_handle_render_failure"), \
-         mock.patch.object(render_agent, "_run_gpu_probe") as probe:
-        render_agent._stage_and_render("vid-1")
-    probe.assert_not_called()
+    assert "__EGL_VENDOR_LIBRARY_FILENAMES" not in kw["env"]
 
 
 # ── GET /render/gpu, POST /render/gpu/test ───────────────────────────────────
@@ -412,9 +339,22 @@ def client(db_path):
         yield c
 
 
-def _store(db_path, key, value):
+def _remote(db_path, rid="r_aaaaaaaaaaaa", probe=None):
+    """An enrolled remote renderer, optionally with a GPU probe."""
     con = sqlite3.connect(db_path)
-    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+    con.execute("INSERT INTO renderers (id, name, gpu_probe, gpu_verified, created_at) "
+                "VALUES (?, 'Studio PC', ?, ?, '2026-01-01T00:00:00Z')",
+                (rid, json.dumps(probe) if probe else "", int(bool(probe and probe.get("ok")))))
+    con.commit()
+    con.close()
+
+
+def _rendering(db_path, renderer_id="builtin", uploaded=""):
+    con = sqlite3.connect(db_path)
+    con.execute("INSERT INTO videos (id, project_id, topic, strategy, producibility_score, status, "
+                "renderer_id, render_uploaded_at, created_at, updated_at) VALUES "
+                "('v', 'p', 't', 'manual', 8, 'RENDERING', ?, ?, "
+                "'2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')", (renderer_id, uploaded))
     con.commit()
     con.close()
 
@@ -430,43 +370,94 @@ def test_before_any_probe_the_status_is_unknown(client):
     ({"configured": True, "ok": True, "renderer": NVIDIA}, "working", "gpu"),
     ({"configured": True, "ok": False, "renderer": INTEL}, "not_usable", "cpu"),
 ])
-def test_the_status_follows_the_last_probe(client, db_path, probe, status, on):
-    _store(db_path, pipeline.GPU_PROBE_RESULT_KEY, json.dumps({"at": "2026-11-05T10:00:00.0Z", **probe}))
+def test_the_status_follows_the_built_in_renderers_probe(client, db_path, probe, status, on):
+    store_builtin_probe(db_path, {"at": "2026-11-05T10:00:00.0Z", **probe})
     body = client.get("/render/gpu").get_json()
     assert body["status"] == status and body["rendering_on"] == on
+    assert body["probe"]["renderer"] == probe["renderer"]
+
+
+def test_the_retired_settings_row_is_no_longer_read(client, db_path):
+    """A pre-upgrade gpu_probe_result row says nothing about any renderer now:
+    only a probe reported through the gateway counts."""
+    con = sqlite3.connect(db_path)
+    con.execute("INSERT INTO settings (key, value) VALUES ('gpu_probe_result', ?)",
+                (json.dumps({"configured": True, "ok": True, "at": "2026-11-05T10:00:00.0Z"}),))
+    con.commit()
+    con.close()
+    body = client.get("/render/gpu").get_json()
+    assert body["status"] == "unknown" and body["probe"] is None
+
+
+def test_the_status_is_the_aggregate_but_the_panel_fields_are_the_built_in_renderers(client, db_path):
+    """Every GPU gate reads "status", so a GPU on an enrolled remote renderer
+    makes it "working" even while the built-in renderer is on the CPU; the
+    rest of the body still describes the built-in renderer, which is what the
+    dashboard's GPU panel shows and tests."""
+    store_builtin_probe(db_path, {"at": "2026-11-05T10:00:00.0Z", "configured": False, "ok": False})
+    _remote(db_path, probe={"at": "2026-11-05T10:00:00.0Z", "configured": True, "ok": True,
+                            "gpu": {"uuid": "GPU-remote", "name": "RTX 4090"}})
+    body = client.get("/render/gpu").get_json()
+    assert body["status"] == "working"
+    assert body["rendering_on"] == "cpu" and body["configured"] is False and body["gpu"] is None
+    # The gates read the same aggregate.
+    con = sqlite3.connect(db_path)
+    try:
+        assert pipeline._cartoon3d_gpu_error(con, "cartoon_3d") == ""
+    finally:
+        con.close()
+
+
+def test_a_test_request_stamps_the_built_in_renderer_not_a_setting(client, db_path):
+    client.post("/render/gpu/test")
+    con = sqlite3.connect(db_path)
+    try:
+        requested = con.execute("SELECT gpu_probe_requested_at FROM renderers "
+                                "WHERE id = 'builtin'").fetchone()[0]
+        rows = con.execute("SELECT key FROM settings WHERE key LIKE 'gpu_probe%'").fetchall()
+    finally:
+        con.close()
+    assert requested and requested.endswith("Z")
+    assert rows == []
 
 
 def test_a_test_request_is_pending_until_a_newer_probe(client, db_path):
-    _store(db_path, pipeline.GPU_PROBE_RESULT_KEY,
-           json.dumps({"at": "2000-01-01T00:00:00.000000Z", "configured": False}))
+    store_builtin_probe(db_path, {"at": "2000-01-01T00:00:00.000000Z", "configured": False})
     r = client.post("/render/gpu/test")
     assert r.status_code == 202
     assert r.get_json()["pending"] is True
-    _store(db_path, pipeline.GPU_PROBE_RESULT_KEY,
-           json.dumps({"at": "2999-01-01T00:00:00.000000Z", "configured": False}))
+    store_builtin_probe(db_path, {"at": "2999-01-01T00:00:00.000000Z", "configured": False})
     assert client.get("/render/gpu").get_json()["pending"] is False
 
 
 def test_a_pending_request_says_it_waits_for_a_render(client, db_path):
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO videos (id, project_id, topic, strategy, producibility_score, status, "
-                "created_at, updated_at) VALUES ('v', 'p', 't', 'manual', 8, 'RENDERING', "
-                "'2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
-    con.commit()
-    con.close()
+    _rendering(db_path)
     body = client.post("/render/gpu/test").get_json()
     assert body["pending"] is True and body["waiting_for_render"] is True
 
 
+@pytest.mark.parametrize("renderer_id,uploaded", [
+    ("r_aaaaaaaaaaaa", ""),                    # another renderer's render
+    ("builtin", "2026-01-01T00:10:00Z"),       # uploaded: only the worker's review is left
+])
+def test_a_render_that_does_not_hold_the_built_in_renderer_does_not_delay_the_test(
+        client, db_path, renderer_id, uploaded):
+    _rendering(db_path, renderer_id, uploaded)
+    body = client.post("/render/gpu/test").get_json()
+    assert body["pending"] is True and body["waiting_for_render"] is False
+
+
 def test_the_two_processes_agree_on_the_row_names():
-    """render_agent.py writes what pipeline.py reads; onboard/gpu.py reads it too."""
-    assert render_agent.GPU_PROBE_RESULT_KEY == pipeline.GPU_PROBE_RESULT_KEY == "gpu_probe_result"
+    """onboard.py --step gpu writes the hold the render gateway reads before it
+    hands the built-in renderer a video, and onboard/gpu.py reads the built-in
+    renderer's probe from the same row the API's panel reads."""
     import pathlib
+    from tubematic_core import renderers
     src = (pathlib.Path(__file__).resolve().parents[3] / "onboard" / "gpu.py").read_text()
-    assert 'PROBE_RESULT_KEY = "gpu_probe_result"' in src
-    # onboard.py --step gpu writes the hold that render_agent.py::_claim_next reads.
     assert pipeline.RENDER_CLAIM_HOLD_KEY == "render_claim_hold_until"
     assert 'RENDER_HOLD_KEY = "render_claim_hold_until"' in src
+    assert f'BUILTIN_RENDERER_ID = "{renderers.BUILTIN_ID}"' in src
+    assert "SELECT gpu_probe FROM renderers WHERE id = ?" in src
 
 
 def test_a_malformed_driver_answer_is_no_answer(db_path, configured):

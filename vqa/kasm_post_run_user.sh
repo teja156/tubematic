@@ -286,8 +286,11 @@ log "$DATA_ROOT ready"
 # Service tokens (TMDEV-152): Compose refuses to start a service whose token
 # file is missing, and the MCP helper above reads mcp_token. Existing tokens
 # are kept, so a relaunch changes nothing. After the chown above, which would
-# otherwise not matter here: the files are created as this user.
-PYTHONPATH="$WORK_ROOT" python3 -m tubematic_core.auth ensure \
+# otherwise not matter here: the files are created as this user. The image's
+# venv, not the system python3: ensure also writes the render gateway's TLS key
+# and certificate, which needs `cryptography` (scripts/requirements.txt, baked
+# into $OPT_ROOT/.venv by the Dockerfile).
+PYTHONPATH="$WORK_ROOT" "$OPT_ROOT/.venv/bin/python3" -m tubematic_core.auth ensure \
     || fail "could not create the service tokens in $DATA_ROOT/secrets"
 
 # ── 6. Seed the DB only if absent ────────────────────────────────────────

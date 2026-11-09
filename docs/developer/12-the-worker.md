@@ -3,18 +3,22 @@
 `renderer/api/worker.py` is the process that does the pipeline's background housekeeping without an
 agent. It runs in the `tubematic-worker` container, has no HTTP server and no exposed ports, and is
 one endless loop over the database: it settles published posts, runs Auto Pilot, polls analytics,
-syncs prices, deletes old output, sends checkpoint notifications and flags stalled videos.
+syncs prices, deletes old output, sends checkpoint notifications, flags stalled videos, and keeps
+two backstops for rendering. Beside the loop, a thread of its own runs the AI review of every
+uploaded render.
 
-It does not render. Rendering, the AI review and the GPU test are the renderer's,
-`renderer/api/render_agent.py` in the `tubematic-renderer` container, on
-[Rendering and Review](11-rendering-and-review.md). The two used to be one loop in one container,
-and a render held every other pass for as long as it took. Split, a post that falls due or a
-checkpoint Auto Pilot should approve never waits behind a render, and recreating the renderer
-(`onboard.py --step gpu` does) never interrupts them.
+It does not render. Rendering and the GPU test are the renderers' (`renderer/api/render_agent.py`,
+the built-in one in the `tubematic-renderer` container), and a renderer reaches the database only
+through the render gateway in `tubematic-api` — see
+[Rendering and Review](11-rendering-and-review.md). The worker and the renderer used to be one loop
+in one container, and a render held every other pass for as long as it took. Split, a post that
+falls due or a checkpoint Auto Pilot should approve never waits behind a render, and recreating the
+renderer (`onboard.py --step gpu` does) never interrupts them.
 
 The worker and the renderer are two of the loops that advance the pipeline with nobody watching.
 The third is the poller, which starts agent sessions. See [The Poller](13-the-poller.md). None of
-them calls another; they meet only in the database, through a video's status.
+them calls another: the worker and the poller meet the rest in the database, through a video's
+status, and a renderer meets it through the gateway.
 
 This page is the worker's loop: what runs, in what order, how often, and the rules every pass
 follows. What each pass decides is on the page that owns that subject, linked from the table below.
@@ -32,8 +36,11 @@ flowchart TD
     PR[4 · price sync — weekly] --> R
     R[5 · retention sweep — hourly] --> N
     N[6 · checkpoint notifications] --> V
-    V[7 · stalled-voicing check] --> SL
+    V[7 · stalled-voicing check] --> L
+    L[8 · render lease sweep] --> G
+    G[9 · GPU-wait sweep] --> SL
     SL[sleep 20 s] --> P
+    S --> RT["review thread: AI review of the<br/>oldest uploaded render, one at a time"]
 ```
 
 | # | Pass | Symbol | Runs | Does nothing unless | Owned by |
@@ -45,8 +52,23 @@ flowchart TD
 | 5 | Retention sweep | `_sweep_retention` | hourly | either retention key is above 0 | [Rendering and Review](11-rendering-and-review.md#retention) |
 | 6 | Checkpoint notifications | `_sweep_notifications` | every tick | a webhook and at least one trigger are set | [The Pipeline](02-pipeline.md#notifications) |
 | 7 | Stalled-voicing check | `_sweep_stalled_voicing` | every tick | the pipeline is not paused | [The Pipeline](02-pipeline.md#script_ready--the-money-checkpoint) |
+| 8 | Render lease sweep | `_sweep_render_leases` | every tick | a `RENDERING` video, not yet uploaded, whose lease has run out or which no renderer holds | [Rendering and Review](11-rendering-and-review.md#leases-restarts-and-lost-renderers) |
+| 9 | GPU-wait sweep | `_sweep_gpu_waits` | every tick | a GPU-only video is queued and no renderer that could take it is online | [Rendering and Review](11-rendering-and-review.md#videos-that-render-on-the-gpu-only) |
+| — | AI review | `_review_once`, on its own thread (`_start_review_thread`) | continuously: every 5 s when idle, 1 s after a review | a `RENDERING` video has been uploaded (`render_uploaded_at` set) | [Rendering and Review](11-rendering-and-review.md#ai-review) |
 
 The loop itself is `worker.py::main`.
+
+**The review is a thread, not a pass**, because one review is a paid Gemini call that takes minutes
+(upload, wait for the file to become `ACTIVE`, then the model watches it). As a pass it would hold
+every other pass for that long — the very thing splitting the worker from the renderer removed. It
+reviews one video at a time, oldest upload first, so several reviews never race for the same quota.
+It always moves the video on (`VIDEO_READY` or `REVISION_REQUESTED`), and a worker restart mid-review
+simply reviews again, because the row is still `RENDERING` and uploaded.
+
+**The two render sweeps are backstops, not the render path.** A renderer that restarts says so in
+its first heartbeat and the gateway re-queues its renders at once; the lease sweep is for one that
+never comes back. The GPU-wait sweep exists because a GPU-only video is offered only to a renderer
+whose GPU passed its test, so with none at all it would wait for ever.
 
 ## What a tick is
 
@@ -93,8 +115,8 @@ on the next tick, with no restart.
 
 **Every status change is guarded on the status it expects.** A pass moves a video with
 `UPDATE … WHERE id = ? AND status = ?`, so a human or an agent who acted first wins and the pass
-does nothing. This is what makes it safe for the worker, the renderer, the API and the MCP server
-to all write the same table.
+does nothing. This is what makes it safe for the worker, the render gateway, the rest of the API
+and the MCP server to all write the same table.
 
 **A pass that only observes must not touch `updated_at`.** That column is the render queue's
 ordering key and the stalled-voicing clock. The notification sweep and the stalled-voicing check
@@ -103,13 +125,16 @@ record what they have seen in their own columns for that reason.
 **Pausing the pipeline stops very little here.** Pause is an instruction to the poller not to start
 agent sessions. In the worker only two passes read it: Auto Pilot does nothing while paused, and
 the stalled-voicing check stops its clock. Publishing, analytics, retention and notifications all
-carry on, because a post already scheduled is work the human has asked for. The renderer does not
-read it either.
+carry on, because a post already scheduled is work the human has asked for. Neither do the render
+sweeps, the review thread or the renderers.
 
 ## What it never does
 
-- **It never renders.** A video at `RENDER_QUEUED` or `RENDERING` is the renderer's; no pass here
-  moves one.
+- **It never renders, and never claims.** A video at `RENDER_QUEUED` goes to a renderer only
+  through the gateway's claim. The worker moves a render-stage video in three cases only: the review
+  thread finishes an uploaded render, the lease sweep re-queues a lost one, and the GPU-wait sweep
+  fails a queued GPU-only video no renderer can take. Each is guarded on the status and columns it
+  expects, so a renderer's result that arrived first wins.
 - **It never starts an agent.** Agent sessions are the poller's. When work needs an agent, the
   video's status says so and the poller picks it up.
 - **It never takes a request.** The dashboard's Publish, Retry and Cancel actions go to the Flask
@@ -117,8 +142,8 @@ read it either.
   code is `pipeline.py::start_publish`, which the API calls for a human and the worker calls for
   Auto Pilot, so both run the same claim, upload and reconciliation rules.
 - **It never trusts a stored file path.** The retention sweep finds a video's mp4 and job directory
-  from the video's and project's ids, not from the row's path columns, as the renderer does — see
-  [Staging and the render call](11-rendering-and-review.md#staging-and-the-render-call).
+  from the video's and project's ids, not from the row's path columns, as the render gateway does — see
+  [Refused before anything renders](11-rendering-and-review.md#refused-before-anything-renders).
 
 ## Watching it
 
@@ -140,7 +165,7 @@ A quiet log on an idle install is normal: a pass with nothing to do logs nothing
    `_sweep_retention` does.
 3. Call it from `worker.py::main`, and decide its position against the two ordering rules above.
    It must not block: a pass that waits on something slow delays every other pass by as long.
-   Rendering is in `render_agent.py` for exactly that reason.
+   Rendering is in `render_agent.py`, and the AI review on its own thread, for exactly that reason.
 4. Guard every status write on the status you expect, and do not write `updated_at` unless the pass
    really is advancing the video.
 5. Add the row to the table on this page, and document what the pass decides on the page that owns

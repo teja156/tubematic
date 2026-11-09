@@ -282,14 +282,15 @@ _PROOF_SKILL = "tubematic-operator"
 # ── Authentication (TMDEV-152) ──────────────────────────────────────────────
 
 def auth_items(db_path: Path = None) -> list:
-    """The password and the three token files, read from disk."""
+    """The password, the service token files and the render gateway's TLS
+    key and certificate, read from disk."""
     import stat
     from tubematic_core import auth
 
     db_path = db_path or DB_PATH
     sdir = auth.secrets_dir()
     missing = []
-    for name in auth.SECRET_NAMES:
+    for name in (*auth.SECRET_NAMES, *auth.TLS_NAMES):
         try:
             auth.read_secret(name, sdir)
         except auth.SecretMissing:

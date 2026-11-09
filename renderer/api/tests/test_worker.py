@@ -80,8 +80,7 @@ def _read_comments(db_path, video_id="vid-1"):
 
 
 def _job_files(tmp_path, video_id="vid-1"):
-    """Create real audio/timeline/scene-config files for tests that exercise
-    the full _stage_and_render staging step."""
+    """Create real audio/timeline/scene-config files under the jobs dir."""
     job_dir = tmp_path / "jobs" / video_id
     job_dir.mkdir(parents=True)
     audio = job_dir / "audio.mp3"
@@ -741,16 +740,17 @@ def test_a_future_schedule_is_never_failed_by_the_deadline(db_path):
 # ── The split from the renderer (TMDEV-188) ─────────────────────────────────
 
 def test_the_worker_and_the_renderer_read_settings_the_same_way():
-    """Both processes carry their own _setting and _truncate_comment (the
-    renderer's copies go once it stops reading the database). Until then a
-    fix to one that misses the other makes the two disagree about a key."""
+    """The worker and render_results (the render rules the gateway and the
+    review thread share) each carry their own _setting and _truncate_comment.
+    A fix to one that misses the other makes the two disagree about a key, or
+    cap a comment differently."""
     import inspect
-    import render_agent
+    import render_results
     for name in ("_setting", "_truncate_comment"):
         assert inspect.getsource(getattr(worker, name)) == \
-            inspect.getsource(getattr(render_agent, name)), name
-    assert worker._COMMENT_MAX_CHARS == render_agent._COMMENT_MAX_CHARS
-    assert worker._COMMENT_TRUNCATION_NOTE == render_agent._COMMENT_TRUNCATION_NOTE
+            inspect.getsource(getattr(render_results, name)), name
+    assert worker._COMMENT_MAX_CHARS == render_results._COMMENT_MAX_CHARS
+    assert worker._COMMENT_TRUNCATION_NOTE == render_results._COMMENT_TRUNCATION_NOTE
 
 
 def test_the_worker_loop_never_renders():

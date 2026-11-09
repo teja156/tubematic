@@ -261,7 +261,7 @@ change it now?" What every setting means, with its default, is in [Settings](05-
 | A domain's default voice, visual style, script profile and mascot (experimental), and its topic cap | Its row on the **Topics** page |
 | The default mascot, and the mascots themselves (create, review, archive). Mascots are experimental | **Settings → Rendering** for the default; **Profiles → Mascots** for the library. Off by default; needs a working GPU. See [Mascots](04-dashboard.md#mascots) |
 | Dashboard password | `python onboard.py --set-password` on the host. Changing it signs every browser out. There is no reset on the dashboard |
-| The service tokens (API, MCP, session signing) | `python onboard.py --rotate-tokens`. Replaces all three, restarts the containers that hold them and signs every browser out. See [Infrastructure](../developer/16-infrastructure.md#changing-the-password-and-rotating-tokens) |
+| The service tokens (API, MCP, session signing, built-in renderer) | `python onboard.py --rotate-tokens`. Replaces all four, restarts the containers that hold them and signs every browser out. See [Infrastructure](../developer/16-infrastructure.md#changing-the-password-and-rotating-tokens) |
 | MCP port | `python onboard.py --step install_config`. Not on the dashboard, because only onboarding rewrites the agents' MCP registration that uses it |
 | Timezone (logs, CLI, dashboard) | Detected from the host. Override it with a `TZ` entry in the Compose `environment:` block, then restart |
 
@@ -389,8 +389,8 @@ tail -f ~/.tubematic-agent/logs/poll.log              # the poller and every age
 python3 scripts/service.py status                     # containers, version, cron
 python3 scripts/service.py logs tubematic-api -f      # the API
 python3 scripts/service.py logs tubematic-mcp -f      # the agent's tools
-python3 scripts/service.py logs tubematic-worker -f   # publishing, Auto Pilot, notifications
-python3 scripts/service.py logs tubematic-renderer -f # rendering, AI review
+python3 scripts/service.py logs tubematic-worker -f   # publishing, Auto Pilot, notifications, AI review
+python3 scripts/service.py logs tubematic-renderer -f # rendering
 python3 scripts/status.py                             # health, checkpoints, costs, disk
 ```
 
@@ -428,6 +428,9 @@ delete it and create another. See [The Dashboard — Script Profiles](04-dashboa
   `python3 scripts/service.py restart tubematic-api` (or `tubematic-mcp`, which drops an open agent
   session's tools). `restart` refuses while a render, a voicing, an agent session or a publish
   upload is in flight, because restarting would kill it; `--force` restarts anyway.
-- **A video stuck in Rendering** may still be inside the render timeout (40 minutes by default). A
-  restart of the renderer puts any video stuck there back in the queue, or marks it failed once it
-  has used up its retries. See [Rendering and Review](../developer/11-rendering-and-review.md).
+- **A video stuck in Rendering** may still be rendering: a render is cut off once it makes no
+  progress for 10 minutes, and after 3 hours at most (both settings on Settings → Rendering). If the
+  renderer restarts, or stops reporting to the API for five minutes, the video goes back in the
+  queue, or is marked failed once it has used up its retries. A finished render also waits in
+  Rendering while the AI review, when it is on, watches it. See
+  [Rendering and Review](../developer/11-rendering-and-review.md).

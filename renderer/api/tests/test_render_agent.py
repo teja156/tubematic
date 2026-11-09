@@ -1,6 +1,39 @@
-"""Tests for the render agent (TMDEV-32; split out of the worker by TMDEV-188):
-the atomic RENDER_QUEUED->RENDERING claim, file staging + a subprocess render
-timeout, the AI-review/failure tail, and startup reconciliation.
+"""The renderer client, render_agent.py: a renderer with no database that
+does everything through the render gateway (TMDEV-189).
+
+Most tests drive the real client against the real gateway app over an httpx
+WSGITransport (render_client_env.py), so a claim, the bundle, the staged
+render, the upload, the result and the row the gateway leaves behind are one
+path, end to end. What they guard:
+
+- the first heartbeat says `started` and comes before any claim (the gateway
+  re-queues what a restarted renderer held), later ones do not;
+- a renderer that needs an upgrade, or is disabled, keeps heartbeating and
+  claims nothing;
+- settings (timeouts, the watermark) come from the claim, never from the
+  agent-written scene-config;
+- each way a render ends is reported with the exact error text the video's
+  comment has always carried, a hung render's whole process group is killed
+  and reaped (never waiting on the stills server), and the job directory and
+  the staged public files are gone afterwards, whatever happened;
+- a stop from the gateway kills the render and no result is sent; a stop
+  must name the claim the heartbeat reported, and a delayed heartbeat reply
+  for an earlier claim never stops a newer claim of the same video;
+- every job request names the claim (X-Render-Claim); an upload the gateway
+  discards as claim_lost throws the render away, one over its size limit or
+  refused for disk space is not retried, one the gateway cannot take yet
+  (upload_in_progress, busy) is tried again after its Retry-After without
+  spending a failure attempt, for up to UPLOAD_WAIT_SECS while the claim
+  holds; a result's error is cut to fit the gateway's JSON limit;
+- a bundle member that could land outside the job directory is refused;
+- a network error never escapes: it is noted as last_error and retried;
+- enrollment checks the certificate pin before sending anything, the state
+  file is written atomically and readable by its owner only, a rotated
+  credential is saved before it is used, and before another heartbeat can go
+  out with the old one;
+- httpx's per-request INFO lines are kept out of the renderer's log;
+- one test runs the real gateway over real TLS: enrollment and a heartbeat
+  through the pinned context, and a wrong pin that sends nothing.
 
 Run from renderer/api/: pytest tests/test_render_agent.py
 """
@@ -9,110 +42,36 @@ import json
 import os
 import signal
 import sqlite3
+import ssl
+import stat
+import tarfile
+import threading
 import unittest.mock as mock
 
+import httpx
 import pytest
 
 os.environ.setdefault("TUBEMATIC_DB", ":memory:")
 
 import render_agent
-import pipeline as pipeline_module
+import render_gateway
+from tubematic_core import auth as tauth
+from tubematic_core import renderers
+
+from .render_client_env import (BUILTIN_TOKEN, GATEWAY_URL, VERSION, FakeRemotion, finished_proc,
+                                make_env)
 
 
 @pytest.fixture
-def db_path(tmp_path, monkeypatch):
-    p = str(tmp_path / "test.db")
-    pipeline_module._init_db(p)  # full schema incl. render_fail_count/ai_review_count
-    monkeypatch.setattr(render_agent, "DB_PATH", p)
-    return p
-
-
-@pytest.fixture
-def dirs(tmp_path, monkeypatch):
-    """Point the renderer's REMOTION_DIR/OUTPUT_DIR at tmp_path so staging and
-    render output land somewhere test-writable, not the real /app/remotion."""
-    remotion_dir = tmp_path / "remotion"
-    output_dir = tmp_path / "output_videos"
-    (remotion_dir / "public").mkdir(parents=True)
-    output_dir.mkdir()
-    monkeypatch.setattr(render_agent, "REMOTION_DIR", remotion_dir)
-    monkeypatch.setattr(render_agent, "OUTPUT_DIR", output_dir)
-    # The renderer derives every job file from JOBS_DIR/<video_id> (TMDEV-162);
-    # _job_files writes them there.
-    monkeypatch.setattr(pipeline_module, "JOBS_DIR", tmp_path / "jobs")
-    return remotion_dir, output_dir
-
-
-def _seed_video(db_path, video_id="vid-1", status="RENDER_QUEUED", render_fail_count=0,
-                 project_id="proj-1", voice_file_path="", timeline_path="",
-                 scene_config_path="", updated_at="2026-01-01T00:00:00Z",
-                 script="", tts_text=""):
-    con = sqlite3.connect(db_path)
-    con.execute(
-        """INSERT INTO videos
-           (id, project_id, topic, strategy, producibility_score, status, render_fail_count,
-            voice_file_path, timeline_path, scene_config_path, script, tts_text,
-            created_at, updated_at)
-           VALUES (?, ?, 'DNS resolution', 'curriculum', 8, ?, ?, ?, ?, ?, ?, ?,
-                   '2026-01-01T00:00:00Z', ?)""",
-        (video_id, project_id, status, render_fail_count,
-         voice_file_path, timeline_path, scene_config_path, script, tts_text, updated_at),
-    )
-    con.commit()
-    con.close()
-
-
-def _read_video(db_path, video_id="vid-1"):
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    row = con.execute("SELECT * FROM videos WHERE id = ?", (video_id,)).fetchone()
-    con.close()
-    return dict(row) if row else None
-
-
-def _read_comments(db_path, video_id="vid-1"):
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    rows = con.execute(
-        "SELECT * FROM comments WHERE video_id = ? ORDER BY created_at", (video_id,)
-    ).fetchall()
-    con.close()
-    return [dict(r) for r in rows]
-
-
-def _job_files(tmp_path, video_id="vid-1"):
-    """Create real audio/timeline/scene-config files for tests that exercise
-    the full _stage_and_render staging step."""
-    job_dir = tmp_path / "jobs" / video_id
-    job_dir.mkdir(parents=True)
-    audio = job_dir / "audio.mp3"
-    timeline = job_dir / "timeline.json"
-    scene_config = job_dir / "scene-config.json"
-    audio.write_bytes(b"fake-audio")
-    timeline.write_text("{}")
-    scene_config.write_text('{"scenes": []}')
-    return str(audio), str(timeline), str(scene_config)
-
-
-def _fake_popen(returncode=0, stdout="", stderr="", pid=4242):
-    """A Popen-shaped mock of a process that has already exited: render_agent.py
-    drains .stdout/.stderr on threads while polling, then reads .returncode,
-    exactly like a real process once it has ended."""
-    proc = mock.MagicMock()
-    proc.pid = pid
-    proc.args = ["npx", "remotion", "render"]
-    proc.stdout = io.StringIO(stdout)
-    proc.stderr = io.StringIO(stderr)
-    proc.poll.return_value = returncode
-    proc.returncode = returncode
-    return proc
+def env(tmp_path, monkeypatch):
+    return make_env(tmp_path, monkeypatch)
 
 
 @pytest.fixture(autouse=True)
 def _fast_render_clock(monkeypatch):
     """The render watcher's clock jumps an hour per read and its sleep is a
-    no-op, so a double whose poll() never returns a code hits the ceiling at
-    once instead of waiting it out."""
+    no-op, so a process that never ends is judged at once (a stall at the
+    default settings) instead of being waited out."""
     tick = {"now": 0.0}
 
     def clock():
@@ -122,1280 +81,1124 @@ def _fast_render_clock(monkeypatch):
     monkeypatch.setattr(render_agent, "_sleep", lambda _s: None)
 
 
-def _mock_subprocess_success():
-    return _fake_popen(returncode=0, stdout="", stderr="")
+def _render(env, remotion=None, **seed):
+    """Seed a queued video, start the renderer, run one loop pass."""
+    env.seed(**seed)
+    env.start()
+    remotion = remotion or FakeRemotion()
+    with mock.patch("subprocess.Popen", side_effect=remotion):
+        render_agent._loop_once()
+    return remotion
 
 
-def _mock_subprocess_failure(stderr="render error"):
-    return _fake_popen(returncode=1, stdout="", stderr=stderr)
-
-
-def _fake_popen_timeout(pid=4242):
-    """A process that never ends: poll() keeps answering None and its pipes
-    are silent, so the watcher gives up at its ceiling (the test clock above
-    makes that immediate) — render_agent.py must then kill the process group."""
-    proc = mock.MagicMock()
-    proc.pid = pid
-    proc.args = ["npx", "remotion", "render"]
-    proc.stdout = io.StringIO("")
-    proc.stderr = io.StringIO("")
+def _hung(argv, **kw):
+    proc = finished_proc(argv, stdout="")
     proc.poll.return_value = None
+    proc.returncode = None
     return proc
 
 
-# ── _claim_next ──────────────────────────────────────────────────────────────
-
-def test_claim_next_claims_render_queued(db_path):
-    _seed_video(db_path, status="RENDER_QUEUED")
-    claimed = render_agent._claim_next()
-    assert claimed == "vid-1"
-    assert _read_video(db_path)["status"] == "RENDERING"
+def _results(env):
+    return [r["json"] for r in env.rec.requests if r["path"].endswith("/result")]
 
 
-def test_claim_next_ignores_voice_ready(db_path):
-    """VOICE_READY means the agent is still authoring scene config — not the
-    renderer's to touch until submit_render advances it to RENDER_QUEUED."""
-    _seed_video(db_path, status="VOICE_READY")
-    assert render_agent._claim_next() is None
-    assert _read_video(db_path)["status"] == "VOICE_READY"
+# ── the whole path ────────────────────────────────────────────────────────────
+
+def test_a_queued_video_is_rendered_uploaded_and_left_for_the_review(env):
+    remotion = _render(env)
+    [(argv, kw)] = remotion.calls
+    assert argv[:4] == ["npx", "remotion", "render", "Composition"]
+    assert kw["cwd"] == str(env.remotion) and kw["start_new_session"] is True
+    assert not any(a.startswith(("--gl", "--chrome-mode")) for a in argv)     # no GPU: the CPU path, as before
+    assert remotion.props() == {"sceneConfigPath": "/public/vid-1/scene-config.json",
+                                "timelinePath": "/public/vid-1/timeline.json",
+                                "audioPath": "/public/vid-1/audio.mp3", "watermark": True}
+    v = env.video()
+    assert v["status"] == "RENDERING" and v["render_uploaded_at"]       # the worker's review finishes it
+    assert v["video_path"] == str(env.out / "proj-1" / "vid-1.mp4")
+    assert (env.out / "proj-1" / "vid-1.mp4").read_bytes() == b"MP4DATA"
+    [timing] = env.sql("SELECT renderer_id, kind, on_gpu, frames FROM render_timings")
+    assert timing == {"renderer_id": "builtin", "kind": "dom", "on_gpu": 0, "frames": 90}
+    [result] = _results(env)
+    assert result["outcome"] == "success" and result["frames"] == 90 and result["seconds"] > 0
+    assert env.rec.paths() == ["/v1/heartbeat", "/v1/claim", "/v1/jobs/vid-1/bundle",
+                               "/v1/jobs/vid-1/output", "/v1/jobs/vid-1/result"]
+    # every job request names the claim the video was handed out under
+    jobs = [r for r in env.rec.requests if r["path"].startswith("/v1/jobs/")]
+    assert len({r["claim"] for r in jobs}) == 1 and len(jobs[0]["claim"]) == 32
 
 
-def test_claim_next_returns_none_when_nothing_queued(db_path):
-    assert render_agent._claim_next() is None
+def test_the_job_is_staged_while_it_renders_and_gone_afterwards(env):
+    job = env.seed()
+    (job / "images").mkdir()
+    (job / "images" / "skyline.png").write_bytes(b"PNG")
+    seen = {}
+
+    def look(argv, kw):
+        staged = env.public / "vid-1"
+        seen["public"] = sorted(str(p.relative_to(staged)) for p in staged.rglob("*"))
+        seen["work"] = (env.render_tmp / "vid-1" / "audio.mp3").read_bytes()
+    env.start()
+    with mock.patch("subprocess.Popen", side_effect=FakeRemotion(on_start=look)):
+        render_agent._loop_once()
+    assert seen["public"] == ["audio.mp3", "images", "images/skyline.png", "scene-config.json", "timeline.json"]
+    assert seen["work"] == b"AUDIO"
+    assert not (env.public / "vid-1").exists() and not (env.render_tmp / "vid-1").exists()
 
 
-def test_claim_next_fifo_by_updated_at(db_path):
-    _seed_video(db_path, video_id="vid-new", status="RENDER_QUEUED",
-                updated_at="2030-01-01T00:00:00Z")
-    _seed_video(db_path, video_id="vid-old", status="RENDER_QUEUED",
-                updated_at="2020-01-01T00:00:00Z")
-    assert render_agent._claim_next() == "vid-old"
+def test_a_video_without_images_still_renders(env):
+    def look(argv, kw):
+        assert not (env.public / "vid-1" / "images").exists()
+    _render(env, FakeRemotion(on_start=look))
+    assert env.video()["render_uploaded_at"]
 
 
-def _set_hold(db_path, until):
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-                (pipeline_module.RENDER_CLAIM_HOLD_KEY, until))
-    con.commit()
-    con.close()
+@pytest.mark.parametrize("vid", ["a.b", "Spaced Name", "x" * 129])
+def test_a_legacy_video_id_still_renders(env, vid):
+    _render(env, vid=vid)
+    assert env.video(vid)["video_path"] == str(env.out / "proj-1" / f"{vid}.mp4")
 
 
-def test_claim_next_claims_nothing_while_onboarding_holds_claims(db_path):
-    """`onboard.py --step gpu` holds claims while it recreates the renderer,
-    so no render is started just to be killed by the recreate."""
-    _seed_video(db_path, status="RENDER_QUEUED")
-    _set_hold(db_path, "2999-01-01T00:00:00Z")
-    assert render_agent._claim_next() is None
-    assert _read_video(db_path)["status"] == "RENDER_QUEUED"
+def test_the_built_in_renderer_never_touches_the_shared_scene_tree(env):
+    """The built-in renderer's generated tree is the volume the agent writes:
+    it renders from it as it always did, and never clears or restages it."""
+    (env.generated / "vid-1").mkdir()
+    (env.generated / "vid-1" / "Intro.tsx").write_text("intro")
+    (env.generated / "Other.tsx").write_text("another video's scene")
+    _render(env, scenes=[{"type": "generated", "src": "vid-1/Intro"}])
+    assert (env.generated / "vid-1" / "Intro.tsx").read_text() == "intro"
+    assert (env.generated / "Other.tsx").read_text() == "another video's scene"
 
 
-def test_claim_next_ignores_an_expired_hold(db_path):
-    """A crashed onboarding leaves its hold behind; it must not stop
-    rendering past its ceiling."""
-    _seed_video(db_path, status="RENDER_QUEUED")
-    _set_hold(db_path, "2000-01-01T00:00:00Z")
-    assert render_agent._claim_next() == "vid-1"
+# ── the heartbeat ─────────────────────────────────────────────────────────────
+
+def test_nothing_is_claimed_before_the_first_heartbeat(env):
+    env.seed()
+    assert render_agent._loop_once() == render_agent.POLL_INTERVAL_SECS
+    assert env.rec.paths() == []
 
 
-# ── render_timeout_secs (TMDEV-57) ────────────────────────────────────────────
-
-def test_render_timeout_secs_defaults_to_10800(db_path):
-    assert render_agent._render_timeout_secs() == 10800
-    assert render_agent._render_stall_timeout_secs() == 600
-
-
-def test_render_timeout_secs_reads_settings_table(db_path):
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES ('render_timeout_secs', '900')")
-    con.commit()
-    con.close()
-    assert render_agent._render_timeout_secs() == 900
+def test_the_first_heartbeat_says_started_and_requeues_what_was_held(env):
+    env.seed(status="RENDERING", renderer_id="builtin")
+    env.start()
+    assert env.video()["status"] == "RENDER_QUEUED"
+    assert env.comments() == ["Render interrupted by renderer restart — automatically re-queued."]
+    env.start()
+    first, second = env.rec.beats()
+    assert first["started"] is True and second["started"] is False
+    assert first["version"] == VERSION and first["state"] == "idle" and first["video_id"] == ""
 
 
-def test_stage_and_render_uses_configured_timeout(db_path, dirs, tmp_path):
-    """The value actually passed to communicate() must be the live setting,
-    not a fixed constant baked in at import time."""
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES ('render_timeout_secs', '900')")
-    con.commit()
-    con.close()
+def test_the_log_lines_the_remote_host_script_watches_for(env, caplog, monkeypatch):
+    """scripts/tubematic_remote_renderer.py follows `docker logs` and matches
+    these words: "first heartbeat", "enrolled", "enrollment_invalid"."""
+    import logging
+    caplog.set_level(logging.INFO, logger="render_agent")
+    env.start()
+    env.start()
+    assert [r for r in caplog.records if "first heartbeat" in r.getMessage().lower()
+            and r.levelno == logging.INFO and VERSION in r.getMessage()].__len__() == 1
+    remote = _remote_env(env, monkeypatch)
+    assert any("enrolled" in r.getMessage().lower() and r.levelno == logging.INFO for r in caplog.records)
+    caplog.clear()
+    with pytest.raises(render_agent.EnrollmentError):
+        render_agent.enroll(remote.token, remote.state, {}, transport=env.rec)       # already used
+    assert any("enrollment_invalid" in r.getMessage() and r.levelno == logging.ERROR for r in caplog.records)
+    assert remote.credential not in caplog.text and remote.secret not in caplog.text
 
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
 
-    fake_proc = _mock_subprocess_success()
+def test_a_heartbeat_carries_a_probe_once(env):
+    with render_agent._st.lock:
+        render_agent._st.pending_probe = {"at": "2026-01-01T00:00:00.000001Z", "configured": False, "ok": False}
+    env.start()
+    env.start()
+    first, second = env.rec.beats()
+    assert first["gpu_probe"]["at"] == "2026-01-01T00:00:00.000001Z" and "gpu_probe" not in second
+    assert json.loads(env.renderer()["gpu_probe"])["at"] == "2026-01-01T00:00:00.000001Z"
+
+
+def test_a_heartbeat_during_a_render_reports_it_and_extends_its_lease(env):
+    env.seed()
+    env.start()
+    seen = {}
+
+    def beat_mid_render(argv, kw):
+        env.sql("UPDATE videos SET render_lease_until = '2000-01-01T00:00:00Z'")
+        assert render_agent._beat()
+        seen["beat"] = env.rec.beats()[-1]
+        seen["lease"] = env.video()["render_lease_until"]
+        seen["claim"] = env.video()["render_claim_id"]
+    with mock.patch("subprocess.Popen", side_effect=FakeRemotion(on_start=beat_mid_render)):
+        render_agent._loop_once()
+    assert seen["beat"]["state"] == "rendering" and seen["beat"]["video_id"] == "vid-1"
+    assert seen["beat"]["claim_id"] and seen["beat"]["claim_id"] == seen["claim"]
+    assert seen["lease"] > "2026"
+
+
+def test_the_built_in_token_is_read_on_every_request(env):
+    """--rotate-tokens rewrites the secret file in place; both the gateway and
+    the renderer read it per request, so the next heartbeat just works."""
+    env.start()
+    (env.secrets / "builtin_renderer_token").write_text("rotated-token")
+    assert render_agent._beat() is True
+    assert [r["auth"] for r in env.rec.requests] == [f"Bearer {BUILTIN_TOKEN}", "Bearer rotated-token"]
+
+
+def test_a_renderer_that_needs_an_upgrade_heartbeats_and_claims_nothing(env, monkeypatch, caplog):
+    env.seed()
+    monkeypatch.setattr(render_agent, "current_version", lambda: "0.0.1")
+    env.start()
+    assert render_agent._loop_once() == render_agent.POLL_INTERVAL_SECS
+    assert render_agent._st.needs_upgrade is True
+    assert "/v1/claim" not in env.rec.paths() and env.video()["status"] == "RENDER_QUEUED"
+    assert "needs upgrade" in caplog.text
+
+
+def test_a_disabled_renderer_heartbeats_and_claims_nothing(env):
+    env.seed()
+    env.sql("UPDATE renderers SET enabled = 0 WHERE id = 'builtin'")
+    env.start()
+    render_agent._loop_once()
+    assert "/v1/claim" not in env.rec.paths() and env.video()["status"] == "RENDER_QUEUED"
+
+
+def test_a_claim_refused_as_disabled_stops_further_claims(env):
+    env.seed()
+    env.start()
+    env.sql("UPDATE renderers SET enabled = 0 WHERE id = 'builtin'")
+    render_agent._loop_once()
+    render_agent._loop_once()
+    assert env.rec.paths().count("/v1/claim") == 1 and render_agent._st.enabled is False
+
+
+def test_probe_now_runs_the_probe_between_renders_and_reports_it(env, monkeypatch):
+    env.start()
+    env.sql("UPDATE renderers SET gpu_probe_requested_at = '2026-05-01T00:00:00.000000Z' WHERE id = 'builtin'")
+    render_agent._beat()
+    assert render_agent._st.probe_now is True
+    probe = {"at": "2026-05-01T00:00:01.000000Z", "configured": False, "ok": False, "reason": "x"}
+    monkeypatch.setattr(render_agent, "_run_gpu_probe", mock.Mock(return_value=probe))
+    render_agent._loop_once()
+    render_agent._run_gpu_probe.assert_called_once_with("requested from the dashboard")
+    assert render_agent._st.probe_now is False
+    r = env.renderer()
+    assert json.loads(r["gpu_probe"])["at"] == probe["at"] and r["gpu_probe_requested_at"] == ""
+
+
+# ── settings come from the claim ──────────────────────────────────────────────
+
+def test_the_timeouts_come_from_the_claim(env):
+    env.sql("INSERT INTO settings (key, value) VALUES ('render_timeout_secs', '900'), "
+            "('render_stall_timeout_secs', '60')")
     seen = {}
 
     def watch(proc, timeout_secs, stall_secs):
         seen.update(timeout=timeout_secs, stall=stall_secs)
         return "", "", "exited"
-    with mock.patch("subprocess.Popen", return_value=fake_proc), \
-         mock.patch.object(render_agent, "_wait_for_render", side_effect=watch):
-        render_agent._stage_and_render("vid-1")
+    with mock.patch.object(render_agent, "_wait_for_render", side_effect=watch):
+        _render(env)
+    assert seen == {"timeout": 900, "stall": 60}
 
-    assert seen == {"timeout": 900, "stall": 600}
 
+def test_the_watermark_comes_from_the_setting_not_the_scene_config(env):
+    """Default on. The scene-config says the opposite and must not count: the
+    agent writes that file."""
+    job = env.seed()
+    (job / "scene-config.json").write_text('{"scenes": [], "watermark": false}')
+    env.start()
+    remotion = FakeRemotion()
+    with mock.patch("subprocess.Popen", side_effect=remotion):
+        render_agent._loop_once()
+    assert remotion.props()["watermark"] is True
 
-# ── The watermark render prop (TMDEV-141) ──────────────────────────────────
 
-def _render_props(popen_mock) -> dict:
-    argv = popen_mock.call_args.args[0]
-    return json.loads(argv[argv.index("--props") + 1])
+def test_the_watermark_is_dropped_when_the_setting_is_off(env):
+    env.sql("INSERT INTO settings (key, value) VALUES ('watermark_enabled', 'false')")
+    assert _render(env).props()["watermark"] is False
 
 
-def test_stage_and_render_asks_for_the_watermark_by_default(db_path, dirs, tmp_path):
-    """Default on, and it comes from the settings table. The scene-config
-    here says the opposite and must not count: the agent writes that file."""
-    audio, timeline, scene_config = _job_files(tmp_path)
-    with open(scene_config, "w") as f:
-        f.write('{"scenes": [], "watermark": false}')
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
+# ── how a render ends ─────────────────────────────────────────────────────────
 
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()) as popen:
-        render_agent._stage_and_render("vid-1")
+def test_a_failed_render_reports_remotions_error(env):
+    _render(env, FakeRemotion(returncode=1, stderr="out of memory"))
+    [result] = _results(env)
+    assert result == {"outcome": "failed", "error": "out of memory", "on_gpu": False, "gpu_ok": None}
+    assert env.video()["status"] == "REVISION_REQUESTED"
+    assert env.comments() == ["Render failed: out of memory"]
+    assert not (env.render_tmp / "vid-1").exists() and not (env.public / "vid-1").exists()
 
-    assert _render_props(popen)["watermark"] is True
 
-
-def test_stage_and_render_drops_the_watermark_when_the_setting_is_off(db_path, dirs, tmp_path):
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES ('watermark_enabled', 'false')")
-    con.commit()
-    con.close()
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()) as popen:
-        render_agent._stage_and_render("vid-1")
-
-    assert _render_props(popen)["watermark"] is False
-
-
-# ── _stage_and_render (full flow: staging + subprocess + tail) ───────────────
-
-def test_stage_and_render_success_ai_review_disabled_sets_video_ready(db_path, dirs, tmp_path, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "false")
-    remotion_dir, _ = dirs
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()):
-        render_agent._stage_and_render("vid-1")
-
-    assert _read_video(db_path)["status"] == "VIDEO_READY"
-    assert (remotion_dir / "public" / "vid-1" / "audio.mp3").exists()
-
-
-def test_stage_and_render_stages_generated_images(db_path, dirs, tmp_path, monkeypatch):
-    """Images live in a subdirectory of the job dir and must reach the served
-    tree — scenes reference them as /public/<vid>/images/<name> (TMDEV-29)."""
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "false")
-    remotion_dir, _ = dirs
-    audio, timeline, scene_config = _job_files(tmp_path)
-    images = tmp_path / "jobs" / "vid-1" / "images"
-    images.mkdir()
-    (images / "skyline.png").write_bytes(b"fake-png")
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()):
-        render_agent._stage_and_render("vid-1")
-
-    assert (remotion_dir / "public" / "vid-1" / "images" / "skyline.png").exists()
-
-
-def test_stage_and_render_without_images_dir_still_renders(db_path, dirs, tmp_path, monkeypatch):
-    """Most videos have no images — an absent images/ dir is normal and must
-    not be treated as a missing job file."""
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "false")
-    remotion_dir, _ = dirs
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()):
-        render_agent._stage_and_render("vid-1")
-
-    assert _read_video(db_path)["status"] == "VIDEO_READY"
-    assert not (remotion_dir / "public" / "vid-1" / "images").exists()
-
-
-def test_stage_and_render_missing_job_files_sets_revision_requested(db_path, dirs):
-    _seed_video(db_path, status="RENDERING", voice_file_path="/nonexistent/audio.mp3",
-                timeline_path="/nonexistent/timeline.json",
-                scene_config_path="/nonexistent/scene-config.json")
-
-    render_agent._stage_and_render("vid-1")
-
-    assert _read_video(db_path)["status"] == "REVISION_REQUESTED"
-    comments = _read_comments(db_path)
-    assert "missing job file" in comments[-1]["content"]
-
-
-# ── TMDEV-162: staging derives every path from the ids ─────────────────────
-
-def test_a_tampered_row_stages_the_derived_files_not_the_planted_ones(db_path, dirs, tmp_path):
-    """A row whose path columns were pointed elsewhere before the fix (PATCH and
-    update_video once accepted any string) must stage the video's own files."""
-    remotion_dir, _ = dirs
-    _job_files(tmp_path)
-    planted = tmp_path / "planted"
-    planted.mkdir()
-    (planted / "secret.json").write_text('{"secret": true}')
-    (planted / "images").mkdir()
-    (planted / "images" / "loot.png").write_bytes(b"loot")
-    _seed_video(db_path, status="RENDERING",
-                voice_file_path=str(planted / "secret.json"),
-                timeline_path=str(planted / "secret.json"),
-                scene_config_path=str(planted / "secret.json"))
-
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()):
-        render_agent._stage_and_render("vid-1")
-
-    staged = remotion_dir / "public" / "vid-1"
-    assert (staged / "timeline.json").read_text() == "{}"
-    assert (staged / "scene-config.json").read_text() == '{"scenes": []}'
-    assert (staged / "audio.mp3").read_bytes() == b"fake-audio"
-    assert not (staged / "images").exists()
-
-
-def test_a_legacy_host_shaped_path_still_renders_from_the_derived_location(db_path, dirs,
-                                                                         tmp_path):
-    """Negative control: rows written by a host-driven MCP hold host paths
-    (HANDOFF). The column only says the file was written; the render reads
-    JOBS_DIR/<id>/, so such a row keeps rendering."""
-    _job_files(tmp_path)
-    host = "/home/someone/.tubematic-data/jobs/vid-1"
-    _seed_video(db_path, status="RENDERING", voice_file_path=f"{host}/audio.mp3",
-                timeline_path=f"{host}/timeline.json",
-                scene_config_path=f"{host}/scene-config.json")
-
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()) as popen:
-        render_agent._stage_and_render("vid-1")
-
-    popen.assert_called_once()
-    assert _read_video(db_path)["status"] == "VIDEO_READY"
-
-
-def test_an_empty_path_column_still_means_not_written(db_path, dirs, tmp_path):
-    """The file existing is not enough: a column the writer never filled means
-    the step never completed, exactly as before."""
-    audio, timeline, _ = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio, timeline_path=timeline,
-                scene_config_path="")
-    with mock.patch("subprocess.Popen") as popen:
-        render_agent._stage_and_render("vid-1")
-    popen.assert_not_called()
-    assert _read_video(db_path)["status"] == "REVISION_REQUESTED"
-    assert "scene_config_path" in _read_comments(db_path)[-1]["content"]
-
-
-@pytest.mark.parametrize("project", ["..", "../../tmp", "a/b"])
-def test_an_escaping_project_id_fails_the_render_without_staging(db_path, dirs, tmp_path,
-                                                                project):
-    remotion_dir, _ = dirs
-    audio, timeline, scene_config = _job_files(tmp_path)
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO projects (id, name, created_at) VALUES (?, 'x', 'n')", (project,))
-    con.commit()
-    con.close()
-    _seed_video(db_path, status="RENDERING", project_id=project, voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-
-    with mock.patch("subprocess.Popen") as popen:
-        render_agent._stage_and_render("vid-1")
-
-    popen.assert_not_called()
-    assert _read_video(db_path)["status"] == "FAILED"
-    assert "Render refused" in _read_comments(db_path)[-1]["content"]
-    assert not (remotion_dir / "public" / "vid-1").exists()
-
-
-def test_a_legacy_project_id_with_a_dot_still_renders(db_path, dirs, tmp_path):
-    _, output_dir = dirs
-    audio, timeline, scene_config = _job_files(tmp_path)
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO projects (id, name, created_at) VALUES ('node.js', 'x', 'n')")
-    con.commit()
-    con.close()
-    _seed_video(db_path, status="RENDERING", project_id="node.js", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()):
-        render_agent._stage_and_render("vid-1")
-    assert _read_video(db_path)["video_path"] == str(output_dir / "node.js" / "vid-1.mp4")
-
-
-# A long id is legacy too: the 128-character cap arrived with the creation
-# rule, and only creation applies it.
-LONG_LEGACY_ID = "x" * 129
-
-
-def test_a_legacy_project_id_over_the_creation_cap_still_renders(db_path, dirs, tmp_path):
-    _, output_dir = dirs
-    audio, timeline, scene_config = _job_files(tmp_path)
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO projects (id, name, created_at) VALUES (?, 'x', 'n')",
-                (LONG_LEGACY_ID,))
-    con.commit()
-    con.close()
-    _seed_video(db_path, status="RENDERING", project_id=LONG_LEGACY_ID, voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()):
-        render_agent._stage_and_render("vid-1")
-    assert _read_video(db_path)["video_path"] == str(output_dir / LONG_LEGACY_ID / "vid-1.mp4")
-
-
-@pytest.mark.parametrize("vid", ["a.b", "Spaced Name", LONG_LEGACY_ID])
-def test_a_legacy_video_id_still_stages_and_renders(db_path, dirs, tmp_path, monkeypatch, vid):
-    """An id filed before the creation rule existed is checked as a path
-    component at use, as ids.py promises. Refusing it here moved every such
-    upgraded video to FAILED."""
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "false")
-    remotion_dir, output_dir = dirs
-    audio, timeline, scene_config = _job_files(tmp_path, vid)
-    _seed_video(db_path, video_id=vid, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()) as popen:
-        render_agent._stage_and_render(vid)
-    popen.assert_called_once()
-    assert (remotion_dir / "public" / vid / "audio.mp3").read_bytes() == b"fake-audio"
-    row = _read_video(db_path, vid)
-    assert row["status"] == "VIDEO_READY"
-    assert row["video_path"] == str(output_dir / "proj-1" / f"{vid}.mp4")
-
-
-@pytest.mark.parametrize("vid", ["..", "../x", "/tmp/x", "a/b", "x" * 256])
-def test_an_unusable_video_id_fails_the_render_without_staging(db_path, dirs, tmp_path, vid):
-    remotion_dir, _ = dirs
-    _seed_video(db_path, video_id=vid, status="RENDERING", voice_file_path="a",
-                timeline_path="t", scene_config_path="s")
-    before = sorted(p.name for p in tmp_path.iterdir())
-    with mock.patch("subprocess.Popen") as popen:
-        render_agent._stage_and_render(vid)
-    popen.assert_not_called()
-    assert _read_video(db_path, vid)["status"] == "FAILED"
-    assert list((remotion_dir / "public").iterdir()) == []
-    assert sorted(p.name for p in tmp_path.iterdir()) == before
-
-
-# The render is written to `<id>.mp4`, so the id must leave four bytes for the
-# suffix: 252 bytes is a working job directory and an impossible file name.
-# Refused before staging, not with ENAMETOOLONG after it.
-def test_a_video_id_too_long_for_its_mp4_fails_before_staging(db_path, dirs, tmp_path):
-    remotion_dir, _ = dirs
-    vid = "x" * 252
-    audio, timeline, scene_config = _job_files(tmp_path, vid)
-    _seed_video(db_path, video_id=vid, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-    with mock.patch("subprocess.Popen") as popen:
-        render_agent._stage_and_render(vid)
-    popen.assert_not_called()
-    assert _read_video(db_path, vid)["status"] == "FAILED"
-    assert "Render refused" in _read_comments(db_path, vid)[-1]["content"]
-    assert list((remotion_dir / "public").iterdir()) == []
-
-
-def test_a_video_id_that_leaves_room_for_its_mp4_renders(db_path, dirs, tmp_path, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "false")
-    _, output_dir = dirs
-    vid = "x" * 251
-    audio, timeline, scene_config = _job_files(tmp_path, vid)
-    _seed_video(db_path, video_id=vid, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()):
-        render_agent._stage_and_render(vid)
-    row = _read_video(db_path, vid)
-    assert row["status"] == "VIDEO_READY"
-    assert row["video_path"] == str(output_dir / "proj-1" / f"{vid}.mp4")
-
-
-def test_a_job_dir_linked_to_another_video_fails_the_render(db_path, dirs, tmp_path):
-    """vid-1 -> vid-2 stays inside the jobs root, so only the per-component
-    symlink walk stops vid-1 rendering with vid-2's audio."""
-    remotion_dir, _ = dirs
-    _job_files(tmp_path, "vid-2")
-    (tmp_path / "jobs" / "vid-1").symlink_to(tmp_path / "jobs" / "vid-2")
-    _seed_video(db_path, status="RENDERING", voice_file_path="a", timeline_path="t",
-                scene_config_path="s")
-    with mock.patch("subprocess.Popen") as popen:
-        render_agent._stage_and_render("vid-1")
-    popen.assert_not_called()
-    assert _read_video(db_path)["status"] == "FAILED"
-    assert "symlink" in _read_comments(db_path)[-1]["content"]
-    assert not (remotion_dir / "public" / "vid-1").exists()
-
-
-def test_a_symlinked_job_file_fails_the_render(db_path, dirs, tmp_path):
-    audio, timeline, scene_config = _job_files(tmp_path)
-    secret = tmp_path / "secret.json"
-    secret.write_text("{}")
-    os.remove(timeline)
-    os.symlink(secret, timeline)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio, timeline_path=timeline,
-                scene_config_path=scene_config)
-    with mock.patch("subprocess.Popen") as popen:
-        render_agent._stage_and_render("vid-1")
-    popen.assert_not_called()
-    assert _read_video(db_path)["status"] == "FAILED"
-
-
-def test_a_symlink_inside_images_is_not_staged(db_path, dirs, tmp_path):
-    remotion_dir, _ = dirs
-    audio, timeline, scene_config = _job_files(tmp_path)
-    images = tmp_path / "jobs" / "vid-1" / "images"
-    images.mkdir()
-    (images / "real.png").write_bytes(b"png")
-    secret = tmp_path / "secret.txt"
-    secret.write_text("s")
-    (images / "leak.png").symlink_to(secret)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio, timeline_path=timeline,
-                scene_config_path=scene_config)
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_success()):
-        render_agent._stage_and_render("vid-1")
-    staged = remotion_dir / "public" / "vid-1" / "images"
-    assert (staged / "real.png").exists()
-    assert not (staged / "leak.png").exists()
-
-
-def test_stage_and_render_timeout_auto_retries_render_queued(db_path, dirs, tmp_path):
-    """A hung Chromium is environmental, not something the agent can fix by
-    revising the scene — auto-retry via RENDER_QUEUED, not REVISION_REQUESTED."""
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config, render_fail_count=0)
-
-    with mock.patch("subprocess.Popen", return_value=_fake_popen_timeout()), \
-         mock.patch("os.getpgid", return_value=4242), \
-         mock.patch("os.killpg"), \
+def test_a_stalled_render_is_killed_and_reported_stalled(env):
+    with mock.patch("os.getpgid", return_value=4242), mock.patch("os.killpg") as killpg, \
          mock.patch("os.waitpid", side_effect=ChildProcessError):
-        render_agent._stage_and_render("vid-1")
+        _render(env, remotion=_hung)
+    killpg.assert_called_once_with(4242, signal.SIGKILL)
+    assert _results(env)[0]["outcome"] == "stalled"
+    assert env.video()["status"] == "RENDER_QUEUED" and env.video()["render_fail_count"] == 1
+    assert env.comments() == ["Render failed: Render stalled: no progress for 600s"]
 
-    video = _read_video(db_path)
-    assert video["status"] == "RENDER_QUEUED"
-    assert video["render_fail_count"] == 1
+
+def test_a_render_past_the_ceiling_is_reported_timed_out(env):
+    env.sql("INSERT INTO settings (key, value) VALUES ('render_timeout_secs', '1000'), "
+            "('render_stall_timeout_secs', '50000')")
+    with mock.patch("os.getpgid", return_value=4242), mock.patch("os.killpg"), \
+         mock.patch("os.waitpid", side_effect=ChildProcessError):
+        _render(env, remotion=_hung)
+    assert _results(env)[0]["outcome"] == "timeout"
+    assert env.comments() == ["Render failed: Render timed out after 1000s"]
 
 
-def test_stage_and_render_timeout_kills_whole_process_group(db_path, dirs, tmp_path):
+def test_a_hung_render_past_the_retry_cap_fails(env):
+    with mock.patch("os.getpgid", return_value=4242), mock.patch("os.killpg"), \
+         mock.patch("os.waitpid", side_effect=ChildProcessError):
+        _render(env, remotion=_hung, render_fail_count=2)
+    assert env.video()["status"] == "FAILED" and env.video()["render_fail_count"] == 3
+
+
+def test_a_hung_render_kills_its_whole_process_group_and_reaps_it(env):
     """TMDEV-57: subprocess.run's own timeout handling only kills the direct
     child, orphaning any Chromium/ffmpeg it spawned (confirmed live — they
     survived as <defunct> zombies competing with the next render attempt).
     Popen + start_new_session=True puts the whole tree in one process group,
     which this asserts gets killed and reaped, not just abandoned."""
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
+    procs = []
 
-    fake_proc = _fake_popen_timeout(pid=4242)
-    with mock.patch("subprocess.Popen", return_value=fake_proc) as mock_popen, \
-         mock.patch("os.getpgid", return_value=4242) as mock_getpgid, \
-         mock.patch("os.killpg") as mock_killpg, \
+    def popen(argv, **kw):
+        procs.append(_hung(argv))
+        return procs[-1]
+    remotion = mock.Mock(side_effect=popen)
+    with mock.patch("os.getpgid", return_value=4242) as getpgid, mock.patch("os.killpg") as killpg, \
          mock.patch("os.waitpid", side_effect=ChildProcessError):
-        render_agent._stage_and_render("vid-1")
-
-    assert mock_popen.call_args.kwargs["start_new_session"] is True
-    mock_getpgid.assert_called_once_with(4242)
-    mock_killpg.assert_called_once_with(4242, signal.SIGKILL)
-    fake_proc.wait.assert_called_once()  # reaped, not left as a zombie
-
-
-def test_stage_and_render_timeout_reaps_reparented_grandchildren(db_path, dirs, tmp_path):
-    """TMDEV-57 follow-up, confirmed live: killpg kills the whole process
-    group at once, but grandchildren (node, chrome-headless, ffmpeg, ...)
-    reparent to this container's PID 1 -- this same renderer process -- the
-    instant their own parent dies, before proc.wait() (which only reaps the
-    direct child) can claim them. A non-blocking WNOHANG drain (an earlier
-    version of this fix) races ahead of heavier processes actually finishing
-    exit and finds nothing -- confirmed live, they sat as permanent zombies.
-    This asserts the loop *blocks* for each already-reparented child in turn
-    until none remain, rather than giving up on the first not-ready check."""
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-
-    # Two grandchildren to reap, then ChildProcessError signals "none left".
-    waitpid_results = [(19, 0), (20, 0), ChildProcessError()]
-    with mock.patch("subprocess.Popen", return_value=_fake_popen_timeout()), \
-         mock.patch("os.getpgid", return_value=4242), \
-         mock.patch("os.killpg"), \
-         mock.patch("os.waitpid", side_effect=waitpid_results) as mock_waitpid:
-        render_agent._stage_and_render("vid-1")
-
-    assert mock_waitpid.call_args_list == [
-        mock.call(-1, os.WNOHANG),
-        mock.call(-1, os.WNOHANG),
-        mock.call(-1, os.WNOHANG),
-    ]
+        _render(env, remotion=remotion)
+    assert remotion.call_args.kwargs["start_new_session"] is True
+    getpgid.assert_called_once_with(4242)
+    killpg.assert_called_once_with(4242, signal.SIGKILL)
+    procs[0].wait.assert_called_once()
 
 
-def test_stage_and_render_timeout_reap_never_waits_on_the_stills_server(db_path, dirs, tmp_path, monkeypatch):
+def test_a_hung_render_reaps_reparented_grandchildren(env):
+    """TMDEV-57 follow-up, confirmed live: grandchildren (node, chrome-headless,
+    ffmpeg, ...) reparent to this container's PID 1 — this same renderer
+    process — the instant their parent dies. The reaper drains each in turn
+    until none remain rather than giving up on the first not-ready check."""
+    with mock.patch("os.getpgid", return_value=4242), mock.patch("os.killpg"), \
+         mock.patch("os.waitpid", side_effect=[(19, 0), (20, 0), ChildProcessError()]) as waitpid:
+        _render(env, remotion=_hung)
+    assert waitpid.call_args_list == [mock.call(-1, os.WNOHANG)] * 3
+
+
+def test_a_hung_render_reap_never_waits_on_the_stills_server(env, monkeypatch):
     """The stills server (TMDEV-179) is a long-lived child of the renderer, so a
     blocking waitpid(-1) would sit on it forever after a timeout. The reaper
     drains non-blocking and stops as soon as no child but the stills server
     is left, polling only while an orphan of the killed group is still dying."""
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-    # waitpid: one orphan reaped, then "children exist but none exited" for as long as we ask
-    waitpid_results = [(19, 0), (0, 0), (0, 0), (0, 0)]
-    others = iter([{20}, set()])   # the second orphan is still dying, then gone; the stills server never counts
+    others = iter([{20}, set()])
     monkeypatch.setattr(render_agent, "_other_children", lambda: next(others, set()))
     monkeypatch.setattr(render_agent.time, "sleep", lambda s: None)
-    with mock.patch("subprocess.Popen", return_value=_fake_popen_timeout()), \
-         mock.patch("os.getpgid", return_value=4242), \
-         mock.patch("os.killpg"), \
-         mock.patch("os.waitpid", side_effect=waitpid_results) as mock_waitpid:
-        render_agent._stage_and_render("vid-1")
-
-    assert mock_waitpid.call_args_list == [mock.call(-1, os.WNOHANG)] * 3
-    assert _read_video(db_path)["status"] == "RENDER_QUEUED"
+    with mock.patch("os.getpgid", return_value=4242), mock.patch("os.killpg"), \
+         mock.patch("os.waitpid", side_effect=[(19, 0), (0, 0), (0, 0), (0, 0)]) as waitpid:
+        _render(env, remotion=_hung)
+    assert waitpid.call_args_list == [mock.call(-1, os.WNOHANG)] * 3
+    assert env.video()["status"] == "RENDER_QUEUED"
 
 
-def test_stage_and_render_timeout_reap_stops_on_no_children(db_path, dirs, tmp_path):
-    """If PID 1 has no other children at all, os.waitpid(-1, ...) raises
-    ChildProcessError immediately -- the loop must treat that as "done" too,
-    not let it escape and break the retry."""
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config, render_fail_count=0)
+def test_an_exception_in_the_render_is_this_videos_error_not_the_renderers_exit(env):
+    def no_space(argv, **kw):
+        raise OSError(28, "No space left on device")
+    _render(env, remotion=no_space)
+    [result] = _results(env)
+    assert result["outcome"] == "error"
+    assert result["error"] == "The renderer hit an error: [Errno 28] No space left on device"
+    assert env.video()["status"] == "RENDER_QUEUED"
+    assert render_agent._st.job is None and render_agent._st.last_error
+    assert not (env.render_tmp / "vid-1").exists() and not (env.public / "vid-1").exists()
 
-    with mock.patch("subprocess.Popen", return_value=_fake_popen_timeout()), \
-         mock.patch("os.getpgid", return_value=4242), \
-         mock.patch("os.killpg"), \
+
+def test_a_bundle_the_gateway_cannot_build_is_reported_as_an_error(env):
+    env.seed()
+
+    def vanish(request):
+        if request.url.path.endswith("/bundle"):
+            (env.jobs / "vid-1" / "audio.mp3").unlink()
+    env.rec.hook = vanish
+    env.start()
+    with mock.patch("subprocess.Popen") as popen:
+        render_agent._loop_once()
+    popen.assert_not_called()
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "could not be fetched" in result["error"]
+    assert env.video()["status"] == "RENDER_QUEUED"
+
+
+def test_a_render_that_wrote_nothing_is_an_error(env):
+    _render(env, FakeRemotion(output=None))
+    assert _results(env)[0]["outcome"] == "error"
+    assert "/v1/jobs/vid-1/output" not in env.rec.paths()
+
+
+# ── a stop from the gateway ───────────────────────────────────────────────────
+
+def test_a_stop_kills_the_render_and_no_result_is_sent(env):
+    """A human moved the video while it rendered: the next heartbeat's stop
+    list names it, the render's process group is killed (the same reaper a
+    stall gets), and the render is thrown away without a result."""
+    env.seed()
+    env.start()
+    killed = []
+    proc_box = {}
+
+    def popen(argv, **kw):
+        proc = finished_proc(argv, stdout="")
+        state = {"polls": 0}
+
+        def poll():
+            if killed:
+                return -9
+            state["polls"] += 1
+            if state["polls"] == 2:
+                env.sql("UPDATE videos SET status = 'REVISION_REQUESTED' WHERE id = 'vid-1'")
+                assert render_agent._beat()          # what the heartbeat thread would do
+                return -9 if killed else None
+            return None
+        proc.poll.side_effect = poll
+        proc_box["proc"] = proc
+        return proc
+    with mock.patch("subprocess.Popen", side_effect=popen), mock.patch("os.getpgid", return_value=4242), \
+         mock.patch("os.killpg", side_effect=lambda *a: killed.append(a)), \
          mock.patch("os.waitpid", side_effect=ChildProcessError):
-        render_agent._stage_and_render("vid-1")
-
-    assert _read_video(db_path)["status"] == "RENDER_QUEUED"
-
-
-def test_stage_and_render_timeout_exceeding_cap_sets_failed(db_path, dirs, tmp_path):
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config, render_fail_count=2)
-
-    with mock.patch("subprocess.Popen", return_value=_fake_popen_timeout()), \
-         mock.patch("os.getpgid", return_value=4242), \
-         mock.patch("os.killpg"), \
-         mock.patch("os.waitpid", side_effect=ChildProcessError):
-        render_agent._stage_and_render("vid-1")
-
-    video = _read_video(db_path)
-    assert video["status"] == "FAILED"
-    assert video["render_fail_count"] == 3
+        # a timeout the fake clock could reach is far away: only the stop ends this render
+        env.sql("INSERT INTO settings (key, value) VALUES ('render_timeout_secs', '999999999'), "
+                "('render_stall_timeout_secs', '999999999')")
+        render_agent._loop_once()
+    assert killed == [(4242, signal.SIGKILL)]
+    assert _results(env) == [] and "/v1/jobs/vid-1/output" not in env.rec.paths()
+    assert env.video()["status"] == "REVISION_REQUESTED" and env.comments() == []
+    assert not (env.render_tmp / "vid-1").exists() and render_agent._st.job is None
 
 
-def test_stage_and_render_failure_sets_revision_requested(db_path, dirs, tmp_path):
-    audio, timeline, scene_config = _job_files(tmp_path)
-    _seed_video(db_path, status="RENDERING", voice_file_path=audio,
-                timeline_path=timeline, scene_config_path=scene_config)
-
-    with mock.patch("subprocess.Popen", return_value=_mock_subprocess_failure("out of memory")):
-        render_agent._stage_and_render("vid-1")
-
-    assert _read_video(db_path)["status"] == "REVISION_REQUESTED"
-    comments = _read_comments(db_path)
-    assert any("Render failed" in c["content"] for c in comments)
+def test_a_stopped_job_never_starts_a_render_process(env):
+    job = render_agent._Job("vid-1")
+    job.stopped = True
+    render_agent._st.job = job
+    with mock.patch("subprocess.Popen") as popen, pytest.raises(render_agent._Stopped):
+        render_agent._spawn(["npx"])
+    popen.assert_not_called()
 
 
-# ── _handle_render_success (AI-review gating tail) ────────────────────────────
-
-def test_handle_render_success_ai_review_disabled_sets_video_ready(db_path, dirs, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "false")
-    _seed_video(db_path, status="RENDERING")
-    render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-    assert _read_video(db_path)["status"] == "VIDEO_READY"
-
-
-def test_handle_render_success_no_gemini_key_sets_video_ready(db_path, dirs, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    _seed_video(db_path, status="RENDERING")
-    render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-    assert _read_video(db_path)["status"] == "VIDEO_READY"
+def test_a_stop_for_a_video_it_is_not_rendering_is_ignored(env):
+    env.start()
+    env.seed("vid-1", status="RENDERING", renderer_id="builtin", render_claim_id="c-1")
+    env.seed("vid-9", status="REVISION_REQUESTED", renderer_id="builtin", render_claim_id="c-9")  # a stale row
+    job = render_agent._Job("vid-1", "c-1")
+    render_agent._st.job = job
+    assert render_agent._beat() is True
+    assert job.stopped is False
 
 
-def test_handle_render_success_ai_review_clean_sets_video_ready(db_path, dirs, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    _seed_video(db_path, status="RENDERING")
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={"overall": "Looks great, no issues found.",
-                                          "must_fix": [], "suggestions": [],
-                                          "feedback": "Looks great, no issues found."}):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    video = _read_video(db_path)
-    assert video["status"] == "VIDEO_READY"
-    assert video["gemini_feedback"] == "Looks great, no issues found."
-    comments = _read_comments(db_path)
-    assert any("AI review 1 of 1 — clean" in c["content"] and "Looks great, no issues found." in c["content"]
-               for c in comments)
+@pytest.mark.parametrize("stop", [["vid-1"], [{"video_id": "vid-1"}], [{"video_id": "vid-1", "claim_id": "other"}],
+                                  [{"video_id": "vid-2", "claim_id": "c-1"}]])
+def test_a_stop_must_name_the_reported_claim(env, stop):
+    env.start()
+    job = render_agent._Job("vid-1", "c-1")
+    render_agent._st.job = job
+    env.rec.hook = lambda request: (httpx.Response(200, json={"enabled": True, "needs_upgrade": False,
+                                                              "stop": stop})
+                                    if request.url.path == "/v1/heartbeat" else None)
+    assert render_agent._beat() is True
+    assert job.stopped is False
+    env.rec.hook = lambda request: httpx.Response(200, json={"stop": [{"video_id": "vid-1", "claim_id": "c-1"}]})
+    assert render_agent._beat() is True
+    assert job.stopped is True
 
 
-def test_handle_render_success_passes_pronunciation_reference_to_review(db_path, dirs, monkeypatch):
-    """VQA-6: the review can only check pronunciation if it is handed the
-    authored wording and the exact text ElevenLabs was given."""
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    _seed_video(db_path, status="RENDERING", script="Vhagar flew.", tts_text="Vah-gar flew.")
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
+@pytest.mark.parametrize("reclaimed_before_the_gateway_saw_it", [False, True])
+def test_a_delayed_heartbeat_for_claim_a_never_stops_or_extends_claim_b(env, reclaimed_before_the_gateway_saw_it):
+    """Claim A's heartbeat is slow. While it is in flight, A is re-queued and
+    the same renderer claims the same video again as claim B and starts it.
+    Whether the gateway handled A's heartbeat before or after B's claim, its
+    reply is applied to A only: B is not stopped, and B's lease is not
+    extended by A's heartbeat."""
+    env.start()
+    env.seed("vid-1", status="RENDERING", renderer_id="builtin", render_claim_id="claim-a",
+             render_lease_until="2999-01-01T00:00:00Z")
+    job_a = render_agent._Job("vid-1", "claim-a")
+    render_agent._st.job = job_a
+    jobs = {}
 
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={"overall": "fine", "must_fix": [], "suggestions": [],
-                                          "feedback": "fine"}) as run:
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
+    def requeue_and_claim_b():
+        import render_results
+        assert render_results.requeue_interrupted("vid-1", "Render lost — automatically re-queued.",
+                                                  renderer_id="builtin")
+        reply = render_agent._client.send("POST", "/v1/claim", json_body={}).json()
+        assert reply["video_id"] == "vid-1" and reply["claim_id"] != "claim-a"
+        env.sql("UPDATE videos SET render_lease_until = '2000-01-01T00:00:00Z'")
+        jobs["b"] = render_agent._Job("vid-1", reply["claim_id"])
+        with render_agent._st.lock:
+            render_agent._st.job = jobs["b"]
 
-    assert run.call_args.kwargs["script_text"] == "Vhagar flew."
-    assert run.call_args.kwargs["tts_text"] == "Vah-gar flew."
-
-
-def test_handle_render_success_unvoiced_reference_passes_empty_strings(db_path, dirs, monkeypatch):
-    """A row rendered before tts_text was ever recorded must not blow up the
-    review tail (or pass None into the prompt builder)."""
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    _seed_video(db_path, status="RENDERING")
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={"overall": "fine", "must_fix": [], "suggestions": [],
-                                          "feedback": "fine"}) as run:
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    # Empty strings, never None — the prompt builder is handed these directly.
-    # Asserted per-key rather than as the whole kwargs dict, which also
-    # carries the VQA-7 model/fps settings (covered separately below).
-    assert run.call_args.kwargs["script_text"] == ""
-    assert run.call_args.kwargs["tts_text"] == ""
-    assert _read_video(db_path)["status"] == "VIDEO_READY"
-
-
-def test_handle_render_success_ai_review_must_fix_sets_revision_requested(db_path, dirs, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    _seed_video(db_path, status="RENDERING")
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
-
-    feedback = ("**Overall:** otherwise clean\n\n"
-                "**Must fix (1):**\n"
-                "- **text_offscreen** @ 0:07 — scene `StepFlowDiagram`\n"
-                "  caption clipped\n"
-                "  Suggested fix: wrap the line\n\n"
-                "**Suggestions (0):**\nNo improvement suggestions.")
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={
-                                "overall": "otherwise clean",
-                                "must_fix": [{"type": "text_offscreen", "timestamp": "0:07",
-                                              "scene": "StepFlowDiagram", "description": "caption clipped",
-                                              "suggestedFix": "wrap the line"}],
-                                "suggestions": [],
-                                "feedback": feedback,
-                            }):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    video = _read_video(db_path)
-    assert video["status"] == "REVISION_REQUESTED"
-    assert video["gemini_feedback"] == feedback
-    comments = _read_comments(db_path)
-    assert any("AI review 1 of 1 found 1 must-fix, 0 suggestions" in c["content"]
-               and "StepFlowDiagram" in c["content"]
-               and "wrap the line" in c["content"]
-               for c in comments)
+    def delayed(request):
+        if request.url.path != "/v1/heartbeat" or jobs:
+            return None
+        env.rec.hook = None
+        if reclaimed_before_the_gateway_saw_it:
+            requeue_and_claim_b()
+            return env.rec.inner.handle_request(request)
+        env.sql("UPDATE videos SET status = 'RENDER_QUEUED', renderer_id = '' WHERE id = 'vid-1'")
+        resp = env.rec.inner.handle_request(request)
+        env.sql("UPDATE videos SET status = 'RENDERING', renderer_id = 'builtin' WHERE id = 'vid-1'")
+        requeue_and_claim_b()
+        return resp
+    env.rec.hook = delayed
+    assert render_agent._beat() is True
+    beat = env.rec.beats()[-1]
+    assert beat["video_id"] == "vid-1" and beat["claim_id"] == "claim-a"
+    assert jobs["b"].stopped is False and render_agent._st.job is jobs["b"]
+    assert job_a.stopped is True
+    v = env.video()
+    assert v["status"] == "RENDERING" and v["render_claim_id"] == jobs["b"].claim_id
+    assert v["render_lease_until"] == "2000-01-01T00:00:00Z"
+    # B's own heartbeat extends B's lease and stops nothing
+    assert render_agent._beat() is True
+    assert jobs["b"].stopped is False and env.video()["render_lease_until"] > "2026"
 
 
-def test_handle_render_success_ai_review_suggestions_only_sets_revision_requested(db_path, dirs, monkeypatch):
-    """TMDEV-58: zero must-fix but non-empty suggestions still loops back —
-    the agent still has real, actionable work to do."""
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    _seed_video(db_path, status="RENDERING")
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
+# ── the bundle's members ──────────────────────────────────────────────────────
 
-    feedback = ("**Overall:** solid, minor polish available\n\n"
-                "**Must fix (0):**\nNo blocking errors found.\n\n"
-                "**Suggestions (1):**\n"
-                "- **video** @ 0:30 — scene `StepFlow.tsx`\n"
-                "  hook title could hold a beat longer\n"
-                "  Suggested fix: extend by 12 frames")
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={
-                                "overall": "solid, minor polish available",
-                                "must_fix": [],
-                                "suggestions": [{"area": "video", "timestamp": "0:30",
-                                                 "scene": "StepFlow.tsx",
-                                                 "description": "hook title could hold a beat longer",
-                                                 "suggestedFix": "extend by 12 frames"}],
-                                "feedback": feedback,
-                            }):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    video = _read_video(db_path)
-    assert video["status"] == "REVISION_REQUESTED"
-    comments = _read_comments(db_path)
-    assert any("AI review 1 of 1 found 0 must-fix, 1 suggestions" in c["content"]
-               for c in comments)
+@pytest.mark.parametrize("name", [
+    "audio.mp3", "timeline.json", "scene-config.json", "mascot.js", "images/a.png", "images/sub/b.png",
+    "cartoon/source.json", "cartoon/audio/mix/mix.wav", "scenes/vid-1/Intro.tsx", "scenes/vid-1/sets/street.ts",
+    "scenes/_flat/Legacy.tsx"])
+def test_the_members_the_gateway_sends_are_accepted(name):
+    assert render_agent._bundle_parts(name, "vid-1") == name.split("/")
 
 
-def test_handle_render_success_ai_review_last_round_at_cap_still_routes_on_findings(db_path, dirs, monkeypatch):
-    """The last non-forced round (new_count == max_render_retries, not yet
-    over it) must still loop back to REVISION_REQUESTED on findings, exactly
-    like any earlier round -- only new_count > max_render_retries forces
-    acceptance. This is the boundary the `>` vs `>=` decision turns on."""
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setenv("AI_REVIEW_MAX_LOOPS", "2")
-    _seed_video(db_path, status="RENDERING")
-    con = sqlite3.connect(db_path)
-    con.execute("UPDATE videos SET ai_review_count = 1 WHERE id = 'vid-1'")  # -> becomes 2, == cap
+@pytest.mark.parametrize("name", [
+    "../escape", "/etc/passwd", "images/../../x", "images/./a.png", "images//a.png", "a\\b", "",
+    "images", "scenes/vid-2/Intro.tsx", "scenes/_flat/a/b.tsx", "scenes/_flat/x.ts", "notes.txt",
+    "cartoon/other.json"])
+def test_any_other_member_is_refused(name):
+    with pytest.raises(render_agent._BundleRefused):
+        render_agent._bundle_parts(name, "vid-1")
+
+
+def _tar(members) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tf:
+        for name, data, kind in members:
+            info = tarfile.TarInfo(name)
+            if kind == "sym":
+                info.type, info.linkname = tarfile.SYMTYPE, "/etc/passwd"
+                tf.addfile(info)
+            else:
+                info.size = len(data)
+                tf.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("bad", [("../../escaped.txt", b"x", "file"), ("images/link.png", b"", "sym")])
+def test_a_bundle_with_a_member_outside_the_job_is_refused_before_anything_lands(env, bad):
+    env.seed()
+    good = [("audio.mp3", b"A", "file"), ("timeline.json", b"{}", "file"), ("scene-config.json", b"{}", "file")]
+    body = _tar(good[:1] + [bad] + good[1:])
+
+    def serve(request):
+        if request.url.path.endswith("/bundle"):
+            return httpx.Response(200, content=body, headers={"content-type": "application/x-tar"})
+    env.rec.hook = serve
+    env.start()
+    with mock.patch("subprocess.Popen") as popen:
+        render_agent._loop_once()
+    popen.assert_not_called()
+    assert not (env.tmp / "escaped.txt").exists() and not (env.render_tmp.parent / "escaped.txt").exists()
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "bundle" in result["error"]
+    assert not (env.render_tmp / "vid-1").exists()
+
+
+# ── network errors ────────────────────────────────────────────────────────────
+
+def _down(request):
+    raise httpx.ConnectError("connection refused", request=request)
+
+
+def test_a_heartbeat_that_cannot_reach_the_gateway_is_noted_and_retried(env):
+    env.rec.hook = _down
+    assert render_agent._beat() is False
+    assert render_agent._st.started is True                     # the next one still says so
+    assert "heartbeat failed" in render_agent._st.last_error
+    env.rec.hook = None
+    env.start()
+    beat = env.rec.beats()[-1]
+    assert beat["started"] is True and "heartbeat failed" in beat["last_error"]
+
+
+def test_a_claim_that_cannot_reach_the_gateway_waits_and_retries(env):
+    env.start()
+    env.rec.hook = _down
+    assert render_agent._loop_once() == render_agent.NETWORK_RETRY_SECS
+    assert "claim failed" in render_agent._st.last_error
+    env.rec.hook = None
+    assert render_agent._loop_once() == render_agent.POLL_INTERVAL_SECS
+    assert render_agent._st.last_error == ""
+
+
+def test_an_upload_that_fails_once_is_tried_again(env):
+    failures = []
+
+    def flaky(request):
+        if request.method == "PUT" and not failures:
+            failures.append(1)
+            raise httpx.WriteError("broken pipe", request=request)
+    env.rec.hook = flaky
+    _render(env)
+    assert env.rec.paths("PUT") == ["/v1/jobs/vid-1/output"] * 2
+    assert _results(env)[0]["outcome"] == "success" and env.video()["render_uploaded_at"]
+
+
+def test_an_upload_that_keeps_failing_is_reported_as_an_error(env):
+    def refuse(request):
+        if request.method == "PUT":
+            raise httpx.WriteError("broken pipe", request=request)
+    env.rec.hook = refuse
+    _render(env)
+    assert len(env.rec.paths("PUT")) == render_agent.UPLOAD_ATTEMPTS
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "could not be uploaded" in result["error"]
+    assert env.video()["status"] == "RENDER_QUEUED"
+
+
+def test_a_result_that_cannot_be_delivered_never_raises(env):
+    def lose(request):
+        if request.url.path.endswith("/result"):
+            raise httpx.ReadTimeout("timed out", request=request)
+    env.rec.hook = lose
+    _render(env)
+    assert len(_results(env)) == render_agent.RESULT_ATTEMPTS
+    assert render_agent._st.job is None and "lease will expire" in render_agent._st.last_error
+
+
+def test_a_claim_with_no_claim_id_is_not_rendered(env):
+    env.seed()
+    env.start()
+
+    def old_reply(request):
+        if request.url.path == "/v1/claim":
+            return httpx.Response(200, json={"video_id": "vid-1", "kind": "dom"})
+    env.rec.hook = old_reply
+    with mock.patch("subprocess.Popen") as popen:
+        render_agent._loop_once()
+    popen.assert_not_called()
+    assert not any(p.startswith("/v1/jobs/") for p in env.rec.paths())
+    assert "no claim id" in render_agent._st.last_error and render_agent._st.job is None
+
+
+def test_an_upload_discarded_as_claim_lost_throws_the_render_away(env):
+    def lost(request):
+        if request.method == "PUT":
+            return httpx.Response(409, json={"error": "claim_lost"})
+    env.rec.hook = lost
+    _render(env)
+    assert len(env.rec.paths("PUT")) == 1                # never retried
+    assert _results(env) == [] and "claim was lost" in render_agent._st.last_error
+
+
+@pytest.mark.parametrize("answer", [httpx.Response(409, json={"error": "upload_in_progress"}),
+                                    httpx.Response(503, json={"error": "busy"}, headers={"Retry-After": "7"})])
+def test_an_upload_the_gateway_cannot_take_yet_is_tried_again_after_a_pause(env, monkeypatch, answer):
+    sleeps = []
+    monkeypatch.setattr(render_agent.time, "sleep", lambda s: sleeps.append(s))
+    answers = []
+
+    def busy_once(request):
+        if request.method == "PUT" and not answers:
+            answers.append(1)
+            return answer
+    env.rec.hook = busy_once
+    _render(env)
+    assert env.rec.paths("PUT") == ["/v1/jobs/vid-1/output"] * 2
+    assert _results(env)[0]["outcome"] == "success" and env.video()["render_uploaded_at"]
+    assert sleeps and sleeps[0] == (7 if answer.status_code == 503 else 0)
+
+
+def _fake_wait_clock(monkeypatch, on_sleep=None):
+    """The upload's busy-wait clock, advanced only by its sleeps (recorded)."""
+    clock = {"now": 1000.0, "sleeps": []}
+
+    def sleep(s):
+        clock["sleeps"].append(s)
+        clock["now"] += s
+        if on_sleep is not None:
+            on_sleep(clock)
+    monkeypatch.setattr(render_agent, "_monotonic", lambda: clock["now"])
+    monkeypatch.setattr(render_agent.time, "sleep", sleep)
+    return clock
+
+
+def test_an_upload_waits_on_a_busy_gateway_long_past_its_failure_attempts(env, monkeypatch):
+    """Every upload slot is taken (by the real gateway's admission, cap 0)
+    for 15 minutes — far past the three failure attempts' ~20 s — then one
+    frees: the finished render is uploaded and reported a success, never a
+    failure."""
+    monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 0)
+
+    def free_a_slot(clock):
+        if clock["now"] - 1000.0 >= 900:
+            monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 4)
+    clock = _fake_wait_clock(monkeypatch, free_a_slot)
+    _render(env)
+    puts = env.rec.paths("PUT")
+    assert len(puts) > render_agent.UPLOAD_ATTEMPTS * 10
+    assert all(s == render_gateway.BUSY_RETRY_AFTER_SECS for s in clock["sleeps"])   # its Retry-After
+    [result] = _results(env)
+    assert result["outcome"] == "success" and env.video()["render_uploaded_at"]
+
+
+def test_an_upload_gives_up_on_a_busy_gateway_after_its_wait(env, monkeypatch):
+    monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 0)
+
+    def runaway(clock):
+        if clock["now"] - 1000.0 > render_agent.UPLOAD_WAIT_SECS + 3600:
+            raise AssertionError("the busy wait never ended")
+    clock = _fake_wait_clock(monkeypatch, runaway)
+    _render(env)
+    assert render_agent.UPLOAD_WAIT_SECS <= sum(clock["sleeps"]) < render_agent.UPLOAD_WAIT_SECS + 60
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "stayed busy (busy)" in result["error"]
+    assert env.video()["status"] == "RENDER_QUEUED"
+
+
+def test_a_stop_ends_the_wait_on_a_busy_gateway(env, monkeypatch):
+    monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 0)
+
+    def stop(clock):
+        if len(clock["sleeps"]) == 5:
+            render_agent._st.job.stopped = True
+    _fake_wait_clock(monkeypatch, stop)
+    _render(env)
+    assert len(env.rec.paths("PUT")) == 5 and _results(env) == []
+
+
+def test_busy_answers_do_not_spend_the_failure_attempts(env, monkeypatch):
+    """Two busy answers, then network errors: the errors still get all three
+    attempts."""
+    answers = []
+
+    def busy_then_down(request):
+        if request.method == "PUT":
+            answers.append(1)
+            if len(answers) <= 2:
+                return httpx.Response(503, json={"error": "busy"}, headers={"Retry-After": "1"})
+            raise httpx.WriteError("broken pipe", request=request)
+    env.rec.hook = busy_then_down
+    _fake_wait_clock(monkeypatch)
+    _render(env)
+    assert len(env.rec.paths("PUT")) == 2 + render_agent.UPLOAD_ATTEMPTS
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "could not be uploaded" in result["error"]
+
+
+def test_an_upload_refused_for_disk_space_is_reported_as_an_error(env):
+    def full(request):
+        if request.method == "PUT":
+            return httpx.Response(507, json={"error": "insufficient_storage"})
+    env.rec.hook = full
+    _render(env)
+    assert len(env.rec.paths("PUT")) == 1                # not retried
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "short of disk space" in result["error"]
+    assert env.video()["status"] == "RENDER_QUEUED"
+
+
+def test_a_long_render_error_is_cut_to_fit_the_gateways_json_limit(env):
+    remotion = FakeRemotion(returncode=1, stderr="E" * 200_000)
+    _render(env, remotion=remotion)
+    [result] = _results(env)
+    assert result["outcome"] == "failed" and result["error"] == "E" * render_agent.RESULT_ERROR_CHARS
+    assert env.video()["status"] == "REVISION_REQUESTED"
+
+
+def test_an_upload_over_the_gateways_limit_is_not_retried(env):
+    def too_big(request):
+        if request.method == "PUT":
+            return httpx.Response(413, json={"error": "output_too_large", "limit": 3})
+    env.rec.hook = too_big
+    _render(env)
+    assert len(env.rec.paths("PUT")) == 1
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "larger than the gateway accepts" in result["error"]
+    assert env.video()["status"] == "RENDER_QUEUED"
+
+
+def test_a_lost_lease_discards_the_render(env):
+    env.seed()
+    env.start()
+
+    def take_over(argv, kw):
+        env.sql("UPDATE videos SET renderer_id = 'r_other'")
+    with mock.patch("subprocess.Popen", side_effect=FakeRemotion(on_start=take_over)):
+        render_agent._loop_once()
+    assert _results(env) == []                          # the upload's 403 ended it
+    assert not (env.out / "proj-1" / "vid-1.mp4").exists()
+
+
+# ── the GPU ───────────────────────────────────────────────────────────────────
+
+def _probe(ok):
+    return {"at": "2026-06-01T00:00:00.000000Z", "configured": True, "ok": ok,
+            "error": "" if ok else "Chromium is rendering on another device: SwiftShader"}
+
+
+def _cartoon_source(env, vid="vid-1"):
+    """The frozen source a Cartoon 3D render is checked against: a one-file
+    tree in the shared generated dir and submit_render's record of it."""
+    from tubematic_core import jobfiles as tjobs
+    (env.generated / vid).mkdir(parents=True, exist_ok=True)
+    (env.generated / vid / "CartoonShort.tsx").write_text("export default () => null;")
+    record = env.jobs / vid / "cartoon" / "source.json"
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(env.generated / vid), "at": "now"}))
+    # the fast test clock spends an hour per look: a ceiling it cannot reach
+    env.sql("INSERT INTO settings (key, value) VALUES ('render_timeout_secs', '999999999')")
+
+
+def test_a_failed_gpu_render_retests_the_gpu_and_reports_the_answer(env, monkeypatch):
+    env.gpu(ok=True)
+    _cartoon_source(env)
+    probe = mock.Mock(return_value=_probe(False))
+    monkeypatch.setattr(render_agent, "_run_gpu_probe", probe)
+    remotion = _render(env, FakeRemotion(returncode=1, stderr="WebGL context lost"), visual_style="cartoon_3d")
+    assert "--gl=angle-egl" in remotion.calls[0][0]
+    probe.assert_called_once_with("a Cartoon 3D render on the GPU failed")
+    [result] = _results(env)
+    assert result["on_gpu"] is True and result["gpu_ok"] is False and result["gpu_probe"]["ok"] is False
+    v = env.video()
+    assert v["status"] == "FAILED" and v["render_fail_count"] == 0       # no retry can bring a GPU back
+    assert env.renderer()["gpu_verified"] == 0
+
+
+def test_a_failed_gpu_render_on_a_gpu_that_still_works_is_the_videos_own(env, monkeypatch):
+    env.gpu(ok=True)
+    _cartoon_source(env)
+    monkeypatch.setattr(render_agent, "_run_gpu_probe", mock.Mock(return_value=_probe(True)))
+    _render(env, FakeRemotion(returncode=1, stderr="TypeError in scene"), mascot_id="", visual_style="cartoon_3d")
+    assert _results(env)[0]["gpu_ok"] is True
+    assert env.video()["status"] == "REVISION_REQUESTED"
+
+
+def test_a_failed_cpu_render_does_not_probe(env, monkeypatch):
+    probe = mock.Mock()
+    monkeypatch.setattr(render_agent, "_run_gpu_probe", probe)
+    _render(env, FakeRemotion(returncode=1, stderr="boom"))
+    probe.assert_not_called()
+    assert _results(env)[0]["gpu_ok"] is None
+
+
+def test_a_gpu_video_on_a_gpu_that_fails_its_test_now_goes_back_to_the_queue(env, monkeypatch):
+    """The gateway believed this renderer's GPU (its last probe passed); the
+    renderer re-tests a GPU it has not verified itself before rendering a
+    GPU-only video, and if it fails the video is not rendered on the CPU: it
+    goes back to the queue and this renderer gets no more GPU work."""
+    env.gpu(ok=True)
+    monkeypatch.setattr(render_agent, "_gpu_verified", False)
+    probe = mock.Mock(side_effect=lambda reason: _probe(False))
+    monkeypatch.setattr(render_agent, "_run_gpu_probe", probe)
+    with mock.patch("subprocess.Popen") as popen:
+        env.seed(visual_style="cartoon_3d")
+        render_agent._loop_once()
+    popen.assert_not_called()
+    probe.assert_called_once_with("a Cartoon 3D video needs the GPU")
+    [result] = _results(env)
+    assert result["gpu_ok"] is False and "did not pass its test" in result["error"]
+    assert env.video()["status"] == "RENDER_QUEUED" and env.renderer()["gpu_verified"] == 0
+
+
+def test_a_mascot_video_gets_its_pinned_code_and_the_mascot_path(env):
+    env.gpu(ok=True)
+    env.sql("INSERT INTO mascots (id, name, status, approved_version) VALUES ('m1', 'M', 'READY', 2)")
+    env.sql("INSERT INTO mascot_versions (mascot_id, version, code) VALUES ('m1', 1, 'v1 code'), ('m1', 2, 'v2')")
+    seen = {}
+
+    def look(argv, kw):
+        seen["code"] = (env.public / "vid-1" / "mascot.js").read_text()
+    remotion = _render(env, FakeRemotion(on_start=look), mascot_id="m1", mascot_version=1)
+    assert remotion.props()["mascotPath"] == "/public/vid-1/mascot.js"
+    assert seen["code"] == "v1 code"
+
+
+def test_a_video_without_a_mascot_gets_no_mascot_path(env):
+    assert "mascotPath" not in _render(env).props()
+
+
+# ── a remote renderer ─────────────────────────────────────────────────────────
+
+class _Remote:
+    pass
+
+
+def _remote_env(env, monkeypatch, tls_dir=None):
+    """Enroll a remote renderer against env's gateway: a real certificate (its
+    pin in the token), fetched by a stand-in for ssl.get_server_certificate."""
+    r = _Remote()
+    tls = tls_dir or env.tmp / "tls"
+    tauth.ensure_secrets(tls)
+    r.pem = tauth.read_secret(tauth.TLS_CERT_NAME, tls)
+    r.pin = tauth.gateway_pin(tls)
+    con = sqlite3.connect(env.db)
+    r.secret, _ = renderers.create_enrollment(con, "")
     con.commit()
     con.close()
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={
-                                "overall": "still one issue",
-                                "must_fix": [{"type": "sync_drift", "timestamp": "unknown",
-                                              "scene": "unknown", "description": "", "suggestedFix": ""}],
-                                "suggestions": [],
-                                "feedback": "still one issue",
-                            }):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    video = _read_video(db_path)
-    assert video["ai_review_count"] == 2
-    assert video["status"] == "REVISION_REQUESTED"
+    r.token = renderers.encode_enrollment_token(GATEWAY_URL, r.secret, r.pin)
+    r.state = env.tmp / "state" / "renderer.json"
+    monkeypatch.setattr(render_agent, "_fetch_server_cert", lambda host, port: r.pem)
+    r.identity = render_agent.enroll(r.token, r.state, {"cpus": 4}, transport=env.rec)
+    r.credential = r.identity.credential()
+    return r
 
 
-def test_handle_render_success_ai_review_over_cap_runs_review_and_forces_video_ready(db_path, dirs, monkeypatch):
-    """TMDEV-58: past the cap the review still runs (closing the old hole
-    where the shipped render carried the previous round's stale feedback),
-    but the video is forced to VIDEO_READY regardless of what it found."""
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setenv("AI_REVIEW_MAX_LOOPS", "2")
-    _seed_video(db_path, status="RENDERING")
-    con = sqlite3.connect(db_path)
-    con.execute("UPDATE videos SET ai_review_count = 2 WHERE id = 'vid-1'")
+def test_enrollment_saves_a_private_state_file_and_the_credential_works(env, monkeypatch):
+    r = _remote_env(env, monkeypatch)
+    data = json.loads(r.state.read_text())
+    assert set(data) >= {"renderer_id", "credential", "credential_expires_at", "machine_id", "pin", "cert_pem",
+                         "gateway_url"}
+    assert data["pin"] == r.pin and data["cert_pem"] == r.pem and data["gateway_url"] == GATEWAY_URL
+    assert stat.S_IMODE(os.stat(r.state).st_mode) == 0o600
+    assert [p.name for p in r.state.parent.iterdir()] == ["renderer.json"]      # no temp file left
+    row = env.renderer(data["renderer_id"])
+    assert row["machine_id"] == data["machine_id"] and json.loads(row["compute"]) == {"cpus": 4}
+    monkeypatch.setattr(render_agent, "_client", render_agent.GatewayClient(r.identity, transport=env.rec))
+    assert render_agent._beat() is True
+    assert env.renderer(data["renderer_id"])["last_heartbeat_at"]
+
+
+def test_reenrolling_keeps_the_machine_and_its_row(env, monkeypatch):
+    r = _remote_env(env, monkeypatch)
+    first = json.loads(r.state.read_text())
+    con = sqlite3.connect(env.db)
+    secret, _ = renderers.create_enrollment(con, "")
     con.commit()
     con.close()
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
-
-    fresh_feedback = "**Overall:** still has an issue\n\n**Must fix (1):**\n- **audio_drop** @ 1:00"
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={
-                                "overall": "still has an issue",
-                                "must_fix": [{"type": "audio_drop", "timestamp": "1:00",
-                                              "scene": "unknown", "description": "", "suggestedFix": ""}],
-                                "suggestions": [],
-                                "feedback": fresh_feedback,
-                            }) as mock_review:
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    mock_review.assert_called_once()
-    video = _read_video(db_path)
-    assert video["status"] == "VIDEO_READY"
-    assert video["gemini_feedback"] == fresh_feedback  # fresh, not stale from a prior round
-    comments = _read_comments(db_path)
-    assert any("Max AI reviews (2) reached" in c["content"] and "still has an issue" in c["content"]
-               for c in comments)
+    render_agent.enroll(renderers.encode_enrollment_token(GATEWAY_URL, secret, r.pin), r.state, {}, env.rec)
+    second = json.loads(r.state.read_text())
+    assert second["machine_id"] == first["machine_id"] and second["renderer_id"] == first["renderer_id"]
+    assert second["credential"] != first["credential"]
+    assert len(env.sql("SELECT id FROM renderers WHERE builtin = 0")) == 1
 
 
-def test_handle_render_success_max_render_retries_one_still_allows_one_revision_round(db_path, dirs, monkeypatch):
-    """Pinning the off-by-one this ticket settled on: with the cap set to 1,
-    the very first review must still be able to loop back to
-    REVISION_REQUESTED when it has findings -- the rejected `>=` boundary
-    would have forced acceptance immediately, making the feature a no-op at
-    this (reachable) setting."""
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setenv("AI_REVIEW_MAX_LOOPS", "1")
-    _seed_video(db_path, status="RENDERING")
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={
-                                "overall": "one issue",
-                                "must_fix": [{"type": "sync_drift", "timestamp": "unknown",
-                                              "scene": "unknown", "description": "", "suggestedFix": ""}],
-                                "suggestions": [],
-                                "feedback": "one issue",
-                            }):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    assert _read_video(db_path)["status"] == "REVISION_REQUESTED"
-
-
-def test_handle_render_success_gemini_error_fails_open_to_video_ready(db_path, dirs, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    _seed_video(db_path, status="RENDERING")
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={"overall": "", "must_fix": [], "suggestions": [],
-                                          "feedback": "AI review did not run: Gemini upload failed: timeout",
-                                          "error": "Gemini upload failed: timeout"}):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    video = _read_video(db_path)
-    assert video["status"] == "VIDEO_READY"
-    assert video["gemini_feedback"] == "AI review did not run: Gemini upload failed: timeout"
-    comments = _read_comments(db_path)
-    assert any("AI review failed" in c["content"] for c in comments)
-
-
-def test_handle_render_success_scene_config_missing_sets_video_ready(db_path, dirs, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    _seed_video(db_path, status="RENDERING")
-    # Do NOT create scene-config.json in the staged public dir — absence is the test condition
-
-    render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    assert _read_video(db_path)["status"] == "VIDEO_READY"
-    comments = _read_comments(db_path)
-    assert any("scene-config.json not found" in c["content"] for c in comments)
-
-
-def test_handle_render_success_unexpected_exception_sets_revision_requested(db_path, dirs, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "false")
-    _seed_video(db_path, status="RENDERING")
-
-    with mock.patch.object(render_agent.db, "update_fields", side_effect=Exception("disk full")):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    assert _read_video(db_path)["status"] == "REVISION_REQUESTED"
-    comments = _read_comments(db_path)
-    assert any("Unexpected error in render tail" in c["content"] for c in comments)
-
-
-# ── _handle_render_failure ─────────────────────────────────────────────────────
-# Render-crash retry backstop (TMDEV-1): a render that keeps crashing must
-# escalate to FAILED once it exceeds the retry cap (reusing max_render_retries),
-# instead of looping REVISION_REQUESTED forever.
-
-def test_handle_render_failure_below_cap_sets_revision_requested(db_path):
-    _seed_video(db_path, status="RENDERING", render_fail_count=0)
-    render_agent._handle_render_failure("vid-1", "Chromium crashed")
-    video = _read_video(db_path)
-    assert video["status"] == "REVISION_REQUESTED"
-    assert video["render_fail_count"] == 1
-    comments = _read_comments(db_path)
-    assert "Render failed" in comments[-1]["content"]
-
-
-def test_handle_render_failure_exceeding_cap_sets_failed(db_path):
-    # default max_render_retries is 1 (TMDEV-74) -> the 2nd failure (count
-    # becomes 2) exceeds it. Seeded at the boundary rather than well past it,
-    # so a silent change to the default fails this test instead of sliding by.
-    _seed_video(db_path, status="RENDERING", render_fail_count=1)
-    render_agent._handle_render_failure("vid-1", "Chromium crashed")
-    video = _read_video(db_path)
-    assert video["status"] == "FAILED"
-    assert video["render_fail_count"] == 2
-    comments = _read_comments(db_path)
-    assert "giving up" in comments[-1]["content"].lower()
-
-
-def test_handle_render_failure_respects_custom_max_render_retries_setting(db_path):
-    """A raised cap must actually be read. The value is deliberately one the
-    default (1, since TMDEV-74) would have escalated on, so the assertion
-    fails if the setting is ignored — pinning it to the default proved
-    nothing."""
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES ('max_render_retries', '3')")
+def test_a_wrong_pin_aborts_enrollment_before_anything_is_sent(env, monkeypatch):
+    r = _remote_env(env, monkeypatch)
+    other = env.tmp / "other-tls"
+    tauth.ensure_secrets(other)
+    con = sqlite3.connect(env.db)
+    secret, _ = renderers.create_enrollment(con, "")
     con.commit()
     con.close()
-    _seed_video(db_path, status="RENDERING", render_fail_count=2)
-
-    render_agent._handle_render_failure("vid-1", "Chromium crashed")
-
-    video = _read_video(db_path)
-    assert video["status"] == "REVISION_REQUESTED"
-    assert video["render_fail_count"] == 3
-
-
-def test_handle_render_failure_persists_across_attempts(db_path):
-    """render_fail_count is never reset between attempts, mirroring ai_review_count."""
-    _seed_video(db_path, status="RENDERING", render_fail_count=0)
-    render_agent._handle_render_failure("vid-1", "crash 1")
-    assert _read_video(db_path)["render_fail_count"] == 1
-
-    con = sqlite3.connect(db_path)
-    con.execute("UPDATE videos SET status = 'RENDERING' WHERE id = 'vid-1'")
-    con.commit()
-    con.close()
-    render_agent._handle_render_failure("vid-1", "crash 2")
-
-    assert _read_video(db_path)["render_fail_count"] == 2
-
-
-def test_handle_render_failure_timeout_retry_status_is_render_queued(db_path):
-    """The retry_status override _stage_and_render passes for a subprocess
-    timeout auto-retries instead of bouncing to the agent."""
-    _seed_video(db_path, status="RENDERING", render_fail_count=0)
-    render_agent._handle_render_failure("vid-1", "timed out", retry_status="RENDER_QUEUED")
-    assert _read_video(db_path)["status"] == "RENDER_QUEUED"
-
-
-# ── _reconcile_rendering_videos ────────────────────────────────────────────────
-# TMDEV-32 changes this from TMDEV-1/TMDEV-30's original behavior: under the
-# cap it now requeues to RENDER_QUEUED (auto-retry, no agent needed) instead
-# of always bouncing to REVISION_REQUESTED — see render_agent.py's docstring.
-
-def test_reconcile_below_cap_sets_render_queued(db_path):
-    _seed_video(db_path, status="RENDERING", render_fail_count=0)
-
-    render_agent._reconcile_rendering_videos()
-
-    video = _read_video(db_path)
-    assert video["status"] == "RENDER_QUEUED"
-    assert video["render_fail_count"] == 1
-    comments = _read_comments(db_path)
-    assert "interrupted" in comments[-1]["content"].lower()
-
-
-def test_reconcile_exceeding_cap_sets_failed(db_path):
-    # default max_render_retries is 1 (TMDEV-74) -> the 2nd interruption
-    # (count becomes 2) exceeds it.
-    _seed_video(db_path, status="RENDERING", render_fail_count=1)
-
-    render_agent._reconcile_rendering_videos()
-
-    video = _read_video(db_path)
-    assert video["status"] == "FAILED"
-    assert video["render_fail_count"] == 2
-    comments = _read_comments(db_path)
-    assert "giving up" in comments[-1]["content"].lower()
-
-
-def test_reconcile_ignores_videos_not_rendering(db_path):
-    _seed_video(db_path, video_id="vid-2", status="VOICING", render_fail_count=0)
-
-    render_agent._reconcile_rendering_videos()
-
-    video = _read_video(db_path, video_id="vid-2")
-    assert video["status"] == "VOICING"
-    assert video["render_fail_count"] == 0
-
-
-def test_reconcile_no_rendering_videos_is_noop(db_path):
-    _seed_video(db_path, status="VIDEO_READY", render_fail_count=0)
-
-    render_agent._reconcile_rendering_videos()  # should not raise or change anything
-
-    assert _read_video(db_path)["status"] == "VIDEO_READY"
-
-
-# ── AI-review model/fps settings and the loop-cap split (VQA-7) ────────────
-
-def _seed_for_review(db_path, dirs, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    _seed_video(db_path, status="RENDERING")
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
-
-
-def test_handle_render_success_passes_model_and_fps_from_settings(db_path, dirs, monkeypatch):
-    """ai_review.py is deliberately DB-free, so the renderer is the only place
-    these settings can be read — if this pass-through breaks, the review
-    silently runs on the module defaults and every settings change is inert."""
-    _seed_for_review(db_path, dirs, monkeypatch)
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES ('ai_review_model', 'gemini-3.6-flash')")
-    con.execute("INSERT INTO settings (key, value) VALUES ('ai_review_fps', '20')")
-    con.commit()
-    con.close()
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={"overall": "fine", "must_fix": [], "suggestions": [],
-                                          "feedback": "fine"}) as run:
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    assert run.call_args.kwargs["model"] == "gemini-3.6-flash"
-    assert run.call_args.kwargs["fps"] == "20"
-
-
-def test_handle_render_success_uses_review_defaults_when_unset(db_path, dirs, monkeypatch):
-    _seed_for_review(db_path, dirs, monkeypatch)
-    monkeypatch.delenv("AI_REVIEW_MODEL", raising=False)
-    monkeypatch.delenv("AI_REVIEW_FPS", raising=False)
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={"overall": "fine", "must_fix": [], "suggestions": [],
-                                          "feedback": "fine"}) as run:
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    assert run.call_args.kwargs["model"] == "gemini-2.5-flash"
-    assert run.call_args.kwargs["fps"] == "10"
-
-
-def test_ai_review_loop_cap_defaults_to_one_and_is_independent(db_path, monkeypatch):
-    """The split itself. Before VQA-7 both budgets read one key, so lowering
-    the review loop halved the render retry budget as a side effect.
-
-    Asserted by moving one row and watching the *other* accessor stay put:
-    both defaults are 1 since TMDEV-74, so comparing the two default values
-    would pass even if the split were reverted."""
-    monkeypatch.delenv("AI_REVIEW_MAX_LOOPS", raising=False)
-    monkeypatch.delenv("MAX_RENDER_RETRIES", raising=False)
-    monkeypatch.setattr(render_agent, "DB_PATH", str(db_path))
-    assert render_agent._max_ai_review_loops() == 1
-    assert render_agent._max_render_retries() == 1
-
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES ('ai_review_max_loops', '2')")
-    con.commit()
-    con.close()
-    assert render_agent._max_ai_review_loops() == 2
-    # ...and the render budget is untouched by that write.
-    assert render_agent._max_render_retries() == 1
-
-
-def test_render_retry_budget_is_unaffected_by_the_review_loop_setting(db_path):
-    """A crashing render must still get its full retry budget when the review
-    loop is set to 1 — the two caps are separate keys (VQA-7)."""
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES ('ai_review_max_loops', '1')")
-    con.commit()
-    con.close()
-    _seed_video(db_path, status="RENDERING")
-
-    # default max_render_retries is 1 -> failure 1 retries, failure 2 gives up.
-    # Writing ai_review_max_loops above must not change either boundary.
-    render_agent._handle_render_failure("vid-1", "boom")
-    assert _read_video(db_path)["status"] == "REVISION_REQUESTED"
-
-    for _ in range(1):
-        con = sqlite3.connect(db_path)
-        con.execute("UPDATE videos SET status = 'RENDERING' WHERE id = 'vid-1'")
-        con.commit()
-        con.close()
-        render_agent._handle_render_failure("vid-1", "boom")
-
-    video = _read_video(db_path)
-    assert video["render_fail_count"] == 2
-    assert video["status"] == "FAILED"
-
-
-# ── Feedback storage vs comment truncation (VQA-7 follow-up) ──────────────
-
-def _long_review(n_chars: int = 12000) -> str:
-    body = "\n".join(f"- **animation_defect** @ 0:{i:02d} — a real blocking defect number {i}"
-                     for i in range(400))
-    return ("**Overall:** many problems.\n\n**Must fix (400):**\n" + body)[:n_chars]
-
-
-def test_gemini_feedback_is_stored_in_full(db_path, dirs, monkeypatch):
-    """The agent acts on gemini_feedback, and must-fix entries are no longer
-    capped by the prompt — so any cap here would silently drop real blocking
-    defects. This is the assertion that keeps the column uncapped."""
-    _seed_for_review(db_path, dirs, monkeypatch)
-    feedback = _long_review()
-    assert len(feedback) > 8000  # the cap that used to apply
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={"overall": "many problems", "must_fix": [],
-                                          "suggestions": [], "feedback": feedback}):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    assert _read_video(db_path)["gemini_feedback"] == feedback
-
-
-def test_long_review_comment_is_truncated_and_says_so(db_path, dirs, monkeypatch):
-    """The comment stays capped, but silently clipping it would let the agent
-    mistake a clipped review for a short one and miss blocking defects."""
-    _seed_for_review(db_path, dirs, monkeypatch)
-    feedback = _long_review()
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={"overall": "many problems", "must_fix": [],
-                                          "suggestions": [], "feedback": feedback}):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    body = "\n".join(c["content"] for c in _read_comments(db_path))
-    assert "gemini_feedback" in body        # points at the complete copy
-    assert "truncated" in body
-    for c in _read_comments(db_path):
-        assert len(c["content"]) <= render_agent._COMMENT_MAX_CHARS
-
-
-def test_short_review_comment_is_untouched(db_path, dirs, monkeypatch):
-    """The truncation marker must not appear on a review that fits."""
-    _seed_for_review(db_path, dirs, monkeypatch)
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={"overall": "fine", "must_fix": [], "suggestions": [],
-                                          "feedback": "**Overall:** fine.\n\nNo blocking errors."}):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    body = "\n".join(c["content"] for c in _read_comments(db_path))
-    assert "truncated" not in body
-
-
-def test_truncate_comment_helper_boundaries():
-    assert render_agent._truncate_comment("") == ""
-    exact = "x" * render_agent._COMMENT_MAX_CHARS
-    assert render_agent._truncate_comment(exact) == exact          # at the cap, untouched
-    over = render_agent._truncate_comment("y" * (render_agent._COMMENT_MAX_CHARS + 1))
-    assert len(over) <= render_agent._COMMENT_MAX_CHARS            # never grows past the cap
-    assert over.endswith("for the complete review.")
-
-
-def test_error_comment_keeps_the_routing_clause_when_the_error_is_long(db_path, dirs, monkeypatch):
-    """httpx embeds the whole request URL in its error strings, so a review
-    error can easily exceed the comment cap. The routing statement has to
-    survive that: a comment that says an error happened but not where the
-    video went is worse than no comment."""
-    _seed_for_review(db_path, dirs, monkeypatch)
-    huge_error = "Gemini review failed: " + ("u" * 5000)
-
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                            return_value={"overall": "", "must_fix": [], "suggestions": [],
-                                          "feedback": "AI review did not run: boom",
-                                          "error": huge_error}):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-
-    body = "\n".join(c["content"] for c in _read_comments(db_path))
-    assert "advancing to VIDEO_READY" in body
-    assert _read_video(db_path)["status"] == "VIDEO_READY"   # fail-open preserved
-    for c in _read_comments(db_path):
-        assert len(c["content"]) <= render_agent._COMMENT_MAX_CHARS
-
-
-# ── _setting precedence (TMDEV-73) ──────────────────────────────────────────
-# The settings table is the source of truth; env is a fallback only. A *blank*
-# row must fall through rather than win: onboarding seeds "" for every
-# credential it did not ask about, so an empty row would otherwise shadow a key
-# supplied through the container environment and silently skip AI review.
-
-def _row(db_path, key, value):
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
-    con.commit()
-    con.close()
-
-
-def test_setting_prefers_a_populated_row_over_env(db_path, monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "from-env")
-    _row(db_path, "gemini_api_key", "from-db")
-    assert render_agent._setting("gemini_api_key", "") == "from-db"
-
-
-def test_setting_falls_back_to_env_when_no_row_exists(db_path, monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "from-env")
-    assert render_agent._setting("gemini_api_key", "") == "from-env"
-
-
-def test_blank_row_falls_through_to_env(db_path, monkeypatch):
-    """The regression guard: onboarding writes "" for an unsupplied key, and a
-    stack that supplies it via `environment:` would otherwise lose AI review."""
-    monkeypatch.setenv("GEMINI_API_KEY", "from-env")
-    _row(db_path, "gemini_api_key", "")
-    assert render_agent._setting("gemini_api_key", "") == "from-env"
-
-
-def test_blank_row_and_no_env_yields_the_default(db_path, monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    _row(db_path, "gemini_api_key", "")
-    assert render_agent._setting("gemini_api_key", "fallback") == "fallback"
-
-
-def test_blank_row_does_not_break_the_int_settings(db_path, monkeypatch):
-    """int("") would raise; the accessors catch it, but falling through means
-    the configured default applies instead of the hardcoded one."""
-    monkeypatch.delenv("MAX_RENDER_RETRIES", raising=False)
-    _row(db_path, "max_render_retries", "")
-    assert render_agent._max_render_retries() == 1
-
-
-def test_the_renderer_matches_the_other_two_key_readers(db_path, monkeypatch):
-    """mcp/server.py's key helpers and pipeline.py's _secret both use
-    `stored or env`. Three readers of one table must not disagree."""
-    monkeypatch.setenv("GEMINI_API_KEY", "from-env")
-    _row(db_path, "gemini_api_key", "")
-    assert render_agent._setting("gemini_api_key", "") == \
-        (pipeline_module._secret({"gemini_api_key": ""}, "gemini_api_key", "GEMINI_API_KEY"))
-
-
-# ── Usage recording and the price sync (TMDEV-107) ───────────────────────────
-
-def _usage_rows(db_path):
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    rows = con.execute("SELECT e.*, l.video_id FROM usage_events e "
-                       "LEFT JOIN usage_event_videos l ON l.event_id = e.id").fetchall()
-    con.close()
-    return rows
-
-
-def _review_ready(db_path, dirs, monkeypatch):
-    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    _seed_video(db_path, status="RENDERING")
-    remotion_dir, _ = dirs
-    scene_dir = remotion_dir / "public" / "vid-1"
-    scene_dir.mkdir(parents=True)
-    (scene_dir / "scene-config.json").write_text('{"scenes": []}')
-
-
-def test_each_review_is_recorded_against_the_video(db_path, dirs, monkeypatch):
-    """A review that loops twice costs two rows — the old flat 2¢ could not
-    tell one review from three."""
-    _review_ready(db_path, dirs, monkeypatch)
-    usage = {"model": "gemini-2.5-flash", "fps": 10,
-             "usageMetadata": {"promptTokenCount": 66000, "candidatesTokenCount": 300}}
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                           return_value={"overall": "", "must_fix": [], "suggestions": [],
-                                         "feedback": "ok", "usage": usage}):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-    [row] = _usage_rows(db_path)
-    assert (row["service"], row["model"], row["operation"], row["video_id"]) == \
-        ("gemini", "gemini-2.5-flash", "ai_review", "vid-1")
-    assert json.loads(row["units"]) == {"input": 66000, "output": 300}
-    assert row["cost_basis"] == "priced"  # gemini-2.5-flash is in the built-in snapshot
-
-
-def test_a_review_without_usage_records_nothing(db_path, dirs, monkeypatch):
-    """A review that never reached Gemini (no usage key) was not billed."""
-    _review_ready(db_path, dirs, monkeypatch)
-    with mock.patch.object(render_agent.ai_review, "run_ai_review",
-                           return_value={"overall": "", "must_fix": [], "suggestions": [],
-                                         "feedback": "AI review did not run: x", "error": "x"}):
-        render_agent._handle_render_success("vid-1", "/output_videos/proj-1/vid-1.mp4")
-    assert _usage_rows(db_path) == []
+    token = renderers.encode_enrollment_token(GATEWAY_URL, secret, tauth.gateway_pin(other))
+    before = len(env.rec.requests)
+    with pytest.raises(render_agent.EnrollmentError, match="nothing was sent"):
+        render_agent.enroll(token, env.tmp / "state2" / "renderer.json", {}, transport=env.rec)
+    assert len(env.rec.requests) == before
+    assert env.sql("SELECT used_at FROM renderer_enrollments WHERE secret_hash = ?",
+                   (renderers.hash_secret(secret),))[0]["used_at"] is None
+    assert r.state.is_file()
+
+
+def test_a_rotated_credential_is_saved_before_it_is_used(env, monkeypatch):
+    r = _remote_env(env, monkeypatch)
+    rid = r.identity.renderer_id
+    env.sql("UPDATE renderers SET credential_issued_at = '2020-01-01T00:00:00Z' WHERE id = ?", (rid,))
+    monkeypatch.setattr(render_agent, "_client", render_agent.GatewayClient(r.identity, transport=env.rec))
+    assert render_agent._beat() is True
+    saved = json.loads(r.state.read_text())
+    assert saved["credential"] != r.credential and r.identity.credential() == saved["credential"]
+    assert stat.S_IMODE(os.stat(r.state).st_mode) == 0o600
+    assert render_agent._beat() is True                    # the new one authenticates
+    assert env.rec.requests[-1]["auth"] == f"Bearer {saved['credential']}"
+    assert env.renderer(rid)["previous_credential_hash"] == ""
+
+
+def test_a_heartbeat_waits_while_a_rotated_credential_is_being_saved(env, monkeypatch):
+    """Heartbeat A receives a rotated credential C1 and is slow to save it.
+    Heartbeat B must not go out with the old credential meanwhile: the gateway
+    would issue C2 in C1's place, and if A's save of C1 landed last the
+    renderer would keep a credential nothing accepts."""
+    r = _remote_env(env, monkeypatch)
+    rid = r.identity.renderer_id
+    env.sql("UPDATE renderers SET credential_issued_at = '2020-01-01T00:00:00Z' WHERE id = ?", (rid,))
+    monkeypatch.setattr(render_agent, "_client", render_agent.GatewayClient(r.identity, transport=env.rec))
+    real_save = r.identity.save_rotated
+    in_save, release = threading.Event(), threading.Event()
+
+    def slow_first_save(credential, expires_at):
+        if not in_save.is_set():
+            in_save.set()
+            assert release.wait(10)
+        real_save(credential, expires_at)
+    monkeypatch.setattr(r.identity, "save_rotated", slow_first_save)
+    results = {}
+    a = threading.Thread(target=lambda: results.update(a=render_agent._beat()))
+    a.start()
+    assert in_save.wait(10)
+    sent = len(env.rec.beats())
+    b = threading.Thread(target=lambda: results.update(b=render_agent._beat()))
+    b.start()
+    b.join(0.3)
+    assert b.is_alive() and len(env.rec.beats()) == sent       # B waits for A's save
+    release.set()
+    a.join(10)
+    b.join(10)
+    assert results == {"a": True, "b": True}
+    saved = json.loads(r.state.read_text())["credential"]
+    assert r.identity.credential() == saved
+    assert render_agent._beat() is True                         # what was kept is what the gateway accepts
+    assert env.rec.requests[-1]["auth"] == f"Bearer {saved}"
+
+
+def test_httpx_request_lines_stay_out_of_the_renderers_log():
+    """A claim every 20 s and a heartbeat every 30 s: httpx's INFO line per
+    request would be thousands of lines a day. Its warnings still show."""
+    import logging
+    assert logging.getLogger("httpx").level == logging.WARNING
+    assert logging.getLogger("httpcore").level == logging.WARNING
+    assert logging.getLogger("render_agent").level == logging.NOTSET     # its own INFO lines are untouched
+
+
+def test_a_rotated_credential_that_cannot_be_saved_is_not_used(env, monkeypatch):
+    r = _remote_env(env, monkeypatch)
+
+    def full_disk(path, data):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(render_agent, "_write_state", full_disk)
+    r.identity.save_rotated("new-credential", "2099-01-01T00:00:00Z")
+    assert r.identity.credential() == r.credential
+
+
+def test_an_expired_credential_is_noted(env, monkeypatch, caplog):
+    r = _remote_env(env, monkeypatch)
+    env.sql("UPDATE renderers SET credential_expires_at = '2020-01-01T00:00:00Z' WHERE id = ?",
+            (r.identity.renderer_id,))
+    monkeypatch.setattr(render_agent, "_client", render_agent.GatewayClient(r.identity, transport=env.rec))
+    assert render_agent._beat() is False
+    assert "credential expired" in render_agent._st.last_error and "credential expired" in caplog.text
+    assert r.credential not in caplog.text
+
+
+def test_a_remote_renderer_stages_the_bundles_scenes_and_clears_them(tmp_path, monkeypatch):
+    env = make_env(tmp_path, monkeypatch, builtin=False)
+    r = _remote_env(env, monkeypatch)
+    monkeypatch.setattr(render_agent, "_client", render_agent.GatewayClient(r.identity, transport=env.rec))
+    (env.generated / "vid-1" / "sets").mkdir(parents=True)
+    (env.generated / "vid-1" / "Intro.tsx").write_text("intro")
+    (env.generated / "vid-1" / "sets" / "street.ts").write_text("street")
+    (env.generated / "Legacy.tsx").write_text("legacy")
+    (env.client_generated / "Leftover.tsx").write_text("another job's scene")
+    seen = {}
+
+    def look(argv, kw):
+        seen["tree"] = sorted(str(p.relative_to(env.client_generated)) for p in env.client_generated.rglob("*")
+                              if p.is_file())
+    env.seed(scenes=[{"type": "generated", "src": "vid-1/Intro"}, {"type": "generated", "src": "Legacy"}])
+    render_agent._beat()
+    with mock.patch("subprocess.Popen", side_effect=FakeRemotion(on_start=look)):
+        render_agent._loop_once()
+    assert seen["tree"] == ["Legacy.tsx", "vid-1/Intro.tsx", "vid-1/sets/street.ts"]
+    assert list(env.client_generated.iterdir()) == []
+    assert env.video()["render_uploaded_at"] and env.video()["video_path"].endswith("vid-1.mp4")
+
+
+def test_load_identity(tmp_path, monkeypatch):
+    env = make_env(tmp_path, monkeypatch, builtin=False)
+    monkeypatch.setenv("TUBEMATIC_RENDERER_STATE", str(tmp_path / "state"))
+    with pytest.raises(render_agent.EnrollmentError, match="not enrolled"):
+        render_agent._load_identity({}, transport=env.rec)
+    r = _remote_env(env, monkeypatch)
+    assert r.state == tmp_path / "state" / "renderer.json"
+    # the token it already redeemed is not redeemed again on a restart
+    monkeypatch.setenv("TUBEMATIC_ENROLL_TOKEN", r.token)
+    before = len(env.rec.requests)
+    ident = render_agent._load_identity({}, transport=env.rec)
+    assert isinstance(ident, render_agent.RemoteIdentity) and ident.credential() == r.credential
+    assert len(env.rec.requests) == before
+    # a damaged state file is refused rather than trusted
+    data = json.loads(r.state.read_text())
+    data["pin"] = "sha256:" + "0" * 64
+    r.state.write_text(json.dumps(data))
+    monkeypatch.delenv("TUBEMATIC_ENROLL_TOKEN")
+    with pytest.raises(render_agent.EnrollmentError, match="damaged"):
+        render_agent._load_identity({}, transport=env.rec)
+    monkeypatch.setenv("TUBEMATIC_RENDERER_BUILTIN", "1")
+    assert isinstance(render_agent._load_identity({}), render_agent.BuiltinIdentity)
+
+
+# ── what the renderer reports about itself ────────────────────────────────────
+
+def test_the_compute_report(monkeypatch):
+    monkeypatch.setattr(render_agent.shutil, "which", lambda name: None)
+    monkeypatch.setenv("TUBEMATIC_GPU_UUID", "GPU-aaaa")
+    monkeypatch.setenv("TUBEMATIC_GPU_NAME", "NVIDIA GeForce GTX 1650")
+    report = render_agent._compute_report()
+    assert report["cpus"] == os.cpu_count() and report["memory_bytes"] > 0
+    assert report["gpus"] == [{"name": "NVIDIA GeForce GTX 1650", "uuid": "GPU-aaaa", "memory_mb": None}]
+    monkeypatch.setattr(render_agent.shutil, "which", lambda name: "/usr/bin/nvidia-smi")
+    smi = mock.Mock(returncode=0, stdout="NVIDIA GeForce GTX 1650, GPU-aaaa, 4096\n", stderr="")
+    with mock.patch("subprocess.run", return_value=smi):
+        assert render_agent._compute_report()["gpus"] == [
+            {"name": "NVIDIA GeForce GTX 1650", "uuid": "GPU-aaaa", "memory_mb": 4096}]
+
+
+def test_the_pinned_context_trusts_one_certificate_and_no_host_name(tmp_path):
+    tauth.ensure_secrets(tmp_path)
+    ctx = render_agent.pinned_context(tauth.read_secret(tauth.TLS_CERT_NAME, tmp_path))
+    assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is False
+    assert len(ctx.get_ca_certs()) == 1
+
+
+def test_the_log_redacts_the_renderers_own_credential(env):
+    assert render_agent._log_secrets() == [BUILTIN_TOKEN]
+
+
+# ── real TLS ──────────────────────────────────────────────────────────────────
+
+def test_enrollment_and_a_heartbeat_over_real_tls(tmp_path, monkeypatch):
+    env = make_env(tmp_path, monkeypatch, builtin=False)
+    tls = tmp_path / "tls"
+    tauth.ensure_secrets(tls)
+    seen = []
+    inner = env.app.wsgi_app
+
+    def counting(environ, start_response):
+        seen.append(environ["PATH_INFO"])
+        return inner(environ, start_response)
+    env.app.wsgi_app = counting
+    server = render_gateway.make_gateway_server(env.app, "127.0.0.1", 0, secrets_dir=tls)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"https://127.0.0.1:{server.server_port}"
+        monkeypatch.setenv("TUBEMATIC_GATEWAY_URL", url)
+
+        def token(pin):
+            con = sqlite3.connect(env.db)
+            secret, _ = renderers.create_enrollment(con, "")
+            con.commit()
+            con.close()
+            return renderers.encode_enrollment_token(url, secret, pin)
+        other = tmp_path / "other"
+        tauth.ensure_secrets(other)
+        with pytest.raises(render_agent.EnrollmentError, match="nothing was sent"):
+            render_agent.enroll(token(tauth.gateway_pin(other)), tmp_path / "s1" / "renderer.json", {})
+        assert seen == []
+        identity = render_agent.enroll(token(tauth.gateway_pin(tls)), tmp_path / "s2" / "renderer.json", {})
+        assert seen == ["/v1/enroll"]
+        monkeypatch.setattr(render_agent, "_client", render_agent.GatewayClient(identity))
+        assert render_agent._beat() is True
+        assert seen == ["/v1/enroll", "/v1/heartbeat"]
+        assert env.renderer(identity.renderer_id)["last_heartbeat_at"]
+        # a client pinned to another certificate never gets an answer
+        data = dict(identity.data, cert_pem=tauth.read_secret(tauth.TLS_CERT_NAME, other))
+        stranger = render_agent.GatewayClient(render_agent.RemoteIdentity(tmp_path / "s3.json", data))
+        with pytest.raises(render_agent.GatewayError):
+            stranger.send("POST", "/v1/heartbeat", json_body={})
+        assert seen == ["/v1/enroll", "/v1/heartbeat"]
+    finally:
+        server.shutdown()
+        thread.join(5)

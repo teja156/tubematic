@@ -623,6 +623,13 @@ def _giffx_scenes(root: Path) -> tuple[list, list, list]:
 # code still reads the image_provider row it deletes, so it must not run
 # alongside new code — see the --no-stop refusal in run_upgrade.
 OPENAI_ONLY_IMAGES_MIGRATION = 16
+# The migration that adds the renderers table and render leases (TMDEV-189).
+# From it on the renderer has no database: it claims through the render
+# gateway in tubematic-api. Recreated one at a time, an old renderer would keep
+# claiming straight from the database beside the gateway (two claimants, no
+# lease), and a new API recreated first would wait for a renderer that is not
+# there yet — see the --no-stop refusal in run_upgrade.
+RENDER_GATEWAY_MIGRATION = 19
 
 
 def _worker_split_pending() -> bool:
@@ -790,6 +797,12 @@ def run_upgrade(*, dry_run: bool, force: bool, no_stop: bool, install_mode: str 
         rep.warn("--no-stop is refused for this upgrade: it retires the Gemini image provider, "
                  "and old containers recreated one at a time would keep reading a setting the "
                  "new database no longer has. Re-run without --no-stop.")
+        return 1
+    if no_stop and applied < RENDER_GATEWAY_MIGRATION:
+        rep.warn("--no-stop is refused for this upgrade: the renderer stops reading the "
+                 "database and renders through the API's new render gateway, and old and new "
+                 "containers recreated one at a time would have an old renderer claiming "
+                 "videos beside the gateway. Re-run without --no-stop.")
         return 1
 
     errors = [i for i in checks.check_prerequisites(mode=mode)

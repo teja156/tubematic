@@ -19,7 +19,7 @@ pronunciation_lexicon, trending_sources), so this script carries no type
 table of its own to drift out of sync with SETTINGS_SPEC.
 
 No setting needs a restart to take effect. Every reader queries the DB live
-at use time — renderer/api/worker.py::_setting, render_agent.py::_setting, mcp/server.py::_get_setting
+at use time — renderer/api/worker.py::_setting, render_results.py::_setting, mcp/server.py::_get_setting
 and renderer/api/pipeline.py::_read_all_settings are all called per-use, with
 no module-level reads and no in-process cache — so a write here applies to
 the very next read. --restart exists only for the unrelated case of a wedged
@@ -180,7 +180,8 @@ def _api_token() -> str:
         return read_secret("api_token")
     except SecretMissing as exc:
         raise SystemExit(f"The pipeline API needs its token: {exc}.\n"
-                         f"Create it: PYTHONPATH={_repo_root()} python3 -m tubematic_core.auth ensure")
+                         f"Create it: PYTHONPATH={_repo_root()} /opt/tubematic/.venv/bin/python3 "
+                         "-m tubematic_core.auth ensure")
 
 
 def _http_json(method: str, url: str, body=None, timeout: int = 30) -> tuple[int, dict]:

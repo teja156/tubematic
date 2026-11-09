@@ -387,3 +387,26 @@ def test_the_gpu_state_is_reported_without_the_card_uuid(install, monkeypatch):
     assert "GPU (warn)" in report and "no longer on this machine" in report
     assert "NVIDIA GeForce GTX 1650" in report
     assert "1304d027" not in report
+
+
+def test_the_gpu_readout_comes_from_the_built_in_renderers_probe(install, monkeypatch):
+    """Since the render gateway the probe is stored on the built-in renderer's
+    row in the renderers table, not in a settings row; the report must still
+    say what the renderer reported, and still without the card's UUID."""
+    from onboard import gpu
+    card = gpu.Gpu(0, "GPU-1304d027-cdec-cc65-95ea-ba9e1a267376", "NVIDIA GeForce GTX 1650",
+                   4096, "595.91.07")
+    override = install["data"] / "compose.gpu.json"
+    override.write_text(gpu.render_override(card, [card]))
+    monkeypatch.setattr(gpu, "OVERRIDE_PATH", override)
+    monkeypatch.setattr(gpu, "docker_has_nvidia_runtime", lambda run=None: True)
+    monkeypatch.setattr(gpu, "list_gpus", lambda run=None: [card])
+    con = sqlite3.connect(install["db"])
+    con.execute("UPDATE renderers SET gpu_probe = ?, gpu_verified = 1 WHERE id = 'builtin'",
+                (json.dumps({"configured": True, "ok": True, "renderer": "ANGLE (NVIDIA)",
+                             "gpu": {"uuid": card.uuid, "name": card.name}}),))
+    con.commit()
+    con.close()
+    report = _collect(install)
+    assert "GPU (ok): Rendering on NVIDIA GeForce GTX 1650" in report
+    assert "1304d027" not in report

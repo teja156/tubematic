@@ -51,6 +51,7 @@ try:
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
+    from tubematic_core import renderers as trenderers
     from tubematic_core import usage as tusage
     from tubematic_core import version as tversion
     from tubematic_core import voice_models as tvoice
@@ -63,6 +64,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
+    from tubematic_core import renderers as trenderers
     from tubematic_core import usage as tusage
     from tubematic_core import version as tversion
     from tubematic_core import voice_models as tvoice
@@ -71,14 +73,14 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
 SETTINGS_SPEC = {
     "pipeline_paused":        ("bool",      "false"),
     # Off by default, and experimental (TMDEV-165). Keep in sync: onboard/
-    # config.py GEMINI_REVIEW_ENABLED, its actions.py fallbacks, render_agent.py.
+    # config.py GEMINI_REVIEW_ENABLED, its actions.py fallbacks, render_results.py.
     "gemini_review_enabled":  ("bool",      "false"),
-    # max_render_retries caps RENDER retries only — crash, timeout and
-    # worker-restart reconciliation (render_agent.py::_max_render_retries). It used
-    # to double as the AI-review loop cap; VQA-7 split those apart. It was
-    # called max_feedback_loops until TMDEV-74, which renamed it because the
-    # old name read like the AI-review loop it no longer governs — see the
-    # one-time key rename in _init_db.
+    # max_render_retries caps RENDER retries only — crash, timeout, a renderer
+    # restart and an expired render lease (render_results.max_render_retries).
+    # It used to double as the AI-review loop cap; VQA-7 split those apart.
+    # It was called max_feedback_loops until TMDEV-74, which renamed it
+    # because the old name read like the AI-review loop it no longer governs —
+    # see the one-time key rename in _init_db.
     "max_render_retries":     ("int",       "1"),
     "ai_review_max_loops":    ("int",       "1"),
     "ai_review_model":        ("str",       "gemini-2.5-flash"),
@@ -112,8 +114,9 @@ SETTINGS_SPEC = {
     # The absolute ceiling on one render: a crash detector of last resort, not a
     # budget. 3 h covers a 180 s Short on the CPU (~1 h 40) with headroom; a
     # slow CPU on an over-length video may need it raised. Stalls are caught
-    # far sooner by render_stall_timeout_secs: the worker reads Remotion's
-    # progress counters and kills a render whose count stops advancing.
+    # far sooner by render_stall_timeout_secs: the renderer reads Remotion's
+    # progress counters and kills a render whose count stops advancing. Both
+    # reach the renderer in the render gateway's claim reply.
     "render_timeout_secs":    ("int",       "10800"),
     "render_stall_timeout_secs": ("int",    "600"),
     # The cron poller's supervisor (TMDEV-129). max_concurrent_agent_sessions
@@ -132,8 +135,8 @@ SETTINGS_SPEC = {
     # The "Made with tubematic.ai" mark burned into every render (TMDEV-141).
     # A setting, and deliberately NOT a scene-config.json key: the agent writes
     # that file and has no tool that writes settings, so only a human can
-    # switch the mark off. The worker reads this per render and passes it to
-    # the composition as a prop.
+    # switch the mark off. The render gateway sends it with each claim and the
+    # renderer passes it to the composition as a prop.
     "watermark_enabled":      ("bool",      "true"),
     # Publishing to social platforms via postforme.dev (TMDEV-83). Off by
     # default — an install with no postforme account must behave exactly as it
@@ -185,7 +188,7 @@ SETTINGS_SPEC = {
     "log_retention_days":     ("int",       "14"),
     # Days after publishing before a PUBLISHED video's mp4 and job dir are
     # deleted and the row archived (TMDEV-84). 0 disables the sweep. Applied by
-    # the render worker's hourly pass, so a change lands within the hour.
+    # the worker's hourly pass, so a change lands within the hour.
     "retention_days":         ("int",       "7"),
     # Days after a FAILED or TOPIC_REJECTED video last changed before its files
     # are deleted and the row archived (TMDEV-134). A separate key, off by
@@ -511,9 +514,11 @@ RESOLVED_VISUAL_STYLES = VALID_CANVASES
 # (swangle) renders the style, at about 1.1 s a frame, so a 90-second Short takes
 # ~50 minutes and a long one over two hours. With the GPU onboarding step, the
 # dashboard panel and its Test button the refusal names something a person can
-# do. Gate on the probe's "working" status, never on "configured": a configured
-# GPU whose renders fall back to the CPU is the case the gate must catch, and the
-# worker's _render_on_gpu() asks the same question of the same probe.
+# do. Gate on the "working" status, never on "configured": a configured GPU
+# whose renders fall back to the CPU is the case the gate must catch. The status
+# is tubematic_core.renderers.gpu_status's aggregate over every renderer (each
+# one's probe arrives through the render gateway), the same rule the gateway
+# uses to decide which renderer may take a GPU render.
 # Keep in sync: the other copy of this block (pinned by an agreement test).
 CARTOON3D_NEEDS_GPU = (
     "Cartoon 3D renders on the GPU only (on the CPU a 90-second Short takes about 50 minutes). "
@@ -533,10 +538,13 @@ RENDERERS = ("dom", "cartoon_3d")
 
 
 def gpu_probe_status(raw_probe) -> str:
-    """The renderer's GPU state from the worker's stored probe (the settings
-    row gpu_probe_result, JSON): "unknown" (never probed), "not_configured"
-    (no GPU override), "working" (configured and the last probe passed) or
-    "not_usable" (configured, but renders fall back to the CPU).
+    """One renderer's GPU state from its stored probe (the JSON in
+    renderers.gpu_probe, as the renderer reported it through the render
+    gateway): "unknown" (never probed), "not_configured" (no GPU override),
+    "working" (configured and the last probe passed) or "not_usable"
+    (configured, but renders fall back to the CPU). The gates read the
+    install-wide aggregate, tubematic_core.renderers.gpu_status, which uses
+    these same values.
     Keep in sync: the other copy (pinned by an agreement test)."""
     import json as _json_
     try:
@@ -1208,7 +1216,8 @@ def _video_duration_secs(video_id: str):
 
 
 def _output_path(project_id: str, video_id: str):
-    """Where the worker renders this video's mp4, or None if it cannot be named.
+    """Where this video's rendered mp4 lives (the render gateway writes a
+    renderer's upload there), or None if it cannot be named.
 
     Derived from the ids (tubematic_core.jobfiles.output_file), never from
     videos.video_path. That column was writable by PATCH and update_video, and
@@ -1366,7 +1375,7 @@ def _seed_mascot(con, project_id, visual_style: str) -> str:
     """The mascot a new video starts with: the project's default (or the install's),
     but only while the renderer's GPU is working and never on a Cartoon 3D video.
     Anything else is "": seeding is a convenience and must never refuse a video."""
-    if visual_style == "cartoon_3d" or gpu_status(con)["status"] != "working":
+    if visual_style == "cartoon_3d" or trenderers.gpu_status(con)["status"] != "working":
         return ""
     prow = con.execute("SELECT default_mascot_id FROM projects WHERE id = ?",
                        (project_id,)).fetchone() if project_id else None
@@ -1375,12 +1384,12 @@ def _seed_mascot(con, project_id, visual_style: str) -> str:
 
 
 def _cartoon3d_gpu_error(con, style: str) -> str:
-    """Why `style` may not be chosen on this install's renderer, or "": only
-    cartoon_3d is gated, on the worker's GPU probe (gpu_status). Keep in sync:
-    mcp/server.py's _cartoon3d_gpu_error reads the same settings row."""
+    """Why `style` may not be chosen on this install, or "": only cartoon_3d
+    is gated, on whether any renderer can render on a GPU (gpu_status). Keep
+    in sync: mcp/server.py's _cartoon3d_gpu_error reads the same aggregate."""
     if style != "cartoon_3d":
         return ""
-    return cartoon_3d_gpu_error(style, gpu_status(con)["status"])
+    return cartoon_3d_gpu_error(style, trenderers.gpu_status(con)["status"])
 
 
 def _illustrated_needs_key(con, style: str) -> bool:
@@ -2255,18 +2264,18 @@ def start_publish(db_path: str, api_key: str, video_id: str, account_ids: list,
             "publications": [_publication_row(r) for r in rows]}, 201
 
 
-# ── GPU rendering (TMDEV-178) ────────────────────────────────────────────────
-# Bare settings rows, not SETTINGS_SPEC keys: nobody edits them through
-# POST /settings. The renderer (render_agent.py::_run_gpu_probe) writes the result —
-# only it can see the GPU, since this container has none — and a dashboard
-# Test request only stamps the request row for the worker's next pass.
-GPU_PROBE_RESULT_KEY = "gpu_probe_result"
-GPU_PROBE_REQUEST_KEY = "gpu_probe_requested_at"
-# `onboard.py --step gpu` sets this (a UTC time, db._now's format) before it
-# looks for a running render and recreates the renderer; until that time the
-# worker claims nothing (render_agent.py::_claim_next). The check-then-recreate is
-# otherwise racy: a render claimed between the two would be killed. The time
-# is a ceiling, so a crashed onboarding never stops rendering for long.
+# ── GPU rendering (TMDEV-178, TMDEV-189) ──────────────────────────────────────
+# Each renderer runs its own GPU probe (only it can see its GPU; this container
+# has none) and reports the result in its heartbeat; the render gateway stores it
+# in renderers.gpu_probe. A dashboard Test only stamps the built-in renderer's
+# renderers.gpu_probe_requested_at, and the gateway's next heartbeat reply tells
+# that renderer to probe again.
+# `onboard.py --step gpu` sets this bare settings row (a UTC time, db._now's
+# format) before it looks for a running render and recreates the renderer; until
+# that time the gateway hands the built-in renderer nothing. The
+# check-then-recreate is otherwise racy: a render claimed between the two would
+# be killed. The time is a ceiling, so a crashed onboarding never stops
+# rendering for long.
 RENDER_CLAIM_HOLD_KEY = "render_claim_hold_until"
 
 
@@ -2278,34 +2287,47 @@ def now_precise() -> str:
 
 
 def gpu_status(con) -> dict:
-    """GET /render/gpu's body, from the worker's last probe."""
-    rows = {r["key"]: r["value"] for r in con.execute(
-        "SELECT key, value FROM settings WHERE key IN (?, ?)",
-        (GPU_PROBE_RESULT_KEY, GPU_PROBE_REQUEST_KEY))}
+    """GET /render/gpu's body.
+
+    Two sources, on purpose. "status" is the install-wide aggregate
+    (tubematic_core.renderers.gpu_status: "working" while ANY renderer can render
+    on a GPU), because it is what every gate reads — Cartoon 3D, mascots,
+    _seed_mascot — and the dashboard gates on this same field; a gate that
+    looked at the built-in renderer alone would refuse a GPU style an enrolled
+    remote renderer can render. Every other field describes the BUILT-IN
+    renderer's own probe (configured, gpu, host_gpus, rendering_on, probe) and
+    its Test request (requested_at, pending, waiting_for_render): that is what
+    the dashboard's GPU panel shows and what its Test button asks for, and the
+    built-in renderer is the only one onboarding's GPU step configures.
+    """
+    row = con.execute("SELECT gpu_probe, gpu_probe_requested_at FROM renderers WHERE id = ?",
+                      (trenderers.BUILTIN_ID,)).fetchone()
+    raw_probe = row[0] if row else ""
     try:
-        probe = _json.loads(rows.get(GPU_PROBE_RESULT_KEY) or "null")
+        probe = _json.loads(raw_probe or "null")
     except ValueError:
         probe = None
     if not isinstance(probe, dict):
         probe = None
-    requested_at = rows.get(GPU_PROBE_REQUEST_KEY) or None
+    requested_at = (row[1] if row else "") or None
     pending = bool(requested_at) and (probe is None or requested_at > (probe.get("at") or ""))
+    # The renderer probes between renders, so a Test waits while the built-in
+    # renderer holds a render it has not uploaded yet (the AI review after an
+    # upload runs in the worker and does not hold the renderer).
     rendering = con.execute(
-        "SELECT 1 FROM videos WHERE status = 'RENDERING' LIMIT 1").fetchone() is not None
-    # unknown (never probed), not_configured, working, or not_usable (configured,
-    # but renders fall back to the CPU); the Cartoon 3D gate reads the same
-    status = gpu_probe_status(rows.get(GPU_PROBE_RESULT_KEY))
+        "SELECT 1 FROM videos WHERE status = 'RENDERING' AND renderer_id = ? "
+        "AND render_uploaded_at = '' LIMIT 1", (trenderers.BUILTIN_ID,)).fetchone() is not None
     return {
-        "status": status,
-        "rendering_on": "gpu" if status == "working" else "cpu",
+        "status": trenderers.gpu_status(con)["status"],
+        # unknown (never probed), not_configured, working, or not_usable
+        # (configured, but renders fall back to the CPU) — this renderer's own.
+        "rendering_on": "gpu" if gpu_probe_status(raw_probe) == "working" else "cpu",
         "configured": bool(probe and probe.get("configured")),
         "gpu": (probe or {}).get("gpu"),
         "host_gpus": (probe or {}).get("host_gpus") or [],
         "probe": probe,
         "requested_at": requested_at,
         "pending": pending,
-        # A Test request waits for the worker's next pass, and the worker
-        # holds its loop for a whole render.
         "waiting_for_render": pending and rendering,
     }
 
@@ -2724,7 +2746,7 @@ def create_pipeline_blueprint() -> Blueprint:
                 err = _mascot_pick_error(con, fields["mascot_id"])
                 if err:
                     return jsonify({"error": err}), 400
-                err = tmascots.mascot_gpu_error(gpu_status(con)["status"])
+                err = tmascots.mascot_gpu_error(trenderers.gpu_status(con)["status"])
                 if err:
                     return jsonify({"error": err}), 400
                 if will_be_cartoon:
@@ -3460,7 +3482,7 @@ def create_pipeline_blueprint() -> Blueprint:
             mascot_unchanged = prev is not None and (prev["default_mascot_id"] or "") == default_mascot
             if default_mascot not in ("", "none") and not mascot_unchanged:
                 err = (_mascot_pick_error(con, default_mascot)
-                       or tmascots.mascot_gpu_error(gpu_status(con)["status"]))
+                       or tmascots.mascot_gpu_error(trenderers.gpu_status(con)["status"]))
                 if err:
                     return jsonify({"error": err.replace("mascot_id", "default_mascot_id")}), 400
             con.execute(
@@ -3596,7 +3618,7 @@ def create_pipeline_blueprint() -> Blueprint:
             if coerced.get("default_mascot_id") and \
                     coerced["default_mascot_id"] != current["default_mascot_id"]:
                 err = (_mascot_pick_error(con, coerced["default_mascot_id"])
-                       or tmascots.mascot_gpu_error(gpu_status(con)["status"]))
+                       or tmascots.mascot_gpu_error(trenderers.gpu_status(con)["status"]))
                 if err:
                     return jsonify({"error": err.replace("mascot_id", "default_mascot_id")}), 400
 
@@ -4145,9 +4167,9 @@ def create_pipeline_blueprint() -> Blueprint:
         """Upload the mp4 and create one postforme post across every target —
         now, or at a scheduled time when the body carries `schedule`.
 
-        Runs inline rather than on the worker: the worker renders one video at
-        a time for ~20 minutes, and a human-clicked publish queued behind a
-        render would look broken. Measured live, the upload alone is ~50s for a
+        Runs inline rather than on the worker: a human-clicked publish queued
+        behind another background job (it was once a ~20-minute render) would
+        look broken. Measured live, the upload alone is ~50s for a
         153MB render, so this request is slow by design.
 
         The video is claimed (PUBLISHING, with one in-progress row per target)
@@ -4589,20 +4611,21 @@ def create_pipeline_blueprint() -> Blueprint:
 
     @bp.get("/render/gpu")
     def get_gpu_status():
-        """The renderer's GPU: configured or not, and whether its last probe
-        showed Chromium's WebGL on it."""
+        """The built-in renderer's GPU: configured or not, and whether its last
+        probe showed Chromium's WebGL on it; "status" is the install-wide
+        aggregate (see gpu_status)."""
         with _conn() as con:
             return jsonify(gpu_status(con))
 
     @bp.post("/render/gpu/test")
     def request_gpu_test():
-        """Ask the worker to probe again on its next pass. 202: the answer
-        arrives later in GET /render/gpu."""
+        """Ask the built-in renderer to probe again: the gateway's next
+        heartbeat reply tells it to, and it probes between renders. 202: the
+        answer arrives later in GET /render/gpu."""
         with _conn() as con:
-            con.execute(
-                "INSERT INTO settings (key, value) VALUES (?, ?)"
-                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                (GPU_PROBE_REQUEST_KEY, now_precise()))
+            trenderers.ensure_builtin(con)
+            con.execute("UPDATE renderers SET gpu_probe_requested_at = ? WHERE id = ?",
+                        (now_precise(), trenderers.BUILTIN_ID))
             return jsonify(gpu_status(con)), 202
 
     @bp.post("/prices/sync")

@@ -1,91 +1,193 @@
 # Rendering and Review
 
-Rendering happens in `tubematic-renderer`, a container with no HTTP server and no exposed ports,
-running `renderer/api/render_agent.py` (the renderer). It is a poll loop over the database: claim a
-video at `RENDER_QUEUED`, stage its files, run Remotion, optionally send the result to Gemini for
-review, and write back a status. Beside that it tests the GPU and runs the Cartoon 3D stills server,
-and nothing else: publishing, Auto Pilot, retention, notifications and the other timed sweeps are
-the worker's, in its own container, so none of them waits behind a render. See
-[The Worker](12-the-worker.md).
+Rendering is split across three processes, so that the one that renders is never the one that decides
+what happens to the video:
 
-It runs in its own container so that a render crash or an out-of-memory kill restarts only the
-renderer, leaving the API, the MCP server, the worker — and any agent session connected to them —
+| Process | Container | What it does |
+|---|---|---|
+| The renderer, `renderer/api/render_agent.py` | `tubematic-renderer` (the built-in renderer) | Runs Remotion. It has **no database**: it asks the render gateway for work, downloads the job's files, renders, uploads the mp4 and reports how the render ended. It also tests its GPU and, built-in only, runs the Cartoon 3D stills server |
+| The render gateway, `renderer/api/render_gateway.py` | `tubematic-api`, HTTPS port 4443 | Everything a renderer asks for: which video it gets, the job's files, where the mp4 goes, and what a failed render does to its video (`renderer/api/render_results.py`) |
+| The worker, `renderer/api/worker.py` | `tubematic-worker` | The AI review of every uploaded render, and two backstops: a render whose renderer stopped reporting, and a GPU-only video no renderer can take. See [The Worker](12-the-worker.md) |
+
+**Why the renderer has no database.** A renderer can be another machine. One that read SQLite would
+need the database file, the jobs volume and the output volume on that machine, and every renderer
+would hold every stored API key. Through the gateway a renderer holds one credential and the
+gateway's certificate, sees one job's files at a time, and can move a video only by reporting on a
+render it holds. The built-in renderer goes through exactly the same routes as a remote one, so the
+path every remote renderer depends on is the one every install runs every day. Enrolling a remote
+renderer is not offered by any command in this release; the gateway's side of it is in
+[HTTP API — The render gateway](05-http-api.md#the-render-gateway).
+
+The renderer runs in its own container so that a render crash or an out-of-memory kill restarts only
+the renderer, leaving the API, the MCP server, the worker — and any agent session connected to them —
 untouched.
 
 ```mermaid
 sequenceDiagram
-    participant W as render_agent.py
+    participant R as renderer (render_agent.py)
+    participant GW as render gateway (tubematic-api)
     participant DB as SQLite
-    participant R as npx remotion render
+    participant W as worker review thread
     participant G as Gemini
 
-    Note over W: startup
-    W->>DB: reconcile rows stuck at RENDERING
-    W->>W: test the GPU, start the stills server
-    loop every 20s while idle
-        W->>W: GPU test if one was requested,<br/>restart the stills server if it died
-        W->>DB: claim oldest RENDER_QUEUED<br/>(atomic, ORDER BY updated_at)
-        alt nothing queued
-            W-->>W: sleep
+    Note over R: startup
+    R->>R: test the GPU, start the stills server (built-in)
+    R->>GW: heartbeat, started: true, GPU probe
+    GW->>DB: re-queue whatever this renderer held
+    loop every 30 s, on its own thread
+        R->>GW: heartbeat (state, video + claim, last error)
+        GW->>DB: extend that claim's lease, store a new probe
+        GW-->>R: enabled, needs_upgrade, probe_now, stop (claims)
+    end
+    loop every 20 s while idle
+        R->>GW: claim
+        GW->>DB: pick a video (scheduler),<br/>refuse what cannot render,<br/>RENDER_QUEUED → RENDERING + lease
+        alt nothing for this renderer
+            GW-->>R: 204
         else claimed
-            W->>DB: status = RENDERING
-            W->>W: stage audio, timeline,<br/>scene-config, images
-            W->>R: render Composition
-            alt exit 0
-                W->>DB: video_path, video_version
-                opt review enabled and key set
-                    W->>G: upload mp4, poll ACTIVE,<br/>generateContent
-                    G-->>W: overall / mustFix / suggestions
-                end
-                W->>DB: VIDEO_READY or REVISION_REQUESTED
-            else crash
-                W->>DB: render_fail_count += 1<br/>REVISION_REQUESTED, or FAILED past the cap
-            else timeout
-                W->>DB: render_fail_count += 1<br/>RENDER_QUEUED, or FAILED past the cap
+            GW-->>R: video, kind, settings
+            R->>GW: GET bundle
+            GW-->>R: tar of the job's files
+            R->>R: stage, npx remotion render
+            alt success
+                R->>GW: PUT output (mp4)
+                R->>GW: result: success
+                GW->>DB: video_path, render_uploaded_at
+            else failed, stalled, timed out
+                R->>R: re-test the GPU if it rendered on one
+                R->>GW: result + gpu_ok
+                GW->>DB: render_fail_count += 1<br/>REVISION_REQUESTED / RENDER_QUEUED,<br/>or FAILED
             end
         end
     end
+    W->>DB: oldest uploaded render
+    opt review enabled and key set
+        W->>G: upload mp4, poll ACTIVE,<br/>generateContent
+        G-->>W: overall / mustFix / suggestions
+    end
+    W->>DB: VIDEO_READY or REVISION_REQUESTED
 ```
 
 ---
 
-## The claim
-
-```sql
-SELECT id FROM videos WHERE status = 'RENDER_QUEUED'
-ORDER BY updated_at ASC, id ASC LIMIT 1;
-```
-
-followed by `UPDATE videos SET status = 'RENDERING' WHERE id = ? AND status = 'RENDER_QUEUED'`. The
-`WHERE` clause *is* the lock — there is no window between reading and claiming.
-
-The same `UPDATE` also refuses while the settings row `render_claim_hold_until` holds a time still in
-the future. `onboard.py --step gpu` writes it before it looks for a running render and clears it once
-it has recreated the renderer. Looking first and recreating second would otherwise let a render be
-claimed in between and then killed. SQLite has a single writer, so a claim either committed before the
-hold (and the look sees it) or sees the hold (and does not happen). The time is a ceiling of ten
-minutes, so an onboarding run that dies holding it delays renders, never stops them. The row is shared,
-so two overlapping runs would release each other's hold; a lock file next to the database
-(`.gpu-recreate.lock`) lets only one run recreate at a time, and the other defers.
-
-Ordering is FIFO on `updated_at`. **Anything that writes `updated_at` changes render order**, which
-is why the publishing poll (where it exists) deliberately keys its own timeouts off a different
-column.
-
-The idle poll interval is `RENDER_POLL_INTERVAL_SECS`, default 20 seconds. It is a plain environment
-variable, not a settings row. A render holds the loop until it ends, so a GPU test asked for during
-one runs after it. It renders one video at a time; videos queue at `RENDER_QUEUED` in `updated_at`
-order.
+## The renderer's loop
 
 | Step | Symbol | Runs |
 |---|---|---|
-| Startup reconciliation | `_reconcile_rendering_videos` | once, at start |
-| GPU test | `_run_gpu_probe` | once, at start, before any claim |
-| GPU test on request | `_sweep_gpu_probe` | every tick, when the dashboard's **Test GPU** asked after the last test started |
-| Stills server | `_ensure_stills_server` | at start and every tick; see [The stills server](#the-stills-server) |
-| Render | `_claim_next`, `_render_claimed` | every tick a video is at `RENDER_QUEUED` |
+| Who it is | `_load_identity` | once, at start: the built-in renderer, or a remote one from its state file, enrolling first when it has an unused token |
+| GPU test | `_run_gpu_probe` | at start, before the first heartbeat, so no render ever runs on an unverified GPU; then on request and after a render on the GPU fails |
+| First heartbeat | `_beat` | at start, with `started: true`, retried every 30 seconds until it gets through. Nothing is claimed before it |
+| Heartbeat thread | `_heartbeat_loop` | every `HEARTBEAT_SECS` (30) on its own thread, whatever the loop is doing |
+| Stills server | `_ensure_stills_server` | built-in only, at start and every pass; see [The stills server](#the-stills-server) |
+| Claim and render | `_loop_once`, `_run_job` | every pass, while the gateway says the renderer is enabled and on main's version |
 
-The loop itself is `render_agent.py::main`.
+The loop itself is `render_agent.py::main`. The idle poll interval is `RENDER_POLL_INTERVAL_SECS`,
+default 20 seconds, a plain environment variable. A gateway that cannot be reached is never fatal:
+the error is logged, sent as the renderer's `last_error` on the next heartbeat that gets through,
+and the call is tried again 30 seconds later.
+
+**The heartbeat is a thread of its own, not a step of the loop**, because a render holds the loop
+for as long as it takes, and the lease on the video it renders is kept alive only by heartbeats
+(below). It carries the renderer's state (`idle` or `rendering`, and which video under which claim), its version, its
+compute (CPUs, memory, GPUs), its last error and any GPU probe no heartbeat has carried yet. The
+reply can tell the renderer to stop a render, to test its GPU, or that it needs an upgrade.
+
+**A renderer that runs a different version from main gets no work.** The heartbeat reply says
+`needs_upgrade` and a claim answers `409 needs_upgrade`, so the renderer keeps heartbeating and
+claims nothing until it is upgraded. Versions must match exactly: the scenes a video's agent wrote import
+the components of main's version, and a renderer built from another version would compile them
+against different ones.
+
+## The claim
+
+A claim is one `POST /v1/claim`. The gateway, not the renderer, picks the video:
+
+1. It refuses a disabled renderer (`409 disabled`) and one on another version (`409 needs_upgrade`).
+   **A renderer that still holds an unfinished claim** (a `RENDERING` video under its id with nothing
+   uploaded) is answered that claim again — the same reply, the same claim id — and never handed a
+   second video. That is what a renderer whose claim reply was lost on the network needs, and it keeps
+   a renderer to one render at a time whatever it asks for.
+2. It lists the `RENDER_QUEUED` videos in `ORDER BY updated_at, id` and asks the scheduler
+   (`tubematic_core/renderers.py::pick_video`, below) which one this renderer should take.
+3. It makes the [pre-render checks](#refused-before-anything-renders) on that video. A video they
+   refuse leaves the queue with its comment and is never handed out; the claim moves to the next.
+4. It claims the video with one guarded `UPDATE`: `status = 'RENDERING'`, the renderer's id, a new
+   random claim id (`render_claim_id`), a lease, `render_started_at`, `WHERE id = ? AND status =
+   'RENDER_QUEUED' AND archived_at IS NULL`, the renderer still enabled, and `NOT EXISTS` an unfinished
+   claim of the same renderer. The `WHERE` clause *is* the lock — two renderers that picked the
+   same video cannot both get it, two claims from one renderer cannot both succeed, and the loser
+   simply tries again (and is then answered the claim it holds).
+5. It answers with the video's id, its claim id, its kind (`dom`, `cartoon_3d` or `mascot`), whether it needs the
+   GPU, its frame count, the lease length, and the render settings: `render_timeout_secs`,
+   `render_stall_timeout_secs` and the watermark. **The renderer reads no settings**; each claim
+   carries their values at the moment it was made.
+
+For the built-in renderer the same `UPDATE` also refuses while the settings row
+`render_claim_hold_until` holds a time still in the future. `onboard.py --step gpu` writes it before
+it looks for a running render and clears it once it has recreated the renderer. Looking first and
+recreating second would otherwise let a render be claimed in between and then killed. SQLite has a
+single writer, so a claim either committed before the hold (and the look sees it) or sees the hold
+(and does not happen). The time is a ceiling of ten minutes, so an onboarding run that dies holding
+it delays renders, never stops them. The row is shared, so two overlapping runs would release each
+other's hold; a lock file next to the database (`.gpu-recreate.lock`) lets only one run recreate at a
+time, and the other defers. The hold applies to the built-in renderer only, because the GPU step
+recreates only that container.
+
+Queue order is FIFO on `updated_at`. **Anything that writes `updated_at` changes render order**,
+which is why the publishing poll (where it exists) deliberately keys its own timeouts off a different
+column.
+
+### Which renderer gets which video
+
+With one renderer the scheduler hands it the oldest video it may take. With several it weighs who
+would finish first:
+
+- **It skips a video this renderer may not take**: a GPU-only video (Cartoon 3D, or one with a
+  mascot — `renderers.py::requires_gpu`) goes only to a renderer whose last GPU test passed. A
+  scene-config whose scene is a Cartoon 3D world counts as Cartoon 3D too, so an `auto` video that
+  resolved to the style is GPU-only from the moment its scene-config is written.
+- **For each candidate it estimates every eligible renderer's finish**: the time until it is free
+  (its estimate for the render it holds, minus the time already spent) plus its estimate for this
+  video. Eligible means enabled, on main's version, online (a heartbeat within `ONLINE_SECS`, 120
+  seconds) and, for a GPU video, GPU-verified. The caller counts as online and free — it is calling,
+  and it only claims when idle.
+- **The caller gets the video if its finish is within `FINISH_TOLERANCE` (1.25×) of the best**, or
+  if the video has waited longer than `STARVATION_SECS` (600 seconds). Otherwise the scheduler
+  moves to the next video. So a slow machine never takes a job a much faster one would finish
+  sooner, and still no video waits forever for the fast machine.
+
+An estimate (`estimate_secs`) is the median seconds per frame of that renderer's last five renders of
+the same kind, from `render_timings`, times the video's frames. A median, so one render that stalled
+and was retried does not make a machine look slow for the next five jobs. A renderer with no timings
+of that kind uses a prior: 0.25 s a frame on a verified GPU, else 1.5 s a frame scaled by its core
+count around a four-core machine. One render runs at a time per renderer.
+
+### Refused before anything renders
+
+These checks used to run after a render was claimed. They run inside the claim now, so a video that
+cannot render is never handed out, and the statuses and comments are the ones they always were:
+
+- **A video whose id, or whose project's id, cannot be used as a path goes straight to `FAILED`**,
+  before anything is staged — a project id such as `..` would put the output outside
+  `/output_videos`. A revision cannot fix an id and a retry would only refuse again, so neither is
+  attempted. A legacy project id with a dot is fine; only one that would leave the output directory
+  is refused. A symlink in place of a job file, or anywhere on the way to it (the video's job
+  directory, `images/`, the project's output directory), is refused the same way.
+- **A missing job file goes to `REVISION_REQUESTED`** with a comment naming it: `audio.mp3`,
+  `timeline.json` or `scene-config.json` is not in the job directory, or its path column is still
+  empty because that step never finished. Images are optional and are not part of that check.
+- **A Cartoon 3D video that also holds a mascot, and a mascot video whose pinned drawing code cannot
+  be read, go to `FAILED`** — see [Videos that render on the GPU only](#videos-that-render-on-the-gpu-only).
+
+**The sources are derived from the video's id, never read from its path columns**
+(`tubematic_core/jobfiles.py`). Those columns were once writable through `PATCH` and `update_video`,
+so a row could name any file the renderer can read and have it copied into a render; a row tampered
+with before that was closed now simply renders the video's own files. The columns still say whether
+each step completed. The video's id is checked as a single path component, not against the rule
+for a new id, so a video filed earlier under an id such as `a.b`, or one longer than the 128
+characters a new id may have, still renders, while one that would leave the jobs directory (`..`,
+`a/b`) moves to `FAILED` with nothing staged. See [`videos`](03-database.md#videos) for the one race
+these checks leave open.
 
 ## Retention
 
@@ -143,69 +245,191 @@ deliberately has no database access. Decisions that look arbitrary and are not:
 `python scripts/cleanup_jobs.py` is the manual complement: it frees job directories only, keeping the
 mp4, for anything you want to reclaim earlier.
 
-## Startup reconciliation
+## Leases, restarts and lost renderers
 
-The renderer registers no signal handlers. A container stop kills it mid-render, and recovery happens
-on the next start rather than through a graceful drain.
+A claimed video is held by a **lease**: `videos.render_lease_until`, set to `LEASE_SECS` (300
+seconds) from the claim. Each heartbeat from the renderer that holds it, while it reports that video
+**and that claim id** as the one it is rendering, extends the lease by the same amount. A renderer
+that went idle never keeps a lease alive, and neither does a heartbeat for an earlier claim of the
+same video: one sent while the renderer was still on claim A, delayed until A had been re-queued
+and the video claimed again as claim B, leaves B's lease alone.
 
-On startup it finds every row still at `RENDERING` — which can only mean a previous renderer died
-holding it — increments `render_fail_count`, and applies the same escalation as any other failure:
-back to `RENDER_QUEUED`, or to `FAILED` if the retry cap is now exceeded. A restart mid-render
-therefore *counts as a failure*, which matters with the default cap of 1: two container restarts
-across one video's life will escalate it. Its comment reads "Render interrupted by renderer restart".
+**Every claim has its own id.** The claim reply carries `claim_id`, a random id the gateway stores in
+`videos.render_claim_id`, and the renderer names it on the bundle, the upload and the result (the
+`X-Render-Claim` header). Each is refused (`403 not_lease_holder`) unless the caller holds that very
+claim, so a renderer that lost its lease cannot touch the claim that took the video over — even when
+the one that took over is the same renderer, claiming the video again, which a renderer id alone
+could not tell apart. Two moments matter because a lease can run out while a request is in flight:
 
-This runs in the renderer and never in the worker: a `RENDERING` row is orphaned only when the
-renderer's process died, and a worker restart says nothing about a render still running.
+- **An upload is checked again before it lands.** The body streams into a temporary file; then, in one
+  write transaction, the gateway checks the claim still holds and renames the file into place. If the
+  claim was lost meanwhile the file is discarded and the upload answered `409 claim_lost`, so a slow
+  upload can never replace the mp4 a newer claim already delivered.
+- **A failure result moves the video only while its claim holds.** The retry count, the status change,
+  the comment and the release of the claim are one transaction guarded on `status = 'RENDERING'`, the
+  renderer and the claim id (`render_results.py::_claim_guard`). A result whose claim was lost between
+  the gateway's check and the routing changes nothing at all.
 
-## Staging and the render call
+There are three ways a held render ends without a result, and each re-queues the video the same way
+(`render_results.py::requeue_interrupted`): `render_fail_count` goes up by one and the video goes
+back to `RENDER_QUEUED`, or to `FAILED` once the count passes `max_render_retries`. **A lost render
+counts as a failure**, which matters with the default cap of 1: two interruptions across one video's
+life will escalate it. Without the count, a render that reliably kills its renderer (an
+out-of-memory) would loop for ever and never reach the `FAILED` backstop.
 
-Remotion serves assets from its `public/` directory, so the renderer copies the job's files in first:
+| How | Who notices | Comment |
+|---|---|---|
+| The renderer's process restarted (a crash, a container restart, `--step gpu`) | The gateway, at the restarted renderer's first heartbeat, which carries `started: true` | "Render interrupted by renderer restart — automatically re-queued." |
+| The renderer stopped heartbeating (a host switched off, a network gone) | The worker's lease sweep, once the lease has run out | "Render lost: <renderer> stopped reporting — automatically re-queued." |
+| A render was in flight across the upgrade that introduced the gateway (the row has no renderer) | The worker's lease sweep, on its first pass | "Render interrupted by the upgrade — automatically re-queued." |
 
-| Source | Destination |
+Past the cap the comment's first part is kept and ends "N times (limit M) — giving up."
+
+**Re-queue only when it is known the render is gone.** A restarted renderer says so itself in its
+first heartbeat, so its renders are re-queued at once instead of waiting out the lease; the renderer
+claims nothing until that heartbeat has gone through. A renderer that never comes back says so by
+its silence, which is what the lease measures. A restart of the worker or the API says nothing about
+a render still running, so neither re-queues anything on its own start. The lease sweep's `UPDATE`
+re-checks that the lease is still past, so a heartbeat that extended it after the sweep looked wins.
+
+**An uploaded render is never re-queued.** Once its mp4 has arrived the video is the review's, and
+re-rendering it would throw a finished render away.
+
+**The gateway can stop a render.** The heartbeat reply's `stop` list names, as `{video_id, claim_id}`
+pairs, every claim this renderer reports or holds that no longer holds its video: archived, moved by
+a human, or re-queued because its lease ran out. The renderer kills that render's process group and
+discards it without a result. **A stop names a claim, not a video, and the renderer applies a reply
+only to the job its request reported** (the `_Job` the heartbeat thread read before sending), never
+to whatever job is current when the reply arrives. Without both, the delayed heartbeat above would
+stop claim B: the reply says "vid-1 is over", and vid-1 is what the renderer is rendering again by
+then. Each retry burnt that way counts towards `max_render_retries`, so a slow network at that
+moment could fail a healthy video.
+
+## The bundle, staging and the render call
+
+A renderer gets a job's files as one **bundle**: `GET /v1/jobs/<video_id>/bundle` answers an
+uncompressed tar, streamed one chunk of one file at a time, so neither side ever holds a whole job in
+memory. Its members are:
+
+| Member | When |
 |---|---|
-| `/jobs/<video_id>/scene-config.json` | `/app/remotion/public/<video_id>/scene-config.json` |
-| `/jobs/<video_id>/timeline.json` | `/app/remotion/public/<video_id>/timeline.json` |
-| `/jobs/<video_id>/audio.mp3` | `/app/remotion/public/<video_id>/audio.mp3` |
-| `/jobs/<video_id>/images/`, if present | `/app/remotion/public/<video_id>/images/` |
+| `audio.mp3`, `timeline.json`, `scene-config.json` | always |
+| `images/**` | when the video has generated images |
+| `cartoon/source.json` | a Cartoon 3D video: the fingerprint of the source `submit_render` queued |
+| `cartoon/audio/mix/mix.wav` | a Cartoon 3D soundtrack, only when it is at least as new as `audio.mp3` |
+| `mascot.js` | a mascot video: the pinned version's drawing code |
+| `scenes/<video_id>/**` | the video's generated scene tree |
+| `scenes/_flat/<name>.tsx` | each legacy flat generated scene its scene-config names |
 
-**The sources are derived from the video's id, never read from its path columns**
-(`tubematic_core/jobfiles.py`). Those columns were once writable through `PATCH` and `update_video`,
-so a row could name any file the renderer can read and have it copied into a render; a row tampered
-with before that was closed now simply stages the video's own files. The columns still say whether
-each step completed. If any of the first three is missing, or its column is still empty, the renderer
-posts a comment naming them and sets `REVISION_REQUESTED` without launching Chromium. Images are
-optional and are not part of that check. Symlinks are never staged: one in place of a job file, or
-anywhere on the way to it (the video's job directory, `images/`, the project's output directory),
-fails the render, and one inside `images/` is skipped, because `copytree` would otherwise copy
-whatever it points at. The video's id is checked as a single path component, not against the rule
-for a new id, so a video filed earlier under an id such as `a.b`, or one longer than the 128
-characters a new id may have, still renders, while one that
-would leave the jobs directory (`..`, `a/b`) moves to `FAILED` with nothing staged. See
-[`videos`](03-database.md#videos) for the one race these checks leave open.
+Every file keeps its modification time, which is what lets the mix-versus-voice comparison still
+mean what it did. The gateway never follows a symlink: a job file that is one makes the bundle
+unavailable (`409`), and one inside `images/` or a scene tree is skipped. The renderer unpacks it
+into a job directory of its own, `/tmp/tubematic-render/<video_id>/` (`TUBEMATIC_RENDER_TMP`),
+refusing a member whose name is absolute, holds `..`, is not one it expects, or is not a regular
+file, and creating every file fresh.
 
-**A video whose id, or whose project's id, cannot be used as a path goes straight to `FAILED`** with
-a comment, before anything is staged — a project id such as `..` would put the output outside
-`/output_videos`. A revision cannot fix an id and a retry would only refuse again, so neither is
-attempted. A legacy project id with a dot is fine; only one that would leave the output directory
-is refused.
+Remotion serves assets from its `public/` directory, so the renderer then copies the job into
+`/app/remotion/public/<video_id>/` (symlinks inside `images/` are skipped, because `copytree` would
+otherwise copy whatever they point at). Where the scenes come from depends on the renderer:
+
+- **The built-in renderer ignores the bundle's scenes.** It mounts the shared
+  `src/scenes/generated/` volume the agent writes, and compiles that tree, as renders always did.
+- **A remote renderer stages them into its own image's `src/scenes/generated/`**, and empties that
+  directory before and after every job, because Remotion compiles every file under it into every
+  render: a scene left from another job could break or leak into the next one. It refuses to empty
+  a mounted directory, so it can never clear a shared tree.
 
 ```
-npx remotion render Composition /output_videos/<project_id>/<video_id>.mp4 \
+npx remotion render Composition /tmp/tubematic-render/<video_id>/output.mp4 \
     --props '{"sceneConfigPath": …, "timelinePath": …, "audioPath": …, "watermark": …}' \
     --browser-executable-path /usr/bin/chromium
 ```
 
-`watermark` is the `watermark_enabled` setting, read when the render starts. It travels as a render
-prop and not inside `scene-config.json` because the agent writes that file — see
+`watermark` is the `watermark_enabled` setting, carried by the claim. It travels as a render prop and
+not inside `scene-config.json` because the agent writes that file — see
 [Watermark](09-remotion-project.md#watermark).
 
 It is launched with `start_new_session=True`, which puts npx, node, Chromium and ffmpeg in one
 process group.
 
+**The finished mp4 is uploaded, not written into the library.** `PUT /v1/jobs/<video_id>/output`
+streams it from disk; the gateway writes it to a temporary file in its own directory on the output
+volume, `<output>/.gateway-uploads/`, flushes it to disk and renames it to
+`<output>/<project_id>/<video_id>.mp4`, so a reader never sees half a video. The temporary files
+never sit beside a video, so nothing that lists a project's videos meets one, and the gateway clears
+the leftovers a crash mid-upload leaves there when it starts (see
+[Infrastructure](16-infrastructure.md#tubematic-api)). An upload is at most `TUBEMATIC_MAX_OUTPUT_BYTES` (default 8 GiB, set in
+`tubematic-api`'s environment): a larger `Content-Length` is refused with `413 output_too_large` before
+anything is read, and a body sent without one (chunked) is counted as it arrives and abandoned, its
+temporary file deleted, the moment it passes the limit. A renderer's body is untrusted input, and the
+output volume is the one the database lives on.
+
+A size limit per request bounds one upload, not the disk: parallel uploads would each write up to it
+before any reached the final claim check. So the gateway also bounds what is in flight:
+
+- **One upload at a time per claim.** A second `PUT` for a claim whose first upload is still
+  streaming (a renderer retrying one it gave up on) is refused with `409 upload_in_progress`.
+- **`TUBEMATIC_MAX_CONCURRENT_UPLOADS` (default 4) at once in all.** Past it, `503 busy` with
+  `Retry-After`. Only one claim per renderer exists, so this caps the temporary files across every
+  renderer.
+- **A free-space floor, `TUBEMATIC_MIN_FREE_BYTES` (default 2 GiB).** An upload whose declared size
+  would leave less than that free on the output filesystem is refused with `507 insufficient_storage`,
+  and the free space is checked again every 64 MiB as the body streams (a chunked body declares
+  nothing, and the disk is shared), which abandons the upload and deletes its temporary file.
+
+The first two are decided before the body is read or a temporary file made; the slot is released
+however the upload ends, a stalled one included: a body that stops arriving for 60 seconds ends the
+upload with `408 body_timeout` (see [the gateway's time bounds](05-http-api.md#time-bounds)). An
+upload has no total deadline, because a long video over a slow home link is a legitimate reason for a
+long upload.
+
+The renderer treats the two kinds of answer differently:
+
+- **A failure is tried three times.** A network error, or any answer not listed below, counts as a
+  failed attempt; after the third the render is reported as an `error` (the video goes back to the
+  queue).
+- **`409 upload_in_progress` and `503 busy` are not failures.** They mean "wait": every slot is held
+  by other renders' uploads, or the gateway is still receiving this claim's earlier attempt. The
+  renderer waits the `Retry-After` the gateway asks for (at most 60 seconds) and tries again, for up
+  to two hours (`render_agent.py::UPLOAD_WAIT_SECS`), without spending an attempt. Its heartbeat keeps
+  the lease alive meanwhile, and a heartbeat that stops the job, or an upload answered `403` because
+  the claim was lost, ends the wait. Counting these as failures would turn ordinary contention — four
+  multi-hundred-megabyte uploads over home links hold every slot for minutes — into a discarded
+  render and a spent render retry, and repeated contention into a `FAILED` video.
+- **`413` and `507` are not tried again** and are reported as the render's error; a `403` or
+  `409 claim_lost` throws the render away. Then it reports the result. A result's `error` is cut to its first 8,000
+characters (`render_agent.py::RESULT_ERROR_CHARS`) so the body fits the gateway's 64 KiB JSON limit;
+the comment it becomes keeps far fewer. The job directory, the staged `public/<video_id>/` and (remote) the staged scenes
+are removed however the job ended.
+
+### The result
+
+`POST /v1/jobs/<video_id>/result` says how the render ended:
+
+| `outcome` | Sent when | The gateway |
+|---|---|---|
+| `success` | Remotion exited 0 and the upload landed | Records `video_path` and `render_uploaded_at`, a `render_timings` row (frames, seconds, on the GPU or not) and releases the lease. The [AI review](#ai-review) finishes the video |
+| `failed` | Remotion exited non-zero | `REVISION_REQUESTED` |
+| `stalled`, `timeout` | The render stopped advancing, or ran past the ceiling | `RENDER_QUEUED` |
+| `error` | Anything else: the bundle could not be fetched, the renderer raised | `RENDER_QUEUED` |
+
+A failure goes through `render_results.py::after_render_failure`, which counts the retry and posts
+the error as the comment ("Render failed: …", capped at 2000 characters). A `success` whose mp4 is
+missing or empty is routed as an `error`. A result is retried three times; one that never arrives is
+left to the lease, whose expiry re-queues the video. A result for a claim the renderer no longer holds
+is dropped and logged — refused (`403`) when the claim was lost before it arrived, a no-op when it
+was lost while the result was being routed (see [Leases](#leases-restarts-and-lost-renderers)).
+
+**A render that cannot run at all is that video's error, not the renderer's exit.** `_run_job` is the
+per-video boundary: whatever escapes the download, the staging or the render (no `npx`, a full disk,
+a bug) is reported as `error` ("The renderer hit an error: …") and requeued, so a row never stays
+`RENDERING` with the renderer gone.
+
 ## The GL renderer
 
 Chromium draws every frame, and WebGL (three.js scenes, and Chromium's own compositing) needs an
-OpenGL implementation. There are two paths, and the renderer picks one per render.
+OpenGL implementation. There are two paths, and each renderer picks one per render from its own GPU
+test.
 
 **The CPU path is the default**, set in `renderer/remotion/remotion.config.ts`:
 `setChromiumOpenGlRenderer("swangle")`, ANGLE over SwiftShader. It works on any machine, which is
@@ -253,30 +477,43 @@ the CLI never passes a still's page console output on, so the answer could not g
 does not read `remotion.config.ts`, which is why the CPU options spell out `swangle` (a test pins
 them to the config file). `_judge_probe` passes it only if the string names NVIDIA **and** the configured GPU,
 so SwiftShader, Mesa/llvmpipe and an integrated GPU all fail. The renderer renders on the GPU only
-while the last probe passed (`_render_on_gpu`); otherwise it takes the CPU path.
+while its last probe passed (`_render_on_gpu`); otherwise it takes the CPU path.
 
 - **It bundles its own entry point**, `src/gpu-probe/index.ts`. The main entry bundles every
   agent-written scene, and one broken scene fails the whole bundle, which would then read as a broken
   GPU.
 - **It runs once at startup, before the first claim**, so no render ever runs on an unverified GPU,
   and every container start (which is when a GPU change applies) leaves a fresh answer.
-- **It runs again after a GPU render fails or times out.** If the GPU is what broke, the next render
-  falls back to the CPU instead of failing the same way. The failed render itself is routed as
-  before, except for a GPU-only video (Cartoon 3D, or one with a mascot): its re-test runs first and,
-  if it fails, the video goes to `FAILED` (see [Videos that render on the GPU only](#videos-that-render-on-the-gpu-only)).
-- **It runs on request**: `POST /render/gpu/test` stamps `gpu_probe_requested_at`, and the
-  `_sweep_gpu_probe` pass runs a probe when that stamp is newer than the last probe's start. Both
-  stamps carry microseconds, because they are compared as strings. Only the renderer's container can
-  have a GPU, so the API only stamps the row; the request waits behind a render in progress, and
+- **It runs again after a render on the GPU fails, stalls or times out**, before the result is sent,
+  and the result carries the answer as `gpu_ok`. If the GPU is what broke, the gateway stops sending
+  this renderer GPU work and its next render falls back to the CPU, instead of failing the same way;
+  a GPU-only video goes to `FAILED` (see [Videos that render on the GPU only](#videos-that-render-on-the-gpu-only)).
+- **It runs on request**: `POST /render/gpu/test` stamps the built-in renderer's
+  `renderers.gpu_probe_requested_at`, and the next heartbeat reply says `probe_now` while that stamp is
+  newer than the last probe's start. Both stamps carry microseconds, because they are compared as
+  strings. The renderer probes between renders, so the request waits behind a render in progress, and
   `GET /render/gpu` reports it as pending meanwhile.
 - **It runs on a CPU install too**, with the CPU path, so the dashboard's Test GPU shows what Chromium
   gets there (SwiftShader).
 - **It never raises.** A probe that cannot start, times out (180 s, with the same process-group kill
-  as a render) or writes no answer stores a failed result with the reason.
+  as a render) or writes no answer reports a failed result with the reason.
 
-The result is the bare settings row `gpu_probe_result` ([Settings internals](04-settings.md#undeclared-rows)),
-served by `GET /render/gpu` and read directly by `upgrade.py --check`. The API container has no GPU
-and no override, so it never guesses: everything it reports comes from that row.
+**The result travels in the heartbeat.** The renderer keeps it until a heartbeat (or a result) has
+carried it; the gateway stores it in that renderer's row as `renderers.gpu_probe`, the same JSON shape
+for every renderer, and sets `gpu_verified` exactly when the probe's `ok` is true. The API container
+has no GPU and no override, so it never guesses: every GPU gate reads the renderers table.
+
+- **"The install has a working GPU" means some renderer does.** `tubematic_core/renderers.py::gpu_status`
+  answers `working` while any enabled renderer is GPU-verified, `unknown` while an enabled renderer has
+  not probed yet, `not_usable` while one has a GPU configured whose probe failed, and `not_configured`
+  otherwise. Those are the values the gates already used (`pipeline.py::gpu_probe_status` reads one
+  probe the same way), and the Cartoon 3D and mascot gates in the API and the MCP server
+  (`_cartoon3d_gpu_error`, `mascot_gpu_error`) read this aggregate. A gate that looked only at the
+  built-in renderer would refuse a style another renderer can render.
+- **`GET /render/gpu` describes the built-in renderer** for every field but `status`: its probe, its
+  configured GPU, its Test request. That is what the dashboard's GPU panel shows and what its Test
+  button asks for, and the built-in renderer is the only one onboarding's `gpu` step configures.
+  `upgrade.py --check` and `scripts/service.py status` read the same row (`onboard/gpu.py::report_lines`).
 
 The text-layout audit stays on `swangle` whatever the install has. It runs in the MCP container,
 which never gets a GPU, and it measures text, which comes out the same on either path.
@@ -301,8 +538,9 @@ touch them. Without the wildcard loop they become permanent zombies. This was ob
 theorised. It polls rather than blocks because the stills server is a long-lived child too: a
 blocking wait on any child would sit on the healthy stills server forever.
 
-**Do not copy this pattern into the MCP server.** The loop is safe here only because the renderer is
-single-threaded and runs one subprocess at a time. The MCP server is multi-threaded with concurrent
+**Do not copy this pattern into the MCP server.** The loop is safe here only because the renderer
+runs one render subprocess at a time, and its one other thread, the heartbeat, starts none (it only
+kills the current render's group when the gateway says stop). The MCP server is multi-threaded with concurrent
 subprocess users, where a wildcard reap can steal a different call's child; it uses the process-group
 kill alone. The general lesson: a reaping strategy relies on a concurrency invariant, and moving it
 to a different concurrency model breaks it silently.
@@ -311,18 +549,23 @@ to a different concurrency model breaks it silently.
 
 The renderer captures the render's stdout and stderr, logs failures to its own stdout
 (`docker compose logs tubematic-renderer`, every line prefixed `[renderer]`, and the `renderer`
-service on the dashboard's Logs page), and writes a truncated copy — capped at 2000 characters
-— into the video's comment thread. There is no persisted full-text render log.
+service on the dashboard's Logs page), and sends the error with its result; the gateway writes it,
+capped at 2000 characters, into the video's comment thread. There is no persisted full-text render
+log. The gateway's side — claims, refusals, uploads, a renderer that needs an upgrade or was told to
+stop — is in `tubematic-api`'s log. Problems that are the renderer's rather than one video's (a
+gateway it cannot reach, a refused credential) are logged and also sent as its `last_error`, stored
+on its row in `renderers`.
 
 ## The stills server
 
 The MCP container's Cartoon 3D tools (`cartoon_beat_gate`, `cartoon_still`) need stills of a
-video's composition, and the renderer's is the one container with the GPU. So the renderer runs
+video's composition, and the built-in renderer's is the one container on this machine with the GPU.
+So the built-in renderer (only it: a remote renderer has no `/jobs` volume) runs
 `renderer/remotion/cartoon-tools/stills-server.mjs` as a child process beside its renders: the
 project is bundled once, one Chromium stays open, and a still takes a few seconds instead of the
 25 to 30 seconds a cold software-GL still costs in the MCP container. It is started with exactly
 the GL options a render gets (`_gl_options`), so a passing GPU test moves it onto the GPU and a
-failing one moves it back, and it serves the shared `/jobs` volume as its public directory, so a
+failing one moves it back, and it serves the shared `/jobs` volume (mounted read-only) as its public directory, so a
 video's files are `/public/<video_id>/…` to the composition with nothing copied. It listens on
 `TUBEMATIC_STILLS_PORT` (4455) on the Compose network only and is never published; the MCP
 container reaches it as `TUBEMATIC_STILLS_SERVER`, and when it does not answer the tools render
@@ -342,28 +585,48 @@ bundle was made from and re-bundles when it differs: an edit to a video's code i
 A Cartoon 3D video and a video with a mascot are both **GPU-only by policy**, not because the CPU path
 cannot draw them: a mascot adds about a tenth of a second of drawing to every frame, which on software
 GL would turn a 90-second Short into hours. The choice is refused where it is made (the dashboard, the
-API and the MCP server) unless the GPU test passed, so the renderer's check is for a video approved
-*before* its GPU stopped working. If the video needs the GPU and `_render_on_gpu()` is false the
-renderer runs the GPU test first when the result is still unknown, and otherwise moves the video
-**straight to `FAILED`** with a comment naming the live GPU status. It bypasses `max_render_retries`:
-a requeue would fail the same way, and sending it to `REVISION_REQUESTED` would hand it to an agent
-that cannot repair a GPU. The video is created again once the GPU works.
+API and the MCP server) unless some renderer's GPU test passed, so everything below is for a video
+approved *before* the GPU stopped working.
 
-The same holds when the GPU stops working **during** such a render. When a GPU-only render fails,
-stalls or times out, the renderer re-tests the GPU *before* it routes the failure
-(`render_agent.py::_after_render_failure`). If the GPU no longer passes, the video goes straight to `FAILED`
-with the same comment plus the render's error, again without spending a retry or an agent session. If
-it still passes, the failure is the video's own and takes the usual path. An ordinary video keeps the
-older order (route the failure, then re-test), since its retry can fall back to the CPU.
+**Such a video is only ever handed to a renderer whose last GPU test passed.** Waiting for one is
+bounded by the worker's GPU-wait sweep (`worker.py::_sweep_gpu_waits`):
+
+- **No GPU-capable renderer at all** (none enabled with a passing test, online or not): the video goes
+  to `FAILED` at once.
+- **One exists, but none is online and on main's version**: the video waits up to `GPU_WAIT_SECS`
+  (30 minutes) from when it was queued, then goes to `FAILED`.
+- **An enabled renderer has not tested its GPU yet**: the video waits as if a GPU renderer were
+  offline, rather than failing at once. This is deliberate. Right after an upgrade or a renderer
+  restart the built-in renderer's row has no probe yet (the probe runs at start and arrives with the
+  first heartbeat), so for those minutes no renderer counts as GPU-capable even on a machine whose GPU
+  works; failing every queued GPU video then would throw away work the renderer is about to take. The
+  wait is still capped by `GPU_WAIT_SECS` from when the video was queued, so an install with no
+  working GPU fails it at most 30 minutes later, with the same comment.
+
+`FAILED` bypasses `max_render_retries` and is terminal: a requeue would fail the same way, and sending
+the video to `REVISION_REQUESTED` would hand it to an agent that cannot repair a GPU. So the comment is
+the only thing the human gets, and it names every renderer and its state
+(`renderers.py::gpu_unavailable_reason`: "offline since …", "needs upgrade", "disabled", "GPU test
+failed: …"). The video is created again once the GPU works.
+
+**The GPU can also stop working during such a render.** When a render on the GPU fails, stalls or
+times out, the renderer re-tests the GPU before it reports. If the re-test fails, the gateway moves a
+GPU-only video straight to `FAILED` with the same comment plus the render's error
+(`render_results.py::after_render_failure` → `fail_without_gpu`), again without spending a retry or an
+agent session. If it still passes, the failure is the video's own and takes the usual path. An
+ordinary video takes the usual path either way, and its retry can fall back to the CPU. A renderer
+handed a GPU-only video whose GPU no longer passes when it starts re-tests too; if the test still
+fails it reports an error, which re-queues the video (counting a retry) and marks that renderer's GPU
+unverified, so the video goes to another GPU renderer or, if there is none, the GPU-wait sweep fails it.
 
 A mascot video is rendered with the version pinned in `videos.mascot_version`, never the mascot's
-current approved version. The renderer reads that version's code (`tubematic_core/mascots.py::code_for`),
-stages it as `public/<video_id>/mascot.js` and passes `mascotPath` as a render prop (see
-[the Remotion project](09-remotion-project.md#the-mascot-layer)). A version of `0` (never pinned) or a
-version with no code fails the video the same way, with a comment saying the drawing code cannot be
-read. A Cartoon 3D video that also holds a mascot (the API and the MCP server refuse the pair, so only
-a row written some other way can) goes to `FAILED` the same way, with `MASCOT_NOT_ON_CARTOON_3D` in its
-comment, rather than rendering without the mascot a human chose.
+current approved version. The gateway reads that version's code (`tubematic_core/mascots.py::code_for`)
+into the bundle as `mascot.js`; the renderer stages it as `public/<video_id>/mascot.js` and passes
+`mascotPath` as a render prop (see [the Remotion project](09-remotion-project.md#the-mascot-layer)). A
+version of `0` (never pinned) or a version with no code fails the video at the claim, with a comment
+saying the drawing code cannot be staged. A Cartoon 3D video that also holds a mascot (the API and the
+MCP server refuse the pair, so only a row written some other way can) goes to `FAILED` the same way,
+with `MASCOT_NOT_ON_CARTOON_3D` in its comment, rather than rendering without the mascot a human chose.
 
 ## Segmented Cartoon 3D renders
 
@@ -375,35 +638,38 @@ crossfade opens a second WebGL context). `_render_cartoon` renders segments of `
 once more, fresh, and a second failure is the render's (a stall is reported as a timeout is, requeued
 and the GPU re-tested; an error goes to the agent). The segments are joined with ffmpeg's concat
 demuxer without re-encoding, and the soundtrack is muxed on: the synthesised mix
-(`<jobs>/<video_id>/cartoon/audio/mix/mix.wav`, written by the MCP server's `cartoon_soundtrack`)
-when it exists and is at least as new as the voice, else `audio.mp3` alone. The work directory beside
-the output is removed either way.
+(`cartoon/audio/mix/mix.wav`, written by the MCP server's `cartoon_soundtrack` and carried in the
+bundle) when it exists and is at least as new as the voice, else `audio.mp3` alone. Both ffmpeg steps run
+as a segment does: in a process group of their own and registered as the job's live process, so a stop
+from the gateway kills the step at once, and a step past its timeout has its group killed and reaped. The
+work directory beside the output is removed either way.
 
 `render_timeout_secs` caps the whole segmented render, every segment, retry and ffmpeg step included, as it
 caps an ordinary render: each segment gets what is left of the one deadline, and the concat and the mux get
 the lesser of what is left and `FFMPEG_TIMEOUT_SECS`. Every segment bundles the generated
 source tree afresh, so what is rendered has to be what the beat gate judged: `submit_render` recorded that
-tree's fingerprint under `<jobs>/<video_id>/cartoon/source.json`, and the renderer compares the live tree
-with it before every segment and again before the join. A tree that differs (edited after the gate) or
-holds a symlink fails the render to the agent with the reason, and so does a missing or symlinked record
-(the record's and the mix's paths are built with `join_below`, so a link in any component on the way is
-refused too): only `submit_render` queues a Cartoon 3D video, and it always writes one. A render that cannot run at all (no `npx`, a full disk) is that video's failure, not an
-exception out of the renderer: `_render_claimed` is the per-video boundary round `_stage_and_render`, and
-whatever escapes it is recorded with `_handle_render_failure` ("The renderer hit an error: …") and
-requeued, so a row never stays `RENDERING` with the renderer gone.
+tree's fingerprint under `<jobs>/<video_id>/cartoon/source.json`, and the renderer compares the tree
+Remotion compiles (the shared generated tree on the built-in renderer, the copy staged from the bundle on a
+remote one) with it before every segment and again before the join. A tree that differs (edited after the
+gate) or holds a symlink fails the render to the agent with the reason, and so does a missing or symlinked
+record (the record's and the mix's paths are built with `join_below`, so a link in any component on the way
+is refused too): only `submit_render` queues a Cartoon 3D video, and it always writes one.
 
 ## Status transitions
 
 | From → To | Trigger |
 |---|---|
-| `RENDER_QUEUED → RENDERING` | Atomic claim |
-| `RENDERING → REVISION_REQUESTED` | A job file was missing; the render exited non-zero under the cap; or an unexpected exception in the post-render path |
-| `RENDERING → RENDER_QUEUED` | Timeout under the cap, or startup reconciliation |
-| `RENDERING → FAILED` | `render_fail_count > max_render_retries` |
-| `RENDERING → VIDEO_READY` | Render succeeded and: review disabled, no key, review errored, review clean, or the review loop cap was exceeded |
+| `RENDER_QUEUED → RENDERING` | A claim (the gateway's guarded `UPDATE`) |
+| `RENDER_QUEUED → REVISION_REQUESTED` | Refused at the claim: a job file is missing |
+| `RENDER_QUEUED → FAILED` | Refused at the claim (an unusable id or path, Cartoon 3D with a mascot, no mascot code), or a GPU-only video no renderer can take (the worker's GPU-wait sweep) |
+| `RENDERING → REVISION_REQUESTED` | The render failed (Remotion exited non-zero) under the cap; or an unexpected exception in the review tail |
+| `RENDERING → RENDER_QUEUED` | A stall, a timeout or a renderer error under the cap; a restarted renderer; an expired lease |
+| `RENDERING → FAILED` | `render_fail_count > max_render_retries`, or a GPU-only render whose GPU failed its re-test |
+| `RENDERING → VIDEO_READY` | Uploaded, and: review disabled, no key, review errored, review clean, or the review loop cap was exceeded |
 | `RENDERING → REVISION_REQUESTED` | Review returned **any** finding, under the cap |
 
-Every write is guarded with `only_if="RENDERING"`.
+Every write out of `RENDERING` is guarded with `only_if="RENDERING"` or the same clause in its own
+`UPDATE`, and every write out of `RENDER_QUEUED` on `RENDER_QUEUED`.
 
 **A crash and a timeout are routed differently on purpose.** A timeout returns to `RENDER_QUEUED`
 for an automatic retry, because nothing about the job is known to be wrong. A crash returns to
@@ -424,8 +690,19 @@ broken upload — a video still arrives at `VIDEO_READY` looking reviewed. The d
 the switch. Installs set up before 2.0.0 keep whatever they had: their setting is stored explicitly,
 and the new default reaches only an install that never answered.
 
-When it is on, after a successful render `renderer/api/ai_review.py` uploads the mp4 to the Gemini
-Files API and asks a model to watch it.
+When it is on, `renderer/api/ai_review.py` uploads each finished mp4 to the Gemini Files API and
+asks a model to watch it.
+
+**The review runs in the worker, not the renderer**, on a thread of its own
+(`worker.py::_start_review_thread`). A video is reviewable once its render has been uploaded: still
+`RENDERING`, with `render_uploaded_at` set. The thread takes the oldest upload first and reviews one at
+a time (`render_results.py::finish_render`), because a review is a paid Gemini call that takes
+minutes and several at once would only race for the same quota. It is a thread so a slow review never
+holds up a publish or an Auto Pilot approval, and it is in the worker so that the renderer needs no
+database and no Gemini key, and is free for the next render the moment its upload lands. A worker
+restart mid-review simply reviews again: the row is still `RENDERING` and uploaded, and the lease
+sweep never touches an uploaded row. The scene-config the review is given is the job's own copy, the
+file the bundle was built from.
 
 The module takes its model, fps and API key as **arguments** — it never reads the database. That
 keeps it testable and reusable, and it is why `vqa/review_video.py` can call `run_ai_review()`
@@ -550,7 +827,7 @@ A review that errors advances the video to `VIDEO_READY`. That is deliberate —
 should not wedge the pipeline — but it went unnoticed for the feature's entire early lifetime, which
 is how an upload bug survived undetected.
 
-The mitigation is that the renderer now writes `videos.gemini_feedback` and posts a comment on
+The mitigation is that the review tail now writes `videos.gemini_feedback` and posts a comment on
 **every** outcome: pass, defects, or error. An error is stored as `AI review did not run: <reason>`,
 so a review that is silently failing open is visible in the dashboard rather than only in logs. Grep
 for that prefix if you suspect the reviewer is not actually running.
@@ -564,7 +841,7 @@ truncation drops suggestions first and must-fix items last.
 **Every review is recorded against the video**, with the token counts Gemini reports in
 `usageMetadata` — so a video that loops through two reviews shows two review calls, and a reply
 that failed to parse is still recorded, because it was still billed. The Files API upload is free
-and is not recorded. `ai_review.py` stays DB-free: it returns the usage and the renderer records it.
+and is not recorded. `ai_review.py` stays DB-free: it returns the usage and the worker's review tail records it.
 See [Settings — Costs](../user-guide/05-settings.md#costs) for how tokens become dollars.
 
 Video tokens scale with sampled frames, so `ai_review_fps` is the cost dial.
@@ -652,7 +929,7 @@ A timeout leaks the bundle and nothing else: the kill is an uncatchable `SIGKILL
 own cleanup never runs, while the Python-side cleanups sit in a `finally` and still execute. Sweep
 `/tmp/tubematic-audit-bundle-*` if audits have been timing out.
 
-> Separately and larger: the renderer never cleans its own staging directory. One copy of each
-> rendered video's assets accumulates in the renderer container's writable layer indefinitely. The
-> audit cannot clobber it — `public/` is not a shared volume, so the two containers hold separate
-> copies.
+> The renderer removes its own staging (`public/<video_id>/` and its job directory under
+> `/tmp/tubematic-render/`) after every job, and clears `/tmp/tubematic-render/` at start, so a job
+> killed half-way does not accumulate either. The audit cannot clobber it — `public/` is not a shared
+> volume, so the MCP container and the renderer hold separate copies.

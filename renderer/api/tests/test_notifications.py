@@ -423,8 +423,8 @@ def _auto_pilot(env, project="proj-1", enabled=True, paused=False):
 
 
 def test_a_finished_video_auto_pilot_will_approve_is_not_announced(env):
-    """The renderer writes VIDEO_READY whenever a render ends, so one can land
-    after the worker's Auto Pilot pass and before this sweep. Auto Pilot
+    """The worker's review thread writes VIDEO_READY whenever a review ends, so
+    one can land after the worker's Auto Pilot pass and before this sweep. Auto Pilot
     approves it on the next pass; asking a human to approve it is wrong."""
     _on(env)
     _auto_pilot(env)

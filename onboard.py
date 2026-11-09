@@ -22,7 +22,7 @@ Flags:
   --list-agents    List supported agents and installed ones, then exit (pipeable)
   --set-password   Set or change the dashboard password. Changing it signs every
                    dashboard session out. Run this before upgrading from 1.2.x.
-  --rotate-tokens  Replace the three service tokens, restart the services that read
+  --rotate-tokens  Replace the service tokens, restart the services that read
                    them, and have OpenCode reload. Waits for in-flight work, like
                    upgrade.py; --force proceeds anyway.
   --install-mode {dev,release}

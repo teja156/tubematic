@@ -61,7 +61,8 @@ STEP_DEFS = [
     ),
     Step(
         "auth", "Dashboard password and service tokens",
-        "Creates the three service tokens in ~/.tubematic-data/secrets/ (kept when they "
+        "Creates the service tokens (API, MCP, dashboard session, built-in renderer) and the "
+        "render gateway's TLS key and certificate in ~/.tubematic-data/secrets/ (kept when they "
         "already exist) and asks for the dashboard password when none is set — twice, hidden, "
         "at least 12 characters. Change it later with --set-password. Must precede container "
         "start: Compose refuses to start a service whose token file is missing.",

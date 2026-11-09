@@ -1,7 +1,8 @@
 """The renderer's stills server (TMDEV-179): the child process that renders the
 MCP container's Cartoon 3D stills on this container's GL path. Started after
 the startup probe, started again when it dies or when the GL path flips, and
-never in a tight loop."""
+never in a tight loop. The built-in renderer only: it serves the shared /jobs
+volume, which a remote renderer does not have."""
 import os
 import sys
 from pathlib import Path
@@ -99,3 +100,11 @@ def test_a_server_that_cannot_start_never_raises(server, monkeypatch):
     monkeypatch.setattr(render_agent.subprocess, "Popen", boom)
     render_agent._ensure_stills_server(now=100.0)
     assert render_agent._stills_proc is None
+
+
+@pytest.mark.parametrize("builtin, started", [("1", 1), ("", 0)])
+def test_only_the_built_in_renderer_runs_one(server, monkeypatch, builtin, started):
+    monkeypatch.setenv("TUBEMATIC_RENDERER_BUILTIN", builtin)
+    monkeypatch.setattr(render_agent, "_st", render_agent._AgentState())   # not started: the pass claims nothing
+    render_agent._loop_once()
+    assert len(server) == started

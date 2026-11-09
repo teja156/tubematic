@@ -522,6 +522,46 @@ def test_the_image_migration_constant_names_the_real_migration(upgrade):
     assert names[upgrade.OPENAI_ONLY_IMAGES_MIGRATION] == "openai_only_images"
 
 
+# ── The renderer moves behind the render gateway (TMDEV-189) ────────────────
+
+def _before_the_gateway(upgrade, env):
+    con = sqlite3.connect(env.db_path)
+    con.execute("DELETE FROM schema_migrations WHERE version >= ?",
+                (upgrade.RENDER_GATEWAY_MIGRATION,))
+    con.commit()
+    con.close()
+
+
+def test_no_stop_is_refused_while_the_renderers_migration_is_pending(upgrade, env):
+    """An old renderer recreated last keeps claiming straight from the database
+    beside the new gateway; a new API recreated first expects a renderer that
+    is not there yet. Only a full stop closes that window."""
+    _before_the_gateway(upgrade, env)
+    code, order, rep = _run(upgrade, env, no_stop=True)
+    assert code == 1
+    assert order == []
+    assert "--no-stop" in rep.text() and "render gateway" in rep.text()
+
+
+def test_the_pending_renderers_migration_still_allows_a_normal_upgrade(upgrade, env):
+    _before_the_gateway(upgrade, env)
+    code, order, _ = _run(upgrade, env)
+    assert code == 0
+    assert _index(order, "docker compose stop") < _index(order, "docker compose up -d")
+
+
+def test_no_stop_is_allowed_once_the_renderers_migration_has_run(upgrade, env):
+    """The refusal is for the one upgrade that crosses it, not every later one."""
+    code, _, _ = _run(upgrade, env, no_stop=True)
+    assert code == 0
+
+
+def test_the_renderers_migration_constant_names_the_real_migration(upgrade):
+    from tubematic_core import db as tdb_real
+    names = {m.version: m.name for m in tdb_real.discover()}
+    assert names[upgrade.RENDER_GATEWAY_MIGRATION] == "renderers"
+
+
 def test_the_upgrade_creates_missing_tokens_before_up(upgrade, env):
     """Compose refuses to start a service whose token file is missing."""
     from tubematic_core import auth

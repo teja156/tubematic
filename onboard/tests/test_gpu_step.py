@@ -447,9 +447,10 @@ def test_work_outside_the_renderer_does_not_hold_it_up(step, status):
 # ── upgrade.py --check / service.py status ───────────────────────────────────
 
 def _store_probe(db_path, probe):
+    """The built-in renderer's probe, where the render gateway stores it."""
     con = sqlite3.connect(db_path)
-    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-                (gpu.PROBE_RESULT_KEY, json.dumps(probe)))
+    con.execute("UPDATE renderers SET gpu_probe = ?, gpu_verified = ? WHERE id = ?",
+                (json.dumps(probe), int(probe.get("ok") is True), gpu.BUILTIN_RENDERER_ID))
     con.commit()
     con.close()
 
@@ -487,12 +488,39 @@ def test_the_readout_warns_when_the_chosen_gpu_is_not_usable(readout, override):
 
 
 def test_the_readout_warns_when_the_renderer_never_got_the_override(readout, override):
-    """A hand-run `docker compose up` without the override: the worker probed
-    with no GPU configured."""
+    """A hand-run `docker compose up` without the override: the renderer
+    probed with no GPU configured."""
     override.write_text(gpu.render_override(GTX, [GTX]))
     _store_probe(readout, {"configured": False, "ok": False})
     [(level, text)] = gpu.report_lines(readout)
     assert level == "warn" and "service.py start tubematic-renderer" in text
+
+
+def test_the_readout_ignores_the_retired_settings_row(readout, override):
+    """Since the render gateway the probe lives on the built-in renderer's
+    row; a gpu_probe_result row left by an older install says nothing about
+    the renderer running now."""
+    override.write_text(gpu.render_override(GTX, [GTX]))
+    con = sqlite3.connect(readout)
+    con.execute("INSERT INTO settings (key, value) VALUES ('gpu_probe_result', ?)",
+                (json.dumps({"configured": True, "ok": True,
+                             "gpu": {"uuid": GTX.uuid, "name": GTX.name}}),))
+    con.commit()
+    con.close()
+    [(level, text)] = gpu.report_lines(readout)
+    assert level == "warn" and "has not reported it" in text
+
+
+def test_a_database_from_before_the_renderers_table_reads_as_no_probe(readout, override):
+    """`upgrade.py --check` runs before the containers migrate, so the table
+    may not exist yet: that is "not reported", never a crash."""
+    override.write_text(gpu.render_override(GTX, [GTX]))
+    con = sqlite3.connect(readout)
+    con.execute("DROP TABLE renderers")
+    con.commit()
+    con.close()
+    [(level, text)] = gpu.report_lines(readout)
+    assert level == "warn" and "has not reported it" in text
 
 
 def test_the_readout_rejects_a_probe_from_the_previous_gpu(readout, override, monkeypatch):

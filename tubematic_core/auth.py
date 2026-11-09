@@ -1,10 +1,24 @@
-"""Service tokens and the admin password (TMDEV-152).
+"""Service tokens, the render gateway's TLS pair and the admin password (TMDEV-152).
 
-Three random secrets live as one file each in a secrets directory:
+Four random secrets live as one file each in a secrets directory:
 
-  api_token       the API's bearer token (dashboard, poll.py, host scripts)
-  mcp_token       the MCP server's bearer token (agent CLIs, via a helper)
-  session_secret  the key the dashboard signs its session cookie with
+  api_token               the API's bearer token (dashboard, poll.py, host scripts)
+  mcp_token               the MCP server's bearer token (agent CLIs, via a helper)
+  session_secret          the key the dashboard signs its session cookie with
+  builtin_renderer_token  the built-in renderer's credential at the render gateway
+
+Beside them, the render gateway's TLS key and self-signed certificate (PEM):
+
+  render_tls_key   EC P-256 private key
+  render_tls_cert  its certificate, CN tubematic-render-gateway, 30 years
+
+The certificate is not a CA-issued one and has no host name in it on purpose:
+renderers reach the gateway by whatever address the operator gives them, so
+nothing can be checked against a name. A client instead trusts exactly this
+certificate, pinned by the sha256 of its DER (gateway_pin()), which an
+enrollment token carries. That is also why the pair is never rotated: a new
+certificate is a new pin, which would cut every remote renderer off until it
+is enrolled again. `--rotate-tokens` rotates the four tokens only.
 
 On the host the directory is ~/.tubematic-data/secrets; inside a container
 Compose mounts each file at /run/secrets/<name> and sets TUBEMATIC_SECRETS_DIR.
@@ -16,9 +30,13 @@ Two rules here look odd and are load-bearing:
   permissions inside the container -- and the dashboard runs as uid 1001, not
   the host user, so a 0600 file would be unreadable there. The 0700 directory
   is what keeps other users on the host out.
+  The TLS key is 0644 too, for one rule across every file: only the API
+  container (which serves the gateway) mounts it, and renderers get the
+  certificate alone.
 * Rotation rewrites a file in place. A bind mount pins the inode it was given
   at start, so an atomic rename would leave every running container reading
-  the old value until it was recreated.
+  the old value until it was recreated. (The TLS pair, which is never
+  rotated, is the one thing written by rename: see _ensure_tls.)
 
 The admin password is not a file: its scrypt hash is a bare `settings` row
 outside SETTINGS_SPEC, so `GET /settings` can never return it and
@@ -34,10 +52,17 @@ import hmac
 import os
 import secrets
 import sqlite3
+import ssl
 import sys
 from pathlib import Path
 
-SECRET_NAMES = ("api_token", "mcp_token", "session_secret")
+SECRET_NAMES = ("api_token", "mcp_token", "session_secret", "builtin_renderer_token")
+# Created by ensure_secrets but never rotated (see the module docstring).
+TLS_KEY_NAME = "render_tls_key"
+TLS_CERT_NAME = "render_tls_cert"
+TLS_NAMES = (TLS_KEY_NAME, TLS_CERT_NAME)
+TLS_COMMON_NAME = "tubematic-render-gateway"
+TLS_VALIDITY_DAYS = 365 * 30
 HOST_SECRETS_DIR = Path.home() / ".tubematic-data" / "secrets"
 PASSWORD_KEY = "admin_password_hash"
 MIN_PASSWORD_LEN = 12
@@ -75,8 +100,96 @@ def _write_in_place(path: Path, value: str) -> None:
     os.chmod(path, 0o644)
 
 
+def _tls_pair() -> tuple[str, str]:
+    """A new EC P-256 key and its self-signed certificate, both PEM.
+
+    `cryptography` is imported here, not at module level: this module is
+    imported by processes (the MCP server, host scripts) that never create the
+    pair and do not ship the package.
+    """
+    from datetime import datetime, timedelta, timezone
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, TLS_COMMON_NAME)])
+    now = datetime.now(timezone.utc)
+    cert = (x509.CertificateBuilder()
+            .subject_name(name).issuer_name(name)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - timedelta(minutes=5))   # a client clock slightly behind
+            .not_valid_after(now + timedelta(days=TLS_VALIDITY_DAYS))
+            # ca=True + key_cert_sign: OpenSSL accepts a self-signed certificate
+            # as its own trust anchor (load_verify_locations) only as a CA.
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .add_extension(x509.KeyUsage(digital_signature=True, key_cert_sign=True,
+                                         content_commitment=False, key_encipherment=False,
+                                         data_encipherment=False, key_agreement=False,
+                                         crl_sign=False, encipher_only=False, decipher_only=False),
+                           critical=True)
+            .sign(key, hashes.SHA256()))
+    key_pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                serialization.NoEncryption()).decode()
+    return key_pem, cert.public_bytes(serialization.Encoding.PEM).decode()
+
+
+def _write_synced(path: Path, value: str) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w") as f:
+        f.write(value)
+        f.flush()
+        os.fsync(f.fileno())
+    os.chmod(path, 0o644)
+
+
+def _fsync_dir(d: Path) -> None:
+    fd = os.open(d, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _ensure_tls(d: Path) -> list[str]:
+    """Create the gateway's key and certificate together when either is
+    missing or empty; never replace a complete pair (not even one that does
+    not load: replacing it would change the pin silently, see the module
+    docstring). A lone key or certificate is useless without its partner, so
+    both are written fresh.
+
+    Written so that no interruption leaves a pair that looks whole but is not
+    (two non-empty files that do not belong together, which nothing here
+    would ever repair): each half goes to a temporary file, synced, and is
+    renamed into place, the half that is still present first. Until the last
+    rename one name stays missing or empty, so an interrupted repair is simply
+    made again by the next ensure; after it the pair is whole and matching.
+    A rename is fine here, unlike for a rotated token: the gateway loads the
+    pair only when it starts, so a new pair needs the containers restarted
+    anyway, and a restarted container mounts the new file."""
+    present = []
+    for name in TLS_NAMES:
+        try:
+            read_secret(name, d)
+            present.append(name)
+        except SecretMissing:
+            pass
+    if len(present) == len(TLS_NAMES):
+        return []
+    pems = dict(zip((TLS_KEY_NAME, TLS_CERT_NAME), _tls_pair()))
+    for name in TLS_NAMES:
+        _write_synced(d / f".{name}.new", pems[name])
+    for name in sorted(TLS_NAMES, key=lambda n: n not in present):
+        os.replace(d / f".{name}.new", d / name)
+        _fsync_dir(d)
+    return list(TLS_NAMES)
+
+
 def ensure_secrets(directory: Path | None = None) -> list[str]:
-    """Create any missing or empty secret. Never replaces one. Returns the names created."""
+    """Create any missing or empty secret, and the TLS pair if it is incomplete.
+    Never replaces one. Returns the names created."""
     d = Path(directory or secrets_dir())
     d.mkdir(parents=True, exist_ok=True)
     os.chmod(d, 0o700)
@@ -87,15 +200,28 @@ def ensure_secrets(directory: Path | None = None) -> list[str]:
         except SecretMissing:
             _write_in_place(d / name, secrets.token_urlsafe(32))
             created.append(name)
+    created += _ensure_tls(d)
     return created
 
 
 def rotate_secrets(names, directory: Path | None = None) -> None:
     d = Path(directory or secrets_dir())
     for name in names:
+        if name in TLS_NAMES:
+            raise ValueError(f"{name!r} is never rotated: a new certificate would cut off every "
+                             "enrolled renderer")
         if name not in SECRET_NAMES:
             raise ValueError(f"unknown secret {name!r}")
         _write_in_place(d / name, secrets.token_urlsafe(32))
+
+
+def gateway_pin(directory: Path | None = None) -> str:
+    """"sha256:<hex>" of the gateway certificate's DER — what an enrollment
+    token carries and every renderer checks before trusting the gateway.
+    Raises SecretMissing when the certificate is absent or empty."""
+    from tubematic_core.renderers import cert_pin
+    pem = read_secret(TLS_CERT_NAME, directory)
+    return cert_pin(ssl.PEM_cert_to_DER_cert(pem))
 
 
 def check_password_strength(password: str) -> None:

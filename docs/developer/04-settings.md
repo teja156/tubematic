@@ -19,8 +19,10 @@ default; the types are `bool`, `int`, `str`, `secret`, `json_list`, `voice_list`
   the default too, rather than failing the read.
 - **Writes are all-or-nothing.** `POST /settings` (`pipeline.py::post_settings`) rejects any
   undeclared key, coerces every value, and only then writes. One bad value changes nothing.
-- **Nothing caches a setting.** The Flask API, the MCP server, the worker and the renderer read
-  the database per use, which is why no key needs a restart.
+- **Nothing caches a setting.** The Flask API, the MCP server and the worker read the database per
+  use, which is why no key needs a restart. A renderer reads no settings at all: the render settings
+  it needs (`render_timeout_secs`, `render_stall_timeout_secs`, `watermark_enabled`) arrive with each
+  claim, read at that moment, so a change applies from the next claim.
 
 ### The default-voice invariant is enforced on read
 
@@ -35,7 +37,7 @@ one to `post_settings`.
 `default_mascot_id` names a row in `mascots`, which a settings coercion cannot see (`_coerce_setting` has
 no database). So `_read_all_settings` blanks the value when the mascot is no longer pickable (archived,
 or never approved), and `post_settings` refuses a new value that is not pickable, or any new value while
-the renderer's GPU is not `working` (`tubematic_core/mascots.py::mascot_gpu_error`, the same rule and
+no renderer's GPU is `working` (`tubematic_core/mascots.py::mascot_gpu_error`, the same rule and
 words as a pick on a video), **on change only**: refusing a re-sent stored value would block every
 unrelated settings save once its mascot is archived or its GPU is gone. The same split as the default
 voice, for the same reason. `''` always passes.
@@ -79,9 +81,7 @@ them as unknown:
 | `mining_youtube_urls` | `POST /research/mining-sources`, or the MCP server's `set_mining_sources` | JSON array of YouTube video URLs, each `https://www.youtube.com/watch?v=<id>`, no repeats, at most 50. Both writers refuse any other entry ([HTTP API — Mining sources](05-http-api.md#mining-sources)) |
 | `mining_url_cursor` | A mining run (the MCP server's `mine_youtube_topics`) | Integer as a string: the index of the URL the next run starts from, so runs rotate through the list |
 | `last_retention_sweep_at` | The worker's retention sweep, stamped before it runs | ISO timestamp |
-| `gpu_probe_result` | The renderer's GPU probe (`render_agent.py::_run_gpu_probe`) | JSON object: when it ran and why, whether a GPU is configured, the GPU and the host's GPU list, Chromium's WebGL renderer and vendor strings, `ok`, the reason when not, and `nvidia-smi`'s view. Served by `GET /render/gpu` ([Rendering and Review](11-rendering-and-review.md#the-gl-renderer)) |
-| `gpu_probe_requested_at` | `POST /render/gpu/test` | ISO timestamp with microseconds, compared as a string with the result's `at` |
-| `render_claim_hold_until` | `onboard.py --step gpu`, around its recreate of the renderer | ISO timestamp (seconds, `Z`). The renderer claims no render until then ([Rendering and Review — The claim](11-rendering-and-review.md#the-claim)); the step deletes the row when it is done |
+| `render_claim_hold_until` | `onboard.py --step gpu`, around its recreate of the renderer | ISO timestamp (seconds, `Z`). The render gateway hands the built-in renderer no render until then ([Rendering and Review — The claim](11-rendering-and-review.md#the-claim)); the step deletes the row when it is done. Other renderers are not held: the step recreates only the built-in one |
 | `voicing_stall_paused_at` | The worker's voicing-stall check, on every pass while the pipeline is paused | ISO timestamp. A stall is flagged only once enough time has passed since the later of this and the video's own last change, so a long pause does not flag every video the moment it ends |
 | `research_run_timestamps` | `POST /research/record-run` | JSON array of ISO timestamps, pruned to 24 hours |
 | `last_research_at` | The MCP server's `mark_research_done` | ISO timestamp |
@@ -92,6 +92,12 @@ them as unknown:
 `mcp_port` and `poll_interval_mins` have no route of their own on purpose: each feeds something only
 onboarding regenerates — the MCP registration and the crontab line — so a dashboard edit would
 silently do nothing.
+
+Two GPU rows are retired: `gpu_probe_result` and `gpu_probe_requested_at` held the single
+renderer's GPU test and the dashboard's request for one. Each renderer's test and request are now
+columns of its row in [`renderers`](03-database.md#renderers-renderer_enrollments-and-render_timings),
+because there can be more than one renderer and each tests its own GPU. Nothing reads or writes the
+old rows any more; an upgraded install may still hold them, harmlessly.
 
 Three more rows used to live here: `agent_binary`, `agent_run_path` and `install_scope`. They are
 columns of an agent's row now. The first `--install-agent` run reads them once, as its pre-fill, and

@@ -115,7 +115,8 @@ a relaunch. Put it in the repo and rebuild.
 automatically by the Kasm platform as `kasm-user` after session start, independent of anything
 else in the container's boot chain. It's what actually does everything in the table above: refresh
 the working tree, refresh Claude Code's skills/commands/MCP registration, create `mounted/`, create
-any missing service token (`python3 -m tubematic_core.auth ensure`), seed the DB, and bring up
+any missing service token and the render gateway's TLS pair (`tubematic_core.auth ensure`, run with
+the image's `/opt/tubematic/.venv` because the TLS pair needs `cryptography`), seed the DB, and bring up
 `tubematic-api`/`tubematic-mcp`/`tubematic-worker`/`tubematic-renderer`. The MCP registration is redone on every launch
 rather than skipped when present: the server needs its token, which Claude Code fetches through
 `scripts/mcp_auth_header.py`, and a registration persisted from an older image has no such helper.
@@ -373,7 +374,7 @@ masked secret from overwriting the real key — so a direct-SQL edit reusing `_c
 skip them.
 
 **No setting needs a restart to take effect.** Every reader queries the database live at use time —
-`renderer/api/worker.py::_setting`, `renderer/api/render_agent.py::_setting`,
+`renderer/api/worker.py::_setting`, `renderer/api/render_results.py::_setting`,
 `mcp/server.py::_get_setting` and `renderer/api/pipeline.py::_read_all_settings` are each called
 per-use, with no module-level reads and no in-process cache — so a write applies to the very next
 read. `--restart renderer` and `--restart worker` exist for a genuinely wedged renderer or worker
