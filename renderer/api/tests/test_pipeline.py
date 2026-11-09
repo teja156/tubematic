@@ -4533,7 +4533,7 @@ def test_a_failed_publish_releases_the_claim_so_it_can_be_retried(client, db_pat
 
 def test_a_video_with_no_project_resolves_the_renderer_s_default_directory(client, db_path,
                                                                           tmp_path, monkeypatch):
-    """render_agent.py::_stage_and_render writes to OUTPUT_DIR/"default_proj" when a
+    """The render gateway writes the upload to OUTPUT_DIR/"default_proj" when a
     video has no project_id. Rebasing to OUTPUT_DIR/"" here would make every
     such video fail publishing with "No rendered video file to publish" despite
     having a perfectly good render."""

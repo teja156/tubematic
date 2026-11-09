@@ -19,7 +19,7 @@ pronunciation_lexicon, trending_sources), so this script carries no type
 table of its own to drift out of sync with SETTINGS_SPEC.
 
 No setting needs a restart to take effect. Every reader queries the DB live
-at use time — renderer/api/worker.py::_setting, render_agent.py::_setting, mcp/server.py::_get_setting
+at use time — renderer/api/worker.py::_setting, render_results.py::_setting, mcp/server.py::_get_setting
 and renderer/api/pipeline.py::_read_all_settings are all called per-use, with
 no module-level reads and no in-process cache — so a write here applies to
 the very next read. --restart exists only for the unrelated case of a wedged

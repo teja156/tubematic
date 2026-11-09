@@ -492,6 +492,78 @@ def test_a_mascot_whose_code_cannot_be_staged_is_refused(env, version, code, why
     assert why in _comments(env)[-1]
 
 
+def test_a_video_not_yet_queued_is_never_handed_out(env):
+    """VOICE_READY means the agent is still authoring scene config — not a
+    renderer's to touch until submit_render advances it to RENDER_QUEUED."""
+    _beat(env)
+    _seed(env, status="VOICE_READY")
+    assert env.client.post("/v1/claim", json={}, headers=B).status_code == 204
+    assert _video(env)["status"] == "VOICE_READY"
+
+
+# ── TMDEV-162: every location is derived from the ids (moved from the renderer) ──
+
+def test_a_tampered_row_bundles_the_derived_files_not_the_planted_ones(env):
+    """A row whose path columns were pointed elsewhere before the fix (PATCH
+    and update_video once accepted any string) still gets the video's own
+    files; a legacy host-shaped path renders from the derived location too."""
+    planted = env.secrets / "planted.json"
+    planted.write_text('{"secret": true}')
+    _claimed(env, written=str(planted))
+    members = _members(env.client.get("/v1/jobs/vid-1/bundle", headers=B))
+    assert members["audio.mp3"] == b"AUDIO" and b"secret" not in members["timeline.json"]
+
+
+@pytest.mark.parametrize("project", ["node.js", "x" * 129])
+def test_a_legacy_project_id_still_renders(env, project):
+    """A dot, or more than the creation cap of 128: legacy ids are checked as
+    path components at use, as ids.py promises."""
+    _claimed(env, project=project)
+    _upload(env)
+    _result(env, outcome="success", frames=90, seconds=1.0)
+    assert _video(env)["video_path"] == str(env.out / project / "vid-1.mp4")
+
+
+@pytest.mark.parametrize("vid", ["..", "../x", "/tmp/x", "a/b", "x" * 256, "x" * 252])
+def test_an_unusable_video_id_is_refused_before_anything_is_bundled(env, vid):
+    """252 bytes is a working job directory but an impossible `<id>.mp4`: refused
+    up front, not with ENAMETOOLONG after a render."""
+    _beat(env)
+    _seed(env, vid, files=False)
+    assert env.client.post("/v1/claim", json={}, headers=B).status_code == 204
+    assert _video(env, vid)["status"] == "FAILED"
+    assert _comments(env, vid)[-1].startswith("Render refused, moved to FAILED:")
+
+
+def test_a_video_id_that_leaves_room_for_its_mp4_is_handed_out(env):
+    vid = "x" * 251
+    _beat(env)
+    _seed(env, vid)
+    assert env.client.post("/v1/claim", json={}, headers=B).get_json()["video_id"] == vid
+
+
+def test_a_job_dir_linked_to_another_video_is_refused(env):
+    """vid-1 -> vid-2 stays inside the jobs root, so only the per-component
+    symlink walk stops vid-1 rendering with vid-2's audio."""
+    _beat(env)
+    _seed(env, "vid-2", status="VOICE_READY")
+    _seed(env, files=False)
+    (env.jobs / "vid-1").symlink_to(env.jobs / "vid-2")
+    assert env.client.post("/v1/claim", json={}, headers=B).status_code == 204
+    assert _video(env)["status"] == "FAILED" and "symlink" in _comments(env)[-1]
+
+
+def test_a_symlinked_job_file_is_refused(env):
+    _beat(env)
+    _seed(env)
+    secret = env.secrets / "secret.json"
+    secret.write_text("{}")
+    (env.jobs / "vid-1" / "timeline.json").unlink()
+    (env.jobs / "vid-1" / "timeline.json").symlink_to(secret)
+    assert env.client.post("/v1/claim", json={}, headers=B).status_code == 204
+    assert _video(env)["status"] == "FAILED"
+
+
 # ── the lease ─────────────────────────────────────────────────────────────────
 
 def _claimed(env, headers=B, **seed):

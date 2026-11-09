@@ -11,6 +11,7 @@ Run from renderer/api/: pytest tests/test_gpu_rendering.py
 import io
 import json
 import os
+import re
 import signal
 import sqlite3
 import subprocess
@@ -39,7 +40,6 @@ LLVMPIPE = "ANGLE (Mesa, llvmpipe (LLVM 15.0.6, 256 bits), OpenGL 4.5)"
 def db_path(tmp_path, monkeypatch):
     p = str(tmp_path / "test.db")
     pipeline._init_db(p)
-    monkeypatch.setattr(render_agent, "DB_PATH", p)
     return p
 
 
@@ -103,14 +103,6 @@ def _driver(answer, stderr=""):
         return proc
     factory.calls = calls
     return factory
-
-
-def _stored(db_path):
-    con = sqlite3.connect(db_path)
-    row = con.execute("SELECT value FROM settings WHERE key = ?",
-                      (pipeline.GPU_PROBE_RESULT_KEY,)).fetchone()
-    con.close()
-    return json.loads(row[0]) if row else None
 
 
 def _probe(db_path, answer, smi_ok=True, stderr=""):
@@ -202,14 +194,17 @@ def test_no_probe_answer_fails():
 
 # ── The probe ────────────────────────────────────────────────────────────────
 
-def test_a_passing_probe_verifies_the_gpu_and_stores_the_result(db_path, configured):
+def test_a_passing_probe_verifies_the_gpu_and_returns_the_result(db_path, configured):
+    """The result travels in the next heartbeat; the gateway stores it on the
+    renderer's row in exactly this shape (GET /render/gpu reads it)."""
     result, _ = _probe(db_path, _answer(NVIDIA))
     assert result["ok"] is True and render_agent._gpu_verified is True
-    stored = _stored(db_path)
-    assert stored["renderer"] == NVIDIA and stored["configured"] is True
-    assert stored["smi"] == {"name": "NVIDIA GeForce GTX 1650", "driver": "595.91.07",
+    assert result["renderer"] == NVIDIA and result["configured"] is True
+    assert result["smi"] == {"name": "NVIDIA GeForce GTX 1650", "driver": "595.91.07",
                              "memory_mib": 4096}
-    assert [g["uuid"] for g in stored["host_gpus"]] == ["GPU-aaaa"]
+    assert [g["uuid"] for g in result["host_gpus"]] == ["GPU-aaaa"]
+    # "at" is pipeline.now_precise's format: compared as a string with a Test request's stamp
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z", result["at"])
 
 
 def test_the_probe_runs_with_exactly_the_options_a_render_gets(db_path, configured):
@@ -246,7 +241,7 @@ def test_a_probe_on_the_wrong_device_leaves_rendering_on_the_cpu(db_path, config
     result, _ = _probe(db_path, _answer(renderer))
     assert result["ok"] is False and render_agent._gpu_verified is False
     assert render_agent._render_on_gpu() is False
-    assert _stored(db_path)["renderer"] == renderer
+    assert result["renderer"] == renderer
 
 
 def test_a_failing_probe_withdraws_an_earlier_verification(db_path, configured, monkeypatch):
@@ -295,111 +290,41 @@ def test_a_probe_that_cannot_start_never_raises(db_path, configured):
     with mock.patch("subprocess.Popen", side_effect=FileNotFoundError("npx")):
         result = render_agent._run_gpu_probe(reason="test")
     assert result["ok"] is False and "could not run" in result["error"]
-    assert _stored(db_path) is not None
-
-
-# ── Requests from the dashboard ──────────────────────────────────────────────
-
-def _request(db_path, at):
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-                (pipeline.GPU_PROBE_REQUEST_KEY, at))
-    con.commit()
-    con.close()
-
-
-def test_a_request_newer_than_the_last_probe_runs_one(db_path):
-    _request(db_path, "2026-11-05T10:00:00.000002Z")
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES (?, ?)",
-                (pipeline.GPU_PROBE_RESULT_KEY, json.dumps({"at": "2026-11-05T10:00:00.000001Z"})))
-    con.commit()
-    con.close()
-    with mock.patch.object(render_agent, "_run_gpu_probe") as probe:
-        render_agent._sweep_gpu_probe()
-    probe.assert_called_once()
-
-
-def test_a_request_already_answered_runs_nothing(db_path):
-    _request(db_path, "2026-11-05T10:00:00.000001Z")
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO settings (key, value) VALUES (?, ?)",
-                (pipeline.GPU_PROBE_RESULT_KEY, json.dumps({"at": "2026-11-05T10:00:00.000002Z"})))
-    con.commit()
-    con.close()
-    with mock.patch.object(render_agent, "_run_gpu_probe") as probe:
-        render_agent._sweep_gpu_probe()
-    probe.assert_not_called()
-
-
-def test_no_request_runs_nothing(db_path):
-    with mock.patch.object(render_agent, "_run_gpu_probe") as probe:
-        render_agent._sweep_gpu_probe()
-    probe.assert_not_called()
+    assert result["at"] and result["secs"] is not None
 
 
 # ── The render ───────────────────────────────────────────────────────────────
+# A dashboard Test request reaches the renderer as the heartbeat's probe_now;
+# that, and the re-test after a failed GPU render, are in test_render_agent.py.
 
-def _job(tmp_path, monkeypatch, db_path):
-    remotion_dir = tmp_path / "remotion"
-    (remotion_dir / "public").mkdir(parents=True)
-    (tmp_path / "out").mkdir()
-    monkeypatch.setattr(render_agent, "REMOTION_DIR", remotion_dir)
-    monkeypatch.setattr(render_agent, "OUTPUT_DIR", tmp_path / "out")
-    monkeypatch.setattr(pipeline, "JOBS_DIR", tmp_path / "jobs")
-    job = tmp_path / "jobs" / "vid-1"
-    job.mkdir(parents=True)
-    (job / "audio.mp3").write_bytes(b"x")
-    (job / "timeline.json").write_text("{}")
-    (job / "scene-config.json").write_text('{"scenes": []}')
-    con = sqlite3.connect(db_path)
-    # The columns only have to say each file was written; paths come from the id.
-    con.execute("INSERT INTO videos (id, project_id, topic, strategy, producibility_score, status, "
-                "voice_file_path, timeline_path, scene_config_path, created_at, updated_at) "
-                "VALUES ('vid-1', 'p', 't', 'manual', 8, 'RENDERING', 'a', 't', 's', "
-                "'2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
-    con.commit()
-    con.close()
+@pytest.fixture
+def client_env(tmp_path, monkeypatch):
+    from .render_client_env import make_env
+    e = make_env(tmp_path, monkeypatch)
+    e.seed()
+    e.start()
+    return e
 
 
-def test_a_verified_gpu_render_gets_the_gpu_flags(db_path, configured, monkeypatch, tmp_path):
-    _job(tmp_path, monkeypatch, db_path)
+def test_a_verified_gpu_render_gets_the_gpu_flags(client_env, configured, monkeypatch):
+    from .render_client_env import FakeRemotion
     monkeypatch.setattr(render_agent, "_gpu_verified", True)
-    with mock.patch("subprocess.Popen", return_value=_popen()) as popen, \
-         mock.patch.object(render_agent, "_handle_render_success"):
-        render_agent._stage_and_render("vid-1")
-    assert "--gl=angle-egl" in popen.call_args.args[0]
-    assert popen.call_args.kwargs["env"]["__EGL_VENDOR_LIBRARY_FILENAMES"].endswith("10_nvidia.json")
+    remotion = FakeRemotion()
+    with mock.patch("subprocess.Popen", side_effect=remotion):
+        render_agent._loop_once()
+    argv, kw = remotion.calls[0]
+    assert "--gl=angle-egl" in argv
+    assert kw["env"]["__EGL_VENDOR_LIBRARY_FILENAMES"].endswith("10_nvidia.json")
 
 
-def test_an_unverified_gpu_render_gets_no_gpu_flags(db_path, configured, monkeypatch, tmp_path):
-    _job(tmp_path, monkeypatch, db_path)
-    with mock.patch("subprocess.Popen", return_value=_popen()) as popen, \
-         mock.patch.object(render_agent, "_handle_render_success"):
-        render_agent._stage_and_render("vid-1")
-    argv = popen.call_args.args[0]
+def test_an_unverified_gpu_render_gets_no_gpu_flags(client_env, configured):
+    from .render_client_env import FakeRemotion
+    remotion = FakeRemotion()
+    with mock.patch("subprocess.Popen", side_effect=remotion):
+        render_agent._loop_once()
+    argv, kw = remotion.calls[0]
     assert not any(a.startswith(("--gl", "--chrome-mode")) for a in argv)
-    assert "__EGL_VENDOR_LIBRARY_FILENAMES" not in popen.call_args.kwargs["env"]
-
-
-def test_a_failed_gpu_render_retests_the_gpu(db_path, configured, monkeypatch, tmp_path):
-    """So the next render falls back to the CPU if the GPU is what broke."""
-    _job(tmp_path, monkeypatch, db_path)
-    monkeypatch.setattr(render_agent, "_gpu_verified", True)
-    with mock.patch("subprocess.Popen", return_value=_popen(stderr="boom", returncode=1)), \
-         mock.patch.object(render_agent, "_handle_render_failure"), \
-         mock.patch.object(render_agent, "_run_gpu_probe") as probe:
-        render_agent._stage_and_render("vid-1")
-    probe.assert_called_once()
-
-
-def test_a_failed_cpu_render_does_not_probe(db_path, monkeypatch, tmp_path):
-    _job(tmp_path, monkeypatch, db_path)
-    with mock.patch("subprocess.Popen", return_value=_popen(stderr="boom", returncode=1)), \
-         mock.patch.object(render_agent, "_handle_render_failure"), \
-         mock.patch.object(render_agent, "_run_gpu_probe") as probe:
-        render_agent._stage_and_render("vid-1")
-    probe.assert_not_called()
+    assert "__EGL_VENDOR_LIBRARY_FILENAMES" not in kw["env"]
 
 
 # ── GET /render/gpu, POST /render/gpu/test ───────────────────────────────────

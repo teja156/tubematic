@@ -2277,11 +2277,6 @@ def start_publish(db_path: str, api_key: str, video_id: str, account_ids: list,
 # be killed. The time is a ceiling, so a crashed onboarding never stops
 # rendering for long.
 RENDER_CLAIM_HOLD_KEY = "render_claim_hold_until"
-# Retired with the single-renderer probe: nothing here reads or writes these
-# settings rows any more. They stay only because render_agent.py still imports
-# them until its gateway client replaces the direct database access.
-GPU_PROBE_RESULT_KEY = "gpu_probe_result"
-GPU_PROBE_REQUEST_KEY = "gpu_probe_requested_at"
 
 
 def now_precise() -> str:
