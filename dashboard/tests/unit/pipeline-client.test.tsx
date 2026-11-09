@@ -333,4 +333,41 @@ describe("PipelineClient", () => {
     expect(last.openRevise).toBe(true);
     expect(last.initialPicks).toEqual(picks);
   });
+
+  // ── Nothing can render ─────────────────────────────────────────────────────
+
+  function stubRenderers(stats: Record<string, number>, renderers: unknown) {
+    vi.spyOn(global, "fetch").mockImplementation((url) => {
+      const u = String(url);
+      const body = u.endsWith("/stats") ? stats : u.endsWith("/renderers") ? renderers : [];
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as unknown as Response);
+    });
+  }
+  const offline = { id: "r1", name: "Studio PC", builtin: false, enabled: true, online: false, state: "idle",
+                    needs_upgrade: false };
+
+  it("warns that nothing can render when videos are queued and no renderer can take one", async () => {
+    stubRenderers({ RENDER_QUEUED: 2 },
+                  { remote_enabled: true, gateway_address: "", renderers: [offline] });
+    const { findByTestId } = render(<PipelineClient />);
+    const banner = await findByTestId("nothing-can-render");
+    expect(banner).toHaveTextContent("NOTHING CAN RENDER");
+    expect(banner).toHaveTextContent("2 videos are waiting");
+    expect(await findByTestId("nothing-can-render-link")).toHaveAttribute("href", "/settings?tab=rendering");
+  });
+
+  it("does not warn while a renderer can render, or when the list cannot be read", async () => {
+    stubRenderers({ RENDER_QUEUED: 2 },
+                  { remote_enabled: false, gateway_address: "", renderers: [offline, { ...offline, id: "b", online: true }] });
+    const first = render(<PipelineClient />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(first.queryByTestId("nothing-can-render")).toBeNull();
+    first.unmount();
+    vi.restoreAllMocks();
+
+    stubRenderers({ RENDER_QUEUED: 2 }, { error: "upstream down" });
+    const second = render(<PipelineClient />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(second.queryByTestId("nothing-can-render")).toBeNull();
+  });
 });

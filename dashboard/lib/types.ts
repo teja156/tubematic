@@ -595,6 +595,73 @@ export interface GpuStatus {
   waiting_for_render: boolean;
 }
 
+/** One GPU a renderer reported, from nvidia-smi on its machine. */
+export interface RendererGpuDevice {
+  name: string;
+  uuid: string;
+  memory_mb: number | null;
+}
+
+/** What a renderer's machine has, as the renderer last reported it. Empty
+ *  until it has connected once. */
+export interface RendererCompute {
+  cpus?: number | null;
+  memory_bytes?: number | null;
+  gpus?: RendererGpuDevice[];
+}
+
+/** The renderer's last GPU probe, summarised: Chromium's WebGL renderer
+ *  string and whether it named the configured GPU. */
+export interface RendererGpuProbe {
+  ok: boolean;
+  configured?: boolean;
+  error: string;
+  renderer: string;
+  name: string;
+  at: string;
+}
+
+/** One entry of GET /renderers. Removed renderers are never listed. */
+export interface Renderer {
+  id: string;
+  name: string;
+  builtin: boolean;
+  enabled: boolean;
+  online: boolean;
+  state: "idle" | "rendering";
+  needs_upgrade: boolean;
+  gpu_verified: boolean;
+  last_heartbeat_at: string | null;
+  current_video_id: string | null;
+  current_video_title: string | null;
+  last_error: string | null;
+  credential_expires_at: string | null;
+  version: string | null;
+  gpu_probed: boolean;
+  gpu_configured: boolean;
+  gpu_error: string;
+  compute: RendererCompute | null;
+  gpu: RendererGpuProbe | null;
+  probe_pending: boolean;
+  /** The machine's host name, as the renderer reported it. */
+  host?: string;
+}
+
+/** GET /renderers. `remote_enabled` is false until
+ *  `onboard.py --step renderers` has published the render gateway's port. */
+export interface RenderersList {
+  remote_enabled: boolean;
+  gateway_address: string;
+  renderers: Renderer[];
+}
+
+/** POST /renderers/enrollments (201). The token is shown once, never again. */
+export interface RendererEnrollment {
+  token: string;
+  expires_at: string;
+  command: string;
+}
+
 /** GET /retention/backlog (TMDEV-134): the non-archived FAILED and
  *  TOPIC_REJECTED videos unpublished_retention_days would sweep, and the disk
  *  their mp4s and job dirs hold. Answered whether or not the key is on. */

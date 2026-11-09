@@ -133,26 +133,32 @@ test.describe("Settings page", () => {
     expect(settings.render_timeout_secs).toBe(2700);
   });
 
-  test("the GPU panel reports CPU rendering from the worker's real probe", async ({ page }) => {
-    // TMDEV-178. The test stack's worker has no GPU override, so it renders on
+  test("the Renderers panel reports CPU rendering from the built-in renderer's real probe", async ({ page }) => {
+    // The test stack's built-in renderer has no GPU override, so it renders on
     // the CPU. It probes as it starts — a Remotion still in the real image —
     // and the WebGL renderer string that reaches this page must be the
-    // software one. Without a GPU chosen there is no Test GPU button.
+    // software one. Without a GPU there is no Test GPU button, the built-in
+    // renderer cannot be removed, and with remote renderers never turned on
+    // Add renderer is disabled and names the onboarding step.
     test.setTimeout(240_000);
     await gotoTab(page, "rendering");
-    const status = page.getByTestId("gpu-status");
-    await expect(status).toBeVisible({ timeout: 10_000 });
-    // The startup probe may still be running; the panel loads once, so reload until it lands.
+    const card = page.getByTestId("renderer-card-builtin");
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    // The startup probe may still be running; reload until it lands (the
+    // panel polls only every 20 s).
     await expect(async () => {
       await page.reload();
       await page.getByTestId("tab-rendering").click();
-      await expect(status).toHaveAttribute("data-status", "not_configured", { timeout: 5_000 });
+      await expect(card.getByTestId("renderer-raw-device")).toContainText("SwiftShader", { timeout: 5_000 });
     }).toPass({ timeout: 200_000 });
-    await expect(status).toHaveText(/Rendering on the CPU/);
-    await expect(page.getByTestId("gpu-renderer")).toContainText("SwiftShader");
-    await expect(page.getByTestId("gpu-device")).toContainText("Software rendering on the CPU");
-    await expect(page.getByTestId("gpu-help")).toContainText("python3 onboard.py --step gpu");
-    await expect(page.getByTestId("gpu-test")).toHaveCount(0);
+    await expect(card.getByTestId("renderer-chip")).toHaveText(/online|busy/);
+    await expect(card.getByTestId("renderer-device")).toContainText("Software rendering on the CPU");
+    await expect(card.getByTestId("renderer-gpu")).toContainText("None — renders on the CPU");
+    await expect(card.getByTestId("renderer-help")).toContainText("python3 onboard.py --step gpu");
+    await expect(card.getByTestId("renderer-test-gpu")).toHaveCount(0);
+    await expect(card.getByTestId("renderer-remove")).toHaveCount(0);
+    await expect(page.getByTestId("renderers-add")).toBeDisabled();
+    await expect(page.getByTestId("renderers-add-hint")).toContainText("python3 onboard.py --step renderers");
   });
 
   test("the agent-session settings save from the Scheduling tab", async ({ page }) => {

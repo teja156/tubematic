@@ -78,7 +78,16 @@ const MOCK_BACKLOG: RetentionBacklog = {
   rejected: { count: 0, bytes: 0 },
 };
 
-/** Routes /settings, /pipeline/status, /agents, /retention/backlog and
+const MOCK_RENDERERS = {
+  remote_enabled: false, gateway_address: "",
+  renderers: [{ id: "builtin", name: "Built-in renderer", builtin: true, enabled: true, online: true,
+                state: "idle", needs_upgrade: false, gpu_verified: false, last_heartbeat_at: null,
+                current_video_id: null, current_video_title: null, last_error: null,
+                credential_expires_at: null, version: "develop", gpu_probed: false, gpu_configured: false,
+                gpu_error: "", compute: { cpus: 6, memory_bytes: 0, gpus: [] }, gpu: null, probe_pending: false }],
+};
+
+/** Routes /settings, /pipeline/status, /renderers, /agents, /retention/backlog and
  * /voices/*\/preview to their own mock bodies — a click on a VoicePreviewButton
  * must not be misrouted to the settings/status branches below and receive a
  * settings object back. A null backlog answers that route with a 500. */
@@ -88,6 +97,9 @@ function stubFetch(settings = MOCK_SETTINGS, status = MOCK_STATUS, agents: Agent
   vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => {
     if (url.endsWith("/render/gpu")) {
       return Promise.resolve({ ok: true, json: async () => ({ status: gpuStatus }) });
+    }
+    if (url.endsWith("/renderers")) {
+      return Promise.resolve({ ok: true, json: async () => MOCK_RENDERERS });
     }
     if (url.endsWith("/mascots")) {
       return Promise.resolve({ ok: true, json: async () => mascots });
@@ -216,6 +228,13 @@ describe("SettingsPage", () => {
     expect(screen.getByTestId("toggle-gemini-review")).toBeTruthy();
     await openTab("rendering");
     expect(screen.getByTestId("input-max-render-retries")).toBeTruthy();
+  });
+
+  it("shows the Renderers panel, with the built-in renderer, on the Rendering tab", async () => {
+    await renderTab("rendering");
+    expect(await screen.findByTestId("renderers-panel")).toBeTruthy();
+    expect(await screen.findByTestId("renderer-card-builtin")).toHaveTextContent("Built-in renderer");
+    expect(screen.queryByTestId("renderers-error")).toBeNull();
   });
 
   it("renders all four topic limit inputs", async () => {
