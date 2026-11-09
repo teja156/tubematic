@@ -79,6 +79,8 @@ A video that failed while rendering cannot be retried. Create it again.
 
 ### NOTHING CAN RENDER
 
+![The Pipeline page with a red NOTHING CAN RENDER banner above the Overview, linking to Settings, Rendering](../images/nothing-can-render.png)
+
 The **Pipeline** page shows this banner when videos are waiting to render and no renderer can take
 them. Open **Settings → Rendering** and look at each renderer's status:
 
@@ -325,6 +327,8 @@ sudo chown "$USER:$USER" ~/.tubematic-data/logs
 
 Start with the video. Its **Comments** tab records each failure Tubematic handled, and its **Logs**
 tab lists what every part of Tubematic did to it.
+
+![The Logs page filtered to warning: each record has a time, a level, the service that wrote it and a message](../images/logs.png)
 
 For the whole install, open the **Logs** page and filter by level. On that page:
 

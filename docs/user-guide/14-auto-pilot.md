@@ -29,6 +29,8 @@ It is off by default. Switching it on does nothing until you select a domain on
 
 Open **Settings → Auto Pilot**. The tab has its own **Save**, and saves everything on it together.
 
+![Settings, Auto Pilot tab: a warning box, the on and off switch, the gap between publishes, the in-progress limit, a tick box per domain and a daily number per account](../images/settings-auto-pilot.png)
+
 | Setting | What it does | Default |
 |---|---|---|
 | **Auto Pilot** on or off | Off stops all of it and keeps the rest of the tab as you set it | Off |

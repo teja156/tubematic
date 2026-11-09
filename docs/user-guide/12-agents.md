@@ -78,6 +78,8 @@ command checks each model again.
 
 ## Choose which agent makes a video
 
+![Settings, Agents tab: a card for each installed agent with its models, its share, its default model and its effort level](../images/settings-agents.png)
+
 Tubematic gives each new video to an agent by share. Set the shares on **Settings → Agents**, where
 you also set:
 

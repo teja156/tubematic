@@ -62,6 +62,8 @@ research stops before you have enough to choose from.
 
 The list of ElevenLabs voices videos can use. A new install starts with two, Teja and Adam.
 
+![Settings, Voice tab: two voices, each with a name, a voice ID, a model, a default marker and a preview button](../images/settings-voice.png)
+
 For each voice you set:
 
 - a name, which is what the pickers show,
@@ -111,6 +113,8 @@ alone unless renders are stopped while they are still working.
 Below those settings, the **Renderers** panel has a card for each machine that renders for this
 install. The renderer on this machine is first and is marked **BUILT-IN**. Actions on a card apply
 at once.
+
+![Settings, Rendering tab: the render settings, then the Renderers panel with the built-in renderer online and rendering on the CPU](../images/settings-rendering.png)
 
 | Status | Meaning |
 |---|---|

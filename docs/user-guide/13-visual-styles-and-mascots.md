@@ -77,6 +77,8 @@ Mascots are experimental and off by default. A video has one only if you pick it
 the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D videos
 cannot have one.
 
+![The Mascots page under Profiles: a form for a new mascot, and the built-in mascot Tubi marked READY](../images/mascots.png)
+
 ### Tubi
 
 Tubematic ships with one mascot, Tubi: a small retro terminal whose screen is its face. You can pick

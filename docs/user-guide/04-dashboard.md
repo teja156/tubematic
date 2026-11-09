@@ -62,6 +62,8 @@ Pipeline, Library, Projects and Profiles refresh every 5 seconds, so you can lea
 
 The page has three parts.
 
+![The Pipeline page: the Overview counts, then Quick Actions with four topics, two scripts and one video waiting for a decision](../images/pipeline-quick-actions.png)
+
 **Overview** shows six counts: topics awaiting you, scripts ready, videos ready, videos in the
 pipeline, published and failed.
 
@@ -82,6 +84,8 @@ Rejected, Revision Requested and Failed. Click a card to open the video. A card 
   (see [When a publish partly fails](06-publishing.md#when-a-publish-partly-fails)),
 - for a scheduled post, when it goes out.
 
+![The board below Quick Actions, with one column per status and a card for each video](../images/pipeline-board.png)
+
 Two notices can appear on this page:
 
 - An amber line above Quick Actions while [Auto Pilot](14-auto-pilot.md) is on.
@@ -90,6 +94,8 @@ Two notices can appear on this page:
   [Troubleshooting](08-troubleshooting.md#nothing-can-render).
 
 ### The video window
+
+![The video window on its Video tab. The player is on the left. The side panel has the approval buttons, the video's details and its cost by service](../images/video-window.png)
 
 Click a card or a row to open the video. The left side has tabs:
 
@@ -121,6 +127,8 @@ To save the video, use the player's own menu, or take the file from
 ### New Video
 
 Creates a video from a topic you type.
+
+![The New Video page with a title, a topic and a visual style chosen](../images/new-video.png)
 
 | Field | Notes |
 |---|---|
@@ -172,6 +180,8 @@ Two pages share this tab. Script profiles are covered in
   platform and account. A dash means the platform reported no figure.
 - **Spend** shows what the install spent today, this week, this month or over a range of days. It
   includes spend that belongs to no single video, such as research.
+
+![The Spend tab for this month: a total, then spend on videos, on research and mining, on other agent runs, and ElevenLabs credits](../images/analytics-spend.png)
 
 **Socials** and the **Videos** tab stay empty until you set up [Publishing](06-publishing.md).
 

@@ -31,6 +31,8 @@ and connect only accounts you want Tubematic to reach.
 
 ### Connecting accounts
 
+![The Socials page: one account each under YouTube, Instagram and TikTok, two of them ticked, and the four Connect buttons below](../images/socials.png)
+
 On the **Socials** page:
 
 1. Press **Connect YouTube**, **Connect Instagram**, **Connect TikTok** or **Connect Facebook**. The
@@ -64,6 +66,8 @@ A **NOT CONNECTED** badge marks a ticked account that postforme does not have an
 ---
 
 ## Publishing a video
+
+![The Publish dialog: two accounts ticked, Schedule selected with a date and time, and the title and description on the right](../images/publish-dialog.png)
 
 Open a video at Video Approved and press **Publish…**. In the dialog:
 
@@ -147,6 +151,8 @@ the Publish dialog opens. Pick the accounts and privacy again.
 
 Tubematic reads each published post's figures once an hour. **Refresh metrics** on the
 **Analytics** page reads them now.
+
+![The Videos tab of Analytics: totals for views, likes, comments and shares, a row per post, and bar charts by platform, by account and by month](../images/analytics-videos.png)
 
 A figure the platform did not report shows as a dash. Figures are kept after a video's files are
 deleted, so an archived video still shows its numbers.

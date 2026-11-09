@@ -76,6 +76,8 @@ agent's default.
    and anything it must cover.
 4. Leave **Automatically approve topic** ticked and press **Submit video**.
 
+![The New Video page with a title and a topic filled in, and Automatically approve topic ticked](images/new-video.png)
+
 The dashboard listens on this machine only. To open it from another machine, see
 [Remote Access](user-guide/09-remote-access.md).
 
@@ -83,6 +85,8 @@ The dashboard listens on this machine only. To open it from another machine, see
 
 Open the **Pipeline** page. Your video moves across the board from left to right, and stops twice
 for you.
+
+![The Pipeline page: six counts at the top, then Quick Actions with rows waiting at Topic Proposed, Script Ready and Video Ready](images/pipeline-quick-actions.png)
 
 | Stage | Who | What you do |
 |---|---|---|

@@ -13,6 +13,8 @@ It runs on your own Linux machine, in Docker.
 A 1080×1920 mp4 at 30 frames a second, in YouTube Shorts format, usually 90 to 180 seconds long. It
 has a synthesised voiceover, word-timed captions, generated images and animated diagrams.
 
+![Three frames from one Short: a title card, a numbered diagram with one step lit, and a closing figure. Each has a caption line and the Tubematic mark in the top corner](../images/sample-frames.jpg)
+
 The agent writes each scene as a React component for that one video, and
 [Remotion](https://remotion.dev) renders it. Because the output is code, the agent can change one
 scene when you ask for a revision, and you can read what produced any frame.

@@ -86,6 +86,8 @@ curriculum seed. You can change those numbers on **Settings → Research**.
 A video you create on the **New Video** page is not scored. It is filed under a domain called
 **Manual Videos**.
 
+![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button](../images/topics.png)
+
 ### Adding a domain
 
 On the **Topics** page, under **Curriculum Seed Domains**, fill in **Add Domain**:
@@ -178,6 +180,8 @@ To change the poll interval, run `python3 onboard.py --step cron` from the insta
 If three sessions in a row leave a video where they found it, the poller stops picking it up and
 marks its card **STUCK**. Open the video and read its comments to see why. Then press
 **Retry agent**, or fix the cause first.
+
+![A stuck video's window. The Actions panel says the agent ran three sessions without moving the video forward, above a Retry agent button](../images/stuck-video.png)
 
 ---
 
