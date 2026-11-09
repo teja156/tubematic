@@ -170,9 +170,6 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 - **Restart open agent sessions after upgrading.** The upgrade redeploys every installed agent's
   skills, which adds the mascot-drawing skill, and re-registers the MCP server, whose tools changed.
   An agent session that was already open keeps the old tools until you restart it.
-- **Going back to 2.0.0 needs the automatic backup restored.** The database gains new tables, and
-  2.0.0 refuses a newer database. Restoring the backup that the upgrade takes before changing the
-  database is the way back; mascots made since are lost with it.
 - **Cartoon 3D needs a working GPU.** The style is greyed out on the dashboard and refused by the
   API until the renderer's GPU test passes (Settings → Rendering → Test GPU). A Cartoon 3D video
   whose GPU stops working, before or during its render, is not rendered on the CPU or handed back to
@@ -209,12 +206,6 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   from the database beside the API that now hands them out. Run the upgrade without `--no-stop`;
   later upgrades accept it again. A video that was rendering when you upgraded is put back in the
   queue automatically, which counts as one of its render retries.
-- **Going back to 2.0.x needs one extra step: remove the worker.** The older version's Compose file
-  has no `tubematic-worker` and will not stop it, so run `docker rm -f tubematic-worker` before you
-  restore the backup, or it keeps publishing with the newer code beside the older stack. The new
-  files in `~/.tubematic-data/secrets/` can stay; 2.0.x ignores them.
-- **Going back to 2.0.0 ignores the GPU choice.** The renderer then runs on the CPU; nothing else is
-  affected.
 - **Remote renderers are off until you turn them on.** The upgrade publishes no new port and changes
   nothing about rendering: your own machine keeps rendering every video. The port remote renderers
   connect to (4443 by default) is opened only when you run `python3 onboard.py --step renderers`,
@@ -228,8 +219,16 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   days and renews itself while the renderer is online; one that stays offline until it runs out shows
   **credential expired** — remove it and add it with a new token. Settings → Rendering shows each
   renderer's expiry.
-- **Going back to 2.0.x stops remote renderers working.** 2.0.x has nothing for them to connect to;
-  remove each one on its own machine with `python3 tubematic_remote_renderer.py remove`.
+- **Going back to 2.0.x takes these steps, in this order.**
+  1. Remove each remote renderer on its own machine with `python3 tubematic_remote_renderer.py remove`:
+     2.0.x has nothing for them to connect to.
+  2. Run `docker rm -f tubematic-worker`. The older version's Compose file has no `tubematic-worker`
+     and will not stop it, so it would keep publishing with the newer code beside the older stack.
+  3. Restore the automatic backup the upgrade took before it changed the database: the database gains
+     new tables, and 2.0.x refuses a newer database. Mascots made since are lost with it.
+
+  The new files in `~/.tubematic-data/secrets/` can stay (2.0.x ignores them), and so can a GPU
+  choice (2.0.0 then renders on the CPU; nothing else is affected).
 
 ---
 
