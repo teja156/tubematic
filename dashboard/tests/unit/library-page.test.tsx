@@ -301,3 +301,18 @@ describe("LibraryPage publishing flag", () => {
     expect(modalProps.at(-1)!.publishingEnabled).toBe(false);
   });
 });
+
+
+describe("LibraryPage partial publishes (TMDEV-191)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("lists a partially published video under its own state", async () => {
+    mockFetchVideos([{ ...VIDEO_WITH_TITLE, status: "PARTIALLY_PUBLISHED" }]);
+    render(<LibraryPage />);
+    await act(async () => {});
+    const pill = screen.getByRole("button", { name: /Partially published/ });
+    expect(pill.textContent).toContain("1");
+    await act(async () => { fireEvent.click(pill); });
+    expect(screen.getByText("Converting video in the browser")).toBeTruthy();
+  });
+});

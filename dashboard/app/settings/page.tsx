@@ -303,7 +303,8 @@ const TABS = [
     fields: ["publishing_enabled"] },
   { key: "notifications", label: "Notifications",
     fields: ["discord_webhook_url", "notify_topic_proposed", "notify_script_ready",
-             "notify_video_ready", "dashboard_base_url"] },
+             "notify_video_ready", "notify_partially_published", "notify_failed",
+             "dashboard_base_url"] },
   // The research readouts are read-only; the two agent-session fields
   // (TMDEV-129) are the only settings here.
   { key: "scheduling", label: "Scheduling",
@@ -1064,6 +1065,10 @@ export default function SettingsPage() {
            "The checkpoint before ElevenLabs charges for voicing."],
           ["notify_video_ready", "A video is ready",
            "A finished render waiting for your sign-off."],
+          ["notify_partially_published", "A publish partly fails",
+           "Live on some accounts, failed on others — names each failed account and its error."],
+          ["notify_failed", "A video fails",
+           "Rendering or publishing gave up and the video needs you — says why."],
         ] as const).map(([key, label, note]) => (
           <Row key={key} label={label} note={note}>
             <button

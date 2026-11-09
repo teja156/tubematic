@@ -7,7 +7,9 @@ import { KanbanCard } from "@/components/KanbanCard";
 // `extraStatuses` folds a transient status into an adjacent column's video
 // list without giving it a column of its own — used for RENDER_QUEUED, which
 // shares the "Rendering" column's in-progress bucket (it's worker-owned and
-// typically only sits there for one poll interval).
+// typically only sits there for one poll interval), and for
+// PARTIALLY_PUBLISHED, which is live and so sits with Published, its card
+// tagged PARTIAL.
 const MAIN_COLUMNS: Array<{ status: VideoStatus; label: string; accent: string; extraStatuses?: VideoStatus[] }> = [
   { status: "TOPIC_PROPOSED",   label: "Topic Proposed",  accent: "#f5a623" },
   { status: "TOPIC_APPROVED",   label: "Topic Approved",  accent: "#5fa3ff" },
@@ -19,7 +21,7 @@ const MAIN_COLUMNS: Array<{ status: VideoStatus; label: string; accent: string; 
   { status: "VIDEO_APPROVED",   label: "Video Approved",  accent: "#ff6b6b" },
   { status: "SCHEDULED",        label: "Scheduled",       accent: "#38bdf8" },
   { status: "PUBLISHING",       label: "Publishing",      accent: "#4ade80" },
-  { status: "PUBLISHED",        label: "Published",       accent: "#65d27a" },
+  { status: "PUBLISHED",        label: "Published",       accent: "#65d27a", extraStatuses: ["PARTIALLY_PUBLISHED"] },
 ];
 
 const SIDE_COLUMNS: Array<{ status: VideoStatus; label: string; accent: string; extraStatuses?: VideoStatus[] }> = [

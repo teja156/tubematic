@@ -126,3 +126,16 @@ describe("KanbanCard scheduled time (TMDEV-133)", () => {
     expect(screen.queryByTestId("scheduled-at-vid-1")).toBeNull();
   });
 });
+
+describe("KanbanCard partial publish (TMDEV-191)", () => {
+  it("tags a partially published video, since it shares the Published column", () => {
+    renderCard(makeVideo({ status: "PARTIALLY_PUBLISHED" }));
+    expect(screen.getByTestId("kanban-card-partial-vid-1")).toBeTruthy();
+    expect(screen.queryByText("LIVE")).toBeNull();
+  });
+
+  it("does not tag a fully published video", () => {
+    renderCard(makeVideo({ status: "PUBLISHED" }));
+    expect(screen.queryByTestId("kanban-card-partial-vid-1")).toBeNull();
+  });
+});

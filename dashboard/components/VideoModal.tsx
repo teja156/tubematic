@@ -22,7 +22,7 @@ import { shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing 
 import { LogList } from "@/components/LogList";
 import { CostBreakdown } from "@/components/CostBreakdown";
 import { formatDateTime, formatScheduled } from "@/lib/datetime";
-import { canDelete, canRetryPublish, isAgentStuck, retryAgent } from "@/lib/videoStatus";
+import { canDelete, canMarkPublished, canRetryPublish, isAgentStuck, markPublished, retryAgent } from "@/lib/videoStatus";
 import { platformLabel } from "@/lib/platforms";
 import {
   AGENT_EFFORTS, type AgentPicks, agentChanged, agentLabel, agentOptions, agentPicksPayload,
@@ -368,6 +368,9 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const [reviewExpanded, setReviewExpanded] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [markOpen, setMarkOpen] = useState(false);
+  const [marking, setMarking] = useState(false);
+  const [markError, setMarkError] = useState("");
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState("");
   const [cancellingSchedule, setCancellingSchedule] = useState(false);
@@ -652,6 +655,8 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     && (video.status === "TOPIC_PROPOSED" || video.status === "SCRIPT_READY");
   const deletable = canDelete(video);
   const retryable = publishingEnabled && canRetryPublish(video, publications.length);
+  const markable = canMarkPublished(video);
+  const publishedCount = publications.filter((p) => p.status === "PUBLISHED").length;
   const stuck = isAgentStuck(video);
 
   // Retry agent (TMDEV-129): clears the stuck flag so the scheduled agent
@@ -667,6 +672,23 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
       setRetryAgentError(e instanceof Error ? e.message : "Retry agent failed.");
     } finally {
       setRetryingAgent(false);
+    }
+  };
+
+  // Mark as published (TMDEV-191): the human has posted to the failed accounts
+  // by hand. A plain guarded PATCH; a refusal stays in the dialog.
+  const handleMarkPublished = async () => {
+    if (marking) return;
+    setMarking(true);
+    setMarkError("");
+    try {
+      await markPublished(video.id);
+      setMarkOpen(false);
+      refreshVideo(video.id);
+    } catch (e) {
+      setMarkError(e instanceof Error ? e.message : "Mark as published failed.");
+    } finally {
+      setMarking(false);
     }
   };
 
@@ -1325,6 +1347,11 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                       )}
                     </>
                   )}
+                  {markable && (
+                    <ActionBtn fullWidth variant="primary" onClick={() => { setMarkError(""); setMarkOpen(true); }}>
+                      Mark as published…
+                    </ActionBtn>
+                  )}
                   {deletable && (
                     <ActionBtn fullWidth variant="danger" onClick={() => setDeleteOpen(true)}>
                       Delete Video
@@ -1570,6 +1597,51 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
           }}
         />
       )}
+
+      {/* Mark as published (TMDEV-191). Download first: retention counts from
+          the first successful post, not from this click, so a partial publish
+          older than retention_days loses its mp4 on the worker's next pass. */}
+      <Dialog open={markOpen} onOpenChange={(v) => !v && setMarkOpen(false)}>
+        <DialogContent
+          data-testid="mark-published-dialog"
+          className="border-[#1e1e30] bg-[#0d0d1a] text-[#f0f0ff]"
+          style={{ maxWidth: 460 }}
+        >
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15, fontWeight: 600 }}>Mark this video as published?</DialogTitle>
+          </DialogHeader>
+          <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--dim)", margin: 0 }}>
+            It went out to {publishedCount} of {publications.length} account(s); Publishing
+            Results has the error for each one that failed. Post it to those accounts by hand,
+            then mark it published.
+          </p>
+          <p data-testid="mark-published-warning"
+             style={{ fontSize: 13, lineHeight: 1.6, color: "var(--amber)", margin: 0 }}>
+            Download the video first. Once it is marked published, retention deletes the video
+            file on its usual schedule, counted from when it first published — for an older
+            publish that can be within a minute.
+          </p>
+          <a
+            data-testid="mark-published-download"
+            href={videoStreamUrl(video)}
+            download={`${video.id}.mp4`}
+            style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--cyan)" }}
+          >
+            ↓ Download video
+          </a>
+          {markError && (
+            <p data-testid="mark-published-error" className="font-mono text-[11px] text-amber-400">
+              {markError}
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <ActionBtn variant="ghost" onClick={() => setMarkOpen(false)}>Cancel</ActionBtn>
+            <ActionBtn variant="primary" disabled={marking} onClick={handleMarkPublished}>
+              {marking ? "Marking…" : "Mark as published"}
+            </ActionBtn>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* One meaning of "delete" everywhere (TMDEV-84): the files go, the
           record stays, archived. Same operation as the retention sweep. */}
