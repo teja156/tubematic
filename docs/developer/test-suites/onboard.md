@@ -8,8 +8,9 @@ Covers the onboarding wizard: `onboard/config.py` (field and section specs), `st
 python -m pytest onboard/tests
 ```
 
-`onboard/` has an `__init__.py`, so this suite does not collide with `mcp/tests` and can be collected
-alongside it. `conftest.py` holds the shared fixtures; among them, it points both Compose override paths
+`onboard/` has an `__init__.py`, so this suite's `tests` package does not collide with another suite's by
+name. Run it in its own `pytest` invocation all the same: collected ahead of `mcp/tests`, two of its files put
+`renderer/api` on the import path and `mcp/tests` then imports the wrong `server` module. `conftest.py` holds the shared fixtures; among them, it points both Compose override paths
 (`compose.gpu.json`, `compose.renderers.json`) at a temporary directory, because `_compose()` adds
 a `-f` for each one that exists and a developer machine's own would change every argv a test asserts.
 

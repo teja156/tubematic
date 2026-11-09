@@ -325,7 +325,7 @@ stick. Publish it by hand when you want it out; nothing in the dashboard puts it
 
 A failed upload returns the video to `VIDEO_APPROVED`. Rather than trying again twenty seconds later
 and commenting each time, Auto Pilot waits 15 minutes after the first failure on a video, an hour
-after the second and six hours after each one after that. Restarting the render container resets
+after the second and six hours after each one after that. Restarting the worker container (`tubematic-worker`) resets
 that wait, so it tries once more straight away. A video that cannot be published at all, such as one
 with no rendered file, gets one comment saying so. If postforme cannot be reached, Auto Pilot simply
 tries again later, without commenting.

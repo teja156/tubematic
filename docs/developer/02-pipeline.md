@@ -88,7 +88,7 @@ flowchart TD
 There is no `SCRIPTING` status. Writing a script is effectively instant, so `TOPIC_APPROVED` is the
 workable status the agent picks up directly.
 
-## The three status sets
+## The status sets
 
 ```python
 ACTIONABLE_STATUSES = {"TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY"}
@@ -161,7 +161,7 @@ without a click, and only for the projects selected for it.
 
 `TOPIC_PROPOSED`, `SCRIPT_READY` and `VIDEO_READY` offer **Request Revision**, which requires a
 comment and routes to `REVISION_REQUESTED`. It is also the only way a human adds a comment to a
-video, so every human comment is a revision request the agent will act on. `VIDEO_APPROVED` has
+video, so every comment a human writes is a revision request the agent will act on. `VIDEO_APPROVED` has
 none: once a video is approved, the remaining decision is whether to publish it. That is distinct from a flat reject: only `TOPIC_PROPOSED` can be
 flat-rejected to the terminal `TOPIC_REJECTED`, and its comment is optional.
 
@@ -254,10 +254,10 @@ the UI.
 
 | Group | Fields | Settable while the video is at |
 |---|---|---|
-| Topic | `script_profile_id`, `visual_style` | `TOPIC_PROPOSED` only |
+| Topic | `script_profile_id`, `visual_style`, `mascot_id` | `TOPIC_PROPOSED` only |
 | Agent | `agent_id`, `agent_model`, `agent_effort` | any human checkpoint — `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` |
 
-**Why two groups.** The topic group shapes what the script *is*: changing either after the script
+**Why two groups.** The topic group shapes what the script *is*: changing one after the script
 exists leaves a script that no longer matches what the row claims. The agent group only decides
 *who does the next piece of work*, so a human may change it at every point they review the video.
 Between checkpoints an agent or the renderer holds the video, and switching under it
@@ -294,8 +294,8 @@ because a brief for a posed figure and a brief for a photograph are different re
 the register after the script exists therefore invalidates every brief the video carries: the fix
 is a rewrite, not a re-render.
 
-`resolved_visual_style` is deliberately **not** part of that freeze. It records which concrete
-register `auto` settled on, and the agent writes it at scene-config time — long past
+`resolved_visual_style` is deliberately **not** part of that freeze. It records which canvas
+(`dark` or `light`) `auto` settled on, and the agent writes it at scene-config time — long past
 `TOPIC_PROPOSED`, so a status freeze would make it unwritable in practice. It is **write-once**
 instead: a second, different value is refused. That, and nothing else, is what makes a revision
 round render at the register the video already uses; no code on the revision path knows the field

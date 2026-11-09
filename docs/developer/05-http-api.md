@@ -125,7 +125,7 @@ cookie itself on a `200`.
 | `400` | Missing, empty, non-string, or longer than 1024 characters — refused before hashing, because scrypt is deliberately slow |
 | `401` | `{"error": "wrong password"}` |
 | `429` | Too many failed attempts; `Retry-After` says how long. After five failures in a row each attempt waits `2^n` seconds, up to 15 minutes, and the password is **not checked** while locked. A success resets it, and so does an API restart. Also `Retry-After: 1` when another login's check is still running: only one runs at a time |
-| `503` | No password is set yet: `python onboard.py --set-password` |
+| `503` | No password is set yet: `python3 onboard.py --set-password` |
 
 The backoff is install-wide rather than per client: every login arrives from the dashboard
 container, and a forwarded client address can be forged.
@@ -210,7 +210,7 @@ Required: `topic`, `strategy`, `producibility_score`. Optional: `id`, `project_i
 | Status | Cause |
 |---|---|
 | `201` | Created at `TOPIC_PROPOSED`, `video_version` 1. Returns the row, plus `warning` if the title was clipped |
-| `400` | `{"error": "Missing fields: [...]"}`; an `id` that is not letters, digits, `_` and `-` (not starting with `-`, at most 128 characters) — it names the video's job directory; a `project_id` that names no project; non-string `title`; `voice_id` not on the roster; `visual_style` not one of `auto` / `motion_graphics` / `stick` / `illustrated`; `visual_style` of `illustrated` while no OpenAI key is stored (the settings row, or `OPENAI_API_KEY`) |
+| `400` | `{"error": "Missing fields: [...]"}`; an `id` that is not letters, digits, `_` and `-` (not starting with `-`, at most 128 characters) — it names the video's job directory; a `project_id` that names no project; non-string `title`; `voice_id` not on the roster; `visual_style` not one of `auto` / `motion_graphics` / `stick` / `illustrated` / `cartoon_3d`; `visual_style` of `illustrated` while no OpenAI key is stored (the settings row, or `OPENAI_API_KEY`) |
 | `409` | `project_id` names a paused domain and `strategy` is not `manual`. The error names the domain and says to skip the candidate. See [Domain pause](02-pipeline.md#domain-pause) |
 | `409` | `project_id` names an expired domain (it holds `topic_cap` topics already) and `strategy` is not `manual`. The error names the domain, its count and its cap, and says to skip the candidate. See [Topic cap](02-pipeline.md#topic-cap) |
 
@@ -274,7 +274,7 @@ The main write path. The body may contain any subset of:
 
 `status` · `title` · `script` · `video_version` · `youtube_url` · `gemini_feedback` · `voice_id` ·
 `agent_id` · `agent_model` · `agent_effort` · `script_profile_id` · `visual_style` ·
-`publish_title` · `publish_description`
+`publish_title` · `publish_description` · `mascot_id`
 
 plus the optional guard `onlyIfCurrentStatus`. **Any other key is silently dropped**, including
 `tts_text` and `resolved_visual_style` — both are written only by the MCP server. The four job-path
@@ -289,7 +289,7 @@ and the dashboard has no business overwriting it.
 | Status | Cause |
 |---|---|
 | `200` | Updated row plus `comments[]` |
-| `400` | Any of `voice_file_path`, `timeline_path`, `scene_config_path`, `video_path` present, with nothing applied; unknown-only body (`No updatable fields provided`); `status` not one of the 15 valid values; non-string or over-70-character `title`; `agent_id` blank, non-string, unknown or uninstalled (unless it is the video's current agent); `agent_model` containing a space or leading `-`; `agent_model` not one of the video's agent's models, or that agent uninstalled or not installed; `voice_id` not on the roster; `script_profile_id` not a non-archived `READY` profile; `visual_style` not one of `auto` / `motion_graphics` / `stick` / `illustrated`; `visual_style` of `illustrated` while no OpenAI key is stored; `agent_effort` not one of `low` / `medium` / `high` / `xhigh` / `max` or blank; `script` without both `publish_title` and `publish_description`; either of those non-string, blank, or over its cap (100 / 2000) — the same rule as MCP `update_video`, see [Publishing](14-publishing.md#schema) |
+| `400` | Any of `voice_file_path`, `timeline_path`, `scene_config_path`, `video_path` present, with nothing applied; unknown-only body (`No updatable fields provided`); `status` not one of the 15 valid values; non-string or over-70-character `title`; `agent_id` blank, non-string, unknown or uninstalled (unless it is the video's current agent); `agent_model` containing a space or leading `-`; `agent_model` not one of the video's agent's models, or that agent uninstalled or not installed; `voice_id` not on the roster; `script_profile_id` not a non-archived `READY` profile; `visual_style` not one of `auto` / `motion_graphics` / `stick` / `illustrated` / `cartoon_3d`; `visual_style` of `illustrated` while no OpenAI key is stored; `agent_effort` not one of `low` / `medium` / `high` / `xhigh` / `max` or blank; `script` without both `publish_title` and `publish_description`; either of those non-string, blank, or over its cap (100 / 2000) — the same rule as MCP `update_video`, see [Publishing](14-publishing.md#schema) |
 | `404` | Video not found |
 | `409` | The video is archived — an archived row is frozen, so a `PATCH` cannot move it back into the pipeline |
 | `409` | `script_profile_id`, `visual_style` or `mascot_id` present while the video is past `TOPIC_PROPOSED`; an approving `PATCH` while the video's mascot is archived |
@@ -327,7 +327,7 @@ status-changing write; the dashboard does. A write carrying a frozen field is bo
 even without it: the `UPDATE` also requires the status the freeze was checked at, so a video that
 moves on between the check and the write is refused rather than changed after it was handed on.
 
-**Unlike `title`, an over-length title is rejected here rather than clipped** — an update is a
+**Unlike `POST /videos`, an over-length title is rejected here rather than clipped** — an update is a
 deliberate edit, so silently truncating it would be wrong.
 
 **No transition graph is enforced.** `status` is validated against the set of legal values, not
@@ -428,7 +428,7 @@ whole tree, the same reason `DELETE` refuses to remove one. See [Retention](11-r
 | Route | Behaviour |
 |---|---|
 | `GET /projects` | All projects, `created_at DESC`. Each row also carries two derived fields, never stored: `topic_count` (every video ever filed into it, archived and rejected included) and `expired` (`topic_count >= topic_cap`). See [Topic cap](02-pipeline.md#topic-cap) |
-| `POST /projects` | Upsert. Requires `name`; `description` must be a string (absent or `null` stores `''`) of at most 2000 characters, counted in code points, and the length is checked only when the description *changes*, so one stored longer before the limit existed still saves with every other edit; `id` defaults to `proj_<hex>`, must be a string, and a **new** one must be letters, digits, `_` and `-`, not starting with `-`, at most 128 characters, since it names the domain's output directory — an existing domain is not checked, so one filed earlier under an odd id stays editable; `status` must be `active` or `paused`, and `paused` is a `400` unless `is_curriculum_seed` is true; `default_visual_style` must be `auto` / `motion_graphics` / `stick` / `illustrated`, or `''` for none, and *changing* it to `illustrated` is a `400` while no OpenAI key is stored — re-sending an unchanged default is not, since every edit through this route re-sends it. `default_voice_id` must be on the roster, or `''` for the install default — again checked only when it *changes*, so a voice later removed from the roster does not block every other edit to the domain. `default_script_profile_id` must be a string naming a `READY`, undeleted script profile, or `''` (or `null`) for none — any other non-string, `false` and `0` included, is a `400` rather than read as none — checked only when it *changes*, on the same reasoning. `topic_cap` must be a whole number from 25 to 750 (`true`, `"100"` and `100.5` are `400`s); absent or `null` means the default, 100. A cap below the domain's count is accepted and expires it at once. `201` with the row, including `topic_count` and `expired`. **It is an upsert, so every column it is given is overwritten** — a caller changing one field must send the others back or they are blanked. Because an omitted `status` is written as `active`, clearing the seed flag on a paused domain also reactivates it |
+| `POST /projects` | Upsert. Requires `name`; `description` must be a string (absent or `null` stores `''`) of at most 2000 characters, counted in code points, and the length is checked only when the description *changes*, so one stored longer before the limit existed still saves with every other edit; `id` defaults to `proj_<hex>`, must be a string, and a **new** one must be letters, digits, `_` and `-`, not starting with `-`, at most 128 characters, since it names the domain's output directory — an existing domain is not checked, so one filed earlier under an odd id stays editable; `status` must be `active` or `paused`, and `paused` is a `400` unless `is_curriculum_seed` is true; `default_visual_style` must be `auto` / `motion_graphics` / `stick` / `illustrated` / `cartoon_3d`, or `''` for none, and *changing* it to `illustrated` is a `400` while no OpenAI key is stored — re-sending an unchanged default is not, since every edit through this route re-sends it. `default_voice_id` must be on the roster, or `''` for the install default — again checked only when it *changes*, so a voice later removed from the roster does not block every other edit to the domain. `default_script_profile_id` must be a string naming a `READY`, undeleted script profile, or `''` (or `null`) for none — any other non-string, `false` and `0` included, is a `400` rather than read as none — checked only when it *changes*, on the same reasoning. `topic_cap` must be a whole number from 25 to 750 (`true`, `"100"` and `100.5` are `400`s); absent or `null` means the default, 100. A cap below the domain's count is accepted and expires it at once. `201` with the row, including `topic_count` and `expired`. **It is an upsert, so every column it is given is overwritten** — a caller changing one field must send the others back or they are blanked. Because an omitted `status` is written as `active`, clearing the seed flag on a paused domain also reactivates it |
 | `POST /projects/<project_id>/status` | Body `{status}`. `400` on a bad value, `404` if unknown, `409` for `paused` on a domain that is not a curriculum seed, `200` with the updated row, shaped like `GET /projects`'s. See [Domain pause](02-pipeline.md#domain-pause) |
 
 ---
@@ -488,9 +488,10 @@ invent a synthetic video id for it: spend that belongs to no video is a first-cl
 
 Installed coding agents — see [Database](03-database.md#agents) and
 [The Agent Layer](07-agent-layer.md#agents). These routes are read-mostly. Rows are created, and
-their binary, workspace and models changed, only by `python onboard.py --install-agent <name>` on
+their binary, workspace and models changed, only by `python3 onboard.py --install-agent <name>` on
 the host, which validates them against the real CLI. No container has an agent binary, so over
-HTTP a human may only pick the default and set each agent's weight.
+HTTP a human may only pick the default, set each agent's weight and effort, and choose which
+installed model comes first.
 
 ### `GET /agents`
 Every row, archived included, ordered by `created_at` then `id`, with `models` parsed to a list and
@@ -516,9 +517,9 @@ is ever the default. It cannot be cleared directly, because that would leave the
 to the front. It must already be in the list: adding a model means probing it against the real CLI,
 which only the host-side installer can do. **`effort` is a plain column**, for the opposite
 reason: the levels come from the CLI rather than from what this install probed, so there is no list
-to reorder and nothing to validate against.
+to reorder, and the only check is that it is one of the five fixed levels.
 
-**There is no `DELETE`.** Uninstalling is `python onboard.py --uninstall-agent <name>` on the host,
+**There is no `DELETE`.** Uninstalling is `python3 onboard.py --uninstall-agent <name>` on the host,
 because it also removes the skills, commands and MCP registration the install deployed — none of
 which the API container can reach. It sets `archived_at` and clears `is_default`, and never deletes
 the row, so every video pinned to the agent keeps resolving it. See
@@ -675,7 +676,7 @@ other call, directly by the process that made it.
 
 ## Publishing and analytics
 
-Eleven further routes cover publishing an approved video now or at a scheduled time, cancelling a
+Further routes cover publishing an approved video now or at a scheduled time, cancelling a
 scheduled post, recovering one that failed while publishing, reading performance back, and
 configuring [Auto Pilot](14-publishing.md#auto-pilot). They are documented with the rest of that subsystem in
 [Publishing](14-publishing.md#http-routes). Those that reach postforme return `503` when publishing
@@ -788,7 +789,7 @@ files still exist and never deletes one. See [Settings](../user-guide/05-setting
 ## Time
 
 Timestamps are **stored in UTC and displayed in the host's local zone.** `updated_at` is the FIFO
-ordering key for the renderer's atomic claim, and local time is non-monotonic across DST — a
+ordering key for the render gateway's atomic claim, and local time is non-monotonic across DST — a
 mix of `Z` and offset-suffixed rows would also sort wrongly as text.
 
 The dashboard container deliberately has **no** `/etc/localtime` mount, unlike the API, worker and

@@ -183,7 +183,7 @@ mostly its later poses.
 ### Agent
 
 There is **no agent setting**. Which agents are installed, which one is the default, and each one's
-models live in the `agents` table, written by `python onboard.py --install-agent <name>` — see
+models live in the `agents` table, written by `python3 onboard.py --install-agent <name>` — see
 [The Agent Layer](../developer/07-agent-layer.md#agents). An agent's default model is the first of its own
 models.
 

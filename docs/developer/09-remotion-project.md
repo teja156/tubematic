@@ -235,9 +235,10 @@ top 150px · bottom 170px · left 60px · right 60px
 
 on the 1080×1920 canvas, leaving 960×1600 usable. These clear YouTube's own overlays.
 
-The numbers are declared independently in **three** places — `TextRevealScene.tsx`,
-`mcp/text_audit.py`, and `renderer/api/ai_review.py` — so the measuring layer, the reviewing layer
-and the rendering layer agree. Change all three together.
+The numbers are declared independently in several places — `TextRevealScene.tsx`,
+`mcp/text_audit.py`, `renderer/api/ai_review.py` and `tubematic_core/mascots.py` (the mascot cue
+check) — so the measuring layer, the reviewing layer and the rendering layer agree. Change them all
+together.
 
 ---
 
@@ -245,10 +246,10 @@ and the rendering layer agree. Change all three together.
 
 The shape is documented here and nowhere else; there is no schema file to validate against.
 
-> **Writing the file is barely validated.** `write_scene_config` checks only that `totalFrames` is
+> **Writing the file is barely validated.** `write_scene_config` checks that `totalFrames` is
 > a positive integer, that `scenes` is a non-empty list, that `canvas` — if present — agrees with
-> the video's visual register, and that `subtitles` — if present — uses known keys and in-range
-> values; then it writes the JSON verbatim, and `CompositionBuilder` reads the file directly.
+> the video's visual register, that `subtitles` — if present — uses known keys and in-range
+> values, a `mascot` cue track against the cue rules, and a Cartoon 3D scene and its beats; then it writes the JSON verbatim, and `CompositionBuilder` reads the file directly.
 > **No defaults are written into the file** — the renderer applies them at render time, so supply
 > every field you rely on and expect an omitted one to follow the component, not the config.
 
@@ -290,7 +291,7 @@ The shape is documented here and nowhere else; there is no schema file to valida
 
 | Field | Notes |
 |---|---|
-| `totalFrames` | Positive integer. Enforced against the timeline by `write_scene_config` and `validate_job` |
+| `totalFrames` | Positive integer, which is all `write_scene_config` checks. Enforced against the timeline by `validate_job` |
 | `canvas` | `"dark"` or `"light"` — the ground painted under every scene, from the video's [visual register](10-scene-authoring.md#visual-registers). **A whole-video property, deliberately not a per-scene one:** scenes that disagree about the canvas flash, and a viewer reads that as a broken render rather than a style. `write_scene_config` rejects a value contradicting the register and fills in an absent one, so an omitted key is safe but never meaningful |
 | `subtitles` | Burned-in captions of the narration — see [Captions](#captions). **Absent means enabled**, which is the only reason the default reaches a config written before the key existed; opting out is an explicit `{"enabled": false}`. Keys: `enabled`, `maxWords` (1–7), `fontFamily`, `fontSize` (28–120), `color` (`null` follows the canvas), `background` (`"pill"`/`"shadow"`/`"outline"`/`"none"`; `"outline"` is bold text with a thick dark stroke and no plate, the usual look of narrated cartoon Shorts), `position`, `uppercase`. `write_scene_config` rejects an unknown key rather than dropping it, and does **not** write the defaults into the file — materialising them would freeze them at whatever they were the day the config was authored |
 | `mascot` | The mascot's **cue track**: a bare list of cue objects, not an object. Present exactly when the video has a mascot (`write_scene_config` refuses it on a video without one, and `validate_job` and `submit_render` refuse a mascot video without it). It holds data only; the drawing code is never in the config. See [the mascot layer](#the-mascot-layer) and [Scene authoring — Mascots](10-scene-authoring.md#mascots) |
@@ -499,6 +500,8 @@ A clean typecheck on your machine proves the *tree* typechecks, not that a rebui
 > eslint failure short-circuits and `tsc` never runs under `npm run lint` even though it passes when
 > invoked directly.
 
-There is **no JavaScript test runner in this project at all** — the dev dependencies are eslint,
-prettier and typescript. That is why every threshold in the text-layout audit lives in Python rather
-than in the probe: Python is the only layer with test coverage.
+The project's JavaScript tests (`npm test`, which runs vitest — see
+[the `renderer/remotion` suite](test-suites/renderer-remotion.md)) cover pure code only: they run in
+Node with no browser, so they cannot reach the text-layout probe. That is why every threshold in the
+text-layout audit lives in Python rather than in the probe: Python is the only layer of the audit
+with test coverage.

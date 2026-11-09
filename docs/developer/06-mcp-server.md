@@ -26,7 +26,7 @@ re-registration:
 Register it with the installer, which does all of this:
 
 ```bash
-python onboard.py --install-agent <agent>
+python3 onboard.py --install-agent <agent>
 ```
 
 It uses that agent's own argv — for
@@ -381,8 +381,8 @@ stateDiagram-v2
   loop writes scenes while the video sits at `REVISION_REQUESTED` and then flips it back before
   submitting; a narrower window would reject the session that legitimately did the work. Moving
   *within* the window keeps the claim; moving *out* always releases it.
-- **Guarded tools:** `generate_image`, `write_scene_file`, `write_scene_config`, `submit_render` —
-  everything that spends money or writes a file.
+- **Guarded tools:** `generate_image`, `generate_character`, `write_scene_file`, `write_scene_config`,
+  `submit_render` — tools that spend money or write a file.
 - **Deliberately exempt:** `read_image`, `get_scene_config`, `read_scene_file`, `get_timeline`,
   `validate_job`, `list_scene_files`, `get_video`. These spend nothing and write nothing. Guarding
   them would mean a session that merely *looked* at a video held it for the full TTL, blocking a
@@ -535,7 +535,7 @@ On either tool, a `403` saying the key's project "does not have access to model"
 error naming the project and the model, and pointing at Settings → API Keys and Settings → Images.
 See [Settings — Images](../user-guide/05-settings.md#images) for why that cannot be checked earlier.
 
-Every successful image call — `generate_image` on either provider and `generate_character` — records
+Every successful image call — `generate_image` and `generate_character` — records
 the tokens the provider reported in the usage ledger, including a regeneration that overwrites an
 earlier image: that one was paid for too.
 

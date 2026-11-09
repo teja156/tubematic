@@ -74,7 +74,8 @@ whose GPU passed its test, so with none at all it would wait for ever.
 
 A tick is one trip round the loop. Every pass is short, so after the last one the worker sleeps
 `WORKER_POLL_INTERVAL_SECS` (default 20 seconds) and goes round again. So every pass runs about
-every 20 seconds. The interval is a plain environment variable, not a settings row. When it is
+every 20 seconds. The one exception is an Auto Pilot post, whose upload runs inside its pass and
+holds the loop for about a minute (see [Publishing](14-publishing.md#posting)). The interval is a plain environment variable, not a settings row. When it is
 unset the worker falls back to `RENDER_POLL_INTERVAL_SECS`, which set this loop's interval when it
 still ran inside the renderer, so an existing override keeps applying.
 

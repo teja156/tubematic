@@ -39,7 +39,7 @@ API container restarting underneath it.
 
 What a user sees — one password, a seven-day sign-in, **Sign out**, the backoff — is in
 [the user guide](../user-guide/04-dashboard.md#signing-in). The password is set on the host with
-`python onboard.py --set-password`; nothing in the dashboard can set or reset it. Signing in at
+`python3 onboard.py --set-password`; nothing in the dashboard can set or reset it. Signing in at
 `/login` sets `tm_session`, an HS256-signed JWT that lasts **seven days, fixed** — use does not
 extend it. It is `HttpOnly` and `SameSite=Strict` always, and `Secure` when the browser came over
 HTTPS (directly, or per a reverse proxy's `X-Forwarded-Proto`), because a `Secure` cookie could
@@ -513,8 +513,8 @@ the tab sits outside the Save and dirty-dot machinery entirely. Choosing the def
 an agent's default model from its select, and each weight's own Save button write immediately
 through `PATCH /agents/<id>`. **The model list itself is read-only here**: the dashboard container
 has no agent binary to validate a new model against, so models are added or removed only by
-re-running `python onboard.py --install-agent <name>` on the host. There is no uninstall control
-either — that is `python onboard.py --uninstall-agent <name>`, which also removes files the
+re-running `python3 onboard.py --install-agent <name>` on the host. There is no uninstall control
+either — that is `python3 onboard.py --uninstall-agent <name>`, which also removes files the
 dashboard cannot reach. See [HTTP API](05-http-api.md#agents).
 
 **The Rendering tab's Renderers panel is outside staging too.** Renderers are rows in their own

@@ -1,7 +1,7 @@
 # Architecture
 
 Tubematic runs as five Docker containers plus one cron job, all on a single machine, coordinating
-through one SQLite file. The renderer is the one container that never opens it: it works through the
+through one SQLite file. The renderer never opens it: it works through the
 render gateway the API serves. That is also what lets other machines render: an optional **remote
 renderer** is the same renderer in a container on another host, reaching the gateway over the
 network ([Remote renderers](../user-guide/11-remote-renderers.md)).
@@ -143,7 +143,7 @@ in-process state between containers.
 | Installer | Database | Direct SQLite from the host — the only writer of the `agents` table |
 | Renderer (built-in, or remote on another machine) | Render gateway | HTTPS on 4443 with a renderer credential, trusting exactly the gateway's pinned certificate: heartbeat, claim, bundle download, mp4 upload, result. The built-in renderer over the Compose network, a remote one over the published port |
 | Worker and render gateway | Database | Guarded `UPDATE`s |
-| Everything | Database | SQLite in WAL mode |
+| Every process that opens the database | Database | SQLite in WAL mode |
 
 ---
 
@@ -184,7 +184,7 @@ them: each derives it from the video's ids, and the dashboard plays a render fro
 | | |
 |---|---|
 | **Baked into the image** | `renderer/api/`, `mcp/`, the dashboard, the Remotion project's `src/` including `scenes/installed/` |
-| **Bind-mounted** | The five data directories above, including `scenes/generated/` |
+| **Bind-mounted** | The data directories above that are volumes, including `scenes/generated/` |
 
 Editing this repository changes nothing in a running container until the image is rebuilt.
 `scenes/generated/` is the exception — it is a volume, so agent-written scenes appear immediately.
@@ -260,7 +260,7 @@ The copies that matter:
 | Duplicated | Copies |
 |---|---|
 | `VALID_VIDEO_STATUSES` / `WORKABLE_STATUSES` | `renderer/api/pipeline.py`, `mcp/server.py`, `dashboard/lib/types.ts` |
-| Safe-zone pixel constants | `TextRevealScene.tsx`, `mcp/text_audit.py`, `renderer/api/ai_review.py` |
+| Safe-zone pixel constants | `TextRevealScene.tsx`, `mcp/text_audit.py`, `renderer/api/ai_review.py`, `tubematic_core/mascots.py` |
 | Timezone detection | `renderer/api/hosttz.py`, `scripts/config.py`, `onboard.py` |
 | `_truncate_title` | `renderer/api/pipeline.py`, `mcp/server.py` — with a test that execs both copies and asserts they agree |
 | The mining URL rule | `tubematic_core/youtube.py`, `dashboard/components/MiningSources.tsx` (only so the Add button lights for what the API stores — the API stays the authority, and a disagreement shows as its 400), and migration `0014`'s frozen copy. The dashboard's copy is held to the same accept-and-refuse table as the Python one rather than by source text, since the two regex dialects differ |

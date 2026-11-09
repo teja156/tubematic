@@ -18,13 +18,16 @@ python -m pytest renderer/api/tests
 python -m pytest onboard/tests
 python -m pytest scripts/tests
 python -m pytest vqa/tests
+python -m pytest renderer/remotion/cartoon-tools/audio/tests   # skips without numpy and scipy
 ```
 
-> **Run `scripts/tests` and `renderer/api/tests` separately.** Neither parent directory has an
+> **Run each suite in its own `pytest` invocation.** For `scripts/tests` and `renderer/api/tests`,
+> neither parent directory has an
 > `__init__.py`, so pytest's default import mode treats each `tests/` subdirectory as a top-level
 > package literally named `tests`. Whichever is collected first wins the name, and the second fails
-> to import. Other combinations are fine — `onboard/` has an `__init__.py` and `mcp/tests` has none,
-> so neither collides. `tubematic_core/tests` deliberately has no `__init__.py` for the same reason.
+> to import. Other combinations fail too: `tubematic_core/tests` and `mcp/tests` have no
+> `__init__.py` and share two test file names, and `mcp/tests` does not collect together with
+> `renderer/api/tests`. CI runs one suite per job for this reason.
 
 Host-side suites cannot import `tubematic_core` on their own: in the containers it arrives on
 `PYTHONPATH` (`/app/lib`), and nothing puts the repo root on `sys.path` here. `renderer/api/tests`
@@ -51,6 +54,7 @@ npx tsc --noEmit
 npm run test:e2e         # Playwright — builds the Docker test stack first
 
 cd renderer/remotion
+npm test                 # vitest
 npx tsc --noEmit         # exactly what validate_job runs
 ```
 
@@ -289,14 +293,12 @@ and `backup_db.py` need nothing beyond what already runs the pipeline.
 Three GitHub Actions workflows: `.github/workflows/ci.yml`, `.github/workflows/release.yml` and
 `.github/workflows/docs-site.yml`.
 
-> **Status: written and structurally checked, never executed.** GitHub Actions only runs on GitHub,
-> and this repository has never had a `.github/` directory before now, so neither workflow has ever
-> actually run. `actionlint` is not installed on the machine that wrote them either. The one
-> automated check either file gets before its first real run is
+> GitHub Actions only runs on GitHub. The one automated check the workflow files get before a
+> real run is
 > `scripts/tests/test_workflows.py` — see [Tests — `scripts`](test-suites/scripts.md) — which parses the
 > YAML and asserts structure (every `needs:` resolves, every action is version-pinned, the Python
 > matrix matches the suite directories actually on disk, the e2e job never triggers on a pull
-> request) rather than behavior. Do not read "written" as "working."
+> request) rather than behavior.
 
 ### `ci.yml` — pull requests and pushes
 
@@ -306,7 +308,7 @@ can be run on demand without cutting a tag).
 
 | Job | What it runs |
 |---|---|
-| `python-tests` | A matrix over the six suite directories — `tubematic_core/tests`, `mcp/tests`, `renderer/api/tests`, `onboard/tests`, `scripts/tests`, `vqa/tests` — one per matrix entry. They cannot run combined; see the `conftest.py`/`sys.path` collision noted under [Tests](#tests) above. The matrix is the fix for that, not a stylistic choice |
+| `python-tests` | A matrix over the suite directories — `tubematic_core/tests`, `mcp/tests`, `renderer/api/tests`, `onboard/tests`, `scripts/tests`, `vqa/tests`, `renderer/remotion/cartoon-tools/audio/tests` — one per matrix entry. They cannot run combined; see the collisions noted under [Tests](#tests) above. The matrix is the fix for that, not a stylistic choice |
 | `dashboard` | `npm ci`, `npx vitest run`, `npm run build`. No Playwright — the e2e suite needs the Docker test stack and is handled separately below |
 | `remotion` | `npm ci --ignore-scripts`, `npx tsc --noEmit`. Deliberately not `npm run lint` — that script also runs eslint, which has two pre-existing errors unrelated to type safety, and `validate_job` (the pipeline's own per-render gate) runs `tsc`, not eslint |
 | `compose-check` | `docker compose config` against `docker-compose.yml`, then again against a release compose generated on the fly by `scripts/gen_release_compose.py`. The release compose is a distinct document — pinned images, loopback-bound ports — so validating only the development file would miss a syntax error the generator itself introduces |

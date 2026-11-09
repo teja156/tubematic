@@ -60,7 +60,7 @@ logs directory in each workspace's `permissions.additionalDirectories`, so the p
 
 A crontab written by an older version still passes `--agent-run-path` and `--agent-binary`. They are
 ignored with a warning rather than rejected — failing on them would stop the pipeline on an upgrade
-that has not re-run the cron step yet. `python onboard.py --step cron` rewrites the line.
+that has not re-run the cron step yet. `python3 onboard.py --step cron` rewrites the line.
 
 ## The supervisor loop
 
@@ -343,7 +343,7 @@ wait is over, rather than leaving the video to a later tick.
   **default model**, whether or not the effort question was asked — the default install is the one
   that never asks and is also the common one. A bad combination warns there rather than first
   appearing as a silently wasted 3am session. It never blocks the install: the runtime fallback still
-  produces a working run. The model matters because the two agents fail differently — Claude rejects
+  produces a working run. The model matters because the agents fail differently — Claude rejects
   the flag regardless of model, Codex and OpenCode reject the model/effort *pair* — so an agent
   whose rejection needs a model (`PROBES_EFFORT_WITHOUT_A_MODEL = False`) is not probed without one,
   which would be a billed run that could never produce a verdict.
@@ -357,7 +357,7 @@ wait is over, rather than leaving the video to a later tick.
 Logs go to `~/.tubematic-agent/logs/poll.log`, rotated at midnight with 14 days kept, and
 `cron.log` in the same directory for raw cron output — anything written before logging starts, such
 as an import error. Every `poll.log` line names the session it came from — `[video=<id>]`,
-`[research]`, `[profile=<id>]` or `[supervisor]` — because several sessions write at once. The JSONL
+`[research]`, `[profile=<id>]`, `[mascot=<id>]` or `[supervisor]` — because several sessions write at once. The JSONL
 sink carries the same as its `video_id` / `profile_id` fields. Every prompt gives the agent the absolute `poll.log` path so it can read recent
 entries when something unexpected happens.
 

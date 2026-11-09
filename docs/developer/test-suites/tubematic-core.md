@@ -14,9 +14,11 @@ python -m pytest tubematic_core/tests
 ```
 
 > **Deliberately no `__init__.py` here**, for the same reason `mcp/tests` and `vqa/tests` have none:
-> `renderer/api/tests`, `onboard/tests` and `scripts/tests` each have one and therefore all claim the
-> top-level package name `tests`, which is why they cannot be collected together in one pytest
-> invocation. Staying `__init__.py`-free keeps this suite out of that collision.
+> `renderer/api/tests` and `scripts/tests` each have one under a parent that is not a package, and
+> therefore both claim the top-level package name `tests`, which is why they cannot be collected
+> together in one pytest invocation. Staying `__init__.py`-free keeps this suite out of that collision,
+> but not out of another: it shares two test file names with `mcp/tests`, so those two cannot be
+> collected together either.
 
 Host-side tests here import `tubematic_core` directly from the repo root — nothing puts that
 directory on `sys.path` automatically outside a container, where it arrives via `PYTHONPATH=/app/lib`

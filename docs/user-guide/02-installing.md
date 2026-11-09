@@ -42,9 +42,10 @@ prints the mode it picked as the first line of output, and records it in `.onboa
 later "why didn't my change get rebuilt?" can be answered without re-running the wizard. Override
 either direction with `--install-mode dev` or `--install-mode release`.
 
-The only thing that actually differs between the two is **build vs. pull** at the two container
-steps — every other step (directories, the database, API keys and settings, MCP registration,
-cron) is identical, and so are the prerequisites. See the
+The only thing that actually differs between the two during setup is **build vs. pull** at the two
+container steps — every other step (directories, the database, API keys and settings, MCP registration,
+cron) is identical, and so are the prerequisites. Once running they differ in one more way, which
+interfaces the dashboard listens on: see [Network exposure](#network-exposure). See the
 note on each affected step below, and
 [Development — Release tooling](../developer/17-development.md#release-tooling) for how a maintainer
 builds the tarball in the first place. Moving an *existing* install to a newer version rather than
@@ -512,7 +513,7 @@ line and is not supported. The command runs in four stages.
 4. **Deploy.** Skills, the MCP registration, Remotion's skills and the logs directory — plus, for
    Claude Code and OpenCode, the slash commands, and for each of them its own permission mechanism:
    Claude Code's workspace allowlist and trust record, OpenCode's permission rules in the
-   workspace's `opencode.json`. Codex needs neither, because its equivalent is `-s read-only` on
+   workspace's `.opencode/opencode.json`. Codex needs neither, because its equivalent is `-s read-only` on
    argv. See [Deployment](../developer/07-agent-layer.md#deployment). Then the agent's row in the `agents`
    table.
 
@@ -624,7 +625,7 @@ curl -s -H "$TOKEN" localhost:4000/pipeline/status     # the full readout
 curl -s -H "$TOKEN" localhost:4000/agents              # the installed agents and their models
 python3 scripts/service.py status          # version, schema, cron entry, all five containers, GPU
 crontab -l | grep poll.py                  # exactly one line
-.venv/bin/python scripts/poll.py --dry-run # what the next tick would do, without doing it
+python3 scripts/poll.py --dry-run          # what the next tick would do, without doing it
 .venv/bin/python scripts/status.py         # videos, costs, disk usage
 ```
 
@@ -930,7 +931,7 @@ docker rmi ghcr.io/teja156/tubematic-backend:<version> ghcr.io/teja156/tubematic
 # 3. Remove any leftover volumes
 docker volume ls -q | grep tubematic | xargs -r docker volume rm
 
-# 4. Delete the install directory
+# 4. Delete the install directory (a release install's is named for its version, such as tubematic-v2.0.0)
 cd .. && rm -rf tubematic
 ```
 
@@ -940,8 +941,8 @@ cd .. && rm -rf tubematic
 |---|---|
 | Stop the containers, keeping everything | `python3 scripts/service.py stop` |
 | Remove only the cron entry | `crontab -e`, and delete the `# Tubematic` comment and the `poll.py` line |
-| Clear videos from the database (interactive: delete videos, reset statuses, or a full wipe) | `.venv/bin/python scripts/clear_db.py` — source checkout only |
-| Reclaim job directories, keeping rendered videos and the database | `.venv/bin/python scripts/cleanup_jobs.py` — source checkout only. Published videos' files are already removed automatically after the retention period |
+| Clear videos from the database (interactive: delete videos, reset statuses, or a full wipe) | `python3 scripts/clear_db.py` — source checkout only |
+| Reclaim job directories, keeping rendered videos and the database | `python3 scripts/cleanup_jobs.py` — source checkout only. Published videos' files are already removed automatically after the retention period |
 
 ---
 

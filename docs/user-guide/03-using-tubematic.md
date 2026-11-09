@@ -79,7 +79,7 @@ data directory and re-points Docker volumes whose data location has moved before
 Open <http://localhost:3000> and sign in with the dashboard password you set during onboarding.
 Signing in and signing out are in [The Dashboard — Signing in](04-dashboard.md#signing-in), and
 using the dashboard from another machine is in [Remote Access](09-remote-access.md). Forgot the password?
-`python onboard.py --set-password` on the host sets a new one and signs every browser out.
+`python3 onboard.py --set-password` on the host sets a new one and signs every browser out.
 
 ---
 
@@ -145,7 +145,7 @@ names the entries that were not accepted.
 
 Cron starts the **poller** at the interval chosen during onboarding (30 minutes by default). When
 there is work, the poller starts the agent each video is assigned to; until an agent is installed
-(`python onboard.py --install-agent <claude|codex|opencode>`) it logs "No agent installed" and does
+(`python3 onboard.py --install-agent <claude|codex|opencode>`) it logs "No agent installed" and does
 nothing.
 
 **The poller keeps running while there is work.** It runs one agent session per video — up to **3
@@ -170,7 +170,7 @@ logs in `~/.tubematic-agent/logs`. Scheduled runs never stop for a permission pr
 sets up what each agent may do without asking. How that is done for each agent is in
 [The Agent Layer — Deployment](../developer/07-agent-layer.md#deployment).
 
-To change the poll interval, re-run `python onboard.py --step cron`. The whole mechanism is in
+To change the poll interval, re-run `python3 onboard.py --step cron`. The whole mechanism is in
 [The Poller](../developer/13-the-poller.md).
 
 ---
@@ -247,22 +247,22 @@ change it now?" What every setting means, with its default, is in [Settings](05-
 | The "Made with tubematic.ai" watermark | **Settings → Rendering**. On by default and not asked during onboarding. The agent cannot change it |
 | Render timeout and render retries | **Settings → Rendering** |
 | How long things are kept — published videos (7 days by default), failed and rejected videos (off by default), logs (14 days by default) | **Settings → Retention** for videos, **Settings → Logs** for logs. The Retention tab also shows how many failed and rejected videos there are and how much disk they hold |
-| Poll interval | `python onboard.py --step cron`. Not on the dashboard: it is baked into your crontab, which the dashboard cannot reach |
-| API keys (ElevenLabs, Gemini, OpenAI, youtube-transcript.io, postforme.dev) | **Settings → API Keys**, or `python onboard.py --step install_config`. The dashboard shows a mask, never the key — type over it to replace it, clear it to remove it. A new key applies to the next call with no restart. Only onboarding checks a key with its provider as you type it |
+| Poll interval | `python3 onboard.py --step cron`. Not on the dashboard: it is baked into your crontab, which the dashboard cannot reach |
+| API keys (ElevenLabs, Gemini, OpenAI, youtube-transcript.io, postforme.dev) | **Settings → API Keys**, or `python3 onboard.py --step install_config`. The dashboard shows a mask, never the key — type over it to replace it, clear it to remove it. A new key applies to the next call with no restart. Only onboarding checks a key with its provider as you type it |
 | Publishing on or off | **Settings → Publishing**. Off by default; needs the postforme.dev key |
-| Auto Pilot — on or off, which projects, which accounts each posts to, posts per day per account, gap between posts, most videos in progress | **Settings → Auto Pilot**. Off by default. `python onboard.py --full-questionnaire` asks only the on/off |
+| Auto Pilot — on or off, which projects, which accounts each posts to, posts per day per account, gap between posts, most videos in progress | **Settings → Auto Pilot**. Off by default. `python3 onboard.py --full-questionnaire` asks only the on/off |
 | Which social accounts may be published to | **Socials** page. An allowlist: an account connected to the same postforme.dev project is left alone unless you tick it here |
-| Agent models, install scope, workspace | Re-run `python onboard.py --install-agent <agent>` — every model is re-checked against the installed CLI. **Settings → Agents** cannot add or remove models, because the dashboard has no agent CLI to check one against |
+| Agent models, install scope, workspace | Re-run `python3 onboard.py --install-agent <agent>` — every model is re-checked against the installed CLI. **Settings → Agents** cannot add or remove models, because the dashboard has no agent CLI to check one against |
 | An agent's default model, the default agent, and each agent's share of new videos | **Settings → Agents** |
-| An agent's effort level | **Settings → Agents** — `low`, `medium`, `high` (the default), `xhigh` or `max`. Also asked by `python onboard.py --install-agent <agent> --full-questionnaire` |
-| Uninstall an agent | `python onboard.py --uninstall-agent <agent>` — removes the skills, commands and MCP registration it deployed and keeps its workspace and logs. `python onboard.py --list-agents` shows what is installed |
+| An agent's effort level | **Settings → Agents** — `low`, `medium`, `high` (the default), `xhigh` or `max`. Also asked by `python3 onboard.py --install-agent <agent> --full-questionnaire` |
+| Uninstall an agent | `python3 onboard.py --uninstall-agent <agent>` — removes the skills, commands and MCP registration it deployed and keeps its workspace and logs. `python3 onboard.py --list-agents` shows what is installed |
 | A video's agent, model or effort | At any checkpoint on the dashboard (Topic Proposed, Script Ready, Video Ready). Changing the agent resets the model to that agent's default. A new video is given an agent automatically, by the shares on **Settings → Agents** |
 | A video's voice | It starts with its domain's default voice, or the install default. Change it on the dashboard at Topic Proposed (any voice) or Script Ready (only a voice whose model can speak the written script) |
 | A domain's default voice, visual style, script profile and mascot (experimental), and its topic cap | Its row on the **Topics** page |
 | The default mascot, and the mascots themselves (create, review, archive). Mascots are experimental | **Settings → Rendering** for the default; **Profiles → Mascots** for the library. Off by default; needs a working GPU. See [Mascots](04-dashboard.md#mascots) |
-| Dashboard password | `python onboard.py --set-password` on the host. Changing it signs every browser out. There is no reset on the dashboard |
-| The service tokens (API, MCP, session signing, built-in renderer) | `python onboard.py --rotate-tokens`. Replaces all four, restarts the containers that hold them and signs every browser out. See [Infrastructure](../developer/16-infrastructure.md#changing-the-password-and-rotating-tokens) |
-| MCP port | `python onboard.py --step install_config`. Not on the dashboard, because only onboarding rewrites the agents' MCP registration that uses it |
+| Dashboard password | `python3 onboard.py --set-password` on the host. Changing it signs every browser out. There is no reset on the dashboard |
+| The service tokens (API, MCP, session signing, built-in renderer) | `python3 onboard.py --rotate-tokens`. Replaces all four, restarts the containers that hold them and signs every browser out. See [Infrastructure](../developer/16-infrastructure.md#changing-the-password-and-rotating-tokens) |
+| MCP port | `python3 onboard.py --step install_config`. Not on the dashboard, because only onboarding rewrites the agents' MCP registration that uses it |
 | Timezone (logs, CLI, dashboard) | Detected from the host. Override it with a `TZ` entry in the Compose `environment:` block, then restart |
 
 **Rule of thumb:** there is no `.env`. The settings database is the single source of truth, and the
@@ -391,7 +391,7 @@ python3 scripts/service.py logs tubematic-api -f      # the API
 python3 scripts/service.py logs tubematic-mcp -f      # the agent's tools
 python3 scripts/service.py logs tubematic-worker -f   # publishing, Auto Pilot, notifications, AI review
 python3 scripts/service.py logs tubematic-renderer -f # rendering
-python3 scripts/status.py                             # health, checkpoints, costs, disk
+.venv/bin/python scripts/status.py                    # health, checkpoints, costs, disk
 ```
 
 `poll.log` is in a fixed place whichever agent runs. The dashboard's **Logs** page shows the
@@ -418,7 +418,7 @@ delete it and create another. See [The Dashboard — Script Profiles](04-dashboa
 
 [Troubleshooting](08-troubleshooting.md) lists symptoms and their usual causes. A few quick checks:
 
-- **See what the poller would do**, without starting anything: `python scripts/poll.py --dry-run`.
+- **See what the poller would do**, without starting anything: `python3 scripts/poll.py --dry-run`.
 - **"Skipping research — N topics already pending (cap=15)"** in `poll.log` means the pending cap is
   full: approve or reject topics, or raise the cap. **"Skipping research — N run(s) in the last 24h
   (cap=8)"** means the daily run cap is used up; **Settings → Scheduling** shows when the next run

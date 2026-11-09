@@ -19,17 +19,17 @@ tail -50 ~/.tubematic-agent/logs/poll.log
 | `"paused": true` | The pipeline is paused. Turn it back on with the switch above the tabs on **Settings** (or `/tubematic-resume` from an agent session) |
 | `workable_count: 0` | Nothing for the agent to do. Every video is at a checkpoint or terminal |
 | Videos at `TOPIC_PROPOSED`, `SCRIPT_READY` or `VIDEO_READY` | **Waiting for you.** This is the most common answer |
-| No cron entry | `python onboard.py --step cron` |
-| `poll.log` says "Cannot call the API without its token" | `~/.tubematic-data/secrets/api_token` is missing or empty, so the poller exits on every tick. `python onboard.py --step auth` creates it, and keeps any token that already exists |
-| `poll.log` says "No agent installed" | The project is set up but no agent is. `python onboard.py --install-agent <agent>` |
-| `poll.log` says a video "is assigned to agent …, which is uninstalled" (or "not installed") | That video is pinned to the agent and is skipped every tick, never rerouted. Re-install the agent with `python onboard.py --install-agent <name>` |
+| No cron entry | `python3 onboard.py --step cron` |
+| `poll.log` says "Cannot call the API without its token" | `~/.tubematic-data/secrets/api_token` is missing or empty, so the poller exits on every tick. `python3 onboard.py --step auth` creates it, and keeps any token that already exists |
+| `poll.log` says "No agent installed" | The project is set up but no agent is. `python3 onboard.py --install-agent <agent>` |
+| `poll.log` says a video "is assigned to agent …, which is uninstalled" (or "not installed") | That video is pinned to the agent and is skipped every tick, never rerouted. Re-install the agent with `python3 onboard.py --install-agent <name>` |
 | A card shows **STUCK** | Three agent sessions in a row left the video at the status they found it at, so the poller stopped picking it up. Its comments, and the `[video=<id>]` lines in `poll.log`, say what the sessions did. Fix the cause, then press **Retry agent** in the video's modal, or change its status |
 | `poll.log` says "A supervisor holds the poll lock but has not touched … — it may be hung" | The poller is still running but has stopped looping. Nothing is killed automatically, because a session may be mid-way through a paid call. Find it with `ps -ef \| grep poll.py` and stop it once its sessions are done |
 | `poll.log` says "Session passed agent_session_timeout_secs" | A session ran longer than **Settings → Scheduling → Session timeout** and was stopped with everything it started. Raise the timeout if long scene work is being cut off |
-| `poll.log` says "Agent rejected model" | The model no longer works for this CLI or account. The session re-ran with the CLI's own default; re-run `python onboard.py --install-agent <agent>` to re-check the model list |
+| `poll.log` says "Agent rejected model" | The model no longer works for this CLI or account. The session re-ran with the CLI's own default; re-run `python3 onboard.py --install-agent <agent>` to re-check the model list |
 | `--install-agent` refuses the workspace path because it "overlaps the poll logs directory" or another agent's workspace | Every agent needs a directory of its own, beside `~/.tubematic-agent/logs/` rather than around it — accept the offered default `~/.tubematic-agent/<agent>`. The old shared `~/.tubematic-agent` is refused on purpose: wiping it would delete the logs and any other agent's workspace |
 | `--uninstall-agent` says the agent "is the default agent" | Make another agent the default on the dashboard's Settings → Agents tab first. The last installed agent can always be uninstalled |
-| `poll.log` says "Ignoring --agent-run-path, --agent-binary" | The crontab predates per-video agents. Harmless; `python onboard.py --step cron` rewrites it |
+| `poll.log` says "Ignoring --agent-run-path, --agent-binary" | The crontab predates per-video agents. Harmless; `python3 onboard.py --step cron` rewrites it |
 | `poll.log` says "Already running" | A previous tick is still holding the lock |
 
 **No new topics are appearing.** Research is gated by two independent caps that must both pass:
@@ -54,8 +54,8 @@ Same fix.
 
 If the agent's MCP status shows a `401`, or OpenCode says "needs authentication", its registration
 is not sending the MCP token: it predates 2.0.0, the install was moved, or
-`~/.tubematic-data/secrets/mcp_token` cannot be read. Re-running `python onboard.py --install-agent
-<agent>` registers it correctly; `python upgrade.py --check` reports which agents are affected.
+`~/.tubematic-data/secrets/mcp_token` cannot be read. Re-running `python3 onboard.py --install-agent
+<agent>` registers it correctly; `python3 upgrade.py --check` reports which agents are affected.
 
 If registration itself fails, the MCP server is not up. Check **`tubematic-mcp`**, not
 `tubematic-api` — they are separate containers, so a healthy Flask says nothing about whether the
@@ -73,7 +73,7 @@ Skills are markdown deployed when the agent is installed, not read from this rep
 Editing a skill file changes nothing until you redeploy, which is re-running the install:
 
 ```bash
-python onboard.py --install-agent claude   # or: --install-agent codex / opencode
+python3 onboard.py --install-agent claude   # or: --install-agent codex / opencode
 ```
 
 Then restart the session. For Claude Code under user scope, skills go to **both** `~/.claude/skills/`
@@ -140,7 +140,7 @@ refused unless a renderer's GPU works, but a video approved before the GPU went 
 anyway. It fails at once when no renderer has a working GPU, after 30 minutes when the one that does
 is offline, and during its render when the GPU stops working part-way. The comment names the
 renderer and what state it was in. Fix the GPU (**Test GPU** on the renderer's card in Settings →
-Rendering, `python onboard.py --step gpu` for the built-in renderer, or bring a remote GPU renderer
+Rendering, `python3 onboard.py --step gpu` for the built-in renderer, or bring a remote GPU renderer
 back online or upgrade it) and create the video again; the failed one is not retried.
 
 **Renders are slow although the machine has an NVIDIA GPU.** Open Settings → Rendering and read the
@@ -250,7 +250,7 @@ container (`default_proj` for a video with no domain), not a link to one elsewhe
 the end of the file, which usually means the file was replaced while it was open: reload the page.
 A `401` instead means the session expired: sign in again.
 
-**Forgot the dashboard password.** On the host: `python onboard.py --set-password`. It signs every
+**Forgot the dashboard password.** On the host: `python3 onboard.py --set-password`. It signs every
 browser out.
 
 **"Too many failed attempts" on the login page.** The install-wide backoff after five wrong
@@ -270,7 +270,7 @@ since the page last polled. Refresh.
 
 **Approving or revising says an agent "is uninstalled, so no work can be handed to it".** The agent
 picked for the video was uninstalled after the page loaded its agent list. Reload the page and pick
-a live agent, or re-install that one with `python onboard.py --install-agent <agent>`.
+a live agent, or re-install that one with `python3 onboard.py --install-agent <agent>`.
 
 ---
 
@@ -433,7 +433,7 @@ Published videos reclaim their own space: the
 [retention sweep](../developer/11-rendering-and-review.md#retention) deletes their mp4 and job directory
 `retention_days` after publishing. Failed and rejected videos keep theirs unless you set
 `unpublished_retention_days`. **Settings → Retention** shows how much disk they hold.
-`python scripts/cleanup_jobs.py` reclaims job directories by hand, for anything else. Leftover
+`python3 scripts/cleanup_jobs.py` reclaims job directories by hand, for anything else. Leftover
 `/tmp/tubematic-audit-bundle-*` directories inside the API container mean text audits have been
 timing out.
 
@@ -503,7 +503,7 @@ The same details sit in the record's `provider_service`, `provider_model`, `prov
 to level `error` therefore shows the incidents, not the refusals. To see refusals as well, search
 for `outcome`.
 
-Three things worth knowing before you go looking:
+Things worth knowing before you go looking:
 
 - **Container stdout still works.** `docker compose logs -f tubematic-renderer` (or
   `tubematic-worker`) is unchanged; the
@@ -516,7 +516,7 @@ Three things worth knowing before you go looking:
   root-owned, every tick warns in `~/.tubematic-agent/logs/poll.log` with `Cannot write …`. Restart
   the stack, whose API and MCP containers make the directory group-writable for your user at
   startup, or run `sudo chown "$USER:$USER" ~/.tubematic-data/logs`. Entries appear from the next
-  tick on; missed ticks are not filled in. `python onboard.py` also warns about any data directory
+  tick on; missed ticks are not filled in. `python3 onboard.py` also warns about any data directory
   you cannot write.
 - **Retention deletes old files.** `log_retention_days` (default 14) is applied when a service starts
   and once a day after that — so unlike every other setting, a change takes effect at the next pass

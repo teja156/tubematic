@@ -54,7 +54,7 @@ For contributors and anyone integrating with or extending Tubematic.
 | **[7 · The Agent Layer](developer/07-agent-layer.md)** | Skills, slash commands, installing an agent and how videos are assigned to one |
 | **[8 · Scripting and Voice](developer/08-scripting-and-voice.md)** | Script segments, length budget, pronunciation and pause markup, `timeline.json`, script profiles |
 | **[9 · The Remotion Project](developer/09-remotion-project.md)** | The frame model, compositions, dynamic scene dispatch, `scene-config.json`, the installed component library |
-| **[10 · Scene Authoring](developer/10-scene-authoring.md)** | How a scene gets written — the two visual registers, the PHOTO / HYBRID / DIAGRAM / STICK taxonomy, cadence, the revision path, adding a component |
+| **[10 · Scene Authoring](developer/10-scene-authoring.md)** | How a scene gets written — the visual registers, the PHOTO / HYBRID / DIAGRAM / STICK taxonomy, cadence, the revision path, adding a component |
 | **[11 · Rendering and Review](developer/11-rendering-and-review.md)** | The renderer and the render gateway: claims and scheduling, leases, the job bundle, remote renderers, the GPU test and GPU-only videos, the Cartoon 3D stills server, timeouts and retries, Gemini video review, the text-layout audit |
 | **[12 · The Worker](developer/12-the-worker.md)** | The always-on loop that settles posts, runs Auto Pilot, the AI review thread and the timed sweeps — every pass, its order and how often it runs |
 | **[13 · The Poller](developer/13-the-poller.md)** | `poll.py`, the cron-started supervisor that runs agent sessions — the loop, the four lanes, one stage per session, timeouts and orphans |

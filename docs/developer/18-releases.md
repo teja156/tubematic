@@ -164,7 +164,8 @@ top of that:
   shipped — the check is only comparing your working tree to `HEAD`, though, so once that edit is
   itself committed, `git diff HEAD` has nothing left to show and the check passes. Immutability past
   that point is enforced by review and discipline, not by this script.
-- **Migrations apply automatically.** Every one of the four backend containers calls `migrate()` on
+- **Migrations apply automatically.** Each of the three containers that open the database
+  (`tubematic-api`, `tubematic-mcp` and `tubematic-worker`) calls `migrate()` on
   its own first database touch after starting, so an upgrade does not require running a migration
   script by hand — `upgrade.py` deliberately never runs one; it stops the old stack and starts the
   new one, and the containers do the rest. Whichever container reaches `migrate()` first takes a real

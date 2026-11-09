@@ -21,7 +21,7 @@ Everything runs from `docker-compose.yml`. Five services, six volumes, one netwo
 | Ports | `127.0.0.1:4000` Flask; 4443, the render gateway over HTTPS, on the Compose network only — published on the host only by the [remote-renderers override](#remote-renderers-override) |
 | Command | `entrypoint.sh python3 /app/api/server.py` |
 | Restart | `unless-stopped` |
-| Healthcheck | `curl -fs localhost:4000/health`, every 15s, 5 retries |
+| Healthcheck | `curl -fs http://127.0.0.1:4000/health`, every 15s, 5 retries |
 | Mounts | all six data volumes, plus `/etc/localtime` and `/etc/timezone` read-only |
 | Secrets | `api_token`, `builtin_renderer_token`, `render_tls_key`, `render_tls_cert` |
 | Depends on | nothing |
@@ -70,7 +70,7 @@ pipeline through Flask, and that path has to keep working when the MCP server is
 | Ports | `127.0.0.1:4100` MCP |
 | Command | `entrypoint.sh python3 /app/mcp/server.py` |
 | Restart | `unless-stopped` |
-| Healthcheck | `curl -fs localhost:4100/health`, every 15s, 5 retries |
+| Healthcheck | `curl -fs http://127.0.0.1:4100/health`, every 15s, 5 retries |
 | Mounts | `db-data`, `jobs-data`, `scenes-generated`, `logs-data`, `backups-data` — and nothing else |
 | Secrets | `mcp_token` |
 | Depends on | `tubematic-api: service_healthy` |
@@ -284,7 +284,7 @@ works and one that can never succeed.** A container's `/etc/hosts` maps `localho
 the only HTTP client in the `node:20-alpine` runtime — resolves `localhost` to the IPv6 address
 first and does **not** fall back to IPv4 when the connection is refused, so the probe fails every
 time, immediately, with nothing logged anywhere: the container simply never becomes healthy. The
-`curl` probes on the API and MCP containers tolerate `localhost` only because curl retries the other
+`curl` probes on the API and MCP containers would tolerate `localhost` only because curl retries the other
 address family, which makes their URL shape a dangerous thing to copy. All three use `127.0.0.1` for
 that reason, and `scripts/tests/test_gen_release_compose.py` fails the build if any healthcheck
 reintroduces the name. `dashboard/Dockerfile`'s
@@ -422,8 +422,8 @@ outside the settings API, so `GET /settings` never returns it and `POST /setting
 
 | Command | Effect |
 |---|---|
-| `python onboard.py --set-password` | Sets or changes the dashboard password. A change also rotates `session_secret`, which signs every browser out |
-| `python onboard.py --rotate-tokens` | Replaces the four tokens (never the TLS pair), restarts the API, MCP and dashboard containers (they hold the old values), and has OpenCode reload its config. It waits for in-flight work like `upgrade.py` does; `--force` proceeds anyway. If a restart or a reload fails it still tries the rest, then **exits non-zero** naming what to run: the new tokens are already in place, so whatever kept an old one cannot authenticate until it picks them up |
+| `python3 onboard.py --set-password` | Sets or changes the dashboard password. A change also rotates `session_secret`, which signs every browser out |
+| `python3 onboard.py --rotate-tokens` | Replaces the four tokens (never the TLS pair), restarts the API, MCP and dashboard containers (they hold the old values), and has OpenCode reload its config. It waits for in-flight work like `upgrade.py` does; `--force` proceeds anyway. If a restart or a reload fails it still tries the rest, then **exits non-zero** naming what to run: the new tokens are already in place, so whatever kept an old one cannot authenticate until it picks them up |
 
 Claude Code, Codex and the built-in renderer need nothing after a rotation, because each reads the
 file on every connection. Signing in again in the browser is the only other visible effect.
@@ -653,14 +653,14 @@ directory, since the shell redirect — and the tick with it — fails if it is 
 exactly one entry — no separate research schedule.
 
 `poll_interval_mins` is baked into this line. Editing the settings row does nothing until you re-run
-`python onboard.py --step cron`.
+`python3 onboard.py --step cron`.
 
 > **Cron strips `TZ`.** An injected timezone environment variable never reaches a cron-invoked
 > process, so `/etc/localtime` is the only reliable path. A container can therefore legitimately show
 > local time interactively and UTC in its cron logs at the same time.
 
 Unattended agent runs are permitted by a scoped allowlist in the agent's workspace **plus** a trusted
-project record in `~/.claude.json`, both written by `python onboard.py --install-agent claude`. Both are required — an allowlist alone is silently ignored. This pair is Claude Code's mechanism; a Codex install writes neither, because its equivalent is `-s read-only` on the command line, and an OpenCode install writes an ordered permission list into the workspace's `.opencode/opencode.json` and `.opencode/opencode.jsonc` instead.
+project record in `~/.claude.json`, both written by `python3 onboard.py --install-agent claude`. Both are required — an allowlist alone is silently ignored. This pair is Claude Code's mechanism; a Codex install writes neither, because its equivalent is `-s read-only` on the command line, and an OpenCode install writes an ordered permission list into the workspace's `.opencode/opencode.json` and `.opencode/opencode.jsonc` instead.
 `--dangerously-skip-permissions` is rejected by this project.
 
 ---
@@ -703,9 +703,9 @@ are read once at session start.
 
 ```bash
 sqlite3 ~/.tubematic-data/data/tubematic.db "SELECT id, status, title FROM videos ORDER BY updated_at DESC LIMIT 10;"
-python scripts/status.py        # health, checkpoints, costs, disk usage
-python scripts/cleanup_jobs.py  # interactive: reclaim job directories (retention does published ones automatically)
-python scripts/clear_db.py      # interactive: delete videos, reset statuses, full wipe
+.venv/bin/python scripts/status.py  # health, checkpoints, costs, disk usage
+python3 scripts/cleanup_jobs.py     # interactive: reclaim job directories (retention does published ones automatically)
+python3 scripts/clear_db.py         # interactive: delete videos, reset statuses, full wipe
 python3 scripts/collect_diagnostics.py  # a redacted report to attach to a bug report
 ```
 

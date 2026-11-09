@@ -41,8 +41,9 @@ python -m pytest vqa/tests
 > **Run `scripts/tests` and `renderer/api/tests` separately.** Neither parent directory has an
 > `__init__.py`, so pytest's default import mode treats each `tests/` subdirectory as a top-level
 > package literally named `tests`. Whichever is collected first wins the name and the second fails to
-> import. Other combinations are fine — `onboard/` has an `__init__.py` and `mcp/tests` has none, so
-> neither collides.
+> import. Other combinations fail too — `tubematic_core/tests` and `mcp/tests` have no `__init__.py` and
+> share two test file names, and `mcp/tests` does not collect together with `renderer/api/tests` — so
+> run each suite in its own `pytest` invocation.
 
 `pytest` is **not** installed by `scripts/requirements.txt` or by the wizard's bootstrap. Install it
 yourself.

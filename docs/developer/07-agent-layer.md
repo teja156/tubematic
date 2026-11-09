@@ -12,7 +12,7 @@ That split is the convention to preserve when you extend the system:
 
 A second convention, also load-bearing: **agent-visible text carries no ticket identifiers.** Skills,
 slash commands and `@mcp.tool` docstrings are read by a model that cannot look them up. Internal
-comments and this documentation are free to reference whatever they like.
+comments are free to reference whatever they like.
 
 ---
 
@@ -314,7 +314,7 @@ Most of those asymmetries are worth the reasoning, because each looks like an om
   in matters: it runs before anything is copied or registered, on every path that asks the
   question, and needs no gate of its own to be kept in sync.
 
-  Two things that rule has to get right, both of which it got wrong first:
+  The things that rule has to get right:
 
   - **Only a LIVE agents row makes a workspace ours.** An archived row means the agent was
     uninstalled: its config was deleted and its workspace deliberately kept, so a document at that
@@ -405,9 +405,9 @@ Skills and commands are **markdown, not code**. Editing this repository changes 
 running agent until they are deployed, and deploying is part of installing the agent:
 
 ```bash
-python onboard.py --install-agent claude
-python onboard.py --install-agent codex
-python onboard.py --install-agent opencode
+python3 onboard.py --install-agent claude
+python3 onboard.py --install-agent codex
+python3 onboard.py --install-agent opencode
 ```
 
 The main `onboard.py` flow sets up the project only. The walkthrough — preconditions, questions,
@@ -483,7 +483,7 @@ Because Tubematic's document is the highest-precedence one, asserting the positi
 makes them survive a hostile or merely opinionated global config. Verified against one denying all
 four: `MCP=ok, WEB=ok, ENV=blocked, SHELL=blocked`.
 
-The denies come **after** the allows, so they win the overlap. Two further things are load-bearing:
+The denies come **after** the allows, so they win the overlap. These are load-bearing too:
 
 - **`shell` is denied, not left alone.** Claude's allowlist grants no Bash and Codex runs under a
   read-only sandbox, but nothing constrains a command OpenCode runs, so allowing it would make
@@ -536,7 +536,7 @@ MCP server, restart it again — tool schemas are read once.
 ### Models
 
 Each agent stores a list of models, and the first is its default. The list is what the dashboard
-offers at the topic checkpoint and what the API accepts for `videos.agent_model` — nothing else.
+offers at each human checkpoint and what the API accepts for `videos.agent_model` — nothing else.
 
 **Every model is probed against the installed CLI before it is stored**, by running that agent's
 own one-word prompt with the model set. For Claude and OpenCode an unknown model fails locally with
@@ -621,15 +621,15 @@ runtime for any pair it was not able to check (a per-video override, say). See
 [The Poller](13-the-poller.md#running-one-agent-process).
 
 **It is not asked during a minimal install.** The question carries the `advanced` attribute, so
-`python onboard.py --install-agent <agent>` seeds `high` silently and only
+`python3 onboard.py --install-agent <agent>` seeds `high` silently and only
 `--full-questionnaire` asks. It is editable afterwards on **Settings → Agents**, and per video at
-the topic checkpoint, so nothing is lost by not asking. Note that `--install-agent` builds its own
+any human checkpoint, so nothing is lost by not asking. Note that `--install-agent` builds its own
 question list rather than going through the main wizard's, so it honours `advanced` by filtering
 that list itself.
 
 **The effort is probed at install time, against the default model**, and the runtime fallback in
 [The Poller](13-the-poller.md#running-one-agent-process) is the backstop for anything the probe could not see — a per-video
-override, or a model the install never tried. The two agents fail differently, which is why the
+override, or a model the install never tried. The agents fail differently, which is why the
 probe needs the model: Claude rejects the `--effort` flag itself regardless of model, while Codex
 and OpenCode accept it always and reject the model/effort *pair*. OpenCode says so precisely —
 `Error: Variant unavailable for <model>: <variant>` — which is worth real money, because it means
@@ -700,7 +700,7 @@ be written in a different agent's style from the last.
 
 The default agent, each weight and each agent's default model are set on the dashboard's Settings →
 Agents tab, which writes through [`PATCH /agents/<id>`](05-http-api.md#agents). Uninstalling is
-host-side only — `python onboard.py --uninstall-agent <name>` — and never deletes the row, so a
+host-side only — `python3 onboard.py --uninstall-agent <name>` — and never deletes the row, so a
 video pinned to an uninstalled agent still resolves it.
 
 ---

@@ -358,8 +358,9 @@ The output of voicing and the input to everything downstream.
 `get_timeline(video_id)` omits `words` unless you pass `include_words=True` — the array is large and
 scene authoring rarely needs it.
 
-**`scene-config.totalFrames` must equal `timeline.totalFrames`.** `write_scene_config` requires it,
-`validate_job` re-checks it within ±5 frames against both the timeline and the audio duration, and
+**`scene-config.totalFrames` must equal `timeline.totalFrames`.** `write_scene_config` checks only
+that it is a positive integer; `validate_job` checks it within ±5 frames against both the timeline
+and the audio duration, and
 the revision loop uses a mismatch as its signal that the audio was re-voiced.
 
 ---
@@ -380,7 +381,7 @@ flowchart LR
 Transcripts are staging data, not an archive — `complete_script_profile` deletes every transcript row
 for the profile once the markdown is written.
 
-Three details worth knowing:
+Details worth knowing:
 
 - **The profile captures style only.** Structure, tone, hook patterns, vocabulary, anti-patterns.
   It explicitly strips absolute word and duration counts, and any creator identity — name, channel,

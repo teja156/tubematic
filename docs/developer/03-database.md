@@ -271,7 +271,7 @@ The central table. One row per video, from proposed topic to published file.
 | `title` | TEXT NOT NULL | `''` | A **short display name**, capped at 70 characters. Legacy rows hold `''`; the UI falls back to `topic` |
 | `status` | TEXT NOT NULL | `TOPIC_PROPOSED` | See [The Pipeline](02-pipeline.md) |
 | `strategy` | TEXT NOT NULL | `manual` | `curriculum` · `trending` · `mining` · `manual` |
-| `producibility_score` | INTEGER NOT NULL | `0` | 1–10. Below 5 is rejected at creation |
+| `producibility_score` | INTEGER NOT NULL | `0` | 1–10. The MCP `create_video` tool rejects a score below 5 at creation; `POST /videos` does not check it, and a video submitted from the dashboard stores `0` (unscored) |
 | `script` | TEXT NOT NULL | `''` | The flat script, **derived** from `script_segments` |
 | `script_segments` | TEXT | | JSON array of `{id, voice, visual}` |
 | `tts_text` | TEXT NOT NULL | `''` | The exact text sent to ElevenLabs, after pronunciation substitution |
@@ -379,7 +379,8 @@ was sourced.
 
 The audit trail. Both the agent and humans write here, and the dashboard renders it as a read-only
 thread. The agent is required to leave a comment at every checkpoint explaining what it did. A human
-comment enters only through the dashboard's Request Revision dialog; the agent's `add_comment` tool
+comment enters through the dashboard's Request Revision dialog (deleting a video from the dashboard
+also leaves one, written by the API); the agent's `add_comment` tool
 refuses any author but `agent`, so it cannot write one.
 
 | Column | Type | Notes |
@@ -418,7 +419,7 @@ are installed and how videos are assigned to them.
 `is_default`, `weight`, `effort`, and which installed model sits first in `models`
 ([HTTP API](05-http-api.md#agents)). No MCP tool writes this table.
 
-**Uninstalled means archived, never deleted** (`python onboard.py --uninstall-agent <name>` sets
+**Uninstalled means archived, never deleted** (`python3 onboard.py --uninstall-agent <name>` sets
 `archived_at`), so a video pinned to an agent always resolves and keeps showing its name. An
 uninstalled agent is assigned no new videos, and the poller skips the videos it already has.
 

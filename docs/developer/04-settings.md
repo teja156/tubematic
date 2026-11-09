@@ -39,8 +39,8 @@ no database). So `_read_all_settings` blanks the value when the mascot is no lon
 or never approved), and `post_settings` refuses a new value that is not pickable, or any new value while
 no renderer's GPU is `working` (`tubematic_core/mascots.py::mascot_gpu_error`, the same rule and
 words as a pick on a video), **on change only**: refusing a re-sent stored value would block every
-unrelated settings save once its mascot is archived or its GPU is gone. The same split as the default
-voice, for the same reason. `''` always passes.
+unrelated settings save once its mascot is archived or its GPU is gone. The default voice is
+not checked at write time at all, for the same reason. `''` always passes.
 
 ### Derived: `pronunciation_mode`
 

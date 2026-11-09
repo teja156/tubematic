@@ -199,14 +199,14 @@ is on disk. If it shows nothing, the dashboard could not reach the API. For the 
 shell:
 
 ```bash
-python onboard.py --status                 # which steps completed
+python3 onboard.py --status                # which steps completed
 TOKEN="Authorization: Bearer $(cat ~/.tubematic-data/secrets/api_token)"
 curl -s localhost:4000/health                          # Flask
 curl -s localhost:4000/render/health                   # Chromium inside the container
 curl -s -H "$TOKEN" localhost:4000/pipeline/status     # the full readout
 curl -s -H "$TOKEN" localhost:4000/agents              # the installed agents and their models
 python3 scripts/service.py status          # version, schema, cron entry, all five containers
-python scripts/status.py                   # videos, costs, disk usage
+.venv/bin/python scripts/status.py         # videos, costs, disk usage
 ```
 
 [Installing — Verifying an install](02-installing.md#verifying-an-install) explains each of
@@ -253,7 +253,7 @@ directory. Delete it first and every cron tick fails with "No such file or direc
 stops advancing. `upgrade.py` rewrites the line — after creating this directory's own `.venv` and
 installing `scripts/requirements.txt` into it, since that venv is the Python cron will run — and
 names the previous directory when it is done. It also copies the previous directory's
-`.onboard-state.json`, which lives per directory, so `python onboard.py --status` here does not
+`.onboard-state.json`, which lives per directory, so `python3 onboard.py --status` here does not
 report an uninstalled system. `python3 upgrade.py --check` confirms the cron entry points at the new
 directory; after that, the old one holds no data of its own and can be removed.
 
@@ -339,7 +339,7 @@ when upgrading:
   backup is not a video backup.
 - **Nothing prunes the backups directory automatically.** Every upgrade that has something pending
   adds at least one file — usually **two**, not one: `migrate()` backs up before it takes its write
-  lock, and the four backend containers start close enough together that
+  lock, and the three containers that open the database start close enough together that
   more than one reaches that point before the first has committed, so more than one snapshot gets
   written (the loser gets a collision-suffixed name rather than overwriting the first). Nothing ever
   removes one. Clean it out by hand if it grows large.
@@ -409,7 +409,7 @@ The supported path back to an older version is:
    and the files in `~/.tubematic-data/secrets/`, and an MCP server from before 2.0.0 ignores the
    header the agents send. Its own `upgrade.py` re-registers the agents the way it expects. If the
    older version ships `upgrade.py`, run `python3 upgrade.py` there. If it predates it, run
-   `python onboard.py --step cron`, then `--step renderer` and `--step dashboard` — each needs a
+   `python3 onboard.py --step cron`, then `--step renderer` and `--step dashboard` — each needs a
    terminal.
 
 There is no tooling that automates this sequence — it is a manual, deliberate operation, on purpose:

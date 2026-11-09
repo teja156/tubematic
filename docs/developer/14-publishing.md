@@ -342,7 +342,7 @@ the human believes went out.
 | `publication_targets` | `[(account_id, platform)]` from a post's `social_accounts`, which are objects on a fetched post and bare ids on a request |
 | `get_post_results` | `GET /social-post-results?post_id=…` |
 | `get_account_feed` | `GET /social-account-feeds/{id}?expand=metrics` |
-| `scrub` / `public_account` | The two credential defences above |
+| `scrub` / `public_account` | The credential defences above |
 | `compose_caption` / `build_platform_configurations` / `extract_metrics` | Per-platform shaping |
 
 Timeouts are 30 seconds normally and **600 for an upload** — roughly a tenfold margin over a

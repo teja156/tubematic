@@ -7,7 +7,7 @@ what happens to the video:
 |---|---|---|
 | The renderer, `renderer/api/render_agent.py` | `tubematic-renderer` (the built-in renderer), and `tubematic-remote-renderer` on each [remote renderer](#remote-renderers) | Runs Remotion. It has **no database**: it asks the render gateway for work, downloads the job's files, renders, uploads the mp4 and reports how the render ended. It also tests its GPU and, built-in only, runs the Cartoon 3D stills server |
 | The render gateway, `renderer/api/render_gateway.py` | `tubematic-api`, HTTPS port 4443 | Everything a renderer asks for: which video it gets, the job's files, where the mp4 goes, and what a failed render does to its video (`renderer/api/render_results.py`) |
-| The worker, `renderer/api/worker.py` | `tubematic-worker` | The AI review of every uploaded render, and two backstops: a render whose renderer stopped reporting, and a GPU-only video no renderer can take. See [The Worker](12-the-worker.md) |
+| The worker, `renderer/api/worker.py` | `tubematic-worker` | The AI review of every uploaded render (when AI review is switched on), and two backstops: a render whose renderer stopped reporting, and a GPU-only video no renderer can take. See [The Worker](12-the-worker.md) |
 
 **Why the renderer has no database.** A renderer can be another machine. One that read SQLite would
 need the database file, the jobs volume and the output volume on that machine, and every renderer
@@ -242,7 +242,7 @@ deliberately has no database access. Decisions that look arbitrary and are not:
   ends every other pass with it, publishing included. Errors are logged per video and the pass moves
   on.
 
-`python scripts/cleanup_jobs.py` is the manual complement: it frees job directories only, keeping the
+`python3 scripts/cleanup_jobs.py` is the manual complement: it frees job directories only, keeping the
 mp4, for anything you want to reclaim earlier.
 
 ## Leases, restarts and lost renderers
@@ -1002,8 +1002,8 @@ put it under the any-finding rule, where one systematic false positive wedges ev
 Promotion to a hard gate is deliberately conditional on seeing it run clean across real videos.
 
 The probe measures and decides nothing. That split is not half-finished work: `mcp/text_audit.py` is
-the only layer with test coverage, because `renderer/remotion/` has no JavaScript test runner at
-all. Moving a threshold into the probe moves it out of the tested layer.
+the only layer with test coverage, because `renderer/remotion/`'s JavaScript tests (vitest) run in
+Node with no browser and cannot reach the probe. Moving a threshold into the probe moves it out of the tested layer.
 
 ### Disk
 

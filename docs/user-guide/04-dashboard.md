@@ -18,7 +18,7 @@ it is built — the request guard, the proxy and stream routes, the components �
 ## Signing in
 
 The dashboard has one password. Onboarding asks for it the first time; after that it is set or
-changed on the host with `python onboard.py --set-password`. There is no sign-up, no second user and
+changed on the host with `python3 onboard.py --set-password`. There is no sign-up, no second user and
 no password reset in the dashboard itself.
 
 - **A sign-in lasts seven days, fixed.** Using the dashboard does not extend it; after seven days
@@ -30,7 +30,8 @@ no password reset in the dashboard itself.
 - **A session that ends while a page is open is noticed within 30 seconds**, and the browser is sent
   to the login page; after signing in you return to the page you were on.
 
-The dashboard listens on the local machine only. To use it from another machine, see
+On a release install the dashboard listens on the local machine only; a source install publishes it
+on every interface. To use it from another machine, see
 [Remote Access](09-remote-access.md). Over plain HTTP the password and the session cookie cross the
 network readable.
 
@@ -379,8 +380,8 @@ work differently, noted below.
   at once, and each agent's share of new videos has its own Save button. Every installed agent is listed with its
   workspace and models; an uninstalled one stays listed, read-only. **Models cannot be added or
   removed here**: the dashboard has no agent CLI to check a model against, so that is
-  `python onboard.py --install-agent <agent>` on the host. Uninstalling is
-  `python onboard.py --uninstall-agent <agent>`.
+  `python3 onboard.py --install-agent <agent>` on the host. Uninstalling is
+  `python3 onboard.py --uninstall-agent <agent>`.
 - **Costs** — saves immediately. Lists the price of every model Tubematic prices itself (Gemini,
   OpenAI and Codex; Claude Code and OpenCode report their own cost, and ElevenLabs is credits), where
   each price came from, and the last price sync. **Sync now** refreshes prices, **Override** sets a
