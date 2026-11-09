@@ -174,6 +174,40 @@ describe("VideoModal — Mark as published", () => {
   });
 });
 
+describe("VideoModal — an action that finishes after the modal moved on", () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it("does not load the old video's rows into the new one", async () => {
+    // Retry publishing started on A finishes after B opened; its callback
+    // refreshes A's publications, which is now the newest request of all.
+    let finishRetry: (r: Response) => void = () => {};
+    const A = { ...makeVideo("FAILED"), id: "vid-A" };
+    const B = { ...makeVideo("PARTIALLY_PUBLISHED"), id: "vid-B" };
+    vi.stubGlobal("fetch", vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/videos/vid-A/publish/retry") && init?.method === "POST") {
+        return new Promise<Response>((r) => { finishRetry = r; });
+      }
+      if (u.endsWith("/videos/vid-A/publications")) {
+        return { ok: true, json: async () => [{ ...pub("b", "FAILED"), video_id: "vid-A" }] } as Response;
+      }
+      if (u.endsWith("/videos/vid-B/publications")) return new Promise<Response>(() => {});
+      if (u.endsWith("/videos/vid-A")) return { ok: true, json: async () => A } as Response;
+      if (u.endsWith("/videos/vid-B")) return { ok: true, json: async () => B } as Response;
+      return { ok: true, json: async () => [] } as Response;
+    }));
+    const { rerender } = render(<VideoModal video={A} onClose={vi.fn()} onAction={vi.fn()} publishingEnabled />);
+    fireEvent.click(await screen.findByText("Retry publishing"));
+    rerender(<VideoModal video={B} onClose={vi.fn()} onAction={vi.fn()} publishingEnabled />);
+    await act(async () => {});
+    await act(async () => { finishRetry({ ok: true, json: async () => ({ outcome: "reconciling" }) } as Response); });
+    await act(async () => {});
+    fireEvent.click(await screen.findByText("Mark as published…"));
+    await screen.findByTestId("mark-published-dialog");
+    expect(screen.getByRole("button", { name: "Mark as published" })).toBeDisabled();
+  });
+});
+
 describe("VideoModal — a failed publication refresh", () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 

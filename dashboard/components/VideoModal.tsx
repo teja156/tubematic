@@ -383,17 +383,25 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // Whether `publications` is this video's real list. Mark as published reads
   // it to say which accounts failed, so it waits for "ok" (TMDEV-191).
   const [publicationsState, setPublicationsState] = useState<"loading" | "ok" | "error">("loading");
-  // Only the newest publications request may land: a slower one for the video
-  // shown before, or an older refresh of this one, would otherwise overwrite it.
+  // The video on screen. This modal stays mounted between videos, so a
+  // response — or an action's callback (publish, retry, cancel) that started a
+  // refresh late — can belong to the video shown before; every refresh drops
+  // one that does not match. Without it a late refreshVideo swapped the modal
+  // back to the old video, and its publication rows could unlock the new
+  // video's Mark as published (TMDEV-191).
+  const shownVideoId = useRef<string | null>(null);
+  // Only the newest publications request may land: an older refresh of the
+  // same video would otherwise overwrite a newer one.
   const publicationsRequest = useRef(0);
   const [logs, setLogs] = useState<LogRecord[]>([]);
 
   const seedId = seed ? seed.id : null;
 
   function refreshVideo(id: string) {
+    if (id !== shownVideoId.current) return;
     fetch(`/api/proxy/videos/${id}`)
       .then((r) => r.json())
-      .then((full: Video) => setVideo(full))
+      .then((full: Video) => { if (id === shownVideoId.current) setVideo(full); })
       .catch(() => {});
   }
 
@@ -403,12 +411,14 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     // between statuses.
     fetch(`/api/proxy/logs?video_id=${encodeURIComponent(id)}&limit=200`)
       .then((r) => r.json())
-      .then((data: Partial<LogsResponse>) =>
-        setLogs(Array.isArray(data.records) ? data.records : []))
-      .catch(() => setLogs([]));
+      .then((data: Partial<LogsResponse>) => {
+        if (id === shownVideoId.current) setLogs(Array.isArray(data.records) ? data.records : []);
+      })
+      .catch(() => { if (id === shownVideoId.current) setLogs([]); });
   }
 
   function refreshPublications(id: string) {
+    if (id !== shownVideoId.current) return;
     const request = ++publicationsRequest.current;
     fetch(`/api/proxy/videos/${id}/publications`)
       .then((r) => {
@@ -416,13 +426,13 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
         return r.json();
       })
       .then((rows: VideoPublication[]) => {
-        if (request !== publicationsRequest.current) return;
+        if (request !== publicationsRequest.current || id !== shownVideoId.current) return;
         if (!Array.isArray(rows)) throw new Error("not a list");
         setPublications(rows);
         setPublicationsState("ok");
       })
       .catch(() => {
-        if (request !== publicationsRequest.current) return;
+        if (request !== publicationsRequest.current || id !== shownVideoId.current) return;
         // Cleared, not kept: after a retry, a cancel or a publish the old rows
         // describe a state that no longer exists.
         setPublications([]);
@@ -431,6 +441,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   }
 
   useEffect(() => {
+    shownVideoId.current = seed ? seed.id : null;
     if (!seed) { setVideo(null); return; }
     setVideo(seed);
     setPickedVoice(null);
