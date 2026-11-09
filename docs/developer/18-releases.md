@@ -57,6 +57,53 @@ fork does not have. They fail and leave the Release intact.
 
 ---
 
+## Writing release notes
+
+`docs/release-notes.md` is the only source of release notes. Write the entry in the commit that
+makes the change, under the heading of the version in development.
+
+The page has one `## vX.Y.Z` heading per version, the newest first.
+
+- `scripts/release_notes.py` reads a section from its heading to the next version heading or the
+  next `---` line. Keep `---` lines out of a section.
+- The section of the version in development has the same heading form as a released one. The
+  page's opening says that the first section can be unreleased, so no section carries a mark that
+  someone has to remove at release time.
+- A section whose bullets are all empty counts as missing, and `check_release.py` fails on it.
+
+A section has these subsections, in this order. Leave out a subsection that would be empty.
+
+- Upgrade notes: what a person has to do, or has to know before deciding to upgrade. That covers
+  manual steps, migrations that cannot be reversed, changed defaults that alter a running install,
+  and removed configuration. Put the actions first, as a list, each with its command. If an upgrade
+  cannot be reversed safely, say so here.
+- Added: capabilities that are new.
+- Changed: behaviour that existed and now works differently. State the earlier behaviour too, so
+  that a reader can tell whether the change affects them.
+- Fixed: defects. Describe the symptom the user saw, such as "the first click on SAVE in Settings
+  did nothing", and leave out the internal cause.
+- Removed: capabilities that are gone.
+
+`release.py` prints a skeleton with the Upgrade notes, Added, Changed and Fixed headings. Check
+before a release that Upgrade notes lists every manual step.
+
+Rules for an entry:
+
+- Write for someone who does not follow this repository. Use no ticket IDs and no commit SHAs, and
+  name a file only when the reader has to touch it. "Every install must re-enter its API keys"
+  helps a reader. "`apply_pipeline_settings` now writes an explicit subset" does not.
+- Say each thing once. When a change needs an action, describe the change under Added or Changed
+  and put the action under Upgrade notes.
+- A change a user would notice gets an entry: a changed default, a new flag, a fixed defect, a
+  removed capability. A refactor, a test or an internal rename gets none.
+- Inside a version section, write every link as an absolute URL on the documentation site. The
+  section becomes the body of a GitHub Release, where a relative link does not resolve. The site
+  drops a page's number prefix and its `.md`, so `docs/user-guide/07-upgrading.md#backups` is
+  `https://docs.tubematic.ai/user-guide/upgrading#backups`. Links in the page's introduction stay
+  relative.
+
+---
+
 ## Version numbers in the code
 
 The version lives in the `VERSION` file at the repository root. Every reader goes through

@@ -110,7 +110,7 @@ def extract(version: str, notes_path) -> str:
             extra = f" (nor `## v{base}`)" if base != wanted else ""
             raise ReleaseNotesError(
                 f"{path} has no `## v{wanted}` section{extra}. Add one before "
-                f"releasing {wanted} -- see the page's own 'How to write an entry'."
+                f"releasing {wanted} -- see 'Writing release notes' in docs/developer/18-releases.md."
             )
 
     # Runs to the next version heading, or a horizontal rule, or EOF.

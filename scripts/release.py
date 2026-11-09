@@ -42,13 +42,13 @@ from tubematic_core.version import release_line as core_release_line  # noqa: E4
 def _release_notes_skeleton(version: str) -> str:
     return (
         f"## v{version}\n\n"
+        "### Upgrade notes\n"
+        "- \n\n"
         "### Added\n"
         "- \n\n"
         "### Changed\n"
         "- \n\n"
         "### Fixed\n"
-        "- \n\n"
-        "### Upgrade notes\n"
         "- \n"
     )
 
