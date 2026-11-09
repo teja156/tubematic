@@ -3,7 +3,7 @@
 Covers `tubematic_core/` — the one Python package shared by every Tubematic process: schema
 migrations (`db.py`), structured JSONL logging (`logging.py`), the canonical version string
 (`version.py`), the spend ledger with its model prices (`usage.py`, `prices.py`), what each
-ElevenLabs model can speak (`voice_models.py`), which YouTube URLs mining accepts (`youtube.py`),
+ElevenLabs model can speak (`voice_models.py`), which on-screen mascot a video may use and whether its cue track is placeable (`mascots.py`), which YouTube URLs mining accepts (`youtube.py`),
 and the rules for ids that become paths and where a video's files live (`ids.py`, `jobfiles.py`).
 See [Database — Migrations](../03-database.md#migrations) and
 [Architecture — Duplication](../01-architecture.md#duplication-is-intentional) for what each module
@@ -161,3 +161,30 @@ shape of "a shell script sets a variable and forgets to fill it in" — which
 lookup rule is "the `VERSION` file beside the package directory," verified directly in
 `test_version_file_sits_beside_the_package`, because that is the same relationship the Dockerfile's
 `COPY VERSION /app/lib/VERSION` has to preserve for the in-container lookup to agree with the host.
+
+**`test_mascots_migration.py` guards that adding mascots changes nothing for an existing install.**
+Existing projects and videos must come out of the migration with no mascot, the only new row is the
+shipped Tubi (ready, version 1, with an empty `code` because builtin code lives in a versioned repo
+file, never in a shipped migration), and a second run must not overwrite anything.
+
+**`test_builtin_tubi.py` guards the files that seeded row points at.** Every install's default mascot
+is read from `renderer/remotion/mascot-builtin/tubi/v1/`, so the test migrates a real database and
+checks that `code_for` returns that directory's `mascot.js` for the approved version, that the three
+model sheets are there as JPEGs (the form the API serves a builtin's sheets in), and that the code
+registers `window.MASCOT`. It also checks that every view's face record carries `bx`: the engine's
+`blush()` reads it, and a face without it turns every blush into NaN with no error. Version 1 is
+immutable; a changed drawing ships as a new version directory with a migration.
+
+**`test_mascots.py` guards the rules every process shares.** `cue_errors` is the only thing between
+the per-video agent's cue track and a mascot standing on the captions in a finished video, so the
+tests use the engine's real box (the 560x640 canvas with the feet 50 above its bottom) and pin: a
+walk is checked along its path (two positions that are each clear but on opposite sides of the
+caption band are refused), walking on or off the screen is allowed at a valid height, and a hidden
+caption band frees the space. The one second in view must be **one unbroken stretch**: two 15-frame stops between walks add up to 30 frames and are still refused. `holds_pickable_sql`, the condition the approval `UPDATE`s repeat, is pinned to agree with `pickable` (no mascot, approved, archived, never approved, missing), and `cartoon_mascot_clash_sql` to name exactly a Cartoon 3D style or resolved renderer with a non-empty mascot, in column and bound form. `EMOTIONS` is checked against the engine's `sheet.js` so the two lists
+cannot drift. `resolve_default` pins `none` versus inherit, and that an archived or unapproved
+default becomes "no mascot" rather than silently falling back. The path helpers refuse bad ids and
+symlinks below the root. `boxes_at_frames` (where the text-layout audit asks whether the mascot stands over measured text) is pinned for off-screen frames, rest frames, a walk in progress and the cue scale.
+
+The caption band is modelled with a line count derived from `maxWords` and `fontSize` (a deliberately wide estimate of a caption word against the 960 px text width), so large, many-word captions that wrap to three or four lines still keep the mascot off them; the default captions keep the two-line band. One bad walk is reported once per cue and kind of violation, not once per frame, so a single mistake cannot flood the agent with the same message.
+
+**`test_mascot_driver_agreement.py` runs the real driver.** `mascots.py` is a Python port of the engine's walk model so a track can be validated without a browser, and text pins on its constants cannot catch a change in the logic. The test runs `renderer/remotion/mascot-tools/driver-agreement.mjs`, which loads the engine's `driver.js` in a bare Node vm context, on fixed tracks (walk-on and off, a mid-walk retarget, a scale change, off then on from the other side) and compares where the feet stand at many frames with `boxes_at_frames`, within a pixel. It skips with a stated reason when `node` is not on PATH.

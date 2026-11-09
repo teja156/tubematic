@@ -46,6 +46,7 @@ import threading
 from pathlib import Path
 
 from tubematic_core import jobfiles as tjobs
+from tubematic_core import mascots as tmascots
 
 # ── Tunables ────────────────────────────────────────────────────────────────
 
@@ -364,6 +365,25 @@ def find_safe_zone_violations(elements: list[dict]) -> list[dict]:
 
 # ── Reporting ──────────────────────────────────────────────────────────────
 
+def mascot_overlaps(elements: list[dict], boxes: list[tuple]) -> list[dict]:
+    """Measured text that sits under the mascot's box at one frame.
+
+    `boxes` are (x0, y0, x1, y1) rectangles (tubematic_core.mascots.box_at); an
+    empty list means the mascot is off screen. The box is the engine's whole
+    canvas, emote headroom included, so a hit is "may be covered", which is why
+    it only ever becomes a warning. Returns {element, box, fraction} with the
+    fraction of the smaller rectangle that is covered, as for text-on-text.
+    """
+    found: list[dict] = []
+    for element in (e for e in elements if is_measurable(e)):
+        for box in boxes:
+            rect = {"x": box[0], "y": box[1], "width": box[2] - box[0], "height": box[3] - box[1]}
+            fraction = overlap_fraction(element, rect)
+            if fraction >= OVERLAP_MIN_FRACTION:
+                found.append({"element": element, "box": box, "fraction": fraction})
+    return found
+
+
 def _excerpt(element: dict) -> str:
     text = (element.get("text") or "").strip()
     return text[:_TEXT_EXCERPT] if len(text) <= _TEXT_EXCERPT else text[:_TEXT_EXCERPT] + "…"
@@ -373,7 +393,7 @@ def _pair_key(scene: int, a: dict, b: dict) -> tuple:
     return (scene, *sorted((_excerpt(a), _excerpt(b))))
 
 
-def summarise(driver_output: dict, scene_config: dict) -> list[str]:
+def summarise(driver_output: dict, scene_config: dict, mascot_cues: list | None = None) -> list[str]:
     """Collapse per-frame measurements into one warning per colliding pair.
 
     A collision normally shows up at every sampled frame of a scene; reporting
@@ -382,6 +402,7 @@ def summarise(driver_output: dict, scene_config: dict) -> list[str]:
     scenes = scene_config.get("scenes") or []
     worst: dict[tuple, dict] = {}
     zones: dict[tuple, dict] = {}
+    under_mascot: dict[tuple, dict] = {}
 
     for pass_result in driver_output.get("passes") or []:
         scene_index = pass_result.get("scene")
@@ -392,6 +413,12 @@ def summarise(driver_output: dict, scene_config: dict) -> list[str]:
                 key = _pair_key(scene_index, hit["a"], hit["b"])
                 if key not in worst or hit["fraction"] > worst[key]["fraction"]:
                     worst[key] = {**hit, "scene": scene_index, "frame": frame}
+            if mascot_cues:
+                box = tmascots.boxes_at_frames(mascot_cues, [frame]).get(frame)
+                for hit in mascot_overlaps(elements, [box] if box else []):
+                    key = (scene_index, _excerpt(hit["element"]))
+                    if key not in under_mascot or hit["fraction"] > under_mascot[key]["fraction"]:
+                        under_mascot[key] = {**hit, "scene": scene_index, "frame": frame}
             for hit in find_safe_zone_violations(elements):
                 key = (scene_index, _excerpt(hit["element"]), tuple(hit["breaches"]))
                 if key not in zones:
@@ -408,6 +435,18 @@ def summarise(driver_output: dict, scene_config: dict) -> list[str]:
             f"'{_excerpt(b)}' "
             f"[{b['x']:.0f},{b['y']:.0f} {b['width']:.0f}x{b['height']:.0f}] "
             f"by {hit['fraction'] * 100:.0f}% of the smaller box"
+        )
+
+    for hit in sorted(under_mascot.values(), key=lambda h: -h["fraction"]):
+        scene = scenes[hit["scene"]] if hit["scene"] < len(scenes) else {}
+        element, box = hit["element"], hit["box"]
+        warnings.append(
+            f"Mascot over text in scene {hit['scene']} ({_scene_label(scene)}) at frame "
+            f"{hit['frame']}: '{_excerpt(element)}' "
+            f"[{element['x']:.0f},{element['y']:.0f} {element['width']:.0f}x{element['height']:.0f}] "
+            f"sits under the mascot's box [{box[0]:.0f},{box[1]:.0f} to {box[2]:.0f},{box[3]:.0f}] "
+            f"({hit['fraction'] * 100:.0f}% of it). The box includes the headroom emotes float into, so the "
+            f"character may not cover the text; if it does, move the mascot (a cue's x or y) or the text"
         )
 
     for hit in zones.values():
@@ -549,7 +588,7 @@ def _run_driver(remotion_dir: Path, config: dict) -> dict:
 
 def audit_text_layout(video_id: str, scene_config: dict, scene_config_path: Path,
                       timeline_path: Path, audio_path: Path,
-                      remotion_dir: Path) -> list[str]:
+                      remotion_dir: Path, mascot_cues: list | None = None) -> list[str]:
     """Audit one video's text layout. Returns advisory warning lines.
 
     FAILS OPEN on every failure mode — a broken audit reports that it could not
@@ -576,7 +615,7 @@ def audit_text_layout(video_id: str, scene_config: dict, scene_config_path: Path
             "passes": passes,
             "browserExecutable": os.getenv("PUPPETEER_EXECUTABLE_PATH") or None,
         })
-        return notes + summarise(output, scene_config)
+        return notes + summarise(output, scene_config, mascot_cues)
     except Exception as e:
         return [f"Text-layout audit could not run ({e}) — text layout was not checked"]
     finally:

@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { Agent, GpuStatus, LogRecord, LogsResponse, ScriptProfile, Video, VideoPublication, Voice } from "@/lib/types";
+import type { Agent, GpuStatus, LogRecord, Mascot, LogsResponse, ScriptProfile, Video, VideoPublication, Voice } from "@/lib/types";
 import { isScored, videoStreamUrl } from "@/lib/utils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReviseDialog } from "@/components/ReviseDialog";
@@ -30,6 +30,8 @@ import {
   pickedAgent, resolvedModel, topicApprovalPayload,
 } from "@/lib/agents";
 import { styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { MascotPicker } from "@/components/MascotPicker";
+import { approvalMascot, showMascotPicker } from "@/lib/mascots";
 
 interface VideoModalProps {
   video: Video | null;
@@ -70,6 +72,8 @@ interface VideoModalProps {
   /** GET /render/gpu, or null while unloaded: Cartoon 3D is disabled in the
    *  style picker unless the renderer's GPU is working. Null = available. */
   gpu?: GpuStatus | null;
+  /** GET /mascots, for the TOPIC_PROPOSED Mascot picker. */
+  mascots?: Mascot[];
   onClose: () => void;
   onAction: (videoId: string, action: string, video: Video, extra?: Record<string, unknown>) => void;
 }
@@ -328,7 +332,7 @@ const reviewToggleStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-export function VideoModal({ video: seed, initialTab, openRevise = false, initialPicks, voices = [], defaultVoiceId = "", scriptProfiles = [], agents, publishingEnabled = false, illustratedAvailable = true, gpu = null, onClose, onAction }: VideoModalProps) {
+export function VideoModal({ video: seed, initialTab, openRevise = false, initialPicks, voices = [], defaultVoiceId = "", scriptProfiles = [], agents, publishingEnabled = false, illustratedAvailable = true, gpu = null, mascots = [], onClose, onAction }: VideoModalProps) {
   const { timeZone, label: tzLabel } = useTimeZone();
   const [video, setVideo] = useState<Video | null>(null);
   const [reviseOpen, setReviseOpen] = useState(false);
@@ -341,6 +345,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const [selectedProfile, setSelectedProfile] = useState("");
   // Frozen after TOPIC_PROPOSED alongside the profile and the model.
   const [selectedStyle, setSelectedStyle] = useState<Video["visual_style"]>("auto");
+  const [selectedMascot, setSelectedMascot] = useState("");
   // A dropdown of the video's own agent's models (the API rejects anything
   // else). null = untouched, so the shown value tracks initialModel() until
   // the human picks — including when the agent list arrives after first paint.
@@ -407,6 +412,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     setPickedVoice(null);
     setSelectedProfile(seed.script_profile_id ?? "");
     setSelectedStyle(seed.visual_style ?? "auto");
+    setSelectedMascot(seed.mascot_id ?? "");
     // Seeded from the inbox row's picks when its Revise opened this modal,
     // otherwise cleared: this modal stays mounted between videos, and a pick
     // left over from the last one would be sent for this one.
@@ -1192,8 +1198,10 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                         <select
                           data-testid="video-modal-style-select"
                           value={selectedStyle}
-                          onChange={(e) =>
-                            setSelectedStyle(e.target.value as Video["visual_style"])}
+                          onChange={(e) => {
+                            setSelectedStyle(e.target.value as Video["visual_style"]);
+                            if (e.target.value === "cartoon_3d") setSelectedMascot("");
+                          }}
                           title="Visual register for this video"
                           className="w-full rounded border border-[#2a2a42] bg-[#131325] px-3 py-2 text-sm text-[#f0f0ff]"
                         >
@@ -1202,6 +1210,20 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           ))}
                         </select>
                       </PickerField>
+                      {showMascotPicker(mascots, video.mascot_id ?? "") && (
+                        <PickerField label="Mascot (experimental)">
+                          <MascotPicker
+                            testId="video-modal-mascot-select"
+                            mascots={mascots}
+                            gpu={gpu}
+                            value={selectedMascot}
+                            locked={selectedStyle === "cartoon_3d"}
+                            onChange={setSelectedMascot}
+                            maxWidth={9999}
+                            style={{ width: "100%", borderRadius: 4, padding: "8px 12px", fontSize: 14, fontFamily: "inherit", borderColor: "#2a2a42", background: "#131325", color: "#f0f0ff" }}
+                          />
+                        </PickerField>
+                      )}
                       {(readyProfiles.length > 0 || selectedProfile !== "") && (
                         <PickerField label="Script profile">
                           <select
@@ -1222,7 +1244,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                       )}
                       {voicePickers}
                       {agentPickers}
-                      <ActionBtn fullWidth variant="primary" onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
+                      <ActionBtn fullWidth variant="primary" onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
                         Approve Topic
                       </ActionBtn>
                       <ActionBtn fullWidth variant="danger" onClick={() => { onAction(video.id, "reject-topic", video); onClose(); }}>

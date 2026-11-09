@@ -26,6 +26,7 @@ export type VisualStyle = "auto" | "motion_graphics" | "stick" | "illustrated" |
 export type ResolvedRenderer = "" | "dom" | "cartoon_3d";
 export type CommentAuthor = "human" | "agent";
 export type ScriptProfileStatus = "PENDING" | "GENERATING" | "READY" | "FAILED";
+export type MascotStatus = "PENDING" | "BUILDING" | "IN_REVIEW" | "READY" | "FAILED";
 
 export interface ScriptSegment {
   id: string;
@@ -94,6 +95,9 @@ export interface Video {
    *  defers the choice to the agent. Optional for the same reason as tts_text:
    *  older object literals stay valid. */
   visual_style?: VisualStyle;
+  /** The mascot chosen at the topic checkpoint, frozen after it; '' means none.
+   *  Optional for the same reason as tts_text. */
+  mascot_id?: string;
   /** What "auto" settled on, written once by the agent at scene-config time.
    *  '' until it has. Meaningless unless visual_style is "auto". */
   resolved_visual_style?: string;
@@ -169,6 +173,9 @@ export interface Project {
    *  default_visual_style; '' means none. Changing it never touches videos
    *  already filed. */
   default_script_profile_id?: string;
+  /** The mascot new videos here start with: '' = the install default,
+   *  "none" = no mascot even if the install has a default. */
+  default_mascot_id?: string;
   /** How many topics the domain may ever hold, 25–750 (100 by default). */
   topic_cap?: number;
   /** Every video ever filed into the domain, archived and rejected included —
@@ -195,6 +202,43 @@ export interface ScriptProfile {
    *  since the markdown is a whole style guide per row. */
   markdown?: string;
   corpus_summary?: string;
+}
+
+/** One sheet image URL per sheet, API-relative ("/mascots/..."); map with
+ *  mascotSheetUrl before use as an <img src>. */
+export type MascotSheets = Partial<Record<"turn" | "feels" | "act", string>>;
+
+export interface MascotVersion {
+  version: number;
+  change_request: string;
+  created_at: string;
+  approved_at: string;
+  has_code: boolean;
+}
+
+/** GET /mascots (list) and GET /mascots/<id> (adds versions and change_request). */
+export interface Mascot {
+  id: string;
+  name: string;
+  description: string;
+  based_on: string;
+  status: MascotStatus;
+  approved_version: number;
+  agent_id: string;
+  agent_model: string;
+  agent_effort: string;
+  attempt_count: number;
+  error: string;
+  created_at: string;
+  updated_at: string;
+  builtin: boolean;
+  archived: boolean;
+  /** Approved and not archived: the only mascots a picker may offer. */
+  pickable: boolean;
+  draft_version: number | null;
+  sheets: { approved: MascotSheets | null; draft: MascotSheets | null };
+  versions?: MascotVersion[];
+  change_request?: string;
 }
 
 export type Stats = Partial<Record<VideoStatus, number>>;
@@ -228,6 +272,9 @@ export interface Settings {
   /** Burn the "Made with tubematic.ai" mark into every render. Human-only:
    *  nothing in scene-config.json can switch it. */
   watermark_enabled: boolean;
+  /** The mascot new videos start with unless their domain says otherwise;
+   *  '' = none. Optional: an older API does not send it. */
+  default_mascot_id?: string;
   /** Pipeline sessions the cron supervisor runs at once (TMDEV-129); research
    *  and script profiles run beside them, outside this cap. 1..10. */
   max_concurrent_agent_sessions: number;

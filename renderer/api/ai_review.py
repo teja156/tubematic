@@ -127,6 +127,17 @@ defect or a suggestion — not its presence, its position, its size, that it nev
 that scene content is visible through it or passes beneath it. It is not on-screen text to be
 judged for clutter, overlap or the safe zone. A video without the mark is likewise not a defect.
 
+Mascot: a video may include a small watercolour character, drawn as a separate overlay on top of the
+scenes and beneath the captions and the watermark. It walks on and off the frame and reacts to the
+narration with emotions and emotes. THAT IS INTENTIONAL AND IS CORRECT. The mascot never speaks and
+has no lip sync: a mouth that does not move with the words is correct, never a lip-sync or sync_drift
+defect. Do not report the mascot as a defect or a suggestion — not its presence, its position, its
+size, its art style, that it walks on or off, its emotions or emotes, or that the captions and the
+watermark are drawn over it. Report it ONLY when it covers something the viewer needs (on-screen
+text, or the subject the narration is about), as an animation_defect naming what it hides, or, as a
+suggestion, when its reaction clearly contradicts the narration (for example delighted during a
+tragedy). A video without a mascot is likewise not a defect.
+
 What IS worth reporting is the opposite: a scene that ALSO writes out what the narration is saying
 — a headline, a title card, a lower third, a caption under a picture, a pull-quote of the spoken
 line — is now redundant with the captions and clutters the frame. Report that under "suggestions"

@@ -7,7 +7,7 @@ The dashboard is the human-facing control plane for the Tubematic automated YouT
 ## What it does
 
 The main pages, each scoped to a distinct operator workflow. The top bar also links to the Archive,
-Projects, Script Profiles, Socials, Analytics, Logs and Settings pages; the full page list is in
+Projects, Script Profiles and Mascots (one **Profiles** tab), Socials, Analytics, Logs and Settings pages; the full page list is in
 [docs/developer/15-dashboard.md](../docs/developer/15-dashboard.md#pages).
 
 ### Pipeline (`/`)

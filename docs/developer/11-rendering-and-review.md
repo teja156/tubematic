@@ -262,7 +262,8 @@ while the last probe passed (`_render_on_gpu`); otherwise it takes the CPU path.
   and every container start (which is when a GPU change applies) leaves a fresh answer.
 - **It runs again after a GPU render fails or times out.** If the GPU is what broke, the next render
   falls back to the CPU instead of failing the same way. The failed render itself is routed as
-  before.
+  before, except for a GPU-only video (Cartoon 3D, or one with a mascot): its re-test runs first and,
+  if it fails, the video goes to `FAILED` (see [Videos that render on the GPU only](#videos-that-render-on-the-gpu-only)).
 - **It runs on request**: `POST /render/gpu/test` stamps `gpu_probe_requested_at`, and the
   `_sweep_gpu_probe` pass runs a probe when that stamp is newer than the last probe's start. Both
   stamps carry microseconds, because they are compared as strings. Only the renderer's container can
@@ -335,6 +336,34 @@ source tree (`src/scenes/generated/`, the agents' per-video TypeScript) is part 
 every still the server compares a stamp of that tree (every file's path, size and mtime) with the one its
 bundle was made from and re-bundles when it differs: an edit to a video's code is seen by its next still
 (about twenty seconds, once), an unchanged tree costs a directory walk.
+
+## Videos that render on the GPU only
+
+A Cartoon 3D video and a video with a mascot are both **GPU-only by policy**, not because the CPU path
+cannot draw them: a mascot adds about a tenth of a second of drawing to every frame, which on software
+GL would turn a 90-second Short into hours. The choice is refused where it is made (the dashboard, the
+API and the MCP server) unless the GPU test passed, so the renderer's check is for a video approved
+*before* its GPU stopped working. If the video needs the GPU and `_render_on_gpu()` is false the
+renderer runs the GPU test first when the result is still unknown, and otherwise moves the video
+**straight to `FAILED`** with a comment naming the live GPU status. It bypasses `max_render_retries`:
+a requeue would fail the same way, and sending it to `REVISION_REQUESTED` would hand it to an agent
+that cannot repair a GPU. The video is created again once the GPU works.
+
+The same holds when the GPU stops working **during** such a render. When a GPU-only render fails,
+stalls or times out, the renderer re-tests the GPU *before* it routes the failure
+(`render_agent.py::_after_render_failure`). If the GPU no longer passes, the video goes straight to `FAILED`
+with the same comment plus the render's error, again without spending a retry or an agent session. If
+it still passes, the failure is the video's own and takes the usual path. An ordinary video keeps the
+older order (route the failure, then re-test), since its retry can fall back to the CPU.
+
+A mascot video is rendered with the version pinned in `videos.mascot_version`, never the mascot's
+current approved version. The renderer reads that version's code (`tubematic_core/mascots.py::code_for`),
+stages it as `public/<video_id>/mascot.js` and passes `mascotPath` as a render prop (see
+[the Remotion project](09-remotion-project.md#the-mascot-layer)). A version of `0` (never pinned) or a
+version with no code fails the video the same way, with a comment saying the drawing code cannot be
+read. A Cartoon 3D video that also holds a mascot (the API and the MCP server refuse the pair, so only
+a row written some other way can) goes to `FAILED` the same way, with `MASCOT_NOT_ON_CARTOON_3D` in its
+comment, rather than rendering without the mascot a human chose.
 
 ## Segmented Cartoon 3D renders
 
@@ -452,6 +481,17 @@ position and size, and scene content visible through or beneath it, are not to b
 neither is its absence on a video rendered with the mark switched off. This is a negative control
 of the same kind as the captions clause. The mark is on every video, so without the paragraph every
 review returns a finding and every video loops.
+
+The prompt likewise states that a video's **mascot** is intentional: a small watercolour character drawn
+over the picture, reacting to the narration with emotions and emotes, never speaking. Its presence,
+position, size, art style, walking on and off, emotions and emotes, and the captions and watermark
+being drawn over it are not to be reported, and neither is a mouth that does not move with the words
+(it has no lip sync, by design) or a video without a mascot. Only a mascot that covers something the
+viewer needs (on-screen text, or the subject being narrated), or whose reaction clearly contradicts
+the narration (a delighted mascot during a tragedy), is reported. This is a negative control of
+the same kind as the captions and watermark clauses: a reviewer that read a mascot as stray artwork
+would return a finding on every mascot video, and any finding routes the video to a revision round,
+so the video would loop.
 
 An unknown canvas produces **no** style contract at all rather than a guessed one, because a wrong
 contract tells the reviewer to accept defects the video has no licence to contain.
@@ -580,6 +620,14 @@ These are the reason the probe looks the way it does.
 3. **Remotion's stdout is not a usable data channel.** It forwards every browser console line to its
    own stdout, and the probe communicates *through* console logs. The driver writes its result to a
    file; an earlier version printed JSON to stdout and it could never be parsed back out.
+
+### Text under a mascot
+
+For a video with a mascot, the audit also computes the mascot's box from the cue track
+(`tubematic_core/mascots.py::boxes_at_frames`) at the sampled frames and reports measured text that
+sits beneath it (`text_audit.py::mascot_overlaps`), as the warning "Mascot over text". The box is the
+engine's whole canvas, emote headroom included, so the warning says the text *may* be covered. The
+audit never boots the mascot itself, which is why the cue track, not a rendered frame, is the source.
 
 ### It is advisory, on purpose
 

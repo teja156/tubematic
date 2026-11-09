@@ -3,10 +3,13 @@
 How to let the renderer use an NVIDIA graphics card, how to tell whether it really is, and what
 happens when it cannot.
 
-**This is optional for every style but one.** Without a GPU every video renders on the CPU, exactly
-as before, and nothing on this page needs doing — except that the **Cartoon 3D (experimental)** visual style cannot
-be chosen: it draws a 3D world for every frame, which takes about an hour per Short on a CPU, so
-it is offered only while the renderer's GPU is working. **Only NVIDIA GPUs are supported.** Intel
+**This is optional for every feature but two.** Without a GPU every video renders on the CPU, exactly
+as before, and nothing on this page needs doing — except that the **Cartoon 3D (experimental)** visual style and **mascots (experimental)** cannot
+be chosen. Cartoon 3D draws a 3D world for every frame, which takes about an hour per Short on a CPU,
+and a mascot's drawing, a tenth of a second a frame on a GPU, is about thirty times slower on a CPU, which adds hours to a Short.
+Both are offered only while the renderer's GPU is working. A video that has already been approved
+with either, whose GPU then stops working, is not rendered on the CPU: it fails with a comment saying
+why, and is created again once the GPU is back. **Only NVIDIA GPUs are supported.** Intel
 and AMD GPUs, integrated or not, are never used.
 
 ---

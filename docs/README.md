@@ -56,7 +56,7 @@ For contributors and anyone integrating with or extending Tubematic.
 | **[10 · Scene Authoring](developer/10-scene-authoring.md)** | How a scene gets written — the two visual registers, the PHOTO / HYBRID / DIAGRAM / STICK taxonomy, cadence, the revision path, adding a component |
 | **[11 · Rendering and Review](developer/11-rendering-and-review.md)** | The renderer: rendering, the GPU test, the Cartoon 3D stills server, timeouts and retries, Gemini video review, the text-layout audit |
 | **[12 · The Worker](developer/12-the-worker.md)** | The always-on loop that settles posts, runs Auto Pilot and the timed sweeps — every pass, its order and how often it runs |
-| **[13 · The Poller](developer/13-the-poller.md)** | `poll.py`, the cron-started supervisor that runs agent sessions — the loop, the three lanes, one stage per session, timeouts and orphans |
+| **[13 · The Poller](developer/13-the-poller.md)** | `poll.py`, the cron-started supervisor that runs agent sessions — the loop, the four lanes, one stage per session, timeouts and orphans |
 | **[14 · Publishing internals](developer/14-publishing.md)** | The postforme client, schema, routes, the worker's publishing passes, and the design decisions behind them |
 | **[15 · Dashboard internals](developer/15-dashboard.md)** | The Next.js app — stack, the request guard, the proxy and stream routes, components, the action model |
 | **[16 · Infrastructure](developer/16-infrastructure.md)** | Compose services, authentication, volumes, images, cron, and day-to-day operating commands |

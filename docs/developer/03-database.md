@@ -54,6 +54,8 @@ erDiagram
     script_profiles ||--o{ script_profile_transcripts : "built from"
     script_profiles ||--o{ videos : "styles"
     agents     ||--o{ videos : "runs"
+    mascots    ||--o{ mascot_versions : "has"
+    mascots    ||--o{ videos : "appears in"
     usage_events ||--o{ usage_event_videos : "was for"
 
     agents {
@@ -100,6 +102,8 @@ erDiagram
         TEXT    visual_style
         TEXT    resolved_visual_style
         TEXT    resolved_renderer
+        TEXT    mascot_id
+        INTEGER mascot_version
         TEXT    agent_model
         TEXT    agent_effort
         TEXT    agent_id
@@ -240,6 +244,8 @@ The central table. One row per video, from proposed topic to published file.
 | `visual_style` | TEXT NOT NULL | `auto` | Which vocabularies the video may draw from: `auto`, `motion_graphics`, `stick`, `illustrated` or `cartoon_3d`. The first four are **permission sets**, not looks; `cartoon_3d` is a different renderer (a painted 3D world written as code for the video) and needs a working GPU. Chosen at the topic checkpoint and frozen there — see [Frozen choices](02-pipeline.md#frozen-choices). `auto` defers the choice to the agent |
 | `resolved_visual_style` | TEXT NOT NULL | `''` | Which **canvas** `auto` settled on (`dark` or `light`), written **once** by the agent at scene-config time. It stores a canvas rather than a register name because the canvas is the only thing `auto` must fix for the life of the video — everything else stays free per beat. `''` until it has. Meaningless unless `visual_style` is `auto`. Write-once is what makes a revision round render at the register the video already uses, without anything on the revision path knowing this column exists |
 | `resolved_renderer` | TEXT NOT NULL | `''` | Which **renderer** `auto` settled on: `dom` (the scene components) or `cartoon_3d` (one painted 3D world written as code for the video). Written **once** by the agent before any scene is authored, and never over HTTP; `''` until it has. A different axis from its neighbour, which stores a canvas: the renderer is the one choice a revision round must never flip, because flipping it discards every scene. Every video that predates the style is `dom`, backfilled by its migration |
+| `mascot_id` | TEXT NOT NULL | `''` | The [mascot](#mascots-and-mascot_versions) this video shows. `''` means none, and every video starts there: it is copied from the domain's, then the install's, default mascot when the video is created, only on an install whose renderer GPU test passes and never for Cartoon 3D. Settable only while the video is `TOPIC_PROPOSED`, like `visual_style` |
+| `mascot_version` | INTEGER NOT NULL | `0` | The mascot version the video was authored against, pinned by the **first** `write_scene_config` of a video that has a mascot and kept by every revision. `0` means not pinned yet. The renderer renders this version, never the mascot's current one, so approving a changed mascot cannot alter a video already in flight |
 | `agent_model` | TEXT | `''` | This video's model. Empty means its agent's default, `models[0]`. A non-empty value must be one of that agent's models |
 | `agent_effort` | TEXT NOT NULL | `''` | How hard the agent thinks on this video: `low`, `medium`, `high`, `xhigh` or `max`. Empty means its agent's own `effort`. Settable at any human checkpoint and frozen between them, like `agent_model` — see [Frozen choices](02-pipeline.md#frozen-choices). Unlike the model, any of the five is always *storable*: the levels are a fixed set rather than a per-install list. Whether a level is *usable* depends on the model the video runs under — some models accept fewer — which is resolved when the run happens, not here |
 | `agent_id` | TEXT | `NULL` | The [agent](#agents) this video runs under. Dealt at creation; a human may move it to another live agent at a checkpoint, and nothing else changes it — see [Frozen choices](02-pipeline.md#frozen-choices). Never written back to `NULL`, which means the default agent at dispatch time — rows from before agents existed, or created while none was installed. Deliberately not a declared foreign key; an id that does not resolve makes the poller skip the video rather than reroute it |
@@ -322,6 +328,7 @@ was sourced.
 | `default_visual_style` | TEXT NOT NULL | `''` | The register this domain's **curriculum** videos start in. `''` means the domain has no preference, which is not the same as `auto`: `auto` is a per-video instruction to the agent, this is the absence of a domain-level one. Videos filed here by trending, mining or manual ignore it — the register reads as a series identity, and curriculum is the one strategy that produces a series |
 | `default_voice_id` | TEXT NOT NULL | `''` | The voice every new video filed into this domain starts with, **whatever its strategy** — unlike `default_visual_style`, it is the domain's narrator, not a series identity. `''` means the install default. It is copied into `videos.voice_id` when a video is created, and skipped if the voice has left the roster, so changing it never reaches back to videos already filed. See [The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice) |
 | `default_script_profile_id` | TEXT NOT NULL | `''` | The [script profile](08-scripting-and-voice.md#script-profiles) this domain's **curriculum** videos start with, for the same series-identity reason as `default_visual_style`; other strategies ignore it. `''` means none. Copied into `videos.script_profile_id` when a curriculum video is created, and skipped if the profile is no longer `READY` or has been deleted — the approving `PATCH` would refuse it. Changing it never reaches back to videos already filed. Migration `0010` |
+| `default_mascot_id` | TEXT NOT NULL | `''` | The mascot new videos in this domain start with, whatever their strategy. `''` inherits the install's `default_mascot_id` setting, `none` means no mascot even when the install has a default. Copied into `videos.mascot_id` at creation; an archived or never-approved mascot reads as none |
 | `topic_cap` | INTEGER NOT NULL | `100` | How many topics the domain may ever hold, 25–750, checked by the API and the MCP server (SQLite can't add a `CHECK` to an existing table). Every video ever filed counts, archived and rejected included. At the cap the domain is **expired** and research files nothing more into it. Expired is derived on read, never stored; `GET /projects` and `list_projects` return it with the count as `expired` and `topic_count`. See [Topic cap](02-pipeline.md#topic-cap). Migration `0013`, which gave a domain already holding 100 or more topics `min(750, count + 100)` so that none expired on upgrade |
 | `created_at` | TEXT NOT NULL | | |
 
@@ -405,7 +412,7 @@ raises: bookkeeping must not fail a video, but a failure to record is always log
 | Column | Meaning |
 |---|---|
 | `service` / `model` | `gemini`, `openai`, `anthropic`, `elevenlabs`, … and the model id the call used |
-| `operation` | `voice`, `voice_preview`, `ai_review`, `mining`, `publish_metadata` (only on rows from before the agent wrote the publish metadata), `image`, `character`, `agent_pipeline`, `agent_research`, `agent_profile`, and `agent_unscoped` on rows from before the poller ran one video per session |
+| `operation` | `voice`, `voice_preview`, `ai_review`, `mining`, `publish_metadata` (only on rows from before the agent wrote the publish metadata), `image`, `character`, `agent_pipeline`, `agent_research`, `agent_profile`, `agent_mascot`, and `agent_unscoped` on rows from before the poller ran one video per session |
 | `units` | Normalised counts: `input`, `input_audio`, `input_image`, `output`, `reasoning`, `output_image`, `cache_read`, `cache_write`, `cache_write_1h` tokens, or ElevenLabs `credits` |
 | `raw_usage` | The provider's own usage object, verbatim — what makes re-pricing possible later |
 | `request_id` | ElevenLabs' `request-id` response header on voice and preview rows, for matching a row to the provider's own history. `NULL` elsewhere |
@@ -503,6 +510,45 @@ for the profile once the markdown is written.
 | `text` | TEXT NOT NULL | |
 | `created_at` | TEXT NOT NULL | |
 
+## `mascots` and `mascot_versions`
+
+A mascot is a small on-screen character whose drawing code an agent writes once and a human approves;
+videos then pick it. How one is built and reviewed is on [The agent layer](07-agent-layer.md); the cue
+track a video plays it with is on [Scene authoring](10-scene-authoring.md#mascots).
+
+| `mascots` | Type | Default |
+|---|---|---|
+| `id` | TEXT PK | A slug of 1-64 lowercase letters, digits, `-` or `_` (it names a directory) |
+| `name`, `description` | TEXT NOT NULL | `''` |
+| `builtin` | INTEGER NOT NULL | `0`. `1` for a mascot that ships in the repo |
+| `based_on` | TEXT NOT NULL | `''`. The mascot this one is a variation of |
+| `status` | TEXT NOT NULL | `PENDING` → `BUILDING` → `IN_REVIEW` → `READY` \| `FAILED` |
+| `approved_version` | INTEGER NOT NULL | `0`. The version a video may use; a mascot is *pickable* once it is above `0` and the row is not archived |
+| `agent_id`, `agent_model`, `agent_effort` | TEXT NOT NULL | `''`. The agent pinned to build it; empty means the default agent |
+| `attempt_count` | INTEGER NOT NULL | `0`. Builder sessions started for the current request; capped at `MAX_MASCOT_ATTEMPTS` |
+| `sheet_renders` | INTEGER NOT NULL | `0`. Sheet renders used in the current attempt; capped at `MAX_SHEET_RENDERS_PER_ATTEMPT` |
+| `error` | TEXT NOT NULL | `''` |
+| `archived` | INTEGER NOT NULL | `0`. Archiving is the only removal, a built-in's too |
+| `created_at` / `updated_at` | TEXT NOT NULL | |
+
+| `mascot_versions` | Type | Notes |
+|---|---|---|
+| `mascot_id`, `version` | PK | Versions are numbered from 1 and never edited once approved |
+| `code` | TEXT NOT NULL | The p5.js drawing code. **`''` for a built-in**, whose code is a repo file |
+| `change_request` | TEXT NOT NULL | What a human asked for in this version; `''` for the first |
+| `created_at`, `approved_at` | TEXT NOT NULL | The draft is the highest version with `approved_at = ''` |
+
+**A built-in's code is not in the database, on purpose.** Migration `0018` seeds the row for the
+shipped mascot, Tubi, but its drawing code lives in `renderer/remotion/mascot-builtin/<id>/v<N>/`
+(`mascot.js` and three model-sheet images), and `tubematic_core/mascots.py::code_for` reads the file
+for a built-in and `mascot_versions.code` for any other. Each version directory is immutable, so a
+better Tubi ships as `v2` beside `v1` plus a new migration that raises `approved_version`; a database
+migration that copied code would have to be edited whenever the drawing changed, and a shipped
+migration may never be edited. Videos pinned to `v1` keep rendering with `v1`.
+
+The rendered model sheets of a non-built-in mascot are files, not rows: `<data root>/data/mascots/<id>/v<N>/<turn|feels|act>.png`,
+beside the database file.
+
 ---
 
 ## Migrations
@@ -550,6 +596,13 @@ migrates first — normally `tubematic-api` at start, so `docker compose logs tu
 it — and the pre-migration backup keeps the list as it was. A value that is not a JSON list is
 replaced by `[]`, its old value logged the same way. Like `0006`, it carries its own copy of the
 URL rule rather than importing `tubematic_core/youtube.py`.
+
+`0018_mascots.sql` is plain SQL and additive: the two mascot tables, `projects.default_mascot_id`,
+`videos.mascot_id` and `videos.mascot_version` (all defaulting to "none"), and the Tubi rows. Nothing
+about an existing project or video changes by applying it, and the feature stays off until someone
+picks a mascot. The Tubi insert uses literal values only, because a shipped migration must do the same
+thing forever. It is one-way in the usual sense: rolling back to a release that predates it needs the
+automatic pre-migration backup restored.
 
 Baked into `0001` are several one-time fixups worth knowing about, because they explain rows an old
 database might still be missing: the `VIDEO_REVISION_REQUESTED → REVISION_REQUESTED`,

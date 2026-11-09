@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ScriptProfile, ScriptProfileStatus } from "@/lib/types";
+import { ProfilesNav } from "@/components/ProfilesNav";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { formatDate } from "@/lib/datetime";
@@ -94,6 +95,7 @@ export default function ScriptProfilesPage() {
 
   return (
     <>
+      <ProfilesNav />
       <SectionLabel
         label="Script Profiles"
         count={`${profiles.length} profile${profiles.length !== 1 ? "s" : ""}`}

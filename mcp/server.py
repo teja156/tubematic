@@ -47,7 +47,6 @@ import html
 from fastmcp import FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
 
-import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
 from fastmcp.server.middleware import Middleware
 from starlette.responses import JSONResponse
 
@@ -71,6 +70,7 @@ try:
     from tubematic_core import db as tdb
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
+    from tubematic_core import mascots as tmascots
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
     from tubematic_core import youtube as tyoutube
@@ -80,9 +80,16 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
     from tubematic_core import db as tdb
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
+    from tubematic_core import mascots as tmascots
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
     from tubematic_core import youtube as tyoutube
+
+# Sibling modules, imported only after the guard above: cartoon imports
+# tubematic_core itself, so importing it first broke the mcp/-only sys.path
+# that vqa/stage_script.py uses.
+import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
+import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
 JOBS_DIR     = Path(os.getenv("TUBEMATIC_JOBS_DIR", str(DATA_ROOT / "jobs")))
@@ -371,7 +378,7 @@ DEFAULT_AGENT_EFFORT = "high"
 # Keep in sync: renderer/api/pipeline.py's ACTIONABLE_STATUSES,
 # TOPIC_ONLY_FIELDS and AGENT_CHECKPOINT_FIELDS. Pinned by a cross-copy test.
 HUMAN_CHECKPOINT_STATUSES = ("TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY")
-TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style")
+TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id")
 AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
 
 # ── Subtitles (TMDEV-101) ────────────────────────────────────────────────────
@@ -1128,6 +1135,18 @@ def _cartoon3d_gpu_error(style: str) -> str:
     return cartoon_3d_gpu_error(style, _gpu_probe_status())
 
 
+def _mascot_pick_error(con, mascot_id) -> str:
+    """Why `mascot_id` cannot be a video's or a domain's mascot, or "". Keep in
+    sync: renderer/api/pipeline.py's _mascot_pick_error (the wording differs only
+    in where a human looks for the list)."""
+    row = con.execute("SELECT approved_version, archived FROM mascots WHERE id = ?",
+                      (mascot_id,)).fetchone()
+    if row is None or not tmascots.pickable(row):
+        return (f"mascot_id {mascot_id!r} is not a mascot that can be chosen: it must exist, "
+                "be approved and not be archived. Mascots are chosen on the dashboard's Mascots page.")
+    return ""
+
+
 def _openai_key() -> str:
     return _get_setting("openai_api_key", "") or os.getenv("OPENAI_API_KEY", "")
 
@@ -1331,10 +1350,20 @@ def get_video(video_id: str) -> dict:
     here before resolving the renderer to cartoon_3d; when it is false, author
     the video with the scene components and say in the handback that a world
     was wanted but the install cannot render one.
+
+    mascot: the mascot this video has, {id, name, version}, or null for none.
+    version is the version the video is pinned to once its scene-config has
+    been written, and until then the mascot's current approved version (the one
+    it will be pinned to). When it is set, the scene-config carries the mascot's
+    cue track (write_scene_config's "mascot" key). mascots_available is true
+    while the renderer's GPU probe says the GPU is working; a mascot is chosen
+    by a human at the topic, never by the video's agent.
     """
     _init_db()
     with _conn() as con:
         video = _fetch_video(con, video_id)
+        if video:
+            video["mascot"] = _video_mascot(con, video)
     if not video:
         return {"error": f"Video not found: {video_id}"}
     video.update(_scene_claim_state(video_id))
@@ -1347,7 +1376,19 @@ def get_video(video_id: str) -> dict:
     # Under "auto" the skill reads this before choosing the renderer, as it
     # reads illustrated_available before choosing generated art.
     video["cartoon_3d_available"] = _gpu_probe_status() == "working"
+    video["mascots_available"] = _gpu_probe_status() == "working"
     return video
+
+
+def _video_mascot(con, video: dict) -> dict | None:
+    """get_video's `mascot`: {id, name, version} or None. The version is the
+    pinned one, else the approved version the video will be pinned to."""
+    mid = video.get("mascot_id") or ""
+    if not mid:
+        return None
+    row = con.execute("SELECT name, approved_version FROM mascots WHERE id = ?", (mid,)).fetchone()
+    return {"id": mid, "name": row["name"] if row else mid,
+            "version": video.get("mascot_version") or (row["approved_version"] if row else 0)}
 
 
 # ── Agents (TMDEV-90) ────────────────────────────────────────────────────────
@@ -1677,7 +1718,7 @@ def create_video(
     with _conn() as con:
         row = con.execute(
             "SELECT name, status, default_visual_style, default_voice_id, "
-            "default_script_profile_id FROM projects WHERE id = ?", (project_id,)
+            "default_script_profile_id, default_mascot_id FROM projects WHERE id = ?", (project_id,)
         ).fetchone()
         if not row:
             return {"error": f"Project '{project_id}' not found."}
@@ -1711,6 +1752,14 @@ def create_video(
         script_profile_id = ""
         if strategy == "curriculum" and _profile_is_ready(con, row["default_script_profile_id"]):
             script_profile_id = row["default_script_profile_id"]
+        # The domain's default mascot (or the install's) seeds EVERY video, like
+        # the voice, but only while the GPU works and never on a Cartoon 3D
+        # video; seeding never refuses a video. Keep in sync:
+        # renderer/api/pipeline.py's _seed_mascot.
+        mascot_id = ""
+        if visual_style != "cartoon_3d" and _gpu_probe_status() == "working":
+            mascot_id = tmascots.resolve_default(
+                con, row["default_mascot_id"] or "", _get_setting("default_mascot_id", ""))
         agent_id = _pick_agent_id(con)
         # The check above runs outside any transaction, so a pause or another
         # session's topic committed since then would be missed; the INSERT
@@ -1719,21 +1768,40 @@ def create_video(
             f"""INSERT INTO videos
                (id, project_id, topic, strategy, producibility_score, title,
                 status, voice_id, agent_id, visual_style, script_profile_id,
-                created_at, updated_at)
-               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?
+                mascot_id, created_at, updated_at)
+               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?
                WHERE {_DOMAIN_OPEN_GUARD}""",
             (video_id, project_id, topic, strategy, producibility_score, title, voice_id,
-             agent_id, visual_style, script_profile_id, now, now, strategy, project_id),
+             agent_id, visual_style, script_profile_id, mascot_id, now, now, strategy, project_id),
         )
         if cur.rowcount == 0:
             return {"error": _closed_domain_error(con, project_id)
                     or _paused_domain_error(project_id, row["name"])}
     result = {"video_id": video_id, "status": "TOPIC_PROPOSED", "topic": topic,
               "agent_id": agent_id, "visual_style": visual_style, "voice_id": voice_id,
-              "script_profile_id": script_profile_id}
+              "script_profile_id": script_profile_id, "mascot_id": mascot_id}
     if title_warning:
         result["warning"] = title_warning
     return result
+
+
+def _approval_mascot_error(con, video_id: str) -> dict | None:
+    """The refusal for approving a topic whose mascot can no longer be used, or
+    None. Shared by set_video_status's check and its lost-race re-check."""
+    held = con.execute("SELECT mascot_id, visual_style, resolved_renderer FROM videos WHERE id = ?",
+                       (video_id,)).fetchone()
+    if not held or not held["mascot_id"]:
+        return None
+    if "cartoon_3d" in (held["visual_style"], held["resolved_renderer"]):
+        # The renderer refuses the pair; approving buys paid work that ends in FAILED.
+        return {"error": f"This video is Cartoon 3D and holds the mascot {held['mascot_id']!r}. "
+                         f"{tmascots.MASCOT_NOT_ON_CARTOON_3D} A human must clear the mascot on the "
+                         "dashboard before the topic is approved."}
+    if _mascot_pick_error(con, held["mascot_id"]):
+        return {"error": f"This video's mascot {held['mascot_id']!r} can no longer be used (it was "
+                         "archived or withdrawn). A human must choose another mascot or none on the "
+                         "dashboard before the topic is approved."}
+    return None
 
 
 @mcp.tool
@@ -1779,6 +1847,15 @@ def set_video_status(
             "SELECT status, archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
         if not row:
             return {"error": f"Video not found: {video_id}"}
+        # Approving a topic is the last chance to catch a mascot archived since
+        # it was seeded or picked. Keep in sync: renderer/api/pipeline.py's
+        # _mascot_approval_error (a Cartoon 3D video has no mascot to check).
+        mascot_err = None
+        approving = new_status == "TOPIC_APPROVED"
+        if approving and row["status"] == "TOPIC_PROPOSED" and not row["archived_at"]:
+            mascot_err = _approval_mascot_error(con, video_id)
+            if mascot_err:
+                return mascot_err
         # TMDEV-84: an archived row is frozen, as it is in Flask's patch_video.
         # An agent holding an id fetched before a dashboard DELETE or a
         # retention sweep would otherwise move it back into the pipeline —
@@ -1787,13 +1864,21 @@ def set_video_status(
         if row["archived_at"]:
             return _archived_error(video_id, row["archived_at"])
         current = row["status"]
+        # The mascot check above and the UPDATE are two statements, so the
+        # UPDATE repeats it: an archive, or a style write leaving a mascot on a
+        # Cartoon 3D video, committing between them must still stop the
+        # approval. Keep in sync: pipeline.py's patch_video.
+        mascot_sql = ""
+        if approving:
+            mascot_sql = (f" AND (status != 'TOPIC_PROPOSED' OR (NOT {tmascots.cartoon_mascot_clash_sql()}"
+                          f" AND {tmascots.holds_pickable_sql()}))")
         # The only_if guard is enforced in the UPDATE's own WHERE clause (not
         # a separate SELECT-then-compare) so the check-and-set is atomic —
         # closes the TOCTOU window a double-invocation could otherwise race.
         if only_if_current_status is not None:
             cur = con.execute(
                 "UPDATE videos SET status = ?, updated_at = ? WHERE id = ? AND status = ?"
-                " AND archived_at IS NULL",
+                " AND archived_at IS NULL" + mascot_sql,
                 (new_status, _now(), video_id, only_if_current_status),
             )
             if cur.rowcount == 0:
@@ -1806,16 +1891,24 @@ def set_video_status(
                     "SELECT status, archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
                 if fresh and fresh["archived_at"]:
                     return _archived_error(video_id, fresh["archived_at"])
+                if approving and fresh and fresh["status"] == only_if_current_status == "TOPIC_PROPOSED":
+                    mascot_err = _approval_mascot_error(con, video_id)
+                    if mascot_err:
+                        return mascot_err
                 current = fresh["status"] if fresh else current
                 return {"error": "status_mismatch", "current_status": current, "expected": only_if_current_status}
         else:
             cur = con.execute(
-                "UPDATE videos SET status = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL",
+                "UPDATE videos SET status = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL" + mascot_sql,
                 (new_status, _now(), video_id),
             )
             if cur.rowcount == 0:
                 fresh = con.execute(
                     "SELECT archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
+                if fresh and not fresh["archived_at"]:
+                    mascot_err = _approval_mascot_error(con, video_id)
+                    if mascot_err:
+                        return mascot_err
                 return _archived_error(video_id, fresh["archived_at"] if fresh else None)
     # TMDEV-61: release the scene-work claim once the video leaves the window
     # a claim can legitimately exist in (VOICE_READY, and REVISION_REQUESTED
@@ -2250,8 +2343,16 @@ def update_video(
     resolved_renderer: str | None = None,
     publish_title: str | None = None,
     publish_description: str | None = None,
+    mascot_id: str | None = None,
 ) -> dict:
     """Update one or more fields on a video record. Pass only fields to change.
+
+    mascot_id: the video's mascot, or "" for none. Settable only while the
+    video is at TOPIC_PROPOSED, and a human's choice at the topic: a new
+    mascot must exist, be approved and not archived, and the renderer's GPU
+    must be working (get_video's mascots_available). It is never allowed on a
+    "cartoon_3d" video, and writing visual_style "cartoon_3d" clears it. Sending
+    the mascot the video already has is not a change and is never refused.
 
     title: the short display name shown on dashboard cards, at most 70
     characters — rejected if longer, unlike create_video, which clips. The full
@@ -2518,6 +2619,31 @@ def update_video(
         gpu_err = _cartoon3d_gpu_error(visual_style)
         if gpu_err:
             return {"error": gpu_err}
+    stored_mascot_id = ""
+    if mascot_id is not None or visual_style is not None:
+        # Judged against the style the video will have once this lands. A pick
+        # is checked on CHANGE only, so echoing the stored mascot is never
+        # refused for a GPU that has gone since; a switch TO cartoon_3d clears
+        # the mascot in the same UPDATE. Keep in sync: renderer/api/pipeline.py's
+        # patch_video.
+        mascot_id = None if mascot_id is None else mascot_id.strip()
+        _init_db()
+        with _conn() as con:
+            cur_vid = con.execute("SELECT mascot_id, visual_style FROM videos WHERE id = ?",
+                                  (video_id,)).fetchone()
+            if not cur_vid:
+                return {"error": f"Video not found: {video_id}"}
+            stored_mascot_id = cur_vid["mascot_id"] or ""
+            will_be_cartoon = (visual_style if visual_style is not None
+                               else cur_vid["visual_style"]) == "cartoon_3d"
+            if mascot_id and mascot_id != (cur_vid["mascot_id"] or ""):
+                err = _mascot_pick_error(con, mascot_id) or tmascots.mascot_gpu_error(_gpu_probe_status())
+                if err:
+                    return {"error": err}
+                if will_be_cartoon:
+                    return {"error": tmascots.MASCOT_NOT_ON_CARTOON_3D}
+        if will_be_cartoon:
+            mascot_id = ""     # whatever was sent: no mascot survives on a cartoon_3d video
     if resolved_renderer is not None:
         resolved_renderer = resolved_renderer.strip()
         if resolved_renderer not in RENDERERS:
@@ -2544,6 +2670,7 @@ def update_video(
         "resolved_visual_style": resolved_visual_style,
         "resolved_renderer": resolved_renderer,
         "publish_title": publish_title, "publish_description": publish_description,
+        "mascot_id": mascot_id,
     }.items() if v is not None}
     if script_segments is not None:
         fields["script_segments"] = json.dumps(script_segments)
@@ -2559,6 +2686,10 @@ def update_video(
     agent_locked = [k for k in AGENT_CHECKPOINT_FIELDS if k in fields]
     set_sql = [f"{k} = ?" for k in fields]
     set_params = list(fields.values())
+    # The pin belongs to the mascot it was taken for: a different mascot (or
+    # none) starts unpinned. Keep in sync: renderer/api/pipeline.py's patch_video.
+    if "mascot_id" in fields and fields["mascot_id"] != stored_mascot_id:
+        set_sql.append("mascot_version = 0")
     where_sql, where_params = "", []
     checked_status = None
     if topic_locked or agent_locked:
@@ -2654,10 +2785,12 @@ def update_video(
     if "resolved_renderer" in fields:
         with _conn() as con:
             row = con.execute(
-                "SELECT visual_style, resolved_renderer FROM videos WHERE id = ?",
+                "SELECT visual_style, resolved_renderer, mascot_id FROM videos WHERE id = ?",
                 (video_id,)).fetchone()
         if not row:
             return {"error": f"Video not found: {video_id}"}
+        if fields["resolved_renderer"] == "cartoon_3d" and (row["mascot_id"] or "") != "":
+            return {"error": tmascots.MASCOT_NOT_ON_CARTOON_3D}
         if (row["visual_style"] or DEFAULT_VISUAL_STYLE) != "auto":
             return {"error": f"resolved_renderer records the renderer 'auto' settled on, but this "
                              f"video's visual_style is {row['visual_style']!r}, which already names "
@@ -2677,6 +2810,16 @@ def update_video(
         set_params.append(pin_voice)
     set_sql.append("updated_at = ?")
     set_params.append(_now())
+    # The style/mascot checks above read the row earlier, so the UPDATE repeats
+    # them over the values the row will have once it lands (what this call
+    # sets, else what the row holds then): a concurrent write must not leave a
+    # mascot on a Cartoon 3D video. Keep in sync: pipeline.py's patch_video.
+    pair = [k for k in ("visual_style", "resolved_renderer", "mascot_id") if k in fields]
+    if pair:
+        exprs = [("?" if k in fields else f"COALESCE(videos.{k}, '')")
+                 for k in ("visual_style", "resolved_renderer", "mascot_id")]
+        where_sql += " AND NOT " + tmascots.cartoon_mascot_clash_sql(*exprs)
+        where_params += [fields[k] for k in ("visual_style", "resolved_renderer", "mascot_id") if k in fields]
     with _conn() as con:
         cur = con.execute(
             f"UPDATE videos SET {', '.join(set_sql)} WHERE id = ? AND archived_at IS NULL"
@@ -2695,6 +2838,10 @@ def update_video(
             if row and "agent_id IS ?" in where_sql:
                 return {"error": "This video's agent changed while the call was in flight — "
                                  "check get_video and pick the model again"}
+            if row and pair:
+                return {"error": "The video's visual style changed while the call was in flight, and "
+                                 f"the result would put a mascot on a Cartoon 3D video. "
+                                 f"{tmascots.MASCOT_NOT_ON_CARTOON_3D} Check get_video"}
     return {"video_id": video_id, "updated_fields": updated}
 
 
@@ -2806,6 +2953,7 @@ def upsert_project(
     default_voice_id: str | None = None,
     default_script_profile_id: str | None = None,
     topic_cap: int | None = None,
+    default_mascot_id: str | None = None,
 ) -> dict:
     """Create or update a project (domain/series container).
 
@@ -2838,6 +2986,14 @@ def upsert_project(
         "" for none. Like default_visual_style, videos filed here by trending,
         mining or manual are unaffected, and changing it never touches videos
         already filed. A human can still pick another profile at the topic.
+    default_mascot_id: the mascot every new video filed into this domain
+        starts with, whatever its sourcing mode: "" to inherit the install's
+        default mascot, "none" for no mascot even if the install has a default,
+        or the id of an approved, unarchived mascot. Seeds only while the
+        renderer's GPU works and never a "cartoon_3d" video, and changing it
+        never touches videos already filed. A new id is refused if it cannot
+        be chosen or the renderer's GPU is not working (the error says which);
+        re-sending the stored one is never refused.
     topic_cap: how many topics the domain may ever hold, a whole number from
         25 to 750 (100 when the domain is created). Every video ever filed
         counts, archived and rejected ones included. Once the domain holds
@@ -2865,6 +3021,8 @@ def upsert_project(
         default_voice_id = default_voice_id.strip()
     if default_script_profile_id is not None:
         default_script_profile_id = default_script_profile_id.strip()
+    if default_mascot_id is not None:
+        default_mascot_id = default_mascot_id.strip()
     if topic_cap is not None and (cap_error := _topic_cap_error(topic_cap)):
         return {"error": cap_error}
     seed = None if is_curriculum_seed is None else int(is_curriculum_seed)
@@ -2877,7 +3035,7 @@ def upsert_project(
         # Keep in sync: renderer/api/pipeline.py's create_project.
         existing = con.execute(
             "SELECT description, is_curriculum_seed, status, default_visual_style, "
-            "default_voice_id, default_script_profile_id FROM projects WHERE id = ?",
+            "default_voice_id, default_script_profile_id, default_mascot_id FROM projects WHERE id = ?",
             (project_id,)
         ).fetchone()
         # The id names the domain's output directory, so a NEW one must be a
@@ -2910,6 +3068,18 @@ def upsert_project(
                 and not _profile_is_ready(con, default_script_profile_id)):
             return {"error": f"script_profile_id {default_script_profile_id!r} is not a READY "
                              "script profile"}
+        # The default mascot follows the same rule: checked only when it
+        # changes, so one archived since, or a GPU gone since, never blocks
+        # another edit of the domain. A new one needs a working GPU, as a pick
+        # on a video does. Keep in sync: renderer/api/pipeline.py's create_project.
+        if (default_mascot_id not in (None, "", "none")
+                and not (existing and (existing["default_mascot_id"] or "") == default_mascot_id)):
+            err = _mascot_pick_error(con, default_mascot_id)
+            if err:
+                return {"error": err.replace("mascot_id", "default_mascot_id")}
+            err = tmascots.mascot_gpu_error(_gpu_probe_status())
+            if err:
+                return {"error": err}
         # Only a CHANGE to illustrated is refused without a key; re-sending a
         # stored default is left alone, as in pipeline.py's create_project.
         # Keep in sync: renderer/api/pipeline.py's create_project.
@@ -2935,7 +3105,7 @@ def upsert_project(
         con.execute(
             """INSERT INTO projects (id, name, description, is_curriculum_seed, status,
                                      default_visual_style, default_voice_id,
-                                     default_script_profile_id, topic_cap, created_at)
+                                     default_script_profile_id, topic_cap, default_mascot_id, created_at)
                VALUES (:id, :name,
                        COALESCE(:description, ''),
                        COALESCE(:seed, 0),
@@ -2944,6 +3114,7 @@ def upsert_project(
                        COALESCE(:voice, ''),
                        COALESCE(:profile, ''),
                        COALESCE(:cap, :default_cap),
+                       COALESCE(:mascot, ''),
                        :now)
                ON CONFLICT(id) DO UPDATE SET
                  name                 = :name,
@@ -2954,10 +3125,11 @@ def upsert_project(
                  default_voice_id     = COALESCE(:voice, projects.default_voice_id),
                  default_script_profile_id =
                      COALESCE(:profile, projects.default_script_profile_id),
-                 topic_cap            = COALESCE(:cap, projects.topic_cap)""",
+                 topic_cap            = COALESCE(:cap, projects.topic_cap),
+                 default_mascot_id    = COALESCE(:mascot, projects.default_mascot_id)""",
             {"id": project_id, "name": name, "description": description, "seed": seed,
              "status": status, "style": default_visual_style, "voice": default_voice_id,
-             "profile": default_script_profile_id, "cap": topic_cap,
+             "profile": default_script_profile_id, "cap": topic_cap, "mascot": default_mascot_id,
              "default_cap": TOPIC_CAP_DEFAULT, "now": now},
         )
         row = con.execute(f"{_PROJECT_SELECT} WHERE p.id = ?", (project_id,)).fetchone()
@@ -4313,6 +4485,22 @@ def validate_job(video_id: str) -> dict:
     except Exception as e:
         errors.append(f"Cartoon 3D readiness could not be checked: {e}")
 
+    # A mascot video renders its mascot from the scene-config's cue track; with
+    # none, the renderer would render a video the human chose a mascot for without
+    # it. write_scene_config already checked any cues it was given.
+    mascot_cues = None
+    try:
+        with _conn() as con:
+            has_mascot = bool(con.execute("SELECT mascot_id FROM videos WHERE id = ?",
+                                          (video_id,)).fetchone()["mascot_id"])
+        if has_mascot:
+            sc = locals().get("scene_config")
+            mascot_cues = sc.get("mascot") if isinstance(sc, dict) and isinstance(sc.get("mascot"), list) else None
+            if not mascot_cues:
+                errors.append(MASCOT_CUES_MISSING)
+    except Exception as e:
+        errors.append(f"The mascot cue track could not be checked: {e}")
+
     # TypeScript typecheck — fail-loud: broken TSX degrades to silent black
     # during render, which is very hard to diagnose. Catching it here is much better.
     try:
@@ -4366,12 +4554,37 @@ def validate_job(video_id: str) -> dict:
             from text_audit import audit_text_layout
             warnings = audit_text_layout(
                 video_id, scene_config, scene_config_path,
-                timeline_path, audio_path, REPO_ROOT / "remotion",
+                timeline_path, audio_path, REPO_ROOT / "remotion", mascot_cues=mascot_cues,
             )
     except Exception as e:
         warnings = [f"Text-layout audit could not run ({e}) — text layout was not checked"]
 
     return {"passed": len(errors) == 0, "errors": errors, "warnings": warnings}
+
+
+MASCOT_CUES_MISSING = ("This video has a mascot but its scene-config has no mascot cues: add a \"mascot\" "
+                       "list to the config (write_scene_config) that brings the mascot on screen")
+
+
+def _mascot_block(video_id: str) -> dict | None:
+    """Why a mascot video may not be queued: its scene-config has no cue track.
+    None for a video without a mascot, or one with no scene-config yet
+    (validate_job reports that)."""
+    try:
+        with _conn() as con:
+            has_mascot = bool(con.execute("SELECT mascot_id FROM videos WHERE id = ?",
+                                          (video_id,)).fetchone()["mascot_id"])
+        if not has_mascot:
+            return None
+        path = tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG)
+        if path.is_symlink() or not path.is_file():
+            return None
+        cues = json.loads(path.read_text(encoding="utf-8")).get("mascot")
+    except Exception:
+        return None
+    if isinstance(cues, list) and cues:
+        return None
+    return {"error": "mascot_cues_missing", "detail": MASCOT_CUES_MISSING}
 
 
 def _cartoon_block(video_id: str) -> dict | None:
@@ -4441,6 +4654,9 @@ def submit_render(video_id: str) -> dict:
         cartoon_err = _cartoon_block(video_id)
         if cartoon_err:
             return cartoon_err
+        mascot_err = _mascot_block(video_id)
+        if mascot_err:
+            return mascot_err
 
         # Atomically claim the VOICE_READY → RENDER_QUEUED transition — the guard
         # is expressed in the UPDATE's own WHERE clause (not a separate
@@ -4472,7 +4688,9 @@ def get_pipeline_status() -> dict:
     active_strategies, mining_available, research_runs_today,
     max_research_runs_per_day, research_window_resets_at, pronunciation_lexicon,
     elevenlabs_voices, elevenlabs_voice_id, agents, user_preferences,
-    illustrated_available.
+    illustrated_available, cartoon_3d_available, mascots_available.
+    mascots_available is true while the renderer's GPU probe says the GPU is
+    working (a mascot is chosen by a human, so this is information only).
     mining_available is true when a Gemini API key is stored (the key itself is
     never returned); without one, "mining" is left out of active_strategies.
     illustrated_available is true when an OpenAI key is stored (the key itself
@@ -4586,6 +4804,7 @@ def get_pipeline_status() -> dict:
         "user_preferences": _get_setting("user_preferences", ""),
         "illustrated_available": bool(_openai_key()),
         "cartoon_3d_available": _gpu_probe_status() == "working",
+        "mascots_available": _gpu_probe_status() == "working",
     }
 
 
@@ -5880,7 +6099,7 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     """Write a video's scene-config.json and record its path on the video record.
 
     config: the complete scene-config object — {totalFrames, fps, canvas?,
-            subtitles?, scenes[], sfx[], music?}. totalFrames must be copied
+            subtitles?, scenes[], sfx[], music?, mascot?}. totalFrames must be copied
             exactly from timeline.totalFrames; see the tubematic-scene-config
             skill for the full structure and the scene-boundary planning rules.
 
@@ -5895,6 +6114,24 @@ def write_scene_config(video_id: str, config: dict) -> dict:
             frame height), uppercase. Because the narration is captioned, a
             scene should not also spell it out: put text in a scene only when
             the text is the thing being shown.
+
+    mascot: the cue track of the video's mascot, a list of cue objects (data,
+            never drawing code), required when get_video's mascot is not null
+            and refused when it is. A cue is {frame, and any of: emotion, x, y,
+            scale, look, facing, jump, on}. emotion is one of neutral, happy,
+            excited, thinking, idea, surprised, confused, sad, love, cool. look
+            is one of up, down, left, right, none; facing is one of left,
+            right, front. x and y (0 to 1) are where the mascot's feet stand
+            as fractions of the frame, scale is 0.4 to 1.2, jump is true or
+            false, "on" true walks it in (false walks it off). It starts off
+            screen. The mascot reacts to the narration and never speaks,
+            so there is no talk cue. It must stand still in view for at least 30 frames
+            (one second) in a row at least once, inside the safe zone (x 60-1020, y 150-1750)
+            and clear of the caption band, at rest and while walking (a walk
+            on or off across a frame edge is exempt from the safe zone only,
+            never from the caption band); a cue that breaks a rule is refused with the reason.
+            The video is pinned to the mascot's approved version by the first
+            write, and a revision keeps it.
 
     canvas: "dark" or "light" — the ground the renderer paints under every
             scene. It is a whole-video property, not a per-scene one: scenes
@@ -5950,7 +6187,7 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     _init_db()
     with _conn() as con:
         row = con.execute(
-            "SELECT id, visual_style, resolved_visual_style, resolved_renderer FROM videos WHERE id = ?",
+            "SELECT id, visual_style, resolved_visual_style, resolved_renderer, mascot_id FROM videos WHERE id = ?",
             (video_id,)).fetchone()
     # The path-traversal guard is the shape check at the top (_video_id_error).
     if not row:
@@ -6003,6 +6240,17 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         if sub_err:
             return {"error": sub_err}
 
+    # ── mascot cue track ─────────────────────────────────────────────────────
+    # A bare list of cues (renderer: window.TRACK.cues). The cue rules (safe
+    # zone, captions, walking) live in tubematic_core.mascots, shared with the
+    # worker; the captions are those of THIS config.
+    if "mascot" in config:
+        if not (row["mascot_id"] or ""):
+            return {"error": "config.mascot is set but this video has no mascot; remove the key"}
+        cue_errs = tmascots.cue_errors(config["mascot"], total_frames, config.get("subtitles"))
+        if cue_errs:
+            return {"error": "config.mascot has problems: " + " ".join(cue_errs)}
+
     scene_err = _validate_cartoon_scene(scenes, config["totalFrames"], video_id)  # TMDEV-185
     if scene_err:
         return {"error": scene_err}
@@ -6052,6 +6300,12 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         with _conn() as con:
             con.execute("BEGIN IMMEDIATE")
             previous = path.read_bytes() if path.is_file() else None
+            if row["mascot_id"]:
+                # Pinned by the first write, kept by every revision: approving a
+                # changed mascot must not alter a video already authored.
+                con.execute(
+                    "UPDATE videos SET mascot_version = (SELECT approved_version FROM mascots "
+                    "WHERE id = videos.mascot_id) WHERE id = ? AND mascot_version = 0", (video_id,))
             if resolve_renderer:
                 recorded = bool(con.execute(
                     "UPDATE videos SET resolved_renderer = ?, updated_at = ? WHERE id = ? AND resolved_renderer = ''",
@@ -6598,6 +6852,9 @@ def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
     after the scene-work guard and the write have succeeded, so a refused call
     never freezes the renderer. Same backstop pattern as the canvas."""
     is_cartoon = any(_cartoon_props(sc) is not None for sc in scenes)
+    if is_cartoon and (row["mascot_id"] or ""):
+        return (f"this video has the mascot {row['mascot_id']!r}, and mascots are not available in the "
+                "Cartoon 3D style: author it with the scene components instead"), ""
     style = row["visual_style"] or ""
     resolved = row["resolved_renderer"] or ""
     unresolved_auto = style == "auto" and not resolved
@@ -6781,6 +7038,245 @@ def cartoon_soundtrack(video_id: str, spec: dict) -> dict:
         if frozen:
             return frozen
         return _cartoon_call(video_id, cartoon.soundtrack, spec)
+
+
+# ── Group 10: mascot authoring ──────────────────────────────────────────────
+# A mascot is drawing code written once by an agent and reviewed by a human; the
+# per-video agent only writes its cue track. The mascot lane of the poller runs
+# these three tools for one mascot at a time: read the job, render the model
+# sheets (the picture a human reviews), submit.
+
+_MASCOT_REMOTION = REPO_ROOT / "remotion"
+_MAX_MASCOT_CODE_CHARS = 200_000
+_mascot_locks: dict[str, threading.Lock] = {}
+_mascot_locks_guard = threading.Lock()
+
+
+def _mascot_lock(mascot_id: str) -> threading.Lock:
+    with _mascot_locks_guard:
+        return _mascot_locks.setdefault(mascot_id, threading.Lock())
+
+
+def _mascot_draft(con, mascot_id: str):
+    """The version being built: the highest above the approved one that is not
+    approved yet, as (version, code, change_request), or None."""
+    return con.execute(
+        "SELECT v.version, v.code, v.change_request FROM mascot_versions v JOIN mascots m ON m.id = v.mascot_id "
+        "WHERE v.mascot_id = ? AND v.version > m.approved_version AND v.approved_at = '' "
+        "ORDER BY v.version DESC LIMIT 1", (mascot_id,)).fetchone()
+
+
+def _mascot_code(con, mascot_id: str, version: int) -> str:
+    """The code of one version ("" when there is none)."""
+    try:
+        return tmascots.code_for(con, _MASCOT_REMOTION, mascot_id, version)
+    except tmascots.MascotError:
+        return ""
+
+
+def _mascot_sheet_state(mascot_id: str, version: int) -> dict:
+    """{sheet: rendered?} for one version. The files are the record: a changed
+    code deletes the sheets made from the old one (render_mascot_sheets)."""
+    state = {}
+    for sheet in tmascots.SHEETS:
+        try:
+            state[sheet] = tmascots.sheet_file(DB_FILE.parent, mascot_id, version, sheet).is_file()
+        except (tmascots.MascotError, tjobs.UnsafePath):
+            state[sheet] = False
+    return state
+
+
+def _mascot_missing_sheets(mascot_id: str, version: int) -> list[str]:
+    return [s for s, ok in _mascot_sheet_state(mascot_id, version).items() if not ok]
+
+
+def _mascot_building(con, mascot_id: str):
+    """(row, draft, error): the mascot and its draft when it is BUILDING, else an error dict."""
+    row = con.execute("SELECT * FROM mascots WHERE id = ?", (mascot_id,)).fetchone()
+    if row is None:
+        return None, None, {"error": f"Mascot not found: {mascot_id}"}
+    if row["status"] != "BUILDING" or row["archived"]:
+        why = "archived" if row["archived"] else f"{row['status']}"
+        return None, None, {"error": f"mascot {mascot_id!r} is {why}; this works only while it is BUILDING"}
+    draft = _mascot_draft(con, mascot_id)
+    if draft is None:
+        return None, None, {"error": f"mascot {mascot_id!r} has no version being built"}
+    return row, draft, None
+
+
+def _mascot_lost_race(con, mascot_id: str, also: str = "") -> dict:
+    """The error for a guarded mascot UPDATE that matched no row: archived (by a
+    human, since the check) or no longer BUILDING."""
+    row = con.execute("SELECT archived FROM mascots WHERE id = ?", (mascot_id,)).fetchone()
+    if row is not None and row["archived"]:
+        return {"error": f"mascot {mascot_id!r} was archived; stop working on it"}
+    return {"error": f"mascot {mascot_id!r} is no longer BUILDING" + (f" {also}" if also else "")}
+
+
+@mcp.tool
+def get_mascot_job(mascot_id: str) -> dict:
+    """Read the brief for the mascot you are building.
+
+    Returns {mascot_id, name, kind, description, change_request, previous_code,
+    previous_version, approved_version, based_on_code, emotions, sheets,
+    renders_left}.
+
+    kind "new": draw the character in description. "surprise": the human gave
+    no description, so invent a character of your own. "change": a human
+    reviewed a version and asked for change_request; previous_code
+    is the code of the version the human reviewed (previous_version: the last
+    version before this one that has code, approved or not) to start from, and
+    the result replaces the approved_version only when a human approves it. based_on_code, when
+    not empty, is another mascot's approved code to start from.
+    emotions are the ten faces the feels sheet must show. sheets says which of
+    the turn, feels and act sheets are rendered for the code as it stands;
+    renders_left is how many more sheet renders this attempt may use.
+    """
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT * FROM mascots WHERE id = ?", (mascot_id,)).fetchone()
+        if row is None:
+            return {"error": f"Mascot not found: {mascot_id}"}
+        draft = _mascot_draft(con, mascot_id)
+        if draft is None:
+            return {"error": f"mascot {mascot_id!r} has no change in progress"}
+        version, _code, request = draft["version"], draft["code"], draft["change_request"]
+        # What the human reviewed: the highest version below the draft with code
+        # (the draft they asked changes to, approved or not), not the approved one.
+        prior = con.execute("SELECT version FROM mascot_versions WHERE mascot_id = ? AND version < ? "
+                            "AND code != '' ORDER BY version DESC LIMIT 1", (mascot_id, version)).fetchone()
+        if prior is None and row["approved_version"] and row["approved_version"] < version:
+            prior = {"version": row["approved_version"]}     # a builtin: its code is a repo file
+        previous_version = prior["version"] if prior else 0
+        previous = _mascot_code(con, mascot_id, previous_version) if previous_version else ""
+        base = row["based_on"]
+        base_row = con.execute("SELECT approved_version FROM mascots WHERE id = ?", (base,)).fetchone() if base else None
+        based_on = _mascot_code(con, base, base_row["approved_version"]) if base_row and base_row["approved_version"] else ""
+    if version > 1:
+        kind = "change"
+    else:
+        kind = "new" if (request or "").strip() or (row["description"] or "").strip() else "surprise"
+    return {
+        "mascot_id": mascot_id, "name": row["name"], "kind": kind,
+        "description": row["description"], "change_request": request,
+        "previous_code": previous, "previous_version": previous_version,
+        "approved_version": row["approved_version"], "based_on_code": based_on,
+        "emotions": list(tmascots.EMOTIONS),
+        "sheets": _mascot_sheet_state(mascot_id, version),
+        "renders_left": max(0, tmascots.MAX_SHEET_RENDERS_PER_ATTEMPT - row["sheet_renders"]),
+    }
+
+
+@mcp.tool
+def render_mascot_sheets(mascot_id: str, code: str, sheet: str):
+    """Store your drawing code for the mascot and render ONE model sheet from it.
+
+    Works only while the mascot is BUILDING. sheet is "turn" (the character
+    turning around), "feels" (the ten emotions) or "act" (its actions); call
+    once per sheet. code is the complete drawing code (at most 200,000
+    characters). Changing it discards the
+    sheets rendered from the old code, so render all three again from the final
+    code before submit_mascot. Every call counts toward a small per-attempt cap,
+    a failed render too (get_mascot_job's renders_left).
+
+    Returns {mascot_id, version, sheet, renders_left, sheets} followed by the
+    sheet picture, or {"error": ...} (a render failure carries the renderer's
+    error output; fix the code and call again).
+    """
+    if sheet not in tmascots.SHEETS:
+        return {"error": f"sheet {sheet!r} must be one of {', '.join(tmascots.SHEETS)}"}
+    if not isinstance(code, str) or not code.strip():
+        return {"error": "code must be the mascot's complete drawing code"}
+    if len(code) > _MAX_MASCOT_CODE_CHARS:
+        return {"error": f"code is {len(code)} characters; the limit is {_MAX_MASCOT_CODE_CHARS}"}
+    _init_db()
+    with _mascot_lock(mascot_id):
+        with _conn() as con:
+            row, draft, err = _mascot_building(con, mascot_id)
+            if err:
+                return err
+            version = draft["version"]
+            if row["sheet_renders"] >= tmascots.MAX_SHEET_RENDERS_PER_ATTEMPT:
+                return {"error": f"this attempt has used all {tmascots.MAX_SHEET_RENDERS_PER_ATTEMPT} sheet "
+                                 "renders; submit_mascot with the sheets you have if all three exist, or stop"}
+            # One statement: the cap holds even against another process, and an
+            # archive from the dashboard since the check above wins.
+            counted = con.execute(
+                "UPDATE mascots SET sheet_renders = sheet_renders + 1, updated_at = ? WHERE id = ? "
+                "AND status = 'BUILDING' AND archived = 0 AND sheet_renders < ?",
+                (_now(), mascot_id, tmascots.MAX_SHEET_RENDERS_PER_ATTEMPT)).rowcount
+            if not counted:
+                return _mascot_lost_race(con, mascot_id, "or has used its renders")
+            if draft["code"] != code:
+                con.execute("UPDATE mascot_versions SET code = ? WHERE mascot_id = ? AND version = ?",
+                            (code, mascot_id, version))
+                # The sheets a human will review must show the code that is
+                # submitted: drop the ones made from older code.
+                for other in tmascots.SHEETS:
+                    tmascots.sheet_file(DB_FILE.parent, mascot_id, version, other).unlink(missing_ok=True)
+        out_png = tmascots.sheet_file(DB_FILE.parent, mascot_id, version, sheet)
+        out_png.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="tubematic-mascot-") as tmp:
+            code_file = Path(tmp) / "mascot.js"
+            code_file.write_text(code, encoding="utf-8")
+            try:
+                mascot_sheets.render_sheet(_MASCOT_REMOTION, code_file, sheet, out_png)
+            except mascot_sheets.MascotSheetError as e:
+                return {"error": str(e)}
+        with _conn() as con:
+            used = con.execute("SELECT sheet_renders FROM mascots WHERE id = ?", (mascot_id,)).fetchone()[0]
+    from PIL import Image as PILImage
+    from fastmcp.utilities.types import Image as MCPImage
+    try:
+        with PILImage.open(out_png) as src:
+            src.load()
+            img = src.convert("RGB")
+    except Exception as e:
+        return {"error": f"the {sheet} sheet could not be read back: {e}"}
+    longest = max(img.size)
+    if longest > _READ_IMAGE_MAX_EDGE:
+        ratio = _READ_IMAGE_MAX_EDGE / longest
+        img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))), PILImage.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    meta = {"mascot_id": mascot_id, "version": version, "sheet": sheet,
+            "renders_left": max(0, tmascots.MAX_SHEET_RENDERS_PER_ATTEMPT - used),
+            "sheets": _mascot_sheet_state(mascot_id, version)}
+    return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
+
+
+@mcp.tool
+def submit_mascot(mascot_id: str, notes: str = "") -> dict:
+    """Hand the finished mascot to a human for review.
+
+    Works only while the mascot is BUILDING, and only once all three sheets
+    (turn, feels, act) are rendered from the code as it now stands: change the
+    code and the sheets must be rendered again. notes is a short message for the
+    log (what you drew, any trade-off); the reviewer sees the sheets.
+    Returns {mascot_id, status: "IN_REVIEW", version, notes}.
+    """
+    _init_db()
+    with _mascot_lock(mascot_id):
+        with _conn() as con:
+            row, draft, err = _mascot_building(con, mascot_id)
+            if err:
+                return err
+            version = draft["version"]
+            if not (draft["code"] or "").strip():
+                return {"error": "no code has been stored: call render_mascot_sheets first"}
+            missing = _mascot_missing_sheets(mascot_id, version)
+            if missing:
+                return {"error": f"the {', '.join(missing)} sheet(s) are not rendered from the current code: "
+                                 "call render_mascot_sheets for each, then submit"}
+            moved = con.execute(
+                "UPDATE mascots SET status = 'IN_REVIEW', error = '', updated_at = ? "
+                "WHERE id = ? AND status = 'BUILDING' AND archived = 0", (_now(), mascot_id)).rowcount
+            if not moved:
+                return _mascot_lost_race(con, mascot_id)
+    notes = (notes or "").strip()[:2000]
+    log.info("mascot %s v%d submitted for review%s", mascot_id, version, f": {notes}" if notes else "")
+    return {"mascot_id": mascot_id, "status": "IN_REVIEW", "version": version, "notes": notes}
+
 
 
 # ── Registered tool names ───────────────────────────────────────────────────

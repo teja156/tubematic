@@ -316,7 +316,7 @@ the builders, the painters, the lights and the water, `post/` the ink, lens blur
 look; the video is the story. Its scene-config entry is one generated scene, `src` `<video_id>/CartoonShort`,
 `startFrame` 0 and `durationInFrames` equal to `totalFrames`, whose props carry `cartoon3d: {beats}`: the
 shots as beats, which is the only per-video data. The worked example the skill points at is
-`src/cartoon3d/examples/chicago/`, the spike that decided this design (TMDEV-184/185) over the earlier
+`src/cartoon3d/examples/chicago/`, the spike that decided this design over the earlier
 data-driven world.
 
 `write_scene_config` refuses a config whose beats do not tile the video (in order, from frame 0 to the
@@ -344,6 +344,62 @@ authoring](06-mcp-server.md#cartoon-3d-authoring); the agent's workflow and the 
 segmented ([Rendering and Review](11-rendering-and-review.md#segmented-cartoon-3d-renders)).
 
 ---
+
+## Mascots
+
+A mascot is an optional on-screen character that **reacts** to the narration: it walks on, shows an
+emotion, glances at something, hops, walks off. It never speaks and is never the narrator. A video
+has one when a human picked it at the topic checkpoint (see
+[Mascots](../user-guide/04-dashboard.md#mascots) for the person's side). The per-video agent **never
+writes drawing code**. The mascot's code was written once and approved by a human
+([Mascot authoring](06-mcp-server.md#mascot-authoring)); the video's agent writes only data, a cue
+track under the scene-config's top-level `mascot` key:
+
+```jsonc
+"mascot": [
+  { "frame": 0,   "on": true, "x": 0.5, "y": 0.62, "emotion": "happy", "facing": "front" },
+  { "frame": 240, "emotion": "surprised", "look": "right", "jump": true },
+  { "frame": 600, "x": 0.25, "emotion": "thinking" }
+]
+```
+
+A cue has a `frame` and any of `emotion`, `x`, `y`, `scale`, `look`, `facing`, `jump` and `on`; a field
+a cue omits stays as the previous cue left it. `x` and `y` (0 to 1) are where the **feet** stand as
+fractions of the frame, `scale` is 0.4 to 1.2, `on: true` walks the mascot in from the nearer edge and
+`on: false` walks it off past the edge. The mascot starts off screen. The allowed values are the
+constants in `tubematic_core/mascots.py` (`EMOTIONS`, `LOOKS`, `FACINGS`, `SCALE_MIN`, `SCALE_MAX`,
+`CUE_KEYS`) and are repeated in the `write_scene_config` tool description, because the agent learns
+them from there and not from refusals. There is deliberately no `talk` cue.
+
+`write_scene_config` runs `tubematic_core/mascots.py::cue_errors` over the track and refuses it with a
+sentence per problem. It plays the track the way `driver.js` will, frame by frame, and checks:
+
+- **The caption band.** The mascot's whole box (the 560 by 640 canvas, emote headroom included, so a
+  cue must be conservative) must stay clear of the burned-in captions' band, at rest and while
+  walking. A walk is tested along its whole path, so two clear positions either side of the band are
+  refused. Walking on or off across a frame edge is exempt from the **safe zone only**, never the band.
+  With captions switched off there is no band.
+  The band is sized from the video's caption settings: its line count follows `maxWords` and `fontSize`,
+  so large many-word captions get a taller band than the default two lines.
+- **The safe zone.** At rest, and during a walk that does not cross an edge, the box must lie inside the
+  same safe zone scenes use (x 60 to 1020, y 150 to 1750; see [Safe zones](09-remotion-project.md#safe-zones)).
+- **At least `MIN_REST_FRAMES` (one second) at rest on screen, in one unbroken run**, so a walk-on in the
+  last second of the video, which a viewer would never see, does not count as a mascot. Short stops between
+  walks are not added together: a walk resets the count.
+- That at least one cue brings it on, that no two cues share a frame, and that every field is of the
+  right type and within range.
+
+**The mascot version is locked by the first write.** The first `write_scene_config` of a video that has a
+mascot records the mascot's approved version in `videos.mascot_version`; later writes and every
+revision keep it. A human approving a changed mascot therefore never alters a video already being
+authored, and the cue track is always checked and rendered against the code it was written for.
+
+The geometry constants in `mascots.py` are copies of the engine's and of `Subtitles.tsx`'s and
+`text_audit.py`'s, kept in step by agreement tests. The mascot layer is drawn **under the captions**, so
+it can never hide a caption, but it can hide a scene's text; `validate_job` warns when measured text
+sits under the box ([Rendering and Review](11-rendering-and-review.md#the-text-layout-audit)). A
+Cartoon 3D video cannot have a mascot, and under `auto` the agent never picks Cartoon 3D for a video
+that has one.
 
 ## Adding an installed component
 

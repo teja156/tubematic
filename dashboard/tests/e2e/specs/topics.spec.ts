@@ -147,7 +147,7 @@ test.describe("Topics page", () => {
   // browser and seeding is left to the API suites. What only a real browser
   // shows is the layout: a seed row with three labelled pickers, a count,
   // a badge and the pause button must still fit at 1280px.
-  test("a domain row labels its three pickers and still fits at 1280px", async ({ page }) => {
+  test("a domain row labels its four pickers and still fits at 1280px", async ({ page }) => {
     const slug = `labels-domain-${uid}`;
     await createProject({ id: slug, name: `Labels Domain ${uid}`, is_curriculum_seed: true });
     await page.route("**/api/proxy/script-profiles", (route) => route.fulfill({ json: [
@@ -168,7 +168,7 @@ test.describe("Topics page", () => {
 
     const row = page.getByTestId(`domain-row-${slug}`);
     await expect(row).toBeVisible();
-    for (const label of ["Visual style", "Default voice", "Script profile", "Topic cap"]) {
+    for (const label of ["Visual style", "Default voice", "Script profile", "Mascot (exp.)", "Topic cap"]) {
       await expect(row.getByText(label, { exact: true })).toBeVisible();
     }
     const profile = page.getByTestId(`domain-profile-${slug}`);

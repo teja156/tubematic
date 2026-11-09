@@ -34,7 +34,7 @@ from tubematic_core import prices
 
 log = logging.getLogger(__name__)
 
-AGENT_OPERATIONS = ("agent_pipeline", "agent_research", "agent_profile", "agent_unscoped")
+AGENT_OPERATIONS = ("agent_pipeline", "agent_research", "agent_profile", "agent_mascot", "agent_unscoped")
 RESEARCH_OPERATIONS = ("agent_research", "mining")
 
 # Log an unpriced model once per process, not once per call.

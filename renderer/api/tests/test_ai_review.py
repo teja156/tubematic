@@ -754,6 +754,25 @@ def test_the_prompt_tells_the_reviewer_the_watermark_is_intentional():
     assert "A video without the mark is likewise not a defect" in prompt
 
 
+def test_the_prompt_tells_the_reviewer_the_mascot_is_intentional():
+    """Same shape as the watermark control: a mascot is drawn over the scenes by
+    design, so a reviewer left to read it as a stray figure, a lip-sync fault or
+    clutter returns a finding on every mascot video, and any finding is a paid
+    revision round. Only covering needed content or a contradicting reaction
+    may be reported."""
+    prompt = ai_review._REVIEW_PROMPT
+    assert "Mascot: a video may include a small watercolour character" in prompt
+    assert "THAT IS INTENTIONAL AND IS CORRECT" in prompt
+    assert "never speaks" in prompt
+    assert "no lip sync" in prompt
+    assert "Do not report the mascot as a defect or a suggestion" in prompt
+    assert "are drawn over it" in prompt
+    # The narrow ways it can still be reported.
+    assert "ONLY when it covers something the viewer needs" in prompt
+    assert "clearly contradicts the narration" in prompt
+    assert "A video without a mascot is likewise not a defect" in prompt
+
+
 def test_the_prompt_asks_for_redundant_scene_text_as_a_suggestion():
     """The positive half: scene text restating the narration is the thing the
     captions replace. It is a suggestion rather than a must-fix because it is a

@@ -75,7 +75,7 @@ flowchart TD
     L -->|yes| AD[adopt sessions a dead<br/>supervisor left running]
     AD --> P1[pass: touch heartbeat,<br/>GET /pipeline/status + /agents]
     P1 -->|unreachable, nothing running| X1[exit 1]
-    P1 --> LN[fill the three lanes]
+    P1 --> LN[fill the four lanes]
     LN --> I{anything running,<br/>just started or cooling down?}
     I -->|no| E[exit 0]
     I -->|yes| WT["wait for a session to end,<br/>or 60 s"] --> P1
@@ -95,6 +95,7 @@ newly installed agent applies on the next pass with no restart.
 | 3 | Read state | `_Supervisor._pass` | `GET /pipeline/status` and `GET /agents`. Either unreachable starts nothing this pass. No agent installed is logged once and is not an error |
 | 4 | Tend adopted sessions | `_Supervisor._tend_adopted` | Stops an adopted session that is past its deadline, and scores one that has ended |
 | 5 | Script profiles lane | `_Supervisor._profiles` | Starts the next pending profile build if the lane is free. **Runs before the pause check, on purpose** |
+| 5b | Mascots lane | `_Supervisor._mascots` | Starts the next pending mascot build if the lane is free. **Also before the pause check** |
 | 6 | Pause check | `_Supervisor._pass` | Paused: steps 7 and 8 are skipped. Sessions already running carry on |
 | 7 | Pipeline lane | `_Supervisor._pipeline` | `GET /videos/workable`, oldest first, and starts one session per video up to `max_concurrent_agent_sessions`, skipping videos already running or waiting out a claim |
 | 8 | Research lane | `_Supervisor._research` | Starts one research session if both caps allow and this supervisor has not run one yet |
@@ -121,16 +122,30 @@ them every second, because nothing signals the supervisor when a process that is
 adoption and the heartbeat. It still takes the lock, so beside a live supervisor it exits at once
 like any other tick.
 
-## The three lanes
+## The four lanes
 
-Each pass fills three lanes:
+Each pass fills four lanes:
 
 | Lane | Sessions | Starts | Paused? |
 |---|---|---|---|
 | Pipeline | up to `max_concurrent_agent_sessions` (default 3), one per video | the oldest workable videos not already running or cooling down, each under its own agent, model and effort | starts nothing new |
 | Research | one | at most **once per supervisor**, when both research caps allow | starts nothing new |
 | Script profiles | one | the next pending profile, one after another | **still runs** |
+| Mascots | one | the next pending mascot (`PENDING` or `BUILDING`), one per pass | **still runs** |
 
+- **The mascot lane** builds a mascot's drawing code (`_Supervisor._mascots`). Like the profile lane it
+  sits above the pause check, because building a mascot spends no ElevenLabs credit and produces no
+  video, so a pause would only strand a dashboard row at *Pending*. It starts at most one session per
+  pass, after `POST /mascots/<id>/record-attempt` has counted the attempt (fail closed, as for
+  profiles). At the attempt cap (`tubematic_core/mascots.py::MAX_MASCOT_ATTEMPTS`) the server marks
+  the mascot `FAILED`; if an approved version already exists the error says it is still in use, and
+  videos keep rendering with it. The session runs under the agent pinned on the mascot (the dashboard's
+  create form or `POST /mascots`), else the default agent, with the mascot's model and effort or that
+  agent's. **A pinned agent that has been uninstalled is never rerouted:** the mascot is skipped with
+  one logged line and no attempt is recorded, the same rule a video follows. The prompt carries only
+  the mascot's id; the brief, any change request and the rendered sheets travel over MCP
+  ([Mascot authoring](06-mcp-server.md#mascot-authoring)). Usage is recorded under the operation
+  `agent_mascot`.
 - **The lock** is `~/.tubematic-agent/poll.lock`. It sits beside the logs rather than in `/tmp` so
   every Tubematic file lives at a known location, and so pollers that share a home directory — Kasm
   sessions on one persistent profile — share one lock. The file is never deleted: unlinking a locked
@@ -290,7 +305,7 @@ wait is over, rather than leaving the video to a later tick.
 - **Every run's usage is recorded, retries included** — each was a separately billed session. The
   CLIs run in their JSON output modes (listed under [Agents](07-agent-layer.md#agents)) so `_report_usage` can parse what each run used
   and POST it to `/usage/agent-session`, tagged with the kind of run (`agent_pipeline`,
-  `agent_research`, `agent_profile`) and, for a pipeline session, **its video with the status it was
+  `agent_research`, `agent_profile`, `agent_mascot`) and, for a pipeline session, **its video with the status it was
   at when the session started** — the stage the dashboard labels that session with. Sessions recorded
   before the poller ran one video per session (`agent_unscoped` among them) could cover several
   videos; those are split evenly across their videos when a video's cost is shown. Claude and OpenCode sessions carry their own

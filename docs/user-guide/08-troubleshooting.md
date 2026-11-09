@@ -111,7 +111,7 @@ the `render_timeout_secs` ceiling (a render that advances, but too slowly). Rais
 look for a scene doing something expensive — a full-bleed blur across hundreds of frames is the
 classic case.
 
-**A Cartoon 3D video went straight to `FAILED` with "renders on the GPU only".** The style is
+**A Cartoon 3D video, or a video with a mascot, went straight to `FAILED` with "renders on the GPU only".** The style or the mascot is
 refused unless the renderer's GPU works, but a video approved before the GPU went away reaches the
 renderer anyway. Fix the GPU (Settings → Rendering → Test GPU, or `python onboard.py --step gpu`)
 and create the video again; the failed one is not retried.

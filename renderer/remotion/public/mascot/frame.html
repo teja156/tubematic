@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>mascot</title>
+<!-- The mascot's own page, loaded in an iframe by the Remotion layer (or by the sheet renderer). The kit runs here in p5
+     global mode, isolated from the React tree. Query: code=<same-origin path to the mascot's JS> (required),
+     sheet=turn|feels|act (optional: draw a model sheet instead of following a cue track). Nothing is loaded from the
+     network: every script is local, and no web font is used. -->
+<style>html,body{margin:0;background:transparent;color-scheme:normal;overflow:hidden}.p5Canvas{display:none!important}#out{display:block}</style>
+<script>
+  const Q = new URLSearchParams(location.search), CODE = Q.get('code') || '', SHEET = Q.get('sheet') || '';
+  // only a plain same-origin path may name the mascot's code: no scheme, no protocol-relative URL
+  if (!/^[A-Za-z0-9_.\/-]+\.js$/.test(CODE) || CODE.startsWith('//')) throw new Error('frame.html needs ?code=<same-origin path to a .js file>');
+  if (SHEET && !['turn', 'feels', 'act'].includes(SHEET)) throw new Error('unknown sheet: ' + SHEET);
+  // a sheet is a 1920x1080 page on paper; the overlay is a transparent 560x640 box
+  window.KIT_W = SHEET ? 1920 : 560; window.KIT_H = SHEET ? 1080 : 640; window.KIT_TRANSPARENT = !SHEET;
+  const PROJECT = SHEET ? { duration: 7, bpm: 110, offset: 0 } : { duration: 600, bpm: 100, offset: 0 };
+  // scripts are written synchronously, in order, so they all run before p5 starts its global-mode sketch on load
+  const script = src => document.write('<script src="' + src + '"><\/script>');
+  script('lib/p5.min.js'); script('lib/p5.brush.js');
+</script>
+</head><body>
+<script>document.write('<canvas id="out" width="' + KIT_W + '" height="' + KIT_H + '"></canvas>');</script>
+<script>
+  script('kit/core.js'); script('kit/expressions.js'); script('kit/timeline.js'); script(CODE);
+  script(SHEET ? 'sheet.js' : 'driver.js');
+</script>
+</body></html>
