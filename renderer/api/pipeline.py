@@ -73,7 +73,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
 SETTINGS_SPEC = {
     "pipeline_paused":        ("bool",      "false"),
     # Off by default, and experimental (TMDEV-165). Keep in sync: onboard/
-    # config.py GEMINI_REVIEW_ENABLED, its actions.py fallbacks, worker.py.
+    # config.py GEMINI_REVIEW_ENABLED, its actions.py fallbacks, render_results.py.
     "gemini_review_enabled":  ("bool",      "false"),
     # max_render_retries caps RENDER retries only — crash, timeout, a renderer
     # restart and an expired render lease (render_results.max_render_retries).

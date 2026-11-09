@@ -54,6 +54,6 @@ fi
 # the shared permission preamble for both, rather than a process launcher.
 #
 # tubematic-renderer deliberately does NOT come through here — its compose
-# `command:` replaces the Dockerfile CMD outright, and worker.py sets its own
+# `command:` replaces the Dockerfile CMD outright, and render_agent.py sets its own
 # os.umask(0).
 exec "$@"
