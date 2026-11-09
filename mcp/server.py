@@ -315,12 +315,12 @@ RESOLVED_VISUAL_STYLES = VALID_CANVASES
 # Keep in sync: the other copy of this block (pinned by an agreement test).
 CARTOON3D_NEEDS_GPU = (
     "Cartoon 3D renders on the GPU only (on the CPU a 90-second Short takes about 50 minutes). "
-    "The renderer has no working GPU: configure one with `python onboard.py --step gpu`, test it "
-    "on the dashboard Settings page under GPU, or choose another visual style."
+    "No renderer has a working GPU: configure one with `python onboard.py --step gpu` or add a GPU "
+    "renderer, test it under Settings → Rendering → Renderers on the dashboard, or choose another visual style."
 )
 CARTOON3D_GPU_UNKNOWN = (
-    "Cartoon 3D renders on the GPU only, and the renderer has not tested its GPU yet (it does so "
-    "when it starts, and on Test GPU on the dashboard Settings page). Test it first, then choose "
+    "Cartoon 3D renders on the GPU only, and no renderer has tested its GPU yet (each does so "
+    "when it starts, and on Test GPU under Settings → Rendering → Renderers). Test it first, then choose "
     "the style."
 )
 # What videos.resolved_renderer holds: which renderer "auto" settled on, written

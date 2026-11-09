@@ -51,6 +51,12 @@ class Reporter:
     def fail(self, msg: str, hint: str = "") -> None:
         raise NotImplementedError
 
+    def raw(self, msg: str) -> None:
+        """A line meant to be copied whole — a token, a command. Defaults to
+        info(); a terminal reporter prints it without wrapping or markup, so a
+        long token copies as one line."""
+        self.info(msg)
+
     def spinner(self, msg: str):
         """Context manager shown for the duration of a long-running call
         with no incremental progress of its own (e.g. a docker build) — an

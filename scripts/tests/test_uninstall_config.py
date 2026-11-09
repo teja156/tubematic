@@ -210,6 +210,16 @@ def test_a_kept_data_root_names_the_gpu_choice(uninstall, populated, monkeypatch
     assert "compose.gpu.json" in capsys.readouterr().out
 
 
+def test_a_kept_data_root_names_the_published_renderers_port(uninstall, populated, monkeypatch,
+                                                              capsys):
+    """A reinstall over a kept data root would publish the render gateway's
+    port to other machines again (TMDEV-190), so the file that does it is named."""
+    (populated / "compose.renderers.json").write_text("{}")
+    _answer(uninstall, monkeypatch, False)
+    uninstall.remove_data_root()
+    assert "compose.renderers.json" in capsys.readouterr().out
+
+
 def test_data_root_step_with_no_root_is_not_an_error(uninstall, tmp_path, monkeypatch):
     monkeypatch.setattr(uninstall, "DATA_ROOT", tmp_path / "gone")
     uninstall.remove_data_root()  # must not raise

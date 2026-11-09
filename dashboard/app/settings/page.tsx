@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { Agent, GpuStatus, Mascot, Settings, PipelineStatus, RetentionBacklog, Voice } from "@/lib/types";
 import { SectionLabel } from "@/components/SectionLabel";
 import { AutoPilotPanel } from "@/components/AutoPilotPanel";
-import { GpuPanel } from "@/components/GpuPanel";
+import { RenderersPanel } from "@/components/RenderersPanel";
 import { CostsPanel } from "@/components/CostsPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastStack, useToasts } from "@/components/Toast";
@@ -902,7 +902,7 @@ export default function SettingsPage() {
         </select>
       </Row>
           <SaveBar tabKey="rendering" count={dirtyFields("rendering").length} saving={saving} onSave={saveTab} />
-          <GpuPanel />
+          <RenderersPanel />
         </TabsContent>
 
         <TabsContent value="logs">

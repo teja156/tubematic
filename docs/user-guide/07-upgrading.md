@@ -107,6 +107,13 @@ the steps in the order that keeps your data safe:
    `~/.tubematic-data/compose.gpu.json` is no longer in the machine. The new renderer could not
    start, after everything had already been stopped. Run `python3 onboard.py --step gpu` to pick
    another GPU or go back to the CPU, then re-run. See [GPU rendering](10-gpu-rendering.md).
+
+   **It refuses the same way when `~/.tubematic-data/compose.renderers.json` cannot be read** — the
+   file that publishes the render gateway's port for [remote renderers](11-remote-renderers.md),
+   edited by hand or damaged. Compose would refuse it at the start, after the stop. Re-run
+   `python3 onboard.py --step renderers` to write it again (or turn remote renderers off), then
+   re-run the upgrade. A readable one is simply carried over: it lives with your data, so the new
+   install publishes the same port.
 2. Installs `scripts/requirements.txt` into this directory's `.venv`.
 3. **Pulls (release) or builds (source) the new images.** The old stack keeps running meanwhile —
    containers keep the image they started from until they are recreated.
@@ -203,7 +210,13 @@ python scripts/status.py                   # videos, costs, disk usage
 ```
 
 [Installing — Verifying an install](02-installing.md#verifying-an-install) explains each of
-these. If anything looks wrong before you've made any new changes of your own, the fastest way back
+these.
+
+**Then upgrade each remote renderer**, if you have any. `upgrade.py` upgrades only this machine, so
+from now on each [remote renderer](11-remote-renderers.md) runs a different version from main,
+shows **needs upgrade** on Settings → Rendering, and takes no work until you run
+`python3 tubematic_remote_renderer.py upgrade` on its own machine. See
+[Remote renderers — Upgrading](11-remote-renderers.md#upgrading). If anything looks wrong before you've made any new changes of your own, the fastest way back
 is [Rollback policy](#rollback-policy) below.
 
 ---
@@ -363,6 +376,9 @@ The supported path back to an older version is:
    ```bash
    docker rm -f tubematic-worker
    ```
+   A version before 2.1.0 has no render gateway either, so any
+   [remote renderers](11-remote-renderers.md) cannot work with it: remove each one on its machine
+   with `python3 tubematic_remote_renderer.py remove`.
 2. **Restore the pre-upgrade backup.** If the upgrade you're reverting added a migration, one was
    taken automatically before it ran, named `tubematic-before-v<version>-<timestamp>.db` under
    `~/.tubematic-data/backups/`. **This discards every row written since the upgrade** — every

@@ -25,9 +25,11 @@ def _no_real_secrets(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _no_real_gpu_override(tmp_path, monkeypatch):
+def _no_real_compose_overrides(tmp_path, monkeypatch):
     """_compose() adds `-f` flags when ~/.tubematic-data/compose.gpu.json exists
     (TMDEV-178). A developer machine with a GPU configured would otherwise
     change every argv a test asserts."""
-    from onboard import gpu
+    from onboard import gpu, remote_renderers
     monkeypatch.setattr(gpu, "OVERRIDE_PATH", tmp_path / "compose.gpu.json")
+    # Same for the remote-renderers override (TMDEV-190).
+    monkeypatch.setattr(remote_renderers, "OVERRIDE_PATH", tmp_path / "compose.renderers.json")

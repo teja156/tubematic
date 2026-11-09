@@ -346,6 +346,49 @@ def test_report_is_clean_on_a_healthy_install(tmp_path, monkeypatch):
     assert rep.warns == []
 
 
+def _healthy(tmp_path, monkeypatch):
+    path = _db(tmp_path)
+    py = tmp_path / ".venv" / "bin" / "python3"
+    py.parent.mkdir(parents=True)
+    py.touch()
+    cron = f"*/30 * * * * {py} {tmp_path}/scripts/poll.py >> /x/cron.log 2>&1\n"
+
+    def run(cmd, **kw):
+        if cmd[:2] == ["crontab", "-l"]:
+            return subprocess.CompletedProcess(cmd, 0, cron, "")
+        return subprocess.CompletedProcess(cmd, 0, "running healthy\n", "")
+    monkeypatch.setattr(stack.subprocess, "run", run)
+    return path
+
+
+def _store_gateway_address(path, address):
+    con = sqlite3.connect(path)
+    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES "
+                "('render_gateway_address', ?)", (address,))
+    con.commit()
+    con.close()
+
+
+def test_report_names_the_remote_renderer_address(tmp_path, monkeypatch):
+    """`service.py status` / `upgrade.py --check` say whether other machines
+    can reach the gateway, and at which address (TMDEV-190)."""
+    from onboard import remote_renderers
+    path = _healthy(tmp_path, monkeypatch)
+    _store_gateway_address(path, "render.example.com:4443")
+    remote_renderers.override_path().write_text(remote_renderers.render_override(4443))
+    rep = _Rep()
+    assert stack.report(rep, db_path=path, repo_root=tmp_path, mode="release") is True, rep.warns
+    assert any("Remote renderers: on" in i and "render.example.com:4443" in i for i in rep.infos)
+
+
+def test_report_flags_half_set_up_remote_renderers(tmp_path, monkeypatch):
+    path = _healthy(tmp_path, monkeypatch)
+    _store_gateway_address(path, "render.example.com:4443")
+    rep = _Rep()
+    assert stack.report(rep, db_path=path, repo_root=tmp_path, mode="release") is False
+    assert any("no port is published" in w for w in rep.warns)
+
+
 # ── Review fixes: reconciliation can take the whole stack down ───────────────
 
 STALE = [("tubematic_db-data", "/old/data", "/new/data")]

@@ -32,7 +32,9 @@ def _poll_state_in_tmp(tmp_path, monkeypatch):
     except ImportError:
         return
     monkeypatch.setattr(stack, "SESSIONS_REGISTRY", tmp_path / "poll-sessions.json")
-    # _compose() adds -f flags when a GPU override exists (TMDEV-178); a
-    # developer's real one must not change the argv service.py tests assert.
-    from onboard import gpu
+    # _compose() adds -f flags when a GPU (TMDEV-178) or remote-renderers
+    # (TMDEV-190) override exists; a developer's real one must not change the
+    # argv service.py tests assert.
+    from onboard import gpu, remote_renderers
     monkeypatch.setattr(gpu, "OVERRIDE_PATH", tmp_path / "compose.gpu.json")
+    monkeypatch.setattr(remote_renderers, "OVERRIDE_PATH", tmp_path / "compose.renderers.json")

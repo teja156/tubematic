@@ -870,6 +870,14 @@ def remove_data_root() -> None:
         # renderer again, so say it is there rather than let that surprise.
         info(f"The GPU choice is still in {gpu_override} — a reinstall keeps using it; "
              f"delete it to start on the CPU: rm {gpu_override}")
+    # Keep in sync with onboard/remote_renderers.py.
+    renderers_override = DATA_ROOT / "compose.renderers.json"
+    if renderers_override.is_file():
+        # Same surprise: a reinstall would publish the render gateway's port
+        # to other machines again.
+        info(f"The remote-renderers port is still published by {renderers_override} — a "
+             f"reinstall keeps publishing it; delete it to keep the port closed: "
+             f"rm {renderers_override}")
     skipped(f"Data root kept — remaining content is under {DATA_ROOT}")
 
 

@@ -2,7 +2,9 @@
 
 Tubematic runs as five Docker containers plus one cron job, all on a single machine, coordinating
 through one SQLite file. The renderer is the one container that never opens it: it works through the
-render gateway the API serves.
+render gateway the API serves. That is also what lets other machines render: an optional **remote
+renderer** is the same renderer in a container on another host, reaching the gateway over the
+network ([Remote renderers](../user-guide/11-remote-renderers.md)).
 
 ```mermaid
 flowchart TB
@@ -26,6 +28,10 @@ flowchart TB
 
     EXT["ElevenLabs · Gemini · OpenAI<br/>youtube-transcript.io · postforme.dev · Discord"]
 
+    subgraph REMOTE["Other machines (optional)"]
+        RREND["tubematic-remote-renderer<br/>render_agent.py — no database"]
+    end
+
     CRON --> POLL
     POLL -->|HTTP| FLASK
     POLL -->|spawns| AGENT
@@ -42,6 +48,7 @@ flowchart TB
     MCP --- FILES
     WORKER --- FILES
     RENDER ---|"scenes/generated, jobs (read-only)"| FILES
+    RREND -->|"HTTPS :4443, published only after<br/>onboard.py --step renderers"| FLASK
 
     MCP --> EXT
     WORKER --> EXT
@@ -54,7 +61,7 @@ flowchart TB
 
 | Container | Image | Ports | Role |
 |---|---|---|---|
-| `tubematic-api` | built from `renderer/Dockerfile` | 4000, and 4443 on the Compose network | The Flask Pipeline API, and the render gateway renderers call ([HTTP API — The render gateway](05-http-api.md#the-render-gateway)) |
+| `tubematic-api` | built from `renderer/Dockerfile` | 4000, and 4443 on the Compose network (published on the host only once remote renderers are turned on) | The Flask Pipeline API, and the render gateway renderers call ([HTTP API — The render gateway](05-http-api.md#the-render-gateway)) |
 | `tubematic-mcp` | **the same image** | 4100 | The MCP server — the agent's entire interface |
 | `tubematic-worker` | **the same image** | none | The worker: publishing, Auto Pilot, analytics, price sync, retention, notifications, the stalled-voicing check, the AI review of uploaded renders, and the render-lease and GPU-wait backstops. See [The Worker](12-the-worker.md) |
 | `tubematic-renderer` | **the same image** | 4455, Compose network only | The built-in renderer: renders what the render gateway hands it, tests its GPU, and runs the Cartoon 3D stills server beside it. No database. See [Rendering and Review](11-rendering-and-review.md) |
@@ -101,13 +108,19 @@ MCP server down, and an agent session survives a Flask restart.
 | 3000 | Dashboard — all interfaces in a checkout, `127.0.0.1` in a release install; behind a login either way |
 | 4000 | Flask Pipeline API — `127.0.0.1` only |
 | 4100 | MCP server — `127.0.0.1` only |
-| 4443 | The render gateway, HTTPS — Compose network only, not published |
+| 4443 | The render gateway, HTTPS — Compose network only, until `onboard.py --step renderers` publishes it on every interface (the host port is the one the operator picked, 4443 by default) for remote renderers |
 | 4455 | The renderer's stills server — Compose network only, never published |
 | 3001 / 4001 | The isolated end-to-end test stack |
 
 Loopback binding costs nothing between containers: they reach each other over the compose network by
 service name, which never touches a published port. See
 [Infrastructure — Why the ports bind to loopback](16-infrastructure.md#why-the-ports-bind-to-loopback).
+
+**The gateway is the one port that may face the network, and it is opt-in.** Remote renderers have
+to reach it, so it cannot be bound to loopback; it is published only by an override file the
+`renderers` step writes, so an install that never asked for remote renderers exposes nothing new.
+It serves TLS only and authenticates every route but its version and enrollment endpoints — see
+[Infrastructure — Remote-renderers override](16-infrastructure.md#remote-renderers-override).
 
 Binding is not the only lock. The dashboard needs a sign-in, and the API and the MCP server each need
 their own bearer token on every request but their health probes — see
@@ -128,7 +141,7 @@ in-process state between containers.
 | AI agent | MCP server | MCP over HTTP on 4100, with the MCP token |
 | Cron poller | Flask API | HTTP with the API token, including which agent runs each video. It has **no database access, by design** |
 | Installer | Database | Direct SQLite from the host — the only writer of the `agents` table |
-| Renderer | Render gateway | HTTPS on 4443 with a renderer credential, trusting exactly the gateway's pinned certificate: heartbeat, claim, bundle download, mp4 upload, result |
+| Renderer (built-in, or remote on another machine) | Render gateway | HTTPS on 4443 with a renderer credential, trusting exactly the gateway's pinned certificate: heartbeat, claim, bundle download, mp4 upload, result. The built-in renderer over the Compose network, a remote one over the published port |
 | Worker and render gateway | Database | Guarded `UPDATE`s |
 | Everything | Database | SQLite in WAL mode |
 
@@ -256,6 +269,8 @@ The copies that matter:
 | `_pick_agent_id`, `_agent_model_error` | `renderer/api/pipeline.py`, `mcp/server.py` — `_pick_agent_id` is pinned by an agreement test |
 | `POLL_LOG_DIR` | `scripts/config.py`, `onboard/config.py` |
 | API-key redaction in error strings | `renderer/api/ai_review.py`, `mcp/server.py` — predates `tubematic_core` and is a reasonable future move into it |
+| Enrollment token decoding, the certificate pin, the `nvidia-smi` parse, the GPU environment, the backend image name | `scripts/tubematic_remote_renderer.py` and their originals in `tubematic_core/renderers.py`, `onboard/gpu.py` and `scripts/gen_release_compose.py`. The script runs on a machine with no checkout, so it imports nothing of ours; each copy is pinned by an agreement test in `scripts/tests/test_tubematic_remote_renderer.py` |
+| The remote-renderer host command and the `render_gateway_address` row name | `onboard/remote_renderers.py`, `renderer/api/pipeline.py` |
 
 The rest of the schema is **not** a copy any more. `renderer/api/pipeline.py::_init_db` and
 `mcp/server.py::_init_db` used to each define the whole thing by hand; both now do nothing but call
@@ -274,6 +289,8 @@ additionally repeated in three to five places without such a comment, so grep fo
 | Render times out | Requeued automatically; nothing is known to be wrong with the job |
 | Renderer container dies mid-render | Its first heartbeat after the restart makes the gateway count the render as a failure and requeue or escalate it |
 | A renderer stops reporting (switched off, network gone) | Its lease runs out after five minutes, and the worker counts the render as a failure and requeues or escalates it |
+| No renderer is enabled, online and on main's version while videos are queued | They wait; the Pipeline page shows a **NOTHING CAN RENDER** banner. A GPU-only video is failed by the worker's GPU-wait sweep instead, after at most 30 minutes |
+| A remote renderer runs another version than main (main was upgraded) | It keeps heartbeating, is listed as needing an upgrade and claims nothing until its host script's `upgrade` is run |
 | The render gateway is unreachable | The renderer claims nothing, logs the error and tries again every 30 seconds. A render already running finishes, but its heartbeats no longer extend its lease, so after five minutes the worker re-queues the video, and the late result is dropped |
 | AI review errors | **Fails open** — the video advances to `VIDEO_READY`, and the error is written to `gemini_feedback` and the comment thread |
 | MCP server dies | Container restarts; the in-memory scene claim is lost, which is harmless |

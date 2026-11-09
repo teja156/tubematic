@@ -618,7 +618,7 @@ a renderer. Migration `0019` adds them. How they are used is on
 | `state`, `current_video_id` | TEXT NOT NULL | `idle`, `''`. What the renderer last reported |
 | `last_error` | TEXT NOT NULL | `''`. The renderer's own last problem, as reported, or "credential expired — re-enroll" |
 | `created_at` | TEXT NOT NULL | |
-| `removed_at` | TEXT | `NULL` = active. The built-in renderer is never removed |
+| `removed_at` | TEXT | `NULL` = active. Set by `DELETE /renderers/<id>` (the dashboard's Remove), which also clears both credential hashes; the row is kept. The built-in renderer is never removed |
 
 | `renderer_enrollments` | Type | Notes |
 |---|---|---|

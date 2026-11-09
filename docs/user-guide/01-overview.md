@@ -58,9 +58,9 @@ work, before **voicing spends money**, and before a finished video goes out.
 
 | Piece | What it is | Where |
 |---|---|---|
-| **Pipeline API** | Flask. The state machine, settings, and every read/write the dashboard makes. Also serves the render gateway the renderer works through | `renderer/api/`, port 4000 (the gateway: HTTPS 4443, inside Docker only) |
+| **Pipeline API** | Flask. The state machine, settings, and every read/write the dashboard makes. Also serves the render gateway the renderer works through | `renderer/api/`, port 4000 (the gateway: HTTPS 4443, inside Docker only unless [remote renderers](11-remote-renderers.md) are on) |
 | **MCP server** | The AI agent's entire interface — 48 tools and nothing else | `mcp/`, its own container, port 4100 |
-| **Renderer** | Asks the API for the next video, runs Remotion, uploads the result, tests the GPU. Its own container, with no access to the database. See [Rendering and Review](../developer/11-rendering-and-review.md) | `renderer/api/render_agent.py` |
+| **Renderer** | Asks the API for the next video, runs Remotion, uploads the result, tests the GPU. Its own container, with no access to the database; other machines can render too, as [remote renderers](11-remote-renderers.md). See [Rendering and Review](../developer/11-rendering-and-review.md) | `renderer/api/render_agent.py` |
 | **Worker** | Runs the AI review of each finished render, sends due scheduled posts and settles posts in flight, runs Auto Pilot, and does the periodic sweeps (analytics, prices, retention, notifications). Its own container, so none of it waits behind a render. See [The Worker](../developer/12-the-worker.md) | `renderer/api/worker.py` |
 | **Remotion project** | The React video codebase — a curated component library plus per-video generated scenes | `renderer/remotion/` |
 | **Dashboard** | Next.js. Where a human creates videos, approves, configures, and watches — the way you run Tubematic | `dashboard/`, port 3000 |

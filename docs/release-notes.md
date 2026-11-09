@@ -94,6 +94,31 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   you chose. Otherwise it renders on the CPU, so a GPU that stops working slows rendering down but
   never fails a video. Settings → Rendering shows which GPU is in use, the driver, and the reason
   when it is not being used.
+- **Other machines can render your videos.** Turn on remote renderers once on your Tubematic machine
+  with `python3 onboard.py --step renderers`, then add any number of other Linux machines with Docker
+  — a bigger box, or one with an NVIDIA GPU — as renderers. Each renders one video at a time
+  alongside your own machine, and Tubematic hands each video to whichever renderer would finish it
+  first. A Cartoon 3D or mascot video goes only to a renderer whose GPU test passed, so a GPU on
+  another machine is enough to use those styles. A renderer never keeps your videos, your database or
+  your API keys: it downloads one video's files, renders it, uploads the result and deletes its copy.
+  It connects over an encrypted connection and trusts only your own machine's certificate. See
+  [Remote renderers](user-guide/11-remote-renderers.md).
+- **A Renderers panel in Settings → Rendering.** It lists every renderer,
+  your own machine's first, with whether it is online, busy, offline, disabled, needs an upgrade or
+  has an expired credential; its CPUs, memory and GPUs; whether its GPU test passed and what graphics
+  device it really got; and its last error. You can disable, rename and remove renderers, test each
+  one's GPU, and **Add renderer**, which gives you a one-time token (valid for an hour) and the
+  command to run on the new machine. The token is not part of the command: the script asks for it
+  and you paste it, so it never lands in that machine's process list or shell history.
+- **A "Nothing can render" banner on the Pipeline page** when videos are waiting to render and no
+  renderer can take them — every one disabled, offline, on a different version or with an expired
+  credential — with a link to
+  Settings → Rendering.
+- **`tubematic_remote_renderer.py`, a download of its own on every release** (and in the release
+  tarball's `scripts/` folder). It sets up a renderer on another machine with a single command,
+  checks your machine's certificate before sending anything, and later upgrades or removes the
+  renderer. The container it leaves running does not keep the token (`--token-stdin` reads it from a
+  pipe for scripted installs). It is listed in the release's `CHECKSUMS.txt`, so you can verify it before running it.
 
 ### Changed
 
@@ -145,9 +170,6 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 - **Restart open agent sessions after upgrading.** The upgrade redeploys every installed agent's
   skills, which adds the mascot-drawing skill, and re-registers the MCP server, whose tools changed.
   An agent session that was already open keeps the old tools until you restart it.
-- **Going back to 2.0.0 needs the automatic backup restored.** The database gains new tables, and
-  2.0.0 refuses a newer database. Restoring the backup that the upgrade takes before changing the
-  database is the way back; mascots made since are lost with it.
 - **Cartoon 3D needs a working GPU.** The style is greyed out on the dashboard and refused by the
   API until the renderer's GPU test passes (Settings → Rendering → Test GPU). A Cartoon 3D video
   whose GPU stops working, before or during its render, is not rendered on the CPU or handed back to
@@ -184,12 +206,29 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   from the database beside the API that now hands them out. Run the upgrade without `--no-stop`;
   later upgrades accept it again. A video that was rendering when you upgraded is put back in the
   queue automatically, which counts as one of its render retries.
-- **Going back to 2.0.x needs one extra step: remove the worker.** The older version's Compose file
-  has no `tubematic-worker` and will not stop it, so run `docker rm -f tubematic-worker` before you
-  restore the backup, or it keeps publishing with the newer code beside the older stack. The new
-  files in `~/.tubematic-data/secrets/` can stay; 2.0.x ignores them.
-- **Going back to 2.0.0 ignores the GPU choice.** The renderer then runs on the CPU; nothing else is
-  affected.
+- **Remote renderers are off until you turn them on.** The upgrade publishes no new port and changes
+  nothing about rendering: your own machine keeps rendering every video. The port remote renderers
+  connect to (4443 by default) is opened only when you run `python3 onboard.py --step renderers`,
+  and it then listens on every network interface — allow it through your network firewall from your
+  renderer machines only, since Docker's published ports are not restricted by `ufw` (see
+  [Remote renderers](user-guide/11-remote-renderers.md)).
+- **After every future upgrade, upgrade each remote renderer too.** Upgrading your Tubematic machine
+  does not reach the others: until you run `python3 tubematic_remote_renderer.py upgrade` on each
+  one, it shows **needs upgrade** and renders nothing. Your own machine keeps rendering meanwhile.
+- **A remote renderer left switched off for weeks may need adding again.** Its credential lasts 30
+  days and renews itself while the renderer is online; one that stays offline until it runs out shows
+  **credential expired** — remove it and add it with a new token. Settings → Rendering shows each
+  renderer's expiry.
+- **Going back to 2.0.x takes these steps, in this order.**
+  1. Remove each remote renderer on its own machine with `python3 tubematic_remote_renderer.py remove`:
+     2.0.x has nothing for them to connect to.
+  2. Run `docker rm -f tubematic-worker`. The older version's Compose file has no `tubematic-worker`
+     and will not stop it, so it would keep publishing with the newer code beside the older stack.
+  3. Restore the automatic backup the upgrade took before it changed the database: the database gains
+     new tables, and 2.0.x refuses a newer database. Mascots made since are lost with it.
+
+  The new files in `~/.tubematic-data/secrets/` can stay (2.0.x ignores them), and so can a GPU
+  choice (2.0.0 then renders on the CPU; nothing else is affected).
 
 ---
 

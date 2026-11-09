@@ -710,6 +710,112 @@ def test_a_prerelease_version_is_published_as_a_github_prerelease(release_jobs):
     assert "preflight" in _ancestors(name, release_jobs)
 
 
+def test_the_remote_renderer_script_is_a_checksummed_release_asset(release_jobs):
+    """A remote renderer host downloads tubematic_remote_renderer.py on its
+    own, with no tarball, so it must be an asset of the Release and covered by
+    the CHECKSUMS.txt published beside it -- and the copy must come from the
+    tagged checkout, in the job that writes the checksums."""
+    build = release_jobs["build-tarball"]
+    run = _run_text(build)
+    assert "cp scripts/tubematic_remote_renderer.py dist/" in run
+    checksum_steps = [st for st in _steps_of(build) if "CHECKSUMS.txt" in st.get("run", "")]
+    assert len(checksum_steps) == 1
+    checksum = checksum_steps[0]["run"]
+    assert "tubematic_remote_renderer.py" in checksum
+    assert "tubematic-v${{ needs.preflight.outputs.version }}.tar.gz" in checksum
+    steps = _steps_of(build)
+    copy_at = next(i for i, st in enumerate(steps) if "tubematic_remote_renderer.py dist/" in st.get("run", ""))
+    assert copy_at < steps.index(checksum_steps[0])
+
+    release_step = next(st for job in release_jobs.values() for st in _steps_of(job)
+                        if "action-gh-release" in st.get("uses", ""))
+    files = release_step["with"]["files"].split()
+    assert "dist/tubematic_remote_renderer.py" in files
+    assert "dist/CHECKSUMS.txt" in files
+
+
+def _build_step(release_jobs, name):
+    [step] = [s for s in _steps_of(release_jobs["build-tarball"]) if s.get("name") == name]
+    return step
+
+
+STAMP_STEP = "Stamp the release owner into the remote renderer script"
+ADD_SCRIPT_STEP = "Add the remote renderer script"
+
+
+def _load_script(path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("stamped_remote_renderer", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_release_owner_is_stamped_into_the_remote_renderer_script(release_jobs, tmp_path):
+    """A fork that releases under its own owner pushes its own backend image;
+    its remote renderers must pull that one, not the upstream image of the
+    same version (main's exact-version check would accept it). The step is
+    run for real, as Actions runs it, on a copy of the script, with a
+    non-default owner."""
+    steps = _steps_of(release_jobs["build-tarball"])
+    names = [st.get("name", "") for st in steps]
+    stamp = _build_step(release_jobs, STAMP_STEP)
+    assert stamp["env"]["OWNER"] == "${{ needs.preflight.outputs.owner }}"
+    # Before the tarball is built and before the asset is copied, so both
+    # carry the stamped file.
+    assert names.index(STAMP_STEP) < names.index("Build release tarball") < names.index(ADD_SCRIPT_STEP)
+
+    script = Path(REPO_ROOT) / "scripts" / "tubematic_remote_renderer.py"
+    original = script.read_text()
+    # The pattern matches exactly one line of the real script.
+    assert len(re.findall(r'^GITHUB_OWNER = "[^"]*"$', original, re.M)) == 1
+    (tmp_path / "scripts").mkdir()
+    copy = tmp_path / "scripts" / script.name
+    copy.write_text(original)
+    proc = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", stamp["run"]], cwd=tmp_path,
+                          capture_output=True, text=True, env={**os.environ, "OWNER": "acme-forks"})
+    assert proc.returncode == 0, proc.stderr
+    stamped = _load_script(copy)
+    assert stamped.GITHUB_OWNER == "acme-forks"
+    assert stamped.default_image("2.1.0") == "ghcr.io/acme-forks/tubematic-backend:2.1.0"
+    # Only that line changed, and the repository's own file keeps its default.
+    diff = [(a, b) for a, b in zip(original.splitlines(), copy.read_text().splitlines()) if a != b]
+    assert diff == [(next(l for l in original.splitlines() if l.startswith("GITHUB_OWNER = ")),
+                     'GITHUB_OWNER = "acme-forks"')]
+    assert script.read_text() == original
+
+
+@pytest.mark.parametrize("text,owner", [
+    ('GITHUB_OWNER = "a"\nGITHUB_OWNER = "b"\n', "acme"),   # two lines: ambiguous
+    ('OWNER = "teja156"\n', "acme"),                         # renamed: nothing to stamp
+    ('GITHUB_OWNER = "teja156"\n', "Acme/../x"),             # an owner unfit for an image name
+])
+def test_the_stamp_fails_the_release_rather_than_shipping_the_default(release_jobs, tmp_path, text, owner):
+    stamp = _build_step(release_jobs, STAMP_STEP)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "tubematic_remote_renderer.py").write_text(text)
+    proc = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", stamp["run"]], cwd=tmp_path,
+                          capture_output=True, text=True, env={**os.environ, "OWNER": owner})
+    assert proc.returncode != 0
+
+
+@pytest.mark.parametrize("same", [True, False])
+def test_the_asset_must_be_the_tarballs_copy(release_jobs, tmp_path, same):
+    import tarfile
+    step = _build_step(release_jobs, ADD_SCRIPT_STEP)
+    assert step["env"]["VERSION"] == "${{ needs.preflight.outputs.version }}"
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "dist").mkdir()
+    (tmp_path / "scripts" / "tubematic_remote_renderer.py").write_text('GITHUB_OWNER = "acme"\n')
+    inside = tmp_path / "inside.py"
+    inside.write_text('GITHUB_OWNER = "acme"\n' if same else 'GITHUB_OWNER = "teja156"\n')
+    with tarfile.open(tmp_path / "dist" / "tubematic-v2.1.0.tar.gz", "w:gz") as tar:
+        tar.add(inside, arcname="tubematic-v2.1.0/scripts/tubematic_remote_renderer.py")
+    proc = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", step["run"]], cwd=tmp_path,
+                          capture_output=True, text=True, env={**os.environ, "VERSION": "2.1.0"})
+    assert (proc.returncode == 0) is same, proc.stderr
+
+
 # ── Docs site (docs.tubematic.ai) ─────────────────────────────────────────
 # release.yml's publish-docs job and docs-site.yml both run the composite
 # action .github/actions/sync-docs-site, which syncs docs/ into the

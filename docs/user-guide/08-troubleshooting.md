@@ -108,7 +108,15 @@ one that cannot reach the gateway or is refused by it. Its log says which:
 
 `python3 scripts/service.py status` reports the containers; a renderer that is up but silent for
 minutes after `first heartbeat accepted` simply has nothing queued that it may take — a GPU-only
-video waits for a renderer whose GPU test passed.
+video waits for a renderer whose GPU test passed, and with several renderers the video goes to the
+one that would finish first.
+
+**The Pipeline page says NOTHING CAN RENDER.** Videos are queued and no renderer is enabled, online
+and on this install's version. Settings → Rendering shows each renderer's state: enable one, start
+the built-in one (`python3 scripts/service.py start tubematic-renderer`), or upgrade the remote ones.
+
+**A remote renderer** — one on another machine — has its own log on that machine, and its own
+troubleshooting table: see [Remote renderers — Troubleshooting](11-remote-renderers.md#troubleshooting).
 
 **`validate_job` fails.**
 
@@ -128,16 +136,17 @@ look for a scene doing something expensive — a full-bleed blur across hundreds
 classic case.
 
 **A Cartoon 3D video, or a video with a mascot, went to `FAILED` with "renders on the GPU only".** The style or the mascot is
-refused unless the renderer's GPU works, but a video approved before the GPU went away is queued
+refused unless a renderer's GPU works, but a video approved before the GPU went away is queued
 anyway. It fails at once when no renderer has a working GPU, after 30 minutes when the one that does
 is offline, and during its render when the GPU stops working part-way. The comment names the
-renderer and what state it was in. Fix the GPU (Settings → Rendering → Test GPU, or
-`python onboard.py --step gpu`) and create the video again; the failed one is not retried.
+renderer and what state it was in. Fix the GPU (**Test GPU** on the renderer's card in Settings →
+Rendering, `python onboard.py --step gpu` for the built-in renderer, or bring a remote GPU renderer
+back online or upgrade it) and create the video again; the failed one is not retried.
 
-**Renders are slow although the machine has an NVIDIA GPU.** Open Settings → Rendering. Red means a
-GPU is chosen but the renderer could not use it, with the reason; grey **Rendering on the CPU**
-means none is chosen, or the renderer was recreated without it by a bare `docker compose up` —
-`python3 scripts/service.py status` tells those two apart. See
+**Renders are slow although the machine has an NVIDIA GPU.** Open Settings → Rendering and read the
+built-in renderer's GPU line. A red reason means a GPU is chosen but the renderer could not use it;
+**None — renders on the CPU** means none is chosen, or the renderer was recreated without it by a
+bare `docker compose up` — `python3 scripts/service.py status` tells those two apart. See
 [GPU rendering](10-gpu-rendering.md#troubleshooting).
 
 **A video reached `FAILED`.** `render_fail_count` exceeded `max_render_retries` (default 1, so the

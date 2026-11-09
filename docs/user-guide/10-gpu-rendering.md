@@ -7,10 +7,16 @@ happens when it cannot.
 as before, and nothing on this page needs doing — except that the **Cartoon 3D (experimental)** visual style and **mascots (experimental)** cannot
 be chosen. Cartoon 3D draws a 3D world for every frame, which takes about an hour per Short on a CPU,
 and a mascot's drawing, a tenth of a second a frame on a GPU, is about thirty times slower on a CPU, which adds hours to a Short.
-Both are offered only while the renderer's GPU is working. A video that has already been approved
-with either, whose GPU then stops working, is not rendered on the CPU: it fails with a comment saying
-why, and is created again once the GPU is back. **Only NVIDIA GPUs are supported.** Intel
-and AMD GPUs, integrated or not, are never used.
+Both are offered only while some renderer's GPU is working — this machine's own, or a
+[remote renderer](11-remote-renderers.md)'s — and such a video only ever goes to a renderer whose
+GPU test passed. A video that has already been approved with either, whose GPU then stops working,
+is not rendered on the CPU: it fails with a comment saying why, and is created again once the GPU is
+back. **Only NVIDIA GPUs are supported.** Intel and AMD GPUs, integrated or not, are never used.
+
+This page sets up the GPU of the machine Tubematic is installed on. A GPU on **another** machine
+renders for this one as a remote renderer: install the driver and the Container Toolkit there
+(steps 1 and 2 below), then follow [Remote renderers](11-remote-renderers.md), whose setup script
+picks the GPU in place of step 3.
 
 ---
 
@@ -121,14 +127,17 @@ removes the file and puts the renderer back on the CPU.
 
 ## Checking it is used
 
-Open **Settings → Rendering** on the dashboard. The **GPU** section shows one of:
+Open **Settings → Rendering** on the dashboard. The **Renderers** panel has a card for every
+renderer, this machine's built-in one first. Its **GPU** line names each GPU the renderer sees, with
+its memory, and one of:
 
-| Status | Meaning |
+| GPU line | Meaning |
 |---|---|
-| **Rendering on the GPU** (green) | The renderer tested the GPU you chose and is using it |
-| **GPU not usable — rendering on the CPU** (red) | A GPU is chosen, but the test showed Chromium could not use it. **Why** gives the reason. Videos still render, on the CPU |
-| **Rendering on the CPU** | No GPU is chosen |
-| **Not tested yet** | The renderer has never finished a test: a new install, or the first minute after upgrading from a version without GPU support |
+| **✓ verified** (green) | The renderer tested the GPU you chose and is using it |
+| A reason, in red | A GPU is chosen, but the test showed Chromium could not use it, and why. Videos still render, on the CPU |
+| **not in use — renders on the CPU** | The renderer sees the GPU, but it was not chosen for it |
+| **None — renders on the CPU** | No GPU is chosen, and the renderer sees none |
+| **not tested yet** | The renderer has never finished a test: a new install, or the first minute after an upgrade |
 
 **Chromium sees** is the graphics device Chromium actually got, read from inside a test frame: first
 in plain words, then the exact string Chromium reports, which is the evidence. On the GPU it names
@@ -136,10 +145,11 @@ your card, for example `ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1650/PCIe/
 3.2)`. On the CPU it names SwiftShader, Chromium's software renderer — what Remotion calls `swangle`
 (`ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) …), SwiftShader driver)`).
 
-The renderer runs that test every time it starts. With a GPU chosen, **Test GPU** asks it to run it
-again — after a driver update, say — and the answer usually appears within a minute, or after the
-current render if one is in progress. Without a GPU there is no button: the answer cannot change
-until you choose one, and choosing one recreates the renderer, which tests as it starts.
+The renderer runs that test every time it starts. On a renderer with a GPU, **Test GPU** on its
+card asks it to run it again — after a driver update, say — and the answer usually appears within a
+minute, or after the current render if one is in progress. Each renderer tests its own GPU, so
+each card has its own button. Without a GPU there is no button: the answer cannot change until you
+choose one, and choosing one recreates the renderer, which tests as it starts.
 
 From a terminal, `python3 scripts/service.py status` (or `python3 upgrade.py --check`) prints the
 same thing on its GPU line.
@@ -162,8 +172,8 @@ rendering down, but never fails a video. How this works is in
   `compose.gpu.json`; a plain `docker compose up` does not, and it recreates the renderer without
   the GPU. Use `python3 scripts/service.py start` instead, which reads it. Rendering carries on, on
   the CPU. The dashboard cannot tell this apart from having chosen no GPU — the renderer was not told
-  about one — so it shows **Rendering on the CPU**; `python3 scripts/service.py status` is what warns
-  that a GPU is chosen but the renderer has not reported it.
+  about one — so it shows **None — renders on the CPU**; `python3 scripts/service.py status` is what
+  warns that a GPU is chosen but the renderer has not reported it.
 - **A driver update.** Reboot after updating the NVIDIA driver; until then the driver and the
   libraries the container is given disagree, and the test fails. After a render on the GPU fails or
   times out, the renderer tests the GPU again, so the next render falls back to the CPU instead of
@@ -181,9 +191,9 @@ rendering down, but never fails a video. How this works is in
 |---|---|---|
 | The `gpu` step says no NVIDIA GPU was found | No driver, or the driver is not loaded | Step 1. Check Secure Boot |
 | The `gpu` step says Docker has no `nvidia` runtime | The Container Toolkit is missing, or `nvidia-ctk runtime configure` was not run | Step 2, including the Docker restart |
-| **Rendering on the CPU** although you chose a GPU (and `service.py status` warns about it) | The renderer was recreated without the GPU, usually by a bare `docker compose up` | `python3 scripts/service.py start tubematic-renderer` |
-| Red, and **Why** says Chromium could not create a WebGL context | The container has the GPU but not its graphics libraries: a driver/library mismatch after a driver update, or an old Container Toolkit | Reboot after a driver update; update the Container Toolkit |
-| Red, **Why** says Chromium could not create a WebGL context, and `docker exec tubematic-renderer ls /usr/share/glvnd/egl_vendor.d/` lists no `10_nvidia.json` | The Container Toolkit mounted the driver libraries but not the NVIDIA EGL vendor file, so Chromium fell back to Mesa. Seen with Docker running inside another container | Switch the toolkit to CDI mode: `sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`, `sudo nvidia-ctk config --set nvidia-container-runtime.mode=cdi --in-place`, then `python3 scripts/service.py start tubematic-renderer` |
+| **None — renders on the CPU** although you chose a GPU (and `service.py status` warns about it) | The renderer was recreated without the GPU, usually by a bare `docker compose up` | `python3 scripts/service.py start tubematic-renderer` |
+| Red, and the reason says Chromium could not create a WebGL context | The container has the GPU but not its graphics libraries: a driver/library mismatch after a driver update, or an old Container Toolkit | Reboot after a driver update; update the Container Toolkit |
+| Red, the reason says Chromium could not create a WebGL context, and `docker exec tubematic-renderer ls /usr/share/glvnd/egl_vendor.d/` lists no `10_nvidia.json` | The Container Toolkit mounted the driver libraries but not the NVIDIA EGL vendor file, so Chromium fell back to Mesa. Seen with Docker running inside another container | Switch the toolkit to CDI mode: `sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`, `sudo nvidia-ctk config --set nvidia-container-runtime.mode=cdi --in-place`, then `python3 scripts/service.py start tubematic-renderer` |
 | Red, and **Chromium sees** names another device (Intel, Mesa, `llvmpipe`) | Chromium picked a different graphics device than the GPU | Report it with `python3 scripts/collect_diagnostics.py` (see [Troubleshooting](08-troubleshooting.md)) |
 | `upgrade.py` refuses, naming `compose.gpu.json` | The chosen GPU or the Container Toolkit is gone | `python3 onboard.py --step gpu`, then upgrade again |
 

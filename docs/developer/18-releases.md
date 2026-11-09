@@ -19,7 +19,7 @@ once they exist the run also publishes that release's docs (see
 
 | Artifact | What it is |
 |---|---|
-| A GitHub Release | Holds the release notes and two files: the tarball and a `CHECKSUMS.txt` for the tarball itself. A version with a `-prerelease` suffix is published as a GitHub **prerelease**, so GitHub never lists it as Latest |
+| A GitHub Release | Holds the release notes and three files: the tarball, `tubematic_remote_renderer.py`, and a `CHECKSUMS.txt` with the sha256 of both. The script is an asset of its own because the machine a [remote renderer](../user-guide/11-remote-renderers.md) runs on downloads it alone, with no tarball and no checkout; it is also in the tarball's `scripts/`. Before either is built, the workflow writes the owner the release pushed its images under into the script's `GITHUB_OWNER` (the script has no checkout to ask), so a fork's renderers pull the fork's backend image; the step fails if that line is not found exactly once, and the asset is compared with the tarball's copy, so the two cannot differ. A version with a `-prerelease` suffix is published as a GitHub **prerelease**, so GitHub never lists it as Latest |
 | Two GHCR images | `tubematic-backend` (from `renderer/Dockerfile` — this is the same image that runs as `tubematic-api`, `tubematic-mcp`, `tubematic-worker` and `tubematic-renderer`) and `tubematic-dashboard`, each pushed under a single version tag — see [Image tags](#image-tags) |
 | The release tarball | `tubematic-vX.Y.Z.tar.gz`, the installer bundle a release install downloads, with its own internal `CHECKSUMS.txt` — written last, once everything else is staged, so it covers every *other* file the tarball contains, not itself |
 
@@ -59,13 +59,16 @@ own, as the first step of a release; that commit is never cherry-picked back, so
 branch keeps its marker.
 
 The install and upgrade commands in [Quickstart](../quickstart.md), [Installing](../user-guide/02-installing.md)
-and [Upgrading](../user-guide/07-upgrading.md) name a real version, never a `<version>`
+and [Upgrading](../user-guide/07-upgrading.md), and the script download in
+[Remote renderers](../user-guide/11-remote-renderers.md), name a real version, never a `<version>`
 placeholder, so they can be pasted as they are. On a release line they name that line's release;
 on the development branch, the newest published release. GitHub's `releases/latest/download/` URL
 cannot stand in for the number, because the tarball's file name carries the version. A release
 updates them in a commit of its own on the line, next to the `VERSION` bump, and that commit is
 cherry-picked to the development branch once the release is published and only if it is the newest
-release. A patch on an older line must not move the development branch's commands back.
+release. A patch on an older line must not move the development branch's commands back. One exception
+while it lasts: the remote-renderer script first ships in 2.1.0, which no published release before
+it has, so its download names 2.1.0 until that release exists.
 
 ---
 

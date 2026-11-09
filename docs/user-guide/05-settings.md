@@ -48,12 +48,16 @@ verified, the bookkeeping rows that share their table, and how to add one are on
 | `render_stall_timeout_secs` | int | `600` | How long the render's progress counter may stand still before the render is judged hung and retried. Remotion reports every frame it renders and encodes; a healthy render advances every few seconds, a wedged browser never does, so this catches a hang in minutes whatever the video's length. Minimum 60; neither setting needs a restart |
 | `max_render_retries` | int | `1` | Render **crash and timeout** retries only. A render lost to a renderer restart, or to a renderer that stopped reporting, counts as a failure too |
 | `text_layout_audit_enabled` | bool | `true` | Kill switch for the advisory text-overlap and safe-zone audit inside `validate_job` |
-| `default_mascot_id` | str | `''` | Experimental. The mascot a new video starts with, unless its domain says otherwise. `''` means none, which is what every install starts with. Set it on Settings → Rendering, where the choices are the approved mascots and are greyed out while the renderer's GPU is not working; a new default is refused then too, from any client. A mascot that has since been archived (or was never approved) reads back as `''` and is refused on write. A domain's own default overrides it, and a video's pick at the topic checkpoint overrides both. See [Mascots](04-dashboard.md#mascots) |
+| `default_mascot_id` | str | `''` | Experimental. The mascot a new video starts with, unless its domain says otherwise. `''` means none, which is what every install starts with. Set it on Settings → Rendering, where the choices are the approved mascots and are greyed out while no renderer's GPU is working; a new default is refused then too, from any client. A mascot that has since been archived (or was never approved) reads back as `''` and is refused on write. A domain's own default overrides it, and a video's pick at the topic checkpoint overrides both. See [Mascots](04-dashboard.md#mascots) |
 | `watermark_enabled` | bool | `true` | Burns the "Made with tubematic.ai" mark into every render. Sent to the renderer with each video it is handed, so it affects later renders only. **A setting rather than a `scene-config.json` key on purpose** — see [Watermark](../developer/09-remotion-project.md#watermark) |
 
 Which GPU renders, if any, is **not** a setting: a container's GPU is fixed when it is created, so it
-is chosen on the host with `python3 onboard.py --step gpu`. The Rendering tab shows the result. See
-[GPU rendering](10-gpu-rendering.md).
+is chosen on the host with `python3 onboard.py --step gpu`. The Rendering tab shows the result, for
+every renderer, on its Renderers panel. See [GPU rendering](10-gpu-rendering.md).
+
+Neither is whether **renderers on other machines** may connect, nor the address they use: turning
+them on publishes a port, which only `python3 onboard.py --step renderers` on the host can do. See
+[Remote renderers](11-remote-renderers.md).
 
 ### Scheduling
 

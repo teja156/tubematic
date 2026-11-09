@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Agent, GpuStatus, Mascot, ScriptProfile, Stats, Video, Voice } from "@/lib/types";
+import type { Agent, GpuStatus, Mascot, RenderersList, ScriptProfile, Stats, Video, Voice } from "@/lib/types";
 import { SummaryStrip } from "@/components/SummaryStrip";
 import { ActionPane } from "@/components/ActionPane";
 import { KanbanBoard } from "@/components/KanbanBoard";
@@ -11,9 +11,13 @@ import { useTimeZone } from "@/components/TimeZoneProvider";
 import { formatClock } from "@/lib/datetime";
 import { deleteVideo, patchVideo } from "@/lib/videoStatus";
 import { illustratedAvailable } from "@/lib/visualStyles";
+import { RENDERING_SETTINGS_HREF, isRenderersList, nothingCanRender } from "@/lib/renderers";
 import type { AgentPicks } from "@/lib/agents";
 
 const POLL_MS = 5_000;
+// The renderer list changes slowly (heartbeats are every few seconds, a
+// renderer counts as offline after two minutes), so it is read less often.
+const RENDERERS_POLL_MS = 20_000;
 
 const NO_CACHE: RequestInit = { cache: "no-store" };
 
@@ -42,6 +46,9 @@ export function PipelineClient() {
   const [gpu, setGpu] = useState<GpuStatus | null>(null);
   const [mascots, setMascots] = useState<Mascot[]>([]);
   const [autoPilot, setAutoPilot] = useState(false);
+  // null until GET /renderers answers, and on failure: the "Nothing can
+  // render" banner is never raised on a list it could not read.
+  const [renderers, setRenderers] = useState<RenderersList | null>(null);
   // null on the server and on first client render, so SSR and the initial CSR
   // pass match exactly ("Updated —"); the clock only starts ticking once
   // mounted client-side, in the timezone the API reports.
@@ -83,6 +90,16 @@ export function PipelineClient() {
     const id = setInterval(fetchAll, POLL_MS);
     return () => clearInterval(id);
   }, [fetchAll]);
+
+  useEffect(() => {
+    const load = () => fetch("/api/proxy/renderers", NO_CACHE)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => setRenderers(isRenderersList(body) ? body : null))
+      .catch(() => setRenderers(null));
+    load();
+    const id = setInterval(load, RENDERERS_POLL_MS);
+    return () => clearInterval(id);
+  }, []);
 
   // Voice roster for the topic and script pickers — fetched once, not polled: the
   // Settings page is the place that changes it, and a stale roster here just
@@ -209,6 +226,23 @@ export function PipelineClient() {
           letterSpacing: "0.06em",
         }}>
           {error}
+        </div>
+      )}
+
+      {nothingCanRender(stats, renderers, now?.getTime() ?? Date.now()) && (
+        <div
+          data-testid="nothing-can-render"
+          role="alert"
+          style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--red)", lineHeight: 1.6,
+                   border: "1px solid var(--red)", background: "rgba(255,107,107,0.05)",
+                   padding: "10px 14px", marginBottom: 20, letterSpacing: "0.04em" }}
+        >
+          NOTHING CAN RENDER — {stats.RENDER_QUEUED} video{stats.RENDER_QUEUED === 1 ? " is" : "s are"} waiting
+          to render, and no renderer is enabled, online and on this install&apos;s version.{" "}
+          <a href={RENDERING_SETTINGS_HREF} data-testid="nothing-can-render-link"
+             style={{ color: "var(--red)", textDecoration: "underline" }}>
+            Check Settings → Rendering
+          </a>
         </div>
       )}
 

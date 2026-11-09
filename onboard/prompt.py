@@ -466,6 +466,50 @@ def ask_gpu_choice(choices: list[str], default: str) -> str:
     return val
 
 
+REMOTE_ON = "On — renderers on other machines may connect"
+REMOTE_OFF = "Off — only the built-in renderer renders"
+
+
+def ask_remote_renderers_on(currently_on: bool) -> bool:
+    """Whether renderers on other machines may reach the render gateway.
+    Cancel exits, like every other question."""
+    val = questionary.select(
+        "Remote renderers:", choices=[REMOTE_ON, REMOTE_OFF],
+        default=REMOTE_ON if currently_on else REMOTE_OFF,
+        instruction=HINTS["select"], style=ASK_STYLE, qmark=QMARK, pointer=POINTER,
+    ).ask()
+    if val is None:
+        raise SystemExit(0)
+    return val == REMOTE_ON
+
+
+def ask_gateway_address(current: str) -> str:
+    """The address remote renderers dial to reach this machine, validated by
+    onboard/remote_renderers.py::parse_address. Cancel exits."""
+    from onboard.remote_renderers import DEFAULT_PORT, address_error
+    val = questionary.text(
+        "Address renderers use to reach this machine:", default=current or "",
+        validate=lambda v: address_error(v) or True,
+        instruction=f"(IP address or DNS name, optionally :port — default port {DEFAULT_PORT})",
+        style=ASK_STYLE, qmark=QMARK,
+    ).ask()
+    if val is None:
+        raise SystemExit(0)
+    return val.strip()
+
+
+def ask_first_enrollment_token() -> bool:
+    """Whether to print a first one-time enrollment token now (default no:
+    the dashboard's Add renderer makes one whenever it is needed)."""
+    val = questionary.confirm(
+        "Create an enrollment token for a first renderer now?", default=False,
+        style=ASK_STYLE, qmark=QMARK,
+    ).ask()
+    if val is None:
+        raise SystemExit(0)
+    return bool(val)
+
+
 def ask_new_password() -> str:
     """The dashboard password, asked twice and hidden (TMDEV-152).
 

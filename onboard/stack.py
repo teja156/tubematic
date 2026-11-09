@@ -405,6 +405,14 @@ def report(rep: Reporter, *, db_path: Path = DB_PATH, repo_root: Path = REPO_ROO
         if level == "warn":
             healthy = False
 
+    # Remote renderers (TMDEV-190): whether the gateway's port is published to
+    # other machines, and the address they dial. Half set up is a fault.
+    from onboard import remote_renderers
+    for level, text in remote_renderers.report_lines(db_path):
+        getattr(rep, level)(text)
+        if level == "warn":
+            healthy = False
+
     # In-flight work — information, not a fault
     for reason in in_flight(db_path):
         rep.info(f"In flight: {reason}")
