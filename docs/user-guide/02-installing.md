@@ -215,6 +215,13 @@ a source install, rebuild it with `python3 onboard.py --step renderer --force`.
 Either the Docker service is stopped, or your user cannot use it. See
 [Run Docker without sudo](#run-docker-without-sudo).
 
+### A step fails
+
+| The wizard says | Run |
+|---|---|
+| The dependency install failed | `.venv/bin/python -m pip install -r scripts/requirements.txt`, then `python3 onboard.py` |
+| A database error, such as "no such table" | `python3 onboard.py --step database` |
+
 ### Nothing happens after the install
 
 Read `~/.tubematic-agent/logs/poll.log`. `No agent installed` means you have not run
@@ -244,7 +251,8 @@ prerequisite already installed.
 5. When the wizard finishes, log your agent CLI in and
    [install an agent](#install-an-agent) from the same terminal.
 
-If you close the terminal, the **Tubematic installer** icon on the desktop opens it again.
+If you close the terminal, the **Tubematic installer** icon on the desktop opens it again, as does
+running `tubematic-installer` in any terminal. Its log is `~/.tubematic-workspace.log`.
 
 Things that differ in a Kasm session:
 
@@ -326,7 +334,7 @@ Tubematic runs `docker` as your user, so your user must be in the `docker` group
 sudo usermod -aG docker $USER
 ```
 
-Log out and back in for it to take effect.
+Log out and back in for it to take effect. `newgrp docker` applies it to the current shell only.
 
 Anyone in the `docker` group can become root on this machine. Add only the account that runs
 Tubematic.

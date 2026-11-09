@@ -42,7 +42,7 @@ valid one costs one very small call. You can type any model name; the suggestion
 installed CLI knows.
 
 After the questions it copies Tubematic's skills and slash commands into place, registers
-Tubematic's tools with the CLI, installs the Remotion skill, and sets up what the agent may do
+Tubematic's tools with the CLI (at `http://localhost:4100/mcp`), installs the Remotion skill, and sets up what the agent may do
 without asking, so a scheduled run does not stop at a permission prompt.
 
 The Remotion skill needs Node.js 22.20 or newer. Without it the command warns that it skipped the

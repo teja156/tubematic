@@ -100,8 +100,9 @@ You can change the same choices later on the domain's row.
 
 ### Mining sources
 
-Add YouTube video links under **Mining Sources** on the **Topics** page, up to 50. A link to a
-channel or a playlist is not accepted.
+Add YouTube video links under **Mining Sources** on the **Topics** page, up to 50. A link to a video,
+a Short or a live video is accepted, in the `youtube.com/watch?v=…` or `youtu.be/…` form. A link to
+a channel or a playlist is not.
 
 While no Gemini key is stored, the **Mining** toggle is greyed out. It works again once you add a
 key on **Settings → API Keys**.
