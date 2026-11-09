@@ -209,6 +209,22 @@ def _container_state(name: str) -> tuple:
     return (parts[0] if parts else ""), (parts[1] if len(parts) > 1 else "")
 
 
+
+def _container_command(name: str) -> str:
+    """The command a container was created with, as one space-joined string;
+    "" when there is no such container. Raises FileNotFoundError when docker
+    itself is missing."""
+    r = subprocess.run(
+        ["docker", "inspect", "--format", "{{json .Config.Cmd}}", name],
+        capture_output=True, text=True)
+    if r.returncode != 0:
+        return ""
+    try:
+        cmd = json.loads(r.stdout or "null")
+    except ValueError:
+        return r.stdout.strip()
+    return " ".join(cmd) if isinstance(cmd, list) else ""
+
 def start(ex: Executor, rep: Reporter, services=(), *, confirm_down) -> None:
     """Directories, then volume reconciliation, then `up -d`, then health.
 

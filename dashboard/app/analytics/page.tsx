@@ -393,7 +393,7 @@ export default function AnalyticsPage() {
                 </button>
               </div>
               <p style={{ ...mono, fontSize: 10, color: "var(--mute)", marginTop: 10, maxWidth: 640 }}>
-                Figures are snapshots, not live reads — the render worker captures one hourly. Refreshing
+                Figures are snapshots, not live reads — the worker captures one hourly. Refreshing
                 takes a snapshot now, though how fresh the numbers are still depends on how often
                 postforme itself reads each platform.
               </p>

@@ -81,8 +81,8 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   renders. Re-running `python3 onboard.py --step gpu`, which recreates the renderer, no longer pauses
   them either.
 - **A render that stops making progress is now killed within ten minutes** instead of forty, and
-  the ceiling on a whole render is three hours instead of forty minutes. The worker reads the
-  renderer's own progress as it runs, so a hung browser is caught quickly whatever the video's
+  the ceiling on a whole render is three hours instead of forty minutes. The renderer watches
+  the render's own progress as it runs, so a hung browser is caught quickly whatever the video's
   length, while a long render that is still advancing is left alone. Two settings control this:
   `render_stall_timeout_secs` (new, default 600) and `render_timeout_secs` (default raised from 2400
   to 10800). Neither needs a restart.

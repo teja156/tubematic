@@ -1117,10 +1117,11 @@ def _recreate_renderer_held(ex: Executor, rep: Reporter, defer: str) -> None:
         rep.info(defer)
         return
     try:
-        # VOICING runs in the MCP container and is untouched by this. Anything
-        # else stack.in_flight reports — a render, an upload the worker may be
-        # running, or a database it cannot read — is a reason to wait.
-        busy = [why for why in stack.in_flight(DB_PATH) if " is VOICING " not in why]
+        # Only the renderer is recreated. Voicing runs in the MCP container
+        # and uploads in the API or tubematic-worker, so neither is touched by
+        # this. A render, or a database it cannot read, is a reason to wait.
+        busy = [why for why in stack.in_flight(DB_PATH)
+                if " is VOICING " not in why and " is PUBLISHING " not in why]
         if busy:
             for why in busy:
                 rep.warn(why)

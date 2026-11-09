@@ -626,18 +626,26 @@ OPENAI_ONLY_IMAGES_MIGRATION = 16
 
 
 def _worker_split_pending() -> bool:
-    """Whether the running stack predates tubematic-worker (TMDEV-188): its
-    renderer is up and there is no worker container. Until 2.1.0 the renderer
-    ran publishing, Auto Pilot and notifications itself, so recreating
-    containers one at a time would leave the old renderer doing all three
-    beside the new worker."""
+    """Whether the running renderer predates tubematic-worker (TMDEV-188).
+    Until 2.1.0 the renderer ran publishing, Auto Pilot and notifications
+    itself, so recreating containers one at a time would leave the old renderer
+    doing all three beside the new worker.
+
+    Decided from the command the running renderer was created with, never from
+    whether a tubematic-worker container exists: a leftover one (a rollback
+    that did not remove it, a half-finished manual step) says nothing about
+    which code the renderer is running. A running renderer whose command
+    cannot be read counts as old: refusing only costs a re-run without
+    --no-stop."""
     from onboard import stack
     try:
         renderer, _ = stack._container_state("tubematic-renderer")
-        worker, _ = stack._container_state("tubematic-worker")
+        if renderer != "running":
+            return False
+        command = stack._container_command("tubematic-renderer")
     except FileNotFoundError:
         return False
-    return renderer == "running" and not worker
+    return "render_agent.py" not in command
 
 
 def _has_openai_key(db_path) -> bool:

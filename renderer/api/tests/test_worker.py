@@ -762,3 +762,23 @@ def test_the_worker_loop_never_renders():
                         "_run_gpu_probe", "_ensure_stills_server"):
         assert render_step not in body
         assert not hasattr(worker, render_step), render_step
+
+
+@pytest.mark.parametrize("env, expected", [
+    ({}, 20),
+    ({"WORKER_POLL_INTERVAL_SECS": "7"}, 7),
+    # Before the split this loop ran in the renderer under the old name; an
+    # install that overrode it keeps its interval.
+    ({"RENDER_POLL_INTERVAL_SECS": "45"}, 45),
+    ({"WORKER_POLL_INTERVAL_SECS": "7", "RENDER_POLL_INTERVAL_SECS": "45"}, 7),
+])
+def test_the_poll_interval_honours_the_pre_split_variable(env, expected):
+    import subprocess
+    import sys
+    clean = {k: v for k, v in os.environ.items()
+             if k not in ("WORKER_POLL_INTERVAL_SECS", "RENDER_POLL_INTERVAL_SECS")}
+    out = subprocess.run(
+        [sys.executable, "-c", "import worker; print(worker.POLL_INTERVAL_SECS)"],
+        cwd=os.path.dirname(worker.__file__), env={**clean, **env},
+        capture_output=True, text=True, check=True)
+    assert int(out.stdout.strip().splitlines()[-1]) == expected

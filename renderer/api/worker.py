@@ -36,8 +36,11 @@ from tubematic_core import prices as tprices
 DB_PATH = os.getenv("TUBEMATIC_DB", "/data/tubematic.db")
 LOG_DIR = Path(os.getenv("TUBEMATIC_LOG_DIR", "/logs"))
 
-# How long the loop sleeps between passes.
-POLL_INTERVAL_SECS = int(os.getenv("WORKER_POLL_INTERVAL_SECS", "20"))
+# How long the loop sleeps between passes. Before 2.1.0 this loop lived in the
+# renderer and RENDER_POLL_INTERVAL_SECS set it, so an install that overrode
+# that keeps its interval here too unless it names the new variable.
+POLL_INTERVAL_SECS = int(os.getenv("WORKER_POLL_INTERVAL_SECS")
+                         or os.getenv("RENDER_POLL_INTERVAL_SECS") or "20")
 
 # Comments the worker writes (a publication error, an Auto Pilot block) are
 # capped like the renderer's; see render_agent.py's note on the same cap.
@@ -951,7 +954,8 @@ def _sweep_unpublished(days: int) -> None:
 # A sweep rather than a send at each write site. The three notifiable statuses
 # are written by three different processes — TOPIC_PROPOSED by the MCP server's
 # create_video, SCRIPT_READY by either the MCP server or the Flask PATCH, and
-# VIDEO_READY right here — and this loop is the only place that sees all three.
+# VIDEO_READY by the renderer (render_agent.py) — so one sweep over the database
+# is the only place that sees all three.
 # It also bundles a research run's topics for free, keeps a slow or unreachable
 # Discord out of every MCP call and dashboard save, and retries a failed send
 # on the next tick, because the marker below only advances on success.
@@ -1043,6 +1047,17 @@ def _sweep_notifications_once() -> None:
         # returns credentials raw, which is what the send needs (the masking in
         # pipeline.py happens at the /settings route boundary, not here).
         settings = pipeline._read_all_settings(con)
+        # A finished video in an Auto Pilot project is approved by Auto Pilot,
+        # never by a human, and nothing holds that approval back (no block
+        # reason, no in-progress budget). The renderer writes VIDEO_READY at
+        # any moment, so one can land between this loop's Auto Pilot pass and
+        # this sweep; announcing it would ask a human to approve a video that
+        # is approved seconds later. Skipped, not marked: if Auto Pilot is
+        # switched off before it acts, the arrival is announced then.
+        auto_pilot_projects = (
+            set(pipeline._auto_pilot_config(con)["projects"])
+            if settings.get("auto_pilot_enabled") and not settings.get("pipeline_paused")
+            else set())
 
     webhook = settings.get("discord_webhook_url", "")
     enabled = {
@@ -1067,6 +1082,8 @@ def _sweep_notifications_once() -> None:
             _mark_seen([status])
             continue
         rows = _pending_notifications(status)
+        if status == "VIDEO_READY":
+            rows = [r for r in rows if r["project_id"] not in auto_pilot_projects]
         if not rows:
             continue
         try:
@@ -1304,7 +1321,8 @@ def main() -> None:
         # (render_agent.py), so nothing here waits behind a render.
         _poll_publishing_videos()
         # Before the notification sweep, so a checkpoint Auto Pilot approves
-        # never also sends a "waiting for you" message.
+        # never also sends a "waiting for you" message. A VIDEO_READY the
+        # renderer writes after this pass is excluded by the sweep itself.
         _sweep_auto_pilot()
         _poll_video_metrics()
         _sync_prices_if_due()

@@ -427,12 +427,17 @@ def test_a_hold_that_cannot_be_written_defers_the_recreate(step, monkeypatch):
     assert "readonly" in rep.text()
 
 
-def test_a_voicing_video_does_not_hold_up_the_renderer(step):
-    """Voicing runs in the MCP container; recreating the renderer cannot hurt it."""
+@pytest.mark.parametrize("status", ["VOICING", "PUBLISHING"])
+def test_work_outside_the_renderer_does_not_hold_it_up(step, status):
+    """Voicing runs in the MCP container and uploads in the API or
+    tubematic-worker; recreating the renderer cannot hurt either. A PUBLISHING
+    video with no publication rows is what stack.in_flight reads as an upload
+    in progress."""
     step.container["exists"] = True
     con = sqlite3.connect(step.db_path)
     con.execute("INSERT INTO videos (id, topic, status, created_at, updated_at) "
-                "VALUES ('vid_1', 't', 'VOICING', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+                "VALUES ('vid_1', 't', ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                (status,))
     con.commit()
     con.close()
     rep, ex, _ = step()

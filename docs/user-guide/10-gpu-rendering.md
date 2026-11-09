@@ -104,9 +104,8 @@ renderer gets. Then it:
   `tubematic-renderer` and nothing else. It lives with your data, not in the install directory, so
   upgrades keep it;
 - recreates `tubematic-renderer` so the change takes effect. It never interrupts a render: it stops
-  new renders from starting while it checks, and if one is already in progress (or a publish is
-  uploading) it says so, and you apply the change afterwards with
-  `python3 scripts/service.py start tubematic-renderer`. Until then, `service.py status` says the
+  new renders from starting while it checks, and if one is already in progress it says so, and you
+  apply the change afterwards with `python3 scripts/service.py start tubematic-renderer`. Until then, `service.py status` says the
   renderer is still on the previous choice.
 
 The step asks nothing when there is no NVIDIA driver or no Container Toolkit: it says which is
