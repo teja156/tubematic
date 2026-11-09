@@ -427,6 +427,16 @@ def test_a_leftover_worker_container_does_not_hide_an_old_renderer(upgrade, env,
     assert order == []
 
 
+def test_a_restarting_old_renderer_still_refuses_no_stop(upgrade, env):
+    """A crash-looping old renderer is in its restart backoff, not stopped:
+    its restart policy brings the old combined loop back mid-upgrade."""
+    _old_stack(env)
+    env.states["tubematic-renderer"] = ("restarting", "")
+    code, order, _ = _run(upgrade, env, no_stop=True)
+    assert code == 1
+    assert order == []
+
+
 def test_a_renderer_whose_command_cannot_be_read_is_treated_as_old(upgrade, env):
     """Refusing costs a re-run without --no-stop; guessing wrong double-posts."""
     env.commands["tubematic-renderer"] = ""
