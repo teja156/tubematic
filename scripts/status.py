@@ -100,6 +100,7 @@ STATUS_COLORS = {
     "SCHEDULED":         GREEN,
     "PUBLISHING":        GREEN,
     "PUBLISHED":         GREEN + BOLD,
+    "PARTIALLY_PUBLISHED": YELLOW + BOLD,
     "FAILED":            RED + BOLD,
 }
 
@@ -184,7 +185,7 @@ def show_status_summary() -> None:
         "TOPIC_PROPOSED", "TOPIC_APPROVED", "TOPIC_REJECTED",
         "SCRIPT_READY", "VOICING", "VOICE_READY", "RENDER_QUEUED",
         "RENDERING", "REVISION_REQUESTED", "VIDEO_READY", "VIDEO_APPROVED",
-        "SCHEDULED", "PUBLISHING", "PUBLISHED", "FAILED",
+        "SCHEDULED", "PUBLISHING", "PUBLISHED", "PARTIALLY_PUBLISHED", "FAILED",
     ]
     for status in ordered:
         count = counts.get(status, 0)
