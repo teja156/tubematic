@@ -58,7 +58,7 @@ def test_a_dry_run_names_the_directory_never_a_value(env):
 
 def test_the_executor_really_writes_when_not_dry(env):
     db, sdir = env
-    assert sorted(Executor(dry_run=False).ensure_secrets()) == sorted(auth.SECRET_NAMES)
+    assert sorted(Executor(dry_run=False).ensure_secrets()) == sorted(auth.SECRET_NAMES + auth.TLS_NAMES)
     assert stat.S_IMODE(os.stat(sdir).st_mode) == 0o700
 
 

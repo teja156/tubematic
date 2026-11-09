@@ -25,22 +25,24 @@ def _mode(path):
 def test_ensure_creates_every_secret_with_the_documented_modes(sdir):
     created = auth.ensure_secrets(sdir)
 
-    assert sorted(created) == sorted(auth.SECRET_NAMES)
+    assert sorted(created) == sorted(auth.SECRET_NAMES + auth.TLS_NAMES)
+    assert "builtin_renderer_token" in auth.SECRET_NAMES
     # The directory keeps other host users out; the files are 0644 because the
     # dashboard container runs as uid 1001 and reads them through a single-file
     # bind mount that bypasses the directory's permissions.
     assert _mode(sdir) == 0o700
-    for name in auth.SECRET_NAMES:
+    for name in auth.SECRET_NAMES + auth.TLS_NAMES:
         assert _mode(sdir / name) == 0o644
         assert len(auth.read_secret(name, sdir)) >= 40
 
 
 def test_ensure_never_replaces_an_existing_secret(sdir):
     auth.ensure_secrets(sdir)
-    before = {n: auth.read_secret(n, sdir) for n in auth.SECRET_NAMES}
+    names = auth.SECRET_NAMES + auth.TLS_NAMES
+    before = {n: auth.read_secret(n, sdir) for n in names}
 
     assert auth.ensure_secrets(sdir) == []
-    assert {n: auth.read_secret(n, sdir) for n in auth.SECRET_NAMES} == before
+    assert {n: auth.read_secret(n, sdir) for n in names} == before
 
 
 def test_ensure_refills_an_empty_file_and_tightens_a_loose_directory(sdir):
@@ -150,3 +152,162 @@ def test_set_admin_password_refuses_a_weak_one(db):
 
 def test_has_admin_password_is_false_for_a_missing_database(tmp_path):
     assert auth.has_admin_password(tmp_path / "nope.db") is False
+
+
+# ── The render gateway's TLS pair ─────────────────────────────────────────────
+#
+# Renderers trust exactly this certificate, pinned by the sha256 of its DER, so
+# the pair must be a working TLS identity for a stdlib client with no host name
+# check, and must never change once made: a new certificate is a new pin, which
+# would cut off every enrolled renderer.
+
+import socket  # noqa: E402
+import ssl  # noqa: E402
+import threading  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from cryptography import x509  # noqa: E402
+from cryptography.hazmat.primitives import serialization  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import ec  # noqa: E402
+from cryptography.x509.oid import NameOID  # noqa: E402
+
+from tubematic_core import renderers  # noqa: E402
+
+
+def _cert(sdir):
+    return x509.load_pem_x509_certificate((sdir / auth.TLS_CERT_NAME).read_bytes())
+
+
+def _key(sdir):
+    return serialization.load_pem_private_key((sdir / auth.TLS_KEY_NAME).read_bytes(), password=None)
+
+
+def test_the_certificate_is_the_documented_self_signed_p256_ca(sdir):
+    auth.ensure_secrets(sdir)
+    cert, key = _cert(sdir), _key(sdir)
+
+    assert isinstance(key, ec.EllipticCurvePrivateKey) and key.curve.name == "secp256r1"
+    assert cert.subject == cert.issuer
+    assert cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value == "tubematic-render-gateway"
+    bc = cert.extensions.get_extension_for_class(x509.BasicConstraints)
+    assert bc.critical and bc.value.ca is True
+    ku = cert.extensions.get_extension_for_class(x509.KeyUsage).value
+    assert ku.digital_signature and ku.key_cert_sign
+    # No host name: renderers reach the gateway by any address, so nothing is
+    # checked against one.
+    with pytest.raises(x509.ExtensionNotFound):
+        cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+    life = cert.not_valid_after_utc - datetime.now(timezone.utc)
+    assert timedelta(days=365 * 30 - 2) < life < timedelta(days=365 * 30 + 1)
+
+
+def test_the_key_matches_the_certificate(sdir):
+    auth.ensure_secrets(sdir)
+    pub = serialization.PublicFormat.SubjectPublicKeyInfo
+    assert (_key(sdir).public_key().public_bytes(serialization.Encoding.DER, pub)
+            == _cert(sdir).public_key().public_bytes(serialization.Encoding.DER, pub))
+
+
+@pytest.mark.parametrize("damage", ["delete_key", "delete_cert", "empty_cert"])
+def test_an_incomplete_pair_is_made_again_as_a_pair(sdir, damage):
+    auth.ensure_secrets(sdir)
+    old_cert = (sdir / auth.TLS_CERT_NAME).read_text()
+    target = sdir / (auth.TLS_KEY_NAME if damage == "delete_key" else auth.TLS_CERT_NAME)
+    if damage.startswith("delete"):
+        target.unlink()
+    else:
+        target.write_text("")
+
+    assert sorted(auth.ensure_secrets(sdir)) == sorted(auth.TLS_NAMES)
+    assert (sdir / auth.TLS_CERT_NAME).read_text() != old_cert
+    pub = serialization.PublicFormat.SubjectPublicKeyInfo
+    assert (_key(sdir).public_key().public_bytes(serialization.Encoding.DER, pub)
+            == _cert(sdir).public_key().public_bytes(serialization.Encoding.DER, pub))
+
+
+def test_the_tls_pair_is_never_rotated(sdir):
+    auth.ensure_secrets(sdir)
+    before = {n: (sdir / n).read_text() for n in auth.TLS_NAMES}
+    for name in auth.TLS_NAMES:
+        with pytest.raises(ValueError):
+            auth.rotate_secrets([name], sdir)
+    # --rotate-tokens rotates SECRET_NAMES, the built-in renderer's token among
+    # them, and leaves the pair alone.
+    old_builtin = auth.read_secret("builtin_renderer_token", sdir)
+    auth.rotate_secrets(auth.SECRET_NAMES, sdir)
+    assert auth.read_secret("builtin_renderer_token", sdir) != old_builtin
+    assert {n: (sdir / n).read_text() for n in auth.TLS_NAMES} == before
+
+
+def test_gateway_pin_is_the_sha256_of_the_certificate_der(sdir):
+    auth.ensure_secrets(sdir)
+    der = _cert(sdir).public_bytes(serialization.Encoding.DER)
+    assert auth.gateway_pin(sdir) == renderers.cert_pin(der)
+    assert auth.gateway_pin(sdir).startswith("sha256:") and len(auth.gateway_pin(sdir)) == 71
+
+
+def test_gateway_pin_fails_closed_without_a_certificate(sdir):
+    sdir.mkdir()
+    with pytest.raises(auth.SecretMissing):
+        auth.gateway_pin(sdir)
+
+
+def test_gateway_pin_reads_the_secrets_dir_override(sdir, monkeypatch):
+    auth.ensure_secrets(sdir)
+    monkeypatch.setenv("TUBEMATIC_SECRETS_DIR", str(sdir))
+    assert auth.gateway_pin() == auth.gateway_pin(sdir)
+
+
+def _serve_once(sdir):
+    """A localhost TLS server presenting the pair in `sdir`, for one handshake."""
+    server_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_ctx.load_cert_chain(sdir / auth.TLS_CERT_NAME, sdir / auth.TLS_KEY_NAME)
+    listener = socket.create_server(("127.0.0.1", 0))
+    port = listener.getsockname()[1]
+
+    def run():
+        try:
+            conn, _ = listener.accept()
+            with server_ctx.wrap_socket(conn, server_side=True) as tls:
+                tls.sendall(b"ok")
+        except (ssl.SSLError, OSError):
+            pass   # the client refused us, which some tests expect
+        finally:
+            listener.close()
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    return port, thread
+
+
+def _pinned_client(pem: str) -> ssl.SSLContext:
+    """Exactly the client a renderer builds: trust this one certificate, no
+    host name check, verification required."""
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    ctx.load_verify_locations(cadata=pem)
+    return ctx
+
+
+def test_a_client_pinned_to_the_certificate_completes_a_handshake(sdir):
+    auth.ensure_secrets(sdir)
+    port, thread = _serve_once(sdir)
+    ctx = _pinned_client((sdir / auth.TLS_CERT_NAME).read_text())
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as raw:
+        with ctx.wrap_socket(raw) as tls:
+            assert tls.recv(2) == b"ok"
+            assert renderers.cert_pin(tls.getpeercert(binary_form=True)) == auth.gateway_pin(sdir)
+    thread.join(5)
+
+
+def test_a_client_pinned_to_another_certificate_refuses_the_server(sdir, tmp_path):
+    auth.ensure_secrets(sdir)
+    other = tmp_path / "other"
+    auth.ensure_secrets(other)
+    port, thread = _serve_once(sdir)
+    ctx = _pinned_client((other / auth.TLS_CERT_NAME).read_text())
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as raw:
+        with pytest.raises(ssl.SSLCertVerificationError):
+            ctx.wrap_socket(raw)
+    thread.join(5)

@@ -103,21 +103,28 @@ def ensure_deps() -> None:
     fresh install where key validation matters most. Nothing extra lands on
     disk: python_deps would have installed it minutes later anyway.
 
+    cryptography is here for the same ordering reason: tubematic_core.auth
+    creates the render gateway's TLS key and certificate wherever service
+    tokens are ensured — the `auth` step, and every stack start — and a single
+    `--step` run (or a venv made before the dependency existed) reaches those
+    without python_deps having run.
+
     Exempt from --dry-run for the same reason as ensure_venv above.
     """
     try:
         import rich        # noqa: F401
         import questionary  # noqa: F401
         import httpx        # noqa: F401
+        import cryptography  # noqa: F401
     except ImportError:
-        print("  → Installing wizard dependencies (rich, questionary, httpx)…")
+        print("  → Installing wizard dependencies (rich, questionary, httpx, cryptography)…")
         r = subprocess.run(
             [sys.executable, "-m", "pip", "install", "-q",
-             "rich>=13.7", "questionary>=2.0", "httpx>=0.27.0"],
+             "rich>=13.7", "questionary>=2.0", "httpx>=0.27.0", "cryptography>=42"],
             check=False,
         )
         if r.returncode != 0:
-            print("  ✘  pip install failed. Run manually: pip install rich questionary httpx")
+            print("  ✘  pip install failed. Run manually: pip install rich questionary httpx cryptography")
             if _ensurepip_missing():
                 print("       This venv has no pip: install Debian/Ubuntu's python3-venv "
                       "package,\n       delete .venv and run this again.")
