@@ -9,7 +9,7 @@ newer version later, see [Upgrading](07-upgrading.md). The dashboard itself, pag
 ## How the pipeline works
 
 Tubematic is an **agent-first** video factory. An AI agent researches topics, writes scripts, voices
-them and writes the scenes; a render worker renders each video and has an AI watch the result for
+them and writes the scenes; a renderer renders each video and has an AI watch the result for
 defects. You make the decisions the agent is not allowed to make, on the dashboard.
 
 **You run Tubematic from the dashboard.** Creating a video, approving it at each checkpoint, pausing,
@@ -72,7 +72,7 @@ From the Tubematic directory:
 python3 scripts/service.py start
 ```
 
-This starts all four containers. Prefer it to a bare `docker compose up -d`: it creates any missing
+This starts all five containers. Prefer it to a bare `docker compose up -d`: it creates any missing
 data directory and re-points Docker volumes whose data location has moved before starting anything.
 `python3 scripts/service.py status` shows whether everything is up, and `stop` stops it.
 
@@ -272,7 +272,7 @@ them. An agent's models, scope and workspace change only through `--install-agen
 them against the real CLI.
 
 **Times** are stored in UTC and shown in the host's timezone everywhere a person reads them — the
-dashboard, `poll.log`, the render worker's log and `scripts/status.py`. A raw database query or the
+dashboard, `poll.log`, the worker's and the renderer's logs and `scripts/status.py`. A raw database query or the
 API's own JSON therefore shows UTC while the dashboard shows local time; that is expected. Why is in
 [HTTP API — Time](../developer/05-http-api.md#time).
 
@@ -388,7 +388,8 @@ tail -f ~/.tubematic-agent/logs/poll.log              # the poller and every age
 python3 scripts/service.py status                     # containers, version, cron
 python3 scripts/service.py logs tubematic-api -f      # the API
 python3 scripts/service.py logs tubematic-mcp -f      # the agent's tools
-python3 scripts/service.py logs tubematic-renderer -f # rendering, AI review, publishing
+python3 scripts/service.py logs tubematic-worker -f   # publishing, Auto Pilot, notifications
+python3 scripts/service.py logs tubematic-renderer -f # rendering, AI review
 python3 scripts/status.py                             # health, checkpoints, costs, disk
 ```
 

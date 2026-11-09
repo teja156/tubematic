@@ -10,7 +10,7 @@ Three parties move a video, and the split between them is the most important thi
 |---|---|
 | **Human** | Approve or reject at the three checkpoints. Nothing else is required of you |
 | **AI agent** | Everything between checkpoints — research, scripting, voicing, scene authoring, submitting a render |
-| **Worker** | Rendering and AI review, autonomously. Never asks and never waits |
+| **Renderer and worker** | Rendering and AI review (the renderer); publishing, Auto Pilot and the timed sweeps (the worker). Autonomously. Never asks and never waits |
 
 ---
 
@@ -37,7 +37,7 @@ flowchart TD
     SR -->|approve — money is spent here| VO
     VO -->|agent calls generate_voice| VR
     VR -->|agent authors scenes,<br/>validates, submits| RQ
-    RQ -->|worker claims| RN
+    RQ -->|renderer claims| RN
     RN -->|render ok + review clean| VRD
     RN -->|render crash / review findings| RR
     RN -->|timeout| RQ
@@ -65,7 +65,7 @@ flowchart TD
     classDef term  fill:#2a2a2a,stroke:#888,color:#fff
 ```
 
-<sub>**Amber** — a human must act · **Blue** — the AI agent acts · **Purple** — automatic, worker-owned · **Grey** — terminal</sub>
+<sub>**Amber** — a human must act · **Blue** — the AI agent acts · **Purple** — automatic, owned by the worker or the renderer · **Grey** — terminal</sub>
 
 | Status | Owner | Meaning |
 |---|---|---|
@@ -75,8 +75,8 @@ flowchart TD
 | `SCRIPT_READY` | Human | A script exists. **Approving spends money** |
 | `VOICING` | Agent | Approved for voicing. The agent will call ElevenLabs |
 | `VOICE_READY` | Agent | Audio and `timeline.json` exist. The agent authors scenes |
-| `RENDER_QUEUED` | Worker | Waiting for the render worker. Not agent-actionable |
-| `RENDERING` | Worker | Being rendered |
+| `RENDER_QUEUED` | Renderer | Waiting for the renderer. Not agent-actionable |
+| `RENDERING` | Renderer | Being rendered |
 | `VIDEO_READY` | Human | A finished mp4 exists, and the reviewer found nothing. Awaiting sign-off |
 | `VIDEO_APPROVED` | Human | You signed it off. Publishing, if enabled, starts here — by hand, unless the video's project is on [Auto Pilot](14-publishing.md#auto-pilot) |
 | `SCHEDULED` | Worker | Uploaded; the publishing service holds the post until the time you picked. You can cancel it back to `VIDEO_APPROVED` |
@@ -99,7 +99,7 @@ WORKABLE_STATUSES = ["TOPIC_APPROVED", "VOICING", "VOICE_READY",
 ```
 
 `ACTIONABLE_STATUSES` is what the dashboard's inbox shows. `WORKABLE_STATUSES` is what the cron
-poller looks for before starting an agent session. A status in neither set is either worker-owned or
+poller looks for before starting an agent session. A status in neither set is either owned by the worker or the renderer, or
 terminal. A workable video that three agent sessions in a row failed to move is flagged **stuck**
 (`agent_stuck_at`): it keeps its status but is left out until a human changes the status or presses
 Retry agent — see [The Poller](13-the-poller.md#success-is-read-from-the-database).
@@ -115,7 +115,7 @@ separate processes with no shared package — but it means a change needs three 
 Three, and the agent is instructed never to cross one alone even though the MCP tools would let it.
 
 A project can be put on **Auto Pilot**, which approves all three and then posts the video, with no
-human involved. It is off by default and is done by the render worker, never by the agent, so
+human involved. It is off by default and is done by the worker, never by the agent, so
 everything below about what the agent may do holds either way. Read
 [Auto Pilot](14-publishing.md#auto-pilot) before turning it on. The rest of this section describes
 a project that is not on it.
@@ -137,7 +137,7 @@ voice picked there.
 The checkpoint is the *status*, not the voicing tool. Approving moves the video to `VOICING`, and
 that move authorizes both the spend and sending the script to ElevenLabs. `VOICING` is ordinary
 agent work, so the poller's next pass starts a voicing session without asking again. If a video sits in `VOICING`
-for three poll intervals anyway, the render worker flags it. See
+for three poll intervals anyway, the worker flags it. See
 [Troubleshooting](../user-guide/08-troubleshooting.md#voice).
 
 ### `VIDEO_READY` — the quality checkpoint
@@ -174,10 +174,10 @@ three to a Discord channel, each independently switchable, configured entirely f
 Settings → Notifications tab. Everything is off until both a webhook URL and at least one trigger
 are set. The keys are listed under [Settings](../user-guide/05-settings.md#notifications).
 
-**Announcing is a sweep in the render worker, not a send at each write site.** The three statuses
-are written by three different processes — `TOPIC_PROPOSED` by the MCP server's `create_video`,
-`SCRIPT_READY` by either the MCP server or the Flask `PATCH`, `VIDEO_READY` by the render worker
-itself — and the worker's poll loop is the only place that sees all three. That choice also buys
+**Announcing is a sweep in the [worker](12-the-worker.md), not a send at each write site.** The
+three statuses are written by three different processes — `TOPIC_PROPOSED` by the MCP server's
+`create_video`, `SCRIPT_READY` by either the MCP server or the Flask `PATCH`, `VIDEO_READY` by the
+renderer — and the worker's poll loop is the only place that sees all three. That choice also buys
 three things a per-call-site send could not:
 
 - **Bundling.** A research run files several topics seconds apart. The sweep holds proposals back
@@ -188,8 +188,8 @@ three things a per-call-site send could not:
 - **Free retries.** The marker that records what has been announced only advances on a successful
   send, so a failure is retried on the next tick rather than lost.
 
-The cost is latency: the passes run at the top of each tick, so a message arrives within a tick when
-the worker is idle, or once the current render finishes when it is not.
+The cost is latency: the sweep runs once a tick, so a message arrives within about twenty seconds.
+A render never delays it; the worker does not render.
 
 **A second arrival announces again.** A video going
 `SCRIPT_READY → REVISION_REQUESTED → SCRIPT_READY` is announced both times — the whole point of the
@@ -197,8 +197,8 @@ revision loop is that the human sees the result of their feedback.
 
 What makes that work is that `videos.notified_status` records an *arrival*, `<status>@<updated_at>`,
 rather than a status name. A status name alone is not an identity: if the whole round happens
-between two sweeps — which is the normal case, since a render holds the worker's loop for up to
-forty minutes — the second `SCRIPT_READY` would read as already announced and the human would never
+between two sweeps — rare with a sweep every twenty seconds, but certain to happen sooner or later,
+for example while the worker is stopped — the second `SCRIPT_READY` would read as already announced and the human would never
 hear that their feedback landed. Every status write already bumps `updated_at`, so pairing the two
 makes each arrival distinct without any of the three writing processes needing to know
 notifications exist. The one thing it cannot separate is two status changes inside the same second.

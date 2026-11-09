@@ -27,7 +27,7 @@ route**; building from source is the alternative for people who want to change T
    built. It still wants Node.js, but for `--install-agent` rather than for a build — see the
    [prerequisites](#prerequisites).
 2. **Clone and build from source (alternative).** `git clone` this repository, then run the wizard
-   from inside it. Docker builds the `tubematic-api`/`tubematic-mcp`/`tubematic-renderer` image and
+   from inside it. Docker builds the `tubematic-api`/`tubematic-mcp`/`tubematic-worker`/`tubematic-renderer` image and
    the dashboard image locally, from the source trees in the checkout. Use it to work on Tubematic,
    or to run something not yet released — at the cost of a longer first install and of running
    whatever the branch you checked out holds.
@@ -72,12 +72,12 @@ command it cannot run on your behalf. Everything *inside* the install directory 
 | | Version | Check | Why |
 |---|---|---|---|
 | Linux host | — | `uname -s` | The only supported platform. Cron, `flock`, `/proc` and bind-mounted volumes under `~` are all assumed |
-| Docker Engine | 29+ | `docker --version`, `docker info` | All four services. The Docker daemon must be running, and usable without `sudo`. On Ubuntu, see [Installing Docker on Ubuntu](#installing-docker-on-ubuntu) |
+| Docker Engine | 29+ | `docker --version`, `docker info` | All five services. The Docker daemon must be running, and usable without `sudo`. On Ubuntu, see [Installing Docker on Ubuntu](#installing-docker-on-ubuntu) |
 | Docker Compose | v2 or newer | `docker compose version` | The `docker compose` plugin, not the legacy `docker-compose` script. Current releases of the plugin report v5 |
 | Python | 3.11+, with `venv` | `python3 --version`, `python3 -c "import ensurepip"` | The wizard, the poller, host scripts. The wizard creates its own virtualenv and cannot start without one; Debian and Ubuntu package the part that seeds `pip` into it separately, so the second command is the one that catches it. See [Installing Python's venv module and Node.js on Ubuntu](#installing-pythons-venv-module-and-nodejs-on-ubuntu) |
 | Node.js | **22.20 or newer** | `node --version` | The Remotion skills installer crashes on import below 22.20. Onboarding only *warns* when Node is older or missing, and the Remotion best-practices skill is then not installed; rendering itself runs in a container and is unaffected. Needed for a **release** install too: it is `--install-agent` that uses Node, not the build. On Ubuntu, see [Installing Python's venv module and Node.js on Ubuntu](#installing-pythons-venv-module-and-nodejs-on-ubuntu) |
 | An AI agent CLI | Latest | `which claude` / `which codex` / `which opencode` | Claude Code, Codex, or OpenCode v2 (the `@opencode/cli` package). Needed for `--install-agent`, not for the main wizard; any number may be installed. Log it in first — `claude` once interactively, `codex login`, or `opencode auth login` |
-| CPU | 2 cores, 4+ recommended | `nproc` | Rendering opens parallel browser tabs — half the available CPU threads — so more cores render faster. At 2 cores the render also competes with the API, worker and dashboard |
+| CPU | 2 cores, 4+ recommended | `nproc` | Rendering opens parallel browser tabs — half the available CPU threads — so more cores render faster. At 2 cores the render also competes with the API, the worker and the dashboard |
 | Memory | 4 GB, 8 GB recommended | `free -g` | The renderer reserves 2 GB of shared memory for Chromium on its own. Each parallel render tab needs roughly 1–2 GB more, so size memory together with the core count |
 | Disk | ~15 GB | `df -h ~` | Images, `node_modules`, and rendered video |
 | NVIDIA GPU (optional) | Driver + NVIDIA Container Toolkit | `nvidia-smi`, `docker info \| grep nvidia` | Renders run on the CPU without one. With one, the `gpu` step hands it to the renderer: about three times faster for an ordinary video, more for 3D. Intel and AMD GPUs are not used. See [GPU rendering](10-gpu-rendering.md) |
@@ -315,7 +315,7 @@ container steps are always last and ask nothing, so no prompt ever interleaves b
 | 7 | `pipeline_settings` | Seeds the rest of the dashboard-editable settings. Asked by default: the image model. Advanced-only: the ElevenLabs voice roster (each voice with the model it speaks with) and default voice, which a new install pre-loads with Teja (`eleven_v4`, the default) and Adam (`eleven_v3`); per-run topic caps, trending sources, the research run cap, the render timeout, log and video retention, the AI review model, sampling rate and loop cap, and Auto Pilot |
 | 8 | `cron` | Asks for the poll interval (default 30 minutes) and writes one cron entry to your user crontab. See [Manual cron setup](#manual-cron-setup) |
 | 9 | `gpu` | Lists the machine's NVIDIA GPUs and asks which one renders, or none. Writes `~/.tubematic-data/compose.gpu.json`, which hands that GPU to the renderer, or removes it for CPU rendering. Asks nothing when there is no NVIDIA driver or no NVIDIA Container Toolkit, except to offer going back to the CPU when a GPU was chosen before the toolkit went. See [GPU rendering](10-gpu-rendering.md) |
-| 10 | `renderer` | Builds one image and starts `tubematic-api`, `tubematic-mcp` and `tubematic-renderer` (release install: pulls the published image instead of building), waiting on the API's and MCP's healthchecks separately and confirming the worker container is running |
+| 10 | `renderer` | Builds one image and starts `tubematic-api`, `tubematic-mcp`, `tubematic-worker` and `tubematic-renderer` (release install: pulls the published image instead of building), waiting on the API's and MCP's healthchecks separately and confirming the worker and renderer containers are running |
 | 11 | `dashboard` | Builds and starts `tubematic-dashboard` (release install: pulls instead of building) |
 
 Steps 3 and 4 must precede 10 and 11. If Compose starts first, Docker auto-creates the missing
@@ -599,7 +599,7 @@ Then:
 1. **Approve the script** on the dashboard. This is the money checkpoint; nothing has been spent yet.
 2. The agent voices it, generates images, writes the scene components, validates, and queues a
    render.
-3. The worker renders and the AI reviewer watches the result.
+3. The renderer renders and the AI reviewer watches the result.
 4. **Approve the video** at `VIDEO_READY`, after actually watching it.
 
 The dashboard's **Pipeline** page shows where every video is. Day-to-day use is covered in
@@ -617,7 +617,7 @@ curl -s localhost:4100/health                          # the MCP server, a separ
 curl -s localhost:4000/render/health                   # Chromium inside the container
 curl -s -H "$TOKEN" localhost:4000/pipeline/status     # the full readout
 curl -s -H "$TOKEN" localhost:4000/agents              # the installed agents and their models
-python3 scripts/service.py status          # version, schema, cron entry, all four containers, GPU
+python3 scripts/service.py status          # version, schema, cron entry, all five containers, GPU
 crontab -l | grep poll.py                  # exactly one line
 .venv/bin/python scripts/poll.py --dry-run # what the next tick would do, without doing it
 .venv/bin/python scripts/status.py         # videos, costs, disk usage
@@ -808,11 +808,12 @@ docker compose logs tubematic-api
 docker compose build --no-cache tubematic-api
 ```
 
-**`tubematic-mcp` or `tubematic-renderer` won't start.** Both run the `tubematic-api` image — there is
-no separate build — so rebuild that one:
+**`tubematic-mcp`, `tubematic-worker` or `tubematic-renderer` won't start.** All three run the
+`tubematic-api` image — there is no separate build — so rebuild that one:
 
 ```bash
 docker compose logs tubematic-mcp
+docker compose logs tubematic-worker
 docker compose logs tubematic-renderer
 docker compose build --no-cache tubematic-api && python3 scripts/service.py start
 ```
@@ -859,7 +860,7 @@ arguments are swallowed silently.
 
 | Step | What it removes |
 |---|---|
-| 1 · Containers | `docker compose down` — stops and removes `tubematic-api`, `tubematic-mcp`, `tubematic-renderer` and `tubematic-dashboard` |
+| 1 · Containers | `docker compose down` — stops and removes `tubematic-api`, `tubematic-mcp`, `tubematic-worker`, `tubematic-renderer` and `tubematic-dashboard` |
 | 2 · Docker volumes | The named volumes. They are bind volumes, so the files in `~/.tubematic-data/` are untouched |
 | 3 · Database | `~/.tubematic-data/data/tubematic.db` — all pipeline state and settings |
 | 4 · Job files | `~/.tubematic-data/jobs/*` — each video's audio, timeline and scene config |
@@ -908,7 +909,7 @@ empty, then tells you the path so you can finish by hand.
 # 1. Run the uninstaller and say yes to every step
 python3 uninstall.py
 
-# 2. Remove the images. tubematic-api, tubematic-mcp and tubematic-renderer share one.
+# 2. Remove the images. tubematic-api, tubematic-mcp, tubematic-worker and tubematic-renderer share one.
 # Source install (built locally):
 docker rmi tubematic-renderer-image tubematic-tubematic-dashboard
 # Release install (pulled) — check `docker images | grep tubematic` for the exact tags:

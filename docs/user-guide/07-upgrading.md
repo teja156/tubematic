@@ -141,7 +141,7 @@ the steps in the order that keeps your data safe:
 | `--check` | Only the report in step 8, plus the password, the token files, a live check that the MCP server refuses a request without its token and accepts the install's, and each agent's registration. Changes nothing, and works on a half-configured install |
 | `--dry-run` | Shows every step it would take, changes nothing |
 | `--force` | Proceeds even though work is in flight — that work is killed |
-| `--no-stop` | Skips the stop, so containers are recreated one at a time. Only for an upgrade whose migrations you know are additive. Refused while any service token is missing (an upgrade from before 2.0.0): old and new containers would refuse each other's calls. Also refused while migration `0016` is pending: old containers would keep reading the `image_provider` setting it deletes |
+| `--no-stop` | Skips the stop, so containers are recreated one at a time. Only for an upgrade whose migrations you know are additive. Refused while any service token is missing (an upgrade from before 2.0.0): old and new containers would refuse each other's calls. Also refused while migration `0016` is pending: old containers would keep reading the `image_provider` setting it deletes. Also refused when the running stack has a `tubematic-renderer` but no `tubematic-worker` (an upgrade from before 2.1.0): the old renderer would keep publishing, running Auto Pilot and sending notifications beside the new worker until it is recreated. Without `--no-stop` that upgrade is fine, and creates the worker |
 | `--install-mode dev\|release` | Overrides the detected install mode |
 
 ### If you installed from a release tarball
@@ -197,7 +197,7 @@ curl -s localhost:4000/health                          # Flask
 curl -s localhost:4000/render/health                   # Chromium inside the container
 curl -s -H "$TOKEN" localhost:4000/pipeline/status     # the full readout
 curl -s -H "$TOKEN" localhost:4000/agents              # the installed agents and their models
-python3 scripts/service.py status          # version, schema, cron entry, all four containers
+python3 scripts/service.py status          # version, schema, cron entry, all five containers
 python scripts/status.py                   # videos, costs, disk usage
 ```
 
@@ -255,7 +255,7 @@ python3 upgrade.py
 ### What happens, either way
 
 **What runs.** `upgrade.py` pulls the new images (a source install builds them) while the old stack is still serving, stops the
-stack, and starts it again on the new images. On that start, each of `tubematic-api`, `tubematic-mcp` and `tubematic-renderer` calls
+stack, and starts it again on the new images. On that start, each of `tubematic-api`, `tubematic-mcp`, `tubematic-worker` and `tubematic-renderer` calls
 `migrate()` on its own first database touch and sees `NNNN` is not in `schema_migrations`. The
 backup happens *before* any of them takes the write lock, not inside it, so it is normal for **more
 than one** to write `tubematic-before-v2.1.0-<timestamp>.db` into `backups-data` before one of them
@@ -325,7 +325,7 @@ when upgrading:
   backup is not a video backup.
 - **Nothing prunes the backups directory automatically.** Every upgrade that has something pending
   adds at least one file — usually **two**, not one: `migrate()` backs up before it takes its write
-  lock, and the three backend containers start close enough together that
+  lock, and the four backend containers start close enough together that
   more than one reaches that point before the first has committed, so more than one snapshot gets
   written (the loser gets a collision-suffixed name rather than overwriting the first). Nothing ever
   removes one. Clean it out by hand if it grows large.
@@ -353,6 +353,15 @@ The supported path back to an older version is:
    ```
    It refuses while work is in flight, for the reason [Upgrading](#upgrading--user-instructions)
    explains; `--force` stops anyway.
+
+   **Going back to a version before 2.1.0, also remove the worker container.** 2.1.0 moved
+   publishing, Auto Pilot and notifications out of `tubematic-renderer` into a new
+   `tubematic-worker` container. An older version's Compose file has no such service, so nothing it
+   runs ever stops, updates or removes that container, and if it were started again it would run the
+   newer code, publishing beside the older renderer that does the same:
+   ```bash
+   docker rm -f tubematic-worker
+   ```
 2. **Restore the pre-upgrade backup.** If the upgrade you're reverting added a migration, one was
    taken automatically before it ran, named `tubematic-before-v<version>-<timestamp>.db` under
    `~/.tubematic-data/backups/`. **This discards every row written since the upgrade** — every
@@ -361,7 +370,7 @@ The supported path back to an older version is:
    with nothing in the database referring to them. Don't run this step on a system that has done
    real work since the upgrade without accepting that loss.
 
-   The backup file is **owned by root**, not your host user: the three backend containers run as
+   The backup file is **owned by root**, not your host user: the backend containers run as
    root, and `backup_db()` only copies the live database's permission *bits* (`0660`) onto the
    snapshot, not its ownership — a plain `cp` as yourself fails with `Permission denied`. Use `sudo`
    to read it, then copy it back over the live database and drop its stale WAL/shm sidecars — they

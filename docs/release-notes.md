@@ -39,7 +39,7 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
 ### Added
 
-- **The render worker runs a stills server for Cartoon 3D authoring.** The gate and preview stills
+- **The renderer runs a stills server for Cartoon 3D authoring.** The gate and preview stills
   the agent's tools ask for are rendered inside `tubematic-renderer`, on the GPU, by a server that
   keeps the project bundled and one browser open, so a still takes seconds instead of the half
   minute a cold software render costs in the MCP container. It listens on the Compose network only
@@ -74,6 +74,12 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
 ### Changed
 
+- **Publishing, Auto Pilot and notifications no longer wait for a render to finish.** They used to
+  run in the same loop as rendering, so while a video rendered — up to an hour or more for a long
+  one — a scheduled post went out late, Auto Pilot approved nothing, and Discord messages were held
+  back. They now run in a container of their own, `tubematic-worker`, and `tubematic-renderer` only
+  renders. Re-running `python3 onboard.py --step gpu`, which recreates the renderer, no longer pauses
+  them either.
 - **A render that stops making progress is now killed within ten minutes** instead of forty, and
   the ceiling on a whole render is three hours instead of forty minutes. The worker reads the
   renderer's own progress as it runs, so a hung browser is caught quickly whatever the video's
@@ -105,6 +111,15 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 - **An upgrade refuses to start while the chosen GPU cannot be used** — the NVIDIA Container Toolkit
   was removed, or the GPU was taken out. It stops before changing anything and tells you to run
   `python3 onboard.py --step gpu` to pick again or go back to the CPU.
+- **The upgrade adds a fifth container, `tubematic-worker`.** Nothing to do: it is created when the
+  stack starts. Publishing, Auto Pilot and notification activity is now in
+  `python3 scripts/service.py logs tubematic-worker`; rendering stays in `tubematic-renderer`'s log.
+- **`python3 upgrade.py --no-stop` is refused for this upgrade.** Recreating containers one at a
+  time would leave the old renderer publishing beside the new worker. Run the upgrade without
+  `--no-stop`; later upgrades accept it again.
+- **Going back to 2.0.x needs one extra step: remove the worker.** The older version's Compose file
+  has no `tubematic-worker` and will not stop it, so run `docker rm -f tubematic-worker` before you
+  restore the backup, or it keeps publishing with the newer code beside the older stack.
 - **Going back to 2.0.0 ignores the GPU choice.** The renderer then runs on the CPU; nothing else is
   affected.
 

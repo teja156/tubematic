@@ -47,23 +47,23 @@ than the JSON shape above.
 ### GPU rendering
 
 Unlike `/render/health`, these need the token. The API container has no GPU, so both only read and
-write settings rows; the render worker does the testing
+write settings rows; the renderer does the testing
 ([Rendering and Review](11-rendering-and-review.md#the-gl-renderer)).
 
 | Route | Response |
 |---|---|
-| `GET /render/gpu` | The worker's last GPU probe (below) |
-| `POST /render/gpu/test` | Stamps `gpu_probe_requested_at` for the worker's next pass and answers `202` with the same body, `pending: true`. The result arrives in a later `GET` |
+| `GET /render/gpu` | The renderer's last GPU probe (below) |
+| `POST /render/gpu/test` | Stamps `gpu_probe_requested_at` for the renderer's next pass and answers `202` with the same body, `pending: true`. The result arrives in a later `GET` |
 
 | Field | Meaning |
 |---|---|
-| `status` | `unknown` (the worker has never probed), `not_configured` (no GPU override: CPU rendering), `working`, or `not_usable` (a GPU is configured but the probe rejected it: CPU rendering) |
+| `status` | `unknown` (the renderer has never probed), `not_configured` (no GPU override: CPU rendering), `working`, or `not_usable` (a GPU is configured but the probe rejected it: CPU rendering) |
 | `rendering_on` | `gpu` only when `status` is `working`, otherwise `cpu` |
 | `configured`, `gpu` | Whether the renderer was given a GPU, and its `{uuid, name}` |
 | `host_gpus` | Every NVIDIA GPU the host had when onboarding's `gpu` step ran: `index`, `uuid`, `name`, `memory_mib`, `driver` |
 | `probe` | The stored result row, or `null` |
 | `requested_at`, `pending` | The last Test request, and whether no probe has started since |
-| `waiting_for_render` | `pending`, and a video is `RENDERING`. The worker answers only after that render |
+| `waiting_for_render` | `pending`, and a video is `RENDERING`. The renderer answers only after that render |
 
 ---
 
@@ -181,7 +181,7 @@ a stored choice is never silently rewritten — and is refused instead by the ap
 carries `visual_style`, at the topic checkpoint and before anything is spent. `cartoon_3d` follows
 the same shape with a different condition: it is refused by `POST /videos`, `PATCH /videos/<id>`
 and the project routes unless `GET /render/gpu` reports `status: working`, with a message naming the
-GPU step (or Test GPU, when the worker has not probed yet). A stored project default is refused only
+GPU step (or Test GPU, when the renderer has not probed yet). A stored project default is refused only
 when it changes.
 
 A `curriculum` video likewise starts with its project's `default_script_profile_id`, while that
@@ -308,7 +308,7 @@ because the agent CLIs' exit codes cannot be trusted to (see
   `agent_stuck_at` is stamped and a single `agent` comment explains what happened and how to hand
   the video back.
 
-`updated_at` is never touched: it is the poller's queue order and the clock the render worker uses
+`updated_at` is never touched: it is the poller's queue order and the clock the worker uses
 to spot a video stalled in `VOICING`.
 
 **A repeated `session_key` is not counted again.** The video keeps the key of the last outcome it
@@ -337,13 +337,13 @@ Body `{author, content}`. `author` defaults to `"human"` and must be `"human"` o
 
 The dashboard calls this only from **Request Revision** (see [Dashboard](15-dashboard.md#actions)),
 but the route itself does not check the video's status. That is deliberate: it was never the only
-way in. The agent's `add_comment` tool and the render worker write comments straight to SQLite, so
+way in. The agent's `add_comment` tool, the worker and the renderer write comments straight to SQLite, so
 a status check here would restate the UI's rule without enforcing anything.
 
 ### `DELETE /videos/<video_id>`
 Deletes the video's rendered mp4 and its job directory, clears `video_path`, and archives the row by
 setting `archived_at`. **There is no hard delete** — this is the only meaning "delete" has, and it is
-the same operation the render worker's retention sweep performs. A `human` comment is left on the
+the same operation the worker's retention sweep performs. A `human` comment is left on the
 video.
 
 | Status | Cause |
@@ -661,7 +661,7 @@ Structured log records, newest first. This is the dashboard's only route to the 
 
 | Parameter | Default | Notes |
 |---|---|---|
-| `service` | all | One of `api`, `mcp`, `renderer`, `poll`. Anything else is a **400** |
+| `service` | all | One of `api`, `mcp`, `worker`, `renderer`, `poll`. Anything else is a **400** |
 | `level` | all | A **minimum**, not an exact match: `warning` also returns errors |
 | `video_id` | — | Exact match |
 | `profile_id` | — | Exact match |
@@ -676,7 +676,7 @@ Structured log records, newest first. This is the dashboard's only route to the 
   ],
   "count": 1,
   "limit": 200,
-  "services": ["api", "mcp", "renderer", "poll"],
+  "services": ["api", "mcp", "worker", "renderer", "poll"],
   "levels": ["debug", "info", "warning", "error"]
 }
 ```
@@ -684,9 +684,10 @@ Structured log records, newest first. This is the dashboard's only route to the 
 `services` and `levels` are echoed so a client's filter lists are not a second copy of the server's
 allowlist. Records carry `video_id`, `profile_id` and `request_id` only when the writer had them.
 
-**`service` is optional on purpose.** One video's trail spans the renderer that rendered it, the MCP
-tools that voiced and staged it, and the API calls that moved it between statuses, so
-`GET /logs?video_id=…` — which is what the video modal's Logs tab issues — has to read all four.
+**`service` is optional on purpose.** One video's trail spans the renderer that rendered it, the
+worker that published it, the MCP tools that voiced and staged it, and the API calls that moved it
+between statuses, so `GET /logs?video_id=…` — which is what the video modal's Logs tab issues — has
+to read all of them.
 
 Filenames are built from an allowlisted service name plus a date; nothing from the request reaches a
 path. Malformed lines are skipped rather than failing the request, since a half-written final line is
@@ -699,11 +700,11 @@ files still exist and never deletes one. See [Settings](../user-guide/05-setting
 ## Time
 
 Timestamps are **stored in UTC and displayed in the host's local zone.** `updated_at` is the FIFO
-ordering key for the render worker's atomic claim, and local time is non-monotonic across DST — a
+ordering key for the renderer's atomic claim, and local time is non-monotonic across DST — a
 mix of `Z` and offset-suffixed rows would also sort wrongly as text.
 
-The dashboard container deliberately has **no** `/etc/localtime` mount, unlike the API and worker
-containers. It learns the host zone over HTTP from `GET /pipeline/status`. A second source of truth
+The dashboard container deliberately has **no** `/etc/localtime` mount, unlike the API, worker and
+renderer containers. It learns the host zone over HTTP from `GET /pipeline/status`. A second source of truth
 could disagree with the first, and mounting an env file into the Next.js process for one variable
 would have leaked every API key into it.
 
@@ -719,8 +720,8 @@ would have leaked every API key into it.
 ## Database access
 
 `renderer/api/db.py` provides `conn()`, `set_status()`, `update_fields()` and `add_comment()`, with
-WAL mode, foreign keys on, and a `sqlite3.Row` factory. It is used **exclusively by the render
-worker**; `pipeline.py` defines its own equivalent connection helper rather than importing it.
+WAL mode, foreign keys on, and a `sqlite3.Row` factory. It is used **exclusively by the worker
+and the renderer**; `pipeline.py` defines its own equivalent connection helper rather than importing it.
 
 Path columns hold **container-absolute** paths and this API stores and returns them as opaque
 strings. Nothing reads a location back out of them. The dashboard builds a rendered video's

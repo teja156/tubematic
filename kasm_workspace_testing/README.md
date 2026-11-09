@@ -58,7 +58,7 @@ base). **It does not build the Tubematic Docker stack itself** — there is no D
 available during a Kasm image build (`dockerd` only starts once a session is running, via
 `custom_startup.sh` → `supervisord` → the `dockerd` program block in
 `/etc/supervisor/conf.d/dockerd.conf`), so `docker compose build` for
-`tubematic-api`/`tubematic-mcp`/`tubematic-renderer`/`tubematic-dashboard` cannot happen at this
+`tubematic-api`/`tubematic-mcp`/`tubematic-worker`/`tubematic-renderer`/`tubematic-dashboard` cannot happen at this
 stage.
 
 **Important:** never *overwrite* `$STARTUPDIR/custom_startup.sh` — that script is what launches
@@ -127,7 +127,7 @@ outside one (Ubuntu Noble marks the system Python as externally-managed per PEP 
   Docker. Expect the first `onboard.py` run (renderer image build especially) to take noticeably
   longer than on bare-metal Docker.
 - **Resource sizing**: the stack's renderer needs `shm_size: 2gb` for Chromium, on top of the
-  Node/Python/ffmpeg footprint of three containers. When registering this image as a Kasm workspace
+  Node/Python/ffmpeg footprint of four containers. When registering this image as a Kasm workspace
   (`create_image`), size sessions generously — at least 4 cores / 6–8 GB memory — well above Kasm's
   small default allocation for lightweight desktop images.
 

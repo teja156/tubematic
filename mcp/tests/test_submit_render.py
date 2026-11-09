@@ -1,7 +1,7 @@
 """Tests for submit_render (TMDEV-32): it's now a pure DB write — no network
 call. It atomically claims VOICE_READY -> RENDER_QUEUED (the same
 guarded-UPDATE pattern as before, just without a renderer POST in between);
-the render worker (a separate always-on process) picks up RENDER_QUEUED
+the renderer (a separate always-on process) picks up RENDER_QUEUED
 videos on its own poll loop.
 
 Requires the mcp/ package deps (fastmcp) — see mcp/requirements.txt.

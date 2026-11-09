@@ -19,8 +19,8 @@ default; the types are `bool`, `int`, `str`, `secret`, `json_list`, `voice_list`
   the default too, rather than failing the read.
 - **Writes are all-or-nothing.** `POST /settings` (`pipeline.py::post_settings`) rejects any
   undeclared key, coerces every value, and only then writes. One bad value changes nothing.
-- **Nothing caches a setting.** The Flask API, the MCP server and the render worker read the
-  database per use, which is why no key needs a restart.
+- **Nothing caches a setting.** The Flask API, the MCP server, the worker and the renderer read
+  the database per use, which is why no key needs a restart.
 
 ### The default-voice invariant is enforced on read
 
@@ -62,17 +62,17 @@ them as unknown:
 | `active_strategies` | `POST /research/strategies` | Comma-joined string. Read through a filter that drops `mining` while no `gemini_api_key` is stored (`pipeline.py::_active_strategies`, `mcp/server.py::_active_strategies`); the filter never rewrites the row, and a save made while there is no key keeps a stored `mining` (the caller was only shown the filtered list), so a key added later brings mining back |
 | `publishing_accounts` | `POST /publishing/accounts` | JSON array of allowed account ids |
 | `auto_pilot_config` | `POST /autopilot` | JSON object: `projects` maps a project id to the account ids it posts to, `account_limits` maps an account id to its posts per day. A missing or malformed row reads as no project selected |
-| `last_metrics_poll_at` | The render worker's hourly metrics pass | ISO timestamp |
-| `last_price_sync_at` | The render worker's weekly price sync, stamped before it runs | ISO timestamp |
+| `last_metrics_poll_at` | The worker's hourly metrics pass | ISO timestamp |
+| `last_price_sync_at` | The worker's weekly price sync, stamped before it runs | ISO timestamp |
 | `last_price_sync_ok_at` | The price sync, when it succeeds | ISO timestamp. Shown on Settings → Costs |
 | `last_price_sync_error` | The price sync | The last failure's message, or `""` after a success |
 | `mining_youtube_urls` | `POST /research/mining-sources`, or the MCP server's `set_mining_sources` | JSON array of YouTube video URLs, each `https://www.youtube.com/watch?v=<id>`, no repeats, at most 50. Both writers refuse any other entry ([HTTP API — Mining sources](05-http-api.md#mining-sources)) |
 | `mining_url_cursor` | A mining run (the MCP server's `mine_youtube_topics`) | Integer as a string: the index of the URL the next run starts from, so runs rotate through the list |
-| `last_retention_sweep_at` | The render worker's retention sweep, stamped before it runs | ISO timestamp |
-| `gpu_probe_result` | The render worker's GPU probe (`worker.py::_run_gpu_probe`) | JSON object: when it ran and why, whether a GPU is configured, the GPU and the host's GPU list, Chromium's WebGL renderer and vendor strings, `ok`, the reason when not, and `nvidia-smi`'s view. Served by `GET /render/gpu` ([Rendering and Review](11-rendering-and-review.md#the-gl-renderer)) |
+| `last_retention_sweep_at` | The worker's retention sweep, stamped before it runs | ISO timestamp |
+| `gpu_probe_result` | The renderer's GPU probe (`render_agent.py::_run_gpu_probe`) | JSON object: when it ran and why, whether a GPU is configured, the GPU and the host's GPU list, Chromium's WebGL renderer and vendor strings, `ok`, the reason when not, and `nvidia-smi`'s view. Served by `GET /render/gpu` ([Rendering and Review](11-rendering-and-review.md#the-gl-renderer)) |
 | `gpu_probe_requested_at` | `POST /render/gpu/test` | ISO timestamp with microseconds, compared as a string with the result's `at` |
-| `render_claim_hold_until` | `onboard.py --step gpu`, around its recreate of the renderer | ISO timestamp (seconds, `Z`). The worker claims no render until then ([Rendering and Review — The claim](11-rendering-and-review.md#the-claim)); the step deletes the row when it is done |
-| `voicing_stall_paused_at` | The render worker's voicing-stall check, on every pass while the pipeline is paused | ISO timestamp. A stall is flagged only once enough time has passed since the later of this and the video's own last change, so a long pause does not flag every video the moment it ends |
+| `render_claim_hold_until` | `onboard.py --step gpu`, around its recreate of the renderer | ISO timestamp (seconds, `Z`). The renderer claims no render until then ([Rendering and Review — The claim](11-rendering-and-review.md#the-claim)); the step deletes the row when it is done |
+| `voicing_stall_paused_at` | The worker's voicing-stall check, on every pass while the pipeline is paused | ISO timestamp. A stall is flagged only once enough time has passed since the later of this and the video's own last change, so a long pause does not flag every video the moment it ends |
 | `research_run_timestamps` | `POST /research/record-run` | JSON array of ISO timestamps, pruned to 24 hours |
 | `last_research_at` | The MCP server's `mark_research_done` | ISO timestamp |
 | `mcp_port` | Onboarding's `install_config` step | Integer as a string. Read back by onboarding and by `--install-agent` to build the MCP URL |

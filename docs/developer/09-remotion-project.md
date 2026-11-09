@@ -47,7 +47,7 @@ At 30fps, frame 30 is one second in. Two consequences follow directly, and both 
 | `TextLayoutAudit` | `CompositionBuilder` plus `TextLayoutProbe` | The same |
 | `Placeholder` | A static placeholder | 90 frames |
 
-`Composition` is the only one ever rendered to video — the render worker always invokes
+`Composition` is the only one ever rendered to video — the renderer always invokes
 `npx remotion render Composition`. `TextLayoutAudit` is driven only through Remotion's Node API by
 the text-layout audit; it is the same video with an invisible measuring probe mounted on top.
 
@@ -193,7 +193,7 @@ safe zone is where scenes put their content, and the mark is meant to stay out o
   `CompositionBuilder` does not read a watermark key from the config. The agent writes that file,
   so anything expressed there the agent could move, dim or delete. A config that carries a
   `watermark` key changes nothing.
-- **The only switch is the `watermark_enabled` [setting](../user-guide/05-settings.md).** The render worker reads
+- **The only switch is the `watermark_enabled` [setting](../user-guide/05-settings.md).** The renderer reads
   it when a render starts and passes it to the composition as the `watermark` render prop. No MCP
   tool writes settings, so only a person can turn the mark off. The prop is drawn unless it is
   exactly `false`, so a caller that sends nothing — Studio preview, the text-layout audit — shows
@@ -210,7 +210,7 @@ safe zone is where scenes put their content, and the mark is meant to stay out o
 The image is `public/watermark.png`, baked into the renderer image and loaded with `staticFile()`.
 It is never fetched over the network, for the reason the caption font is not a webfont: it is on the
 path of every render, and a renderer without egress would stall on it. It sits beside, not inside,
-the per-video `public/<video_id>/` directories the worker and the audit stage into, so neither
+the per-video `public/<video_id>/` directories the renderer and the audit stage into, so neither
 touches it. The source artwork, with the other variants, is in `logos/` at the repository root.
 
 Scenes are **not** told about the mark and should not be laid out around it. It is a see-through
@@ -415,7 +415,7 @@ the skill points at, typechecked with the project). The agent writes its `Cartoo
 under `src/scenes/generated/<video_id>/` and imports the kit from there; see
 [Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d). The beat gate and the stills command
 lines under `gate/` are bundled by `cartoon-tools/build.mjs` for the MCP server; `cartoon-tools/audio/`
-is the soundtrack engine (Python) and `cartoon-tools/stills-server.mjs` the worker's stills server.
+is the soundtrack engine (Python) and `cartoon-tools/stills-server.mjs` the renderer's stills server.
 
 The style is offered as **Cartoon 3D (experimental)**: every video is code the agent writes, and the look,
 the gate and the kit are still settling. **Credits:** the kit descends from

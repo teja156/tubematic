@@ -1,4 +1,4 @@
-"""The render worker's stalled-VOICING backstop (TMDEV-112).
+"""The worker's stalled-VOICING backstop (TMDEV-112).
 
 VOICING is agent-workable, so a video no tick manages to voice is picked up on
 every tick, forever: an agent that refuses generate_voice, a generate_voice that

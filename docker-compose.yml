@@ -260,7 +260,7 @@ services:
       - OUTPUT_BASE_PATH=/output_videos
       - TUBEMATIC_DB=/data/tubematic.db
       - TUBEMATIC_JOBS_DIR=/jobs
-      # The stills server the worker runs beside its renders, for the MCP
+      # The stills server the renderer runs beside its renders, for the MCP
       # container's Cartoon 3D tools. Compose network only, never published.
       - TUBEMATIC_STILLS_PORT=4455
     shm_size: '2gb'
