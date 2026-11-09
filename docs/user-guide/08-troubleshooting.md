@@ -427,9 +427,13 @@ Compose prompts on a device change and answers "no" non-interactively. Start the
 **`entrypoint: … is root-owned — falling back to world-writable`.** Something created the data
 directory before onboarding did — usually a bare `docker compose up`. Fix the ownership on the host.
 
-**Disk filling up.** Rendered video and `node_modules` dominate. Measure with `df -h /`, not
-`docker system df`, whose per-image sizes double-count shared layers. With the containerd
-snapshotter, image layers are not under `/var/lib/docker` at all.
+**Disk filling up.** Click the disk-usage figure in the dashboard's top bar for a breakdown of what
+Tubematic holds ([The top bar](04-dashboard.md#the-top-bar)). Rendered video, old Docker images and
+`node_modules` usually take the most space. Each successful upgrade removes the previous version's
+images, and an upgrade that needs attention keeps them until the next successful one. For the machine
+as a whole, measure with `df -h /`. The per-image sizes of `docker system df` count shared layers
+once per image, so they add up to more than the disk holds. With the containerd snapshotter, image
+layers live outside `/var/lib/docker`.
 
 Published videos reclaim their own space: the
 [retention sweep](../developer/11-rendering-and-review.md#retention) deletes their mp4 and job directory

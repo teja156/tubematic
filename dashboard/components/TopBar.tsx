@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTimeZone } from "@/components/TimeZoneProvider";
+import { DiskUsage } from "@/components/DiskUsage";
 import type { PipelineStatus } from "@/lib/types";
 
 type ApiStatus = "unknown" | "ok" | "error";
@@ -505,6 +506,7 @@ export function TopBar() {
             whiteSpace: "nowrap",
           }}
         >
+          <DiskUsage />
           <VersionBadge />
           <TimeZoneBadge />
           <SysStatus />

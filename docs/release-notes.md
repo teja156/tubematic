@@ -127,6 +127,14 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   account that failed and its error and links the posts that went out; **A video fails** says why a
   video stopped — a render that kept failing, a publish that failed everywhere, and so on — and
   offers Retry publishing when the failure happened while publishing.
+- The dashboard's top bar shows how much disk space Tubematic takes up. Click the figure for a
+  breakdown: finished videos, job files, backups, logs and the rest of your data, then the Docker
+  images in use, old images, the containers' scratch space and the install folder. Your machine
+  measures the Docker and install figures about once an hour and right after an upgrade, and the
+  popup says how long ago.
+- Upgrading removes the previous version's Docker images, which used to pile up with every upgrade.
+  It does so once the upgrade has succeeded. An upgrade that needs attention keeps them, and the next
+  successful one removes them.
 
 ### Changed
 
@@ -250,6 +258,11 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
   The new files in `~/.tubematic-data/secrets/` can stay (2.0.x ignores them), and so can a GPU
   choice (2.0.0 then renders on the CPU; nothing else is affected).
+- Once this upgrade succeeds, it removes your 2.0.x images and any older Tubematic images still on
+  the machine, and reports how much space that freed. Going back to 2.0.x afterwards downloads those
+  images again (a source install rebuilds them). That takes time and bandwidth and needs no extra
+  step from you. If another container on this machine runs from an old Tubematic image, Docker keeps
+  that image and the upgrade warns.
 
 ---
 

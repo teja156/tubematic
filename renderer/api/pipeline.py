@@ -22,6 +22,7 @@ import random
 import re
 import shutil
 import sqlite3
+import threading
 import time
 import uuid
 import zoneinfo
@@ -48,6 +49,7 @@ try:
     from tubematic_core import logging as tlog
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
+    from tubematic_core import disk_usage as tdisk
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -61,6 +63,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     from tubematic_core import logging as tlog
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
+    from tubematic_core import disk_usage as tdisk
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -1717,6 +1720,69 @@ def _job_dir_bytes(video_id: str) -> int:
     return total
 
 
+# GET /storage (TMDEV-192). Walking the jobs tree on every poll of every open
+# dashboard tab would be wasteful, and the figure moves slowly, so the walk is
+# kept for a minute. None means never measured (not 0.0, which would read as
+# "measured at boot" and serve nothing for the first minute — the same trap
+# tubematic_core/logging.py notes).
+STORAGE_CACHE_SECS = 60
+_storage_cache = {"at": None, "data": None}
+_storage_lock = threading.Lock()
+
+
+def _reset_storage_cache() -> None:
+    with _storage_lock:
+        _storage_cache["at"] = None
+        _storage_cache["data"] = None
+
+
+def _measure_data(db_path: str) -> dict:
+    """The data folders, each measured the way `du` counts. Voice previews
+    sit inside the output folder and mascot sheets inside the database
+    folder; each gets its own line rather than inflating its parent's."""
+    data_dir = Path(db_path).parent
+    previews = OUTPUT_DIR / "voice-previews"
+    mascots = data_dir / "mascots"
+    snapshot = data_dir / tdisk.SNAPSHOT_NAME
+    items = [
+        ("videos", tdisk.tree_bytes(OUTPUT_DIR, exclude=[previews])),
+        ("voice_previews", tdisk.tree_bytes(previews)),
+        ("jobs", tdisk.tree_bytes(JOBS_DIR)),
+        ("scenes", tdisk.tree_bytes(REMOTION_DIR / "src" / "scenes" / "generated")),
+        ("database", tdisk.tree_bytes(data_dir, exclude=[mascots, snapshot])),
+        ("mascots", tdisk.tree_bytes(mascots)),
+        ("backups", tdisk.tree_bytes(tdb.backup_dir_for(db_path))),
+        ("logs", tdisk.tree_bytes(LOG_DIR)),
+    ]
+    return {
+        "measured_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "items": [{"key": k, "bytes": b} for k, b in items],
+        "total_bytes": sum(b for _k, b in items),
+    }
+
+
+def storage_usage(db_path: str) -> dict:
+    """Disk Tubematic uses: the data folders (measured here, cached for
+    STORAGE_CACHE_SECS) plus the host's snapshot of images, container layers
+    and the install folder, which no container can measure (none has the
+    Docker socket). `host` is None until the host has written a snapshot."""
+    with _storage_lock:
+        at = _storage_cache["at"]
+        if at is None or time.monotonic() - at >= STORAGE_CACHE_SECS:
+            _storage_cache["data"] = _measure_data(db_path)
+            _storage_cache["at"] = time.monotonic()
+        data = _storage_cache["data"]
+    host = tdisk.read_snapshot(Path(db_path).parent / tdisk.SNAPSHOT_NAME)
+    total = data["total_bytes"]
+    if host:
+        images = host.get("images") or {}
+        for value in (images.get("current_bytes"), images.get("old_bytes"),
+                      host.get("containers_bytes"), host.get("install_bytes")):
+            if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                total += value
+    return {"data": data, "host": host, "total_bytes": total}
+
+
 def _init_db(db_path: str) -> None:
     """Bring the database up to date. Idempotent.
 
@@ -3194,6 +3260,12 @@ def create_pipeline_blueprint() -> Blueprint:
                 _file_bytes(_output_path(row["project_id"], row["id"]))
                 + _job_dir_bytes(row["id"]))
         return jsonify(out)
+
+    @bp.get("/storage")
+    def storage():
+        """Disk Tubematic uses, for the dashboard's top-bar indicator
+        (TMDEV-192). Read-only."""
+        return jsonify(storage_usage(db_path))
 
     @bp.post("/videos")
     def create_video():

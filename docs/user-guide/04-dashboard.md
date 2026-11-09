@@ -40,6 +40,20 @@ network readable.
 
 Every page shares one bar. From left to right it holds the page tabs, then:
 
+- The disk-usage figure, for example `◔ 14.2 GB`: how much disk space Tubematic takes up. Click it
+  for a breakdown in two parts.
+  - Your data, measured live: finished videos, voice previews, job files (each video's voice audio,
+    scene images and timeline), generated scenes, the database, mascot sheets, backups and logs.
+  - Docker & install: the images this install runs, old images that no container uses, the
+    containers' own scratch space, and the install folder with its Python and Node packages. Your
+    machine measures these about once an hour and right after an upgrade or onboarding, and the
+    popup says how long ago. Until the first measurement, the total counts your data only and the
+    popup says so.
+
+  Old images can share layers that no single image's size includes, so with two or more of them
+  their size and the total show "≥". A source install also lists Docker's build cache, which stays
+  out of the total because anything else built on the machine shares it. [Upgrading](07-upgrading.md)
+  removes the old images. The figure disappears while the API does not answer.
 - **The version badge** — the installed version, for example `v1.2.3`. It is the quickest way to
   check which version an install is on, to make a bug report unambiguous, and to confirm an upgrade
   landed ([Upgrading](07-upgrading.md)). It is re-read every 30 seconds, so a page left open across

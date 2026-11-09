@@ -1045,3 +1045,124 @@ def test_both_overrides_are_carried_gpu_first(upgrade, env, monkeypatch, tmp_pat
     assert code == 0, rep.text()
     up = next(d for d in order if " up -d" in d)
     assert up.index(f"-f {gpu_path}") < up.index(f"-f {renderers_path}")
+
+
+# ── Old images (TMDEV-192) ───────────────────────────────────────────────────
+
+class _RmEx:
+    """Records `docker image rm` calls; refuses the targets in `refuse`."""
+    def __init__(self, refuse=()):
+        self.refuse = set(refuse)
+        self.calls = []
+
+    def run(self, cmd, **kw):
+        import subprocess
+        self.calls.append(cmd)
+        if cmd[-1] in self.refuse:
+            return subprocess.CompletedProcess(cmd, 1, stdout="",
+                                               stderr="Error: conflict: image is being used")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+
+OLD = [{"id": "sha256:old1", "refs": ["ghcr.io/o/tubematic-backend:2.0.0"], "bytes": 2 * 1024**3},
+       {"id": "sha256:old2", "refs": [], "bytes": 300 * 1024**2}]
+
+
+def _finish(upgrade, tmp_path, *, healthy=True, dry_run=False, old=OLD, refuse=(),
+            totals=(None, None)):
+    rep, ex, refreshed = _Rep(), _RmEx(refuse), []
+    answers = iter(totals)
+    upgrade._finish_images(ex, rep, tmp_path, healthy=healthy, dry_run=dry_run,
+                           find=lambda: old,
+                           refresh=lambda *a: refreshed.append(a),
+                           total=lambda: next(answers))
+    return ex, rep, refreshed
+
+
+def test_a_successful_upgrade_removes_old_images_by_tag_or_id(upgrade, tmp_path):
+    ex, rep, refreshed = _finish(upgrade, tmp_path)
+    assert ex.calls == [["docker", "image", "rm", "ghcr.io/o/tubematic-backend:2.0.0"],
+                        ["docker", "image", "rm", "sha256:old2"]]
+    assert "Removed 2 old images (about 2.3 GB freed)" in rep.text()
+    assert all("-f" not in c and "--force" not in c for c in ex.calls)
+    assert refreshed == [(tmp_path, upgrade.REPO_ROOT)]
+
+
+def test_freed_space_counts_layers_only_the_old_images_shared(upgrade, tmp_path):
+    # The two images' own sizes add to 2.3 GB; the machine's image total fell by
+    # 3 GB, because a layer both of them used went too.
+    _, rep, _ = _finish(upgrade, tmp_path, totals=(10 * 1024**3, 7 * 1024**3))
+    assert "about 3.0 GB freed" in rep.text()
+
+
+def test_a_rounded_total_never_reports_less_than_the_images_own_sizes(upgrade, tmp_path):
+    _, rep, _ = _finish(upgrade, tmp_path, totals=(10 * 1024**3, 9 * 1024**3))
+    assert "about 2.3 GB freed" in rep.text()
+
+
+def test_an_upgrade_that_needs_attention_keeps_the_old_images(upgrade, tmp_path):
+    ex, rep, refreshed = _finish(upgrade, tmp_path, healthy=False)
+    assert ex.calls == [] and refreshed == []
+    assert "Old images kept" in rep.text()
+
+
+def test_a_dry_run_removes_nothing_and_says_what_would_happen(upgrade, tmp_path):
+    def boom():
+        raise AssertionError("a dry run must not even look for old images")
+    rep = _Rep()
+    upgrade._finish_images(_RmEx(), rep, tmp_path, healthy=True, dry_run=True, find=boom,
+                           refresh=lambda *a: (_ for _ in ()).throw(AssertionError()))
+    assert "[dry-run]" in rep.text()
+
+
+def test_a_refused_image_is_a_warning_and_the_rest_still_go(upgrade, tmp_path):
+    ex, rep, refreshed = _finish(upgrade, tmp_path,
+                                 refuse={"ghcr.io/o/tubematic-backend:2.0.0"})
+    assert len(ex.calls) == 2
+    warnings = [m for k, m in rep.lines if k == "warn"]
+    assert len(warnings) == 1 and "being used" in warnings[0]
+    assert "Removed 1 old image (about 300.0 MB freed)" in rep.text()
+    assert refreshed  # still re-measured
+
+
+def test_nothing_old_removes_nothing(upgrade, tmp_path):
+    ex, rep, refreshed = _finish(upgrade, tmp_path, old=[])
+    assert ex.calls == []
+    assert "No old images" in rep.text()
+    assert refreshed
+
+
+def test_an_unwritable_snapshot_is_a_warning_not_a_failure(upgrade, tmp_path):
+    rep = _Rep()
+    def refresh(*a):
+        raise PermissionError("data/ is root-owned")
+    upgrade._finish_images(_RmEx(), rep, tmp_path, healthy=True, dry_run=False,
+                           find=lambda: [], refresh=refresh, total=lambda: None)
+    assert "disk-usage figure" in rep.text()
+
+
+def test_the_upgrade_reports_the_old_image_step_after_the_result(upgrade, env):
+    code, _, rep = _run(upgrade, env)
+    assert code == 0
+    assert "[dry-run] once the upgrade succeeds" in rep.text()
+
+
+def test_a_stranded_agent_reaches_the_image_step_as_unhealthy(upgrade, env, monkeypatch):
+    seen = []
+    monkeypatch.setattr(upgrade, "_finish_images",
+                        lambda ex, rep, root, **kw: seen.append(kw["healthy"]))
+    monkeypatch.setattr(upgrade, "_redeploy_agents", lambda *a: ["claude"])
+    code, _, _ = _run(upgrade, env)
+    assert seen == [False]
+    assert code == 1
+
+
+def test_a_failed_upgrade_never_reaches_the_image_step(upgrade, env, monkeypatch):
+    seen = []
+    monkeypatch.setattr(upgrade, "_finish_images", lambda *a, **kw: seen.append(kw))
+    def fail(*a, **kw):
+        raise RuntimeError("compose up failed")
+    monkeypatch.setattr(stack, "start", fail)
+    code, _, _ = _run(upgrade, env)
+    assert code == 1
+    assert seen == []

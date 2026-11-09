@@ -421,6 +421,45 @@ counts as 0 rather than failing the request. So does a job directory that is not
 the jobs directory: video ids are caller-supplied, and an id such as `.` would otherwise size the
 whole tree, the same reason `DELETE` refuses to remove one. See [Retention](11-rendering-and-review.md#retention).
 
+### `GET /storage`
+How much disk Tubematic uses, for the dashboard's disk-usage figure in the top bar. Read-only.
+
+```json
+{"data": {"measured_at": "2026-11-09T10:00:00Z", "total_bytes": 4400000000,
+          "items": [{"key": "videos", "bytes": 3221225472}, {"key": "voice_previews", "bytes": 2097152},
+                    {"key": "jobs", "bytes": 1073741824}, {"key": "scenes", "bytes": 5242880},
+                    {"key": "database", "bytes": 41943040}, {"key": "mascots", "bytes": 0},
+                    {"key": "backups", "bytes": 209715200}, {"key": "logs", "bytes": 62914560}]},
+ "host": {"measured_at": "2026-11-09T09:40:12Z",
+          "images": {"current_bytes": 5000000000, "old_bytes": 4500000000, "old_count": 2},
+          "containers_bytes": 31457280, "build_cache_bytes": 2000000000, "install_bytes": 943718400},
+ "total_bytes": 14875176000}
+```
+
+`data` comes from the API's own mounts, measured the way `du` counts: allocated blocks, a hardlinked
+file once, symlinks not followed, and anything unreadable as 0. The walk is cached for 60 seconds
+(`pipeline.py::STORAGE_CACHE_SECS`), so open tabs polling the route share one walk of the jobs tree.
+Voice previews sit on their own line and are left out of `videos`, and mascot sheets are left out of
+`database` in the same way.
+
+`host` is the host's snapshot, `~/.tubematic-data/data/disk-usage.json`, read on each request. No
+container has the Docker socket, so the API cannot measure images, the containers' writable layers
+or the install folder. The poller writes the file about hourly, and `upgrade.py` and onboarding write
+it after they change images (see [The poller](13-the-poller.md#disk-usage)). It is `null` until the
+first one is written, and when the file cannot be read. A figure inside it is `null` when Docker
+could not be read.
+
+`old_bytes` is the sum of each old image's unique size, which is what removing that image alone
+frees, and `old_count` is how many old images there are. With two or more, `old_bytes` is a floor:
+a layer that only old images share appears in none of their unique sizes, and Docker reports no
+per-layer size to add it from. The rule for which images are old is
+`tubematic_core/disk_usage.py::old_images`, the same one `upgrade.py` deletes by.
+
+`total_bytes` is `data.total_bytes` plus the host's images, container layers and install folder, so it
+is a floor whenever `old_bytes` is. The dashboard shows both with "≥". An `images` of `null` adds
+nothing. The build cache stays out of the total because BuildKit's cache is shared with anything
+else built on the machine.
+
 ---
 
 ## Projects

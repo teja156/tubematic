@@ -473,7 +473,8 @@ only drops its own record, despite the warning it prints.
 
 > **`docker volume prune` is dangerous here.** These are the database and the entire video library.
 > Remove them by name, deliberately, or not at all. `docker image prune` without `-a` is safe — it
-> only removes untagged images.
+> only removes untagged images. `upgrade.py` removes old Tubematic images itself (see
+> [Old images](#old-images)).
 
 ### Backups
 
@@ -633,6 +634,26 @@ inside a container that owns it rather than across the mount.
 
 Multi-stage on `node:20-alpine`: install, build with `output: "standalone"`, then a runner stage that
 copies only the standalone bundle and static assets and runs as a **non-root user**.
+
+### Old images
+
+Each upgrade leaves the previous version's images behind. A release install pulls new
+`ghcr.io/<owner>/tubematic-backend` and `tubematic-dashboard` tags beside the old ones, and a source
+rebuild moves the `tubematic-renderer-image` and `tubematic-tubematic-dashboard` tags and leaves the
+old images untagged. `upgrade.py` removes them once an upgrade has succeeded
+([Upgrading](../user-guide/07-upgrading.md), step 9), and the dashboard's disk-usage figure counts
+them until then. Both use one rule, `tubematic_core/disk_usage.py::old_images`:
+
+- A candidate is any image under those four repositories, whatever its tag, and any untagged image
+  labelled `com.docker.compose.project=tubematic`, which Compose puts on each image it builds. Any
+  owner matches, because a fork publishes under its own.
+- Every image that a `tubematic`-project container uses, running or stopped, is excluded.
+- With no Tubematic containers at all, no image is old. With the stack gone, the images in use
+  cannot be told apart from the rest, so the rule names none.
+
+The e2e stack (project `tubematic-test`) and the Kasm workspace image do not match. `upgrade.py`
+removes one image at a time, by tag (or by id for an untagged one), without forcing, so Docker
+refuses to remove an image that another container uses.
 
 ---
 
