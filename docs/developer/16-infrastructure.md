@@ -49,7 +49,10 @@ files out of the project directories is what keeps them away from everything tha
 When the TLS pair is missing, or its two files are not a usable pair, the gateway does not start
 and logs an error saying so; the API still serves the dashboard, and no renderer (the built-in one
 included) can reach it until the pair is put right and the API is restarted — see
-[The secrets directory](#the-secrets-directory).
+[The secrets directory](#the-secrets-directory). The same holds when the gateway cannot listen on its
+port (`render gateway not started: it cannot listen on port …`, usually another program on 4443):
+werkzeug's server answers a failed bind with `sys.exit(1)`, so `render_gateway.py::make_gateway_server`
+catches that as well as `OSError`, or one taken port would stop the whole API.
 
 **4443 is not published by `docker-compose.yml`.** The built-in renderer reaches it as
 `https://tubematic-api:4443` over the Compose network, which needs no published port. A renderer on

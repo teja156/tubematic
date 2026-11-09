@@ -1439,8 +1439,8 @@ def make_gateway_server(app, host: str, port: int, secrets_dir=None):
     """A threaded werkzeug server for the gateway over TLS, not yet serving
     (the caller runs serve_forever in a thread), holding at most
     MAX_CONNECTIONS connections. None, with an error logged, when the TLS
-    pair is missing or cannot be loaded: the API must still serve the
-    dashboard.
+    pair is missing or cannot be loaded, or the port cannot be bound: the
+    API must still serve the dashboard.
 
     The listening socket is wrapped here rather than by werkzeug, with
     do_handshake_on_connect=False, so the handshake happens in each
@@ -1464,8 +1464,23 @@ def make_gateway_server(app, host: str, port: int, secrets_dir=None):
                   "renderer must then be enrolled again with a new token. Then restart tubematic-api and "
                   "tubematic-renderer.")
         return None
-    server = _server_class()(host, port, _bounded_app(app), _handler_class())
-    server.socket = ctx.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
+    try:
+        # werkzeug's server answers a failed bind (the port taken, or not
+        # bindable) with sys.exit(1) after closing its socket, so SystemExit
+        # is caught alongside OSError: the API must still serve the dashboard.
+        server = _server_class()(host, port, _bounded_app(app), _handler_class())
+    except (OSError, SystemExit) as e:
+        log.error(f"render gateway not started: it cannot listen on port {port} ({e!r}). The API "
+                  "still serves the dashboard, but no renderer, the built-in one included, can reach "
+                  "it. Free the port (another program may be using it) and restart tubematic-api.")
+        return None
+    try:
+        server.socket = ctx.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
+    except OSError as e:
+        server.server_close()
+        log.error(f"render gateway not started: its listening socket could not be set up for TLS "
+                  f"({e!r}). The API still serves the dashboard; restart tubematic-api.")
+        return None
     # werkzeug reads it for the environ's https scheme and its SSL error log
     server.ssl_context = ctx
     return server
