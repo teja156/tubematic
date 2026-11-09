@@ -149,6 +149,9 @@ export function DiskUsage() {
   }));
   const host = usage.host;
   const extra = host ? hostRows(host) : [];
+  // The total includes the old-image figure, so when that is a floor (two or
+  // more old images) the total is one too.
+  const total = `${(host?.images?.old_count ?? 0) > 1 ? "≥ " : ""}${formatBytes(usage.total_bytes)}`;
   const max = Math.max(0, ...[...dataRows, ...extra].map((r) => r.bytes ?? 0));
 
   return (
@@ -162,7 +165,7 @@ export function DiskUsage() {
         }}
       >
         <span aria-hidden style={{ marginRight: 5 }}>◔</span>
-        {formatBytes(usage.total_bytes)}
+        {total}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner side="bottom" align="end" sideOffset={10} style={{ zIndex: 200 }}>
@@ -178,7 +181,7 @@ export function DiskUsage() {
             <Popover.Title style={{ margin: 0, fontSize: 12, fontWeight: 400,
               color: "var(--amber)", display: "flex", justifyContent: "space-between" }}>
               <span>DISK USAGE</span>
-              <span data-testid="disk-usage-total">{formatBytes(usage.total_bytes)}</span>
+              <span data-testid="disk-usage-total">{total}</span>
             </Popover.Title>
             <Section title="Your data" meta="live">
               {dataRows.map((r) => <UsageRow key={r.key} row={r} max={max} />)}

@@ -74,7 +74,7 @@ test.describe("TopBar", () => {
     }
     await expect(page.getByTestId("disk-usage-unmeasured")).toBeVisible();
     await expect(page.getByTestId("disk-usage-total")).toHaveText(await badge.innerText().then(
-      (t) => t.replace(/^\W+/, "").trim()));
+      (t) => t.replace(/^◔\s*/, "").trim()));
     const box = await popup.boundingBox();
     expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
     await page.keyboard.press("Escape");

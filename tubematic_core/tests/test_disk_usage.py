@@ -244,6 +244,26 @@ def test_images_total_counts_each_layer_once_machine_wide():
     assert disk_usage.images_total_bytes(run=_release_install(fail={"system df"})) is None
 
 
+@pytest.mark.parametrize("answer", ["", "not json", "[]", '{"Images": "x"}'])
+def test_unreadable_image_sizes_are_unknown_not_zero(tmp_path, answer):
+    docker = _release_install()
+    real = docker.__call__
+    def run(argv):
+        if argv[1:4] == ["system", "df", "-v"]:
+            return SimpleNamespace(returncode=0, stdout=answer, stderr="")
+        return real(argv)
+    snap = disk_usage.measure_host(tmp_path, run=run)
+    assert snap["images"] is None
+    assert snap["containers_bytes"] == 3500  # what could be read still is
+    # the rule itself does not depend on sizes
+    assert {e["id"] for e in disk_usage.old_images(run=run)} >= {OLD_BACKEND, OLD_DASH}
+
+
+def test_a_failed_system_df_is_unknown_not_zero(tmp_path):
+    docker = _release_install(fail={"system df"})
+    assert disk_usage.measure_host(tmp_path, run=docker)["images"] is None
+
+
 def test_measure_host_without_docker_reports_unknown_not_zero(tmp_path):
     snap = disk_usage.measure_host(tmp_path, run=_release_install(fail={"ps -a"}))
     assert snap["images"] is None

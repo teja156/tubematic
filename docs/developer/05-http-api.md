@@ -452,7 +452,8 @@ How much disk Tubematic uses, for the dashboard's disk-usage badge. Read-only.
   unique sizes, yet goes when they all do, and Docker reports no per-layer figure to add it from. The
   dashboard shows it as "≥". Both follow the same rule `upgrade.py` deletes by: `tubematic_core/disk_usage.py::old_images`.
 - **`total_bytes`** is `data.total_bytes` plus the host's images, container layers and install
-  folder. The build cache is not added, because BuildKit's cache is shared with anything else built
+  folder, so it is a floor whenever `old_bytes` is (the dashboard marks both). An `images` of `null`
+  (Docker answered `system df -v` with nothing usable) adds nothing rather than counting as 0. The build cache is not added, because BuildKit's cache is shared with anything else built
   on the machine.
 
 ---

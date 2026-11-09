@@ -186,18 +186,21 @@ def _dangling_ours(run) -> set:
     return set((out or "").split())
 
 
-def _image_sizes(run) -> dict:
+def _image_sizes(run) -> dict | None:
     """{image id: {"size": bytes, "unique": bytes}} from `docker system df -v`.
     `unique` is what removing the image alone would free: layers it shares
-    with another image stay. Keyed by `_key`. Empty when Docker can't be
-    read."""
+    with another image stay. Keyed by `_key`. None when Docker can't be
+    read or answers in a shape this does not know, so a size is never
+    reported as 0 when it is unknown."""
     out = _docker(run, "system", "df", "-v", "--format", "{{json .}}")
     try:
         doc = json.loads(out or "")
     except ValueError:
-        return {}
+        return None
+    if not isinstance(doc, dict) or not isinstance(doc.get("Images"), list):
+        return None
     sizes = {}
-    for row in (doc.get("Images") or []) if isinstance(doc, dict) else []:
+    for row in doc["Images"]:
         if not isinstance(row, dict):
             continue
         size = parse_size(row.get("Size"))
@@ -274,7 +277,8 @@ def _old_images(run, containers, sizes) -> list:
 
 
 def _old_entry(image_id, sizes) -> dict:
-    return {"id": image_id, "refs": [], "bytes": sizes.get(_key(image_id), {}).get("unique", 0)}
+    return {"id": image_id, "refs": [],
+            "bytes": (sizes or {}).get(_key(image_id), {}).get("unique", 0)}
 
 
 def measure_host(install_dir, run=_default_run) -> dict:
@@ -289,6 +293,9 @@ def measure_host(install_dir, run=_default_run) -> dict:
     snapshot["containers_bytes"] = sum(c["size_rw"] for c in containers)
     current = {_key(c["image"]) for c in containers}
     old = _old_images(run, containers, sizes)
+    snapshot["build_cache_bytes"] = _build_cache_bytes(run)
+    if sizes is None:
+        return snapshot  # images stay None: unknown, not 0
     snapshot["images"] = {
         "current_bytes": sum(sizes.get(i, {}).get("size", 0) for i in current),
         # Each old image's unique size. With two or more, a layer only old
@@ -297,7 +304,6 @@ def measure_host(install_dir, run=_default_run) -> dict:
         "old_bytes": sum(e["bytes"] for e in old),
         "old_count": len(old),
     }
-    snapshot["build_cache_bytes"] = _build_cache_bytes(run)
     return snapshot
 
 

@@ -602,7 +602,8 @@ which `upgrade.py`'s clean-up uses too, so the popup's "the next upgrade removes
 
 **Until a snapshot exists the badge shows the data alone**, and the popup says the Docker half is
 not measured yet rather than presenting a smaller number as the whole. A host figure Docker could
-not give reads "unknown", never `0 B`. Docker's build cache is listed on a source install but kept
+not give reads "unknown", never `0 B`. With two or more old images their figure is a floor (layers
+only they share are in no per-image size), and so is the total that includes it: both show "≥". Docker's build cache is listed on a source install but kept
 out of the total, because BuildKit's cache is shared with anything else built on the machine.
 
 **Nothing is rendered when the answer is not the expected shape**, the same rule as the version

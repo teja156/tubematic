@@ -47,7 +47,7 @@ describe("DiskUsage", () => {
     const fn = mockFetch(usage(HOST));
     render(<DiskUsage />);
     const badge = await screen.findByTestId("disk-usage");
-    expect(badge.textContent).toContain("14.7 GB");
+    expect(badge.textContent).toContain("14.7 GB");  // "≥": two old images
     expect(String(fn.mock.calls[0][0])).toBe("/api/proxy/storage");
   });
 
@@ -71,13 +71,23 @@ describe("DiskUsage", () => {
     expect(screen.getByTestId("disk-row-images_old").textContent).toContain("≥ 4.5 GB");
   });
 
-  it("shows a single old image's size without the floor mark", async () => {
+  it("marks the bar's and the popup's total as a floor when the old-image figure is one", async () => {
+    mockFetch(usage(HOST));
+    render(<DiskUsage />);
+    expect((await screen.findByTestId("disk-usage")).textContent).toContain("≥ 14.7 GB");
+    await openPopup();
+    expect(screen.getByTestId("disk-usage-total").textContent).toBe("≥ 14.7 GB");
+  });
+
+  it("shows a single old image's size, and the total, without the floor mark", async () => {
     mockFetch(usage({ ...HOST, images: { current_bytes: 5 * GB, old_bytes: GB, old_count: 1 } }));
     render(<DiskUsage />);
     await openPopup();
     const row = screen.getByTestId("disk-row-images_old").textContent ?? "";
     expect(row).toContain("1.0 GB");
     expect(row).not.toContain("≥");
+    expect(screen.getByTestId("disk-usage").textContent).not.toContain("≥");
+    expect(screen.getByTestId("disk-usage-total").textContent).not.toContain("≥");
   });
 
   it("marks the build cache as outside the total", async () => {
