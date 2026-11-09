@@ -123,23 +123,37 @@ def test_nothing_is_sent_when_every_trigger_is_off(env):
     assert env.sent == []
 
 
-@pytest.mark.parametrize("status,key", [
+TRIGGERS = [
     ("TOPIC_PROPOSED", "notify_topic_proposed"),
     ("SCRIPT_READY", "notify_script_ready"),
     ("VIDEO_READY", "notify_video_ready"),
-])
+    ("PARTIALLY_PUBLISHED", "notify_partially_published"),
+    ("FAILED", "notify_failed"),
+]
+NOTIFIABLE = [status for status, _ in TRIGGERS]
+
+
+def test_every_trigger_defaults_off():
+    """A bool default also applies on upgrade: an install with a webhook and only
+    some triggers on must not start receiving alerts it never asked for."""
+    for _, key in TRIGGERS:
+        assert pipeline.SETTINGS_SPEC[key] == ("bool", "false")
+    assert set(worker.NOTIFIABLE_STATUSES) == set(NOTIFIABLE)
+
+
+@pytest.mark.parametrize("status,key", TRIGGERS)
 def test_each_trigger_gates_only_its_own_event(env, status, key):
     _settings(env, discord_webhook_url=URL, **{key: True})
     _video(env, "wanted", status=status)
-    for other in ("TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY"):
+    for other in NOTIFIABLE:
         if other != status:
             _video(env, f"quiet-{other}", status=other)
     worker._sweep_notifications()
     assert len(env.sent) == 1
     assert _marker(env, "wanted") == _arrival(env, "wanted")
-    # The other two are stamped as seen rather than left pending, so switching
+    # The others are stamped as seen rather than left pending, so switching
     # their trigger on later starts from that moment instead of replaying them.
-    for other in ("TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY"):
+    for other in NOTIFIABLE:
         if other != status:
             assert _marker(env, f"quiet-{other}") == _arrival(env, f"quiet-{other}")
 
@@ -534,3 +548,119 @@ def test_the_base_url_reaches_the_message(env):
     _video(env, status="VIDEO_READY")
     worker._sweep_notifications()
     assert "http://box:3000/library" in env.sent[0][1]["embeds"][0]["description"]
+
+
+# ── Partially published and failed (TMDEV-191) ───────────────────────────────
+
+def _alerts(env, **extra):
+    _settings(env, discord_webhook_url=URL, notify_partially_published=True,
+              notify_failed=True, **extra)
+
+
+def _pub(env, vid, account, status, *, url="", error="", post_id="sp_1", platform="youtube"):
+    _sql(env, "INSERT INTO video_publications (id, video_id, platform, social_account_id,"
+              " postforme_post_id, status, post_url, error, created_at, updated_at)"
+              " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         (f"{vid}-{account}", vid, platform, account, post_id, status, url, error,
+          _ago(60), _ago(60)))
+
+
+def _comment(env, vid, text, created_at, author="agent"):
+    _sql(env, "INSERT INTO comments (video_id, author, content, created_at) VALUES (?, ?, ?, ?)",
+         (vid, author, text, created_at))
+
+
+def test_a_partial_publish_names_the_failed_account_and_links_the_live_post(env):
+    _alerts(env)
+    _video(env, status="PARTIALLY_PUBLISHED")
+    _pub(env, "vid-1", "spc_yt", "PUBLISHED", url="https://youtu.be/abc")
+    _pub(env, "vid-1", "spc_ig", "FAILED", error="token expired", platform="instagram")
+    worker._sweep_notifications()
+    assert len(env.sent) == 1
+    embed = env.sent[0][1]["embeds"][0]
+    assert "1 of 2" in embed["title"]
+    text = json.dumps(embed)
+    assert "spc_ig" in text and "token expired" in text and "https://youtu.be/abc" in text
+    assert _marker(env) == _arrival(env)
+
+
+def test_a_failed_video_carries_the_reason_written_when_it_failed(env):
+    """The comment written at the arrival, never an older one: a render that
+    failed, retried and then failed for good must report the final reason."""
+    _alerts(env)
+    stamp = _ago(30)
+    _video(env, status="FAILED", updated_at=stamp)
+    _comment(env, "vid-1", "Render failed: an earlier retry", _ago(600))
+    _comment(env, "vid-1", "Render failed 2 times (limit 1) — giving up. Last error: OOM", stamp)
+    _comment(env, "vid-1", "a human aside", stamp, author="human")
+    worker._sweep_notifications()
+    desc = env.sent[0][1]["embeds"][0]["description"]
+    assert "Last error: OOM" in desc
+    assert "earlier retry" not in desc and "human aside" not in desc
+
+
+def test_a_failed_video_with_no_fresh_reason_does_not_reuse_a_stale_one(env):
+    _alerts(env)
+    _video(env, status="FAILED", updated_at=_ago(30))
+    _comment(env, "vid-1", "Render failed: an earlier retry", _ago(600))
+    worker._sweep_notifications()
+    desc = env.sent[0][1]["embeds"][0]["description"]
+    assert "earlier retry" not in desc
+    assert "No reason was recorded" in desc
+
+
+def test_a_publish_failure_offers_retry_and_a_render_failure_does_not(env):
+    _alerts(env)
+    _video(env, "pub-fail", status="FAILED")
+    _pub(env, "pub-fail", "spc_yt", "FAILED", error="quota")
+    _video(env, "render-fail", status="FAILED")
+    worker._sweep_notifications()
+    by_id = {p["embeds"][0]["footer"]["text"]: p["embeds"][0]["description"] for _, p in env.sent}
+    assert "Retry publishing" in by_id["Tubematic · pub-fail"]
+    assert "Retry publishing" not in by_id["Tubematic · render-fail"]
+
+
+def test_auto_pilot_never_hides_a_failure(env):
+    """The Auto Pilot skip is for VIDEO_READY only — Auto Pilot approves those.
+    Nothing approves its way out of a failure."""
+    _alerts(env)
+    _auto_pilot(env)
+    _video(env, "partial", status="PARTIALLY_PUBLISHED")
+    _video(env, "failed", status="FAILED")
+    worker._sweep_notifications()
+    assert len(env.sent) == 2
+
+
+def test_a_publish_that_succeeds_everywhere_sends_no_partial_alert(env, monkeypatch):
+    """Negative control, end to end: the publish poll settles the video, then
+    the sweep runs. Every account succeeded, so the video is PUBLISHED and
+    nothing is announced."""
+    _alerts(env, publishing_enabled=True, postforme_api_key="pfm")
+    _video(env, status="PUBLISHING")
+    for account in ("spc_a", "spc_b"):
+        _pub(env, "vid-1", account, "PENDING")
+    import postforme
+    monkeypatch.setattr(postforme, "get_post_results", lambda key, post_id: [
+        {"social_account_id": a, "success": True, "platform_data": {"url": f"https://x/{a}"}}
+        for a in ("spc_a", "spc_b")])
+    worker._poll_publishing_videos()
+    worker._sweep_notifications()
+    assert _sql(env, "SELECT status FROM videos WHERE id = 'vid-1'")[0][0] == "PUBLISHED"
+    assert env.sent == []
+
+
+def test_a_publish_that_partly_fails_is_announced_on_the_same_tick(env, monkeypatch):
+    """The positive twin: the derivation writes its comment and status before the
+    sweep in the same loop, so the alert goes out on the tick it settles."""
+    _alerts(env, publishing_enabled=True, postforme_api_key="pfm")
+    _video(env, status="PUBLISHING")
+    for account in ("spc_a", "spc_b"):
+        _pub(env, "vid-1", account, "PENDING")
+    import postforme
+    monkeypatch.setattr(postforme, "get_post_results", lambda key, post_id: [
+        {"social_account_id": "spc_a", "success": True, "platform_data": {"url": "https://x/a"}},
+        {"social_account_id": "spc_b", "success": False, "error": {"message": "nope"}}])
+    worker._poll_publishing_videos()
+    worker._sweep_notifications()
+    assert len(env.sent) == 1
+    assert "1 of 2" in env.sent[0][1]["embeds"][0]["title"]

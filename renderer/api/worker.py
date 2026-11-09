@@ -419,10 +419,16 @@ def _write_result(publication_id: str, status: str, url: str, error: str, now: s
 def _derive_video_status(video_id: str) -> None:
     """videos.status from its publication rows, once none are still pending.
 
-    PUBLISHED if ANY target succeeded. There is no un-publish, so a video live
-    on two of four accounts genuinely is published; calling it FAILED would lie
-    about the accounts that did post, and the per-account failures are visible
-    on their own rows. FAILED only when every target failed.
+    PUBLISHED when every target succeeded, FAILED when every one failed, and
+    PARTIALLY_PUBLISHED for a mix (TMDEV-191). A mix is never FAILED: there is
+    no un-publish, and calling a video live on two of four accounts failed
+    would lie about the accounts that did post. Nor is it PUBLISHED, which
+    left the failed accounts' upload with no owner. PARTIALLY_PUBLISHED is a
+    human-owned state — the human posts by hand and marks it published.
+
+    It is deliberately swept by neither retention pass (the mp4 has to survive
+    for that manual upload) and deliberately holds its Auto Pilot in-flight
+    slot (back-pressure while something is broken). Do not add it to either.
     """
     with db.conn(DB_PATH) as con:
         rows = con.execute(
@@ -434,12 +440,15 @@ def _derive_video_status(video_id: str) -> None:
 
     published = counts.get("PUBLISHED", 0)
     failed = counts.get("FAILED", 0)
-    if published:
-        db.set_status(DB_PATH, video_id, "PUBLISHED", only_if="PUBLISHING")
-        if failed:
+    if published and failed:
+        if db.set_status(DB_PATH, video_id, "PARTIALLY_PUBLISHED", only_if="PUBLISHING"):
             _comment(video_id,
-                     f"Published to {published} account(s); {failed} failed. "
-                     "See the publication list for the per-account errors.")
+                     f"Published to {published} of {published + failed} account(s); "
+                     f"{failed} failed — see Publishing Results for each error. Download "
+                     "the video, post it to the failed account(s) by hand, then use Mark "
+                     "as published.")
+    elif published:
+        db.set_status(DB_PATH, video_id, "PUBLISHED", only_if="PUBLISHING")
     else:
         db.set_status(DB_PATH, video_id, "FAILED", only_if="PUBLISHING")
         _comment(video_id, f"Publishing failed on all {failed} target(s).")
@@ -972,21 +981,29 @@ def _sweep_unpublished(days: int) -> None:
 
 # ── Discord notifications (TMDEV-5) ─────────────────────────────────────────
 #
-# A sweep rather than a send at each write site. The three notifiable statuses
-# are written by different writers — TOPIC_PROPOSED by the MCP server's
-# create_video, SCRIPT_READY by either the MCP server or the Flask PATCH, and
-# VIDEO_READY by this worker's review thread (render_results.py) — so one
-# sweep over the database is the only place that sees all three.
+# A sweep rather than a send at each write site. The notifiable statuses are
+# written by different writers — TOPIC_PROPOSED by the MCP server's
+# create_video, SCRIPT_READY by either the MCP server or the Flask PATCH,
+# VIDEO_READY by this worker's review thread (render_results.py),
+# PARTIALLY_PUBLISHED by the publish poll here, and FAILED by half a dozen paths
+# across this worker and the render gateway — so one sweep over the database is
+# the only place that sees them all.
 # It also bundles a research run's topics for free, keeps a slow or unreachable
 # Discord out of every MCP call and dashboard save, and retries a failed send
 # on the next tick, because the marker below only advances on success.
-NOTIFIABLE_STATUSES = ("TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY")
+NOTIFIABLE_STATUSES = ("TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY",
+                       "PARTIALLY_PUBLISHED", "FAILED")
 
 # Which setting gates which status.
 _NOTIFY_SETTING = {
     "TOPIC_PROPOSED": "notify_topic_proposed",
     "SCRIPT_READY":   "notify_script_ready",
     "VIDEO_READY":    "notify_video_ready",
+    # Alerts, not checkpoints (TMDEV-191). One toggle for every cause of
+    # FAILED — render, publish, a refused path — because they all mean the
+    # same thing to a human: stuck, needs a person. The cause is in the message.
+    "PARTIALLY_PUBLISHED": "notify_partially_published",
+    "FAILED":         "notify_failed",
 }
 
 # How long the newest proposed topic must have sat before the bundle goes out.
@@ -1130,12 +1147,45 @@ def _sweep_notifications_once() -> None:
 
 def _payload_for(status: str, row: dict, voices: dict, base_url: str) -> dict:
     video = dict(row)
+    if status == "PARTIALLY_PUBLISHED":
+        video["publications"] = _publications(video["id"])
+        return discord_notify.build_partially_published_payload(video, base_url=base_url)
+    if status == "FAILED":
+        video["publications"] = _publications(video["id"])
+        video["failure_reason"] = _failure_reason(video)
+        return discord_notify.build_failed_payload(video, base_url=base_url)
     if status == "SCRIPT_READY":
         video["voice_name"] = voices.get(video.get("voice_id") or "", "")
         return discord_notify.build_script_ready_payload(video, base_url=base_url)
     video["duration_secs"] = pipeline._video_duration_secs(video["id"])
     video["review_summary"] = _review_summary(video.get("gemini_feedback") or "")
     return discord_notify.build_video_ready_payload(video, base_url=base_url)
+
+
+def _publications(video_id: str) -> list:
+    with db.conn(DB_PATH) as con:
+        return [dict(r) for r in con.execute(
+            "SELECT platform, social_account_id, postforme_post_id, status, post_url, error"
+            " FROM video_publications WHERE video_id = ? ORDER BY platform, id", (video_id,))]
+
+
+def _failure_reason(video: dict) -> str:
+    """The agent comment that explains this FAILED arrival, or "".
+
+    Every path into FAILED writes a comment composed for a human: the render
+    and gateway paths in the same transaction as the status, this worker's
+    publish paths straight after it in the same thread, ahead of this sweep.
+    So the reason is the newest agent comment written at or after the arrival
+    (created_at >= updated_at, both second-granularity UTC). The bound is what
+    keeps an older retry's "Render failed: ..." from being reported as the
+    final reason when a later FAILED write left no comment of its own.
+    """
+    with db.conn(DB_PATH) as con:
+        row = con.execute(
+            "SELECT content FROM comments WHERE video_id = ? AND author = 'agent'"
+            " AND created_at >= ? ORDER BY created_at DESC, id DESC LIMIT 1",
+            (video["id"], video["updated_at"])).fetchone()
+    return row["content"] if row else ""
 
 
 def _pending_notifications(status: str) -> list:

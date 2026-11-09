@@ -642,6 +642,9 @@ def test_no_limit_is_the_default_and_ignores_the_backlog(env):
     ("VIDEO_APPROVED", "auto", VOICED, True),
     ("PUBLISHING", "auto", VOICED, True),
     ("SCHEDULED", "auto", {**VOICED, "scheduled_at": _at(3600)}, True),
+    # published somewhere, failed elsewhere: holds its slot until a human marks
+    # it published — deliberate back-pressure (TMDEV-191)
+    ("PARTIALLY_PUBLISHED", "auto", VOICED, True),
     # a revision keeps its slot wherever it goes back to
     ("SCRIPT_READY", "auto", VOICED, True),
     ("TOPIC_PROPOSED", "auto", VOICED, True),
