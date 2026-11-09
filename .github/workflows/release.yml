@@ -157,6 +157,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyyaml
 
+      # The remote renderer script pulls ghcr.io/<owner>/tubematic-backend,
+      # and it runs with no checkout, so it cannot ask tubematic_core whose
+      # images these are: a fork's release would otherwise hand its renderers
+      # the upstream image of the same version. The owner this release pushed
+      # under is written into the script here, BEFORE the tarball is built and
+      # the asset copied, so both carry the same stamped file and CHECKSUMS.txt
+      # covers it. The pattern must match exactly one line, and the stamp must
+      # be there afterwards -- a renamed constant fails the release instead of
+      # silently shipping the default.
+      - name: Stamp the release owner into the remote renderer script
+        env:
+          OWNER: ${{ needs.preflight.outputs.owner }}
+        run: |
+          script=scripts/tubematic_remote_renderer.py
+          [[ "$OWNER" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "unusable owner: $OWNER"; exit 1; }
+          test "$(grep -c '^GITHUB_OWNER = "[^"]*"$' "$script")" = 1
+          sed -i "s/^GITHUB_OWNER = \"[^\"]*\"\$/GITHUB_OWNER = \"${OWNER}\"/" "$script"
+          grep -qx "GITHUB_OWNER = \"${OWNER}\"" "$script"
+
       - name: Build release tarball
         run: |
           python3 scripts/build_release_tarball.py \
@@ -167,7 +186,14 @@ jobs:
       # The remote renderer script is a Release asset of its own: the machine
       # it runs on downloads it alone, with no tarball and no checkout.
       - name: Add the remote renderer script
-        run: cp scripts/tubematic_remote_renderer.py dist/
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          cp scripts/tubematic_remote_renderer.py dist/
+          # The asset and the tarball's copy must be the same stamped file.
+          tar -xzOf "dist/tubematic-v${VERSION}.tar.gz" \
+            "tubematic-v${VERSION}/scripts/tubematic_remote_renderer.py" \
+            | cmp - dist/tubematic_remote_renderer.py
 
       - name: Write release checksums
         working-directory: dist

@@ -115,22 +115,35 @@ describe("nothingCanRender", () => {
   const queued = { RENDER_QUEUED: 2 };
 
   it("is raised when videos are queued and no renderer can take one", () => {
-    expect(nothingCanRender(queued, list([renderer({ online: false })]))).toBe(true);
-    expect(nothingCanRender(queued, list([renderer({ enabled: false }), renderer({ id: "r2", needs_upgrade: true })])))
-      .toBe(true);
-    expect(nothingCanRender(queued, list([]))).toBe(true);
+    expect(nothingCanRender(queued, list([renderer({ online: false })]), NOW)).toBe(true);
+    expect(nothingCanRender(queued, list([renderer({ enabled: false }), renderer({ id: "r2", needs_upgrade: true })]),
+                            NOW)).toBe(true);
+    expect(nothingCanRender(queued, list([]), NOW)).toBe(true);
+  });
+
+  it("is raised when the only online renderer's credential has expired", () => {
+    // Still "online" (its last good heartbeat is recent), but it can no longer
+    // authenticate, so it claims nothing — the card says so, and so must the banner.
+    const lapsed = renderer({ credential_expires_at: "2026-11-08T11:59:00Z" });
+    expect(rendererStatus(lapsed, NOW)).toBe("credential_expired");
+    expect(canRender(lapsed, NOW)).toBe(false);
+    expect(nothingCanRender(queued, list([lapsed]), NOW)).toBe(true);
+    const refused = renderer({ last_error: "credential expired — re-enroll" });
+    expect(nothingCanRender(queued, list([refused]), NOW)).toBe(true);
+    // The same renderer a minute before expiry can still render.
+    expect(nothingCanRender(queued, list([lapsed]), Date.parse("2026-11-08T11:58:00Z"))).toBe(false);
   });
 
   it("is not raised while one renderer can render, busy or not", () => {
-    expect(nothingCanRender(queued, list([renderer({ online: false }), renderer({ id: "r2", state: "rendering" })])))
-      .toBe(false);
-    expect(canRender(renderer({ state: "rendering" }))).toBe(true);
+    expect(nothingCanRender(queued, list([renderer({ online: false }), renderer({ id: "r2", state: "rendering" })]),
+                            NOW)).toBe(false);
+    expect(canRender(renderer({ state: "rendering" }), NOW)).toBe(true);
   });
 
   it("is not raised with nothing queued, or on a list it could not read", () => {
-    expect(nothingCanRender({}, list([renderer({ online: false })]))).toBe(false);
-    expect(nothingCanRender({ RENDER_QUEUED: 0 }, list([]))).toBe(false);
-    expect(nothingCanRender(queued, null)).toBe(false);
+    expect(nothingCanRender({}, list([renderer({ online: false })]), NOW)).toBe(false);
+    expect(nothingCanRender({ RENDER_QUEUED: 0 }, list([]), NOW)).toBe(false);
+    expect(nothingCanRender(queued, null, NOW)).toBe(false);
   });
 });
 

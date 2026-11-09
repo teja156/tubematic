@@ -1001,11 +1001,21 @@ def test_without_an_override_start_is_the_bare_compose_up(upgrade, env):
 
 # ── Remote-renderers override (TMDEV-190) ────────────────────────────────────
 
-def test_a_broken_renderers_override_refuses_before_anything_changes(upgrade, env):
-    """Compose cannot parse it, so the `up` in "Start" would fail after the
-    stack is already stopped."""
+@pytest.mark.parametrize("text", [
+    "{ not json",
+    # Compose parses these, but port 0 publishes a random port and 70000 fails
+    # the `up` in "Start", after the stack is already stopped.
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:0:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:70000:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:4443:4443", "0.0.0.0:4443:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:4443:4443", "[::]:9443:4443"]}}}),
+])
+def test_a_broken_renderers_override_refuses_before_anything_changes(upgrade, env, text):
+    """Compose cannot parse it, or would publish something other than the one
+    port the step chose, so the `up` in "Start" would fail (or misbehave)
+    after the stack is already stopped."""
     from onboard import remote_renderers
-    remote_renderers.override_path().write_text("{ not json")
+    remote_renderers.override_path().write_text(text)
     code, order, rep = _run(upgrade, env)
     assert code == 1
     assert order == []

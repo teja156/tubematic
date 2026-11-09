@@ -229,7 +229,7 @@ export function PipelineClient() {
         </div>
       )}
 
-      {nothingCanRender(stats, renderers) && (
+      {nothingCanRender(stats, renderers, now?.getTime() ?? Date.now()) && (
         <div
           data-testid="nothing-can-render"
           role="alert"

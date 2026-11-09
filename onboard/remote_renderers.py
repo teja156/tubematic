@@ -41,12 +41,16 @@ SETTING_KEY = "render_gateway_address"  # keep in sync with renderer/api/pipelin
 
 STEP_HINT = "python3 onboard.py --step renderers"
 DOCS_HINT = "docs/user-guide/11-remote-renderers.md"
-HOST_COMMAND = "python3 tubematic_remote_renderer.py install --token '{token}'"
+# The token is never part of the command: a command line is visible to every
+# user of the renderer machine (ps, /proc) and lands in shell history. The
+# script asks for the token with a hidden prompt instead.
+# Keep in sync with renderer/api/pipeline.py::REMOTE_RENDERER_COMMAND.
+HOST_COMMAND = "python3 tubematic_remote_renderer.py install"
 
 # A DNS name: dot-separated labels of letters, digits and hyphens, none
 # starting or ending with a hyphen.
 _LABEL = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)$")
-_PORT_ENTRY = re.compile(r"^(?:0\.0\.0\.0|\[::\]):(\d+):" + str(GATEWAY_PORT) + r"$")
+_PORT_ENTRY = re.compile(r"^(?:0\.0\.0\.0|\[::\]):([0-9]{1,5}):" + str(GATEWAY_PORT) + r"$")
 
 
 def override_path() -> Path:
@@ -75,12 +79,28 @@ def _check_host(host: str) -> None:
             # (999.1.1.1, 10.0.0), never a real DNS name.
             raise ValueError(f"{host!r} is not a valid IPv4 address")
         return
+    if ip.version == 6 and ip.is_link_local:
+        raise ValueError(f"{host} is an IPv6 link-local address (fe80::/10): dialling it needs "
+                         "the renderer's own interface name, which a token cannot carry — give "
+                         "a routable address or a DNS name")
+    # An IPv4 address written as IPv6 (::ffff:127.0.0.1, or the old ::127.0.0.1
+    # form) is judged as the IPv4 address it is: Python's IPv6 checks do not
+    # look inside it, so ::ffff:127.0.0.1 would pass as "not loopback".
+    if ip.version == 6:
+        if ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        elif ip.packed[:12] == bytes(12) and int(ip) > 1:
+            ip = ipaddress.IPv4Address(ip.packed[12:])
     if ip.is_unspecified:
         raise ValueError(f"{host} means \"every address\", which a renderer cannot dial — "
                          "give this machine's own address")
     if ip.is_loopback:
         raise ValueError(f"{host} is a loopback address; a renderer on another machine cannot "
                          "reach this one there")
+    if ip.is_multicast:
+        raise ValueError(f"{host} is a multicast address, not one machine's address")
+    if ip == ipaddress.IPv4Address("255.255.255.255"):
+        raise ValueError(f"{host} is the broadcast address, not one machine's address")
 
 
 def parse_address(text) -> tuple[str, int]:
@@ -173,21 +193,36 @@ def render_override(port: int, ipv6: bool = False) -> str:
 
 def read_override(path: Path = None) -> dict | None:
     """{"port"} from an existing override, None when there is none. Raises
-    ValueError for a file that exists but is not one this module wrote."""
+    ValueError for a file that exists but is not exactly one this module
+    writes: a host port outside 1-65535, a duplicate or extra ports entry, a
+    bind other than 0.0.0.0 (plus [::]), another service or any other key.
+    Compose would accept some of those (port 0 publishes a random port), so
+    upgrade.py could not rely on `up` to refuse them after it has stopped
+    everything."""
     path = path or override_path()
     if not path.is_file():
         return None
     try:
         doc = json.loads(path.read_text())
         ports = doc["services"][API_SERVICE]["ports"]
-        matches = [_PORT_ENTRY.match(p) for p in ports]
-        if not ports or not all(matches):
-            raise ValueError("unexpected ports entry")
-        found = {int(m.group(1)) for m in matches}
-        if len(found) != 1:
-            raise ValueError("more than one host port")
-        return {"port": found.pop()}
-    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        if not isinstance(ports, list) or not ports:
+            raise ValueError("no ports entry")
+        match = _PORT_ENTRY.match(ports[0]) if isinstance(ports[0], str) else None
+        if not match:
+            raise ValueError(f"unexpected ports entry {ports[0]!r}")
+        port = int(match.group(1))
+        if not 1 <= port <= 65535:
+            raise ValueError(f"host port {port} is outside 1-65535")
+        expected = json.loads(render_override(port, ipv6=len(ports) > 1))
+        if not isinstance(doc.get("x-tubematic", ""), str):
+            raise ValueError("unexpected x-tubematic value")
+        doc.pop("x-tubematic", None)
+        expected.pop("x-tubematic", None)
+        if doc != expected:
+            raise ValueError("it holds something other than the one published port this "
+                             f"installer writes (expected {expected['services']})")
+        return {"port": port}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, IndexError) as e:
         raise ValueError(f"{path} is not a remote-renderers override this installer wrote "
                          f"({e})") from e
 
@@ -283,6 +318,15 @@ def check_hint(result: str, port: int) -> str:
             "Tubematic's render gateway. Renderers trust only the gateway's own certificate, "
             "so nothing may sit in front of it — free the port, or re-run "
             f"`{STEP_HINT}` with another port.")
+
+
+def untested_address_note(address: str) -> str:
+    """The local check proves the port is published and that the gateway
+    answers on it — on this machine. Whether the address in the tokens leads
+    here from another machine (DNS, routing, NAT, a firewall) it cannot see."""
+    return (f"Only this machine's port and certificate were checked. Whether {address} reaches "
+            "this machine from your renderer machines was not tested here: the renderer's "
+            "install checks it (and the certificate) when it first connects.")
 
 
 def firewall_note(port: int) -> str:

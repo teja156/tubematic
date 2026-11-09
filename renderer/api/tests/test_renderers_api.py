@@ -169,8 +169,10 @@ def test_a_token_names_this_gateway_and_its_pin(client, db_path, secrets):
     decoded = trenderers.decode_enrollment_token(body["token"])
     assert decoded["url"] == "https://render.example.com:8443"
     assert decoded["pin"] == auth.gateway_pin(secrets)
-    assert body["command"] == (f"python3 tubematic_remote_renderer.py install "
-                               f"--token '{body['token']}'")
+    # The token is never in the command: a command line is visible to every
+    # user of the renderer machine and lands in shell history.
+    assert body["command"] == "python3 tubematic_remote_renderer.py install"
+    assert body["token"] not in body["command"] and "--token" not in body["command"]
     # One-time, hashed, named: the secret itself is never stored.
     [(stored, name, expires)] = _sql(db_path, "SELECT secret_hash, name, expires_at "
                                               "FROM renderer_enrollments")

@@ -99,8 +99,10 @@ It asks two things:
 1. **Remote renderers: On or Off.**
 2. **The address renderers use to reach this machine** — an IP address or a DNS name the remote
    machines can resolve, optionally with `:port` (default **4443**). For example `192.168.1.20`,
-   `render.example.lan:8443`, or an IPv6 address in brackets, `[2001:db8::20]`. Not `localhost` or a
-   loopback address, and no `http://` or `https://`.
+   `render.example.lan:8443`, or an IPv6 address in brackets, `[2001:db8::20]`. Not `localhost`, a
+   loopback, multicast or broadcast address, an IPv6 link-local address (`fe80::…`, which needs an
+   interface name to dial), and no `http://` or `https://`. An IPv4 address written as IPv6
+   (`[::ffff:127.0.0.1]`) is judged as the IPv4 address it is.
 
 Then it:
 
@@ -109,11 +111,23 @@ Then it:
   It lives with your data, so upgrades keep it;
 - stores the address, which the dashboard puts into every enrollment token;
 - recreates `tubematic-api` so the port opens. That takes a few seconds; a render in progress carries
-  on. If a post is uploading, it waits and tells you to finish with
-  `python3 scripts/service.py start tubematic-api`;
-- checks that the port answers with the gateway's own certificate;
+  on;
+- checks that the port answers with the gateway's own certificate. This is a check on main itself
+  (`127.0.0.1`): it proves the port is published, not that the address reaches main from your
+  renderer machines, and the step says so. The renderer's `install` is what tests the address, when
+  it first connects;
 - prints the firewall note below, and offers to print a first enrollment token. The default is no:
   the dashboard makes one whenever you need it (see [Adding a renderer](#adding-a-renderer)).
+
+The file, the stored address and the running `tubematic-api` change together or not at all:
+
+- **A post is uploading** (the upload runs inside `tubematic-api`, which a recreate would cut off):
+  nothing is changed, and the step tells you to run it again once the upload has finished.
+- **`docker compose up` fails** (another program holds the port, say): the step puts the previous
+  file and address back, starts `tubematic-api` on them again, and fails with Docker's error.
+- **The stack is stopped** (`python3 scripts/service.py stop`): the choice is saved and nothing is
+  started — the port opens or closes the next time the whole stack starts
+  (`python3 scripts/service.py start`).
 
 Re-run it to change the address or the port, or choose **Off** to turn remote renderers off again:
 that closes the port, and renderers already added stay listed on the dashboard, offline, until you
@@ -147,6 +161,26 @@ one of two places instead:
   do not survive a reboot unless you save them (for example with `iptables-persistent`). See
   Docker's [Packet filtering and firewalls](https://docs.docker.com/engine/network/packet-filtering-firewalls/).
 
+**With an IPv6 address, the `iptables` rule above does not cover the IPv6 listener.** `iptables`
+filters IPv4 only, and an IPv6 address makes main publish the port on `[::]` as well. Restrict both
+families:
+
+- **Simplest: a network or cloud firewall that filters IPv4 and IPv6**, in front of main.
+- **On main:** Tubematic's Compose network is IPv4-only, and for that Docker hands the `[::]` port
+  to its own proxy process on main, which accepts the connections as an ordinary program would. They
+  therefore pass main's IPv6 `INPUT` chain, not `DOCKER-USER`, so filter them there. For example, to
+  drop connections to port 4443 from anywhere outside `2001:db8:5::/64`:
+
+  ```bash
+  sudo ip6tables -I INPUT -p tcp --dport 4443 ! -s 2001:db8:5::/64 -j DROP
+  ```
+
+  Check afterwards, from a machine outside that range, that the port no longer answers
+  (`nc -6 -vz <main's IPv6 address> 4443`): if your Docker daemon was set up differently (an
+  IPv6-enabled network, or the userland proxy turned off), the packets are forwarded instead, and the
+  rule belongs in `ip6tables`' `DOCKER-USER` chain, written like the IPv4 one above. Save it the
+  same way (`iptables-persistent` saves IPv6 rules too, to `/etc/iptables/rules.v6`).
+
 ### Why nothing may sit in front of the port
 
 **Never put a TLS-terminating proxy (Caddy, nginx, a load balancer, a tunnel that decrypts) in
@@ -169,7 +203,8 @@ Why the pin is the certificate and not a certificate authority is in
 
 On the dashboard, open **Settings → Rendering**, press **Add renderer**, give the machine a name (it
 is how the dashboard lists it, at most 60 characters) and press **Create token**. The dialog shows the
-token and the exact command to run.
+token, and the command to run on the renderer machine. The command does not contain the token: the
+script asks for it.
 
 **The token is shown once, works once and lasts one hour.** Closing the dialog forgets it; a token
 that expired or was already used is refused, and you simply make another. Treat it as a password
@@ -201,13 +236,15 @@ sha256sum -c CHECKSUMS.txt --ignore-missing   # must say: tubematic_remote_rende
 
 ### 3 · Run it
 
-On the renderer machine, paste the command the dialog showed:
+On the renderer machine, run the command the dialog showed:
 
 ```bash
-python3 tubematic_remote_renderer.py install --token '<the token from the dialog>'
+python3 tubematic_remote_renderer.py install
 ```
 
-It:
+It asks for the enrollment token — paste the token from the dialog; nothing shows as you paste.
+The token is never part of a command line: a command line can be read by every user of the machine
+(`ps`) and is kept in your shell history, and the token stays usable for an hour. Then it:
 
 1. checks that Docker works, and on a machine with an NVIDIA GPU that Docker has the `nvidia`
    runtime;
@@ -216,17 +253,26 @@ It:
 3. connects to main at the address in the token and **checks main's certificate against the token
    before sending anything**, then asks main for its version;
 4. shows what it is about to do and asks you to confirm;
-5. pulls `ghcr.io/teja156/tubematic-backend` at main's version and starts the
-   `tubematic-remote-renderer` container, which restarts with Docker;
-6. waits up to a minute for the renderer to connect, and says whether it did.
+5. pulls `ghcr.io/teja156/tubematic-backend` at main's version (the image of whoever published the
+   release) and starts the renderer with the token, waiting up to a minute for it to trade the token
+   for its own credential, which it keeps in the `tubematic-renderer-state` Docker volume;
+6. removes that first container and starts `tubematic-remote-renderer` again **without** the token
+   — Docker keeps a container's environment in its configuration (`docker inspect` shows it), so
+   the container left running must not hold it. That one restarts with Docker;
+7. waits up to a minute for the renderer to connect, and says whether it did.
+
+If the renderer does not enroll (main refuses the token, the container stops, or a minute passes),
+`install` removes the container that held the token — and the state volume, unless an earlier
+install left it — and tells you to run `install` again, with a new token if main said this one is
+used or expired.
 
 The renderer then appears on the dashboard and starts taking work. The token is never written to
-disk: the renderer trades it for its own credential the first time it starts and keeps that
-instead.
+disk.
 
 | Option | Effect |
 |---|---|
-| `--token TOKEN` | The enrollment token. Required |
+| `--token-stdin` | Read the token from one line of standard input instead of asking, for scripted installs: `install --token-stdin < token-file` |
+| `--token TOKEN` | The token on the command line. Works, with a warning: avoid it, for the reasons above |
 | `--gpu UUID` | Use this NVIDIA GPU (`nvidia-smi -L` lists the UUIDs). Needed on a machine with several GPUs when there is no terminal to ask in |
 | `--no-gpu` | Render on the CPU even though the machine has a GPU |
 | `--name NAME` | The name main lists it under, when the token was made without one (the dashboard's always has one, and that name wins). Defaults to the machine's host name |
@@ -370,7 +416,7 @@ the renderer is doing. The lines that matter:
 |---|---|
 | `enrolled as renderer …` | Added to main. Good |
 | `first heartbeat accepted by main …` | Connected and reporting; printed on every start. Good |
-| `the gateway refused the enrollment (enrollment_invalid)` | The token was already used, expired (an hour), or made on another install. Make a new one, then `remove` (deleting the saved state) and `install` again |
+| `the gateway refused the enrollment (enrollment_invalid)` | The token was already used, expired (an hour), or made on another install. `install` has already removed the container; make a new token and run `install` again |
 | `credential expired` | See [Credentials](#credentials): remove it on both sides and add it again |
 | `this renderer needs upgrade` | Main runs another version. Run `upgrade` on this machine |
 | `… presented a certificate … that is not the one the enrollment token pins …; nothing was sent to it` | Something other than main's gateway answers at that address: a wrong address, another service on that port, or a TLS-terminating proxy. See [Why nothing may sit in front of the port](#why-nothing-may-sit-in-front-of-the-port) |

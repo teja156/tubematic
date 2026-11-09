@@ -187,11 +187,27 @@ port is always 4443. When the address is an IPv6 one, a second entry `[::]:<port
 IPv6 too. It is added only then because a host with IPv6 disabled refuses that bind and `up` would
 fail. The step also stores the address renderers dial, `host:port` (an IPv6 host in brackets), as
 the settings row `render_gateway_address` ([Settings internals — Undeclared rows](04-settings.md#undeclared-rows));
-`''` or no row means off. It then recreates `tubematic-api` (`up -d tubematic-api`, deferred while a
-post is uploading, since the upload runs inside an API request), checks that `127.0.0.1:<port>`
-answers a TLS handshake with the gateway's own certificate (`remote_renderers.py::wait_for_gateway`,
-retried while the container starts), prints a firewall note, and can print a first enrollment token.
-Choosing *off* deletes the file, blanks the row and recreates `tubematic-api` again.
+`''` or no row means off. It then recreates `tubematic-api` (`up -d tubematic-api`), checks that
+`127.0.0.1:<port>` answers a TLS handshake with the gateway's own certificate
+(`remote_renderers.py::wait_for_gateway`, retried while the container starts), says that the
+advertised address itself was not tested from another machine, prints a firewall note, and can print
+a first enrollment token. Choosing *off* deletes the file, blanks the row and recreates
+`tubematic-api` again. The address must be one a renderer can dial: no loopback, unspecified,
+multicast or broadcast address, no IPv6 link-local one (it needs a zone the token cannot carry), and
+an IPv4 address written as IPv6 (`::ffff:a.b.c.d`) is judged as that IPv4 address
+(`remote_renderers.py::_check_host`) — Python's IPv6 checks do not look inside it.
+
+**The file, the row and the running container change as one.** The row is what the dashboard reads
+(it hands out tokens while it is set) and the published port is what the container has, so a
+half-applied change leaves them saying opposite things. `apply_renderers` therefore looks at
+everything that can refuse *before* touching either: with `tubematic-api` running and a publish
+upload in flight (the upload runs inside an API request) it changes nothing and says to re-run the
+step later. A failed `up -d tubematic-api` puts the previous file and row back and runs `up` once
+more on them, since Compose may already have removed the old container (a port someone else holds is
+refused only when the new one starts). And it recreates only a container whose `State.Status` is
+exactly `running` (`actions.py::_api_running`): a stopped stack (`service.py stop` leaves the
+containers `exited`) gets the choice stored and nothing started, because `up -d tubematic-api` there
+would start the API alone and publish the port while the rest stays down.
 
 **Why an override and not a line in `docker-compose.yml`**: the Compose file is the same on every
 install, and a published 4443 there would open the gateway on every machine, including those that
@@ -205,15 +221,20 @@ renderers on also publishes a port, which only the host can do.
 **The port is published on every interface (`0.0.0.0`), and `ufw` does not restrict it.** Docker
 routes a published port in the `nat` table, ahead of the `INPUT` chain `ufw` writes to. The step's
 firewall note, and [Remote renderers](../user-guide/11-remote-renderers.md#allow-the-port-through-your-firewall--from-your-renderers-only),
-point at a network firewall or Docker's `DOCKER-USER` chain instead. **Nothing may terminate TLS in
+point at a network firewall or Docker's `DOCKER-USER` chain instead. The `[::]` entry is different:
+Tubematic's Compose network is IPv4-only, so Docker's userland proxy serves that port as a process on
+the host, its packets meet the host's IPv6 `INPUT` chain rather than `DOCKER-USER`, and an IPv4
+`iptables` rule never covers it — the user guide gives the `ip6tables` rule. **Nothing may terminate TLS in
 front of it**: renderers trust exactly the gateway's certificate
 ([HTTP API — TLS and the certificate pin](05-http-api.md#tls-and-the-certificate-pin)).
 
-Like the GPU override, `read_override` accepts only what this module writes (the `ports` of
-`tubematic-api`, each `0.0.0.0` or `[::]` to container port 4443, one host port), and
-`remote_renderers.py::override_problems` reports anything else. The prerequisites check warns about
-it and **`upgrade.py` refuses before stopping anything**, because Compose refuses a file it cannot
-parse and the `up` would fail after the stop. A readable one is carried across an upgrade untouched.
+Like the GPU override, `read_override` accepts only exactly what this module writes: the document
+`render_override` would produce for its port (one `0.0.0.0` entry, plus one `[::]` entry, in that
+order, both to container port 4443 with the same host port in 1–65535; no other service, key or
+setting), and `remote_renderers.py::override_problems` reports anything else. The prerequisites
+check warns about it and **`upgrade.py` refuses before stopping anything**, because Compose refuses
+a file it cannot parse — and accepts some it can but should not (host port 0 publishes a random
+port; 70000 fails only at `up`) — and the `up` would fail or misbehave after the stop. A readable one is carried across an upgrade untouched.
 `scripts/service.py status` and `upgrade.py --check` report whether remote renderers are on and flag
 a half-done state (a port with no stored address, an address with no port, or the two disagreeing).
 `uninstall.py` leaves the file with a kept data root and names it, since a reinstall would publish the

@@ -1162,8 +1162,18 @@ def apply_renderers(cfg: OnboardConfig, ex: Executor, rep: Reporter, *, ask_on=N
     tubematic-api so the port opens or closes, then check locally that the
     port answers with the gateway's own certificate.
 
+    The override file, the settings row and the running container are one
+    change. Everything that can refuse it (a publish upload in flight, which a
+    recreate would kill) is looked at BEFORE either is touched, so a refusal
+    changes nothing; and a recreate that fails puts the previous file and row
+    back and starts tubematic-api on them again. Otherwise the dashboard (which
+    reads the row) and the published port (which the container has) would say
+    opposite things — a closed port the dashboard hands out tokens for, or an
+    open one it calls off. A stack that is not running gets the choice stored
+    and nothing started: it applies on the next full start.
+
     Opt-in: a full install never runs it (see Step.opt_in); `--step
-    renderers` does, on a running install, and re-running it changes the
+    renderers` does, on an installed Tubematic, and re-running it changes the
     address or turns remote renderers off. The keyword arguments are test
     seams for the three questions and the local TLS check."""
     from onboard import remote_renderers as rr
@@ -1191,54 +1201,71 @@ def apply_renderers(cfg: OnboardConfig, ex: Executor, rep: Reporter, *, ask_on=N
 
     if ask_on is None:
         from onboard.prompt import ask_remote_renderers_on as ask_on
-    if not ask_on(bool(current or before is not None)):
-        changed = before is not None
-        if changed:
-            ex.unlink(path)
-            rep.ok(f"Removed {path} — the render gateway's port is no longer published")
-        if current:
-            _upsert_settings(ex, {rr.SETTING_KEY: ""}, "turn remote renderers off")
-            rep.ok("Remote renderers are off. Enrolled ones keep their place on the dashboard "
-                   "(Settings → Rendering) until you remove them there.")
-        if not changed and not current:
-            rep.ok("Remote renderers stay off")
-        if changed:
-            _recreate_api(ex, rep)
+    turn_on = ask_on(bool(current or before is not None))
+    pin = address = port = None
+    if turn_on:
+        # The gateway serves TLS with the key pair the auth step creates;
+        # without it nothing listens, and no token could carry a pin.
+        try:
+            pin = auth.gateway_pin()
+        except auth.SecretMissing as e:
+            rep.fail(f"The render gateway's certificate is missing ({e}).",
+                     "Create it with: python3 onboard.py --step auth")
+            return
+        if ask_address is None:
+            from onboard.prompt import ask_gateway_address as ask_address
+        address = rr.normalize_address(ask_address(current))
+        host, port = rr.parse_address(address)
+        text = rr.render_override(port, ipv6=":" in host)
+    else:
+        address, text = "", None
+    file_changed = text != before
+    row_changed = address != current
+
+    if not file_changed and not row_changed:
+        rep.ok(f"Remote renderers keep reaching this machine at {address} (port {port} stays "
+               f"published, {path} unchanged)" if turn_on else "Remote renderers stay off")
+        if not turn_on:
+            return
+        status = _api_status()
+        running = status == "running"
+        if not running:
+            rep.info(_not_running_note(status))
+    else:
+        # Look before touching anything: a refusal here leaves the file, the
+        # row and the container exactly as they were.
+        status = _api_status()
+        running = status == "running"
+        if file_changed and running:
+            busy = _api_recreate_blockers()
+            if busy:
+                for why in busy:
+                    rep.warn(why)
+                rep.info("Nothing was changed: recreating tubematic-api now would cut that off. "
+                         f"Re-run `{rr.STEP_HINT}` once it has finished.")
+                return
+        _write_renderers_change(ex, rr, path, text if file_changed else ..., address,
+                                row_changed)
+        if file_changed:
+            rep.ok(f"tubematic-api will publish the render gateway on port {port} — wrote {path}"
+                   if text is not None
+                   else f"Removed {path} — the render gateway's port will no longer be published")
+        if row_changed:
+            rep.ok(f"Remote renderers will reach this machine at {address}" if address
+                   else "Remote renderers are off. Enrolled ones keep their place on the "
+                        "dashboard (Settings → Rendering) until you remove them there.")
+        if not running:
+            rep.info(_not_running_note(status))
+        elif file_changed:
+            r = ex.run([*_compose(), "up", "-d", "tubematic-api"], cwd=REPO_ROOT)
+            if r.returncode != 0:
+                _undo_renderers_change(ex, rep, rr, path, before, current, row_changed,
+                                       (r.stderr or "").strip()[-500:])
+                return
+            rep.ok("tubematic-api is up to date with this choice")
+    if not turn_on:
         return
 
-    # The gateway serves TLS with the key pair the auth step creates; without
-    # it nothing listens, and no token could carry a pin.
-    try:
-        pin = auth.gateway_pin()
-    except auth.SecretMissing as e:
-        rep.fail(f"The render gateway's certificate is missing ({e}).",
-                 "Create it with: python3 onboard.py --step auth")
-        return
-
-    if ask_address is None:
-        from onboard.prompt import ask_gateway_address as ask_address
-    address = rr.normalize_address(ask_address(current))
-    host, port = rr.parse_address(address)
-    text = rr.render_override(port, ipv6=":" in host)
-    changed = text != before
-    if changed:
-        ex.mkdir(path.parent)
-        ex.write_file(path, text)
-        rep.ok(f"tubematic-api will publish the render gateway on port {port} — wrote {path}")
-    else:
-        rep.ok(f"Port {port} stays published ({path} unchanged)")
-    if address != current:
-        _upsert_settings(ex, {rr.SETTING_KEY: address}, f"{rr.SETTING_KEY} = {address}")
-        rep.ok(f"Remote renderers will reach this machine at {address}")
-    else:
-        rep.ok(f"Remote renderers keep reaching this machine at {address}")
-
-    running = _api_running()
-    if changed and running:
-        running = _recreate_api(ex, rep)
-    elif not running:
-        rep.info("tubematic-api is not running; the port opens when it starts: "
-                 "python3 scripts/service.py start")
     rep.info(rr.firewall_note(port))
     if ex.dry_run:
         rep.info(f"[dry-run] would check that 127.0.0.1:{port} answers with the render "
@@ -1255,6 +1282,7 @@ def apply_renderers(cfg: OnboardConfig, ex: Executor, rep: Reporter, *, ask_on=N
         rep.info(f"Fix that, then re-run: {rr.STEP_HINT}")
         return
     rep.ok(f"The render gateway answers on port {port} with its own certificate")
+    rep.info(rr.untested_address_note(address))
 
     if confirm is None:
         from onboard.prompt import ask_first_enrollment_token as confirm
@@ -1267,50 +1295,85 @@ def apply_renderers(cfg: OnboardConfig, ex: Executor, rep: Reporter, *, ask_on=N
         made["secret"], made["expires_at"] = trenderers.create_enrollment(con)
     ex.sqlite_write(DB_PATH, _create, "a one-time renderer enrollment")
     token = trenderers.encode_enrollment_token(rr.gateway_url(address), made["secret"], pin)
-    rep.ok(f"Enrollment token (valid once, until {made['expires_at']} UTC — keep it private):")
-    rep.raw(token)
     rep.info(f"On the renderer machine, with tubematic_remote_renderer.py from this release "
              f"({rr.DOCS_HINT}), run:")
-    rep.raw(rr.HOST_COMMAND.format(token=token))
+    rep.raw(rr.HOST_COMMAND)
+    rep.ok(f"When it asks for the enrollment token, paste this one (valid once, until "
+           f"{made['expires_at']} UTC — keep it private):")
+    rep.raw(token)
+
+
+def _write_renderers_change(ex: Executor, rr, path: Path, text, address: str,
+                            row_changed: bool) -> None:
+    """Put the override file and the settings row in their new state. `text`
+    is the file's new content, None to remove it, ... to leave it alone."""
+    if text is None:
+        ex.unlink(path)
+    elif text is not ...:
+        ex.mkdir(path.parent)
+        ex.write_file(path, text)
+    if row_changed:
+        _upsert_settings(ex, {rr.SETTING_KEY: address},
+                         f"{rr.SETTING_KEY} = {address or '(off)'}")
+
+
+def _undo_renderers_change(ex: Executor, rep: Reporter, rr, path: Path, before, current: str,
+                           row_changed: bool, error: str) -> None:
+    """`up -d tubematic-api` failed with the new override: put the previous
+    file and row back, and start tubematic-api on them again — Compose may
+    already have removed the old container before it failed (a port another
+    program holds is refused only when the new one starts)."""
+    if before is None:
+        ex.unlink(path)
+    else:
+        ex.mkdir(path.parent)
+        ex.write_file(path, before)
+    if row_changed:
+        _upsert_settings(ex, {rr.SETTING_KEY: current},
+                         f"restore {rr.SETTING_KEY} = {current or '(off)'}")
+    r = ex.run([*_compose(), "up", "-d", "tubematic-api"], cwd=REPO_ROOT)
+    restored = ("tubematic-api runs on the previous setting again"
+                if r.returncode == 0 else
+                "starting tubematic-api on it failed too ("
+                + ((r.stderr or "").strip()[-300:] or f"exit {r.returncode}")
+                + ") — start it with: python3 scripts/service.py start")
+    rep.fail("docker compose up failed, so nothing was changed: the previous remote-renderers "
+             f"setting is back in place and {restored}.",
+             f"The error: {error or 'none printed'}")
+
+
+def _api_status() -> str:
+    """tubematic-api's State.Status ("running", "exited", "created", …), or
+    '' when there is no such container. Read-only, so outside the executor,
+    in both modes."""
+    r = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-api"],
+                       capture_output=True, text=True)
+    return (r.stdout or "").strip() if r.returncode == 0 else ""
 
 
 def _api_running() -> bool:
-    """Whether a tubematic-api container exists. Read-only, so outside the
-    executor, in both modes."""
-    r = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-api"],
-                       capture_output=True, text=True)
-    return r.returncode == 0
+    """Exactly "running". A stopped stack (`service.py stop` leaves exited
+    containers), a created or restarting one is not: `up -d tubematic-api`
+    there would start the API alone while the rest stays stopped."""
+    return _api_status() == "running"
 
 
-def _recreate_api(ex: Executor, rep: Reporter) -> bool:
-    """Recreate a running tubematic-api so a published port opens or closes —
-    ports, like a GPU reservation, are fixed when a container is created.
-    Returns whether it is up to date with the override.
+def _not_running_note(status: str) -> str:
+    state = f"is {status}" if status else "does not exist yet"
+    return (f"tubematic-api {state}, so nothing was started: the choice is saved and applies "
+            "the next time the whole stack starts (python3 scripts/service.py start).")
 
-    A publish upload runs inside an API request, so one in flight (or a
-    database nothing can be verified against) defers the recreate. A render
-    does not: renderers reach the API only through the gateway and retry
-    their heartbeats and uploads, and a few seconds offline is well inside a
-    render lease. Voicing runs in the MCP container, which is not touched."""
+
+def _api_recreate_blockers() -> list:
+    """Why recreating tubematic-api now would cost something. A publish
+    upload runs inside an API request, so one in flight (or a database
+    nothing can be verified against) is a reason to wait. A render is not:
+    renderers reach the API only through the gateway and retry their
+    heartbeats and uploads, and a few seconds offline is well inside a render
+    lease. Voicing runs in the MCP container, which is not touched."""
     from onboard import stack
-    if not _api_running():
-        rep.info("tubematic-api is not running; the change applies when it starts: "
-                 "python3 scripts/service.py start")
-        return False
-    busy = [why for why in stack.in_flight(DB_PATH)
+    return [why for why in stack.in_flight(DB_PATH)
             if " is VOICING " not in why and " is RENDERING " not in why]
-    if busy:
-        for why in busy:
-            rep.warn(why)
-        rep.info("Not recreating tubematic-api now. Once that finishes, apply the change "
-                 "with: python3 scripts/service.py start tubematic-api")
-        return False
-    r = ex.run([*_compose(), "up", "-d", "tubematic-api"], cwd=REPO_ROOT)
-    if r.returncode != 0:
-        rep.fail("docker compose up failed", (r.stderr or "").strip()[-500:])
-        return False
-    rep.ok("tubematic-api is up to date with this choice")
-    return True
 
 
 def apply_renderer(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:

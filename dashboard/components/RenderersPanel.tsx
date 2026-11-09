@@ -392,7 +392,10 @@ function AddRendererDialog({ open, onClose, onAdded }: {
             </div>
             <pre data-testid="add-renderer-command" style={secret}>{enrollment.command}</pre>
             <CopyButton text={enrollment.command} testId="copy-command" />
-            <div style={note}>The token on its own:</div>
+            <div data-testid="add-renderer-paste" style={note}>
+              When it asks for the enrollment token, paste this one (it is not typed into the command, so it
+              stays out of the machine&apos;s process list and shell history):
+            </div>
             <pre data-testid="add-renderer-token" style={secret}>{enrollment.token}</pre>
             <CopyButton text={enrollment.token} testId="copy-token" />
             <div style={note}>

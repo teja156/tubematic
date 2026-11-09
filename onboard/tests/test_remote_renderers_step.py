@@ -41,16 +41,24 @@ def _cp(stdout="", returncode=0):
 
 class _RecordingEx(Executor):
     """A live executor (files and rows really written) whose commands are
-    recorded and never run, so no test can reach a real `docker compose`."""
-    def __init__(self, dry_run=False):
+    recorded and never run, so no test can reach a real `docker compose`.
+    `results` answers the calls in order (exit codes); the rest succeed. Each
+    call also records the override file as it was when the call was made."""
+    def __init__(self, dry_run=False, results=()):
         super().__init__(dry_run=dry_run)
         self.calls = []
+        self.seen = []
+        self.results = list(results)
 
     def run(self, cmd, cwd=None, **kw):
         if self.dry_run:
             return super().run(cmd, cwd=cwd, **kw)
         self.calls.append(list(cmd))
-        return _cp()
+        path = rr.override_path()
+        self.seen.append(path.read_text() if path.is_file() else None)
+        code = self.results.pop(0) if self.results else 0
+        return subprocess.CompletedProcess(cmd, code, stdout="",
+                                           stderr="" if code == 0 else "port is already allocated")
 
 
 # ── The address ──────────────────────────────────────────────────────────────
@@ -92,11 +100,30 @@ def test_a_usable_address_is_stored_with_its_port(text, stored):
     ("127.0.0.1", "loopback"),
     ("[::1]:4443", "loopback"),
     ("localhost", "localhost"),
+    # An IPv4 address written as IPv6 is judged as that IPv4 address.
+    ("[::ffff:127.0.0.1]", "loopback"),
+    ("[::ffff:127.8.9.10]:8443", "loopback"),
+    ("[::ffff:0.0.0.0]", "every address"),
+    ("[::127.0.0.1]", "loopback"),
+    ("[::ffff:224.0.0.1]", "multicast"),
+    ("[::ffff:255.255.255.255]", "broadcast"),
+    ("224.0.0.1", "multicast"),
+    ("239.255.255.250:4443", "multicast"),
+    ("[ff02::1]", "multicast"),
+    ("255.255.255.255", "broadcast"),
+    ("[fe80::1]", "link-local"),
+    ("[febf::1]:4443", "link-local"),
 ])
 def test_an_unusable_address_is_refused_with_a_reason(text, needle):
     with pytest.raises(ValueError, match=needle):
         rr.parse_address(text)
     assert needle in rr.address_error(text)
+
+
+@pytest.mark.parametrize("text", ["[::ffff:192.168.1.20]", "[2001:db8::1]", "169.254.10.1",
+                                  "[fec0::1]", "192.168.1.255"])
+def test_ordinary_unicast_addresses_still_pass(text):
+    assert rr.address_error(text) is None
 
 
 def test_the_gateway_url_carries_the_port():
@@ -123,6 +150,15 @@ def test_the_override_reads_back(tmp_path):
     assert rr.read_override(path) == {"port": 9443}
 
 
+@pytest.mark.parametrize("port", [1, 4443, 65535])
+def test_every_port_the_step_can_write_reads_back(tmp_path, port):
+    path = tmp_path / "o.json"
+    for ipv6 in (False, True):
+        path.write_text(rr.render_override(port, ipv6=ipv6))
+        assert rr.read_override(path) == {"port": port}
+        assert rr.override_problems(path) == []
+
+
 def test_no_override_reads_as_none_and_has_no_problems(tmp_path):
     assert rr.read_override(tmp_path / "missing.json") is None
     assert rr.override_problems(tmp_path / "missing.json") == []
@@ -133,6 +169,27 @@ def test_no_override_reads_as_none_and_has_no_problems(tmp_path):
     "services: {}\n",
     json.dumps({"services": {"tubematic-api": {"ports": ["127.0.0.1:4000:4000"]}}}),
     json.dumps({"services": {"tubematic-api": {"ports": []}}}),
+    # A host port outside 1-65535: Compose would publish a random port for 0.
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:0:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:70000:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:123456:4443"]}}}),
+    # Duplicate, conflicting, misordered or extra entries.
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:4443:4443", "0.0.0.0:4443:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:4443:4443", "[::]:9443:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:4443:4443", "0.0.0.0:9443:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["[::]:4443:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["[::]:4443:4443", "0.0.0.0:4443:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:4443:4443", "[::]:4443:4443",
+                                                        "[::]:4443:4443"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": [4443]}}}),
+    # Anything beyond the one published port.
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:4443:4443"],
+                                               "privileged": True}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:4443:4443"]},
+                             "tubematic-mcp": {"ports": ["0.0.0.0:4100:4100"]}}}),
+    json.dumps({"services": {"tubematic-api": {"ports": ["0.0.0.0:4443:4443"]}},
+                "volumes": {"x": {}}}),
+    json.dumps({"x-tubematic": 5, "services": {"tubematic-api": {"ports": ["0.0.0.0:4443:4443"]}}}),
 ])
 def test_a_foreign_or_broken_file_is_a_problem_naming_the_step(tmp_path, text):
     path = tmp_path / "o.json"
@@ -307,16 +364,16 @@ def step(tmp_path, monkeypatch):
     tdb.migrate(db_path, backup=False)
     monkeypatch.setattr(actions, "DB_PATH", db_path)
     auth.ensure_secrets()
-    api = {"exists": True}
+    api = {"status": "running"}   # "" = no container
 
     def inspect(argv, **kw):
         assert argv[:2] == ["docker", "inspect"]
-        return _cp("running", 0) if api["exists"] else _cp("", 1)
+        return _cp(api["status"] + "\n", 0) if api["status"] else _cp("", 1)
     monkeypatch.setattr(actions.subprocess, "run", inspect)
 
     def run(*, on=True, address="render.example.com", token=False, check=("ok", "fine"),
-            dry_run=False):
-        rep, ex = _Rep(), _RecordingEx(dry_run=dry_run)
+            dry_run=False, results=()):
+        rep, ex = _Rep(), _RecordingEx(dry_run=dry_run, results=results)
         asked = {"on": [], "address": [], "token": 0, "check": []}
 
         def ask_on(current):
@@ -334,6 +391,7 @@ def step(tmp_path, monkeypatch):
         def fake_check(port, pin):
             asked["check"].append((port, pin))
             return check
+        run.last_ex = ex
         actions.apply_renderers(None, ex, rep, ask_on=ask_on, ask_address=ask_address,
                                 confirm=confirm, check=fake_check)
         return rep, ex, asked
@@ -354,6 +412,9 @@ def test_turning_remote_renderers_on(step):
     assert asked["check"] == [(8443, auth.gateway_pin())]
     assert "TCP port 8443" in rep.text() and "DOCKER-USER" in rep.text()
     assert "answers on port 8443" in rep.text()
+    # Only the local port was checked, and the step says so.
+    assert "render.example.com:8443 reaches this machine from your renderer machines was not " \
+           "tested" in rep.text()
 
 
 def test_the_current_address_is_offered_as_the_default(step):
@@ -414,23 +475,89 @@ def test_dry_run_writes_nothing(step):
     con.close()
 
 
-def test_a_stopped_api_is_not_started_or_checked(step):
-    """`up -d tubematic-api` on a stopped install would start half a stack."""
-    step.api["exists"] = False
+@pytest.mark.parametrize("status", ["", "exited", "created", "dead", "restarting", "paused"])
+def test_an_api_that_is_not_running_is_not_started_or_checked(step, status):
+    """`up -d tubematic-api` on a stopped install (service.py stop leaves the
+    containers exited) would start the API alone, publishing the port, while
+    the operator has the rest of the stack stopped. The choice is stored and
+    applies on the next full start."""
+    step.api["status"] = status
     rep, ex, asked = step(token=True)
     assert ex.calls == [] and asked["check"] == [] and asked["token"] == 0
     assert rr.read_override() == {"port": 4443}
-    assert "not running" in rep.text()
+    assert _row(step.db_path) == "render.example.com:4443"
+    assert "nothing was started" in rep.text() and "service.py start" in rep.text()
+    if status:
+        assert f"is {status}" in rep.text()
 
 
-def test_a_publish_upload_in_flight_defers_the_recreate(step, monkeypatch):
-    """The upload runs inside an API request, which a recreate would kill."""
+def test_api_running_means_exactly_running(monkeypatch):
+    for out, code, expected in [("running\n", 0, True), ("exited\n", 0, False),
+                                ("restarting\n", 0, False), ("", 1, False),
+                                ("running-ish\n", 0, False)]:
+        monkeypatch.setattr(actions.subprocess, "run", lambda argv, **kw: _cp(out, code))
+        assert actions._api_running() is expected
+
+
+_UPLOADING = ["vid_x is PUBLISHING (A video): its upload has not finished"]
+
+
+def _setup(step, before):
+    """Put the install in a starting state: on at `before`, or off (None)."""
+    if before:
+        step(address=before)
+
+
+@pytest.mark.parametrize("before,on,address", [
+    (None, True, "render.example.com"),                     # enable
+    ("render.example.com", False, None),                    # disable
+    ("render.example.com", True, "render.example.com:9443"),  # change the port
+])
+def test_a_publish_upload_in_flight_changes_nothing(step, monkeypatch, before, on, address):
+    """The upload runs inside an API request, which a recreate would kill. The
+    gate is looked at BEFORE the file or the row is touched, so the dashboard
+    (the row) and the published port (the container) keep agreeing."""
     from onboard import stack
-    monkeypatch.setattr(stack, "in_flight", lambda db: [
-        "vid_x is PUBLISHING (A video): its upload has not finished"])
-    rep, ex, asked = step()
+    _setup(step, before)
+    path = rr.override_path()
+    file_before = path.read_text() if path.is_file() else None
+    row_before = _row(step.db_path)
+    monkeypatch.setattr(stack, "in_flight", lambda db: _UPLOADING)
+    rep, ex, asked = step(on=on, address=address)
     assert ex.calls == [] and asked["check"] == []
-    assert "service.py start tubematic-api" in rep.text()
+    assert (path.read_text() if path.is_file() else None) == file_before
+    assert _row(step.db_path) == row_before
+    assert "Nothing was changed" in rep.text() and rr.STEP_HINT in rep.text()
+
+
+@pytest.mark.parametrize("before,on,address", [
+    (None, True, "render.example.com"),
+    ("render.example.com", False, None),
+    ("render.example.com", True, "render.example.com:9443"),
+])
+def test_a_failed_recreate_puts_the_previous_setting_back(step, before, on, address):
+    """`up` failed (a port another program holds, a daemon error): the file
+    and the row go back to what they were and tubematic-api is started on
+    them again — Compose may already have removed the old container."""
+    _setup(step, before)
+    path = rr.override_path()
+    file_before = path.read_text() if path.is_file() else None
+    row_before = _row(step.db_path)
+    with pytest.raises(RuntimeError, match="nothing was changed"):
+        step(on=on, address=address, results=[1, 0])
+    assert (path.read_text() if path.is_file() else None) == file_before
+    assert (_row(step.db_path) or "") == (row_before or "")
+    # Two `up -d tubematic-api`: the new configuration, then the restored one.
+    ex_calls = step.last_ex.calls
+    assert [c[-3:] for c in ex_calls] == [["up", "-d", "tubematic-api"]] * 2
+    assert step.last_ex.seen[0] != file_before and step.last_ex.seen[1] == file_before
+
+
+def test_a_failed_restore_says_how_to_start_the_api(step):
+    with pytest.raises(RuntimeError, match="service.py start"):
+        step(results=[1, 1])
+    assert not rr.override_path().exists()
+    assert (_row(step.db_path) or "") == ""
 
 
 def test_a_render_in_flight_does_not_hold_the_recreate(step, monkeypatch):
@@ -472,7 +599,10 @@ def test_a_confirmed_first_token_names_this_gateway_and_its_pin(step):
     [(stored,)] = con.execute("SELECT secret_hash FROM renderer_enrollments").fetchall()
     con.close()
     assert stored == trenderers.hash_secret(decoded["secret"])
-    assert f"python3 tubematic_remote_renderer.py install --token '{token}'" in rep.text()
+    # The command carries no token: the script asks for it with a hidden prompt.
+    assert ("info", "python3 tubematic_remote_renderer.py install") in rep.lines
+    assert not [m for _, m in rep.lines if "--token" in m]
+    assert "paste this one" in rep.text()
 
 
 def test_turning_on_without_the_gateway_certificate_fails(step, tmp_path, monkeypatch):

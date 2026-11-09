@@ -559,9 +559,10 @@ the state file. On the first start the file holds no credential and `TUBEMATIC_E
 token, so it enrolls (`render_agent.py::enroll`): fetch the certificate with a bare handshake,
 refuse it unless its sha256 is the token's pin, `POST /v1/enroll`, and write the credential, the
 certificate, the pin, the gateway URL, a `machine_id` and the hash of the token's secret
-(`enrolled_with`) into the state file. On every later start the token is still in the container's
-environment, but its secret's hash matches `enrolled_with`, so it is ignored and the saved
-credential is used — a used token would be refused anyway. A different token re-enrolls the same
+(`enrolled_with`) into the state file. The host script then recreates the container without the
+token (below), so a later start normally sees none; when one is still set (a container started by
+hand), its secret's hash matches `enrolled_with`, so it is ignored and the saved credential is used
+— a used token would be refused anyway. A different token re-enrolls the same
 machine (same `machine_id`); if that fails while a usable credential is saved, the renderer carries
 on with it. With neither a credential nor a token it cannot start, and retries every
 `ENROLL_RETRY_SECS` (60), logging why. `TUBEMATIC_GATEWAY_URL`, when set, overrides the saved
@@ -578,7 +579,8 @@ credential the gateway does not know. When the gateway answers `401 credential_e
 renderer logs and reports `credential expired: …`; it cannot recover on its own.
 
 **The log lines the host script waits for.** `scripts/tubematic_remote_renderer.py install` and
-`upgrade` watch the container's log for up to 60 seconds for `enrolled` or `first heartbeat` (success),
+`upgrade` watch the container's log for up to 60 seconds for `enrolled` or `first heartbeat` (success;
+for `install` this is also the moment the token-bearing container may be replaced),
 `enrollment_invalid` or `credential expired` (refused), and `needs upgrade`. Those words are a
 contract between the two files, kept in `render_agent.py`'s log calls with a comment saying so.
 
@@ -597,7 +599,10 @@ release asset of its own covered by the release's `CHECKSUMS.txt`
   `GET /v1/version` read, over a context that trusts that certificate alone. A wrong address, a
   TLS-terminating proxy or an impostor gets a TLS handshake and nothing else.
 - **The image is main's version**: `ghcr.io/<owner>/tubematic-backend:<version>`, the owner hardcoded
-  from `tubematic_core.version.GITHUB_REPO` (the script cannot import it; a test pins the two), or
+  from `tubematic_core.version.GITHUB_REPO` (the script cannot import it; a test pins the two) and
+  overwritten by the release workflow with the owner that release pushed its images under, before
+  the tarball and the asset are built from it — so a fork's renderers pull the fork's image, not
+  upstream's of the same version ([Releases](18-releases.md#what-a-release-consists-of)), or
   `--image`. `upgrade` reads the version again, so a remote renderer follows main only when its
   operator runs it.
 - **The container is the composed renderer's twin**: the same command, `shm_size` 2g and
@@ -605,11 +610,20 @@ release asset of its own covered by the release's `CHECKSUMS.txt`
   the environment `onboard/gpu.py`'s override gives the built-in renderer
   (`NVIDIA_DRIVER_CAPABILITIES=graphics,utility`, `TUBEMATIC_GPU_UUID`, `TUBEMATIC_GPU_NAME`,
   `TUBEMATIC_HOST_GPUS`). Tests pin each against its source.
-- **The token never touches a command line or a file.** `docker run` gets a bare
-  `-e TUBEMATIC_ENROLL_TOKEN`, so Docker copies the value from the script's own environment for that
-  one call; the local state file, `~/.tubematic-remote-renderer.json` (0600), holds the gateway URL,
-  the pin, the image, the name and the GPU choice. `upgrade` recreates the container without the
-  token, from that file, keeping the state volume and therefore the credential.
+- **The token never touches a command line or a file, and does not outlive enrollment.** The
+  dashboard's command is a bare `install`; the script reads the token with `getpass` (or one line of
+  stdin with `--token-stdin`; `--token` still works and warns), because a command line is readable
+  by every user of the machine (`ps`, `/proc/<pid>/cmdline`) and kept in shell history while the
+  token stays redeemable for an hour. `docker run` gets a bare `-e TUBEMATIC_ENROLL_TOKEN`, so Docker
+  copies the value from the script's own environment — but Docker then stores it in the container's
+  configuration (`docker inspect`). So `install` runs that container with `--restart no` only until
+  the log shows the renderer has enrolled (`enroll_container`), removes it, and starts the real one
+  from the same argv minus the token, `--restart unless-stopped`. Any other outcome (refused, the
+  container stopped, no sign within 60 s, a failed `docker run`, Ctrl-C) removes the token-bearing
+  container (`discard_enrollment`) and the state volume too, unless an earlier install left it. The
+  local state file, `~/.tubematic-remote-renderer.json` (0600), holds the gateway URL, the pin, the
+  image, the name and the GPU choice. `upgrade` recreates the container without the token, from that
+  file, keeping the state volume and therefore the credential.
 
 ## The stills server
 

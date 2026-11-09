@@ -251,7 +251,7 @@ describe("RenderersPanel", () => {
   });
 
   it("Add renderer shows the token and the command once, copyable, and forgets them on close", async () => {
-    const command = "python3 tubematic_remote_renderer.py install --token 'tok-123'";
+    const command = "python3 tubematic_remote_renderer.py install";
     const fn = stub([list([BUILTIN])], {
       "POST /renderers/enrollments": { status: 201,
                                        body: { token: "tok-123", expires_at: "2026-11-08T13:00:00Z", command } },
@@ -269,6 +269,9 @@ describe("RenderersPanel", () => {
     expect(JSON.parse((callsTo(fn, "POST", "/renderers/enrollments")[0][1] as RequestInit).body as string))
       .toEqual({ name: "Studio PC" });
     expect(screen.getByTestId("add-renderer-command")).toHaveTextContent(command);
+    // The token is pasted when the script asks, never typed into the command.
+    expect(screen.getByTestId("add-renderer-command")).not.toHaveTextContent("tok-123");
+    expect(screen.getByTestId("add-renderer-paste")).toHaveTextContent("When it asks for the enrollment token");
     expect(screen.getByTestId("add-renderer-once")).toHaveTextContent("valid for 1 hour, single use");
     fireEvent.click(screen.getByTestId("copy-command"));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(command));

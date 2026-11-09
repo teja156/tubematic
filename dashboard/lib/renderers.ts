@@ -106,17 +106,20 @@ export function describeDevice(renderer: string, verified: boolean, gpuName = ""
   return "Another graphics device, not the chosen GPU";
 }
 
-/** Can take a render right now (busy or not). */
-export function canRender(r: Renderer): boolean {
-  return r.enabled && r.online && !r.needs_upgrade;
+/** Can take a render right now (busy or not). An expired credential counts
+ *  against it by the same rule, and the same `now`, as rendererStatus: such a
+ *  renderer stays "online" until its last good heartbeat ages out, but it can
+ *  no longer authenticate, so it claims nothing. */
+export function canRender(r: Renderer, now: number): boolean {
+  return r.enabled && r.online && !r.needs_upgrade && !credentialExpired(r, now);
 }
 
 /** The Pipeline page's banner: videos are waiting to render and no renderer
  *  can take one. An unloaded or failed renderer list never raises it — a
  *  banner that cries wolf on a network blip would be worse than none. */
-export function nothingCanRender(stats: Stats, list: RenderersList | null): boolean {
+export function nothingCanRender(stats: Stats, list: RenderersList | null, now: number): boolean {
   if (!list || (stats.RENDER_QUEUED ?? 0) <= 0) return false;
-  return !list.renderers.some(canRender);
+  return !list.renderers.some((r) => canRender(r, now));
 }
 
 export function anyProbePending(list: RenderersList | null): boolean {

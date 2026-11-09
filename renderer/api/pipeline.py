@@ -2343,8 +2343,11 @@ RENDER_GATEWAY_DEFAULT_PORT = 4443
 RENDERER_NAME_MAX_CHARS = 60
 # The exact command the dashboard shows next to a new enrollment token (keep in
 # sync with onboard/remote_renderers.py HOST_COMMAND and
-# scripts/tubematic_remote_renderer.py's `install`).
-REMOTE_RENDERER_COMMAND = "python3 tubematic_remote_renderer.py install --token '{token}'"
+# scripts/tubematic_remote_renderer.py's `install`). The token is NOT part of
+# it: a command line is visible to every user of the renderer machine (ps,
+# /proc/<pid>/cmdline) and is kept in shell history, while the token stays
+# redeemable for an hour. The script asks for it with a hidden prompt.
+REMOTE_RENDERER_COMMAND = "python3 tubematic_remote_renderer.py install"
 
 
 def render_gateway_address(con) -> str:
@@ -4761,7 +4764,7 @@ def create_pipeline_blueprint() -> Blueprint:
             secret, expires_at = trenderers.create_enrollment(con, name)
         token = trenderers.encode_enrollment_token(render_gateway_url(address), secret, pin)
         return jsonify({"token": token, "expires_at": expires_at,
-                        "command": REMOTE_RENDERER_COMMAND.format(token=token)}), 201
+                        "command": REMOTE_RENDERER_COMMAND}), 201
 
     @bp.patch("/renderers/<renderer_id>")
     def update_renderer(renderer_id):

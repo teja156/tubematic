@@ -356,6 +356,16 @@ describe("PipelineClient", () => {
     expect(await findByTestId("nothing-can-render-link")).toHaveAttribute("href", "/settings?tab=rendering");
   });
 
+  it("warns when the only online renderer's credential has expired", async () => {
+    // It stays "online" until its last good heartbeat ages out, but it can no
+    // longer authenticate, so nothing renders.
+    const lapsed = { ...offline, online: true, credential_expires_at: "2020-01-01T00:00:00Z" };
+    stubRenderers({ RENDER_QUEUED: 1 },
+                  { remote_enabled: true, gateway_address: "", renderers: [lapsed] });
+    const { findByTestId } = render(<PipelineClient />);
+    expect(await findByTestId("nothing-can-render")).toHaveTextContent("1 video is waiting");
+  });
+
   it("does not warn while a renderer can render, or when the list cannot be read", async () => {
     stubRenderers({ RENDER_QUEUED: 2 },
                   { remote_enabled: false, gateway_address: "", renderers: [offline, { ...offline, id: "b", online: true }] });

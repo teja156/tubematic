@@ -107,15 +107,18 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   your own machine's first, with whether it is online, busy, offline, disabled, needs an upgrade or
   has an expired credential; its CPUs, memory and GPUs; whether its GPU test passed and what graphics
   device it really got; and its last error. You can disable, rename and remove renderers, test each
-  one's GPU, and **Add renderer**, which gives you a one-time token (valid for an hour) and the exact
-  command to run on the new machine.
+  one's GPU, and **Add renderer**, which gives you a one-time token (valid for an hour) and the
+  command to run on the new machine. The token is not part of the command: the script asks for it
+  and you paste it, so it never lands in that machine's process list or shell history.
 - **A "Nothing can render" banner on the Pipeline page** when videos are waiting to render and no
-  renderer can take them — every one disabled, offline or on a different version — with a link to
+  renderer can take them — every one disabled, offline, on a different version or with an expired
+  credential — with a link to
   Settings → Rendering.
 - **`tubematic_remote_renderer.py`, a download of its own on every release** (and in the release
   tarball's `scripts/` folder). It sets up a renderer on another machine with a single command,
   checks your machine's certificate before sending anything, and later upgrades or removes the
-  renderer. It is listed in the release's `CHECKSUMS.txt`, so you can verify it before running it.
+  renderer. The container it leaves running does not keep the token (`--token-stdin` reads it from a
+  pipe for scripted installs). It is listed in the release's `CHECKSUMS.txt`, so you can verify it before running it.
 
 ### Changed
 

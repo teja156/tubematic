@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run a Tubematic renderer on another machine (TMDEV-190).
 
-    python3 tubematic_remote_renderer.py install --token '<token>' [--image TAG]
+    python3 tubematic_remote_renderer.py install [--token-stdin] [--image TAG]
                                          [--gpu UUID | --no-gpu] [--name NAME] [--yes]
     python3 tubematic_remote_renderer.py upgrade [--image TAG] [--yes]
     python3 tubematic_remote_renderer.py remove [--yes]
@@ -23,15 +23,24 @@ other certificate (a wrong address, a TLS-terminating proxy, an attacker) is
 refused with nothing sent, so the one-time secret never leaves this machine
 for anyone but main.
 
-The token itself is never written anywhere by this script. It reaches the
-container's environment once (the renderer trades it for a credential it keeps
-in the `tubematic-renderer-state` volume and ignores it afterwards), and the
-local state file holds only the gateway address, the pin, the image and the
-GPU choice.
+Where the token goes. `install` asks for it with a hidden prompt (or reads one
+line from stdin with --token-stdin), never from the command line: a command
+line is readable by every user of this machine (ps, /proc/<pid>/cmdline) and
+kept in shell history, and the token can be redeemed by anyone for an hour.
+(--token still works for scripts that need it, with a warning.) It reaches one
+short-lived enrollment container's environment, which Docker keeps in the
+container's configuration (`docker inspect` shows it). So that container lives
+only until the renderer has traded the token for a credential, kept in the
+`tubematic-renderer-state` volume; it is then removed and the renderer started
+again from the same argv without the token. If enrollment fails, the
+token-bearing container is removed too. The script never writes the token to
+disk: the local state file holds only the gateway address, the pin, the image
+and the GPU choice.
 """
 import argparse
 import base64
 import binascii
+import getpass
 import hashlib
 import json
 import os
@@ -351,8 +360,11 @@ def gpu_env(gpu: dict, host_gpus: list) -> list:
 def run_argv(state: dict, *, with_token: bool) -> list:
     """`docker run` for the renderer container. The enrollment token is named
     with a bare `-e TUBEMATIC_ENROLL_TOKEN`, so Docker copies its value from
-    this call's environment and it never appears on a command line."""
-    argv = ["docker", "run", "-d", "--name", CONTAINER, "--restart", "unless-stopped",
+    this call's environment and it never appears on a command line. A
+    container that carries the token is the short-lived enrollment one, so it
+    never restarts by itself: install removes it either way."""
+    restart = "no" if with_token else "unless-stopped"
+    argv = ["docker", "run", "-d", "--name", CONTAINER, "--restart", restart,
             "--shm-size", SHM_SIZE, "-v", f"{STATE_VOLUME}:{STATE_MOUNT}",
             # The host's own name and clock: the dashboard shows the renderer's
             # host (a container ID otherwise) and its log times read in the
@@ -406,35 +418,96 @@ def container_logs(lines: int) -> str:
     return _out(run_cmd(["docker", "logs", "--tail", str(lines), CONTAINER], timeout=30))
 
 
-def wait_until_connected() -> bool:
-    """Watch the new container's log for up to WAIT_SECS. True when the
-    renderer reports it is connected; False when it failed or nothing showed
-    in time (both are printed)."""
+def watch_logs() -> tuple:
+    """Watch the container's log for up to WAIT_SECS. (outcome, logs) with
+    outcome "ready" (enrolled, or a first heartbeat), "refused" (main said
+    no), "stopped" (the container exited) or "timeout"."""
     deadline = time.monotonic() + WAIT_SECS
-    print(f"Waiting up to {WAIT_SECS} s for the renderer to connect to main …")
     while True:
         logs = container_logs(200)
         if _FAILED.search(logs):
-            print("The renderer could not connect: main refused it.\n" + _tail(logs))
-            print("An enrollment token works once and for one hour: make a new one on "
-                  f"{DASHBOARD_HINT}, then `remove` (deleting the state) and `install` again.")
-            return False
+            return "refused", logs
         if _READY.search(logs):
-            if _NEEDS_UPGRADE.search(logs):
-                print("Connected, but main says this renderer needs an upgrade, so it takes no "
-                      "work. Run `upgrade` here (without --image) once main is upgraded.")
-            else:
-                print(f"Connected. The renderer is listed on {DASHBOARD_HINT}.")
-            return True
+            return "ready", logs
         st = container_state()
         if st is not None and not (st.get("State") or {}).get("Running", False):
-            print("The renderer container stopped.\n" + _tail(logs))
-            return False
+            return "stopped", logs
         if time.monotonic() >= deadline:
-            print(f"No sign of a connection after {WAIT_SECS} s. The container is running and "
-                  "keeps retrying; check `status` in a minute.\n" + _tail(logs))
-            return False
+            return "timeout", logs
         time.sleep(POLL_SECS)
+
+
+def wait_until_connected() -> bool:
+    """Watch the renderer container's log for up to WAIT_SECS. True when the
+    renderer reports it is connected; False when it failed or nothing showed
+    in time (both are printed)."""
+    print(f"Waiting up to {WAIT_SECS} s for the renderer to connect to main …")
+    outcome, logs = watch_logs()
+    if outcome == "refused":
+        print("The renderer could not connect: main refused it.\n" + _tail(logs))
+        print("An enrollment token works once and for one hour: make a new one on "
+              f"{DASHBOARD_HINT}, then `remove` (deleting the state) and `install` again.")
+        return False
+    if outcome == "ready":
+        if _NEEDS_UPGRADE.search(logs):
+            print("Connected, but main says this renderer needs an upgrade, so it takes no "
+                  "work. Run `upgrade` here (without --image) once main is upgraded.")
+        else:
+            print(f"Connected. The renderer is listed on {DASHBOARD_HINT}.")
+        return True
+    if outcome == "stopped":
+        print("The renderer container stopped.\n" + _tail(logs))
+        return False
+    print(f"No sign of a connection after {WAIT_SECS} s. The container is running and "
+          "keeps retrying; check `status` in a minute.\n" + _tail(logs))
+    return False
+
+
+def enroll_container(state: dict, token: str) -> bool:
+    """Start the short-lived enrollment container (the only one that ever
+    carries the token) and wait for the renderer to trade the token for a
+    credential. True once it has: the credential is in the state volume. On
+    any other outcome — and on an error or Ctrl-C while waiting — the
+    token-bearing container is removed before this returns or raises."""
+    volume_existed = volume_exists()
+    done = False
+    try:
+        start_container(state, token=token)
+        print(f"Waiting up to {WAIT_SECS} s for the renderer to enroll with main …")
+        outcome, logs = watch_logs()
+        if outcome == "ready":
+            done = True
+            print(f"Enrolled: the renderer saved its credential in the {STATE_VOLUME} volume.")
+            return True
+        if outcome == "refused":
+            print("Main refused the enrollment.\n" + _tail(logs))
+        elif outcome == "stopped":
+            print("The renderer container stopped before it enrolled.\n" + _tail(logs))
+        else:
+            print(f"The renderer did not enroll within {WAIT_SECS} s.\n" + _tail(logs))
+        return False
+    finally:
+        if not done:
+            discard_enrollment(volume_existed)
+
+
+def discard_enrollment(volume_existed: bool) -> None:
+    """Remove the container that holds the token in its configuration, and
+    the state volume when this install created it (it holds no credential
+    worth keeping); an earlier install's volume is left alone."""
+    run_cmd(["docker", "rm", "-f", CONTAINER], timeout=60)
+    if container_exists():
+        print(f"Could not remove the {CONTAINER} container, whose configuration still holds the "
+              f"enrollment token: remove it with `docker rm -f {CONTAINER}`.")
+    else:
+        print(f"Removed the {CONTAINER} container, so the enrollment token is not left in "
+              "Docker's configuration.")
+    if volume_existed:
+        print(f"Kept the {STATE_VOLUME} volume from an earlier install.")
+    elif volume_exists():
+        run_cmd(["docker", "volume", "rm", STATE_VOLUME], timeout=60)
+    print("Run `install` again. A token works once and for one hour: if main says it is used "
+          f"or expired, make a new one on {DASHBOARD_HINT} (Add renderer).")
 
 
 def _tail(logs: str, n: int = LOG_LINES) -> str:
@@ -473,7 +546,7 @@ def read_state() -> dict:
         state = json.loads(path.read_text())
     except FileNotFoundError:
         raise RemoteError(f"No remote renderer is installed by this user ({path} is missing). "
-                          "Run `install --token …` first.") from None
+                          "Run `install` first.") from None
     except (OSError, ValueError) as e:
         raise RemoteError(f"{path} could not be read ({e}). Run `remove`, then `install` again.") from None
     for key in ("gateway_url", "pin", "image", "name"):
@@ -541,11 +614,39 @@ def choose_gpu(args, info: dict):
             return gpus[int(answer) - 1], gpus
 
 
+TOKEN_PROMPT = ("Enrollment token (from main's dashboard, Settings → Rendering → Add renderer; "
+                "the input is hidden): ")
+
+
+def read_token(args) -> str:
+    """The token, from a hidden prompt by default, or one line of stdin with
+    --token-stdin. --token works too, with a warning: a command line is
+    readable by every user of this machine and kept in shell history."""
+    if args.token is not None:
+        print("warning: --token puts the enrollment token in this machine's process list (ps, "
+              "/proc) and in your shell history, where it can be redeemed until it expires. "
+              "Run `install` without it to be asked for the token, or use --token-stdin.",
+              file=sys.stderr)
+        return args.token.strip()
+    if args.token_stdin:
+        return sys.stdin.readline().strip()
+    if not interactive():
+        raise RemoteError("No terminal to ask for the enrollment token: pipe it in with "
+                          "--token-stdin.")
+    try:
+        return getpass.getpass(TOKEN_PROMPT).strip()
+    except EOFError:
+        raise RemoteError("No enrollment token given.") from None
+
+
 # ── Subcommands ──────────────────────────────────────────────────────────────
 
 def cmd_install(args) -> int:
+    token_text = read_token(args)
+    if not token_text:
+        raise RemoteError(f"No enrollment token given. Copy it from {DASHBOARD_HINT} (Add renderer).")
     try:
-        token = decode_token(args.token)
+        token = decode_token(token_text)
     except ValueError as e:
         raise RemoteError(f"The enrollment token is not valid: {e}. Copy it again from "
                           f"{DASHBOARD_HINT} (Add renderer).") from None
@@ -581,9 +682,24 @@ def cmd_install(args) -> int:
         print(f"Using the local image {image}.")
     else:
         pull(image)
-    start_container(state, token=args.token.strip())
+    if not enroll_container(state, token_text):
+        return 1
+    # Enrolled: the renderer runs on the credential in the state volume from
+    # here on. Recreate its container from the same argv minus the token, so
+    # Docker's configuration (docker inspect) never keeps it.
     write_state(state)
-    print(f"Started the {CONTAINER} container (restarts with Docker).")
+    try:
+        remove_container()
+    except RemoteError as e:
+        raise RemoteError(f"{e}. Its configuration still holds the enrollment token: remove it "
+                          f"with `docker rm -f {CONTAINER}`, then run `upgrade`.") from None
+    try:
+        start_container(state)
+    except RemoteError as e:
+        raise RemoteError(f"{e}. The renderer is enrolled (its credential is saved); run "
+                          "`upgrade` to start it again.") from None
+    print(f"Restarted the {CONTAINER} container without the enrollment token (it restarts "
+          "with Docker).")
     return 0 if wait_until_connected() else 1
 
 
@@ -680,10 +796,16 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
     i = sub.add_parser("install", help="set up the renderer with an enrollment token",
-                       description="Check Docker and the GPU, verify main's certificate against "
-                                   "the token, pull main's image and start the renderer container.")
-    i.add_argument("--token", required=True,
-                   help="the enrollment token from main's dashboard (Settings → Rendering → Add renderer)")
+                       description="Ask for the enrollment token (from main's dashboard, Settings "
+                                   "→ Rendering → Add renderer; the input is hidden), check Docker "
+                                   "and the GPU, verify main's certificate against the token, pull "
+                                   "main's image, enroll the renderer and start its container.")
+    t = i.add_mutually_exclusive_group()
+    t.add_argument("--token-stdin", action="store_true",
+                   help="read the enrollment token from one line of stdin (for automation); "
+                        "without this, install asks for it with a hidden prompt")
+    t.add_argument("--token", help="the enrollment token on the command line: avoid it — it is "
+                                   "visible in the process list and kept in shell history")
     i.add_argument("--image", help="run this image instead of main's published one "
                                    "(a local image is used without pulling)")
     g = i.add_mutually_exclusive_group()

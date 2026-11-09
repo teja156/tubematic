@@ -11,6 +11,7 @@ to disk. No test runs Docker: every docker and nvidia-smi call goes through
 """
 import base64
 import http.server
+import io
 import json
 import os
 import ssl
@@ -254,17 +255,37 @@ def test_the_gpu_environment_is_what_the_compose_override_gives():
 # ── A fake Docker host ───────────────────────────────────────────────────────
 
 class _Docker:
-    """Answers run_cmd like a Docker host would, recording every call."""
+    """Answers run_cmd like a Docker host would, recording every call. It
+    keeps each container's configuration as Docker would: a bare `-e NAME`
+    takes its value from the calling environment (extra_env) and is stored in
+    the container's Config.Env, which `docker inspect` shows to anyone who can
+    run docker — the exposure the enrollment container must not outlive."""
 
     def __init__(self):
         self.calls = []
         self.runtimes = {"runc": {}, "nvidia": {}}
         self.gpus = GPU_SMI
-        self.container = False
+        self.containers = {}
+        self.history = []     # every container ever created, in order
         self.volume = False
         self.images = set()
         self.logs = "2026-11-08T10:00:00+0000 [renderer] enrolled as r_0123456789ab\n"
         self.fail = set()
+        self.fail_run_after = None   # fail every `docker run` after this many
+
+    @property
+    def container(self):
+        return trr.CONTAINER in self.containers
+
+    @container.setter
+    def container(self, value):
+        if value:
+            self.containers[trr.CONTAINER] = {"env": [], "restart": "unless-stopped"}
+        else:
+            self.containers.pop(trr.CONTAINER, None)
+
+    def env_of(self, name=None):
+        return self.containers[name or trr.CONTAINER]["env"]
 
     def called(self, verb):
         return [c for c in self.calls if c["argv"][:2] == ["docker", verb]]
@@ -283,9 +304,12 @@ class _Docker:
         if argv[1:3] == ["container", "inspect"]:
             if not self.container:
                 return bad("no such container")
+            c = self.containers[trr.CONTAINER]
             return ok(json.dumps([{"State": {"Status": "running", "Running": True,
                                              "StartedAt": "2026-11-08T10:00:00Z"},
-                                   "Config": {"Image": "img"}, "RestartCount": 0}]))
+                                   "Config": {"Image": "img", "Env": c["env"]},
+                                   "HostConfig": {"RestartPolicy": {"Name": c["restart"]}},
+                                   "RestartCount": 0}]))
         if argv[1:3] == ["image", "inspect"]:
             return ok("[]") if argv[3] in self.images else bad()
         if argv[1:3] == ["volume", "inspect"]:
@@ -294,10 +318,23 @@ class _Docker:
             self.volume = False
             return ok()
         if verb == "run":
-            self.container = self.volume = True
+            if self.fail_run_after is not None and len(self.called("run")) > self.fail_run_after:
+                return bad("Error response from daemon: run failed")
+            env = []
+            for i, a in enumerate(argv):
+                if a == "-e":
+                    item = argv[i + 1]
+                    if "=" in item:
+                        env.append(item)
+                    elif extra_env and item in extra_env:
+                        env.append(f"{item}={extra_env[item]}")
+            c = {"env": env, "restart": argv[argv.index("--restart") + 1]}
+            self.containers[argv[argv.index("--name") + 1]] = c
+            self.history.append(c)
+            self.volume = True
             return ok("abc123")
         if verb == "rm":
-            self.container = False
+            self.containers.pop(argv[-1], None)
             return ok()
         if verb == "logs":
             return ok(self.logs)
@@ -332,9 +369,17 @@ TOKEN = core.encode_enrollment_token("https://main.lan:4443", "the-one-time-secr
 
 
 def _run_call(docker):
+    """The `docker run` of the container that is left running."""
     runs = docker.called("run")
-    assert len(runs) == 1
-    return runs[0]
+    assert runs
+    return runs[-1]
+
+
+def _no_token_left(docker):
+    """No container that exists now carries the token in its configuration."""
+    for c in docker.containers.values():
+        assert not any(e.startswith("TUBEMATIC_ENROLL_TOKEN") for e in c["env"]), c
+        assert not any("the-one-time-secret" in e or TOKEN in e for e in c["env"]), c
 
 
 def test_a_cpu_install_runs_exactly_this_container(docker, main_version, monkeypatch):
@@ -342,8 +387,8 @@ def test_a_cpu_install_runs_exactly_this_container(docker, main_version, monkeyp
     monkeypatch.setattr(trr.socket, "gethostname", lambda: "garage-host")
     monkeypatch.setattr(trr.os.path, "exists", lambda p: p == "/etc/localtime" or _real_exists(p))
     assert trr.main(["install", "--token", TOKEN, "--name", "garage box", "--yes"]) == 0
-    call = _run_call(docker)
-    assert call["argv"] == [
+    enroll, final = docker.called("run")
+    expected = [
         "docker", "run", "-d", "--name", "tubematic-remote-renderer",
         "--restart", "unless-stopped", "--shm-size", "2g",
         "-v", "tubematic-renderer-state:/state",
@@ -354,21 +399,48 @@ def test_a_cpu_install_runs_exactly_this_container(docker, main_version, monkeyp
         "-e", "TUBEMATIC_RENDERER_STATE=/state",
         "-e", "TUBEMATIC_GATEWAY_URL=https://main.lan:4443",
         "-e", "TUBEMATIC_RENDERER_NAME=garage box",
-        "-e", "TUBEMATIC_ENROLL_TOKEN",
         "ghcr.io/teja156/tubematic-backend:2.1.0", "python3", "/app/api/render_agent.py",
     ]
+    # The container left running: the same argv, no token, restarts with Docker.
+    assert final["argv"] == expected and final["extra_env"] is None
+    # The enrollment container before it: the same argv plus the bare token
+    # name, and it never restarts by itself.
+    at = expected.index("ghcr.io/teja156/tubematic-backend:2.1.0")
+    bootstrap = expected[:at] + ["-e", "TUBEMATIC_ENROLL_TOKEN"] + expected[at:]
+    bootstrap[bootstrap.index("unless-stopped")] = "no"
+    assert enroll["argv"] == bootstrap
+    # It was removed before the final one started.
+    verbs = [c["argv"][1] for c in docker.calls if c["argv"][0] == "docker"]
+    assert verbs.index("run") < verbs.index("rm") < len(verbs) - 1 - verbs[::-1].index("run")
     assert main_version == [("https://main.lan:4443", PIN_OK)]
     assert docker.called("pull")[0]["argv"] == ["docker", "pull", "ghcr.io/teja156/tubematic-backend:2.1.0"]
 
 
-def test_the_token_reaches_only_the_run_calls_environment(docker, main_version):
+def test_the_token_reaches_only_the_enrollment_containers_environment(docker, main_version):
     docker.gpus = ""
     trr.main(["install", "--token", TOKEN, "--yes"])
     for call in docker.calls:
         assert not any(TOKEN in a or "the-one-time-secret" in a for a in call["argv"])
-        if call["argv"][:2] != ["docker", "run"]:
-            assert not call["extra_env"]
-    assert _run_call(docker)["extra_env"] == {"TUBEMATIC_ENROLL_TOKEN": TOKEN}
+    enroll, final = docker.called("run")
+    assert enroll["extra_env"] == {"TUBEMATIC_ENROLL_TOKEN": TOKEN}
+    assert [c for c in docker.calls if c["extra_env"]] == [enroll]
+    assert final["extra_env"] is None
+
+
+def test_the_running_container_does_not_keep_the_token(docker, main_version):
+    """Docker stores a container's environment in its configuration, where
+    `docker inspect` shows it: the enrollment container held the token, the
+    one left running must not."""
+    docker.gpus = ""
+    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 0
+    first, last = docker.history
+    assert f"TUBEMATIC_ENROLL_TOKEN={TOKEN}" in first["env"]   # the fake really records it
+    assert first["restart"] == "no"
+    assert list(docker.containers) == [trr.CONTAINER]
+    _no_token_left(docker)
+    assert last["restart"] == "unless-stopped"
+    inspect = json.loads(docker(["docker", "container", "inspect", trr.CONTAINER]).stdout)
+    assert not any("ENROLL_TOKEN" in e for e in inspect[0]["Config"]["Env"])
 
 
 def test_a_gpu_install_hands_over_the_one_gpu(docker, main_version):
@@ -489,17 +561,127 @@ def test_the_state_file_is_0600_and_never_holds_the_token(docker, main_version, 
     assert TOKEN not in out.out + out.err and "the-one-time-secret" not in out.out + out.err
 
 
-def test_a_refused_enrollment_is_reported(docker, main_version, capsys):
-    docker.logs = "[renderer] enrollment refused by the gateway: enrollment_invalid\n"
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
-    assert "main refused it" in capsys.readouterr().out
-
-
-def test_no_connection_within_the_wait_is_reported(docker, main_version, capsys, monkeypatch):
-    docker.logs = "[renderer] render agent starting\n"
+@pytest.mark.parametrize("logs,needle", [
+    ("[renderer] enrollment refused by the gateway: enrollment_invalid\n", "Main refused"),
+    ("[renderer] render agent starting\n", "did not enroll within"),
+])
+def test_a_failed_enrollment_leaves_no_token_bearing_container(docker, main_version, capsys,
+                                                               monkeypatch, logs, needle):
+    docker.gpus = ""
+    docker.logs = logs
     monkeypatch.setattr(trr, "WAIT_SECS", 0)
     assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    out = capsys.readouterr().out
+    assert needle in out and "Removed the tubematic-remote-renderer container" in out
+    assert docker.containers == {}
+    # The volume this install created held no credential: it goes too.
+    assert not docker.volume
+    assert len(docker.called("run")) == 1     # the renderer was never started for real
+    assert not trr.state_path().exists()
+
+
+def test_a_failed_enrollment_keeps_an_earlier_installs_volume(docker, main_version, capsys):
+    docker.gpus = ""
+    docker.volume = True
+    docker.logs = "[renderer] enrollment refused by the gateway: enrollment_invalid\n"
+    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert docker.containers == {} and docker.volume
+    assert not [c for c in docker.calls if c["argv"][1:3] == ["volume", "rm"]]
+    assert "Kept the tubematic-renderer-state volume" in capsys.readouterr().out
+
+
+def test_a_failed_docker_run_removes_whatever_it_created(docker, main_version, monkeypatch):
+    """`docker run -d` can create the container and then fail to start it,
+    leaving the token in a created container."""
+    docker.gpus = ""
+    real = docker.__call__
+
+    def run(argv, **kw):
+        result = real(argv, **kw)
+        if argv[:2] == ["docker", "run"]:
+            return subprocess.CompletedProcess(argv, 125, "Error: could not start", "")
+        return result
+    monkeypatch.setattr(trr, "run_cmd", run)
+    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert docker.containers == {}
+
+
+def test_ctrl_c_while_enrolling_removes_the_token_bearing_container(docker, main_version, monkeypatch):
+    docker.gpus = ""
+
+    def interrupted():
+        raise KeyboardInterrupt
+    monkeypatch.setattr(trr, "watch_logs", interrupted)
+    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 130
+    assert docker.containers == {}
+
+
+def test_a_failed_restart_after_enrolling_says_upgrade_restarts_it(docker, main_version, capsys):
+    docker.gpus = ""
+    docker.fail_run_after = 1
+    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert "`upgrade`" in capsys.readouterr().err
+    _no_token_left(docker)
+    assert trr.state_path().exists()
+
+
+def test_no_connection_after_enrolling_is_reported(docker, main_version, capsys, monkeypatch):
+    outcomes = iter([("ready", "enrolled"), ("timeout", "")])
+    monkeypatch.setattr(trr, "watch_logs", lambda: next(outcomes))
+    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
     assert "No sign of a connection" in capsys.readouterr().out
+    _no_token_left(docker)
+
+
+# ── How the token is given ───────────────────────────────────────────────────
+
+def test_install_asks_for_the_token_with_a_hidden_prompt(docker, main_version, monkeypatch, capsys):
+    docker.gpus = ""
+    asked = []
+    monkeypatch.setattr(trr, "interactive", lambda: True)
+    monkeypatch.setattr(trr.getpass, "getpass", lambda prompt: asked.append(prompt) or f"  {TOKEN}\n")
+    monkeypatch.setattr("builtins.input", lambda *_: "y")
+    assert trr.main(["install"]) == 0
+    assert asked == [trr.TOKEN_PROMPT] and "hidden" in asked[0]
+    assert docker.called("run")[0]["extra_env"] == {"TUBEMATIC_ENROLL_TOKEN": TOKEN}
+    out = capsys.readouterr()
+    assert TOKEN not in out.out + out.err and "warning" not in out.err
+    _no_token_left(docker)
+
+
+def test_install_reads_one_line_of_stdin_with_token_stdin(docker, main_version, monkeypatch, capsys):
+    docker.gpus = ""
+    monkeypatch.setattr(trr.sys, "stdin", io.StringIO(TOKEN + "\nignored\n"))
+    monkeypatch.setattr(trr.getpass, "getpass", lambda *a: pytest.fail("prompted"))
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 0
+    assert docker.called("run")[0]["extra_env"] == {"TUBEMATIC_ENROLL_TOKEN": TOKEN}
+    assert "warning" not in capsys.readouterr().err
+
+
+def test_an_empty_stdin_is_refused(docker, main_version, monkeypatch, capsys):
+    monkeypatch.setattr(trr.sys, "stdin", io.StringIO(""))
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
+    assert "No enrollment token" in capsys.readouterr().err
+    assert docker.calls == []
+
+
+def test_no_terminal_and_no_token_points_at_token_stdin(docker, main_version, capsys):
+    assert trr.main(["install", "--yes"]) == 1
+    assert "--token-stdin" in capsys.readouterr().err
+    assert docker.calls == []
+
+
+def test_token_on_the_command_line_warns_but_works(docker, main_version, capsys):
+    docker.gpus = ""
+    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 0
+    err = capsys.readouterr().err
+    assert "warning" in err and "process list" in err and "shell history" in err
+    assert TOKEN not in err
+
+
+def test_token_and_token_stdin_cannot_both_be_given(capsys):
+    with pytest.raises(SystemExit):
+        trr.main(["install", "--token", TOKEN, "--token-stdin"])
 
 
 # ── upgrade, remove, status ──────────────────────────────────────────────────
