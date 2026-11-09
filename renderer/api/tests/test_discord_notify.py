@@ -245,8 +245,8 @@ def test_a_rate_limit_is_retried_once_then_succeeds(monkeypatch):
 
 
 def test_a_second_rate_limit_gives_up_rather_than_looping(monkeypatch):
-    """This runs inline in the render worker's tick — retrying forever would
-    stall rendering. The sweep's marker stays unadvanced, so the next tick
+    """This runs inline in the worker's tick — retrying forever would stall
+    every other pass, publishing included. The sweep's marker stays unadvanced, so the next tick
     retries anyway."""
     monkeypatch.setattr(dn.time, "sleep", lambda _s: None)
     calls = []

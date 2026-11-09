@@ -11,7 +11,7 @@ and applies exactly two mechanical transformations:
    install has no source tree, so a `build:` key pointing at
    renderer/Dockerfile would reference a path that does not exist. A service
    that already reuses the locally-built image under the `tubematic-renderer-
-   image` tag (tubematic-mcp, tubematic-renderer) is repointed at the same
+   image` tag (tubematic-mcp, tubematic-worker, tubematic-renderer) is repointed at the same
    backend image for the same reason -- a release install builds nothing, so
    that local tag would never resolve.
 2. Every published port is forced onto a `127.0.0.1:` binding. An entry that
@@ -56,7 +56,7 @@ except ModuleNotFoundError:
 # `owner` kwarg, and release.yml always passes github.repository_owner.
 DEFAULT_OWNER = GITHUB_REPO.split("/")[0]
 
-# The local tag tubematic-mcp and tubematic-renderer carry today because they
+# The local tag tubematic-mcp, tubematic-worker and tubematic-renderer carry because they
 # reuse what tubematic-api builds, rather than building a second time.
 _LOCAL_BACKEND_IMAGE = "tubematic-renderer-image"
 

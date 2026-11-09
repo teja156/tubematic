@@ -20,14 +20,14 @@ from unittest import mock
 import pytest
 
 import pipeline
-import worker
+import render_agent
 
 
 @pytest.fixture
 def db_path(tmp_path, monkeypatch):
     p = str(tmp_path / "test.db")
     pipeline._init_db(p)
-    monkeypatch.setattr(worker, "DB_PATH", p)
+    monkeypatch.setattr(render_agent, "DB_PATH", p)
     return p
 
 
@@ -36,23 +36,23 @@ def no_gpu(monkeypatch):
     """Every test starts unconfigured and unverified, as test_gpu_rendering does."""
     for var in ("TUBEMATIC_GPU_UUID", "TUBEMATIC_GPU_NAME", "TUBEMATIC_HOST_GPUS"):
         monkeypatch.delenv(var, raising=False)
-    monkeypatch.setattr(worker, "_gpu_verified", False)
+    monkeypatch.setattr(render_agent, "_gpu_verified", False)
 
 
 # ── The counter ──────────────────────────────────────────────────────────────
 
 def test_progress_reads_remotion_counters_and_nothing_else():
-    assert worker._progress_of("Bundling 6%") == (0, 6)
-    assert worker._progress_of("Bundling 100%") == (0, 100)
-    assert worker._progress_of("Rendered 8/60") == (1, 8)
-    assert worker._progress_of("[Tab 0] Encoded 17/60") == (2, 17)
-    assert worker._progress_of("Getting composition") is None
-    assert worker._progress_of("") is None
+    assert render_agent._progress_of("Bundling 6%") == (0, 6)
+    assert render_agent._progress_of("Bundling 100%") == (0, 100)
+    assert render_agent._progress_of("Rendered 8/60") == (1, 8)
+    assert render_agent._progress_of("[Tab 0] Encoded 17/60") == (2, 17)
+    assert render_agent._progress_of("Getting composition") is None
+    assert render_agent._progress_of("") is None
 
 
 def test_phases_order_so_the_first_encoded_counts_as_progress():
-    assert worker._progress_of("Encoded 0/60") > worker._progress_of("Rendered 60/60")
-    assert worker._progress_of("Rendered 0/60") > worker._progress_of("Bundling 100%")
+    assert render_agent._progress_of("Encoded 0/60") > render_agent._progress_of("Rendered 60/60")
+    assert render_agent._progress_of("Rendered 0/60") > render_agent._progress_of("Bundling 100%")
 
 
 # ── The watcher, against real processes ────────────────────────────────────────
@@ -64,7 +64,7 @@ def _child(script: str) -> subprocess.Popen:
 
 @pytest.fixture
 def quick(monkeypatch):
-    monkeypatch.setattr(worker, "_POLL_SECS", 0.05)
+    monkeypatch.setattr(render_agent, "_POLL_SECS", 0.05)
 
 
 def test_a_render_that_advances_is_left_alone(quick):
@@ -72,7 +72,7 @@ def test_a_render_that_advances_is_left_alone(quick):
                   "for i in range(1, 6):\n"
                   "    print(f'Rendered {i}/5'); sys.stderr.write('chatter\\n'); time.sleep(0.15)\n"
                   "print('Encoded 5/5')")
-    out, err, outcome = worker._wait_for_render(proc, timeout_secs=30, stall_secs=0.5)
+    out, err, outcome = render_agent._wait_for_render(proc, timeout_secs=30, stall_secs=0.5)
     assert outcome == "exited" and proc.returncode == 0
     assert "Rendered 5/5" in out and "Encoded 5/5" in out
     assert err.count("chatter") == 5          # the second pipe was drained too
@@ -83,7 +83,7 @@ def test_a_render_whose_counter_stops_is_a_stall_even_if_it_keeps_printing(quick
                   "print('Rendered 8/60')\n"
                   "while True:\n"
                   "    print('Rendered 8/60'); time.sleep(0.1)")      # the real logs repeat a line
-    out, _, outcome = worker._wait_for_render(proc, timeout_secs=30, stall_secs=0.6)
+    out, _, outcome = render_agent._wait_for_render(proc, timeout_secs=30, stall_secs=0.6)
     assert outcome == "stall"
     assert out.count("Rendered 8/60") >= 2
     proc.kill(); proc.wait()
@@ -93,7 +93,7 @@ def test_the_ceiling_still_catches_a_render_that_crawls(quick):
     proc = _child("import time, itertools\n"
                   "for i in itertools.count(1):\n"
                   "    print(f'Rendered {i}/100000'); time.sleep(0.1)")
-    _, _, outcome = worker._wait_for_render(proc, timeout_secs=0.7, stall_secs=30)
+    _, _, outcome = render_agent._wait_for_render(proc, timeout_secs=0.7, stall_secs=30)
     assert outcome == "timeout"
     proc.kill(); proc.wait()
 
@@ -102,7 +102,7 @@ def test_a_big_stderr_cannot_deadlock_the_watcher(quick):
     proc = _child("import sys\n"
                   "sys.stderr.write('x' * 300000)\n"           # past any pipe buffer
                   "print('Rendered 1/1'); print('Encoded 1/1')")
-    out, err, outcome = worker._wait_for_render(proc, timeout_secs=30, stall_secs=5)
+    out, err, outcome = render_agent._wait_for_render(proc, timeout_secs=30, stall_secs=5)
     assert outcome == "exited" and len(err) == 300000 and "Encoded 1/1" in out
 
 
@@ -112,8 +112,8 @@ def _cartoon_job(tmp_path, monkeypatch, db_path, visual_style="cartoon_3d", cart
     remotion_dir = tmp_path / "remotion"
     (remotion_dir / "public").mkdir(parents=True)
     (tmp_path / "out").mkdir()
-    monkeypatch.setattr(worker, "REMOTION_DIR", remotion_dir)
-    monkeypatch.setattr(worker, "OUTPUT_DIR", tmp_path / "out")
+    monkeypatch.setattr(render_agent, "REMOTION_DIR", remotion_dir)
+    monkeypatch.setattr(render_agent, "OUTPUT_DIR", tmp_path / "out")
     monkeypatch.setattr(pipeline, "JOBS_DIR", tmp_path / "jobs")
     job = tmp_path / "jobs" / "vid-1"
     job.mkdir(parents=True)
@@ -123,12 +123,12 @@ def _cartoon_job(tmp_path, monkeypatch, db_path, visual_style="cartoon_3d", cart
               if cartoon_config else [])
     (job / "scene-config.json").write_text(json.dumps({"scenes": scenes}))
     if cartoon_config:
-        # the generated source and the record of it submit_render wrote: the worker renders that tree or nothing
+        # the generated source and the record of it submit_render wrote: the renderer renders that tree or nothing
         from tubematic_core import jobfiles as tjobs
         generated = tmp_path / "generated"
         (generated / "vid-1").mkdir(parents=True)
         (generated / "vid-1" / "CartoonShort.tsx").write_text("export default () => null;")
-        monkeypatch.setattr(worker, "GENERATED_DIR", generated)
+        monkeypatch.setattr(render_agent, "GENERATED_DIR", generated)
         (job / "cartoon").mkdir()
         (job / "cartoon" / "source.json").write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(generated / "vid-1"), "at": "now"}))
     con = sqlite3.connect(db_path)
@@ -171,9 +171,9 @@ def _exited(stdout=""):
 def test_a_cartoon_video_without_a_working_gpu_fails_at_once_with_the_reason(db_path, monkeypatch, tmp_path):
     _cartoon_job(tmp_path, monkeypatch, db_path)
     _store_probe(db_path, {"configured": True, "ok": False, "error": "Chromium is rendering on another device: SwiftShader"})
-    monkeypatch.setattr(worker, "_gpu_verified", False)
-    with mock.patch("subprocess.Popen") as popen, mock.patch.object(worker, "_run_gpu_probe") as probe:
-        worker._stage_and_render("vid-1")
+    monkeypatch.setattr(render_agent, "_gpu_verified", False)
+    with mock.patch("subprocess.Popen") as popen, mock.patch.object(render_agent, "_run_gpu_probe") as probe:
+        render_agent._stage_and_render("vid-1")
     popen.assert_not_called()                 # no CPU fallback
     probe.assert_not_called()                 # the probe had answered: not_usable
     video, comments = _video(db_path)
@@ -184,21 +184,21 @@ def test_a_cartoon_video_without_a_working_gpu_fails_at_once_with_the_reason(db_
 
 
 def test_an_unprobed_gpu_is_probed_before_judging(db_path, monkeypatch, tmp_path):
-    """After every worker restart the probe has not run yet; a Cartoon 3D
+    """After every renderer restart the probe has not run yet; a Cartoon 3D
     video claimed first triggers it rather than being failed on no evidence."""
     _cartoon_job(tmp_path, monkeypatch, db_path)
-    monkeypatch.setattr(worker, "_gpu_verified", False)
+    monkeypatch.setattr(render_agent, "_gpu_verified", False)
 
     def probe(reason):
         _store_probe(db_path, {"configured": True, "ok": True})
-        monkeypatch.setattr(worker, "_gpu_verified", True)
+        monkeypatch.setattr(render_agent, "_gpu_verified", True)
         return {}
     monkeypatch.setenv("TUBEMATIC_GPU_UUID", "GPU-1")
     # a fresh fake process per call: the segmented render starts one per attempt
     with mock.patch("subprocess.Popen", side_effect=lambda *a, **k: _exited()) as popen, \
-         mock.patch.object(worker, "_run_gpu_probe", side_effect=probe) as ran, \
-         mock.patch.object(worker, "_handle_render_success"):
-        worker._stage_and_render("vid-1")
+         mock.patch.object(render_agent, "_run_gpu_probe", side_effect=probe) as ran, \
+         mock.patch.object(render_agent, "_handle_render_success"):
+        render_agent._stage_and_render("vid-1")
     assert ran.call_args_list[0].kwargs["reason"] == "a Cartoon 3D video needs the GPU"
     # the first segment of the segmented render (TMDEV-185), on the GPU flags, two tabs, video only
     argv = popen.call_args_list[0].args[0]
@@ -211,9 +211,9 @@ def test_a_cartoon_scene_config_counts_even_under_auto(db_path, monkeypatch, tmp
     settled on a world is gated by the file, not only by the style column."""
     _cartoon_job(tmp_path, monkeypatch, db_path, visual_style="auto")
     _store_probe(db_path, {"configured": False, "ok": False})
-    monkeypatch.setattr(worker, "_gpu_verified", False)
+    monkeypatch.setattr(render_agent, "_gpu_verified", False)
     with mock.patch("subprocess.Popen") as popen:
-        worker._stage_and_render("vid-1")
+        render_agent._stage_and_render("vid-1")
     popen.assert_not_called()
     video, comments = _video(db_path)
     assert video["status"] == "FAILED" and "not_configured" in comments[-1]
@@ -221,10 +221,10 @@ def test_a_cartoon_scene_config_counts_even_under_auto(db_path, monkeypatch, tmp
 
 def test_an_ordinary_video_renders_on_the_cpu_as_before(db_path, monkeypatch, tmp_path):
     _cartoon_job(tmp_path, monkeypatch, db_path, visual_style="auto", cartoon_config=False)
-    monkeypatch.setattr(worker, "_gpu_verified", False)
+    monkeypatch.setattr(render_agent, "_gpu_verified", False)
     with mock.patch("subprocess.Popen", return_value=_exited()) as popen, \
-         mock.patch.object(worker, "_handle_render_success"):
-        worker._stage_and_render("vid-1")
+         mock.patch.object(render_agent, "_handle_render_success"):
+        render_agent._stage_and_render("vid-1")
     argv = popen.call_args.args[0]
     assert "--concurrency=2" not in argv
     assert _video(db_path)[0]["status"] == "RENDERING"   # success handling was stubbed out

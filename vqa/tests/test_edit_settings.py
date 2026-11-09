@@ -312,7 +312,7 @@ class TestRestartService:
 
     def test_dashboard_is_not_restartable(self):
         """The VQA environment never starts tubematic-dashboard."""
-        assert set(RESTARTABLE_SERVICES) == {"renderer", "api", "mcp"}
+        assert set(RESTARTABLE_SERVICES) == {"renderer", "worker", "api", "mcp"}
 
     def test_mcp_is_its_own_service(self):
         """Flask and the MCP server are separate containers, so bouncing a

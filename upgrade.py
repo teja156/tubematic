@@ -625,6 +625,21 @@ def _giffx_scenes(root: Path) -> tuple[list, list, list]:
 OPENAI_ONLY_IMAGES_MIGRATION = 16
 
 
+def _worker_split_pending() -> bool:
+    """Whether the running stack predates tubematic-worker (TMDEV-188): its
+    renderer is up and there is no worker container. Until 2.1.0 the renderer
+    ran publishing, Auto Pilot and notifications itself, so recreating
+    containers one at a time would leave the old renderer doing all three
+    beside the new worker."""
+    from onboard import stack
+    try:
+        renderer, _ = stack._container_state("tubematic-renderer")
+        worker, _ = stack._container_state("tubematic-worker")
+    except FileNotFoundError:
+        return False
+    return renderer == "running" and not worker
+
+
 def _has_openai_key(db_path) -> bool:
     """Whether the settings table holds a non-blank OpenAI key.
 
@@ -753,6 +768,12 @@ def run_upgrade(*, dry_run: bool, force: bool, no_stop: bool, install_mode: str 
         rep.warn("--no-stop is refused for this upgrade: it creates the service tokens, and "
                  "recreating containers one at a time would leave old and new ones refusing "
                  "each other's calls. Re-run without --no-stop.")
+        return 1
+    if no_stop and _worker_split_pending():
+        rep.warn("--no-stop is refused for this upgrade: it moves publishing, Auto Pilot and "
+                 "notifications out of the renderer into a new tubematic-worker container, and "
+                 "the old renderer would keep running them beside the new worker until it is "
+                 "recreated. Re-run without --no-stop.")
         return 1
     if no_stop and applied < OPENAI_ONLY_IMAGES_MIGRATION:
         rep.warn("--no-stop is refused for this upgrade: it retires the Gemini image provider, "

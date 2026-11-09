@@ -6,7 +6,8 @@ Run:
 Report:
 - Whether tubematic-api (Flask, :4000) is up → URL: http://localhost:4000
 - Whether tubematic-mcp (the agent's tools, :4100) is up
-- Whether tubematic-renderer (the render worker; no exposed port) is up
+- Whether tubematic-worker (publishing, Auto Pilot, notifications; no exposed port) is up
+- Whether tubematic-renderer (renders videos; no exposed port) is up
 - Whether tubematic-dashboard (:3000) is up → URL: http://localhost:3000
 
 Also check both health endpoints — they are separate containers, so either can

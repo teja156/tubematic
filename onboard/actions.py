@@ -1165,9 +1165,11 @@ def apply_renderer(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
         rep.ok("Image built")
 
     ex.ensure_secrets()  # Compose refuses to start a service whose token file is missing
-    rep.info("Starting tubematic-api, tubematic-mcp and tubematic-renderer containers…")
+    rep.info("Starting tubematic-api, tubematic-mcp, tubematic-worker and tubematic-renderer "
+             "containers…")
     r = ex.run([*_compose(), "up", "-d",
-                "tubematic-api", "tubematic-mcp", "tubematic-renderer"], cwd=REPO_ROOT)
+                "tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer"],
+               cwd=REPO_ROOT)
     if r.returncode != 0:
         rep.fail("docker compose up failed")
         return
@@ -1186,17 +1188,24 @@ def apply_renderer(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
     if not _await_health("tubematic-mcp", "http://localhost:4100/mcp", rep):
         return
 
-    r_worker = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-renderer"],
+    r_worker = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-worker"],
                                capture_output=True, text=True)
     if r_worker.stdout.strip() == "running":
-        rep.ok("tubematic-renderer (render worker) running")
+        rep.ok("tubematic-worker (publishing, Auto Pilot, notifications) running")
+    else:
+        rep.warn("tubematic-worker container is not running. Check: docker compose logs tubematic-worker")
+
+    r_renderer = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-renderer"],
+                                capture_output=True, text=True)
+    if r_renderer.stdout.strip() == "running":
+        rep.ok("tubematic-renderer running")
         from onboard import gpu
         try:
             chosen = gpu.read_override()
         except ValueError:
             chosen = None
         if chosen:
-            # The answer takes the worker a few seconds after it starts, so it
+            # The answer takes the renderer a few seconds after it starts, so it
             # is pointed at rather than waited for here.
             rep.info(f"It tests {chosen['name']} as it starts — see Settings → Rendering on the "
                      "dashboard, or run: python3 upgrade.py --check")

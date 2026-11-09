@@ -5,8 +5,8 @@
 
 Builds a custom [Kasm Workspaces](https://kasmweb.com/) image that gives testers a disposable,
 browser-accessible desktop with the Tubematic source pre-staged and Docker-in-Docker available, so
-the full 4-container stack (`tubematic-api`, `tubematic-mcp`, `tubematic-renderer`,
-`tubematic-dashboard`) can be brought up inside the session without touching the host machine.
+the full 5-container stack (`tubematic-api`, `tubematic-mcp`, `tubematic-worker`,
+`tubematic-renderer`, `tubematic-dashboard`) can be brought up inside the session without touching the host machine.
 
 Base image: `kasmweb/ubuntu-noble-dind:1.19.0-rolling-daily` (root-mode Docker-in-Docker).
 

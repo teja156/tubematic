@@ -35,7 +35,8 @@ LOCK_PATH = POLL_LOG_DIR.parent / "poll.lock"
 # dead supervisor is still visible. Keep in sync: scripts/poll.py REGISTRY.
 SESSIONS_REGISTRY = POLL_LOG_DIR.parent / "poll-sessions.json"
 
-SERVICES = ("tubematic-api", "tubematic-mcp", "tubematic-renderer", "tubematic-dashboard")
+SERVICES = ("tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer",
+            "tubematic-dashboard")
 
 
 # ── In-flight work ───────────────────────────────────────────────────────────
@@ -244,20 +245,22 @@ def start(ex: Executor, rep: Reporter, services=(), *, confirm_down) -> None:
         return
 
     # Every service with a healthcheck is waited on; one that fails it, or a
-    # renderer that is not running, fails the start rather than warning —
-    # callers report success from the exit code.
+    # worker or renderer that is not running (neither has a healthcheck), fails
+    # the start rather than warning — callers report success from the exit code.
     wanted = services or list(SERVICES)
     for name, url in (("tubematic-api", "http://localhost:4000"),
                       ("tubematic-mcp", "http://localhost:4100/mcp"),
                       ("tubematic-dashboard", "http://localhost:3000")):
         if name in wanted and not _await_health(name, url, rep):
             rep.fail(f"{name} did not become healthy", f"Run: docker compose logs {name}")
-    if "tubematic-renderer" in wanted:
-        status, _ = _container_state("tubematic-renderer")
+    for name in ("tubematic-worker", "tubematic-renderer"):
+        if name not in wanted:
+            continue
+        status, _ = _container_state(name)
         if status != "running":
-            rep.fail(f"tubematic-renderer is {status or 'missing'}, not running",
-                     "Run: docker compose logs tubematic-renderer")
-        rep.ok("tubematic-renderer running")
+            rep.fail(f"{name} is {status or 'missing'}, not running",
+                     f"Run: docker compose logs {name}")
+        rep.ok(f"{name} running")
 
 
 # ── Cron ─────────────────────────────────────────────────────────────────────

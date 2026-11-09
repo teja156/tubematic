@@ -40,19 +40,20 @@ Before touching the pipeline, verify the following. If **any item fails**, stop 
 | MCP server connected | Attempt to call any `tubematic:` tool. If it fails with a connection or tool-not-found error, the MCP server is not running — tell the user to re-register it with `python onboard.py --install-agent <agent>` and restart their agent session. |
 | API container healthy | `curl -s http://localhost:4000/health` — must return `{"status":"ok"}`. If not, tell the user: `python3 scripts/service.py start tubematic-api` |
 | MCP container healthy | `curl -s http://localhost:4100/health` — must return `{"status":"ok"}`. Flask and the MCP server are separate containers, so a healthy API says nothing about this one. If not: `python3 scripts/service.py start tubematic-mcp` |
-| Render worker container running | `docker compose ps tubematic-renderer` — state must be `running`. This is the separate process that actually renders videos; if it's down, videos will pile up in `RENDER_QUEUED` forever. If not: `python3 scripts/service.py start tubematic-renderer` |
-| Remotion render ready | `curl -s http://localhost:4000/render/health` — must return `{"status":"ok"}` (a Chromium smoke test served by the API container, which shares the render worker's image). If not, rebuild: `docker compose build tubematic-api && python3 scripts/service.py start` |
+| Worker container running | `docker compose ps tubematic-worker` — state must be `running`. It runs publishing, Auto Pilot and notifications; if it's down, approved posts never go out and Auto Pilot stops. If not: `python3 scripts/service.py start tubematic-worker` |
+| Renderer container running | `docker compose ps tubematic-renderer` — state must be `running`. This is the separate process that actually renders videos; if it's down, videos will pile up in `RENDER_QUEUED` forever. If not: `python3 scripts/service.py start tubematic-renderer` |
+| Remotion render ready | `curl -s http://localhost:4000/render/health` — must return `{"status":"ok"}` (a Chromium smoke test served by the API container, which shares the renderer's image). If not, rebuild: `docker compose build tubematic-api && python3 scripts/service.py start` |
 | Dashboard container running | `docker compose ps tubematic-dashboard` — state must be `running`. If not: `python3 scripts/service.py start tubematic-dashboard` |
 | ElevenLabs API key set | `GET /settings` → `elevenlabs_api_key` must be non-empty. It comes back masked, never as the real key — a mask means it is set. If empty, tell the user to add it on the Settings dashboard (voicing will fail without it). |
 | OpenAI API key set | `GET /settings` → `openai_api_key` must be non-empty (masked, like the others). If empty, tell the user to add it on the Settings dashboard — every scene image comes from OpenAI, so `generate_image` fails without it. |
-| Gemini API key (optional) | `gemini_api_key` is optional. If empty, the mining strategy is off and AI review inside the render worker is skipped, so the video advances directly to `VIDEO_READY`. This is expected. |
+| Gemini API key (optional) | `gemini_api_key` is optional. If empty, the mining strategy is off and AI review inside the renderer is skipped, so the video advances directly to `VIDEO_READY`. This is expected. |
 
 If all checks pass, continue. If one or more fail, output a clear list like:
 
 ```
 ⚠ Setup incomplete — fix the following before I can continue:
 
-  ✘ Render worker container is not running
+  ✘ Renderer container is not running
       → python3 scripts/service.py start tubematic-renderer
 
   ✘ No ElevenLabs API key configured

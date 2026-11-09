@@ -309,8 +309,8 @@ log "Building tubematic-api..."
 if ! docker compose build tubematic-api; then
     fail "docker compose build tubematic-api failed — see output above"
 fi
-log "Starting tubematic-api + tubematic-mcp + tubematic-renderer..."
-if ! docker compose up -d tubematic-api tubematic-mcp tubematic-renderer; then
+log "Starting tubematic-api + tubematic-mcp + tubematic-worker + tubematic-renderer..."
+if ! docker compose up -d tubematic-api tubematic-mcp tubematic-worker tubematic-renderer; then
     fail "docker compose up failed — see output above"
 fi
 

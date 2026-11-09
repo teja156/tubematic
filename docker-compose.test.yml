@@ -56,12 +56,33 @@ services:
       timeout: 5s
       retries: 20
 
-  # Render worker — same image, no build, so e2e specs that drive a video to
+  # Worker — publishing, Auto Pilot, notifications and the other background
+  # passes (see docker-compose.yml's tubematic-worker for the production
+  # wiring). Same image, no build.
+  tubematic-worker-test:
+    image: tubematic-renderer-test-image
+    command: python3 /app/api/worker.py
+    volumes:
+      - test-output-videos:/output_videos
+      - test-jobs-data:/jobs
+      - test-db-data:/data
+    networks:
+      - tubematic-test-net
+    environment:
+      - OUTPUT_BASE_PATH=/output_videos
+      - TUBEMATIC_DB=/data/tubematic.db
+      - TUBEMATIC_JOBS_DIR=/jobs
+      - TZ=America/New_York
+    depends_on:
+      tubematic-api-test:
+        condition: service_healthy
+
+  # Renderer — same image, no build, so e2e specs that drive a video to
   # RENDER_QUEUED actually get rendered (see docker-compose.yml's non-test
   # tubematic-renderer service for the equivalent production wiring).
   tubematic-renderer-test:
     image: tubematic-renderer-test-image
-    command: python3 /app/api/worker.py
+    command: python3 /app/api/render_agent.py
     volumes:
       - test-output-videos:/output_videos
       - test-jobs-data:/jobs

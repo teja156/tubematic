@@ -407,12 +407,13 @@ def test_the_sweep_never_raises(env, monkeypatch):
     worker._sweep_notifications()
 
 
-def test_the_sweep_runs_before_the_render_claim(env):
-    """A render holds the loop for ~20 minutes. The passes run at the top of
-    the tick so a notification is never stuck behind two renders."""
+def test_the_sweep_never_waits_behind_a_render(env):
+    """A render can hold a loop for an hour. The sweep runs in the worker,
+    whose loop has no render in it, so a notification never waits for one."""
     import inspect
     body = inspect.getsource(worker.main)
-    assert body.index("_sweep_notifications()") < body.index("_claim_next()")
+    assert "_sweep_notifications()" in body
+    assert "_claim_next" not in body and "_render_claimed" not in body
 
 
 # ── What the messages carry ──────────────────────────────────────────────────

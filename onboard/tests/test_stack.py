@@ -416,8 +416,18 @@ def test_an_unhealthy_dashboard_fails_the_start(monkeypatch):
         stack.start(ex, _Rep(), ["tubematic-dashboard"], confirm_down=lambda n: True)
 
 
+def test_a_worker_that_exited_fails_the_start(monkeypatch):
+    """It has no healthcheck either, so a worker that dies at startup (a bad
+    migration, a missing mount) would otherwise be reported as started."""
+    ex = _live_start(monkeypatch, {"tubematic-worker": ("exited", ""),
+                                   "tubematic-renderer": ("running", "")})
+    with pytest.raises(RuntimeError):
+        stack.start(ex, _Rep(), [], confirm_down=lambda n: True)
+
+
 def test_a_healthy_start_succeeds(monkeypatch):
-    ex = _live_start(monkeypatch, {"tubematic-renderer": ("running", "")})
+    ex = _live_start(monkeypatch, {"tubematic-worker": ("running", ""),
+                                   "tubematic-renderer": ("running", "")})
     stack.start(ex, _Rep(), [], confirm_down=lambda n: True)
 
 
