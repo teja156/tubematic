@@ -3,12 +3,20 @@
 
 Its own container (tubematic-worker), main deployment only. One loop of
 non-blocking passes: publishing, Auto Pilot, video metrics, the weekly price
-sync, retention, Discord notifications and the stalled-VOICING backstop.
+sync, retention, Discord notifications, the stalled-VOICING backstop, and two
+render backstops: a render whose renderer stopped heartbeating past its lease
+is re-queued (_sweep_render_leases), and a GPU-only video no renderer can take
+is failed (_sweep_gpu_waits). Beside the loop, a review thread runs the AI
+review tail of every uploaded render (render_results.finish_render), one at a
+time, so a slow Gemini review never holds up a publish or an approval.
 
-Rendering is tubematic-renderer's (render_agent.py). The two used to share
-one loop, so a render held every pass here for as long as it took; split, a
-publish or an approval never waits behind a render, and recreating the
-renderer (onboard.py --step gpu does) never interrupts them.
+Rendering itself is the renderers' (render_agent.py, the built-in one and any
+remote host). None of them reads the database: each claims, downloads and
+uploads through the render gateway in tubematic-api (render_gateway.py), and
+the rules for a render's outcome live in render_results.py, shared by the
+gateway and this worker. The worker never renders, so a publish or an
+approval never waits behind a render, and recreating a renderer (onboard.py
+--step gpu does) never interrupts them.
 
 Run: python3 worker.py
 """
@@ -18,6 +26,7 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
 import uuid
 import zoneinfo
@@ -30,9 +39,11 @@ import hosttz
 import metrics
 import pipeline
 import postforme
+import render_results
 from tubematic_core import logging as tlog
 from tubematic_core import mascots as tmascots
 from tubematic_core import prices as tprices
+from tubematic_core import renderers
 
 DB_PATH = os.getenv("TUBEMATIC_DB", "/data/tubematic.db")
 LOG_DIR = Path(os.getenv("TUBEMATIC_LOG_DIR", "/logs"))
@@ -44,7 +55,7 @@ POLL_INTERVAL_SECS = int(os.getenv("WORKER_POLL_INTERVAL_SECS")
                          or os.getenv("RENDER_POLL_INTERVAL_SECS") or "20")
 
 # Comments the worker writes (a publication error, an Auto Pilot block) are
-# capped like the renderer's; see render_agent.py's note on the same cap.
+# capped like a render's; see render_results.py's note on the same cap.
 _COMMENT_MAX_CHARS = 2000
 _COMMENT_TRUNCATION_NOTE = (
     "\n\n… truncated — read `gemini_feedback` on this video for the complete review."
@@ -962,10 +973,10 @@ def _sweep_unpublished(days: int) -> None:
 # ── Discord notifications (TMDEV-5) ─────────────────────────────────────────
 #
 # A sweep rather than a send at each write site. The three notifiable statuses
-# are written by three different processes — TOPIC_PROPOSED by the MCP server's
+# are written by different writers — TOPIC_PROPOSED by the MCP server's
 # create_video, SCRIPT_READY by either the MCP server or the Flask PATCH, and
-# VIDEO_READY by the renderer (render_agent.py) — so one sweep over the database
-# is the only place that sees all three.
+# VIDEO_READY by this worker's review thread (render_results.py) — so one
+# sweep over the database is the only place that sees all three.
 # It also bundles a research run's topics for free, keeps a slow or unreachable
 # Discord out of every MCP call and dashboard save, and retries a failed send
 # on the next tick, because the marker below only advances on success.
@@ -1059,7 +1070,7 @@ def _sweep_notifications_once() -> None:
         settings = pipeline._read_all_settings(con)
         # A finished video in an Auto Pilot project is approved by Auto Pilot,
         # never by a human, and nothing holds that approval back (no block
-        # reason, no in-progress budget). The renderer writes VIDEO_READY at
+        # reason, no in-progress budget). The review thread writes VIDEO_READY at
         # any moment, so one can land between this loop's Auto Pilot pass and
         # this sweep; announcing it would ask a human to approve a video that
         # is approved seconds later. Skipped, not marked: if Auto Pilot is
@@ -1311,6 +1322,147 @@ def _flag_stalled(row: dict, comment: str) -> bool:
     return True
 
 
+# ── Render backstops and the review thread (TMDEV-189) ──────────────────────
+#
+# A renderer holds the video it claimed by a lease (renderers.LEASE_SECS) that
+# each of its heartbeats extends. One that stops heartbeating — a host switched
+# off, a network gone, a container killed — lets the lease run out, and this
+# sweep re-queues the video, counting a render retry exactly as a renderer
+# restart always has. An uploaded render is never touched: it is the review
+# thread's, and re-rendering it would throw a finished render away. A RENDERING
+# row with no renderer at all is one a renderer from before the gateway was
+# rendering when the install was upgraded.
+
+def _sweep_render_leases() -> None:
+    """One lease pass. Never raises — see _sweep_retention."""
+    try:
+        _sweep_render_leases_once()
+    except Exception:  # noqa: BLE001 - see _sweep_retention's docstring
+        log.exception("render lease sweep failed")
+
+
+def _sweep_render_leases_once() -> None:
+    now = renderers.now_ts()
+    with db.conn(DB_PATH) as con:
+        rows = [dict(r) for r in con.execute(
+            "SELECT v.id, v.renderer_id, r.name FROM videos v LEFT JOIN renderers r ON r.id = v.renderer_id"
+            " WHERE v.status = 'RENDERING' AND v.render_uploaded_at = ''"
+            "   AND (v.renderer_id = '' OR v.render_lease_until < ?)"
+            " ORDER BY v.updated_at, v.id", (now,)).fetchall()]
+    for row in rows:
+        if row["renderer_id"]:
+            comment = (f"Render lost: {row['name'] or row['renderer_id']} stopped reporting"
+                       " — automatically re-queued.")
+        else:
+            comment = render_results.UPGRADE_COMMENT
+        if render_results.requeue_interrupted(row["id"], comment, renderer_id=row["renderer_id"],
+                                              lease_expired_before=now):
+            log.warning(f"[{row['id']}] {comment}", extra={"video_id": row["id"]})
+
+
+# A GPU-only video (Cartoon 3D, a mascot) is only ever handed to a renderer
+# whose GPU passed its probe. With no such renderer at all it would wait
+# forever, so it fails at once; with one that is merely offline, or needs an
+# upgrade, it waits renderers.GPU_WAIT_SECS from when it was queued, then
+# fails. While some enabled renderer has not probed its GPU yet (the first
+# minutes after an upgrade or a fresh install) nothing is judged on no
+# evidence: the video waits as if a GPU renderer were offline. FAILED is
+# terminal, so the comment names every renderer and its state — it is the only
+# thing the human gets.
+
+def _sweep_gpu_waits() -> None:
+    """One GPU-wait pass. Never raises — see _sweep_retention."""
+    try:
+        _sweep_gpu_waits_once()
+    except Exception:  # noqa: BLE001 - see _sweep_retention's docstring
+        log.exception("GPU wait sweep failed")
+
+
+def _gpu_ready_now(con, now, main) -> bool:
+    """Some renderer could take a GPU video right now: GPU-capable, online
+    and running main's version."""
+    return any(s["enabled"] and s["gpu_verified"] and s["online"] and s["version"] == main
+               for s in renderers.renderer_states(con, now, main))
+
+
+def _sweep_gpu_waits_once() -> None:
+    from tubematic_core.version import version as current_version
+    now = renderers.now_ts()
+    main = current_version()
+    with db.conn(DB_PATH) as con:
+        queued = [dict(r) for r in con.execute(
+            "SELECT id, updated_at, visual_style, resolved_renderer, mascot_id FROM videos"
+            " WHERE status = 'RENDER_QUEUED' AND archived_at IS NULL ORDER BY updated_at, id").fetchall()]
+        if not queued:
+            return
+        for v in queued:
+            v["scene_cartoon"] = render_results.video_scene_is_cartoon3d(v["id"])
+        waiting = [v for v in queued if renderers.requires_gpu(v)]
+        if not waiting:
+            return
+        capable = renderers.gpu_capable_exists(con)
+        unprobed = renderers.gpu_status(con)["status"] == "unknown"
+        ready = _gpu_ready_now(con, now, main)
+        reason = renderers.gpu_unavailable_reason(con, now, main)
+    if ready:
+        return
+    wait_mins = renderers.GPU_WAIT_SECS // 60
+    for v in waiting:
+        what = "is Cartoon 3D" if renderers.video_kind(v) == "cartoon_3d" else "has a mascot"
+        if not capable and not unprobed:
+            why = "and no renderer has a working GPU"
+        else:
+            waited = renderers.age_secs(v["updated_at"], now) or 0
+            if waited <= renderers.GPU_WAIT_SECS:
+                continue
+            why = f"and no renderer with a working GPU came online in the {wait_mins} minutes it waited"
+        comment = (f"Not rendered, moved to FAILED: this video {what}, which renders on the GPU only, {why}. "
+                   f"{reason} Configure or fix the GPU (python onboard.py --step gpu; Test GPU on the "
+                   "dashboard Settings page), or bring the GPU renderer back online, then create the video again.")
+        if db.set_status(DB_PATH, v["id"], "FAILED", only_if="RENDER_QUEUED"):
+            db.add_comment(DB_PATH, v["id"], "agent", _truncate_comment(comment))
+            log.error(f"[{v['id']}] {comment}", extra={"video_id": v["id"]})
+
+
+# The review thread. A row is reviewable once its render is uploaded
+# (render_uploaded_at set) and it is still RENDERING; finish_render always
+# moves it on. Oldest upload first, one at a time: a review is a paid Gemini
+# call that takes minutes, and running several at once would only race them for
+# the same quota. A worker restart mid-review simply reviews again.
+REVIEW_IDLE_SECS = 5
+REVIEW_GAP_SECS = 1
+
+
+def _review_once() -> bool:
+    """Finish the oldest uploaded render, if any. Returns whether one was found."""
+    with db.conn(DB_PATH) as con:
+        row = con.execute(
+            "SELECT id FROM videos WHERE status = 'RENDERING' AND render_uploaded_at != ''"
+            " ORDER BY render_uploaded_at, id LIMIT 1").fetchone()
+    if row is None:
+        return False
+    render_results.finish_render(row["id"])
+    return True
+
+
+def _review_loop() -> None:
+    while True:
+        try:
+            found = _review_once()
+        except Exception:  # noqa: BLE001 - the thread must outlive any one row
+            log.exception("review pass failed")
+            found = False
+        # A short gap even after a review, so a row the database refused to
+        # move on cannot spin this thread.
+        time.sleep(REVIEW_GAP_SECS if found else REVIEW_IDLE_SECS)
+
+
+def _start_review_thread() -> threading.Thread:
+    thread = threading.Thread(target=_review_loop, name="ai-review", daemon=True)
+    thread.start()
+    return thread
+
+
 def main() -> None:
     # Mirrors entrypoint.sh's umask — keeps every file the worker writes into
     # the bind-mounted /output_videos host-writable/deletable.
@@ -1325,10 +1477,12 @@ def main() -> None:
         secrets=pipeline.log_secret_provider(DB_PATH),
     )
     log.info("worker starting")
+    _start_review_thread()
 
     while True:
-        # Every pass is non-blocking. Rendering is tubematic-renderer's
-        # (render_agent.py), so nothing here waits behind a render.
+        # Every pass is non-blocking. Rendering is the renderers' (through the
+        # render gateway), and the AI review runs on its own thread, so
+        # nothing here waits behind a render or a review.
         _poll_publishing_videos()
         # Before the notification sweep, so a checkpoint Auto Pilot approves
         # never also sends a "waiting for you" message. A VIDEO_READY the
@@ -1339,6 +1493,8 @@ def main() -> None:
         _sweep_retention()
         _sweep_notifications()
         _sweep_stalled_voicing()
+        _sweep_render_leases()
+        _sweep_gpu_waits()
         time.sleep(POLL_INTERVAL_SECS)
 
 
