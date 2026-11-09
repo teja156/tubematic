@@ -181,3 +181,76 @@ top of that:
 What a migration means for someone upgrading — that older code may not read the result, and that
 going back needs the pre-upgrade backup — is in
 [Upgrading — Rollback policy](../user-guide/07-upgrading.md#rollback-policy).
+
+---
+
+## `upgrade.py` in detail
+
+The procedure a user follows is in [Upgrading](../user-guide/07-upgrading.md). This section holds the
+detail behind three parts of it.
+
+### The removed-component check
+
+**It also refuses when a generated scene imports the removed `GifFX` component** — any `.tsx`
+under `~/.tubematic-data/scenes/generated/` with a module path (in an `import`, `export …
+from`, dynamic `import()` or `require()`, including `(require)(…)`, `require?.(…)`,
+`require.resolve(…)` and `require.resolveWeak(…)` and their bracket spellings
+(`require["resolve"](…)`), which webpack bundles the same way) that resolves to
+`installed/GifFX`. A method named `require` on another object (`loader.require(…)`) is not told
+apart from webpack's and refuses too, and neither is a call on any other bracket key of `require`
+(`require["cache"](…)`, `require[key](…)`): it refuses when its argument names `GifFX`. It reads the
+scene the way the bundler does, not as a substring search: a small lexer skips comments
+and strings, so an old import kept as a note in a comment or a string does not refuse. Comments between the keyword and the path are skipped, string escapes (`\u0047`,
+`\u{47}`, `\x47`, a line continuation) are decoded, a template string with no `${…}` counts as
+a string, and the path is normalised, so `installed/./GifFX`, `installed//GifFX` or
+`installed/GifFX.tsx` count too; the match is case-sensitive, like module resolution on the
+Linux renderer. An `import()` or `require()` whose argument is computed
+(`"../../installed/" + "GifFX"`, a template with a `${…}`) refuses when its string parts,
+joined, spell `GifFX`: webpack folds constant parts into one path, which then fails the
+bundle, and a computed path naming the component is refused rather than guessed at. That has
+one known cost: a computed path is not resolved, so `import("./" + "GifFX")` refuses even when
+it only names a sibling `./GifFX` of the scene's own (the static `import … from "./GifFX"`
+passes). It is a lexer rather than a TypeScript parser, so it can misread unusual code (code
+taken for JSX). It recognises a generic arrow function's type parameters (`<T,>`,
+`<T extends …>`, `<T = …>`, whatever letter the name starts with), which TSX does not read as
+JSX, and every other misreading errs towards refusing, never towards missing an import: JSX
+text is lexed as code too, in case it was code. Each piece of text runs to the next `<` or `{`,
+which in misread code may sit inside a comment or a bracket key, so a piece that cuts off an
+`import()`/`require()` call, or ends while `import` or `require` still awaits its path or call,
+cannot be judged and refuses. That has a known cost: JSX text whose last word before a tag or a
+`{…}` is `import` or `require` (`<p>The modules you require.</p>`) refuses too. `from` there is
+ordinary prose (`<p>Packets from {src}</p>`) and passes, unless a comment follows it. A comment, template or attribute value that never closes is not one, so what
+follows it is lexed as code; and a stray quote never hides the lines after it.
+You can see which file and why. The renderer compiles every generated scene
+together, so one such file would fail every render on the install, not just its own video. A
+generated scene it cannot read is refused for the same reason: the renderer could not compile it
+either. So is one whose module path holds an escape it cannot decode (an octal escape, or a
+malformed `\x`/`\u`), which TypeScript rejects too. It lists the files; delete them, fix the
+import or the file's permissions, then re-run. A video whose `scene-config.json` names `GifFX` is only warned about: if it is
+rendered again, the renderer skips the scene it cannot load and that overlay is simply left out.
+
+### `--no-stop`
+
+Skips the stop, so containers are recreated one at a time. Only for an upgrade whose migrations you know are additive. Refused while any service token is missing (an upgrade from before 2.0.0): old and new containers would refuse each other's calls. Also refused while migration `0016` is pending: old containers would keep reading the `image_provider` setting it deletes. Also refused while the running `tubematic-renderer` still runs the old combined loop (an upgrade from before 2.1.0), whether or not a `tubematic-worker` container is also there: the old renderer would keep publishing, running Auto Pilot and sending notifications beside the new worker until it is recreated. Without `--no-stop` that upgrade is fine, and creates the worker. Also refused while migration `0019` is pending (an upgrade from before 2.1.0, again): from it on the renderer has no database and claims through the API's render gateway, and an old renderer recreated after the new API would keep claiming straight from the database beside the gateway
+
+### What the containers do on the first start
+
+The example below imagines a release whose one migration, `NNNN`, adds a nullable column.
+
+**What runs.** `upgrade.py` pulls the new images (a source install builds them) while the old stack is still serving, stops the
+stack, and starts it again on the new images. On that start, each of `tubematic-api`, `tubematic-mcp` and `tubematic-worker` calls
+`migrate()` on its own first database touch (`tubematic-renderer` has no database) and sees `NNNN` is not in `schema_migrations`. The
+backup happens *before* any of them takes the write lock, not inside it, so it is normal for **more
+than one** to write `tubematic-before-v2.1.0-<timestamp>.db` into `backups-data` before one of them
+wins the lock and actually applies `NNNN` — the loser(s) get a collision-suffixed name rather than
+overwriting the first. Whichever container gets there first with the lock applies the migration; the
+others then find nothing pending and pass straight through.
+
+**What's preserved.** Everything: every video, comment, setting, job file and rendered mp4. An
+additive migration touches only the schema, never existing rows or files outside the database.
+
+**What you should see afterwards.** `docker compose logs tubematic-api` shows no migration error;
+one or more new files have appeared under `~/.tubematic-data/backups/` (two is the normal case here,
+not a sign something went wrong — see above); existing videos are unchanged and still show their
+prior status; and (in this hypothetical) `videos.thumbnail_url` exists and is empty on every
+pre-existing row, ready for new videos to populate.
