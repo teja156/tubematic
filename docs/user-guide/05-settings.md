@@ -1,7 +1,7 @@
 # Settings
 
 Every runtime knob lives in the `settings` table as a string, and is coerced and validated on the
-way in and out. There are **42 declared keys**, defined by `SETTINGS_SPEC` in
+way in and out. There are **44 declared keys**, defined by `SETTINGS_SPEC` in
 `renderer/api/pipeline.py`.
 
 Three properties are worth stating once, because they explain a lot of the design:

@@ -405,7 +405,7 @@ answers.
 | `TimeZoneProvider.tsx` | Fetches the host's timezone once and provides it via context. See below |
 | `Toast.tsx` | `useToasts()` plus a stack renderer. Success toasts auto-dismiss after 3s; error toasts persist |
 | `SummaryStrip.tsx` | Six stat tiles: Topics Awaiting, Scripts Ready, Videos Ready, In Pipeline, Published, Failed |
-| `StatusBadge.tsx` | Colored dot and label for any of the 15 statuses |
+| `StatusBadge.tsx` | Colored dot and label for any of the 16 statuses |
 | `SectionLabel.tsx` | Section heading rule with an optional count |
 | `RenderersPanel.tsx` | Settings → Rendering's **Renderers** panel. See [The settings page](#the-settings-page). Its rules (the status chip, the GPU verdict, the banner condition) are pure functions in `dashboard/lib/renderers.ts`, so they are unit-tested without React |
 | `UpdateBanner.tsx` | The "newer release available" strip under the top bar, mounted in `app/layout.tsx`. See [Update check](#update-check) |
