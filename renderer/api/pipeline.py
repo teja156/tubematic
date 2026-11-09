@@ -2688,8 +2688,9 @@ def create_pipeline_blueprint() -> Blueprint:
             # The approving PATCH is the last chance to catch a mascot archived
             # since it was seeded or picked: the video is about to be authored
             # against it, and nothing downstream would refuse.
-            if (fields.get("status") == "TOPIC_APPROVED" and row["status"] == "TOPIC_PROPOSED"
-                    and not will_be_cartoon):
+            mascot_guarded = (fields.get("status") == "TOPIC_APPROVED"
+                              and row["status"] == "TOPIC_PROPOSED" and not will_be_cartoon)
+            if mascot_guarded:
                 err = _mascot_approval_error(con, fields.get("mascot_id", stored_mascot))
                 if err:
                     return jsonify({"error": err}), 409
@@ -2753,6 +2754,17 @@ def create_pipeline_blueprint() -> Blueprint:
             frozen_bound = bool(topic_locked or agent_locked or voice_exempt)
             if frozen_bound:
                 where_sql, where_params = " AND status = ?", [row["status"]]
+            # The check above and this UPDATE are two statements, so an archive
+            # committing between them would let the approval through: the
+            # UPDATE repeats it for the mascot the video will hold once it lands
+            # (the one sent, else the stored one). Keep in sync: mcp/server.py's
+            # set_video_status and worker.py's _auto_pilot_approve.
+            if mascot_guarded:
+                if "mascot_id" in fields:
+                    where_sql += " AND " + tmascots.holds_pickable_sql("?")
+                    where_params += [fields["mascot_id"], fields["mascot_id"]]
+                else:
+                    where_sql += " AND " + tmascots.holds_pickable_sql()
             if "agent_id" in fields or fields.get("agent_model"):
                 stored = con.execute(
                     "SELECT agent_id FROM videos WHERE id = ?", (video_id,)
@@ -2832,6 +2844,13 @@ def create_pipeline_blueprint() -> Blueprint:
                         "current": fresh["status"],
                         "expected": row["status"],
                     }), 409
+                if mascot_guarded:
+                    err = _mascot_approval_error(
+                        con, fields["mascot_id"] if "mascot_id" in fields else (
+                            con.execute("SELECT mascot_id FROM videos WHERE id = ?",
+                                        (video_id,)).fetchone()["mascot_id"] or ""))
+                    if err:
+                        return jsonify({"error": err}), 409
                 return jsonify({
                     "error": "This video's agent changed while the request was in flight — "
                              "reload and pick the model again"
@@ -3362,10 +3381,13 @@ def create_pipeline_blueprint() -> Blueprint:
                 if err:
                     return jsonify({"error": err}), 400
             # The default mascot follows the same rule: checked only when it
-            # changes, so one archived since does not block every other edit.
+            # changes, so one archived since, or a GPU gone since, does not
+            # block every other edit. A new one needs a working GPU, as a pick
+            # on a video does. Keep in sync: mcp/server.py's upsert_project.
             mascot_unchanged = prev is not None and (prev["default_mascot_id"] or "") == default_mascot
             if default_mascot not in ("", "none") and not mascot_unchanged:
-                err = _mascot_pick_error(con, default_mascot)
+                err = (_mascot_pick_error(con, default_mascot)
+                       or tmascots.mascot_gpu_error(gpu_status(con)["status"]))
                 if err:
                     return jsonify({"error": err.replace("mascot_id", "default_mascot_id")}), 400
             con.execute(
@@ -3495,12 +3517,13 @@ def create_pipeline_blueprint() -> Blueprint:
             # stores the URL anyway. Refusing on an unreachable Discord would
             # make Settings un-saveable for reasons that have nothing to do
             # with what was typed.
-            # The install's default mascot must be pickable, checked only when it
-            # changes (like the project default) so an unrelated save is never
-            # blocked by one archived since.
+            # The install's default mascot must be pickable and needs a working
+            # GPU, checked only when it changes (like the project default) so an
+            # unrelated save is never blocked by one archived, or a GPU gone, since.
             if coerced.get("default_mascot_id") and \
                     coerced["default_mascot_id"] != current["default_mascot_id"]:
-                err = _mascot_pick_error(con, coerced["default_mascot_id"])
+                err = (_mascot_pick_error(con, coerced["default_mascot_id"])
+                       or tmascots.mascot_gpu_error(gpu_status(con)["status"]))
                 if err:
                     return jsonify({"error": err.replace("mascot_id", "default_mascot_id")}), 400
 

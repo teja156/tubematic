@@ -1785,6 +1785,19 @@ def create_video(
     return result
 
 
+def _approval_mascot_error(con, video_id: str) -> dict | None:
+    """The refusal for approving a topic whose mascot can no longer be used, or
+    None. Shared by set_video_status's check and its lost-race re-check."""
+    held = con.execute("SELECT mascot_id, visual_style FROM videos WHERE id = ?",
+                       (video_id,)).fetchone()
+    if (held and held["visual_style"] != "cartoon_3d" and held["mascot_id"]
+            and _mascot_pick_error(con, held["mascot_id"])):
+        return {"error": f"This video's mascot {held['mascot_id']!r} can no longer be used (it was "
+                         "archived or withdrawn). A human must choose another mascot or none on the "
+                         "dashboard before the topic is approved."}
+    return None
+
+
 @mcp.tool
 def set_video_status(
     video_id: str,
@@ -1831,14 +1844,12 @@ def set_video_status(
         # Approving a topic is the last chance to catch a mascot archived since
         # it was seeded or picked. Keep in sync: renderer/api/pipeline.py's
         # _mascot_approval_error (a Cartoon 3D video has no mascot to check).
-        if new_status == "TOPIC_APPROVED" and row["status"] == "TOPIC_PROPOSED" and not row["archived_at"]:
-            held = con.execute("SELECT mascot_id, visual_style FROM videos WHERE id = ?",
-                               (video_id,)).fetchone()
-            if (held["visual_style"] != "cartoon_3d" and held["mascot_id"]
-                    and _mascot_pick_error(con, held["mascot_id"])):
-                return {"error": f"This video's mascot {held['mascot_id']!r} can no longer be used (it was "
-                                 "archived or withdrawn). A human must choose another mascot or none on the "
-                                 "dashboard before the topic is approved."}
+        mascot_err = None
+        approving = new_status == "TOPIC_APPROVED"
+        if approving and row["status"] == "TOPIC_PROPOSED" and not row["archived_at"]:
+            mascot_err = _approval_mascot_error(con, video_id)
+            if mascot_err:
+                return mascot_err
         # TMDEV-84: an archived row is frozen, as it is in Flask's patch_video.
         # An agent holding an id fetched before a dashboard DELETE or a
         # retention sweep would otherwise move it back into the pipeline —
@@ -1847,13 +1858,20 @@ def set_video_status(
         if row["archived_at"]:
             return _archived_error(video_id, row["archived_at"])
         current = row["status"]
+        # The mascot check above and the UPDATE are two statements, so the
+        # UPDATE repeats it: an archive committing between them must still
+        # stop the approval. Keep in sync: pipeline.py's patch_video.
+        mascot_sql = ""
+        if approving:
+            mascot_sql = (" AND (status != 'TOPIC_PROPOSED' OR COALESCE(visual_style, '') = 'cartoon_3d'"
+                          f" OR {tmascots.holds_pickable_sql()})")
         # The only_if guard is enforced in the UPDATE's own WHERE clause (not
         # a separate SELECT-then-compare) so the check-and-set is atomic —
         # closes the TOCTOU window a double-invocation could otherwise race.
         if only_if_current_status is not None:
             cur = con.execute(
                 "UPDATE videos SET status = ?, updated_at = ? WHERE id = ? AND status = ?"
-                " AND archived_at IS NULL",
+                " AND archived_at IS NULL" + mascot_sql,
                 (new_status, _now(), video_id, only_if_current_status),
             )
             if cur.rowcount == 0:
@@ -1866,16 +1884,24 @@ def set_video_status(
                     "SELECT status, archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
                 if fresh and fresh["archived_at"]:
                     return _archived_error(video_id, fresh["archived_at"])
+                if approving and fresh and fresh["status"] == only_if_current_status == "TOPIC_PROPOSED":
+                    mascot_err = _approval_mascot_error(con, video_id)
+                    if mascot_err:
+                        return mascot_err
                 current = fresh["status"] if fresh else current
                 return {"error": "status_mismatch", "current_status": current, "expected": only_if_current_status}
         else:
             cur = con.execute(
-                "UPDATE videos SET status = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL",
+                "UPDATE videos SET status = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL" + mascot_sql,
                 (new_status, _now(), video_id),
             )
             if cur.rowcount == 0:
                 fresh = con.execute(
                     "SELECT archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
+                if fresh and not fresh["archived_at"]:
+                    mascot_err = _approval_mascot_error(con, video_id)
+                    if mascot_err:
+                        return mascot_err
                 return _archived_error(video_id, fresh["archived_at"] if fresh else None)
     # TMDEV-61: release the scene-work claim once the video leaves the window
     # a claim can legitimately exist in (VOICE_READY, and REVISION_REQUESTED
@@ -2945,7 +2971,8 @@ def upsert_project(
         or the id of an approved, unarchived mascot. Seeds only while the
         renderer's GPU works and never a "cartoon_3d" video, and changing it
         never touches videos already filed. A new id is refused if it cannot
-        be chosen; re-sending the stored one is never refused.
+        be chosen or the renderer's GPU is not working (the error says which);
+        re-sending the stored one is never refused.
     topic_cap: how many topics the domain may ever hold, a whole number from
         25 to 750 (100 when the domain is created). Every video ever filed
         counts, archived and rejected ones included. Once the domain holds
@@ -3021,12 +3048,17 @@ def upsert_project(
             return {"error": f"script_profile_id {default_script_profile_id!r} is not a READY "
                              "script profile"}
         # The default mascot follows the same rule: checked only when it
-        # changes, so one archived since never blocks another edit of the
-        # domain. Keep in sync: renderer/api/pipeline.py's create_project.
+        # changes, so one archived since, or a GPU gone since, never blocks
+        # another edit of the domain. A new one needs a working GPU, as a pick
+        # on a video does. Keep in sync: renderer/api/pipeline.py's create_project.
         if (default_mascot_id not in (None, "", "none")
-                and not (existing and (existing["default_mascot_id"] or "") == default_mascot_id)
-                and (err := _mascot_pick_error(con, default_mascot_id))):
-            return {"error": err.replace("mascot_id", "default_mascot_id")}
+                and not (existing and (existing["default_mascot_id"] or "") == default_mascot_id)):
+            err = _mascot_pick_error(con, default_mascot_id)
+            if err:
+                return {"error": err.replace("mascot_id", "default_mascot_id")}
+            err = tmascots.mascot_gpu_error(_gpu_probe_status())
+            if err:
+                return {"error": err}
         # Only a CHANGE to illustrated is refused without a key; re-sending a
         # stored default is left alone, as in pipeline.py's create_project.
         # Keep in sync: renderer/api/pipeline.py's create_project.
@@ -6072,8 +6104,8 @@ def write_scene_config(video_id: str, config: dict) -> dict:
             as fractions of the frame, scale is 0.4 to 1.2, jump is true or
             false, "on" true walks it in (false walks it off). It starts off
             screen. The mascot reacts to the narration and never speaks,
-            so there is no talk cue. It must stand in view for at least 30 frames
-            (one second) at rest, inside the safe zone (x 60-1020, y 150-1750)
+            so there is no talk cue. It must stand still in view for at least 30 frames
+            (one second) in a row at least once, inside the safe zone (x 60-1020, y 150-1750)
             and clear of the caption band, at rest and while walking (a walk
             on or off across a frame edge is exempt from the safe zone only,
             never from the caption band); a cue that breaks a rule is refused with the reason.

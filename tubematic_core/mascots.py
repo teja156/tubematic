@@ -87,6 +87,15 @@ def pickable(row) -> bool:
     return (_get(row, "approved_version", 0) or 0) > 0 and not _get(row, "archived", 0)
 
 
+def holds_pickable_sql(id_expr: str = "videos.mascot_id") -> str:
+    """An SQL condition: `id_expr` is '' (no mascot) or names a pickable mascot.
+    For the WHERE of a guarded approval UPDATE, so an archive committed after the
+    caller's own check still stops the approval. `id_expr` is a column, or "?"
+    (then bind the id twice)."""
+    return (f"(COALESCE({id_expr}, '') = '' OR EXISTS (SELECT 1 FROM mascots m WHERE m.id = {id_expr}"
+            " AND m.approved_version > 0 AND COALESCE(m.archived, 0) = 0))")
+
+
 def resolve_default(con, project_default: str, install_default: str) -> str:
     """The mascot a new video starts with. "none" means no mascot even if the
     install has a default; "" inherits the install default. A result that is
@@ -190,9 +199,10 @@ CAPTION_TEXT_WIDTH = FRAME_WIDTH - 2 * 60   # Subtitles.tsx lays the text out wi
 CAPTION_WORD_WIDTH_EM = 3.6
 
 
-# The mascot must stand in view (walk-on finished) for this long at least once:
-# a walk-on at the very end of the video would pass the "has an on cue" test
-# without a viewer ever seeing it.
+# The mascot must stand in view (walk-on finished) for this long, unbroken, at
+# least once: a walk-on at the very end of the video would pass the "has an on
+# cue" test without a viewer ever seeing it, and short stops between walks do
+# not add up to a second a viewer sees it stand.
 MIN_REST_FRAMES = FPS
 
 
@@ -343,6 +353,8 @@ def boxes_at_frames(cues, frames) -> dict:
             if s[0] <= t:
                 st = s[1]
         m = _move_at(moves, t)
+        if m is not None or not st["on"]:
+            rest_run = 0
         if m is not None:
             x, y = _move_pos(m, t)
             out[f] = box_at({"x": x, "y": y, "scale": st["scale"]})
@@ -396,13 +408,15 @@ def cue_errors(cues, total_frames: int, subtitles=None) -> list:
             errs.append(why)
 
     si = 0
-    rest_frames = 0
+    rest_run = longest_rest = 0
     for f in range(total_frames):
         t = f / FPS
         while si + 1 < len(states) and states[si + 1][0] <= t:
             si += 1
         _, st, state_cue = states[si]
         m = _move_at(moves, t)
+        if m is not None or not st["on"]:
+            rest_run = 0
         if m is not None:
             x, y = _move_pos(m, t)
             box = box_at({"x": x, "y": y, "scale": st["scale"]})
@@ -419,7 +433,8 @@ def cue_errors(cues, total_frames: int, subtitles=None) -> list:
                        f"y {SAFE_ZONE['top']}-{FRAME_HEIGHT - SAFE_ZONE['bottom']}): a larger scale or a "
                        "position near the edge makes the box too wide, so lower scale or keep x nearer the centre")
         elif st["on"]:
-            rest_frames += 1
+            rest_run += 1
+            longest_rest = max(longest_rest, rest_run)
             box = box_at(st)
             if _hits_band(box, band):
                 report(state_cue, "band", f"the cue at frame {state_cue} puts the mascot over the captions "
@@ -431,8 +446,9 @@ def cue_errors(cues, total_frames: int, subtitles=None) -> list:
                        f"x {SAFE_ZONE['left']}-{FRAME_WIDTH - SAFE_ZONE['right']}, "
                        f"y {SAFE_ZONE['top']}-{FRAME_HEIGHT - SAFE_ZONE['bottom']}): move x or y toward the "
                        "centre, or lower scale")
-    if rest_frames < MIN_REST_FRAMES:
-        errs.append(f"the mascot is not on screen long enough: it must stand in view for at least "
-                    f"{MIN_REST_FRAMES} frames (1 second) after walking on, which takes 0.5-3.2 seconds. "
-                    "Bring it on earlier")
+    if longest_rest < MIN_REST_FRAMES:
+        errs.append(f"the mascot is not on screen long enough: it must stand still in view for at least "
+                    f"{MIN_REST_FRAMES} frames (1 second) in a row at least once, counted after walking on "
+                    "(which takes 0.5-3.2 seconds) and broken by any walk. Bring it on earlier, or leave "
+                    "longer between its moves")
     return errs

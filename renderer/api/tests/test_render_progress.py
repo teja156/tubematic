@@ -339,6 +339,112 @@ def test_a_mascot_version_with_no_code_fails_with_a_comment(db_path, monkeypatch
     assert "has no version 3" in comments[-1]
 
 
+# ── A GPU-only video whose render fails: the GPU is tested before the agent is told ─
+
+def _failed_proc():
+    proc = _exited()
+    proc.stderr = io.StringIO("Error: WebGL context lost\n")
+    proc.returncode = 1
+    return proc
+
+
+def _probe_answers(db_path, monkeypatch, working):
+    """A probe that records the video's status when it ran, then answers."""
+    seen = []
+
+    def probe(reason):
+        seen.append((reason, _video(db_path)[0]["status"]))
+        _store_probe(db_path, {"configured": True, "ok": working,
+                               "error": "" if working else "Chromium is rendering on another device: SwiftShader"})
+        monkeypatch.setattr(worker, "_gpu_verified", working)
+        return {}
+    return seen, probe
+
+
+def _assert_failed_for_the_gpu(db_path, seen, what):
+    assert seen and seen[0][1] == "RENDERING"          # tested before the status moved
+    video, comments = _video(db_path)
+    assert video["status"] == "FAILED"
+    assert video["render_fail_count"] == 0             # no retry spent, no agent handed it
+    assert f"{what}, which renders on the GPU only" in comments[-1]
+    assert "not_usable" in comments[-1] and "SwiftShader" in comments[-1]
+    assert "Test GPU" in comments[-1] and "--step gpu" in comments[-1]
+    assert comments[-1].startswith("Render failed, moved to FAILED")
+    assert len(comments) == 1
+
+
+def test_a_mascot_render_that_fails_on_a_gpu_that_stopped_working_goes_straight_to_failed(db_path, monkeypatch, tmp_path):
+    _mascot_job(tmp_path, monkeypatch, db_path)
+    _working_gpu(db_path, monkeypatch)
+    seen, probe = _probe_answers(db_path, monkeypatch, working=False)
+    with mock.patch("subprocess.Popen", return_value=_failed_proc()), \
+         mock.patch.object(worker, "_run_gpu_probe", side_effect=probe), \
+         mock.patch.object(worker, "_handle_render_failure") as handled:
+        worker._stage_and_render("vid-1")
+    handled.assert_not_called()
+    assert seen[0][0] == "a render on the GPU failed"
+    _assert_failed_for_the_gpu(db_path, seen, "has a mascot")
+
+
+def test_a_mascot_render_that_hangs_on_a_gpu_that_stopped_working_goes_straight_to_failed(db_path, monkeypatch, tmp_path):
+    _mascot_job(tmp_path, monkeypatch, db_path)
+    _working_gpu(db_path, monkeypatch)
+    seen, probe = _probe_answers(db_path, monkeypatch, working=False)
+    with mock.patch("subprocess.Popen", return_value=_exited()), \
+         mock.patch.object(worker, "_wait_for_render", return_value=("", "", "stall")), \
+         mock.patch.object(worker, "_kill_group_and_reap"), \
+         mock.patch.object(worker, "_run_gpu_probe", side_effect=probe):
+        worker._stage_and_render("vid-1")
+    _assert_failed_for_the_gpu(db_path, seen, "has a mascot")
+
+
+@pytest.mark.parametrize("outcome", ["failed", "hung"])
+def test_a_cartoon_render_that_fails_on_a_gpu_that_stopped_working_goes_straight_to_failed(db_path, monkeypatch, tmp_path, outcome):
+    _cartoon_job(tmp_path, monkeypatch, db_path)
+    _working_gpu(db_path, monkeypatch)
+    seen, probe = _probe_answers(db_path, monkeypatch, working=False)
+    with mock.patch.object(worker, "_render_cartoon", return_value=(outcome, "segment 1 died")), \
+         mock.patch.object(worker, "_run_gpu_probe", side_effect=probe):
+        worker._stage_and_render("vid-1")
+    assert seen[0][0] == "a Cartoon 3D render on the GPU " + ("stalled" if outcome == "hung" else "failed")
+    _assert_failed_for_the_gpu(db_path, seen, "is Cartoon 3D")
+
+
+@pytest.mark.parametrize("kind", ["mascot", "cartoon"])
+def test_a_gpu_only_render_failing_on_a_gpu_that_still_works_is_the_videos_own_failure(db_path, monkeypatch, tmp_path, kind):
+    """The negative control: the GPU passed its re-test, so the failure goes the usual way."""
+    (_mascot_job if kind == "mascot" else _cartoon_job)(tmp_path, monkeypatch, db_path)
+    _working_gpu(db_path, monkeypatch)
+    seen, probe = _probe_answers(db_path, monkeypatch, working=True)
+    with mock.patch("subprocess.Popen", return_value=_failed_proc()), \
+         mock.patch.object(worker, "_render_cartoon", return_value=("failed", "segment 1 died")), \
+         mock.patch.object(worker, "_run_gpu_probe", side_effect=probe):
+        worker._stage_and_render("vid-1")
+    assert len(seen) == 1
+    video, comments = _video(db_path)
+    assert video["status"] == "REVISION_REQUESTED" and video["render_fail_count"] == 1
+    assert comments[-1].startswith("Render failed:") and "GPU only" not in comments[-1]
+
+
+# ── A Cartoon 3D video holding a mascot: refused, never silently dropped ─────────
+
+def test_a_cartoon_video_that_holds_a_mascot_fails_rather_than_dropping_it(db_path, monkeypatch, tmp_path):
+    from tubematic_core import mascots as tmascots
+    _cartoon_job(tmp_path, monkeypatch, db_path)
+    _working_gpu(db_path, monkeypatch)
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET mascot_id = 'tubi', mascot_version = 1 WHERE id = 'vid-1'")
+    con.commit()
+    con.close()
+    with mock.patch("subprocess.Popen") as popen, mock.patch.object(worker, "_render_cartoon") as cartoon:
+        worker._stage_and_render("vid-1")
+    popen.assert_not_called()
+    cartoon.assert_not_called()
+    video, comments = _video(db_path)
+    assert video["status"] == "FAILED" and video["render_fail_count"] == 0
+    assert tmascots.MASCOT_NOT_ON_CARTOON_3D in comments[-1] and "tubi" in comments[-1]
+
+
 # ── The AI review's contract ───────────────────────────────────────────────────
 
 def test_the_review_is_told_what_cartoon_3d_looks_like():

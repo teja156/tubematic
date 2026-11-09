@@ -855,6 +855,23 @@ def test_a_topic_whose_mascot_was_archived_is_not_approved(env):
     assert len(notes) == 1 and "tubi" in notes[0]
 
 
+def test_an_archive_landing_after_the_check_still_stops_the_approval(env, monkeypatch):
+    """The check and the UPDATE are two statements: the UPDATE's WHERE repeats it."""
+    _auto_pilot(env, {"auto": []})
+    _video(env, "v", "TOPIC_PROPOSED", mascot_id="tubi")
+    real = worker._auto_pilot_block_reason
+
+    def racing(con, video, settings):
+        reason = real(con, video, settings)
+        _sql(env, "UPDATE mascots SET archived = 1 WHERE id = 'tubi'")
+        return reason
+
+    monkeypatch.setattr(worker, "_auto_pilot_block_reason", racing)
+    worker._sweep_auto_pilot()
+    assert _row(env, "v")["status"] == "TOPIC_PROPOSED"
+    assert not any("Approved automatically" in n for n in _comments(env, "v"))
+
+
 def test_a_topic_with_a_usable_mascot_is_approved(env):
     _auto_pilot(env, {"auto": []})
     _video(env, "v", "TOPIC_PROPOSED", mascot_id="tubi")

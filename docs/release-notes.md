@@ -108,10 +108,12 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
 - **Nothing turns on by itself.** Every existing video, domain and setting is unchanged by the upgrade:
   no mascot is chosen anywhere until you choose one.
-- **Mascots need a working GPU.** The pickers are greyed out until the renderer's GPU test passes
-  (Settings → Rendering → Test GPU; see [GPU rendering](user-guide/10-gpu-rendering.md)). A video with
-  a mascot that is approved before its GPU stops working is not rendered on the CPU: it fails with a
-  comment saying why, and is created again once the GPU is back.
+- **Mascots need a working GPU.** The pickers, the default mascots included, are greyed out until the
+  renderer's GPU test passes (Settings → Rendering → Test GPU; see
+  [GPU rendering](user-guide/10-gpu-rendering.md)), and the API refuses a new choice then too. A video
+  with a mascot whose GPU stops working, before or during its render, is not rendered on the CPU or
+  handed back to the agent: it fails with a comment saying why, and is created again once the GPU is
+  back.
 - **Restart open agent sessions after upgrading.** The upgrade redeploys every installed agent's
   skills, which adds the mascot-drawing skill, and re-registers the MCP server, whose tools changed.
   An agent session that was already open keeps the old tools until you restart it.
@@ -120,8 +122,8 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   database is the way back; mascots made since are lost with it.
 - **Cartoon 3D needs a working GPU.** The style is greyed out on the dashboard and refused by the
   API until the renderer's GPU test passes (Settings → Rendering → Test GPU). A Cartoon 3D video
-  approved before its GPU stopped working is not rendered on the CPU: it fails with a comment
-  saying why, and is created again once the GPU is back.
+  whose GPU stops working, before or during its render, is not rendered on the CPU or handed back to
+  the agent: it fails with a comment saying why, and is created again once the GPU is back.
 - **Reinstalling the agent picks up the new skill.** The upgrade redeploys every installed agent's
   skills, so `tubematic-cartoon3d` arrives with it; an agent you install by hand gets it from
   `python3 onboard.py --install-agent <agent>` as usual.

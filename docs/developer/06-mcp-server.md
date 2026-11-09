@@ -131,7 +131,7 @@ description=None, is_curriculum_seed=None, status=None, default_visual_style=Non
 default_voice_id=None, default_script_profile_id=None, topic_cap=None, default_mascot_id=None)` ·
 `set_project_status(project_id, status)`
 
-`default_mascot_id` is `""` (inherit the install's default mascot), `"none"` (no mascot even if the install has a default) or an approved, unarchived mascot; like the other defaults it is checked only when it changes.
+`default_mascot_id` is `""` (inherit the install's default mascot), `"none"` (no mascot even if the install has a default) or an approved, unarchived mascot; like the other defaults it is checked only when it changes, and a changed id is also refused while the renderer's GPU is not `working`.
 
 Every project these return carries two derived fields, never stored: `topic_count` (every video
 ever filed into it, archived and rejected included) and `expired` (`topic_count >= topic_cap`). An

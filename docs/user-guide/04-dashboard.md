@@ -211,6 +211,10 @@ You choose a mascot at three levels, each overriding the one before:
 1. **Settings → Rendering → Default mascot**: the install-wide default. Empty means none.
 2. **Topics**: each domain's **default mascot**. *Use install default* follows level 1, *None* means no
    mascot in this domain even when the install has a default.
+
+A default can only be set to a mascot while the renderer's GPU works (the API refuses it otherwise,
+as the dashboard's greyed pickers do). One set earlier stays set if the GPU goes, but seeds nothing
+until the GPU works again.
 3. **The topic checkpoint**: a mascot picker beside the other choices when you approve a topic. It is
    fixed once the topic is approved.
 

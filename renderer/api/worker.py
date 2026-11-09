@@ -1342,11 +1342,14 @@ def _auto_pilot_approve(settings: dict, config: dict, room=None) -> None:
                                 f"Auto Pilot did not approve this {what}: {reason}"), now))
                 continue
             # The same writes a dashboard approval makes (patch_video), under
-            # the same guard: a human who acted first wins, and an archived
-            # video is never moved.
+            # the same guard: a human who acted first wins, an archived video
+            # is never moved, and a topic's mascot archived since the check
+            # above stops it (the next pass says why).
             approved = con.execute(
                 "UPDATE videos SET status = ?, updated_at = ?, agent_no_progress_count = 0,"
-                " agent_stuck_at = NULL WHERE id = ? AND status = ? AND archived_at IS NULL",
+                " agent_stuck_at = NULL WHERE id = ? AND status = ? AND archived_at IS NULL"
+                " AND (status != 'TOPIC_PROPOSED' OR COALESCE(visual_style, '') = 'cartoon_3d'"
+                f" OR {tmascots.holds_pickable_sql()})",
                 (new_status, now, video_id, status)).rowcount
             if approved:
                 con.execute(
@@ -2173,24 +2176,24 @@ def _stage_and_render(video_id: str) -> None:
     cartoon = (_scene_config_is_cartoon3d(scene_config_path)
                or (row["visual_style"] or "") == "cartoon_3d"
                or (row["resolved_renderer"] or "") == "cartoon_3d")
-    # A Cartoon 3D video never carries a mascot (the API clears it); a stray
-    # id on one is ignored rather than drawn over the 3D world.
-    mascot_id = "" if cartoon else (row["mascot_id"] or "")
+    # A Cartoon 3D video never carries a mascot: the API and the MCP server
+    # refuse the pair and clear the mascot on a switch to the style. One that
+    # holds both anyway is refused here too, rather than rendered without the
+    # mascot a human chose. Neither a requeue nor the agent can fix it.
+    mascot_id = row["mascot_id"] or ""
+    if cartoon and mascot_id:
+        db.add_comment(DB_PATH, video_id, "agent", _truncate_comment(
+            f"Not rendered, moved to FAILED: this video is Cartoon 3D and also holds the mascot "
+            f"{mascot_id!r}. {tmascots.MASCOT_NOT_ON_CARTOON_3D} Create the video again."))
+        db.set_status(DB_PATH, video_id, "FAILED", only_if="RENDERING")
+        return
     needs_gpu = cartoon or bool(mascot_id)
     if needs_gpu and not _render_on_gpu():
         if pipeline.gpu_probe_status(_setting("gpu_probe_result", "")) == "unknown":
             _run_gpu_probe(reason="a Cartoon 3D video needs the GPU" if cartoon
                            else "a mascot video needs the GPU")
     if needs_gpu and not _render_on_gpu():
-        probe = json.loads(_setting("gpu_probe_result", "") or "null") or {}
-        status = pipeline.gpu_probe_status(_setting("gpu_probe_result", ""))
-        why = (probe.get("error") or "").strip() if isinstance(probe, dict) else ""
-        db.add_comment(DB_PATH, video_id, "agent", _truncate_comment(
-            f"Not rendered, moved to FAILED: this video {'is Cartoon 3D' if cartoon else 'has a mascot'}, "
-            f"which renders on the GPU only, and the renderer's GPU is {status}" + (f" — {why}" if why else "") +
-            ". Configure or fix the GPU (python onboard.py --step gpu; Test GPU on the dashboard "
-            "Settings page), then create the video again."))
-        db.set_status(DB_PATH, video_id, "FAILED", only_if="RENDERING")
+        _fail_without_gpu(video_id, cartoon)
         return
 
     render_props = {
@@ -2244,12 +2247,12 @@ def _stage_and_render(video_id: str) -> None:
             # than bounce to the agent, and re-test a GPU that may have wedged
             what = f"Render stalled: {detail}"
             log.error(f"[{video_id}] {what}", extra={"video_id": video_id})
-            _handle_render_failure(video_id, what, retry_status="RENDER_QUEUED")
+            _after_render_failure(video_id, what, "RENDER_QUEUED", on_gpu, needs_gpu, cartoon,
+                                  "a Cartoon 3D render on the GPU stalled")
         else:
             log.error(f"[{video_id}] render failed: {detail}", extra={"video_id": video_id})
-            _handle_render_failure(video_id, detail)
-        if on_gpu:
-            _run_gpu_probe(reason="a Cartoon 3D render on the GPU " + ("stalled" if outcome == "hung" else "failed"))
+            _after_render_failure(video_id, detail, "REVISION_REQUESTED", on_gpu, needs_gpu, cartoon,
+                                  "a Cartoon 3D render on the GPU failed")
         return
     try:
         # start_new_session=True puts npx and everything it spawns (node,
@@ -2292,12 +2295,11 @@ def _stage_and_render(video_id: str) -> None:
         # A hung Chromium is environmental, not something the agent can fix
         # by revising the scene — auto-retry via RENDER_QUEUED (same terminal
         # choice as the crash-reconcile path above) rather than bouncing to
-        # the agent as REVISION_REQUESTED.
-        _handle_render_failure(video_id, what, retry_status="RENDER_QUEUED")
-        if on_gpu:
-            # Same reason as a failed render below: if the GPU hung, the retry
-            # this just queued should run on the CPU.
-            _run_gpu_probe(reason="a render on the GPU timed out")
+        # the agent as REVISION_REQUESTED. The GPU is re-tested for the same
+        # reason as a failed render below: if it hung, the retry should not
+        # use it.
+        _after_render_failure(video_id, what, "RENDER_QUEUED", on_gpu, needs_gpu, cartoon,
+                              "a render on the GPU timed out")
         return
 
     if result.returncode == 0:
@@ -2306,12 +2308,52 @@ def _stage_and_render(video_id: str) -> None:
     else:
         error_msg = result.stderr or result.stdout
         log.error(f"[{video_id}] render failed: {error_msg}", extra={"video_id": video_id})
-        _handle_render_failure(video_id, error_msg)
-        if on_gpu:
-            # A GPU that stopped working (a driver update, a reset) fails every
-            # render after it. Re-testing now means the next one falls back to
-            # the CPU instead of failing the same way.
-            _run_gpu_probe(reason="a render on the GPU failed")
+        # A GPU that stopped working (a driver update, a reset) fails every
+        # render after it. Re-testing now means the next one falls back to the
+        # CPU instead of failing the same way.
+        _after_render_failure(video_id, error_msg, "REVISION_REQUESTED", on_gpu, needs_gpu, cartoon,
+                              "a render on the GPU failed")
+
+
+def _fail_without_gpu(video_id: str, cartoon: bool, render_error: str | None = None) -> None:
+    """Move a GPU-only video (Cartoon 3D, or one with a mascot) straight to
+    FAILED because the renderer's GPU is not working, with the live probe
+    status and its error. Before a render, or after one failed and the re-test
+    found the GPU gone (`render_error` is then that render's error, maybe "")."""
+    probe = json.loads(_setting("gpu_probe_result", "") or "null") or {}
+    status = pipeline.gpu_probe_status(_setting("gpu_probe_result", ""))
+    why = (probe.get("error") or "").strip() if isinstance(probe, dict) else ""
+    lead = ("Not rendered, moved to FAILED" if render_error is None else "Render failed, moved to FAILED")
+    render_error = (render_error or "").strip()
+    db.add_comment(DB_PATH, video_id, "agent", _truncate_comment(
+        f"{lead}: this video {'is Cartoon 3D' if cartoon else 'has a mascot'}, "
+        f"which renders on the GPU only, and the renderer's GPU is {status}" + (f" — {why}" if why else "") +
+        ". Configure or fix the GPU (python onboard.py --step gpu; Test GPU on the dashboard "
+        "Settings page), then create the video again." +
+        (f" The render's error: {render_error}" if render_error else "")))
+    db.set_status(DB_PATH, video_id, "FAILED", only_if="RENDERING")
+
+
+def _after_render_failure(video_id: str, error_msg: str, retry_status: str, on_gpu: bool,
+                          needs_gpu: bool, cartoon: bool, probe_reason: str) -> None:
+    """Handle a render that failed or hung, re-testing a GPU it ran on.
+
+    A GPU-only video's GPU is re-tested FIRST: if it no longer works, neither a
+    requeue nor the agent can bring it back, so the video goes straight to
+    FAILED with the GPU's status, spending no retry and no agent session. If it
+    still works the failure is the video's own and takes the usual path. Any
+    other video keeps its order: the status moves first, then the re-test
+    decides whether the retry runs on the GPU or the CPU."""
+    if needs_gpu and on_gpu:
+        _run_gpu_probe(reason=probe_reason)
+        if not _render_on_gpu():
+            _fail_without_gpu(video_id, cartoon, error_msg or "")
+            return
+        _handle_render_failure(video_id, error_msg, retry_status=retry_status)
+        return
+    _handle_render_failure(video_id, error_msg, retry_status=retry_status)
+    if on_gpu:
+        _run_gpu_probe(reason=probe_reason)
 
 
 def _handle_render_success(video_id: str, output_path: str) -> None:

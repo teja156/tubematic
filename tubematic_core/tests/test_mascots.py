@@ -57,6 +57,19 @@ def test_pickable():
     assert not mascots.pickable({"approved_version": 2, "archived": 1})
 
 
+def test_holds_pickable_sql_agrees_with_pickable():
+    con = _con()
+    con.executemany("INSERT INTO mascots (id, approved_version, archived) VALUES (?, ?, ?)",
+                    [("ok", 1, 0), ("wip", 0, 0), ("gone", 2, 1)])
+    con.execute("CREATE TABLE videos (id TEXT, mascot_id TEXT)")
+    con.executemany("INSERT INTO videos VALUES (?, ?)",
+                    [("a", ""), ("b", "ok"), ("c", "wip"), ("d", "gone"), ("e", "ghost"), ("f", None)])
+    held = {r[0] for r in con.execute(f"SELECT id FROM videos WHERE {mascots.holds_pickable_sql()}")}
+    assert held == {"a", "b", "f"}
+    bound = mascots.holds_pickable_sql("?")
+    assert [con.execute(f"SELECT {bound}", (m, m)).fetchone()[0] for m in ("", "ok", "gone")] == [1, 1, 0]
+
+
 def test_resolve_default_none_empty_and_unpickable():
     con = _con()
     con.execute("INSERT INTO mascots (id, approved_version, archived) VALUES ('ok', 1, 0), ('arch', 1, 1), ('new', 0, 0)")
@@ -273,6 +286,17 @@ def test_coming_on_screen_means_standing_in_view_not_just_an_on_cue():
     assert _errs([{"frame": 299, "on": True, "x": .5, "y": .5}], total=300)
     assert _errs([{"frame": 0, "on": True, "x": .5, "y": .5}], total=300) == []
     assert _errs([{"frame": 0, "on": True, "x": .5, "y": .5}], total=30)   # walk-on eats the whole video
+
+
+def test_the_second_in_view_must_be_one_unbroken_stretch_not_a_sum():
+    # The walk-on from x 0.5 ends at frame 80.6, so this stands still for frames 81-95 and,
+    # after a 15-frame step, 111-125: 30 frames at rest in all, never 30 in a row.
+    split = [{"frame": 0, "on": True, "x": .5, "y": .5}, {"frame": 96, "x": .55}, {"frame": 126, "on": False}]
+    errs = _errs(split)
+    assert any("not on screen long enough" in e and "in a row" in e for e in errs)
+    # standing still for frames 81-110, then walking off: exactly one unbroken second
+    assert _errs([{"frame": 0, "on": True, "x": .5, "y": .5}, {"frame": 111, "on": False}]) == []
+    assert _errs([{"frame": 0, "on": True, "x": .5, "y": .5}, {"frame": 110, "on": False}])
 
 
 def test_errors_name_the_cue_that_caused_them_not_a_later_one():

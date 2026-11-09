@@ -403,6 +403,7 @@ def test_a_symlinked_builtin_sheet_is_refused(client, db_path, tmp_path, monkeyp
 
 def test_default_mascot_id_is_a_setting_that_must_be_pickable(client, db_path):
     assert len(pipeline.SETTINGS_SPEC) == 42
+    _gpu(db_path, "working")
     assert client.get("/settings").get_json()["default_mascot_id"] == ""
     _mascot(db_path, "wip", status="PENDING", approved=0)
     for bad in ("wip", "ghost", "none"):
@@ -410,6 +411,24 @@ def test_default_mascot_id_is_a_setting_that_must_be_pickable(client, db_path):
         assert r.status_code == 400, bad
     assert client.post("/settings", json={"default_mascot_id": "tubi"}).status_code == 200
     assert client.get("/settings").get_json()["default_mascot_id"] == "tubi"
+    assert client.post("/settings", json={"default_mascot_id": ""}).status_code == 200
+
+
+def test_a_new_install_default_needs_a_working_gpu_and_an_unchanged_one_does_not(client, db_path):
+    """The same rule as picking a mascot on a video: checked on change only, so
+    a settings save re-sending the stored default is never refused for a GPU
+    that has gone since."""
+    _gpu(db_path, "not_usable")
+    r = client.post("/settings", json={"default_mascot_id": "tubi"})
+    assert r.status_code == 400 and r.get_json()["error"] == tm.MASCOT_NEEDS_GPU
+    _gpu(db_path, None)
+    r = client.post("/settings", json={"default_mascot_id": "tubi"})
+    assert r.status_code == 400 and r.get_json()["error"] == tm.MASCOT_GPU_UNKNOWN
+    _gpu(db_path, "working")
+    assert client.post("/settings", json={"default_mascot_id": "tubi"}).status_code == 200
+    _gpu(db_path, "not_configured")
+    assert client.post("/settings", json={"default_mascot_id": "tubi",
+                                          "pipeline_paused": False}).status_code == 200
     assert client.post("/settings", json={"default_mascot_id": ""}).status_code == 200
 
 
@@ -423,13 +442,30 @@ def test_a_stored_default_that_stopped_being_pickable_reads_as_none(client, db_p
 
 # ---------- the project default ----------
 
-def test_project_default_is_stored_returned_and_resets_when_omitted(client):
+def test_project_default_is_stored_returned_and_resets_when_omitted(client, db_path):
+    _gpu(db_path, "working")
     assert _project(client, default_mascot_id="tubi").get_json()["default_mascot_id"] == "tubi"
     assert _project(client, default_mascot_id="none").get_json()["default_mascot_id"] == "none"
     assert _project(client).get_json()["default_mascot_id"] == ""      # full replace
 
 
+def test_a_new_project_default_needs_a_working_gpu_and_an_unchanged_one_does_not(client, db_path):
+    _gpu(db_path, "not_usable")
+    r = _project(client, default_mascot_id="tubi")
+    assert r.status_code == 400 and r.get_json()["error"] == tm.MASCOT_NEEDS_GPU
+    _gpu(db_path, None)
+    assert _project(client, default_mascot_id="tubi").get_json()["error"] == tm.MASCOT_GPU_UNKNOWN
+    for always in ("none", ""):
+        assert _project(client, default_mascot_id=always).status_code == 201, always
+    _gpu(db_path, "working")
+    assert _project(client, default_mascot_id="tubi").status_code == 201
+    _gpu(db_path, "not_configured")
+    # POST /projects is a full replace: an edit re-sends the stored default
+    assert _project(client, default_mascot_id="tubi", name="Renamed").status_code == 201
+
+
 def test_project_default_must_be_pickable_on_change_only(client, db_path):
+    _gpu(db_path, "working")
     _mascot(db_path, "wip", status="PENDING", approved=0)
     for bad in ("wip", "ghost", 4):
         assert _project(client, default_mascot_id=bad).status_code == 400, bad
@@ -457,6 +493,7 @@ def test_seeding_covers_every_strategy_and_inherits_the_install_default(client, 
 
 
 def test_no_seed_without_a_working_gpu(client, db_path):
+    _gpu(db_path, "working")                 # set while it worked, then the GPU went
     _project(client, default_mascot_id="tubi")
     for status in ("unknown", "not_usable", "not_configured"):
         _gpu(db_path, status)
@@ -609,6 +646,51 @@ def test_approving_with_a_seeded_then_archived_mascot_checks_the_stored_value(cl
     vid = _video(client).get_json()["id"]
     client.delete("/mascots/tubi")
     assert client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED"}).status_code == 409
+
+
+def _archive_after_the_check(db_path, monkeypatch, mid):
+    """An archive of `mid` that commits after the approval's own check passed,
+    before its UPDATE: only the UPDATE's own WHERE can still catch it."""
+    real = pipeline._mascot_approval_error
+    fired = []
+
+    def racing(con, mascot_id):
+        err = real(con, mascot_id)
+        if not fired:       # once: a re-check after the UPDATE runs inside its write
+            fired.append(1)
+            _sql(db_path, "UPDATE mascots SET archived = 1 WHERE id = ?", (mid,))
+        return err
+
+    monkeypatch.setattr(pipeline, "_mascot_approval_error", racing)
+
+
+def test_an_archive_landing_after_the_approval_check_still_refuses(client, db_path, monkeypatch):
+    _gpu(db_path, "working")
+    vid = _proposed(client)
+    client.patch(f"/videos/{vid}", json={"mascot_id": "tubi"})
+    _archive_after_the_check(db_path, monkeypatch, "tubi")
+    r = client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED"})
+    assert r.status_code == 409 and "tubi" in r.get_json()["error"]
+    assert "archived" in r.get_json()["error"]
+    assert _sql(db_path, "SELECT status FROM videos WHERE id = ?", (vid,))[0][0] == "TOPIC_PROPOSED"
+
+
+def test_an_archive_racing_an_approval_that_also_picks_the_mascot_refuses(client, db_path, monkeypatch):
+    """The same PATCH sets mascot_id: the guard must test the id it writes."""
+    _gpu(db_path, "working")
+    _mascot(db_path, "moss")
+    vid = _proposed(client)
+    _archive_after_the_check(db_path, monkeypatch, "moss")
+    r = client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED", "mascot_id": "moss"})
+    assert r.status_code == 409 and "moss" in r.get_json()["error"]
+    assert _sql(db_path, "SELECT status, mascot_id FROM videos WHERE id = ?", (vid,))[0] == ("TOPIC_PROPOSED", "")
+
+
+def test_an_approval_with_no_mascot_is_not_held_by_the_guard(client, db_path, monkeypatch):
+    _gpu(db_path, "working")
+    vid = _proposed(client)
+    _archive_after_the_check(db_path, monkeypatch, "tubi")
+    assert client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED"}).status_code == 200
 
 
 # ---------- usage ----------

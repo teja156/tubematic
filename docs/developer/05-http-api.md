@@ -576,11 +576,14 @@ away.
 
 The install default (`default_mascot_id` setting) and a project's `default_mascot_id` take `''`
 (inherit; none at install level), `none` (project only: no mascot even if the install has one) or a
-pickable id, checked only when they change. A new video is seeded from them, for every strategy, only
+pickable id, checked only when they change; a changed id is also `400` while the renderer's GPU is not
+`working`, in the same words as a pick on a video. A new video is seeded from them, for every strategy, only
 while the renderer's GPU is `working` and never on a `cartoon_3d` video. `PATCH /videos/<id>` sets
 `mascot_id` only at `TOPIC_PROPOSED`; a change is refused without a working GPU, for an unpickable
 mascot and on a Cartoon 3D video, switching a video to Cartoon 3D clears it in the same update, and
-the approving `PATCH` is `409` when the video's mascot has since been archived.
+the approving `PATCH` is `409` when the video's mascot has since been archived. That check is repeated
+in the approving `UPDATE`'s own `WHERE` (`tubematic_core/mascots.py::holds_pickable_sql`), so an
+archive that commits between the check and the write still refuses the approval with the same `409`.
 
 | Status | Cause |
 |---|---|

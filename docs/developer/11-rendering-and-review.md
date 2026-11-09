@@ -251,7 +251,8 @@ while the last probe passed (`_render_on_gpu`); otherwise it takes the CPU path.
   and every container start (which is when a GPU change applies) leaves a fresh answer.
 - **It runs again after a GPU render fails or times out.** If the GPU is what broke, the next render
   falls back to the CPU instead of failing the same way. The failed render itself is routed as
-  before.
+  before, except for a GPU-only video (Cartoon 3D, or one with a mascot): its re-test runs first and,
+  if it fails, the video goes to `FAILED` (see [the worker](12-the-worker.md#videos-that-render-on-the-gpu-only)).
 - **It runs on request**: `POST /render/gpu/test` stamps `gpu_probe_requested_at`, and the
   `_sweep_gpu_probe` pass runs a probe when that stamp is newer than the last probe's start. Both
   stamps carry microseconds, because they are compared as strings.

@@ -234,6 +234,30 @@ def test_approving_passes_with_a_usable_mascot_or_none_or_a_cartoon_video(db):
         assert server.set_video_status(vid, "TOPIC_APPROVED")["status"] == "TOPIC_APPROVED"
 
 
+def test_an_archive_landing_after_the_approval_check_still_refuses(db, monkeypatch):
+    """The check and the UPDATE are two statements: the UPDATE's WHERE repeats it."""
+    _mascot()
+    _video(mascot="moss")
+    real, fired = server._mascot_pick_error, []
+
+    def racing(con, mascot_id):
+        err = real(con, mascot_id)
+        if not fired:
+            fired.append(1)
+            with server._conn() as other:
+                other.execute("UPDATE mascots SET archived = 1 WHERE id = 'moss'")
+        return err
+
+    monkeypatch.setattr(server, "_mascot_pick_error", racing)
+    for only_if in (None, "TOPIC_PROPOSED"):
+        fired.clear()
+        with server._conn() as con:
+            con.execute("UPDATE mascots SET archived = 0")
+        out = server.set_video_status(VID, "TOPIC_APPROVED", only_if_current_status=only_if)
+        assert "can no longer be used" in out.get("error", ""), out
+        assert _col("status") == "TOPIC_PROPOSED"
+
+
 # ── get_video / get_pipeline_status ─────────────────────────────────────────
 
 def test_get_video_names_the_mascot_and_the_version_it_will_use(db):
@@ -260,6 +284,7 @@ def test_get_video_has_no_mascot_by_default_and_reports_the_gpu(db):
 
 def test_a_project_default_mascot_is_checked_only_on_change(db):
     _mascot()
+    _gpu()
     assert "error" not in server.upsert_project("d1", "D", default_mascot_id="moss")
     with server._conn() as con:
         con.execute("UPDATE mascots SET archived = 1 WHERE id = 'moss'")
@@ -267,8 +292,24 @@ def test_a_project_default_mascot_is_checked_only_on_change(db):
     assert "that can be chosen" in server.upsert_project("d2", "New", default_mascot_id="moss")["error"]
 
 
+def test_a_new_project_default_mascot_needs_a_working_gpu_and_an_unchanged_one_does_not(db):
+    """Matches the dashboard, which greys the picker without a working GPU."""
+    _mascot()
+    _gpu("not_usable")
+    assert server.upsert_project("d1", "D", default_mascot_id="moss") == {"error": tmascots.MASCOT_NEEDS_GPU}
+    _gpu("unknown")
+    assert server.upsert_project("d1", "D", default_mascot_id="moss") == {"error": tmascots.MASCOT_GPU_UNKNOWN}
+    for always in ("none", ""):
+        assert "error" not in server.upsert_project("d1", "D", default_mascot_id=always), always
+    _gpu()
+    assert "error" not in server.upsert_project("d1", "D", default_mascot_id="moss")
+    _gpu("not_configured")
+    assert "error" not in server.upsert_project("d1", "D renamed", default_mascot_id="moss")
+
+
 def test_a_project_default_can_be_none_or_blank_and_omission_keeps_it(db):
     _mascot()
+    _gpu()
     out = server.upsert_project("d1", "D", default_mascot_id="moss")
     assert out["default_mascot_id"] == "moss"
     assert server.upsert_project("d1", "D2")["default_mascot_id"] == "moss"

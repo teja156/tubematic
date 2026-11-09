@@ -82,12 +82,21 @@ worker runs the GPU test first when the result is still unknown, and otherwise m
 a requeue would fail the same way, and sending it to `REVISION_REQUESTED` would hand it to an agent
 that cannot repair a GPU. The video is created again once the GPU works.
 
+The same holds when the GPU stops working **during** such a render. When a GPU-only render fails,
+stalls or times out, the worker re-tests the GPU *before* it routes the failure
+(`worker.py::_after_render_failure`). If the GPU no longer passes, the video goes straight to `FAILED`
+with the same comment plus the render's error, again without spending a retry or an agent session. If
+it still passes, the failure is the video's own and takes the usual path. An ordinary video keeps the
+older order (route the failure, then re-test), since its retry can fall back to the CPU.
+
 A mascot video is rendered with the version pinned in `videos.mascot_version`, never the mascot's
 current approved version. The worker reads that version's code (`tubematic_core/mascots.py::code_for`),
 stages it as `public/<video_id>/mascot.js` and passes `mascotPath` as a render prop (see
 [the Remotion project](09-remotion-project.md#the-mascot-layer)). A version of `0` (never pinned) or a
 version with no code fails the video the same way, with a comment saying the drawing code cannot be
-read. A mascot recorded on a Cartoon 3D video is ignored rather than drawn over the 3D world.
+read. A Cartoon 3D video that also holds a mascot (the API and the MCP server refuse the pair, so only
+a row written some other way can) goes to `FAILED` the same way, with `MASCOT_NOT_ON_CARTOON_3D` in its
+comment, rather than rendering without the mascot a human chose.
 
 ### Segmented Cartoon 3D renders
 

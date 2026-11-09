@@ -695,8 +695,9 @@ How to direct it:
   on, and walks off when you turn it off (an `on` cue). It does not have to be there for the whole video: a
   mascot that arrives at the hook, reacts at the turns and leaves before the closing line can read better
   than one that is always there.
-- **At least one on-screen stretch of at least one second** after the walk-on has finished. A mascot that
-  arrives at the very end, or that is only ever walking, is never seen standing; validation refuses it.
+- **At least one on-screen stretch of at least one second** after the walk-on has finished, standing still in
+  one unbroken run: short stops between walks do not add up. A mascot that arrives at the very end, or that
+  is only ever walking, is never seen standing; validation refuses it.
 - **Keep it out of the caption band, and inside the safe zone** (the same safe zone as text). Only the safe
   zone is waived, and only while it walks across a frame edge; the caption band is never waived. Where it stands must not cover the burned-in captions or any text your scenes show at
   that moment; the validator names the frame when it does. Put it in a corner or a margin the scene leaves

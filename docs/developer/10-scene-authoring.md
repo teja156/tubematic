@@ -383,8 +383,9 @@ sentence per problem. It plays the track the way `driver.js` will, frame by fram
   so large many-word captions get a taller band than the default two lines.
 - **The safe zone.** At rest, and during a walk that does not cross an edge, the box must lie inside the
   same safe zone scenes use (x 60 to 1020, y 150 to 1750; see [Safe zones](09-remotion-project.md#safe-zones)).
-- **At least `MIN_REST_FRAMES` (one second) at rest on screen**, so a walk-on in the last second
-  of the video, which a viewer would never see, does not count as a mascot.
+- **At least `MIN_REST_FRAMES` (one second) at rest on screen, in one unbroken run**, so a walk-on in the
+  last second of the video, which a viewer would never see, does not count as a mascot. Short stops between
+  walks are not added together: a walk resets the count.
 - That at least one cue brings it on, that no two cues share a frame, and that every field is of the
   right type and within range.
 
