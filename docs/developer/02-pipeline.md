@@ -10,7 +10,7 @@ Three parties move a video, and the split between them is the most important thi
 |---|---|
 | **Human** | Approve or reject at the three checkpoints. Nothing else is required of you |
 | **AI agent** | Everything between checkpoints — research, scripting, voicing, scene authoring, submitting a render |
-| **Renderer and worker** | Rendering and AI review (the renderer); publishing, Auto Pilot and the timed sweeps (the worker). Autonomously. Never asks and never waits |
+| **Renderer and worker** | Rendering (the renderer, through the API's render gateway); the AI review, publishing, Auto Pilot and the timed sweeps (the worker). Autonomously. Never asks and never waits |
 
 ---
 
@@ -40,7 +40,7 @@ flowchart TD
     RQ -->|renderer claims| RN
     RN -->|render ok + review clean| VRD
     RN -->|render crash / review findings| RR
-    RN -->|timeout| RQ
+    RN -->|timeout, or renderer lost| RQ
     RN -->|retry cap exceeded| F
     VRD -->|approve| VA
     VA -->|"you publish, or Auto Pilot does"| PB[PUBLISHING]:::auto
@@ -76,7 +76,7 @@ flowchart TD
 | `VOICING` | Agent | Approved for voicing. The agent will call ElevenLabs |
 | `VOICE_READY` | Agent | Audio and `timeline.json` exist. The agent authors scenes |
 | `RENDER_QUEUED` | Renderer | Waiting for the renderer. Not agent-actionable |
-| `RENDERING` | Renderer | Being rendered |
+| `RENDERING` | Renderer, then the worker | Being rendered, then — once the mp4 is uploaded — waiting for the AI review |
 | `VIDEO_READY` | Human | A finished mp4 exists, and the reviewer found nothing. Awaiting sign-off |
 | `VIDEO_APPROVED` | Human | You signed it off. Publishing, if enabled, starts here — by hand, unless the video's project is on [Auto Pilot](14-publishing.md#auto-pilot) |
 | `SCHEDULED` | Worker | Uploaded; the publishing service holds the post until the time you picked. You can cancel it back to `VIDEO_APPROVED` |
@@ -177,7 +177,7 @@ are set. The keys are listed under [Settings](../user-guide/05-settings.md#notif
 **Announcing is a sweep in the [worker](12-the-worker.md), not a send at each write site.** The
 three statuses are written by three different processes — `TOPIC_PROPOSED` by the MCP server's
 `create_video`, `SCRIPT_READY` by either the MCP server or the Flask `PATCH`, `VIDEO_READY` by the
-renderer — and the worker's poll loop is the only place that sees all three. That choice also buys
+worker's own review thread — and the worker's poll loop is the only place that sees all three. That choice also buys
 three things a per-call-site send could not:
 
 - **Bundling.** A research run files several topics seconds apart. The sweep holds proposals back

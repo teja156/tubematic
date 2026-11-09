@@ -122,8 +122,9 @@ the steps in the order that keeps your data safe:
    still running against it. An added column survives that; a rename or a drop does not — the
    same reason [Rollback policy](#rollback-policy) stops the containers before restoring.
 5. Starts the stack: creates any missing data directories, re-points Docker volumes whose recorded
-   device has moved, creates any missing service token in `~/.tubematic-data/secrets/` (an existing
-   one is never replaced), runs `up -d`, and waits for the health checks. The containers apply pending
+   device has moved, creates any missing service token, and the render gateway's TLS key and
+   certificate when either is missing, in `~/.tubematic-data/secrets/` (an existing one is never
+   replaced), runs `up -d`, and waits for the health checks. The containers apply pending
    migrations as they start, backing up first. `upgrade.py` never runs one itself.
 6. Rewrites the cron entry to run this install.
 7. Redeploys each installed agent's skills and commands from this install — the same files
@@ -141,7 +142,7 @@ the steps in the order that keeps your data safe:
 | `--check` | Only the report in step 8, plus the password, the token files, a live check that the MCP server refuses a request without its token and accepts the install's, and each agent's registration. Changes nothing, and works on a half-configured install |
 | `--dry-run` | Shows every step it would take, changes nothing |
 | `--force` | Proceeds even though work is in flight — that work is killed |
-| `--no-stop` | Skips the stop, so containers are recreated one at a time. Only for an upgrade whose migrations you know are additive. Refused while any service token is missing (an upgrade from before 2.0.0): old and new containers would refuse each other's calls. Also refused while migration `0016` is pending: old containers would keep reading the `image_provider` setting it deletes. Also refused while the running `tubematic-renderer` still runs the old combined loop (an upgrade from before 2.1.0), whether or not a `tubematic-worker` container is also there: the old renderer would keep publishing, running Auto Pilot and sending notifications beside the new worker until it is recreated. Without `--no-stop` that upgrade is fine, and creates the worker |
+| `--no-stop` | Skips the stop, so containers are recreated one at a time. Only for an upgrade whose migrations you know are additive. Refused while any service token is missing (an upgrade from before 2.0.0): old and new containers would refuse each other's calls. Also refused while migration `0016` is pending: old containers would keep reading the `image_provider` setting it deletes. Also refused while the running `tubematic-renderer` still runs the old combined loop (an upgrade from before 2.1.0), whether or not a `tubematic-worker` container is also there: the old renderer would keep publishing, running Auto Pilot and sending notifications beside the new worker until it is recreated. Without `--no-stop` that upgrade is fine, and creates the worker. Also refused while migration `0019` is pending (an upgrade from before 2.1.0, again): from it on the renderer has no database and claims through the API's render gateway, and an old renderer recreated after the new API would keep claiming straight from the database beside the gateway |
 | `--install-mode dev\|release` | Overrides the detected install mode |
 
 ### If you installed from a release tarball
@@ -255,8 +256,8 @@ python3 upgrade.py
 ### What happens, either way
 
 **What runs.** `upgrade.py` pulls the new images (a source install builds them) while the old stack is still serving, stops the
-stack, and starts it again on the new images. On that start, each of `tubematic-api`, `tubematic-mcp`, `tubematic-worker` and `tubematic-renderer` calls
-`migrate()` on its own first database touch and sees `NNNN` is not in `schema_migrations`. The
+stack, and starts it again on the new images. On that start, each of `tubematic-api`, `tubematic-mcp` and `tubematic-worker` calls
+`migrate()` on its own first database touch (`tubematic-renderer` has no database) and sees `NNNN` is not in `schema_migrations`. The
 backup happens *before* any of them takes the write lock, not inside it, so it is normal for **more
 than one** to write `tubematic-before-v2.1.0-<timestamp>.db` into `backups-data` before one of them
 wins the lock and actually applies `NNNN` — the loser(s) get a collision-suffixed name rather than

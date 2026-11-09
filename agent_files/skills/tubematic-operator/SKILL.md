@@ -21,7 +21,7 @@ All operations use the `tubematic` MCP server. Tool signatures and return shapes
 | `VOICING` | AI | generate_voice → VOICE_READY |
 | `VOICE_READY` | AI | write scene config, validate_job, submit_render → RENDER_QUEUED |
 | `RENDER_QUEUED` | **AUTO** | renderer claims the job and starts rendering; advances to RENDERING automatically |
-| `RENDERING` | **AUTO** | renderer renders + AI review; advances to VIDEO_READY, REVISION_REQUESTED, or FAILED automatically |
+| `RENDERING` | **AUTO** | renderer renders, then the AI review (when enabled) watches the result; advances to VIDEO_READY, REVISION_REQUESTED, or FAILED automatically |
 | `REVISION_REQUESTED` | AI | read comment, infer stage, fix → matching checkpoint (or FAILED if unfixable) |
 | `VIDEO_READY` | **Human** | approve → VIDEO_APPROVED, or request revision → REVISION_REQUESTED |
 | `TOPIC_REJECTED` | — | terminal — human flat-rejected the topic, no further action |
@@ -46,7 +46,7 @@ Before touching the pipeline, verify the following. If **any item fails**, stop 
 | Dashboard container running | `docker compose ps tubematic-dashboard` — state must be `running`. If not: `python3 scripts/service.py start tubematic-dashboard` |
 | ElevenLabs API key set | `GET /settings` → `elevenlabs_api_key` must be non-empty. It comes back masked, never as the real key — a mask means it is set. If empty, tell the user to add it on the Settings dashboard (voicing will fail without it). |
 | OpenAI API key set | `GET /settings` → `openai_api_key` must be non-empty (masked, like the others). If empty, tell the user to add it on the Settings dashboard — every scene image comes from OpenAI, so `generate_image` fails without it. |
-| Gemini API key (optional) | `gemini_api_key` is optional. If empty, the mining strategy is off and AI review inside the renderer is skipped, so the video advances directly to `VIDEO_READY`. This is expected. |
+| Gemini API key (optional) | `gemini_api_key` is optional. If empty, the mining strategy is off and the AI review of a finished render is skipped, so the video advances directly to `VIDEO_READY`. This is expected. |
 
 If all checks pass, continue. If one or more fail, output a clear list like:
 
@@ -108,8 +108,8 @@ TOPIC_PROPOSED  →  TOPIC_APPROVED  →  SCRIPT_READY
 Side exits:
   TOPIC_PROPOSED      → TOPIC_REJECTED       (human flat-rejects; terminal)
   any checkpoint       → REVISION_REQUESTED   (human requests a revision, mandatory comment)
-  RENDERING           → REVISION_REQUESTED   (renderer: render crash or AI-review findings)
-  RENDERING           → FAILED               (renderer: render-crash retry cap exceeded)
+  RENDERING           → REVISION_REQUESTED   (automatic: render crash or AI-review findings)
+  RENDERING           → FAILED               (automatic: render retry cap exceeded, or a GPU-only video with no working GPU)
   SCHEDULED           → VIDEO_APPROVED       (human cancels the scheduled post)
   PUBLISHING          → PUBLISHED | FAILED   (worker: polls the publish results; PUBLISHED if any target succeeded)
   REVISION_REQUESTED  → FAILED               (agent judges the failure unfixable)
@@ -212,7 +212,7 @@ image.
 and `stick` are restrictions — on the canvas, and on whether figures may appear at all.
 `cartoon_3d` is a different renderer altogether: one painted 3D world written as code for that video
 by the **tubematic-cartoon3d** skill against the renderer's kit, with no other scene components,
-offered only while the renderer's GPU is working. `auto` is the absence of a restriction: the agent picks the register, the renderer
+offered only while a renderer's GPU is working. `auto` is the absence of a restriction: the agent picks the register, the renderer
 included — it records `resolved_renderer` first, then the canvas — and may choose the world only
 while `cartoon_3d_available` is true.
 
@@ -261,8 +261,8 @@ ideas, which may be empty). Fix every must-fix item first — that scene, not th
 pipeline in general — then apply the suggestions in the same revision pass rather than deferring
 them; a review with zero must-fix but non-empty suggestions still arrives as `REVISION_REQUESTED`
 and still deserves a real revision, not a pass-through re-submit. The comment also states which
-review number this is out of the cap (e.g. "AI review 1 of 1") — past the cap, the renderer
-runs one final review, writes its feedback, and accepts the render as `VIDEO_READY` regardless of
+review number this is out of the cap (e.g. "AI review 1 of 1") — past the cap, the AI review
+runs one final time, writes its feedback, and accepts the render as `VIDEO_READY` regardless of
 what it found, so there is no further automatic round to lean on.
 
 One must-fix type does **not** belong to the animation/render path: `mispronunciation`. The review
@@ -281,7 +281,7 @@ If a render-failure comment describes something you cannot fix by editing scenes
 ## Error Handling
 
 - **Render failure** — the renderer sets the video to `REVISION_REQUESTED` with an error comment (or `FAILED` directly if its own render-crash retry cap was already exceeded). Read the comment; if fixable, fix the scene TSX before re-submitting — otherwise escalate to `FAILED` (see **Handling REVISION_REQUESTED**). A renderer crash/restart mid-render is handled separately and automatically (the renderer requeues it to `RENDER_QUEUED` on its own startup reconcile) — no agent action needed for that case.
-- **AI-review feedback** — the renderer sets the video to `REVISION_REQUESTED` whenever the review has any must-fix errors or suggestions, with a comment summarizing both (full detail in `gemini_feedback`). Fix the must-fix items first, then apply the suggestions, before re-submitting — see **Handling REVISION_REQUESTED**. A `mispronunciation` must-fix routes to the pronunciation path there, not a scene edit.
+- **AI-review feedback** — the AI review sets the video to `REVISION_REQUESTED` whenever the review has any must-fix errors or suggestions, with a comment summarizing both (full detail in `gemini_feedback`). Fix the must-fix items first, then apply the suggestions, before re-submitting — see **Handling REVISION_REQUESTED**. A `mispronunciation` must-fix routes to the pronunciation path there, not a scene edit.
 - **`generate_voice` error** — call `add_comment` with the error and leave the video at `VOICING`; it is already there, so do not call `set_video_status`. Re-writing the same status changes only `updated_at`, which is the clock the worker uses to flag a video stuck in `VOICING` to the human.
 - **`validate_job` errors** — fix all reported issues (missing scene files, TypeScript errors) before calling `submit_render`.
 - **`validate_job` warnings** — advisory, and they never block `submit_render`, but do not ignore them. They come from the text-layout audit, which renders settled frames in a real browser and measures real text rects, so "overlaps by 73% of the smaller box" or "crosses bottom (y=1900 > 1750)" is measured fact. Each names the scene, the frame, and the text, which is enough to find the element in your own TSX. Fix them and re-run `validate_job` before submitting; a render plus an AI-review round costs far more than the edit. If a warning looks wrong, say so in `add_comment` rather than silently submitting — a false positive is a bug worth reporting. One warning is expected and not a defect: `audit skipped: an audit for <id> is already running`.

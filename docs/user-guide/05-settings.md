@@ -6,8 +6,10 @@ way in and out. There are **42 declared keys**, defined by `SETTINGS_SPEC` in
 
 Three properties are worth stating once, because they explain a lot of the design:
 
-- **No setting requires a restart.** The Flask API, the MCP server, the worker and the renderer all read
-  the database per use, with no in-process cache. A write applies to the next read. Restarting is
+- **No setting requires a restart.** The Flask API, the MCP server and the worker all read
+  the database per use, with no in-process cache. A write applies to the next read. The renderer
+  reads no settings: the render settings it needs arrive with each video it is handed, so a change
+  applies from the next render. Restarting is
   only ever a remedy for a wedged container.
 - **The database is the source of truth after onboarding.** `onboard.py` seeds these rows; after
   that, the dashboard and the API own them. Re-running an onboarding step re-seeds.
@@ -44,10 +46,10 @@ verified, the bookkeeping rows that share their table, and how to add one are on
 |---|---|---|---|
 | `render_timeout_secs` | int | `10800` | The absolute ceiling on one Remotion render, a crash detector of last resort rather than a budget: three hours covers a three-minute Short on the CPU with headroom. A slow CPU rendering an over-length video may need it raised. Minimum 60 |
 | `render_stall_timeout_secs` | int | `600` | How long the render's progress counter may stand still before the render is judged hung and retried. Remotion reports every frame it renders and encodes; a healthy render advances every few seconds, a wedged browser never does, so this catches a hang in minutes whatever the video's length. Minimum 60; neither setting needs a restart |
-| `max_render_retries` | int | `1` | Render **crash and timeout** retries only. A renderer restart mid-render counts as a failure |
+| `max_render_retries` | int | `1` | Render **crash and timeout** retries only. A render lost to a renderer restart, or to a renderer that stopped reporting, counts as a failure too |
 | `text_layout_audit_enabled` | bool | `true` | Kill switch for the advisory text-overlap and safe-zone audit inside `validate_job` |
 | `default_mascot_id` | str | `''` | Experimental. The mascot a new video starts with, unless its domain says otherwise. `''` means none, which is what every install starts with. Set it on Settings → Rendering, where the choices are the approved mascots and are greyed out while the renderer's GPU is not working; a new default is refused then too, from any client. A mascot that has since been archived (or was never approved) reads back as `''` and is refused on write. A domain's own default overrides it, and a video's pick at the topic checkpoint overrides both. See [Mascots](04-dashboard.md#mascots) |
-| `watermark_enabled` | bool | `true` | Burns the "Made with tubematic.ai" mark into every render. Read by the renderer when a render starts, so it affects later renders only. **A setting rather than a `scene-config.json` key on purpose** — see [Watermark](../developer/09-remotion-project.md#watermark) |
+| `watermark_enabled` | bool | `true` | Burns the "Made with tubematic.ai" mark into every render. Sent to the renderer with each video it is handed, so it affects later renders only. **A setting rather than a `scene-config.json` key on purpose** — see [Watermark](../developer/09-remotion-project.md#watermark) |
 
 Which GPU renders, if any, is **not** a setting: a container's GPU is fixed when it is created, so it
 is chosen on the host with `python3 onboard.py --step gpu`. The Rendering tab shows the result. See

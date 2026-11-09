@@ -29,6 +29,10 @@ are in [Infrastructure — Authentication](16-infrastructure.md#authentication).
 `renderer/api/pipeline.py::create_pipeline_blueprint` reads `TUBEMATIC_DB` **once**, when the
 blueprint is constructed, and closes over it for the life of the process.
 
+The same process also serves the [render gateway](#the-render-gateway), a separate app on HTTPS
+port 4443 that only renderers call. Nothing on this page's port 4000 is reachable with a renderer's
+credential, and nothing on 4443 with the API token.
+
 ---
 
 ## Health
@@ -46,24 +50,29 @@ than the JSON shape above.
 
 ### GPU rendering
 
-Unlike `/render/health`, these need the token. The API container has no GPU, so both only read and
-write settings rows; the renderer does the testing
-([Rendering and Review](11-rendering-and-review.md#the-gl-renderer)).
+Unlike `/render/health`, these need the token. The API container has no GPU: each renderer tests
+its own and reports the result through the [render gateway](#the-render-gateway), which stores it on
+the renderer's row in `renderers` ([Rendering and Review](11-rendering-and-review.md#the-gl-renderer)).
 
 | Route | Response |
 |---|---|
-| `GET /render/gpu` | The renderer's last GPU probe (below) |
-| `POST /render/gpu/test` | Stamps `gpu_probe_requested_at` for the renderer's next pass and answers `202` with the same body, `pending: true`. The result arrives in a later `GET` |
+| `GET /render/gpu` | The built-in renderer's last GPU probe (below), with the install-wide `status` |
+| `POST /render/gpu/test` | Stamps the built-in renderer's `gpu_probe_requested_at`; its next heartbeat reply tells it to test again. Answers `202` with the same body, `pending: true`. The result arrives in a later `GET` |
 
 | Field | Meaning |
 |---|---|
-| `status` | `unknown` (the renderer has never probed), `not_configured` (no GPU override: CPU rendering), `working`, or `not_usable` (a GPU is configured but the probe rejected it: CPU rendering) |
-| `rendering_on` | `gpu` only when `status` is `working`, otherwise `cpu` |
-| `configured`, `gpu` | Whether the renderer was given a GPU, and its `{uuid, name}` |
+| `status` | **Install-wide**, across every renderer: `working` (some enabled renderer's GPU test passed), `unknown` (an enabled renderer has not tested yet), `not_usable` (a GPU is configured but its test failed: CPU rendering), or `not_configured`. The Cartoon 3D and mascot gates read this same value |
+| `rendering_on` | `gpu` only when the built-in renderer's own last test passed, otherwise `cpu` |
+| `configured`, `gpu` | Whether the built-in renderer was given a GPU, and its `{uuid, name}` |
 | `host_gpus` | Every NVIDIA GPU the host had when onboarding's `gpu` step ran: `index`, `uuid`, `name`, `memory_mib`, `driver` |
-| `probe` | The stored result row, or `null` |
+| `probe` | The built-in renderer's stored probe, or `null` |
 | `requested_at`, `pending` | The last Test request, and whether no probe has started since |
-| `waiting_for_render` | `pending`, and a video is `RENDERING`. The renderer answers only after that render |
+| `waiting_for_render` | `pending`, and the built-in renderer holds a render it has not uploaded yet. It tests only between renders |
+
+Every field but `status` describes the built-in renderer on purpose: it is what the dashboard's GPU
+panel shows and its Test button asks for, and it is the only renderer onboarding's `gpu` step
+configures. `status` is the aggregate because a gate that looked at the built-in renderer alone would
+refuse a style another renderer can render.
 
 ---
 
@@ -759,11 +768,111 @@ would have leaked every API key into it.
 
 ---
 
+## The render gateway
+
+A second Flask app, `renderer/api/render_gateway.py::create_gateway_app`, served by the same
+`tubematic-api` process (`server.py::start_render_gateway`, in a thread of its own) on **HTTPS port
+4443** (`TUBEMATIC_GATEWAY_PORT`). It is the only thing a renderer talks to, the built-in one and any
+remote one alike. What the routes do to a video — the scheduler, leases, the bundle, routing a
+result — is on [Rendering and Review](11-rendering-and-review.md); this section is the wire.
+
+| | |
+|---|---|
+| Container | `tubematic-api` |
+| Port | **4443**, TLS only. Not published by `docker-compose.yml`: the built-in renderer reaches it as `https://tubematic-api:4443` over the Compose network |
+| Prefix | `/v1` |
+| Authentication | `Authorization: Bearer <renderer credential>` on every route but `GET /v1/version` and `POST /v1/enroll` |
+
+| Route | Answers |
+|---|---|
+| `GET /v1/version` | `200 {"version", "gateway": 1}` — main's version. Open |
+| `POST /v1/enroll` | Body `{secret, machine_id, name, host, version, compute}`. `200 {renderer_id, credential, credential_expires_at}`, or `403 enrollment_invalid` for a secret that is unknown, used or expired (one answer for all three). Open: the body carries the one-time secret |
+| `POST /v1/heartbeat` | Body `{started, version, compute, state, video_id, last_error, gpu_probe?}`. `200 {enabled, needs_upgrade, main_version, probe_now, stop, credential_expires_at, credential?}` |
+| `POST /v1/claim` | `204` nothing for this renderer; `409 disabled` or `409 needs_upgrade`; or `200 {video_id, kind, needs_gpu, cartoon, mascot, total_frames, lease_secs, settings: {render_timeout_secs, render_stall_timeout_secs, watermark}}` |
+| `GET /v1/jobs/<video_id>/bundle` | `200 application/x-tar`, streamed; `409 bundle_unavailable` when the job's files cannot be read |
+| `PUT /v1/jobs/<video_id>/output` | The raw mp4 as the body, streamed. `200 {bytes}`; `409 unsafe_path`; `500 upload_failed` |
+| `POST /v1/jobs/<video_id>/result` | Body `{outcome, error, on_gpu, gpu_ok, frames, seconds, gpu_probe?}`, `outcome` one of `success`, `failed`, `stalled`, `timeout`, `error`. `200 {}`; `400 bad_outcome` |
+
+The three `/v1/jobs/` routes answer `403 not_lease_holder` to any renderer but the one holding the
+video's lease. A missing or unknown credential is `401 unauthorized`; an expired one is `401
+credential_expired`.
+
+**Why a port of its own, and why renderer credentials work only here.** Port 4000 is bound to
+loopback and takes the API token, which can change any setting, approve paid work and publish. A renderer on another machine needs a port it can reach, and must be
+able to do far less: claim, fetch one job, upload one mp4, report. Two apps make that boundary
+structural rather than a list of exemptions. The gateway refuses the API token (it is simply not a
+renderer credential), and port 4000 refuses a renderer credential (it is not the API token), so a
+leaked renderer credential cannot touch the dashboard's API, and the dashboard's token cannot claim
+or rewrite renders.
+
+### Credentials
+
+`tubematic_core/renderers.py::authenticate` resolves a bearer token to a renderer row:
+
+- **The built-in renderer's** is the secret file `builtin_renderer_token`, compared in constant time
+  and read fresh on every request on both sides, so `onboard.py --rotate-tokens` applies to the next
+  request with no restart and no row update. It never expires. The built-in renderer cannot be
+  removed, only disabled.
+- **A remote renderer's** is the credential it was issued at enrollment, a random 256-bit value
+  stored only as its sha256. It lasts `CREDENTIAL_DAYS` (30). From `ROTATE_AFTER_DAYS` (15) on, each
+  heartbeat reply carries a new one; the old one moves to `previous_credential_hash`, and **both
+  authenticate until the new one is first used**, which clears the previous. A renderer that never
+  received the new one (a reply lost on the way) is therefore never locked out: a new one is issued
+  again on its next heartbeat. The renderer switches to a rotated credential only once it is written
+  to its state file, for the same reason. An expired credential answers `401 credential_expired` and
+  sets the renderer's `last_error` to "credential expired — re-enroll". A plain hash is enough: there
+  is nothing to guess in a 256-bit random value.
+
+A disabled renderer still authenticates — that is how it hears `409 disabled` and stops claiming. A
+removed one never does.
+
+### TLS and the certificate pin
+
+The gateway serves a self-signed EC P-256 certificate, `render_tls_cert` with its key
+`render_tls_key`, both created by `tubematic_core.auth.ensure_secrets` beside the service tokens
+(CN `tubematic-render-gateway`, valid 30 years, no host name). **No client checks a host name**: a
+renderer reaches the gateway by whatever address the operator gives it, so there is nothing to check
+a name against. Instead a client trusts exactly one certificate, that one, as its only trust anchor
+(`render_agent.py::pinned_context`: `check_hostname` off, `CERT_REQUIRED`, `cadata` the pinned PEM).
+The certificate carries `BasicConstraints(ca=True)` and `key_cert_sign` because OpenSSL accepts a
+self-signed certificate as its own trust anchor only as a CA.
+
+**The pin is the sha256 of the certificate's DER, not of its public key** (`renderers.py::cert_pin`,
+`tubematic_core.auth.gateway_pin`), written `sha256:<hex>`. A pin on the public key (SPKI) is the
+more common choice, but computing one needs an ASN.1 parser, and the script that is to set up a
+remote renderer's host must check the pin with Python's standard library alone, which can turn a PEM
+into DER (`ssl.PEM_cert_to_DER_cert`) but not take a certificate apart. The cost of pinning the certificate is that a new
+certificate is a new pin, so **the TLS pair is never rotated**: `--rotate-tokens` leaves it alone and
+`rotate_secrets` refuses it, because a new certificate would cut every enrolled renderer off until it
+was enrolled again. Its key is mounted only into `tubematic-api`; renderers get the certificate.
+
+### Enrollment
+
+A remote renderer joins with an **enrollment token**, `tmr1.` followed by unpadded base64url of
+`{"u": <gateway URL>, "s": <secret>, "p": <pin>}` (`renderers.py::encode_enrollment_token` /
+`decode_enrollment_token`). The secret is one-time, valid for `ENROLLMENT_SECS` (one hour), and stored
+only as its hash in `renderer_enrollments`; redeeming it is one guarded `UPDATE`, so two renderers
+racing with one secret cannot both enroll. The URL must be `https://`.
+
+The renderer (`render_agent.py::enroll`, given the token as `TUBEMATIC_ENROLL_TOKEN`) first fetches
+the gateway's certificate with a bare TLS handshake, and **refuses it unless its sha256 is the token's
+pin, before sending anything** — the secret never reaches a server that is not the gateway. It then
+trusts that certificate and calls `POST /v1/enroll`. Its state file (`renderer.json` under
+`TUBEMATIC_RENDERER_STATE`, mode 0600) keeps its id, credential, a random `machine_id`, the pin and
+the certificate. Enrolling again from the same machine keeps the `machine_id`, so the gateway replaces
+that renderer's credential, version and compute on its existing row rather than adding a second one.
+
+In this release nothing issues an enrollment token: the module function exists, and the dashboard
+and onboarding do not offer it yet, so the built-in renderer is the only one an install runs.
+
+---
+
 ## Database access
 
 `renderer/api/db.py` provides `conn()`, `set_status()`, `update_fields()` and `add_comment()`, with
-WAL mode, foreign keys on, and a `sqlite3.Row` factory. It is used **exclusively by the worker
-and the renderer**; `pipeline.py` defines its own equivalent connection helper rather than importing it.
+WAL mode, foreign keys on, and a `sqlite3.Row` factory. It is used by the worker, the render gateway (`render_gateway.py`) and the render rules they share
+(`render_results.py`), never by a renderer, which has no database; `pipeline.py` defines its own
+equivalent connection helper rather than importing it.
 
 Path columns hold **container-absolute** paths and this API stores and returns them as opaque
 strings. Nothing reads a location back out of them. The dashboard builds a rendered video's

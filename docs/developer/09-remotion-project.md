@@ -193,8 +193,9 @@ safe zone is where scenes put their content, and the mark is meant to stay out o
   `CompositionBuilder` does not read a watermark key from the config. The agent writes that file,
   so anything expressed there the agent could move, dim or delete. A config that carries a
   `watermark` key changes nothing.
-- **The only switch is the `watermark_enabled` [setting](../user-guide/05-settings.md).** The renderer reads
-  it when a render starts and passes it to the composition as the `watermark` render prop. No MCP
+- **The only switch is the `watermark_enabled` [setting](../user-guide/05-settings.md).** The render gateway
+  reads it when a renderer claims the video and sends it with the claim, and the renderer passes it
+  to the composition as the `watermark` render prop. No MCP
   tool writes settings, so only a person can turn the mark off. The prop is drawn unless it is
   exactly `false`, so a caller that sends nothing — Studio preview, the text-layout audit — shows
   the same frame a render does.
