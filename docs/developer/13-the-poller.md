@@ -92,6 +92,7 @@ newly installed agent applies on the next pass with no restart.
 |---|---|---|---|
 | 0 | Adopt, once | `_Supervisor._adopt` | Before the first pass only: take over sessions a dead supervisor left running. See [Timeouts and orphans](#timeouts-and-orphans) |
 | 1 | Heartbeat | `_touch_heartbeat` | Touches `poll.heartbeat`, so a later tick can tell a live supervisor from a hung one |
+| 1b | Disk-usage snapshot | `_refresh_disk_snapshot` | When `~/.tubematic-data/data/disk-usage.json` is an hour old, re-measures what only the host can see (Docker images, the containers' writable layers, the install folder) for the dashboard's disk-usage badge. See [Disk usage](#disk-usage) |
 | 2 | Reap | `_Supervisor._reap` | Collects sessions that finished since the last pass, and starts the 15-minute wait for a video whose scene-work claim may still be held |
 | 3 | Read state | `_Supervisor._pass` | `GET /pipeline/status` and `GET /agents`. Either unreachable starts nothing this pass. No agent installed is logged once and is not an error |
 | 4 | Tend adopted sessions | `_Supervisor._tend_adopted` | Stops an adopted session that is past its deadline, and scores one that has ended |
@@ -120,8 +121,25 @@ are, and the wait in step 9 is what paces the loop. With adopted sessions presen
 them every second, because nothing signals the supervisor when a process that is not its child ends.
 
 **`--dry-run`** runs exactly one pass, logs what each lane would start, and starts nothing. It skips
-adoption and the heartbeat. It still takes the lock, so beside a live supervisor it exits at once
+adoption, the heartbeat and the disk-usage snapshot. It still takes the lock, so beside a live supervisor it exits at once
 like any other tick.
+
+### Disk usage
+
+The dashboard's disk-usage badge ([Dashboard — Disk usage](15-dashboard.md#disk-usage)) needs
+figures no container can produce, because no container has the Docker socket. The poller is the
+only Tubematic process that runs on the host on a schedule, so it measures them:
+`tubematic_core/disk_usage.py::refresh_snapshot` runs `docker ps`, `docker container inspect
+--size`, `docker image ls` and `docker system df` (all read-only), walks the install folder, and
+writes the result atomically to `~/.tubematic-data/data/disk-usage.json`, where the API reads it.
+This is not database access, so the poller's rule against touching the database still holds.
+
+- **It runs before step 3**, so a paused pipeline, an unreachable API or an install with no agent
+  still gets a fresh figure.
+- **It is throttled on the file's age (an hour).** Images change only when someone upgrades,
+  re-onboards or rebuilds, and `upgrade.py` and onboarding re-measure right after they do.
+- **It never costs a tick.** A failure is logged once, as a warning, and not retried for an hour,
+  so an unwritable data folder does not turn into a Docker query on every pass.
 
 ## The four lanes
 

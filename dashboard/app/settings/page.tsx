@@ -14,6 +14,7 @@ import { formatDate, formatDateTime, formatRelative } from "@/lib/datetime";
 import { AGENT_EFFORTS } from "@/lib/agents";
 import { mascotGate, mascotGateNote, mascotOptions } from "@/lib/mascots";
 import { codePoints } from "@/lib/utils";
+import { formatBytes } from "@/lib/format";
 
 const STATUS_POLL_MS = 30_000;
 
@@ -255,14 +256,6 @@ function Row({ label, note, children }: { label: string; note?: string; children
       {children}
     </div>
   );
-}
-
-/** Binary units, so the figure matches `du -h` on the host. */
-function formatBytes(n: number): string {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
-  return i === 0 ? `${n} B` : `${n.toFixed(1)} ${units[i]}`;
 }
 
 function backlogText(b: RetentionBacklog): string {

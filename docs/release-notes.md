@@ -119,6 +119,14 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   checks your machine's certificate before sending anything, and later upgrades or removes the
   renderer. The container it leaves running does not keep the token (`--token-stdin` reads it from a
   pipe for scripted installs). It is listed in the release's `CHECKSUMS.txt`, so you can verify it before running it.
+- **A disk-usage badge in the dashboard's top bar.** It shows how much disk space Tubematic takes up.
+  Click it for a breakdown: finished videos, job files, backups, logs and the rest of your data,
+  then the Docker images in use, old images, the containers' scratch space and the install folder.
+  The Docker and install figures are measured on your machine about once an hour, and right after an
+  upgrade; the popup says how long ago.
+- **Upgrading now removes the previous version's Docker images**, which used to pile up with every
+  upgrade. It happens only once the upgrade has fully succeeded; an upgrade that needs attention keeps
+  them, and the next successful one removes them.
 
 ### Changed
 
@@ -229,6 +237,11 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
   The new files in `~/.tubematic-data/secrets/` can stay (2.0.x ignores them), and so can a GPU
   choice (2.0.0 then renders on the CPU; nothing else is affected).
+- **This upgrade frees the space your 2.0.x images took.** Once it succeeds, it removes them, along
+  with any older Tubematic images still on the machine; the report says how much it freed. Going
+  back to 2.0.x afterwards downloads (or, on a source install, rebuilds) those images again, which
+  takes time and bandwidth but no extra step. If anything else on this machine runs a container
+  from an old Tubematic image, Docker keeps that image, and the upgrade warns.
 
 ---
 

@@ -58,6 +58,29 @@ test.describe("TopBar", () => {
     await expect(badge).toHaveText(/^v(\d+\.\d+\.\d+|develop$)/);
   });
 
+  // The e2e stack has no host poller, so there is no snapshot: the bar shows the
+  // data folders alone and the popup says the Docker half is not measured yet
+  // (TMDEV-192). The figure itself depends on what other specs left on disk.
+  test("disk-usage badge opens a breakdown of the data folders", async ({ page }) => {
+    await page.goto("/");
+    const badge = page.getByTestId("disk-usage");
+    await expect(badge).toBeVisible({ timeout: 15_000 });
+    await expect(badge).toHaveText(/\d+(\.\d)? (B|KB|MB|GB|TB)$/);
+    await badge.click();
+    const popup = page.getByTestId("disk-usage-popup");
+    await expect(popup).toBeVisible();
+    for (const key of ["videos", "jobs", "database", "backups", "logs"]) {
+      await expect(page.getByTestId(`disk-row-${key}`)).toBeVisible();
+    }
+    await expect(page.getByTestId("disk-usage-unmeasured")).toBeVisible();
+    await expect(page.getByTestId("disk-usage-total")).toHaveText(await badge.innerText().then(
+      (t) => t.replace(/^\W+/, "").trim()));
+    const box = await popup.boundingBox();
+    expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    await page.keyboard.press("Escape");
+    await expect(popup).toBeHidden();
+  });
+
   // playwright.config.ts sets the browser's timezoneId to Asia/Tokyo — neither
   // UTC nor the test API's TZ (America/New_York, docker-compose.test.yml). If
   // this badge showed EST/EDT it would only prove the dashboard is using the
@@ -73,15 +96,16 @@ test.describe("TopBar", () => {
   // The unwrapped single row needs about 1510px plus gutters. Below that it
   // used to squeeze its text onto several lines and make every page scroll
   // sideways; now the tabs drop to a second row (below 1640px). Measured after
-  // the version badge has rendered, since it adds width.
+  // the version and disk-usage badges have rendered, since both add width.
   for (const width of [1024, 1280, 1600]) {
     test(`at ${width}px the bar wraps instead of scrolling the page`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/");
       await expect(page.getByTestId("version-badge")).toBeVisible();
+      await expect(page.getByTestId("disk-usage")).toBeVisible();
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-      for (const id of ["nav-settings", "sign-out", "health-status"]) {
+      for (const id of ["nav-settings", "sign-out", "health-status", "disk-usage"]) {
         const box = await page.getByTestId(id).boundingBox();
         expect(box, id).not.toBeNull();
         expect(box!.x + box!.width, id).toBeLessThanOrEqual(width);
@@ -100,6 +124,7 @@ test.describe("TopBar", () => {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto("/");
     await expect(page.getByTestId("version-badge")).toBeVisible();
+    await expect(page.getByTestId("disk-usage")).toBeVisible();
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     // Nothing squeezed onto a second line: the timezone, SYS and the active tab

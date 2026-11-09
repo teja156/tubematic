@@ -30,6 +30,7 @@ API container restarting underneath it.
 | Pipeline board, Library, Projects, Script Profiles, Mascots | 5s |
 | Settings page's pipeline-status readout, top-bar health indicator, top-bar version badge | 30s |
 | Settings → Rendering's Renderers panel, and the Pipeline page's renderer list behind the **Nothing can render** banner | 20s; the panel polls every 3s while a GPU test it asked for is outstanding |
+| Top-bar disk-usage badge (`/storage`; also fetched each time its popup opens, and the API keeps its own walk for 60s) | 5 min |
 | Update banner (`/api/update-check`; GitHub itself is asked at most every 2 hours) | 10 min |
 | Settings values themselves, timezone, voice roster, script-profile list, agent list | fetched once on mount |
 
@@ -406,7 +407,7 @@ answers.
 | `SectionLabel.tsx` | Section heading rule with an optional count |
 | `RenderersPanel.tsx` | Settings → Rendering's **Renderers** panel. See [The settings page](#the-settings-page). Its rules (the status chip, the GPU verdict, the banner condition) are pure functions in `dashboard/lib/renderers.ts`, so they are unit-tested without React |
 | `UpdateBanner.tsx` | The "newer release available" strip under the top bar, mounted in `app/layout.tsx`. See [Update check](#update-check) |
-| `TopBar.tsx` | Sticky nav across every page, plus a version badge, timezone badge and health indicator. See below. One unwrapped row needs about 1510px plus the gutters; below a 1640px viewport (the bar's own max-width) the tabs drop to a second row (`.tm-topbar-*` in `globals.css`, which also raises `--hd-height`), because the row used to squeeze its text onto several lines and then make every page scroll sideways. The breakpoint leaves room for the scrollbar, which the media query counts, a longer timezone label and the version string; the row is `nowrap`, so it never wraps text |
+| `TopBar.tsx` | Sticky nav across every page, plus the disk-usage badge (`DiskUsage.tsx`), a version badge, timezone badge and health indicator. See below. One unwrapped row needs about 1510px plus the gutters; below a 1640px viewport (the bar's own max-width) the tabs drop to a second row (`.tm-topbar-*` in `globals.css`, which also raises `--hd-height`), because the row used to squeeze its text onto several lines and then make every page scroll sideways. The breakpoint leaves room for the scrollbar, which the media query counts, a longer timezone label and the version string; the row is `nowrap`, so it never wraps text |
 | `components/ui/*` | shadcn/ui primitives — `badge`, `button`, `dialog`, `tabs`, `textarea` |
 
 ---
@@ -581,6 +582,33 @@ number, and a checkout of the development branch carries the marker `develop`, s
 `vdevelop` there. Marking the install mode would mean recording it a second time, in the database,
 purely so the API container could read it back; setting `TUBEMATIC_VERSION` on the API service is
 the existing way to override the string if you want one.
+
+---
+
+## Disk usage
+
+The top bar's disk-usage badge (`components/DiskUsage.tsx`) shows how much disk Tubematic takes
+up and opens a breakdown on click (a `@base-ui/react` Popover); what a user reads from it is in
+[the user guide](../user-guide/04-dashboard.md#the-top-bar). It reads
+[`GET /storage`](05-http-api.md#get-storage).
+
+**Two halves, because no container can see Docker.** The API measures the six data folders it
+mounts. Images, the containers' own writable layers and the install folder exist only on the host,
+so the poller (hourly), `upgrade.py` and onboarding measure them and leave a snapshot,
+`~/.tubematic-data/data/disk-usage.json`, which the API passes on as `host`. Giving the dashboard
+or the API the Docker socket instead would hand every container root on the machine for the sake
+of a number. `tubematic_core/disk_usage.py` holds both halves and the one rule for "old image",
+which `upgrade.py`'s clean-up uses too, so the popup's "the next upgrade removes them" stays true.
+
+**Until a snapshot exists the badge shows the data alone**, and the popup says the Docker half is
+not measured yet rather than presenting a smaller number as the whole. A host figure Docker could
+not give reads "unknown", never `0 B`. Docker's build cache is listed on a source install but kept
+out of the total, because BuildKit's cache is shared with anything else built on the machine.
+
+**Nothing is rendered when the answer is not the expected shape**, the same rule as the version
+badge: an older API during an upgrade (a `404`), a network error, or any other body. The badge sits
+first in the right-hand cluster, so a test that sequences `fetch` answers for another badge must
+answer `/storage` separately (`tests/unit/topbar-version.test.tsx::besideDiskUsage`).
 
 ---
 

@@ -275,3 +275,31 @@ def test_an_explicit_flag_still_overrides_a_recorded_mode_end_to_end(tmp_path, m
     assert saved.get("install_mode") == "release", (
         "a dry-run explicit override must not overwrite the recorded state"
     )
+
+
+def test_the_dashboard_step_records_disk_usage_and_a_failure_only_warns(
+        no_volume_reconcile, monkeypatch):
+    """TMDEV-192: the images just pulled or built reach the dashboard's disk
+    figure now, not at the poller's next hourly measurement."""
+    from tubematic_core import disk_usage
+    calls = []
+    monkeypatch.setattr(disk_usage, "refresh_snapshot", lambda *a, **kw: calls.append(a))
+    ex = Executor(dry_run=False)
+    ex.run = _fake_run("nothing-fails")
+    actions.apply_dashboard(OnboardConfig(values={"install_mode": "release"}), ex, _Rep())
+    assert calls == [(actions.DATA_ROOT, actions.REPO_ROOT)]
+
+    def refuse(*a, **kw):
+        raise PermissionError("root-owned")
+    monkeypatch.setattr(disk_usage, "refresh_snapshot", refuse)
+    rep = _Rep()
+    actions.apply_dashboard(OnboardConfig(values={"install_mode": "release"}), ex, rep)
+    assert rep.fails == []
+    assert any("disk usage" in w for w in rep.warns), rep.warns
+
+
+def test_a_dry_run_dashboard_step_records_nothing(no_volume_reconcile, monkeypatch):
+    from tubematic_core import disk_usage
+    monkeypatch.setattr(disk_usage, "refresh_snapshot",
+                        lambda *a, **kw: (_ for _ in ()).throw(AssertionError("dry run")))
+    actions.apply_dashboard(None, Executor(dry_run=True), _Rep())

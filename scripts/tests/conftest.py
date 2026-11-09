@@ -1,4 +1,5 @@
-"""Keep every poll.py test away from the real supervisor state files.
+"""Keep every poll.py test away from the real supervisor state files, and
+from the host's Docker and data folder.
 
 The heartbeat, the session registry and the agent output files all live beside
 the real poll lock under ~/.tubematic-agent (TMDEV-129). A test that wrote
@@ -26,6 +27,9 @@ def _poll_state_in_tmp(tmp_path, monkeypatch):
     monkeypatch.setattr(poll, "HEARTBEAT", tmp_path / "poll.heartbeat")
     monkeypatch.setattr(poll, "REGISTRY", tmp_path / "poll-sessions.json")
     monkeypatch.setattr(poll, "SESSIONS_DIR", tmp_path / "sessions")
+    # The disk-usage snapshot (TMDEV-192) runs docker and writes into the real
+    # ~/.tubematic-data. test_poll_disk_snapshot.py drives the real function.
+    monkeypatch.setattr(poll, "_refresh_disk_snapshot", lambda: None)
     # service.py's gate reads the same registry through onboard/stack.py.
     try:
         from onboard import stack

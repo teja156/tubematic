@@ -27,6 +27,9 @@ In order:
      and re-register MCP with the token. An agent left without it fails the
      upgrade: the MCP server would refuse every call it makes.
   8. Report: version, schema, cron, containers.
+  9. Once all of that succeeded: remove the previous version's images (every
+     Tubematic image no Tubematic container uses), and re-measure disk use
+     for the dashboard. An upgrade that needs attention keeps them.
 
 Flags:
   --check          Report the install's state and change nothing
@@ -138,6 +141,62 @@ def _redeploy_agents(ex, rep, db_path) -> list:
                      f"token. Run: python onboard.py --install-agent {row['id']}")
             stranded.append(row["id"])
     return stranded
+
+
+def _remove_old_images(ex, rep, *, find=None) -> None:
+    """Remove every Tubematic image no Tubematic container uses (TMDEV-192).
+    Called only once the upgrade has succeeded, so the new containers are up
+    and the previous version's images are exactly the unused ones.
+
+    One image at a time and never `-f`: Docker refuses an image a container
+    still uses (a remote renderer started on this same host from an old
+    tag, say), and that refusal is a warning, never a failed upgrade. A
+    tagged image goes by its tags, an untagged one by its id."""
+    from tubematic_core import disk_usage
+    find = find or disk_usage.old_images
+    old = find()
+    if not old:
+        rep.info("No old images to remove.")
+        return
+    removed, freed, refused = 0, 0, []
+    for image in old:
+        ok = True
+        for target in image["refs"] or [image["id"]]:
+            r = ex.run(["docker", "image", "rm", target])
+            if r.returncode != 0:
+                ok = False
+                reason = (r.stderr or r.stdout or "").strip().splitlines()
+                refused.append(f"{target} ({reason[-1] if reason else 'refused'})")
+        if ok:
+            removed += 1
+            freed += image.get("bytes") or 0
+    if removed:
+        rep.ok(f"Removed {removed} old image{'s' if removed != 1 else ''} "
+               f"(about {disk_usage.human(freed)} freed)")
+    if refused:
+        rep.warn("Docker kept these old images, so they still use disk space; the next "
+                 "successful upgrade tries again: " + "; ".join(refused))
+
+
+def _finish_images(ex, rep, data_root, *, healthy: bool, dry_run: bool,
+                   find=None, refresh=None) -> None:
+    """After the result is known: remove the previous images only when
+    everything succeeded (a failed or unhealthy upgrade keeps them, so going
+    back costs nothing), then re-measure for the dashboard's disk figure."""
+    from tubematic_core import disk_usage
+    if dry_run:
+        rep.info("[dry-run] once the upgrade succeeds, the previous version's images are removed")
+        return
+    if not healthy:
+        rep.info("Old images kept because the upgrade needs attention; the next successful "
+                 "upgrade removes them.")
+        return
+    _remove_old_images(ex, rep, find=find)
+    try:
+        (refresh or disk_usage.refresh_snapshot)(data_root, REPO_ROOT)
+    except OSError as e:
+        rep.warn(f"Could not update the dashboard's disk-usage figure: {e}. "
+                 "The poller retries within the hour.")
 
 
 def _carry_state(previous, mode: str, ex) -> None:
@@ -879,6 +938,9 @@ def run_upgrade(*, dry_run: bool, force: bool, no_stop: bool, install_mode: str 
         rep.warn("These agents cannot reach the MCP server and will do nothing until fixed: "
                  + ", ".join(stranded))
         healthy = False
+
+    _section("Old images")
+    _finish_images(ex, rep, data_root, healthy=healthy, dry_run=dry_run)
     if previous and Path(previous).resolve() != REPO_ROOT:
         rep.info(f"The previous install at {previous} is no longer used by cron"
                  + (" (once this runs for real)." if dry_run else

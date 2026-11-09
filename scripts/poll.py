@@ -52,6 +52,7 @@ sys.path.insert(0, str(SCRIPTS_DIR.parent))
 from config import (  # noqa: E402
     DATA_ROOT, RENDERER_URL, POLL_LOG_DIR, LOCAL_TZ_LABEL,
 )
+from tubematic_core import disk_usage  # noqa: E402
 from tubematic_core import logging as tlog  # noqa: E402
 from agent_adapters import ADAPTERS, clip  # noqa: E402
 
@@ -1395,6 +1396,33 @@ def _touch_heartbeat() -> None:
         log.warning("Could not touch %s: %s", HEARTBEAT, e)
 
 
+# The dashboard's disk-usage figure (TMDEV-192). No container can see Docker
+# or the install folder, so the host measures them and leaves a snapshot in the
+# data folder for the API. Hourly is plenty: images only change when someone
+# upgrades, re-onboards or rebuilds, and upgrade.py and onboarding re-measure
+# right after they do.
+DISK_SNAPSHOT_MAX_AGE_SECS = 3600
+_disk_snapshot_retry_at = 0.0
+
+
+def _refresh_disk_snapshot() -> None:
+    """Re-measure when the snapshot is an hour old. Never raises: a failure
+    here must not cost a tick. An unwritable data folder is logged and left
+    alone for an hour rather than re-measured every pass."""
+    global _disk_snapshot_retry_at
+    if time.monotonic() < _disk_snapshot_retry_at:
+        return
+    try:
+        if disk_usage.refresh_snapshot(DATA_ROOT, SCRIPTS_DIR.parent,
+                                       max_age=DISK_SNAPSHOT_MAX_AGE_SECS):
+            log.debug("Disk-usage snapshot refreshed")
+    except Exception as e:  # noqa: BLE001 - bookkeeping, never fatal
+        _disk_snapshot_retry_at = time.monotonic() + DISK_SNAPSHOT_MAX_AGE_SECS
+        log.warning("Could not write the disk-usage snapshot in %s: %s. The dashboard's "
+                    "disk figure leaves out images and the install folder until it can.",
+                    disk_usage.snapshot_path(DATA_ROOT).parent, e)
+
+
 def _check_heartbeat() -> None:
     """Called by a tick that found the lock held. Logs; never kills."""
     try:
@@ -1490,6 +1518,9 @@ class _Supervisor:
             while True:
                 if not self.dry_run:
                     _touch_heartbeat()
+                    # Before _pass, which returns early when paused, when the
+                    # API is down or when no agent exists.
+                    _refresh_disk_snapshot()
                 self._reap()
                 self.dispatched = False
                 code = self._pass()

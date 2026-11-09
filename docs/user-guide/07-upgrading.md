@@ -143,6 +143,15 @@ the steps in the order that keeps your data safe:
    and the pipeline would stall while looking healthy. Fix the cause it names, then
    `python3 onboard.py --install-agent <agent>`.
 8. Reports the version, the database schema, the cron entry and each container's health.
+9. **Removes the previous version's images**, once everything above has succeeded. That is every
+   Tubematic image no Tubematic container uses: the older `tubematic-backend` and
+   `tubematic-dashboard` tags on a release install, and the untagged images earlier builds left on a
+   source install. It then re-measures disk use for the dashboard's
+   [disk-usage badge](04-dashboard.md#the-top-bar). Images are removed one at a time and never
+   forced. If Docker refuses one, for example because a container still uses it, the upgrade warns
+   and still succeeds. An upgrade that needs attention (a failed health check, an agent left without
+   its MCP registration) **keeps the old images**, so going back costs nothing; the next successful
+   upgrade removes them. Docker's build cache is left alone.
 
 | Flag | What it does |
 |---|---|
@@ -399,7 +408,10 @@ The supported path back to an older version is:
    If the upgrade had no migration in it (a patch release, most likely), there is nothing to restore
    and you can skip this step.
 3. **Go back to the prior code.** Source install: `git checkout v<old>`. Release install: use the
-   prior version's extracted directory, if you kept it, or extract its tarball afresh.
+   prior version's extracted directory, if you kept it, or extract its tarball afresh. From 2.1.0
+   a successful upgrade removes the previous version's images (step 9 above), so the older version's
+   images are probably gone. That costs time, not a step: step 4 pulls them again (release) or
+   rebuilds them (source).
 4. **Bring the stack back up from that older install**, which also points cron back at it. Going
    back to a version before 2.0.0 does need step 2: 2.0.0 adds migrations, starting at `0013`
    (the per-domain topic cap), and the older `upgrade.py` refuses to start against a database a newer version has

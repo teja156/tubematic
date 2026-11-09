@@ -473,7 +473,8 @@ only drops its own record, despite the warning it prints.
 
 > **`docker volume prune` is dangerous here.** These are the database and the entire video library.
 > Remove them by name, deliberately, or not at all. `docker image prune` without `-a` is safe — it
-> only removes untagged images.
+> only removes untagged images. Old Tubematic images need neither: `upgrade.py` removes them
+> (see [Old images](#old-images)).
 
 ### Backups
 
@@ -633,6 +634,26 @@ inside a container that owns it rather than across the mount.
 
 Multi-stage on `node:20-alpine`: install, build with `output: "standalone"`, then a runner stage that
 copies only the standalone bundle and static assets and runs as a **non-root user**.
+
+### Old images
+
+Every upgrade leaves the previous version's images behind: a release install pulls new
+`ghcr.io/<owner>/tubematic-backend` and `tubematic-dashboard` tags beside the old ones, and a source
+rebuild moves the `tubematic-renderer-image` and `tubematic-tubematic-dashboard` tags, leaving the
+old images untagged. `upgrade.py` removes them once an upgrade has succeeded
+([Upgrading](../user-guide/07-upgrading.md), step 9), and the dashboard's disk-usage badge counts
+them in the meantime. Both use one rule, `tubematic_core/disk_usage.py::old_images`:
+
+- **A candidate** is any image under those four repositories, whatever its tag, plus any untagged
+  image labelled `com.docker.compose.project=tubematic`, which Compose stamps on every image it
+  builds. The owner is matched loosely, because a fork publishes under its own.
+- **Excluded** is every image a `tubematic`-project container uses, running or stopped.
+- **No Tubematic containers at all means nothing is old.** With the stack gone there is nothing to
+  tell the images in use from the rest, so the rule names none rather than guess.
+
+The e2e stack (project `tubematic-test`), the Kasm workspace image and anything else on the machine
+never match. Removal is one image at a time, by tag (or by id for an untagged one), and never
+forced, so Docker's own refusal still protects an image some other container uses.
 
 ---
 

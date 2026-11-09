@@ -59,6 +59,15 @@ describe("TopBar version badge", () => {
   });
 });
 
+/** The disk-usage badge (TMDEV-192) fetches first, being first in the bar. The
+ * sequenced mocks below are about the version poll, so it is answered apart. */
+function besideDiskUsage(inner: ReturnType<typeof vi.fn>) {
+  return vi.fn((url: string, init?: RequestInit) =>
+    String(url).includes("/storage")
+      ? Promise.resolve({ ok: false, status: 404, json: async () => ({}) } as Response)
+      : inner(url, init));
+}
+
 /** The badge is polled rather than fetched once, because the one thing it is
  * documented for — confirming an upgrade landed — happens *while the page is
  * open*. An upgrade restarts the API underneath it, and a once-on-mount fetch
@@ -75,7 +84,7 @@ describe("TopBar version badge across an API restart", () => {
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ version: "1.0.1" }) })
       .mockResolvedValue({ ok: true, json: async () => ({ version: "1.0.2" }) });
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", besideDiskUsage(fetchMock));
 
     render(<TopBar />);
     await vi.waitFor(() =>
@@ -94,7 +103,7 @@ describe("TopBar version badge across an API restart", () => {
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ version: "1.0.1" }) })
       .mockRejectedValue(new Error("connection refused"));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", besideDiskUsage(fetchMock));
 
     render(<TopBar />);
     await vi.waitFor(() =>

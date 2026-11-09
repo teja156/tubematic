@@ -669,3 +669,23 @@ export interface RetentionBacklog {
   failed: { count: number; bytes: number };
   rejected: { count: number; bytes: number };
 }
+
+/** GET /storage (TMDEV-192): disk Tubematic uses. `data` is measured by the API
+ * itself; `host` is the host's snapshot of what no container can see (images,
+ * container layers, the install folder), null until the host first writes it.
+ * A host figure is null when Docker could not be read. */
+export interface StorageUsage {
+  data: {
+    measured_at: string;
+    items: { key: string; bytes: number }[];
+    total_bytes: number;
+  };
+  host: {
+    measured_at: string;
+    images: { current_bytes: number; old_bytes: number; old_count: number } | null;
+    containers_bytes: number | null;
+    build_cache_bytes: number | null;
+    install_bytes: number | null;
+  } | null;
+  total_bytes: number;
+}
