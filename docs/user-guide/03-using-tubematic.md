@@ -117,8 +117,8 @@ Five controls bound what research produces, and so what it costs.
 | Research modes | Toggles on the **Topics** page | All on | Turns curriculum, trending or mining off |
 | Pause a domain | **Pause topic generation** on a seed's row on the **Topics** page | Not paused | Stops research filing topics in that domain |
 | Topic cap | **Topic cap** on a domain's row | 100 | The most topics a domain may hold over its lifetime, from 25 to 750 |
-| Pending-topic limit | **Settings → Research** | 15 | Research does not run while this many topics are waiting for your decision |
-| Research runs per day | **Settings → Research** | 8 | The most research runs in any 24 hours |
+| Pending-topic limit | **Research pending cap** on **Settings → Research** | 15 | Research does not run while this many topics are waiting for your decision |
+| Research runs per day | **Max research runs per day** on **Settings → Research** | 8 | The most research runs in any 24 hours |
 
 ### Pausing a domain
 

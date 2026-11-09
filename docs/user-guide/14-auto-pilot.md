@@ -35,7 +35,7 @@ Open **Settings → Auto Pilot**. The tab has its own **Save**, and saves everyt
 | **Gap between publishes** | The shortest time between two posts on one account. Enter minutes or hours, up to a week | 4 hours |
 | **Most videos in progress** | How many videos may be between voicing and publishing at once. See [The in-progress limit](#the-in-progress-limit) | 0, which means no limit |
 | **Projects** | Which domains are on Auto Pilot. Each one has its own list of accounts, chosen from the accounts ticked on the Socials page | None |
-| **Auto post per day**, per account | How many posts the account takes in one day. 0 means Auto Pilot does not post to it | 1 |
+| A number for each account, under **Accounts** | How many videos Auto Pilot posts to the account in one day. 0 means it does not post there | 1 |
 
 When you turn Auto Pilot on, or add a domain while it is on, the dashboard asks you to confirm and
 tells you how many videos are waiting for approval in those domains. Auto Pilot approves them as
@@ -97,7 +97,7 @@ Two things follow from these rules:
 
 ## Limiting what it spends
 
-Research normally stops once 15 topics are waiting for your approval (the pending-topic limit on
+Research normally stops once 15 topics are waiting for your approval (**Research pending cap** on
 **Settings → Research**). In an Auto Pilot domain no topic waits, so that limit does not fill. Two
 things bound the spend instead.
 
