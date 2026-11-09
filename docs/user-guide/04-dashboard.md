@@ -128,6 +128,11 @@ A card shows:
 
 While [Auto Pilot](06-publishing.md#auto-pilot) is switched on, a one-line notice sits above Quick Actions.
 
+When videos are waiting to render and no renderer can take one — every renderer is disabled, offline,
+or on a different version from this install — a red **NOTHING CAN RENDER** banner sits at the top of
+the page, with a link to Settings → Rendering. See
+[Remote renderers — Troubleshooting](11-remote-renderers.md#troubleshooting).
+
 ### The video window
 
 Clicking a card or row opens the video's window. Its tabs are **Topic**, **Script**, **Video**,
@@ -180,7 +185,7 @@ A mascot is a small character that appears over a video, walks on and off, and *
 narration says: it looks surprised, has an idea, hops, glances at something. It is never the narrator
 and never lip-syncs; its face shows only the emotion. Mascots are **experimental** and **off by default** everywhere, and
 a video has one only if you pick it. They are drawn on the GPU, so **a mascot can only be chosen while
-the renderer's GPU is working** (Settings → Rendering → **Test GPU**; see
+a renderer's GPU is working** (Settings → Rendering, **Test GPU** on the renderer's card; see
 [GPU rendering](10-gpu-rendering.md)). A mascot is not available in the Cartoon 3D style.
 
 **Tubi** ships with Tubematic, ready to use: a small retro terminal whose screen is its face. Choose it and
@@ -213,7 +218,7 @@ You choose a mascot at three levels, each overriding the one before:
 2. **Topics**: each domain's **default mascot**, the column labelled **Mascot (exp.)**. *Use install default* follows level 1, *None* means no
    mascot in this domain even when the install has a default.
 
-A default can only be set to a mascot while the renderer's GPU works (the API refuses it otherwise,
+A default can only be set to a mascot while a renderer's GPU works (the API refuses it otherwise,
 as the dashboard's greyed pickers do). One set earlier stays set if the GPU goes, but seeds nothing
 until the GPU works again.
 3. **The topic checkpoint**: a mascot picker beside the other choices when you approve a topic, labelled
@@ -248,7 +253,7 @@ The agent decides when the mascot walks on and off and what it reacts to. How th
 
   A default voice that has left the roster shows as "(removed)", and a default profile that has
   been deleted as "Unavailable profile". **Illustrated** is greyed out until an OpenAI key is
-  stored, and **Cartoon 3D (experimental)** until the renderer's GPU is working (Settings → Rendering).
+  stored, and **Cartoon 3D (experimental)** until a renderer's GPU is working (Settings → Rendering).
 
 ### Script Profiles
 
@@ -348,11 +353,16 @@ work differently, noted below.
   comments to see whether a review ran.
 - **Images** — the OpenAI model for scene images and the one for the Illustrated style's characters.
   There is no provider choice: every image comes from OpenAI.
-- **Rendering** — the two render timeouts (the stall timeout that catches a hung render, the ceiling on a whole one), the retry count, the watermark and the **default mascot** (experimental), and a **GPU** section that says whether videos render on an
-  NVIDIA GPU or the CPU, names the GPU and the graphics device Chromium actually gets, and says why
-  when a chosen GPU is not being used. With a GPU chosen, **Test GPU** has the renderer check again;
-  it answers within about a minute, or after the render in progress. The GPU is chosen on the host, not here — see
-  [GPU rendering](10-gpu-rendering.md).
+- **Rendering** — the two render timeouts (the stall timeout that catches a hung render, the ceiling on a whole one), the retry count, the watermark and the **default mascot** (experimental), and the
+  **Renderers** panel. It lists every machine that renders for this install, the built-in renderer
+  first, each with a status (online, busy, offline, disabled, needs upgrade, credential expired),
+  its CPUs, memory and GPUs, whether its GPU test passed and the graphics device Chromium actually
+  gets, and its last error. **Test GPU** (on a renderer with a GPU) has it check again; it answers
+  within about a minute, or after the render in progress. Each renderer can be disabled and renamed,
+  and a remote one removed. **Add renderer** makes the one-time token that adds another machine, once
+  remote renderers are turned on. The panel saves each action at once, outside the tab's **Save**.
+  A GPU is chosen on the host, not here — see [GPU rendering](10-gpu-rendering.md) and
+  [Remote renderers](11-remote-renderers.md).
 - **Voice** — up to ten named voices and the default one. A new install starts with Teja (on
   `eleven_v4`, the default) and Adam (on `eleven_v3`), which can be removed like any other voice. Each voice has its own ElevenLabs model
   and a ▶ button that plays a sample of it with that model; there is no install-wide model.

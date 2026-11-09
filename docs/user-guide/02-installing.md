@@ -245,8 +245,10 @@ run from a script finds the system Node instead. On a server, NodeSource is the 
 ## Network exposure
 
 Know what listens before you install. The Flask API (4000) and the MCP server (4100) are bound to
-`127.0.0.1` and need a bearer token. The dashboard (3000) is password-protected, but it speaks
-**plain HTTP**:
+`127.0.0.1` and need a bearer token. The render gateway (4443), which renderers call, is not
+published at all unless you turn on [remote renderers](11-remote-renderers.md); then it listens on
+every interface, serves only TLS and asks every caller for a renderer credential. The dashboard
+(3000) is password-protected, but it speaks **plain HTTP**:
 
 - **Release install:** the dashboard is bound to `127.0.0.1` as well, so only this machine reaches it.
 - **Source install:** the development compose file publishes it on **all interfaces**, so anything that
@@ -318,6 +320,7 @@ container steps are always last and ask nothing, so no prompt ever interleaves b
 | 9 | `gpu` | Lists the machine's NVIDIA GPUs and asks which one renders, or none. Writes `~/.tubematic-data/compose.gpu.json`, which hands that GPU to the renderer, or removes it for CPU rendering. Asks nothing when there is no NVIDIA driver or no NVIDIA Container Toolkit, except to offer going back to the CPU when a GPU was chosen before the toolkit went. See [GPU rendering](10-gpu-rendering.md) |
 | 10 | `renderer` | Builds one image and starts `tubematic-api`, `tubematic-mcp`, `tubematic-worker` and `tubematic-renderer` (release install: pulls the published image instead of building), waiting on the API's and MCP's healthchecks separately and confirming the worker and renderer containers are running |
 | 11 | `dashboard` | Builds and starts `tubematic-dashboard` (release install: pulls instead of building) |
+| — | `renderers` (opt-in) | **Not part of the install**: it runs only when named, `python3 onboard.py --step renderers`, on an install that is already running. Lets renderers on other machines reach this one: asks for the address they use, writes `~/.tubematic-data/compose.renderers.json`, which publishes the render gateway's port (4443 by default), stores the address and recreates `tubematic-api`. Re-run it to change the address or turn remote renderers off. See [Remote renderers](11-remote-renderers.md) |
 
 Steps 3 and 4 must precede 10 and 11. If Compose starts first, Docker auto-creates the missing
 bind-mount directories **as root**, which the containers can use but host-side tooling cannot. Step
@@ -332,6 +335,7 @@ The agent is not one of the steps. It is installed afterwards, with its own comm
 and prints the next command.
 
 Progress is tracked in `.onboard-state.json` in the install directory, so an interrupted run resumes.
+`--status` lists the opt-in step separately, since a complete install never runs it.
 
 ### Questions
 
@@ -668,6 +672,7 @@ about whether the poller is running.
 | **Installed agents** | The `agents` table, written by `--install-agent` |
 | **Service tokens and the session key** | `~/.tubematic-data/secrets/` |
 | **The GPU the renderer uses**, if any | `~/.tubematic-data/compose.gpu.json`, written by the `gpu` step. See [GPU rendering](10-gpu-rendering.md) |
+| **Whether renderers on other machines may connect**, and the port they use | `~/.tubematic-data/compose.renderers.json`, written by the `renderers` step, and the address they dial, a row in the settings table. See [Remote renderers](11-remote-renderers.md) |
 | **Wizard progress** | `.onboard-state.json` in the install directory |
 
 **There is no `.env` file.** Credentials live in the settings table so they can be rotated from
@@ -868,7 +873,7 @@ arguments are swallowed silently.
 | 5 · Generated scenes | `~/.tubematic-data/scenes/generated/*` — the agent-written scene components |
 | 6 · Agent integration | Each installed agent's skills, commands and MCP registration (and, for a project-scope Claude Code install, the agent workspace) |
 | 7 · Cron | The Tubematic lines in your user crontab |
-| 8 · Leftover files | A `docker-compose.override.yml` or `.env` left by an older version. Nothing writes either any more, but Compose still loads an override it finds — except on an install with a GPU chosen, where Tubematic names its compose files explicitly and a stray override is ignored |
+| 8 · Leftover files | A `docker-compose.override.yml` or `.env` left by an older version. Nothing writes either any more, but Compose still loads an override it finds — except on an install with a GPU chosen or remote renderers on, where Tubematic names its compose files explicitly and a stray override is ignored |
 | 9 · Data root | Offers to delete `~/.tubematic-data/` outright — **including rendered videos** |
 
 Step 6 reads Claude Code's install scope and workspace from its row in the `agents` table, falling
@@ -901,6 +906,12 @@ empty, then tells you the path so you can finish by hand.
   the step names their path; a reinstall creates new ones, so they are safe to delete by hand.
 - **The GPU choice** in `~/.tubematic-data/compose.gpu.json` — also only step 9. A reinstall that
   keeps the data root uses it again; delete it to start on the CPU.
+- **The remote-renderers port** in `~/.tubematic-data/compose.renderers.json` — also only step 9,
+  which names it when you keep the data root. A reinstall that keeps the data root publishes the
+  port again; delete the file to keep it closed.
+- **Remote renderers on other machines.** The uninstaller cannot reach them; run
+  `python3 tubematic_remote_renderer.py remove` on each one (see
+  [Remote renderers — Removing a renderer](11-remote-renderers.md#removing-a-renderer)).
 - **Docker images** — the built or pulled images stay cached, and a later install reuses them.
 - **The install directory itself** — delete it by hand.
 

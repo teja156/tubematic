@@ -69,10 +69,45 @@ the renderer's row in `renderers` ([Rendering and Review](11-rendering-and-revie
 | `requested_at`, `pending` | The last Test request, and whether no probe has started since |
 | `waiting_for_render` | `pending`, and the built-in renderer holds a render it has not uploaded yet. It tests only between renders |
 
-Every field but `status` describes the built-in renderer on purpose: it is what the dashboard's GPU
-panel shows and its Test button asks for, and it is the only renderer onboarding's `gpu` step
-configures. `status` is the aggregate because a gate that looked at the built-in renderer alone would
-refuse a style another renderer can render.
+Every field but `status` describes the built-in renderer: it is the only renderer onboarding's `gpu`
+step configures, and these two routes predate there being more than one. The dashboard reads `GET /render/gpu`
+for its `status`, which the Cartoon 3D and mascot pickers gate on; its Renderers panel reads every renderer
+from [`GET /renderers`](#renderers) and tests one with `POST /renderers/<id>/gpu-test`, which does for
+any renderer what `POST /render/gpu/test` does for the built-in one. Both GPU routes stay for any
+caller that used them. `status` is the aggregate because a gate that looked at the built-in renderer
+alone would refuse a style another renderer can render.
+
+### Renderers
+
+What the dashboard's Renderers panel (Settings → Rendering) reads and does. Every machine that
+renders, the built-in renderer included; how they are added from the host side is in
+[Remote renderers](../user-guide/11-remote-renderers.md). All need the API token, like every route
+here; none of them is on the render gateway.
+
+| Route | Answers |
+|---|---|
+| `GET /renderers` | `200 {"remote_enabled", "gateway_address", "renderers": [...]}`. `remote_enabled` is whether the settings row `render_gateway_address` holds an address (written only by `onboard.py --step renderers`), and `gateway_address` is that address, `host:port`. The list holds every renderer not removed, the built-in one first (re-created if its row is ever missing) |
+| `POST /renderers/enrollments` | Body `{"name"}`, optional, 1–60 characters after trimming (`400` otherwise; blank means none). `201 {"token", "expires_at", "command"}`: a one-time [enrollment token](#enrollment) valid for an hour, for a renderer that will be listed under that name, and the exact host command, `python3 tubematic_remote_renderer.py install --token '<token>'`. **The token is in this answer only**; the database keeps its secret's hash. `409 {"error": "remote_renderers_off"}` while no address is stored — the token would carry an address nothing can reach. `503 {"error": "gateway_certificate_missing"}` when the gateway's certificate cannot be read, since a token without its pin cannot be issued |
+| `PATCH /renderers/<id>` | Body with `enabled` (a boolean) and/or `name` (1–60 characters). `200` with the updated renderer; `400` for a body with neither, or a bad value; `404 not_found` for an unknown or removed id. A disabled renderer still heartbeats and is told so, and claims nothing. The built-in renderer can be disabled |
+| `DELETE /renderers/<id>` | `200 {"id", "removed_at"}`. Sets `removed_at` and clears both credential hashes, so the renderer's next heartbeat gets `401`; a render it held is re-queued by the worker's lease sweep once its lease runs out. `409 {"error": "builtin"}` for the built-in renderer, which can only be disabled; `404 not_found` |
+| `POST /renderers/<id>/gpu-test` | Stamps that renderer's `gpu_probe_requested_at`; its next heartbeat reply says `probe_now`. `202` with the renderer, `probe_pending: true`; the result arrives in a later `GET /renderers`. `404 not_found` |
+
+Each entry in `renderers` is `tubematic_core/renderers.py::renderer_states` plus what the panel
+shows (`pipeline.py::renderer_list`):
+
+| Field | Meaning |
+|---|---|
+| `id`, `name`, `builtin`, `enabled` | `builtin` for the built-in renderer, `r_<hex>` for an enrolled one |
+| `online` | A heartbeat within the last 120 seconds |
+| `state`, `current_video_id`, `current_video_title` | `idle` or `rendering`, as last reported, and that video's title (its topic when it has none) |
+| `needs_upgrade`, `version` | `version` is what the renderer last reported; anything but main's sets `needs_upgrade`, and such a renderer claims nothing |
+| `gpu_verified`, `gpu_probed`, `gpu_configured`, `gpu_error` | From its last GPU probe: whether it passed (what makes a renderer GPU-capable), whether there is one, whether a GPU was configured, and why it failed |
+| `gpu` | `null` before the first probe, else `{ok, configured, error, renderer, name, at}`: the WebGL renderer string Chromium reported, the configured GPU's name and when the probe ran |
+| `probe_pending`, `waiting_for_render` | A Test was asked for and no probe has started since; and the renderer is busy rendering, which it finishes first |
+| `compute`, `host` | What it reported: `{cpus, memory_bytes, gpus: [{name, uuid, memory_mb}]}`, and its host name as the renderer process sees it |
+| `last_heartbeat_at`, `last_error`, `credential_expires_at`, `created_at` | `credential_expires_at` is `''` for the built-in renderer, whose credential never expires |
+
+No credential hash is ever returned.
 
 ---
 
@@ -190,7 +225,7 @@ a stored choice is never silently rewritten — and is refused instead by the ap
 carries `visual_style`, at the topic checkpoint and before anything is spent. `cartoon_3d` follows
 the same shape with a different condition: it is refused by `POST /videos`, `PATCH /videos/<id>`
 and the project routes unless `GET /render/gpu` reports `status: working`, with a message naming the
-GPU step (or Test GPU, when the renderer has not probed yet). A stored project default is refused only
+GPU step (or Test GPU, when a renderer has not probed yet). A stored project default is refused only
 when it changes.
 
 A `curriculum` video likewise starts with its project's `default_script_profile_id`, while that
@@ -779,7 +814,7 @@ result — is on [Rendering and Review](11-rendering-and-review.md); this sectio
 | | |
 |---|---|
 | Container | `tubematic-api` |
-| Port | **4443**, TLS only. Not published by `docker-compose.yml`: the built-in renderer reaches it as `https://tubematic-api:4443` over the Compose network |
+| Port | **4443**, TLS only. Not published by `docker-compose.yml`: the built-in renderer reaches it as `https://tubematic-api:4443` over the Compose network. Remote renderers reach it on the host port `onboard.py --step renderers` publishes ([Infrastructure — Remote-renderers override](16-infrastructure.md#remote-renderers-override)) |
 | Prefix | `/v1` |
 | Authentication | `Authorization: Bearer <renderer credential>` on every route but `GET /v1/version` and `POST /v1/enroll` |
 
@@ -862,8 +897,17 @@ trusts that certificate and calls `POST /v1/enroll`. Its state file (`renderer.j
 the certificate. Enrolling again from the same machine keeps the `machine_id`, so the gateway replaces
 that renderer's credential, version and compute on its existing row rather than adding a second one.
 
-In this release nothing issues an enrollment token: the module function exists, and the dashboard
-and onboarding do not offer it yet, so the built-in renderer is the only one an install runs.
+Two things issue a token, both only while remote renderers are on (an address is stored):
+[`POST /renderers/enrollments`](#renderers), behind the dashboard's **Add renderer**, and the
+`renderers` onboarding step, which can print a first one. The token's URL is
+`https://<render_gateway_address>`, with port 4443 added when the address names none
+(`pipeline.py::render_gateway_url`). The name a token was issued with wins over the one the renderer
+sends at enrollment; a token issued without one (the onboarding step's) takes the renderer's.
+
+The host side — checking Docker and the GPU, verifying the pin before anything is sent, reading
+`GET /v1/version` to pick the image and starting the container with the token — is
+`scripts/tubematic_remote_renderer.py`, a standard-library-only script shipped as a release asset;
+see [Rendering and Review — Remote renderers](11-rendering-and-review.md#remote-renderers).
 
 ---
 

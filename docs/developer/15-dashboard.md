@@ -29,6 +29,7 @@ API container restarting underneath it.
 |---|---|
 | Pipeline board, Library, Projects, Script Profiles, Mascots | 5s |
 | Settings page's pipeline-status readout, top-bar health indicator, top-bar version badge | 30s |
+| Settings → Rendering's Renderers panel, and the Pipeline page's renderer list behind the **Nothing can render** banner | 20s; the panel polls every 3s while a GPU test it asked for is outstanding |
 | Update banner (`/api/update-check`; GitHub itself is asked at most every 2 hours) | 10 min |
 | Settings values themselves, timezone, voice roster, script-profile list, agent list | fetched once on mount |
 
@@ -385,7 +386,7 @@ answers.
 
 | Component | Purpose |
 |---|---|
-| `PipelineClient.tsx` | Root client component for `/`. Owns all polling and the single `handleAction` dispatcher |
+| `PipelineClient.tsx` | Root client component for `/`. Owns all polling and the single `handleAction` dispatcher, and the **Nothing can render** banner: shown when `stats.RENDER_QUEUED` is above zero and no renderer from `GET /renderers` is enabled, online and on main's version (`lib/renderers.ts::nothingCanRender`). A list that has not loaded, or failed, never raises it — a banner that cried wolf on a network blip would teach people to ignore it |
 | `KanbanBoard.tsx` / `KanbanColumn.tsx` / `KanbanCard.tsx` | The board. A card shows a score dot (or "—" for an unscored video from the New Video page), the display name, strategy tag, relative age, a **STUCK** tag when the scheduled agent has stopped retrying the video, when a `SCHEDULED` post goes out (in the zone it was picked in), a progress bar for in-flight statuses, and inline actions at checkpoint statuses |
 | `ActionPane.tsx` | The checkpoint inbox described above. Flashes green or red and hides the row after an action |
 | `VideoModal.tsx` | Full detail dialog — Topic / Script / Video / Publishing Results / Comments / Logs tabs, plus a sidebar with status-appropriate actions (including Delete), a separate **Published to** section linking to each live post (kept out of Actions because opening a post changes nothing about the video), metadata, the video's cost breakdown (`CostBreakdown.tsx`), and the AI review feedback with expand/collapse. Script, Video and Publishing Results appear only once they have content; **Logs is always present**, because a per-video log matters most when nothing else about the video worked. **Comments is a read-only thread** — see `ReviseDialog.tsx` |
@@ -403,6 +404,7 @@ answers.
 | `SummaryStrip.tsx` | Six stat tiles: Topics Awaiting, Scripts Ready, Videos Ready, In Pipeline, Published, Failed |
 | `StatusBadge.tsx` | Colored dot and label for any of the 15 statuses |
 | `SectionLabel.tsx` | Section heading rule with an optional count |
+| `RenderersPanel.tsx` | Settings → Rendering's **Renderers** panel. See [The settings page](#the-settings-page). Its rules (the status chip, the GPU verdict, the banner condition) are pure functions in `dashboard/lib/renderers.ts`, so they are unit-tested without React |
 | `UpdateBanner.tsx` | The "newer release available" strip under the top bar, mounted in `app/layout.tsx`. See [Update check](#update-check) |
 | `TopBar.tsx` | Sticky nav across every page, plus a version badge, timezone badge and health indicator. See below. One unwrapped row needs about 1510px plus the gutters; below a 1640px viewport (the bar's own max-width) the tabs drop to a second row (`.tm-topbar-*` in `globals.css`, which also raises `--hd-height`), because the row used to squeeze its text onto several lines and then make every page scroll sideways. The breakpoint leaves room for the scrollbar, which the media query counts, a longer timezone label and the version string; the row is `nowrap`, so it never wraps text |
 | `components/ui/*` | shadcn/ui primitives — `badge`, `button`, `dialog`, `tabs`, `textarea` |
@@ -514,6 +516,26 @@ has no agent binary to validate a new model against, so models are added or remo
 re-running `python onboard.py --install-agent <name>` on the host. There is no uninstall control
 either — that is `python onboard.py --uninstall-agent <name>`, which also removes files the
 dashboard cannot reach. See [HTTP API](05-http-api.md#agents).
+
+**The Rendering tab's Renderers panel is outside staging too.** Renderers are rows in their own
+table, so `RenderersPanel.tsx` reads `GET /renderers` itself and each button — Enable/Disable,
+Rename, Remove (remote only, behind a confirmation), Test GPU — writes at once through the
+[renderers routes](05-http-api.md#renderers). One card per renderer, the built-in one first, with a
+status chip decided by `lib/renderers.ts::rendererStatus` — the first of *disabled*, *credential
+expired*, *needs upgrade*, *offline*, *busy* and *online* that applies, because the first thing that
+stops a renderer taking work is the one worth saying. The card always shows Chromium's raw WebGL
+renderer string beside its plain-words reading: "verified" is the renderer's verdict from that
+string, never from a render having finished, and the string is the evidence. **Test GPU** shows only
+for a renderer that reports or is configured with a GPU — without one a test can only re-confirm the
+CPU. The panel never starts, stops or reconfigures a renderer: the dashboard has no Docker access by
+design, so the card says which host command does (`onboard.py --step gpu` for the built-in renderer,
+the remote host script's `upgrade` for one that needs an upgrade).
+
+**Add renderer** is disabled, with the command that fixes it, until `GET /renderers` says
+`remote_enabled`. Its dialog asks for a name, calls `POST /renderers/enrollments`, and shows the
+token and the host command **once**, each with a copy button (and selectable text, since
+`navigator.clipboard` is absent on a plain-HTTP page that is not `localhost`). Closing the dialog
+forgets them: only the secret's hash is stored, so there is nothing to show again.
 
 **The Costs tab is outside staging too**, for the same reason: model prices are rows in their own
 table. See [Settings — Costs](../user-guide/05-settings.md#costs) and [HTTP API](05-http-api.md#costs).

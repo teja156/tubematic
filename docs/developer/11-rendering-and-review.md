@@ -5,7 +5,7 @@ what happens to the video:
 
 | Process | Container | What it does |
 |---|---|---|
-| The renderer, `renderer/api/render_agent.py` | `tubematic-renderer` (the built-in renderer) | Runs Remotion. It has **no database**: it asks the render gateway for work, downloads the job's files, renders, uploads the mp4 and reports how the render ended. It also tests its GPU and, built-in only, runs the Cartoon 3D stills server |
+| The renderer, `renderer/api/render_agent.py` | `tubematic-renderer` (the built-in renderer), and `tubematic-remote-renderer` on each [remote renderer](#remote-renderers) | Runs Remotion. It has **no database**: it asks the render gateway for work, downloads the job's files, renders, uploads the mp4 and reports how the render ended. It also tests its GPU and, built-in only, runs the Cartoon 3D stills server |
 | The render gateway, `renderer/api/render_gateway.py` | `tubematic-api`, HTTPS port 4443 | Everything a renderer asks for: which video it gets, the job's files, where the mp4 goes, and what a failed render does to its video (`renderer/api/render_results.py`) |
 | The worker, `renderer/api/worker.py` | `tubematic-worker` | The AI review of every uploaded render, and two backstops: a render whose renderer stopped reporting, and a GPU-only video no renderer can take. See [The Worker](12-the-worker.md) |
 
@@ -14,9 +14,9 @@ need the database file, the jobs volume and the output volume on that machine, a
 would hold every stored API key. Through the gateway a renderer holds one credential and the
 gateway's certificate, sees one job's files at a time, and can move a video only by reporting on a
 render it holds. The built-in renderer goes through exactly the same routes as a remote one, so the
-path every remote renderer depends on is the one every install runs every day. Enrolling a remote
-renderer is not offered by any command in this release; the gateway's side of it is in
-[HTTP API — The render gateway](05-http-api.md#the-render-gateway).
+path every remote renderer depends on is the one every install runs every day. How a remote
+renderer is set up and runs is in [Remote renderers](#remote-renderers) below; the gateway's side of
+enrollment is in [HTTP API — The render gateway](05-http-api.md#the-render-gateway).
 
 The renderer runs in its own container so that a render crash or an out-of-memory kill restarts only
 the renderer, leaving the API, the MCP server, the worker — and any agent session connected to them —
@@ -257,7 +257,7 @@ out-of-memory) would loop for ever and never reach the `FAILED` backstop.
 | How | Who notices | Comment |
 |---|---|---|
 | The renderer's process restarted (a crash, a container restart, `--step gpu`) | The gateway, at the restarted renderer's first heartbeat, which carries `started: true` | "Render interrupted by renderer restart — automatically re-queued." |
-| The renderer stopped heartbeating (a host switched off, a network gone) | The worker's lease sweep, once the lease has run out | "Render lost: <renderer> stopped reporting — automatically re-queued." |
+| The renderer stopped heartbeating (a host switched off, a network gone, or the renderer removed on the dashboard, after which its heartbeats get `401`) | The worker's lease sweep, once the lease has run out | "Render lost: <renderer> stopped reporting — automatically re-queued." |
 | A render was in flight across the upgrade that introduced the gateway (the row has no renderer) | The worker's lease sweep, on its first pass | "Render interrupted by the upgrade — automatically re-queued." |
 
 Past the cap the comment's first part is kept and ends "N times (limit M) — giving up."
@@ -416,13 +416,14 @@ while its last probe passed (`_render_on_gpu`); otherwise it takes the CPU path.
   and the result carries the answer as `gpu_ok`. If the GPU is what broke, the gateway stops sending
   this renderer GPU work and its next render falls back to the CPU, instead of failing the same way;
   a GPU-only video goes to `FAILED` (see [Videos that render on the GPU only](#videos-that-render-on-the-gpu-only)).
-- **It runs on request**: `POST /render/gpu/test` stamps the built-in renderer's
+- **It runs on request**: `POST /renderers/<id>/gpu-test` (the dashboard's **Test GPU** on a
+  renderer's card; `POST /render/gpu/test` for the built-in one) stamps that renderer's
   `renderers.gpu_probe_requested_at`, and the next heartbeat reply says `probe_now` while that stamp is
   newer than the last probe's start. Both stamps carry microseconds, because they are compared as
   strings. The renderer probes between renders, so the request waits behind a render in progress, and
-  `GET /render/gpu` reports it as pending meanwhile.
-- **It runs on a CPU install too**, with the CPU path, so the dashboard's Test GPU shows what Chromium
-  gets there (SwiftShader).
+  `GET /renderers` reports it as pending meanwhile.
+- **It runs on a CPU-only renderer too**, with the CPU path, so the probe records what Chromium gets
+  there (SwiftShader).
 - **It never raises.** A probe that cannot start, times out (180 s, with the same process-group kill
   as a render) or writes no answer reports a failed result with the reason.
 
@@ -439,9 +440,10 @@ has no GPU and no override, so it never guesses: every GPU gate reads the render
   (`_cartoon3d_gpu_error`, `mascot_gpu_error`) read this aggregate. A gate that looked only at the
   built-in renderer would refuse a style another renderer can render.
 - **`GET /render/gpu` describes the built-in renderer** for every field but `status`: its probe, its
-  configured GPU, its Test request. That is what the dashboard's GPU panel shows and what its Test
-  button asks for, and the built-in renderer is the only one onboarding's `gpu` step configures.
-  `upgrade.py --check` and `scripts/service.py status` read the same row (`onboard/gpu.py::report_lines`).
+  configured GPU, its Test request — the built-in renderer is the only one onboarding's `gpu` step
+  configures. The dashboard's Renderers panel shows every renderer's probe from `GET /renderers`
+  instead ([HTTP API — Renderers](05-http-api.md#renderers)). `upgrade.py --check` and
+  `scripts/service.py status` read the built-in renderer's row (`onboard/gpu.py::report_lines`).
 
 The text-layout audit stays on `swangle` whatever the install has. It runs in the MCP container,
 which never gets a GPU, and it measures text, which comes out the same on either path.
@@ -483,6 +485,77 @@ log. The gateway's side — claims, refusals, uploads, a renderer that needs an 
 stop — is in `tubematic-api`'s log. Problems that are the renderer's rather than one video's (a
 gateway it cannot reach, a refused credential) are logged and also sent as its `last_error`, stored
 on its row in `renderers`.
+
+A remote renderer's log stays on its own machine: it has no `/logs` mount, so the JSONL file the
+built-in renderer writes for the dashboard's Logs page is not written, and its lines are in
+`docker logs tubematic-remote-renderer` there. Its `last_error`, on its row, is what main sees.
+
+## Remote renderers
+
+A remote renderer is `render_agent.py` in the same backend image, run as one container,
+`tubematic-remote-renderer`, on another machine. It is the built-in renderer minus four things: it
+has no `/jobs` volume (so no stills server), no shared generated-scene volume (it stages each job's
+scenes from the bundle — [above](#the-bundle-staging-and-the-render-call)), no
+`builtin_renderer_token`, and no copy of the gateway's certificate. What it has instead is a state
+volume, `tubematic-renderer-state` at `/state` (`TUBEMATIC_RENDERER_STATE`), holding
+`renderer.json`, mode 0600.
+
+**Who it is: `render_agent.py::_load_identity`.** With `TUBEMATIC_RENDERER_BUILTIN` unset it reads
+the state file. On the first start the file holds no credential and `TUBEMATIC_ENROLL_TOKEN` holds a
+token, so it enrolls (`render_agent.py::enroll`): fetch the certificate with a bare handshake,
+refuse it unless its sha256 is the token's pin, `POST /v1/enroll`, and write the credential, the
+certificate, the pin, the gateway URL, a `machine_id` and the hash of the token's secret
+(`enrolled_with`) into the state file. On every later start the token is still in the container's
+environment, but its secret's hash matches `enrolled_with`, so it is ignored and the saved
+credential is used — a used token would be refused anyway. A different token re-enrolls the same
+machine (same `machine_id`); if that fails while a usable credential is saved, the renderer carries
+on with it. With neither a credential nor a token it cannot start, and retries every
+`ENROLL_RETRY_SECS` (60), logging why. `TUBEMATIC_GATEWAY_URL`, when set, overrides the saved
+address; the host script always sets it to the one it was installed with.
+
+**What it reports.** Its enrollment and every heartbeat carry its compute
+(`render_agent.py::_compute_report`: CPU count, `MemTotal`, and every GPU `nvidia-smi` lists inside
+the container), its version and its name (`TUBEMATIC_RENDERER_NAME`, else the container's host
+name). The scheduler's prior for a renderer with no timings reads that compute.
+
+**Rotation.** A rotated credential from a heartbeat reply is written to the state file before it is
+used (`RemoteIdentity.save_rotated`), so a crash between the two never leaves it holding a
+credential the gateway does not know. When the gateway answers `401 credential_expired` the
+renderer logs and reports `credential expired: …`; it cannot recover on its own.
+
+**The log lines the host script waits for.** `scripts/tubematic_remote_renderer.py install` and
+`upgrade` watch the container's log for up to 60 seconds for `enrolled` or `first heartbeat` (success),
+`enrollment_invalid` or `credential expired` (refused), and `needs upgrade`. Those words are a
+contract between the two files, kept in `render_agent.py`'s log calls with a comment saying so.
+
+### The host script
+
+`scripts/tubematic_remote_renderer.py` is what an operator runs on the remote machine: `install`,
+`upgrade`, `remove` and `status`, documented for users in
+[Remote renderers](../user-guide/11-remote-renderers.md). It is **standard library only**, Python
+3.10+, because that machine has no checkout and nothing installed but Docker; a test fails the build
+if it imports anything else. It is shipped twice: in the release tarball's `scripts/`, and as a
+release asset of its own covered by the release's `CHECKSUMS.txt`
+([Releases](18-releases.md#what-a-release-consists-of)).
+
+- **The pin is checked before anything is sent.** `fetch_pinned_cert` reads the certificate with
+  `ssl.get_server_certificate` and compares its sha256 with the token's pin; only then is
+  `GET /v1/version` read, over a context that trusts that certificate alone. A wrong address, a
+  TLS-terminating proxy or an impostor gets a TLS handshake and nothing else.
+- **The image is main's version**: `ghcr.io/<owner>/tubematic-backend:<version>`, the owner hardcoded
+  from `tubematic_core.version.GITHUB_REPO` (the script cannot import it; a test pins the two), or
+  `--image`. `upgrade` reads the version again, so a remote renderer follows main only when its
+  operator runs it.
+- **The container is the composed renderer's twin**: the same command, `shm_size` 2g and
+  `PUPPETEER_EXECUTABLE_PATH`, `--restart unless-stopped`, and with a GPU `--gpus device=<uuid>` plus
+  the environment `onboard/gpu.py`'s override gives the built-in renderer
+  (`NVIDIA_DRIVER_CAPABILITIES=graphics,utility`, `TUBEMATIC_GPU_UUID`, `TUBEMATIC_GPU_NAME`,
+  `TUBEMATIC_HOST_GPUS`). Tests pin each against its source.
+- **The token never touches a command line or a file.** `docker run` gets a bare
+  `-e TUBEMATIC_ENROLL_TOKEN`, so Docker copies the value from the script's own environment for that
+  one call; the local state file, `~/.tubematic-remote-renderer.json` (0600), holds the gateway URL,
+  the pin, the image, the name and the GPU choice. `upgrade` recreates the container without the
+  token, from that file, keeping the state volume and therefore the credential.
 
 ## The stills server
 

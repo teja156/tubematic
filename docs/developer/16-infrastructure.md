@@ -18,7 +18,7 @@ Everything runs from `docker-compose.yml`. Five services, six volumes, one netwo
 | | |
 |---|---|
 | Build | `renderer/Dockerfile`, context = repo root, tagged `tubematic-renderer-image` |
-| Ports | `127.0.0.1:4000` Flask; 4443, the render gateway over HTTPS, on the Compose network only (not published) |
+| Ports | `127.0.0.1:4000` Flask; 4443, the render gateway over HTTPS, on the Compose network only — published on the host only by the [remote-renderers override](#remote-renderers-override) |
 | Command | `entrypoint.sh python3 /app/api/server.py` |
 | Restart | `unless-stopped` |
 | Healthcheck | `curl -fs localhost:4000/health`, every 15s, 5 retries |
@@ -34,7 +34,8 @@ serves the dashboard, and renderers cannot reach it until the secrets exist and 
 
 **4443 is not published by `docker-compose.yml`.** The built-in renderer reaches it as
 `https://tubematic-api:4443` over the Compose network, which needs no published port. A renderer on
-another machine would need it published, and nothing in this release does that.
+another machine needs it published, which only the opt-in `renderers` onboarding step does, through
+an override file — see [Remote-renderers override](#remote-renderers-override).
 
 `tubematic-api` deliberately depends on no other service. The dashboard and the poller reach the
 pipeline through Flask, and that path has to keep working when the MCP server is down.
@@ -146,11 +147,14 @@ every install. Instead the `gpu` onboarding step (`onboard/gpu.py`) writes
 It is JSON, which Compose reads as YAML, so onboarding needs no YAML library to write and read it.
 It lives under the data root, not the install, because upgrades install into a new directory.
 
-`onboard/actions.py::_compose()` adds `-f docker-compose.yml -f <override>` when the file exists, and
-is the bare `docker compose` otherwise, so an install without a GPU keeps the argv it always had.
-Everything that runs `up` goes through it: the onboarding steps, `scripts/service.py` and
-`upgrade.py`. **A hand-run `docker compose up` does not**, and recreates the renderer without the
-GPU. That is safe, because the renderer then simply renders on the CPU, but it is why the docs and
+`onboard/actions.py::_compose()` names the overrides: when either this one or the
+[remote-renderers one](#remote-renderers-override) exists, it is
+`docker compose -f docker-compose.yml -f <every override that exists>`, always in the same order
+(GPU, then remote renderers); with neither it is the bare `docker compose`, so an install that uses
+neither keeps the argv it always had. Everything that runs `up` goes through it: the onboarding
+steps, `scripts/service.py` and `upgrade.py`. **A hand-run `docker compose up` does not**, and
+recreates the renderer without the GPU (and `tubematic-api` without the published gateway port).
+That is safe, because the renderer then simply renders on the CPU, but it is why the docs and
 hints say `scripts/service.py start`. Naming files with `-f` also stops Compose loading a stray
 `docker-compose.override.yml`, which only very old installs ever had.
 
@@ -158,6 +162,57 @@ hints say `scripts/service.py start`. Naming files with `-f` also stops Compose 
 over (`gpu.py::override_problems`: no `nvidia` runtime, no driver, or the GPU is gone). Without
 that check, the upgrade would stop the stack and then fail at `up`. How the renderer decides whether
 the GPU works is in [Rendering and Review](11-rendering-and-review.md#the-gl-renderer).
+
+#### Remote-renderers override
+
+The opt-in `renderers` onboarding step (`python3 onboard.py --step renderers`,
+`onboard/actions.py::apply_renderers` with `onboard/remote_renderers.py`) lets renderers on other
+machines reach the render gateway. It writes `~/.tubematic-data/compose.renderers.json`, which
+changes `tubematic-api` only:
+
+```json
+{
+  "x-tubematic": "Written by `python3 onboard.py --step renderers`. …",
+  "services": { "tubematic-api": { "ports": ["0.0.0.0:4443:4443"] } }
+}
+```
+
+The host port is the one in the address the operator gives (4443 when it names none); the container
+port is always 4443. When the address is an IPv6 one, a second entry `[::]:<port>:4443` publishes on
+IPv6 too. It is added only then because a host with IPv6 disabled refuses that bind and `up` would
+fail. The step also stores the address renderers dial, `host:port` (an IPv6 host in brackets), as
+the settings row `render_gateway_address` ([Settings internals — Undeclared rows](04-settings.md#undeclared-rows));
+`''` or no row means off. It then recreates `tubematic-api` (`up -d tubematic-api`, deferred while a
+post is uploading, since the upload runs inside an API request), checks that `127.0.0.1:<port>`
+answers a TLS handshake with the gateway's own certificate (`remote_renderers.py::wait_for_gateway`,
+retried while the container starts), prints a firewall note, and can print a first enrollment token.
+Choosing *off* deletes the file, blanks the row and recreates `tubematic-api` again.
+
+**Why an override and not a line in `docker-compose.yml`**: the Compose file is the same on every
+install, and a published 4443 there would open the gateway on every machine, including those that
+never asked for remote renderers. **Why under the data root**: upgrades install into a new
+directory, and the data root is what carries `compose.gpu.json`, the database and the secrets across
+them. **Why the address is a settings row and not only in the override**: the dashboard builds every
+enrollment token from it and greys out *Add renderer* without it, and the API container cannot read
+a host file. It is not a `SETTINGS_SPEC` key, so the dashboard cannot set it: turning remote
+renderers on also publishes a port, which only the host can do.
+
+**The port is published on every interface (`0.0.0.0`), and `ufw` does not restrict it.** Docker
+routes a published port in the `nat` table, ahead of the `INPUT` chain `ufw` writes to. The step's
+firewall note, and [Remote renderers](../user-guide/11-remote-renderers.md#allow-the-port-through-your-firewall--from-your-renderers-only),
+point at a network firewall or Docker's `DOCKER-USER` chain instead. **Nothing may terminate TLS in
+front of it**: renderers trust exactly the gateway's certificate
+([HTTP API — TLS and the certificate pin](05-http-api.md#tls-and-the-certificate-pin)).
+
+Like the GPU override, `read_override` accepts only what this module writes (the `ports` of
+`tubematic-api`, each `0.0.0.0` or `[::]` to container port 4443, one host port), and
+`remote_renderers.py::override_problems` reports anything else. The prerequisites check warns about
+it and **`upgrade.py` refuses before stopping anything**, because Compose refuses a file it cannot
+parse and the `up` would fail after the stop. A readable one is carried across an upgrade untouched.
+`scripts/service.py status` and `upgrade.py --check` report whether remote renderers are on and flag
+a half-done state (a port with no stored address, an address with no port, or the two disagreeing).
+`uninstall.py` leaves the file with a kept data root and names it, since a reinstall would publish the
+port again.
 
 ### `tubematic-dashboard`
 
@@ -224,7 +279,7 @@ Three containers listen, and each one checks every request (the API on two ports
 |---|---|---|
 | `tubematic-dashboard` | browsers | A signed session cookie, set after the dashboard password |
 | `tubematic-api` | the dashboard, the poller, `vqa/edit_settings.py`, `curl` | `Authorization: Bearer <api_token>` |
-| `tubematic-api`, render gateway (4443) | renderers | TLS with a pinned certificate, then `Authorization: Bearer <renderer credential>` |
+| `tubematic-api`, render gateway (4443) | renderers — the built-in one, and remote ones once the port is published | TLS with a pinned certificate, then `Authorization: Bearer <renderer credential>`. Open: `GET /v1/version` and `POST /v1/enroll`, whose body carries the one-time secret |
 | `tubematic-mcp` | the agent CLIs | `Authorization: Bearer <mcp_token>` |
 
 **Sessions for people, tokens for programs.** A browser cannot hold a bearer token safely, and a
@@ -411,7 +466,7 @@ migration ran, so the services that come back up will migrate it forward again o
 | 3000 | Dashboard — all interfaces in a checkout, `127.0.0.1` in a release install; behind its login either way |
 | 4000 | Flask API — `127.0.0.1` only |
 | 4100 | MCP server — `127.0.0.1` only |
-| 4443 | The render gateway (HTTPS) — Compose network only, not published |
+| 4443 | The render gateway (HTTPS) — Compose network only, unless the [remote-renderers override](#remote-renderers-override) publishes it on every interface (host port chosen by the operator, 4443 by default) |
 | 4455 | The renderer's stills server — Compose network only, never published |
 | 3001 / 4001 | The end-to-end test stack |
 
@@ -542,7 +597,7 @@ project record in `~/.claude.json`, both written by `python onboard.py --install
 ## Operating
 
 ```bash
-python3 scripts/service.py status                        # version, schema, cron, container health, GPU
+python3 scripts/service.py status                        # version, schema, cron, container health, GPU, remote renderers
 python3 scripts/service.py logs tubematic-api -f         # Flask
 python3 scripts/service.py logs tubematic-mcp -f         # the agent's tools
 python3 scripts/service.py logs tubematic-worker -f      # publishing, Auto Pilot, notifications

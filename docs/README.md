@@ -37,6 +37,7 @@ For anyone running Tubematic. No knowledge of the code is assumed.
 | **[8 · Troubleshooting](user-guide/08-troubleshooting.md)** | Symptoms and where the cause usually is |
 | **[9 · Remote Access](user-guide/09-remote-access.md)** | Using the dashboard from another machine: Twingate, or HTTPS with Caddy or nginx |
 | **[10 · GPU Rendering](user-guide/10-gpu-rendering.md)** | Rendering on an NVIDIA GPU: the driver, the NVIDIA Container Toolkit, picking the GPU, and checking it is really used |
+| **[11 · Remote Renderers](user-guide/11-remote-renderers.md)** | Letting other machines render for your install: turning it on, the firewall, adding, upgrading and removing a renderer, credentials and troubleshooting |
 
 ## Developer docs
 
@@ -54,7 +55,7 @@ For contributors and anyone integrating with or extending Tubematic.
 | **[8 · Scripting and Voice](developer/08-scripting-and-voice.md)** | Script segments, length budget, pronunciation and pause markup, `timeline.json`, script profiles |
 | **[9 · The Remotion Project](developer/09-remotion-project.md)** | The frame model, compositions, dynamic scene dispatch, `scene-config.json`, the installed component library |
 | **[10 · Scene Authoring](developer/10-scene-authoring.md)** | How a scene gets written — the two visual registers, the PHOTO / HYBRID / DIAGRAM / STICK taxonomy, cadence, the revision path, adding a component |
-| **[11 · Rendering and Review](developer/11-rendering-and-review.md)** | The renderer and the render gateway: claims and scheduling, leases, the job bundle, the GPU test and GPU-only videos, the Cartoon 3D stills server, timeouts and retries, Gemini video review, the text-layout audit |
+| **[11 · Rendering and Review](developer/11-rendering-and-review.md)** | The renderer and the render gateway: claims and scheduling, leases, the job bundle, remote renderers, the GPU test and GPU-only videos, the Cartoon 3D stills server, timeouts and retries, Gemini video review, the text-layout audit |
 | **[12 · The Worker](developer/12-the-worker.md)** | The always-on loop that settles posts, runs Auto Pilot, the AI review thread and the timed sweeps — every pass, its order and how often it runs |
 | **[13 · The Poller](developer/13-the-poller.md)** | `poll.py`, the cron-started supervisor that runs agent sessions — the loop, the four lanes, one stage per session, timeouts and orphans |
 | **[14 · Publishing internals](developer/14-publishing.md)** | The postforme client, schema, routes, the worker's publishing passes, and the design decisions behind them |
@@ -70,7 +71,8 @@ For contributors and anyone integrating with or extending Tubematic.
 
 **Just want to run it.** [Quickstart](quickstart.md) → [Using Tubematic](user-guide/03-using-tubematic.md)
 → [The Dashboard](user-guide/04-dashboard.md), and [Remote Access](user-guide/09-remote-access.md) to
-use it from another machine.
+use it from another machine. To render faster, [GPU Rendering](user-guide/10-gpu-rendering.md) and
+[Remote Renderers](user-guide/11-remote-renderers.md).
 
 **Want to change how videos look.** [Overview](user-guide/01-overview.md) →
 [The Remotion Project](developer/09-remotion-project.md) → [Scene Authoring](developer/10-scene-authoring.md).

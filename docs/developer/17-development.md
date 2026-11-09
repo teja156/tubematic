@@ -340,8 +340,9 @@ The job order is load-bearing:
    GHCR, each under the single bare tag `X.Y.Z` — what the generated release compose pulls. See
    [Releases — Image tags](18-releases.md#image-tags) for the two tags that
    were dropped and why. The packages are public, so a release install pulls them without logging in.
-4. **Build the release tarball** with `scripts/build_release_tarball.py` and write a `CHECKSUMS.txt`
-   for the archive itself.
+4. **Build the release tarball** with `scripts/build_release_tarball.py`, copy
+   `scripts/tubematic_remote_renderer.py` beside it, and write a `CHECKSUMS.txt` holding the sha256
+   of both.
 5. **Smoke-test the published artifact** — extract the tarball into a fresh temporary directory
    (never the checkout), create the data directories, service tokens and the render gateway's TLS
    pair onboarding would have made (Compose refuses to start a service whose secret file is missing;
@@ -349,7 +350,8 @@ The job order is load-bearing:
    does not ship it), bring up its own
    `docker-compose.yml` against the images just pushed, assert
    every service reaches healthy and the API answers, then tear down.
-6. **Create the GitHub Release** and attach the tarball and its checksum.
+6. **Create the GitHub Release** and attach the tarball, the remote renderer script and
+   `CHECKSUMS.txt`.
 7. **Publish the docs** (`publish-docs`) — sync this tag's `docs/` into the documentation site as its
    release line, then build and push it. See [Publishing the docs](#docs-siteyml--publishing-the-docs).
 8. **Publish the Kasm registry entry** (`publish-kasm-registry`) — put this release on the Kasm
