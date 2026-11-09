@@ -13,9 +13,11 @@ HTTPS through the render gateway (render_gateway.py) and nothing else:
      heartbeat, which says `started` so the gateway re-queues whatever this
      renderer held before it restarted;
   3. a heartbeat thread reports every HEARTBEAT_SECS what it is doing (which
-     keeps the lease on the video it renders alive), carries any new probe,
-     and applies the reply: stop a render the gateway no longer wants, run a
-     probe the dashboard asked for, save a rotated credential;
+     keeps the lease on the claim it renders alive), carries any new probe,
+     and applies the reply: stop a render the gateway no longer wants (the
+     stop names a claim, and is applied only to the job the heartbeat
+     reported, never to a newer claim of the same video started since), run
+     a probe the dashboard asked for, save a rotated credential;
   4. the loop claims a video, downloads its bundle (the job's files as one tar
      stream) into a job directory of its own, stages it for Remotion, renders
      with the settings the claim carried, uploads the mp4 and reports how the
@@ -764,6 +766,11 @@ ENROLL_RETRY_SECS = 60
 UPLOAD_ATTEMPTS = 3
 RESULT_ATTEMPTS = 3
 RETRY_PAUSE_SECS = 5
+MAX_RETRY_AFTER_SECS = 60
+# A result's error, at most: even escaped six bytes a character it stays
+# under the gateway's 64 KiB JSON limit, and the comment it becomes keeps
+# only its first 2000 characters.
+RESULT_ERROR_CHARS = 8000
 CONNECT_TIMEOUT_SECS = 30
 # Generous read/write timeouts: a bundle with many images, or a long video's
 # upload over a home connection, moves hundreds of megabytes.
@@ -1237,6 +1244,7 @@ def _beat() -> bool:
             body = {"started": _st.started, "version": current_version(), "compute": _st.compute,
                     "state": "rendering" if job is not None else "idle",
                     "video_id": job.video_id if job is not None else "",
+                    "claim_id": job.claim_id if job is not None else "",
                     "last_error": _st.last_error}
         if probe is not None:
             body["gpu_probe"] = probe
@@ -1269,7 +1277,6 @@ def _beat() -> bool:
             was_behind, _st.needs_upgrade = _st.needs_upgrade, reply.get("needs_upgrade") is True
             if reply.get("probe_now") is True:
                 _st.probe_now = True
-            current = _st.job
         if _st.needs_upgrade and not was_behind:
             log.warning(f"this renderer needs upgrade: it runs {current_version()}, main runs "
                         f"{reply.get('main_version')}, and it takes no work until it is upgraded")
@@ -1280,10 +1287,16 @@ def _beat() -> bool:
         # gateway no longer accepts. The other requests never rotate.
         if isinstance(credential, str) and credential:
             _client.identity.save_rotated(credential, str(reply.get("credential_expires_at") or ""))
+    # The stop list names claims. It answers the request that was sent, so it
+    # is applied to the job that request reported — never to whatever job is
+    # current by the time the reply arrives: that may be a newer claim of the
+    # same video, started while this reply was delayed, which the gateway
+    # still wants. Entries for anything else (a stale row it once held) are
+    # ignored.
     stop = reply.get("stop") if isinstance(reply.get("stop"), list) else []
-    # Ignore ids it is not rendering: a stale row it once held, already gone.
-    if current is not None and current.video_id in stop:
-        _stop_job(current)
+    if job is not None and any(isinstance(e, dict) and e.get("video_id") == job.video_id
+                               and e.get("claim_id") == job.claim_id for e in stop):
+        _stop_job(job)
     return True
 
 
@@ -1615,10 +1628,15 @@ def _succeeded(job: _Job, output_path: str, on_gpu: bool, frames: int, seconds: 
 def _upload(job: _Job, out: Path) -> None:
     """PUT the mp4, streamed from disk, at most UPLOAD_ATTEMPTS times while the
     lease holds (a 403, or a 409 claim_lost, means the claim was lost: another
-    claim took the video over). A 413 (over the gateway's size limit) is not
-    tried again."""
+    claim took the video over). A 409 upload_in_progress (an earlier attempt
+    of this claim is still being received) and a 503 busy (the gateway's
+    upload slots are full) are tried again after a pause, at least the
+    Retry-After the gateway asks for. A 413 (over the gateway's size limit)
+    and a 507 (the main machine is short of disk space) are not tried again:
+    the render is reported as an error."""
     last = None
     for attempt in range(1, UPLOAD_ATTEMPTS + 1):
+        pause = RETRY_PAUSE_SECS * attempt
         if job.stopped:
             raise _Stopped()
         try:
@@ -1640,18 +1658,36 @@ def _upload(job: _Job, out: Path) -> None:
                 raise GatewayError(f"the rendered video ({out.stat().st_size} bytes) is larger than the "
                                    "gateway accepts (TUBEMATIC_MAX_OUTPUT_BYTES on the main machine)", 413,
                                    _error_code(resp))
+            if resp.status_code == 507:
+                raise GatewayError("the rendered video could not be uploaded: the main machine is short of disk "
+                                   "space for it (insufficient_storage; it keeps TUBEMATIC_MIN_FREE_BYTES free)",
+                                   507, _error_code(resp))
+            if resp.status_code in (409, 503):
+                pause = max(pause, min(_retry_after(resp), MAX_RETRY_AFTER_SECS))
             last = f"the upload answered {resp.status_code} {_error_code(resp)}".strip()
         log.warning(f"[{job.video_id}] upload attempt {attempt}/{UPLOAD_ATTEMPTS} failed: {last}",
                     extra={"video_id": job.video_id})
         if attempt < UPLOAD_ATTEMPTS:
-            time.sleep(RETRY_PAUSE_SECS * attempt)
+            time.sleep(pause)
     raise GatewayError(f"the rendered video could not be uploaded: {last}")
+
+
+def _retry_after(resp: httpx.Response) -> float:
+    try:
+        return max(0.0, float(resp.headers.get("Retry-After", "")))
+    except ValueError:
+        return 0.0
 
 
 def _post_result(job: _Job, body: dict) -> bool:
     """Report how the render ended. Retried a few times; a result that cannot
-    be delivered is left to the lease, whose expiry re-queues the video."""
+    be delivered is left to the lease, whose expiry re-queues the video. The
+    error is cut to RESULT_ERROR_CHARS (Remotion's stderr is unbounded) so the
+    body stays under the gateway's JSON limit; the comment it becomes keeps
+    far fewer characters than that anyway."""
     vid = job.video_id
+    if isinstance(body.get("error"), str) and len(body["error"]) > RESULT_ERROR_CHARS:
+        body = {**body, "error": body["error"][:RESULT_ERROR_CHARS]}
     for attempt in range(1, RESULT_ATTEMPTS + 1):
         try:
             resp = _client.send("POST", _job_path(vid, "result"), json_body=body, headers=_job_headers(job))

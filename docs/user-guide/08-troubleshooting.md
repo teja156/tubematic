@@ -104,6 +104,7 @@ one that cannot reach the gateway or is refused by it. Its log says which:
 | `heartbeat answered 401 unauthorized` | The renderer's token does not match the API's: one of the two containers is still running with an old `builtin_renderer_token` mount. Restart both |
 | `the gateway's certificate cannot be loaded`, or a TLS certificate error | The renderer's copy of `render_tls_cert` is not the one the API serves. Restart both containers so they mount the same file |
 | `this renderer needs upgrade` | The renderer runs a different version from the API, so it gets no work. Recreate it from the same install: `python3 scripts/service.py restart tubematic-renderer`, or re-run the upgrade |
+| `short of disk space` (also in the video's comment) | The disk holding `~/.tubematic-data` has too little free space for the finished video: the API refuses an upload that would leave less than 2 GiB free (`TUBEMATIC_MIN_FREE_BYTES`), because the database lives on the same disk. The render counts as a failed attempt and the video goes back to the queue, or to `FAILED` once it is past `max_render_retries`. Free some space before its next turn |
 
 `python3 scripts/service.py status` reports the containers; a renderer that is up but silent for
 minutes after `first heartbeat accepted` simply has nothing queued that it may take — a GPU-only

@@ -789,10 +789,10 @@ result — is on [Rendering and Review](11-rendering-and-review.md); this sectio
 |---|---|
 | `GET /v1/version` | `200 {"version", "gateway": 1}` — main's version. Open |
 | `POST /v1/enroll` | Body `{secret, machine_id, name, host, version, compute}`. `200 {renderer_id, credential, credential_expires_at}`, or `403 enrollment_invalid` for a secret that is unknown, used or expired (one answer for all three). Open: the body carries the one-time secret |
-| `POST /v1/heartbeat` | Body `{started, version, compute, state, video_id, last_error, gpu_probe?}`. `200 {enabled, needs_upgrade, main_version, probe_now, stop, credential_expires_at, credential?}` |
+| `POST /v1/heartbeat` | Body `{started, version, compute, state, video_id, claim_id, last_error, gpu_probe?}` — `video_id` and `claim_id` name the claim it is rendering (both `""` when idle). `200 {enabled, needs_upgrade, main_version, probe_now, stop, credential_expires_at, credential?}`, where `stop` is a list of `{video_id, claim_id}`: claims this renderer reported or held that it no longer holds. Only the reported claim's lease is extended |
 | `POST /v1/claim` | `204` nothing for this renderer; `409 disabled` or `409 needs_upgrade`; or `200 {video_id, claim_id, kind, needs_gpu, cartoon, mascot, total_frames, lease_secs, settings: {render_timeout_secs, render_stall_timeout_secs, watermark}}`. A renderer that already holds an unfinished claim gets that claim again, the same `claim_id` included, never a second video |
 | `GET /v1/jobs/<video_id>/bundle` | `200 application/x-tar`, streamed; `409 bundle_unavailable` when the job's files cannot be read |
-| `PUT /v1/jobs/<video_id>/output` | The raw mp4 as the body, streamed, at most `TUBEMATIC_MAX_OUTPUT_BYTES` (default 8 GiB). `200 {bytes}`; `413 output_too_large {limit}` for a larger `Content-Length` (refused before reading) or a chunked body that passes the limit (abandoned there, nothing kept); `409 claim_lost` when the claim was lost while the body streamed (the file is discarded); `409 unsafe_path`; `500 upload_failed` |
+| `PUT /v1/jobs/<video_id>/output` | The raw mp4 as the body, streamed, at most `TUBEMATIC_MAX_OUTPUT_BYTES` (default 8 GiB). `200 {bytes}`; `413 output_too_large {limit}` for a larger `Content-Length` (refused before reading) or a chunked body that passes the limit (abandoned there, nothing kept); `409 upload_in_progress` while another upload for the same claim is still streaming; `503 busy` with `Retry-After` when `TUBEMATIC_MAX_CONCURRENT_UPLOADS` uploads are already streaming; `507 insufficient_storage {min_free_bytes}` when the upload would leave less than `TUBEMATIC_MIN_FREE_BYTES` free on the output filesystem (checked before reading, and again as it streams); `409 claim_lost` when the claim was lost while the body streamed (the file is discarded); `409 unsafe_path`; `500 upload_failed` |
 | `POST /v1/jobs/<video_id>/result` | Body `{outcome, error, on_gpu, gpu_ok, frames, seconds, gpu_probe?}`, `outcome` one of `success`, `failed`, `stalled`, `timeout`, `error`. `200 {}`; `400 bad_outcome` |
 
 The three `/v1/jobs/` routes need the claim they act for in an `X-Render-Claim: <claim_id>` header,
@@ -802,6 +802,24 @@ whose lease ran out is refused even after it has claimed the same video again. W
 checks made again later (before an upload is renamed into place, and inside the transaction that
 routes a failure), is in [Leases](11-rendering-and-review.md#leases-restarts-and-lost-renderers). A
 missing or unknown credential is `401 unauthorized`; an expired one is `401 credential_expired`.
+
+**Every route but the upload takes a small JSON body, and reads at most 64 KiB of it**
+(`render_gateway.py::MAX_JSON_BYTES`, fixed). A larger `Content-Length` is refused with
+`413 body_too_large {limit}` before a byte is read; a chunked body is read only until it passes the
+limit, then refused the same way. The check runs before authentication and before any parse, so
+the open enroll route bounds what an unauthenticated caller can make the gateway hold, and nothing
+on these routes ever reads an unbounded body. Only `PUT /output` streams a large body, under its
+own limits:
+
+| Limit | Environment variable | Default | Answer past it |
+|---|---|---|---|
+| One upload's size | `TUBEMATIC_MAX_OUTPUT_BYTES` | 8 GiB | `413 output_too_large` |
+| Uploads streaming at once, across every claim | `TUBEMATIC_MAX_CONCURRENT_UPLOADS` | 4 | `503 busy`, `Retry-After: 10` |
+| Uploads streaming at once for one claim | — | 1 | `409 upload_in_progress` |
+| Free space an upload must leave on the output filesystem | `TUBEMATIC_MIN_FREE_BYTES` | 2 GiB | `507 insufficient_storage` |
+
+The concurrency answers come before the body is read or a temp file made. Why each exists is in
+[The bundle, staging and the render call](11-rendering-and-review.md#the-bundle-staging-and-the-render-call).
 
 **Why a port of its own, and why renderer credentials work only here.** Port 4000 is bound to
 loopback and takes the API token, which can change any setting, approve paid work and publish. A renderer on another machine needs a port it can reach, and must be

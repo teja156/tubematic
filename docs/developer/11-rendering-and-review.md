@@ -35,9 +35,9 @@ sequenceDiagram
     R->>GW: heartbeat, started: true, GPU probe
     GW->>DB: re-queue whatever this renderer held
     loop every 30 s, on its own thread
-        R->>GW: heartbeat (state, video, last error)
-        GW->>DB: extend the lease, store a new probe
-        GW-->>R: enabled, needs_upgrade, probe_now, stop
+        R->>GW: heartbeat (state, video + claim, last error)
+        GW->>DB: extend that claim's lease, store a new probe
+        GW-->>R: enabled, needs_upgrade, probe_now, stop (claims)
     end
     loop every 20 s while idle
         R->>GW: claim
@@ -88,7 +88,7 @@ and the call is tried again 30 seconds later.
 
 **The heartbeat is a thread of its own, not a step of the loop**, because a render holds the loop
 for as long as it takes, and the lease on the video it renders is kept alive only by heartbeats
-(below). It carries the renderer's state (`idle` or `rendering`, and which video), its version, its
+(below). It carries the renderer's state (`idle` or `rendering`, and which video under which claim), its version, its
 compute (CPUs, memory, GPUs), its last error and any GPU probe no heartbeat has carried yet. The
 reply can tell the renderer to stop a render, to test its GPU, or that it needs an upgrade.
 
@@ -249,8 +249,10 @@ mp4, for anything you want to reclaim earlier.
 
 A claimed video is held by a **lease**: `videos.render_lease_until`, set to `LEASE_SECS` (300
 seconds) from the claim. Each heartbeat from the renderer that holds it, while it reports that video
-as the one it is rendering, extends the lease by the same amount. A renderer that went idle never
-keeps a lease alive.
+**and that claim id** as the one it is rendering, extends the lease by the same amount. A renderer
+that went idle never keeps a lease alive, and neither does a heartbeat for an earlier claim of the
+same video: one sent while the renderer was still on claim A, delayed until A had been re-queued
+and the video claimed again as claim B, leaves B's lease alone.
 
 **Every claim has its own id.** The claim reply carries `claim_id`, a random id the gateway stores in
 `videos.render_claim_id`, and the renderer names it on the bundle, the upload and the result (the
@@ -293,10 +295,15 @@ re-checks that the lease is still past, so a heartbeat that extended it after th
 **An uploaded render is never re-queued.** Once its mp4 has arrived the video is the review's, and
 re-rendering it would throw a finished render away.
 
-**The gateway can stop a render.** The heartbeat reply's `stop` list names every video this renderer
-reports or holds that is no longer `RENDERING` under its id: archived, moved by a human, or
-re-queued because its lease ran out. The renderer kills that render's process group and discards it
-without a result.
+**The gateway can stop a render.** The heartbeat reply's `stop` list names, as `{video_id, claim_id}`
+pairs, every claim this renderer reports or holds that no longer holds its video: archived, moved by
+a human, or re-queued because its lease ran out. The renderer kills that render's process group and
+discards it without a result. **A stop names a claim, not a video, and the renderer applies a reply
+only to the job its request reported** (the `_Job` the heartbeat thread read before sending), never
+to whatever job is current when the reply arrives. Without both, the delayed heartbeat above would
+stop claim B: the reply says "vid-1 is over", and vid-1 is what the renderer is rendering again by
+then. Each retry burnt that way counts towards `max_render_retries`, so a slow network at that
+moment could fail a healthy video.
 
 ## The bundle, staging and the render call
 
@@ -352,9 +359,29 @@ never sees half a video. An upload is at most `TUBEMATIC_MAX_OUTPUT_BYTES` (defa
 `tubematic-api`'s environment): a larger `Content-Length` is refused with `413 output_too_large` before
 anything is read, and a body sent without one (chunked) is counted as it arrives and abandoned, its
 temporary file deleted, the moment it passes the limit. A renderer's body is untrusted input, and the
-output volume is the one the database lives on. The renderer tries an upload up to three times while
-its lease holds (never again after a `413`, which is reported as the render's error; a `403` or
-`409 claim_lost` throws the render away), then reports the result. The job directory, the staged `public/<video_id>/` and (remote) the staged scenes
+output volume is the one the database lives on.
+
+A size limit per request bounds one upload, not the disk: parallel uploads would each write up to it
+before any reached the final claim check. So the gateway also bounds what is in flight:
+
+- **One upload at a time per claim.** A second `PUT` for a claim whose first upload is still
+  streaming (a renderer retrying one it gave up on) is refused with `409 upload_in_progress`.
+- **`TUBEMATIC_MAX_CONCURRENT_UPLOADS` (default 4) at once in all.** Past it, `503 busy` with
+  `Retry-After`. Only one claim per renderer exists, so this caps the temporary files across every
+  renderer.
+- **A free-space floor, `TUBEMATIC_MIN_FREE_BYTES` (default 2 GiB).** An upload whose declared size
+  would leave less than that free on the output filesystem is refused with `507 insufficient_storage`,
+  and the free space is checked again every 64 MiB as the body streams (a chunked body declares
+  nothing, and the disk is shared), which abandons the upload and deletes its temporary file.
+
+The first two are decided before the body is read or a temporary file made; the slot is released
+however the upload ends. The renderer tries an upload up to three times while its lease holds,
+pausing between tries (at least the `Retry-After` the gateway asks for, up to 60 seconds, after a
+`409 upload_in_progress` or `503 busy`). It never tries again after a `413` or a `507`, which are
+reported as the render's error (the video goes back to the queue); a `403` or `409 claim_lost`
+throws the render away. Then it reports the result. A result's `error` is cut to its first 8,000
+characters (`render_agent.py::RESULT_ERROR_CHARS`) so the body fits the gateway's 64 KiB JSON limit;
+the comment it becomes keeps far fewer. The job directory, the staged `public/<video_id>/` and (remote) the staged scenes
 are removed however the job ended.
 
 ### The result
