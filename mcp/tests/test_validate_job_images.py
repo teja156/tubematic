@@ -114,7 +114,7 @@ def test_the_hint_does_not_name_the_removed_gif_tool(jobs_dir):
 
 def test_correctly_scoped_music_is_not_flagged(jobs_dir):
     """Only images are checked. music.mp3 under the right prefix is left alone
-    — it is separately broken (never staged by worker.py) and surfacing that
+    — it is separately broken (never staged by render_agent.py) and surfacing that
     here would be an unrelated failure."""
     cfg = _config({"music": f"/public/{VID}/music.mp3"})
     assert server._bad_image_refs(cfg, VID) == []

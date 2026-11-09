@@ -80,6 +80,12 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(actions, "apply_cron", _step("cron"))
     monkeypatch.setattr(agent_install, "deploy", _step("deploy"))
     monkeypatch.setattr(stack, "report", lambda rep, **kw: True)
+    # A stack that already has the worker, unless a test says otherwise.
+    e_states = {"tubematic-renderer": ("running", ""), "tubematic-worker": ("running", "")}
+    monkeypatch.setattr(stack, "_container_state", lambda name: e_states.get(name, ("", "")))
+    e_commands = {"tubematic-renderer": "python3 /app/api/render_agent.py",
+                  "tubematic-worker": "python3 /app/api/worker.py"}
+    monkeypatch.setattr(stack, "_container_command", lambda name: e_commands.get(name, ""))
 
     def no_migrate(*a, **k):
         raise AssertionError("upgrade.py must never run migrations — the containers do")
@@ -89,6 +95,8 @@ def env(tmp_path, monkeypatch):
         pass
     e = Env()
     e.db_path, e.previous, e.lock = db_path, previous, tmp_path / "poll.lock"
+    e.states = e_states
+    e.commands = e_commands
     e.data_root = tmp_path / "tubematic-data"
     # From 2.0.0 an upgrade refuses without a dashboard password (TMDEV-152).
     from tubematic_core import auth
@@ -382,6 +390,75 @@ def test_no_stop_is_refused_while_a_token_is_missing(upgrade, env):
 
 def test_no_stop_is_allowed_once_the_tokens_exist(upgrade, env):
     code, order, _ = _run(upgrade, env, no_stop=True)
+    assert code == 0
+
+
+# ── Housekeeping moves to tubematic-worker (TMDEV-188) ───────────────────────
+
+OLD_RENDERER = "python3 /app/api/worker.py"
+
+
+def _old_stack(env):
+    """A 2.0.x stack: the renderer runs worker.py and there is no worker."""
+    env.commands["tubematic-renderer"] = OLD_RENDERER
+    del env.states["tubematic-worker"]
+    del env.commands["tubematic-worker"]
+
+
+def test_no_stop_is_refused_while_the_renderer_still_does_the_housekeeping(upgrade, env):
+    """Recreated one at a time, the old renderer keeps publishing beside the
+    new worker until its own turn comes: two publishing loops at once."""
+    _old_stack(env)
+    code, order, rep = _run(upgrade, env, no_stop=True)
+    assert code == 1
+    assert order == []
+    assert "--no-stop" in rep.text() and "tubematic-worker" in rep.text()
+
+
+@pytest.mark.parametrize("worker_state", ["exited", "created", "running"])
+def test_a_leftover_worker_container_does_not_hide_an_old_renderer(upgrade, env, worker_state):
+    """A rollback that kept tubematic-worker, or a half-done manual step, leaves
+    a worker container beside a renderer still running the old loop. The
+    renderer's own command decides, not the worker's existence."""
+    env.commands["tubematic-renderer"] = OLD_RENDERER
+    env.states["tubematic-worker"] = (worker_state, "")
+    code, order, _ = _run(upgrade, env, no_stop=True)
+    assert code == 1
+    assert order == []
+
+
+@pytest.mark.parametrize("state", ["restarting", "paused"])
+def test_a_restarting_or_paused_old_renderer_still_refuses_no_stop(upgrade, env, state):
+    """Neither is stopped: a crash-looping renderer's restart policy brings the
+    old combined loop back mid-upgrade, and a paused one resumes when Compose
+    stops it."""
+    _old_stack(env)
+    env.states["tubematic-renderer"] = (state, "")
+    code, order, _ = _run(upgrade, env, no_stop=True)
+    assert code == 1
+    assert order == []
+
+
+def test_a_renderer_whose_command_cannot_be_read_is_treated_as_old(upgrade, env):
+    """Refusing costs a re-run without --no-stop; guessing wrong double-posts."""
+    env.commands["tubematic-renderer"] = ""
+    code, _, _ = _run(upgrade, env, no_stop=True)
+    assert code == 1
+
+
+def test_the_worker_split_still_allows_a_normal_upgrade(upgrade, env):
+    """Without --no-stop the old renderer is stopped before the worker starts."""
+    _old_stack(env)
+    code, order, _ = _run(upgrade, env)
+    assert code == 0
+    assert _index(order, "docker compose stop") < _index(order, "docker compose up -d")
+
+
+def test_no_stop_is_allowed_when_the_old_stack_is_not_running(upgrade, env):
+    """Nothing old is running, so nothing can overlap with the new worker."""
+    _old_stack(env)
+    env.states["tubematic-renderer"] = ("exited", "")
+    code, _, _ = _run(upgrade, env, no_stop=True)
     assert code == 0
 
 

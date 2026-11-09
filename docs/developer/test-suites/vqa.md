@@ -31,18 +31,18 @@ Python suites; `test_host_side_imports.py` and `test_make_seed_db.py` are flat.
 real key — so a direct-SQL script reusing `_coerce_setting` would skip them. Do not "simplify" this
 into a DB write.
 
-**No settings key needs a restart.** `worker.py`, `mcp/server.py` and `pipeline.py` all read the
+**No settings key needs a restart.** `worker.py`, `render_agent.py`, `mcp/server.py` and `pipeline.py` all read the
 database per use with no in-process cache, so a write applies to the next read. `--restart` is
 opt-in, for a wedged container only.
 
-**The seed database sets `gemini_review_enabled=false` deliberately.** The worker bounces any video
+**The seed database sets `gemini_review_enabled=false` deliberately.** The renderer bounces any video
 with a non-empty suggestions list to `REVISION_REQUESTED`, so leaving review on would mean almost no
 video ever reaches `VIDEO_READY` in the VQA environment.
 
 **`review_video.py` derives paths rather than translating them.** It used to map the stored
 container paths (`/jobs/…`, `/output_videos/…`) onto the host tree by prefix. The stored columns were
 once writable by any caller, so a row could name any host file to be uploaded for review; deriving
-the location from the ids, exactly as the worker does, makes such a row harmless. The isolated-tree
+the location from the ids, exactly as the renderer does, makes such a row harmless. The isolated-tree
 test therefore copies `tubematic_core` along with the script.
 
 **`stage_script.py` owns `mounted/jobs/<vid>/tts_text.txt` with preview semantics.** That is why

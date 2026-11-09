@@ -13,7 +13,7 @@ suite that covers a change without grepping for it.
 |---|---|---|
 | **[`tubematic_core/tests`](tubematic-core.md)** | pytest | The package shared by every process — schema migrations, structured logging, the version string |
 | **[`mcp/tests`](mcp.md)** | pytest | The MCP server — agent tools, the scene-work claim, `validate_job`, the text-layout audit |
-| **[`renderer/api/tests`](renderer-api.md)** | pytest | The Flask API, the render worker, Gemini review, host timezone |
+| **[`renderer/api/tests`](renderer-api.md)** | pytest | The Flask API, the worker, the renderer, Gemini review, host timezone |
 | **[`onboard/tests`](onboard.md)** | pytest | The onboarding wizard — fields, steps, validators, and what each action writes |
 | **[`scripts/tests`](scripts.md)** | pytest | `poll.py` — the cron entrypoint, its decision tree and prompt construction |
 | **[`vqa/tests`](vqa.md)** | pytest | The VQA utilities shipped in the VQA Kasm image |

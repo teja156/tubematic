@@ -27,7 +27,7 @@ every pass for a video it is not allowed to act on — a paid session burned eac
 
 A publish therefore starts in one of two places, and neither is the agent. By default it is a
 person, in the Publish dialog. With [Auto Pilot](#auto-pilot) on for a video's project it is the
-render worker. Auto Pilot is opt-in, per project, and changes none of the above: the worker calls
+[worker](12-the-worker.md). Auto Pilot is opt-in, per project, and changes none of the above: the worker calls
 the publish code directly, and the agent's tools and instructions are the same either way.
 
 ---
@@ -67,8 +67,9 @@ sequenceDiagram
 
 **The upload runs inline in the Flask request**, not on the worker, and that is true of a scheduled
 post too — see [Scheduling a post](#scheduling-a-post). It takes about 50 seconds for a
-150 MB file. The worker renders one video at a time for around twenty minutes, so a human-clicked
-publish queued behind a render would look broken. An [Auto Pilot](#auto-pilot) post is the
+150 MB file. The worker used to render as well, one video at a time for around twenty minutes, so a
+human-clicked publish queued behind a render would have looked broken; inline, the person who
+clicked gets the result, or the error, in the same request. An [Auto Pilot](#auto-pilot) post is the
 exception: nobody is waiting on it, so its upload runs on the worker.
 
 ---
@@ -131,7 +132,7 @@ What Auto Pilot does, what is configured, how it behaves and how to size it are 
 [Auto Pilot](../user-guide/06-publishing.md#auto-pilot), including the warning a user should read
 before turning it on. This section is how it is built.
 
-It is one pass in the render worker, `worker.py::_sweep_auto_pilot`, run right after the publishing
+It is one pass in the worker, `worker.py::_sweep_auto_pilot`, run right after the publishing
 pass on every tick. It returns at once unless `auto_pilot_enabled` is on, the pipeline is not paused
 and a project is selected. The project list and the per-account daily numbers are the
 `auto_pilot_config` settings row ([Settings internals](04-settings.md#undeclared-rows)); the three
@@ -158,7 +159,8 @@ human who acted first wins.
   was commented on, so the comment is not repeated on every tick. **The check itself is repeated**,
   so the video is approved once the cause is fixed — do not turn the mark into a skip, or a fixed
   cause never unblocks.
-- **An approval can wait behind a render.** The worker is one loop and a render holds it.
+- **An approval never waits behind a render.** The worker does not render; an approval waits at
+  most one tick, about twenty seconds.
 - **No checkpoint notification is sent** for a video Auto Pilot approves: the pass runs before the
   [notification sweep](02-pipeline.md#notifications), so by then the video has moved on.
 
@@ -170,8 +172,8 @@ For a `VIDEO_APPROVED` video in a selected project, the same pass picks a time a
   `pipeline.py::start_publish`, the same function behind `POST /videos/<id>/publish`. The claim, the
   upload, the ambiguity split and the settling are the ones this page describes for a human publish,
   not a second copy. A post in the future becomes a [scheduled post](#scheduling-a-post).
-- **The upload runs on the worker here**, because nobody is waiting on it. It holds the loop for
-  about a minute, so each tick starts at most one post.
+- **The upload runs on the worker here**, because nobody is waiting on it. It holds the worker's
+  loop for about a minute, so each tick starts at most one post.
 - **Usable accounts are re-checked at posting time**: chosen for the project, still on the Socials
   allowlist, still connected at postforme, and with a daily number above 0. If none is left, or
   publishing is disabled, the video waits at `VIDEO_APPROVED`.
@@ -265,8 +267,8 @@ a target that has not published yet simply has no row. The worker counts non-`PE
 `created_at` is reset when the post id is attached, so the platforms get a full hour to report from
 the post's creation rather than from before the upload. It is a
 wall clock rather than a retry counter because a publish has no crash to count, and it keys off that
-column rather than `videos.updated_at` because `updated_at` is the FIFO ordering key for the render
-worker's atomic claim — a polling loop writing to it would reorder the render queue.
+column rather than `videos.updated_at` because `updated_at` is the FIFO ordering key for the
+renderer's atomic claim — a polling loop writing to it would reorder the render queue.
 
 **The publication rows are written at the claim, before the upload, with an empty post id.** An empty
 `postforme_post_id` means "a publish is in flight", and the worker leaves such rows alone until the
@@ -615,9 +617,8 @@ because the worker re-checks the allowlist. The three scalar keys are ordinary s
 
 ## The worker
 
-The publishing passes run on every tick, **before** the render claim, so publishing never starves
-rendering and a long render delays a publish by at most one tick. Where they sit among the worker's
-other passes is on [The Worker](12-the-worker.md).
+The publishing passes run on every tick of the worker, which never renders, so a render never
+delays a publish. Where they sit among the worker's other passes is on [The Worker](12-the-worker.md).
 
 **Scheduled posts.** First, every `SCHEDULED` video whose `scheduled_at` has passed moves to
 `PUBLISHING`, with its rows' `created_at` reset so the deadline counts from now — see
@@ -641,7 +642,7 @@ entries back to local rows by postforme's own post id rather than by URL, becaus
 URLs. That shape is load-bearing: an earlier per-publication version hit the rate limit past the
 fifth target and **silently lost snapshots permanently** — a time series cannot be backfilled. It
 pages at 100 entries, capped at 20 pages per account so a runaway cursor cannot spin inside a loop
-that also has renders to claim.
+that also has posts to settle.
 
 **Analytics survive deletion.** Published videos are exactly what the
 [retention sweep](11-rendering-and-review.md#retention) deletes, but it removes only files: the

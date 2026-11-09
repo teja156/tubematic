@@ -341,7 +341,7 @@ MCP tools that show the kit, render the stills, run the gate, keep the verdict, 
 and refuse an ungated render are described in [MCP server — Cartoon 3D
 authoring](06-mcp-server.md#cartoon-3d-authoring); the agent's workflow and the kit's API are the
 `tubematic-cartoon3d` skill (see [the agent layer](07-agent-layer.md#the-skills)). The render itself is
-segmented ([The Worker](12-the-worker.md#segmented-cartoon-3d-renders)).
+segmented ([Rendering and Review](11-rendering-and-review.md#segmented-cartoon-3d-renders)).
 
 ---
 

@@ -5,7 +5,7 @@
 // Renders one still of the "GpuProbe" composition (src/gpu-probe/) and writes
 // what Chromium's WebGL reported — its unmasked renderer and vendor strings —
 // as one JSON document to the file named by the config's outputPath. Called by
-// renderer/api/worker.py::_run_gpu_probe, which decides whether that string is
+// renderer/api/render_agent.py::_run_gpu_probe, which decides whether that string is
 // the GPU it expected; this driver decides nothing. Keep it thin.
 //
 // Why a Node driver and not `npx remotion still`: the CLI never prints a page's
@@ -13,7 +13,7 @@
 // probe's answer could not get out. onBrowserLog here receives it directly.
 //
 // The browser and GL options come from the worker verbatim, built by the same
-// worker.py::_gl_options a render's command-line flags are built from. The
+// render_agent.py::_gl_options a render's command-line flags are built from. The
 // Node API does NOT read remotion.config.ts, so nothing may be left to it: the
 // worker always sends gl, chromeMode and browserExecutable explicitly.
 //

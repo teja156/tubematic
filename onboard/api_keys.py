@@ -296,7 +296,7 @@ def check_gemini(key: str, *, transport=None) -> KeyCheck:
 
     Not hard rejections, deliberately: the key is optional (TMDEV-165). Its
     only uses are AI review — off by default, and skipped outright when no key
-    is set (renderer/api/worker.py's
+    is set (renderer/api/render_agent.py's
     `if not gemini_review_enabled or not gemini_api_key`) — and the mining
     strategy, which is off without a key. Blocking here would turn an optional
     key into a required one for anyone whose Gemini account has a quota gap.

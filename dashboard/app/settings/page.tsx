@@ -825,7 +825,7 @@ export default function SettingsPage() {
       <SectionLabel label="Rendering" />
       <Row
         label="Render stall timeout"
-        note="How long the render's progress counter may stand still before the worker kills the render and retries — the check that catches a hung browser in minutes rather than hours. Shown in minutes; stored as render_stall_timeout_secs."
+        note="How long the render's progress counter may stand still before the renderer kills the render and retries — the check that catches a hung browser in minutes rather than hours. Shown in minutes; stored as render_stall_timeout_secs."
       >
         <NumInput
           value={Math.round(val("render_stall_timeout_secs") / 60)}
@@ -837,7 +837,7 @@ export default function SettingsPage() {
       </Row>
       <Row
         label="Render timeout"
-        note="The ceiling on one render attempt, whatever its progress, before the worker kills it and retries. Only a render that keeps advancing but pathologically slowly reaches it; raise it on a slow CPU rendering over-length videos. Shown in minutes; stored as render_timeout_secs — same key onboard.py's wizard writes."
+        note="The ceiling on one render attempt, whatever its progress, before the renderer kills it and retries. Only a render that keeps advancing but pathologically slowly reaches it; raise it on a slow CPU rendering over-length videos. Shown in minutes; stored as render_timeout_secs — same key onboard.py's wizard writes."
       >
         <NumInput
           value={Math.round(val("render_timeout_secs") / 60)}
@@ -928,7 +928,7 @@ export default function SettingsPage() {
       <SectionLabel label="Video retention" />
       <Row
         label="Delete published videos after"
-        note="Days after a video is published before its rendered file and working files (audio, images) are deleted to free disk. The record, its publication links and analytics stay, in the Archive. This setting deletes only published videos. 0 keeps them forever. The render worker checks once an hour."
+        note="Days after a video is published before its rendered file and working files (audio, images) are deleted to free disk. The record, its publication links and analytics stay, in the Archive. This setting deletes only published videos. 0 keeps them forever. The worker checks once an hour."
       >
         <NumInput
           value={val("retention_days")}
@@ -1087,8 +1087,8 @@ export default function SettingsPage() {
           </Row>
         ))}
         <p style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--mute)", marginTop: 10 }}>
-          Notifications are sent by the render worker, so they arrive within a
-          minute or so of the event — or once the current render finishes.
+          Notifications are sent by the worker, so they arrive within a minute
+          or so of the event, even while a video is rendering.
         </p>
       </div>
           <SaveBar tabKey="notifications" count={dirtyFields("notifications").length} saving={saving} onSave={saveTab} />

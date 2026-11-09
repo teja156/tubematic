@@ -1,26 +1,29 @@
 # Rendering and Review
 
-Rendering happens in `tubematic-renderer`, a container with no HTTP server and no exposed ports. It
-is a poll loop over the database: claim a video at `RENDER_QUEUED`, stage its files, run Remotion,
-optionally send the result to Gemini for review, and write back a status.
-
-That loop does more than render. Every pass it runs, in order, is on
-[The Worker](12-the-worker.md); this page is the render pass and the review that follows it.
+Rendering happens in `tubematic-renderer`, a container with no HTTP server and no exposed ports,
+running `renderer/api/render_agent.py` (the renderer). It is a poll loop over the database: claim a
+video at `RENDER_QUEUED`, stage its files, run Remotion, optionally send the result to Gemini for
+review, and write back a status. Beside that it tests the GPU and runs the Cartoon 3D stills server,
+and nothing else: publishing, Auto Pilot, retention, notifications and the other timed sweeps are
+the worker's, in its own container, so none of them waits behind a render. See
+[The Worker](12-the-worker.md).
 
 It runs in its own container so that a render crash or an out-of-memory kill restarts only the
-renderer, leaving the API and the MCP server — and any agent session connected to them — untouched.
+renderer, leaving the API, the MCP server, the worker — and any agent session connected to them —
+untouched.
 
 ```mermaid
 sequenceDiagram
-    participant W as worker.py
+    participant W as render_agent.py
     participant DB as SQLite
     participant R as npx remotion render
     participant G as Gemini
 
     Note over W: startup
     W->>DB: reconcile rows stuck at RENDERING
+    W->>W: test the GPU, start the stills server
     loop every 20s while idle
-        W->>DB: the short passes: publishing, Auto Pilot,<br/>analytics, retention, notifications
+        W->>W: GPU test if one was requested,<br/>restart the stills server if it died
         W->>DB: claim oldest RENDER_QUEUED<br/>(atomic, ORDER BY updated_at)
         alt nothing queued
             W-->>W: sleep
@@ -70,10 +73,19 @@ is why the publishing poll (where it exists) deliberately keys its own timeouts 
 column.
 
 The idle poll interval is `RENDER_POLL_INTERVAL_SECS`, default 20 seconds. It is a plain environment
-variable, not a settings row.
+variable, not a settings row. A render holds the loop until it ends, so a GPU test asked for during
+one runs after it. It renders one video at a time; videos queue at `RENDER_QUEUED` in `updated_at`
+order.
 
-> Rendering is one pass of several. Every pass the worker runs, their order and how often each
-> runs are on [The Worker](12-the-worker.md).
+| Step | Symbol | Runs |
+|---|---|---|
+| Startup reconciliation | `_reconcile_rendering_videos` | once, at start |
+| GPU test | `_run_gpu_probe` | once, at start, before any claim |
+| GPU test on request | `_sweep_gpu_probe` | every tick, when the dashboard's **Test GPU** asked after the last test started |
+| Stills server | `_ensure_stills_server` | at start and every tick; see [The stills server](#the-stills-server) |
+| Render | `_claim_next`, `_render_claimed` | every tick a video is at `RENDER_QUEUED` |
+
+The loop itself is `render_agent.py::main`.
 
 ## Retention
 
@@ -87,14 +99,10 @@ its comments, publication links and analytics — the dashboard's Archive page l
 operation backs the dashboard's Delete action (`DELETE /videos/<id>`, see
 [HTTP API](05-http-api.md#videos)), so "delete" means one thing everywhere.
 
-The Discord notification sweep shares this loop and the same reasoning — see
-[Notifications](02-pipeline.md#notifications). Both run *before* the render claim, so a render,
-which holds the loop for twenty minutes, delays them by at most one render rather than blocking
-them behind two.
-
-It lives in the render worker because this is the only continuously running process with both
-database and filesystem access; the cron poller deliberately has no database access. Decisions that
-look arbitrary and are not:
+It is a pass of the worker (`worker.py::_sweep_retention`, in `tubematic-worker`, see
+[The Worker](12-the-worker.md)), not of the renderer, so a render never delays it. It lives in a
+continuously running process because it needs both database and filesystem access; the cron poller
+deliberately has no database access. Decisions that look arbitrary and are not:
 
 - **Unpublished output is swept only when you ask for it.** A video that ages out unpublished still
   holds an mp4 that cost real ElevenLabs and render time, and losing it would be unrecoverable. So
@@ -128,27 +136,30 @@ look arbitrary and are not:
   filters it out explicitly. A published video with no usable publish time is never swept.
 - **Hourly, with a settings-row stamp** (`last_retention_sweep_at`), the same pattern as the metrics
   pass, so a frequently restarted container does not sweep on every start.
-- **It never raises.** The loop has no error handling of its own, and an escaping exception restarts
-  the container — which startup reconciliation counts as a render failure against whatever was
-  rendering. Errors are logged per video and the pass moves on.
+- **It never raises.** The worker's loop has no error handling of its own, and an escaping exception
+  ends every other pass with it, publishing included. Errors are logged per video and the pass moves
+  on.
 
 `python scripts/cleanup_jobs.py` is the manual complement: it frees job directories only, keeping the
 mp4, for anything you want to reclaim earlier.
 
 ## Startup reconciliation
 
-The worker registers no signal handlers. A container stop kills it mid-render, and recovery happens
+The renderer registers no signal handlers. A container stop kills it mid-render, and recovery happens
 on the next start rather than through a graceful drain.
 
-On startup it finds every row still at `RENDERING` — which can only mean a previous worker died
+On startup it finds every row still at `RENDERING` — which can only mean a previous renderer died
 holding it — increments `render_fail_count`, and applies the same escalation as any other failure:
 back to `RENDER_QUEUED`, or to `FAILED` if the retry cap is now exceeded. A restart mid-render
 therefore *counts as a failure*, which matters with the default cap of 1: two container restarts
-across one video's life will escalate it.
+across one video's life will escalate it. Its comment reads "Render interrupted by renderer restart".
+
+This runs in the renderer and never in the worker: a `RENDERING` row is orphaned only when the
+renderer's process died, and a worker restart says nothing about a render still running.
 
 ## Staging and the render call
 
-Remotion serves assets from its `public/` directory, so the worker copies the job's files in first:
+Remotion serves assets from its `public/` directory, so the renderer copies the job's files in first:
 
 | Source | Destination |
 |---|---|
@@ -159,9 +170,9 @@ Remotion serves assets from its `public/` directory, so the worker copies the jo
 
 **The sources are derived from the video's id, never read from its path columns**
 (`tubematic_core/jobfiles.py`). Those columns were once writable through `PATCH` and `update_video`,
-so a row could name any file the worker can read and have it copied into a render; a row tampered
+so a row could name any file the renderer can read and have it copied into a render; a row tampered
 with before that was closed now simply stages the video's own files. The columns still say whether
-each step completed. If any of the first three is missing, or its column is still empty, the worker
+each step completed. If any of the first three is missing, or its column is still empty, the renderer
 posts a comment naming them and sets `REVISION_REQUESTED` without launching Chromium. Images are
 optional and are not part of that check. Symlinks are never staged: one in place of a job file, or
 anywhere on the way to it (the video's job directory, `images/`, the project's output directory),
@@ -194,11 +205,11 @@ process group.
 ## The GL renderer
 
 Chromium draws every frame, and WebGL (three.js scenes, and Chromium's own compositing) needs an
-OpenGL implementation. There are two paths, and the worker picks one per render.
+OpenGL implementation. There are two paths, and the renderer picks one per render.
 
 **The CPU path is the default**, set in `renderer/remotion/remotion.config.ts`:
 `setChromiumOpenGlRenderer("swangle")`, ANGLE over SwiftShader. It works on any machine, which is
-why it is the file's setting and not the worker's. The render command above is exactly what runs.
+why it is the file's setting and not the renderer's. The render command above is exactly what runs.
 
 > **`--browser-executable-path` is not a Remotion flag.** The CLI's flag is `--browser-executable`,
 > and an unknown flag is ignored, so a CPU render does not use the image's Debian Chromium: it uses
@@ -206,7 +217,7 @@ why it is the file's setting and not the worker's. The render command above is e
 > been so, and the CPU path is left exactly as it was. The GPU path names the browser with the real
 > flag.
 
-**The GPU path** adds five settings, from `worker.py::_gl_options` (`_gl_args` turns them into
+**The GPU path** adds five settings, from `render_agent.py::_gl_options` (`_gl_args` turns them into
 flags):
 
 | Setting | Why it is needed |
@@ -222,7 +233,7 @@ times slower than old headless rendering, measured on a 2D scene.
 
 How the GPU reaches the container is the Compose override written by the `gpu` onboarding step
 ([Infrastructure](16-infrastructure.md#gpu-override)). That override also sets
-`TUBEMATIC_GPU_UUID` and `TUBEMATIC_GPU_NAME`, which is how the worker knows a GPU is meant to be
+`TUBEMATIC_GPU_UUID` and `TUBEMATIC_GPU_NAME`, which is how the renderer knows a GPU is meant to be
 there.
 
 ### The probe decides, never the configuration
@@ -232,7 +243,7 @@ Being configured is not the same as working. A driver update, an old Container T
 Chromium cannot use, and **a render on the wrong GL device still succeeds**, only several times
 slower. So nothing about a finished render counts as evidence.
 
-`worker.py::_run_gpu_probe` renders one still of the `GpuProbe` composition through a small Node
+`render_agent.py::_run_gpu_probe` renders one still of the `GpuProbe` composition through a small Node
 driver, `renderer/remotion/gpu-probe/run-gpu-probe.mjs`, given exactly the options and environment
 `_gl_options` gives a render. The composition creates a WebGL context, reads
 `WEBGL_debug_renderer_info`'s unmasked renderer string and prints it on a tagged console line; the
@@ -241,7 +252,7 @@ stdout, which Remotion fills with page output. It is a driver and not `npx remot
 the CLI never passes a still's page console output on, so the answer could not get out. The Node API
 does not read `remotion.config.ts`, which is why the CPU options spell out `swangle` (a test pins
 them to the config file). `_judge_probe` passes it only if the string names NVIDIA **and** the configured GPU,
-so SwiftShader, Mesa/llvmpipe and an integrated GPU all fail. The worker renders on the GPU only
+so SwiftShader, Mesa/llvmpipe and an integrated GPU all fail. The renderer renders on the GPU only
 while the last probe passed (`_render_on_gpu`); otherwise it takes the CPU path.
 
 - **It bundles its own entry point**, `src/gpu-probe/index.ts`. The main entry bundles every
@@ -252,10 +263,12 @@ while the last probe passed (`_render_on_gpu`); otherwise it takes the CPU path.
 - **It runs again after a GPU render fails or times out.** If the GPU is what broke, the next render
   falls back to the CPU instead of failing the same way. The failed render itself is routed as
   before, except for a GPU-only video (Cartoon 3D, or one with a mascot): its re-test runs first and,
-  if it fails, the video goes to `FAILED` (see [the worker](12-the-worker.md#videos-that-render-on-the-gpu-only)).
+  if it fails, the video goes to `FAILED` (see [Videos that render on the GPU only](#videos-that-render-on-the-gpu-only)).
 - **It runs on request**: `POST /render/gpu/test` stamps `gpu_probe_requested_at`, and the
   `_sweep_gpu_probe` pass runs a probe when that stamp is newer than the last probe's start. Both
-  stamps carry microseconds, because they are compared as strings.
+  stamps carry microseconds, because they are compared as strings. Only the renderer's container can
+  have a GPU, so the API only stamps the row; the request waits behind a render in progress, and
+  `GET /render/gpu` reports it as pending meanwhile.
 - **It runs on a CPU install too**, with the CPU path, so the dashboard's Test GPU shows what Chromium
   gets there (SwiftShader).
 - **It never raises.** A probe that cannot start, times out (180 s, with the same process-group kill
@@ -271,22 +284,24 @@ which never gets a GPU, and it measures text, which comes out the same on either
 ### The timeout, and why it is more than a kill
 
 Two settings bound one render. `render_stall_timeout_secs` (default 600) is the one that matters: the
-worker reads Remotion's progress counters (`Bundling N%`, `Rendered N/M`, `Encoded N/M`) from the
+renderer reads Remotion's progress counters (`Bundling N%`, `Rendered N/M`, `Encoded N/M`) from the
 render's own output as it runs, and a render whose count stops advancing for that long is judged
 hung, whatever its style or length — the number must advance, since real logs repeat a line.
 `render_timeout_secs` (default 10800) is the absolute ceiling, for a render that advances
-pathologically slowly. On either the worker:
+pathologically slowly. On either the renderer:
 
 1. `SIGKILL`s the whole **process group** — one signal reaches every descendant.
 2. Reaps the direct child.
-3. Runs a blocking `waitpid(-1, …)` loop until it raises `ChildProcessError`.
+3. Runs a non-blocking `waitpid(-1, WNOHANG)` loop until no child but the stills server is left
+   (`_kill_group_and_reap`).
 
 Step 3 is the non-obvious one. The moment their parent dies, the SIGKILLed grandchildren reparent to
-the worker process — which is PID 1 in its container — and reaping the direct child by PID cannot
+the renderer process — which is PID 1 in its container — and reaping the direct child by PID cannot
 touch them. Without the wildcard loop they become permanent zombies. This was observed, not
-theorised.
+theorised. It polls rather than blocks because the stills server is a long-lived child too: a
+blocking wait on any child would sit on the healthy stills server forever.
 
-**Do not copy this pattern into the MCP server.** The loop is safe here only because the worker is
+**Do not copy this pattern into the MCP server.** The loop is safe here only because the renderer is
 single-threaded and runs one subprocess at a time. The MCP server is multi-threaded with concurrent
 subprocess users, where a wildcard reap can steal a different call's child; it uses the process-group
 kill alone. The general lesson: a reaping strategy relies on a concurrency invariant, and moving it
@@ -294,9 +309,88 @@ to a different concurrency model breaks it silently.
 
 ### Logs
 
-The worker captures the render's stdout and stderr, logs failures to its own stdout
-(`docker compose logs tubematic-renderer`), and writes a truncated copy — capped at 2000 characters
+The renderer captures the render's stdout and stderr, logs failures to its own stdout
+(`docker compose logs tubematic-renderer`, every line prefixed `[renderer]`, and the `renderer`
+service on the dashboard's Logs page), and writes a truncated copy — capped at 2000 characters
 — into the video's comment thread. There is no persisted full-text render log.
+
+## The stills server
+
+The MCP container's Cartoon 3D tools (`cartoon_beat_gate`, `cartoon_still`) need stills of a
+video's composition, and the renderer's is the one container with the GPU. So the renderer runs
+`renderer/remotion/cartoon-tools/stills-server.mjs` as a child process beside its renders: the
+project is bundled once, one Chromium stays open, and a still takes a few seconds instead of the
+25 to 30 seconds a cold software-GL still costs in the MCP container. It is started with exactly
+the GL options a render gets (`_gl_options`), so a passing GPU test moves it onto the GPU and a
+failing one moves it back, and it serves the shared `/jobs` volume as its public directory, so a
+video's files are `/public/<video_id>/…` to the composition with nothing copied. It listens on
+`TUBEMATIC_STILLS_PORT` (4455) on the Compose network only and is never published; the MCP
+container reaches it as `TUBEMATIC_STILLS_SERVER`, and when it does not answer the tools render
+their stills locally instead. Renders and stills share the GPU; the server renders one still at a
+time. `_ensure_stills_server` starts it at startup and checks it every tick: it starts it again
+when it has died (at most once a minute) or when a GPU test moved renders between the GPU and the
+CPU, and does nothing when `TUBEMATIC_STILLS_PORT` is unset (Compose sets it). It is also why the
+reaper that follows a killed render (`_kill_group_and_reap`) drains the killed group's orphans
+without blocking — see [the timeout](#the-timeout-and-why-it-is-more-than-a-kill). The generated
+source tree (`src/scenes/generated/`, the agents' per-video TypeScript) is part of the bundle, so before
+every still the server compares a stamp of that tree (every file's path, size and mtime) with the one its
+bundle was made from and re-bundles when it differs: an edit to a video's code is seen by its next still
+(about twenty seconds, once), an unchanged tree costs a directory walk.
+
+## Videos that render on the GPU only
+
+A Cartoon 3D video and a video with a mascot are both **GPU-only by policy**, not because the CPU path
+cannot draw them: a mascot adds about a tenth of a second of drawing to every frame, which on software
+GL would turn a 90-second Short into hours. The choice is refused where it is made (the dashboard, the
+API and the MCP server) unless the GPU test passed, so the renderer's check is for a video approved
+*before* its GPU stopped working. If the video needs the GPU and `_render_on_gpu()` is false the
+renderer runs the GPU test first when the result is still unknown, and otherwise moves the video
+**straight to `FAILED`** with a comment naming the live GPU status. It bypasses `max_render_retries`:
+a requeue would fail the same way, and sending it to `REVISION_REQUESTED` would hand it to an agent
+that cannot repair a GPU. The video is created again once the GPU works.
+
+The same holds when the GPU stops working **during** such a render. When a GPU-only render fails,
+stalls or times out, the renderer re-tests the GPU *before* it routes the failure
+(`render_agent.py::_after_render_failure`). If the GPU no longer passes, the video goes straight to `FAILED`
+with the same comment plus the render's error, again without spending a retry or an agent session. If
+it still passes, the failure is the video's own and takes the usual path. An ordinary video keeps the
+older order (route the failure, then re-test), since its retry can fall back to the CPU.
+
+A mascot video is rendered with the version pinned in `videos.mascot_version`, never the mascot's
+current approved version. The renderer reads that version's code (`tubematic_core/mascots.py::code_for`),
+stages it as `public/<video_id>/mascot.js` and passes `mascotPath` as a render prop (see
+[the Remotion project](09-remotion-project.md#the-mascot-layer)). A version of `0` (never pinned) or a
+version with no code fails the video the same way, with a comment saying the drawing code cannot be
+read. A Cartoon 3D video that also holds a mascot (the API and the MCP server refuse the pair, so only
+a row written some other way can) goes to `FAILED` the same way, with `MASCOT_NOT_ON_CARTOON_3D` in its
+comment, rather than rendering without the mascot a human chose.
+
+## Segmented Cartoon 3D renders
+
+A Cartoon 3D video is not rendered as one `remotion render`: a long single render of one hung silently
+part way on the GPU (most likely GPU memory, as every tab accumulates every set's textures and a
+crossfade opens a second WebGL context). `_render_cartoon` renders segments of `CARTOON_CHUNK_FRAMES`
+(450) frames, each its own Remotion process with a fresh browser, `--frames=a-b --muted` and
+`--concurrency=2`, under the same stall watcher as any render; a segment that stalls or fails is tried
+once more, fresh, and a second failure is the render's (a stall is reported as a timeout is, requeued
+and the GPU re-tested; an error goes to the agent). The segments are joined with ffmpeg's concat
+demuxer without re-encoding, and the soundtrack is muxed on: the synthesised mix
+(`<jobs>/<video_id>/cartoon/audio/mix/mix.wav`, written by the MCP server's `cartoon_soundtrack`)
+when it exists and is at least as new as the voice, else `audio.mp3` alone. The work directory beside
+the output is removed either way.
+
+`render_timeout_secs` caps the whole segmented render, every segment, retry and ffmpeg step included, as it
+caps an ordinary render: each segment gets what is left of the one deadline, and the concat and the mux get
+the lesser of what is left and `FFMPEG_TIMEOUT_SECS`. Every segment bundles the generated
+source tree afresh, so what is rendered has to be what the beat gate judged: `submit_render` recorded that
+tree's fingerprint under `<jobs>/<video_id>/cartoon/source.json`, and the renderer compares the live tree
+with it before every segment and again before the join. A tree that differs (edited after the gate) or
+holds a symlink fails the render to the agent with the reason, and so does a missing or symlinked record
+(the record's and the mix's paths are built with `join_below`, so a link in any component on the way is
+refused too): only `submit_render` queues a Cartoon 3D video, and it always writes one. A render that cannot run at all (no `npx`, a full disk) is that video's failure, not an
+exception out of the renderer: `_render_claimed` is the per-video boundary round `_stage_and_render`, and
+whatever escapes it is recorded with `_handle_render_failure` ("The renderer hit an error: …") and
+requeued, so a row never stays `RENDERING` with the renderer gone.
 
 ## Status transitions
 
@@ -456,7 +550,7 @@ A review that errors advances the video to `VIDEO_READY`. That is deliberate —
 should not wedge the pipeline — but it went unnoticed for the feature's entire early lifetime, which
 is how an upload bug survived undetected.
 
-The mitigation is that the worker now writes `videos.gemini_feedback` and posts a comment on
+The mitigation is that the renderer now writes `videos.gemini_feedback` and posts a comment on
 **every** outcome: pass, defects, or error. An error is stored as `AI review did not run: <reason>`,
 so a review that is silently failing open is visible in the dashboard rather than only in logs. Grep
 for that prefix if you suspect the reviewer is not actually running.
@@ -470,7 +564,7 @@ truncation drops suggestions first and must-fix items last.
 **Every review is recorded against the video**, with the token counts Gemini reports in
 `usageMetadata` — so a video that loops through two reviews shows two review calls, and a reply
 that failed to parse is still recorded, because it was still billed. The Files API upload is free
-and is not recorded. `ai_review.py` stays DB-free: it returns the usage and the worker records it.
+and is not recorded. `ai_review.py` stays DB-free: it returns the usage and the renderer records it.
 See [Settings — Costs](../user-guide/05-settings.md#costs) for how tokens become dollars.
 
 Video tokens scale with sampled frames, so `ai_review_fps` is the cost dial.
@@ -558,7 +652,7 @@ A timeout leaks the bundle and nothing else: the kill is an uncatchable `SIGKILL
 own cleanup never runs, while the Python-side cleanups sit in a `finally` and still execute. Sweep
 `/tmp/tubematic-audit-bundle-*` if audits have been timing out.
 
-> Separately and larger: the render worker never cleans its own staging directory. One copy of each
+> Separately and larger: the renderer never cleans its own staging directory. One copy of each
 > rendered video's assets accumulates in the renderer container's writable layer indefinitely. The
 > audit cannot clobber it — `public/` is not a shared volume, so the two containers hold separate
 > copies.

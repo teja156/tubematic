@@ -2,7 +2,7 @@
 // on request in a few seconds instead of the ~25 s a cold `remotion still` costs (Chrome boot + bundle every time).
 // Stills were by far the biggest time cost of an authoring run.
 //
-// In production the render worker (renderer/api/worker.py) runs it inside tubematic-renderer, the one container with
+// In production the renderer (renderer/api/render_agent.py) runs it inside tubematic-renderer, the one container with
 // the GPU, with the same GL flags its renders get, and the MCP container's Cartoon 3D tools post their gate and
 // preview stills to it over the Compose network (STILLS_SERVER in src/cartoon3d/probe2/gate/stills.ts). The public
 // directory is the shared /jobs volume, served live through a symlink, so a video's scene-config, timeline and

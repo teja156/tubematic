@@ -1,6 +1,6 @@
 # Infrastructure
 
-Everything runs from `docker-compose.yml`. Four services, six volumes, one network, one cron entry.
+Everything runs from `docker-compose.yml`. Five services, six volumes, one network, one cron entry.
 
 > **Start the stack with `python3 scripts/service.py start` (or through onboarding), not a bare
 > `docker compose up -d`.** Both create any missing data directory and reconcile the volume device
@@ -54,7 +54,7 @@ door, but the narrowest reach is still the right default behind it.
 
 `logs-data` is a write path, not a read one: MCP appends its own `mcp.*.jsonl` and never reads
 another service's — Flask is the only reader. `backups-data` is a write path too, and it is not
-optional: every one of the three backend services calls `migrate()` itself rather than assuming
+optional: every one of the four backend services calls `migrate()` itself rather than assuming
 another process already has, and each one that migrates must be able to back up first — one that
 silently could not would fail closed on every start. See [Backups](#backups).
 
@@ -65,17 +65,33 @@ corrupt anything. Waiting for a healthy Flask before starting MCP is a preferenc
 startup order, not a correctness requirement. Nothing gates the MCP server at runtime once it is up —
 a later Flask crash does not stop it, and Flask never depends on MCP in either direction.
 
+### `tubematic-worker`
+
+The same image, no `build:` section, `command: python3 /app/api/worker.py`. No published ports, no
+healthcheck, `depends_on: tubematic-api: service_healthy`. It runs the background passes that are not
+rendering — publishing, Auto Pilot, analytics, price sync, retention, notifications and the
+stalled-voicing check — see [The Worker](12-the-worker.md).
+
+Its mounts are `output-videos`, `jobs-data`, `db-data`, `logs-data`, `backups-data` and the two
+timezone files, and nothing else. `output-videos` and `jobs-data` because retention deletes a video's
+mp4 and job directory; the timezone files because Auto Pilot's daily numbers and a scheduled post's
+wall time are host-zone days. No `scenes-generated`: it never reads or writes a scene.
+
+Like the renderer, its `command:` is the bare interpreter, so it never runs `entrypoint.sh` and
+applies its own umask at startup.
+
 ### `tubematic-renderer`
 
-The same image, no `build:` section, `command: python3 /app/api/worker.py`. Same six volumes and the
-same timezone mounts, no published ports, `shm_size: 2gb` for Chromium, and
-`depends_on: tubematic-api: service_healthy`. It runs one child process beside the worker: the
-Cartoon 3D stills server on `TUBEMATIC_STILLS_PORT` (4455), reachable on the Compose network only,
+The same image, no `build:` section, `command: python3 /app/api/render_agent.py`. Same six volumes and
+the same timezone mounts as the API, no published ports, `shm_size: 2gb` for Chromium, and
+`depends_on: tubematic-api: service_healthy`. It renders, reviews and tests the GPU, and nothing else
+— see [Rendering and Review](11-rendering-and-review.md). It runs one child process beside its
+renders: the Cartoon 3D stills server on `TUBEMATIC_STILLS_PORT` (4455), reachable on the Compose network only,
 which the MCP container's gate and preview tools use so their stills render on this container's GPU
-(see [The Worker](12-the-worker.md#the-stills-server)).
+(see [Rendering and Review](11-rendering-and-review.md#the-stills-server)).
 
-Its `command:` is the bare interpreter, so unlike the other two it **never runs `entrypoint.sh`** —
-which is why it applies its own umask at startup rather than inheriting one.
+Its `command:` is the bare interpreter, so unlike the API and the MCP server it **never runs
+`entrypoint.sh`** — which is why it applies its own umask at startup rather than inheriting one.
 
 It is the only service that can get a GPU, and only through the override below.
 
@@ -102,13 +118,13 @@ It lives under the data root, not the install, because upgrades install into a n
 is the bare `docker compose` otherwise, so an install without a GPU keeps the argv it always had.
 Everything that runs `up` goes through it: the onboarding steps, `scripts/service.py` and
 `upgrade.py`. **A hand-run `docker compose up` does not**, and recreates the renderer without the
-GPU. That is safe, because the worker then simply renders on the CPU, but it is why the docs and
+GPU. That is safe, because the renderer then simply renders on the CPU, but it is why the docs and
 hints say `scripts/service.py start`. Naming files with `-f` also stops Compose loading a stray
 `docker-compose.override.yml`, which only very old installs ever had.
 
 `upgrade.py` refuses before stopping anything when the override names a GPU Docker cannot hand
 over (`gpu.py::override_problems`: no `nvidia` runtime, no driver, or the GPU is gone). Without
-that check, the upgrade would stop the stack and then fail at `up`. How the worker decides whether
+that check, the upgrade would stop the stack and then fail at `up`. How the renderer decides whether
 the GPU works is in [Rendering and Review](11-rendering-and-review.md#the-gl-renderer).
 
 ### `tubematic-dashboard`
@@ -120,7 +136,7 @@ It also has **no** `logs-data` mount, deliberately. The Logs page reads through 
 so the dashboard has no filesystem route to a log file and no Docker socket — the two ways a log
 viewer usually acquires far more privilege than it needs.
 
-It deliberately has **no** `/etc/localtime` mount, unlike the API and the worker: a second source of
+It deliberately has **no** `/etc/localtime` mount, unlike the API, the worker and the renderer: a second source of
 truth could disagree with the first, so it learns the host zone over HTTP instead. See
 [HTTP API — Time](05-http-api.md#time).
 
@@ -147,17 +163,17 @@ Debian-based API/MCP image. Without any healthcheck here, Docker reports a conta
 instant it is running, before Next.js has bound its port — a real race a release-workflow smoke test
 would hit directly.
 
-### Three containers, one image
+### Four containers, one image
 
-Only `tubematic-api` declares `build:`. The MCP server and the worker reuse the tag, and the only
-difference between the three is the compose `command:`. One build covers all of them — a rebuild of
-`tubematic-api` is a rebuild of the other two.
+Only `tubematic-api` declares `build:`. The MCP server, the worker and the renderer reuse the tag,
+and the only difference between the four is the compose `command:`. One build covers all of them —
+a rebuild of `tubematic-api` is a rebuild of the other three.
 
 ### Why the ports bind to loopback
 
 Flask and the MCP server publish on `127.0.0.1` rather than every interface. This costs nothing
 internally: container-to-container traffic goes over the compose network by service name and never
-touches a published port, which is why the worker can talk to the same database with no `ports:`
+touches a published port, which is why the worker and the renderer can talk to the same database with no `ports:`
 entry at all. Publishing exists only for callers on the host — the poller, the status script, `curl`
 and the agent's MCP client, all of which use `localhost`.
 
@@ -183,8 +199,9 @@ cron job cannot type a password, so each kind of caller gets the one that suits 
 unauthenticated routes are the health probes (`/health` on both servers, `/render/health` on
 Flask), which return nothing a caller could use.
 
-**The render worker has no check because it has nothing to protect**: it listens on no port and
-only makes outbound calls.
+**The worker and the renderer have no check because they have nothing to protect**: neither
+publishes a port, and the worker listens on none. The renderer's one listener, the stills server, is
+on the Compose network only.
 
 The dashboard makes one outbound call of its own: the [update check](15-dashboard.md#update-check)
 reads `api.github.com` at most every two hours, unauthenticated. Without internet access it fails
@@ -289,8 +306,8 @@ only drops its own record, despite the warning it prints.
 ### Backups
 
 `backups-data` (`~/.tubematic-data/backups` on the host, `/backups` in the containers) holds
-pre-migration snapshots of the database file — nothing else. It is mounted in the three backend
-services (`tubematic-api`, `tubematic-mcp`, `tubematic-renderer`), each of which calls `migrate()`
+pre-migration snapshots of the database file — nothing else. It is mounted in the four backend
+services (`tubematic-api`, `tubematic-mcp`, `tubematic-worker`, `tubematic-renderer`), each of which calls `migrate()`
 itself, but **deliberately not in `tubematic-dashboard`**: the dashboard has no database access at
 all, and a backup is a full copy of a database whose `settings` table is the credential store, so it
 has no reason to be able to read or write one.
@@ -306,7 +323,7 @@ itself fails, the migration does not run either — see
 The snapshot's permission *bits* are set to match the source database's rather than left at SQLite's
 own default — it is a full copy of the same credential-store file, so it must never come out more
 permissive than the file it was copied from. Bits are all that's copied, though, not ownership: the
-three backend containers run as root, so every snapshot lands **owned by root**, unlike the live
+four backend containers run as root, so every snapshot lands **owned by root**, unlike the live
 database, which `renderer/entrypoint.sh` deliberately keeps group-writable by the host user. A
 backup that fails partway (disk full, mid-copy) is deleted rather than left behind: a
 correctly-named, partially-written `.db` file here would be indistinguishable from a good one until
@@ -314,7 +331,7 @@ someone actually tried to restore it.
 
 **Nothing prunes this directory automatically.** Every upgrade that has anything pending adds **at
 least one** file — usually two: the backup happens before `migrate()` takes its write lock, not
-inside it, so when more than one of the three backend containers reaches that point before any of
+inside it, so when more than one of the four backend containers reaches that point before any of
 them has committed, each writes its own snapshot (the loser gets a collision-suffixed name rather
 than overwriting the first). Nothing ever removes one. Clean it out by hand if it grows large; the
 timestamp in each filename is enough to tell which ones are safe to delete.
@@ -327,10 +344,10 @@ files and vanished rows behind. Only do this alongside reverting the code too �
 procedure this is one step of:
 
 ```bash
-docker compose stop tubematic-api tubematic-mcp tubematic-renderer
+docker compose stop tubematic-api tubematic-mcp tubematic-worker tubematic-renderer
 sudo cp ~/.tubematic-data/backups/tubematic-before-vX.Y.Z-<timestamp>.db ~/.tubematic-data/data/tubematic.db
 rm -f ~/.tubematic-data/data/tubematic.db-wal ~/.tubematic-data/data/tubematic.db-shm
-docker compose start tubematic-api tubematic-mcp tubematic-renderer
+docker compose start tubematic-api tubematic-mcp tubematic-worker tubematic-renderer
 ```
 
 `sudo` is required for the `cp` because the backup is root-owned (see above) — a plain copy as
@@ -347,7 +364,7 @@ migration ran, so the services that come back up will migrate it forward again o
 | 3000 | Dashboard — all interfaces in a checkout, `127.0.0.1` in a release install; behind its login either way |
 | 4000 | Flask API — `127.0.0.1` only |
 | 4100 | MCP server — `127.0.0.1` only |
-| 4455 | The render worker's stills server — Compose network only, never published |
+| 4455 | The renderer's stills server — Compose network only, never published |
 | 3001 / 4001 | The end-to-end test stack |
 
 Container names are fixed, so two checkouts cannot run their stacks simultaneously.
@@ -480,6 +497,7 @@ project record in `~/.claude.json`, both written by `python onboard.py --install
 python3 scripts/service.py status                        # version, schema, cron, container health, GPU
 python3 scripts/service.py logs tubematic-api -f         # Flask
 python3 scripts/service.py logs tubematic-mcp -f         # the agent's tools
+python3 scripts/service.py logs tubematic-worker -f      # publishing, Auto Pilot, notifications
 python3 scripts/service.py logs tubematic-renderer -f    # render output lands here
 python3 scripts/service.py restart tubematic-renderer
 python3 upgrade.py                                       # picks up code changes
@@ -494,7 +512,7 @@ alone is not refused, since it holds no work, with one exception that also appli
 when a volume has to be re-pointed, the reconcile runs `docker compose down`, which takes every
 container down whichever service was named, so that is gated too — and afterwards every service is
 brought back, not only the named one. `start` exits non-zero when a service it started fails its
-health check or, for the renderer, is not running. Read-only `docker compose` commands (`ps`,
+health check or, for the worker and the renderer, is not running. Read-only `docker compose` commands (`ps`,
 `logs`) are as safe as ever.
 
 To pick up code changes, run `upgrade.py`, not a bare build and `up -d`. It stops the whole stack
@@ -534,7 +552,7 @@ Video and `node_modules` dominate. Two things are worth knowing before you go lo
 Container logs are unrotated unless you configure `log-opts` in the daemon config. That change needs
 a daemon restart, which bounces every container on the host.
 
-The render worker also never cleans its own staging directory: one copy of each rendered video's
+The renderer also never cleans its own staging directory: one copy of each rendered video's
 assets accumulates in the renderer container's writable layer. Recreating the container clears it.
 
 ---

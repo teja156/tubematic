@@ -6,7 +6,7 @@ way in and out. There are **42 declared keys**, defined by `SETTINGS_SPEC` in
 
 Three properties are worth stating once, because they explain a lot of the design:
 
-- **No setting requires a restart.** The Flask API, the MCP server and the render worker all read
+- **No setting requires a restart.** The Flask API, the MCP server, the worker and the renderer all read
   the database per use, with no in-process cache. A write applies to the next read. Restarting is
   only ever a remedy for a wedged container.
 - **The database is the source of truth after onboarding.** `onboard.py` seeds these rows; after
@@ -44,10 +44,10 @@ verified, the bookkeeping rows that share their table, and how to add one are on
 |---|---|---|---|
 | `render_timeout_secs` | int | `10800` | The absolute ceiling on one Remotion render, a crash detector of last resort rather than a budget: three hours covers a three-minute Short on the CPU with headroom. A slow CPU rendering an over-length video may need it raised. Minimum 60 |
 | `render_stall_timeout_secs` | int | `600` | How long the render's progress counter may stand still before the render is judged hung and retried. Remotion reports every frame it renders and encodes; a healthy render advances every few seconds, a wedged browser never does, so this catches a hang in minutes whatever the video's length. Minimum 60; neither setting needs a restart |
-| `max_render_retries` | int | `1` | Render **crash and timeout** retries only. A worker restart mid-render counts as a failure |
+| `max_render_retries` | int | `1` | Render **crash and timeout** retries only. A renderer restart mid-render counts as a failure |
 | `text_layout_audit_enabled` | bool | `true` | Kill switch for the advisory text-overlap and safe-zone audit inside `validate_job` |
 | `default_mascot_id` | str | `''` | Experimental. The mascot a new video starts with, unless its domain says otherwise. `''` means none, which is what every install starts with. Set it on Settings → Rendering, where the choices are the approved mascots and are greyed out while the renderer's GPU is not working; a new default is refused then too, from any client. A mascot that has since been archived (or was never approved) reads back as `''` and is refused on write. A domain's own default overrides it, and a video's pick at the topic checkpoint overrides both. See [Mascots](04-dashboard.md#mascots) |
-| `watermark_enabled` | bool | `true` | Burns the "Made with tubematic.ai" mark into every render. Read by the worker when a render starts, so it affects later renders only. **A setting rather than a `scene-config.json` key on purpose** — see [Watermark](../developer/09-remotion-project.md#watermark) |
+| `watermark_enabled` | bool | `true` | Burns the "Made with tubematic.ai" mark into every render. Read by the renderer when a render starts, so it affects later renders only. **A setting rather than a `scene-config.json` key on purpose** — see [Watermark](../developer/09-remotion-project.md#watermark) |
 
 Which GPU renders, if any, is **not** a setting: a container's GPU is fixed when it is created, so it
 is chosen on the host with `python3 onboard.py --step gpu`. The Rendering tab shows the result. See
@@ -86,7 +86,7 @@ without a restart, but not immediately. Everything else on this page applies to 
 Each key covers its own statuses and has its own clock. `retention_days` sweeps only `PUBLISHED`
 videos, dated from the latest successful publication's `published_at`, not from when the video was
 created. `unpublished_retention_days` sweeps only `FAILED` and `TOPIC_REJECTED` videos, dated from
-`updated_at`, which is when they last moved. No other status is ever swept. The render worker applies
+`updated_at`, which is when they last moved. No other status is ever swept. The worker applies
 both hourly, so a change lands within the hour.
 
 Unlike `log_retention_days`, both keys allow 0. For `retention_days`, the default would otherwise
@@ -236,7 +236,7 @@ publishing stays human-driven. See [Publishing](06-publishing.md).
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `auto_pilot_enabled` | bool | `false` | Lets the render worker approve every human checkpoint and post the video, for the projects selected on Settings → Auto Pilot. On with no project selected, it does nothing |
+| `auto_pilot_enabled` | bool | `false` | Lets the worker approve every human checkpoint and post the video, for the projects selected on Settings → Auto Pilot. On with no project selected, it does nothing |
 | `auto_pilot_gap_mins` | int | `240` | The shortest time between two posts on one account, in minutes. 0 to 10080 (a week). The dashboard takes minutes or hours |
 | `auto_pilot_max_in_flight` | int | `0` | How many videos may be in progress before Auto Pilot stops voicing new scripts and approving topics: voiced and unpublished videos in Auto Pilot projects, plus every post waiting to go out, including posts scheduled by hand. Finished videos are still approved and scheduled. Size it in days of posting. 0 to 500; 0 means no limit. Was `auto_pilot_max_scheduled` before v1.2.3. See [Publishing → the in-progress limit](06-publishing.md#the-in-progress-limit) |
 
@@ -327,8 +327,8 @@ input rate and is marked *estimated*; anything else missing makes the call unpri
 long-prompt price tiers is priced at its base rate and marked *estimated*, because usage arrives as
 totals and the tier that applied is unknowable.
 
-**The sync** runs weekly in the render worker (on the same settings-row throttle as the metrics
-poll, so it survives restarts and never starves rendering) and on demand from Settings → Sync now.
+**The sync** runs weekly in the worker (on the same settings-row throttle as the metrics
+poll, so it survives restarts) and on demand from Settings → Sync now.
 Both feeds are fetched whole. It only touches models in use (the snapshot's list, anything already
 recorded, and the installed Codex agent's models), never overwrites a manual rate, rejects a move of
 more than 5× as upstream breakage, logs every change with its old and new value, and is

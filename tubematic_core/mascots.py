@@ -1,4 +1,4 @@
-"""Mascots: the rules shared by the API, the MCP server, the worker and the poller.
+"""Mascots: the rules shared by the API, the MCP server, the worker, the renderer and the poller.
 
 A mascot is a library entry whose drawing code is authored once (by an agent, or
 shipped in the repo for a builtin) and then reused by videos. The per-video agent

@@ -132,8 +132,9 @@ yes, and moves on its own in between:
 2. **You approve the script** (`SCRIPT_READY`). Nothing has been spent on voice yet.
 3. **The agent voices it, generates images and writes the scenes.** This is the longest agent stage;
    how long depends on the model and the length of the video.
-4. **The render worker renders it and the AI reviewer watches it.** The worker checks for queued
-   renders every 20 seconds. A render takes minutes, and is cut off at 40 minutes by default. A review
+4. **The renderer renders it and the AI reviewer watches it.** The renderer checks for queued
+   renders every 20 seconds. A render takes minutes, and is cut off by default once it has made no
+   progress for 10 minutes. A review
    that finds defects sends the video back to the agent for one revision round by default.
 5. **You watch it and approve it** (`VIDEO_READY`). Publishing, if you enabled it, is a separate step
    after that.

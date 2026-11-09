@@ -5,7 +5,7 @@
 scene-config.json) over time. This tool helps you reclaim disk space by
 removing job directories that are no longer needed.
 
-The render worker's retention sweep (settings.retention_days) already deletes
+The worker's retention sweep (settings.retention_days) already deletes
 both the job directory *and* the rendered mp4 of every PUBLISHED video once it
 has been published for that many days, and archives the row; with
 settings.unpublished_retention_days set, it does the same to FAILED and

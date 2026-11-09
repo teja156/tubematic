@@ -1,6 +1,6 @@
 # Architecture
 
-Tubematic runs as four Docker containers plus one cron job, all on a single machine, coordinating
+Tubematic runs as five Docker containers plus one cron job, all on a single machine, coordinating
 through one SQLite file.
 
 ```mermaid
@@ -14,7 +14,8 @@ flowchart TB
         subgraph NET["Docker network: tubematic-net"]
             FLASK["tubematic-api<br/>Flask Pipeline API :4000"]
             MCP["tubematic-mcp<br/>MCP server :4100"]
-            WORKER["tubematic-renderer<br/>worker.py — no ports"]
+            WORKER["tubematic-worker<br/>worker.py — no ports"]
+            RENDER["tubematic-renderer<br/>render_agent.py — no ports"]
             DASH["tubematic-dashboard<br/>Next.js :3000"]
         end
 
@@ -35,11 +36,14 @@ flowchart TB
     FLASK --- DB
     MCP --- DB
     WORKER --- DB
+    RENDER --- DB
     MCP --- FILES
     WORKER --- FILES
+    RENDER --- FILES
 
     MCP --> EXT
     WORKER --> EXT
+    RENDER --> EXT
     FLASK --> EXT
 ```
 
@@ -51,13 +55,14 @@ flowchart TB
 |---|---|---|---|
 | `tubematic-api` | built from `renderer/Dockerfile` | 4000 | The Flask Pipeline API |
 | `tubematic-mcp` | **the same image** | 4100 | The MCP server — the agent's entire interface |
-| `tubematic-renderer` | **the same image** | 4455, Compose network only | The render worker, and the Cartoon 3D stills server beside it |
+| `tubematic-worker` | **the same image** | none | The worker: publishing, Auto Pilot, analytics, price sync, retention, notifications, the stalled-voicing check. See [The Worker](12-the-worker.md) |
+| `tubematic-renderer` | **the same image** | 4455, Compose network only | The renderer: renders, AI review, the GPU test, and the Cartoon 3D stills server beside it. See [Rendering and Review](11-rendering-and-review.md) |
 | `tubematic-dashboard` | built from `dashboard/Dockerfile` | 3000 | Next.js |
 
-The first three are one image with a different `command:`. Only the API service declares `build:`;
-the other two reuse the tag, so one build covers all three.
+The first four are one image with a different `command:`. Only the API service declares `build:`;
+the other three reuse the tag, so one build covers all four.
 
-Those same three mount a shared logs directory at `/logs` and each append a daily JSONL file there.
+Those same four mount a shared logs directory at `/logs` and each append a daily JSONL file there.
 The dashboard deliberately does not — it reads them back through Flask's `GET /logs`, so it needs
 neither a log mount nor a Docker socket. See [Infrastructure](16-infrastructure.md#volumes).
 
@@ -68,11 +73,17 @@ Flask died the MCP server still held PID 1, so the container stayed up, reported
 that looked alive. Splitting them makes a dead process a dead container, which the restart policy
 can act on, and gives each an independent healthcheck.
 
-**Why the worker is separate.** Rendering runs Chromium and ffmpeg for twenty minutes and can be
+**Why the renderer is separate.** Rendering runs Chromium and ffmpeg for twenty minutes and can be
 OOM-killed. Isolating it means a render crash restarts only the renderer.
 
+**Why the worker is separate from the renderer.** They used to be one loop in one container, so a
+render held up every post, Auto Pilot approval and notification behind it, and recreating the
+renderer (as `onboard.py --step gpu` does) stopped them too. Apart, neither waits on the other. They
+never move the same video: the renderer moves only a video it claimed at `RENDER_QUEUED`, and no
+worker pass touches one at `RENDER_QUEUED` or `RENDERING`.
+
 **The dependency direction is one-way.** `tubematic-api` depends on nothing; the dashboard, the
-worker and the MCP server all wait on it. So the dashboard and poller path keeps working with the
+worker, the renderer and the MCP server all wait on it. So the dashboard and poller path keeps working with the
 MCP server down, and an agent session survives a Flask restart.
 
 ## Ports
@@ -82,7 +93,7 @@ MCP server down, and an agent session survives a Flask restart.
 | 3000 | Dashboard — all interfaces in a checkout, `127.0.0.1` in a release install; behind a login either way |
 | 4000 | Flask Pipeline API — `127.0.0.1` only |
 | 4100 | MCP server — `127.0.0.1` only |
-| 4455 | The render worker's stills server — Compose network only, never published |
+| 4455 | The renderer's stills server — Compose network only, never published |
 | 3001 / 4001 | The isolated end-to-end test stack |
 
 Loopback binding costs nothing between containers: they reach each other over the compose network by
@@ -108,7 +119,7 @@ in-process state between containers.
 | AI agent | MCP server | MCP over HTTP on 4100, with the MCP token |
 | Cron poller | Flask API | HTTP with the API token, including which agent runs each video. It has **no database access, by design** |
 | Installer | Database | Direct SQLite from the host — the only writer of the `agents` table |
-| Worker | Database | Guarded `UPDATE` polling |
+| Worker and renderer | Database | Guarded `UPDATE` polling |
 | Everything | Database | SQLite in WAL mode |
 
 ---
@@ -165,9 +176,9 @@ tubematic/
 ├── uninstall.py
 ├── mcp/                       # MCP server and the text-audit decision layer
 ├── renderer/
-│   ├── api/                   # Flask API, render worker, AI review, DB helpers
+│   ├── api/                   # Flask API, worker, renderer, AI review, DB helpers
 │   ├── remotion/              # the Remotion video project
-│   ├── Dockerfile             # one image for tubematic-api, -mcp and -renderer
+│   ├── Dockerfile             # one image for tubematic-api, -mcp, -worker and -renderer
 │   └── entrypoint.sh
 ├── tubematic_core/             # the one shared Python package — schema/migrations, logging, version
 ├── dashboard/                 # Next.js app
@@ -246,7 +257,7 @@ additionally repeated in three to five places without such a comment, so grep fo
 |---|---|
 | Render crashes | Retry, then `REVISION_REQUESTED`, then `FAILED` past the cap |
 | Render times out | Requeued automatically; nothing is known to be wrong with the job |
-| Worker container dies mid-render | Startup reconciliation counts it as a failure and requeues or escalates |
+| Renderer container dies mid-render | Startup reconciliation counts it as a failure and requeues or escalates |
 | AI review errors | **Fails open** — the video advances to `VIDEO_READY`, and the error is written to `gemini_feedback` and the comment thread |
 | MCP server dies | Container restarts; the in-memory scene claim is lost, which is harmless |
 | Flask API unreachable | The poller starts nothing; an idle supervisor exits non-zero and cron starts a new one on the next tick |

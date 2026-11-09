@@ -86,7 +86,7 @@ install you re-ran.
 
 ## Renders
 
-**Nothing is being rendered.** Check the worker is running and read its log — render output goes
+**Nothing is being rendered.** Check the renderer is running and read its log — render output goes
 there and nowhere else:
 
 ```bash
@@ -102,7 +102,7 @@ docker compose logs -f tubematic-renderer
 | A TypeScript error in a file you did not touch | The typecheck covers the **whole project**. A broken scene from any video blocks every render |
 | Frame count mismatch | `scene-config.totalFrames` must equal `timeline.totalFrames`. Usually a re-voice that changed the audio length |
 | An image path does not resolve | Image props must be `/public/<video_id>/images/…` and the file must exist |
-| `missing job file(s)` | The named file is not in `/jobs/<video_id>/`, or its path column is still empty because that step never finished. The worker looks only there — it derives the location from the id and ignores the stored path, so host paths in the database are harmless. A script driving the MCP server from a host shell must write into the same jobs volume (`~/.tubematic-data/jobs`, the default outside a container) |
+| `missing job file(s)` | The named file is not in `/jobs/<video_id>/`, or its path column is still empty because that step never finished. The renderer looks only there — it derives the location from the id and ignores the stored path, so host paths in the database are harmless. A script driving the MCP server from a host shell must write into the same jobs volume (`~/.tubematic-data/jobs`, the default outside a container) |
 | `Render refused, moved to FAILED` | The video's id, or its project's id, cannot be used as a file path — for example a project id of `..`, which would put the render outside `/output_videos`. New ids are checked when created, so this means a row from before that check. No route changes a video's project, so the fix is an edit to the row in the database, or deleting the video |
 
 **A video bounces between `RENDER_QUEUED` and `RENDERING`.** The render is being killed: its
@@ -113,7 +113,7 @@ classic case.
 
 **A Cartoon 3D video, or a video with a mascot, went straight to `FAILED` with "renders on the GPU only".** The style or the mascot is
 refused unless the renderer's GPU works, but a video approved before the GPU went away reaches the
-worker anyway. Fix the GPU (Settings → Rendering → Test GPU, or `python onboard.py --step gpu`)
+renderer anyway. Fix the GPU (Settings → Rendering → Test GPU, or `python onboard.py --step gpu`)
 and create the video again; the failed one is not retried.
 
 **Renders are slow although the machine has an NVIDIA GPU.** Open Settings → Rendering. Red means a
@@ -187,7 +187,7 @@ script is written for it. See [The model follows the voice](../developer/08-scri
 **`ELEVENLABS_API_KEY not set` from a host script.** Keys live in the settings table, not the
 environment. A standalone script must read them from the database.
 
-**A video has a "Stuck in VOICING" comment.** The render worker posts it when a video has sat in
+**A video has a "Stuck in VOICING" comment.** The worker (`tubematic-worker`) posts it when a video has sat in
 `VOICING` for three poll intervals without being voiced. It also logs an error and, if a Discord
 webhook is set, sends an alert. Every tick picks a `VOICING` video up, so a video still there means
 something keeps failing. The poll log says what. There are three usual causes:
@@ -306,7 +306,14 @@ un-publish, so a video live anywhere genuinely is published. `FAILED` is reserve
 every destination failed.
 
 **A video is stuck at `PUBLISHING`.** The worker settles it on each tick, so check the worker is
-running. After one hour, targets with no result are force-failed by the wall-clock backstop. A
+running — publishing is the `tubematic-worker` container, not the renderer:
+
+```bash
+docker compose ps tubematic-worker
+docker compose logs -f tubematic-worker
+```
+
+After one hour, targets with no result are force-failed by the wall-clock backstop. A
 publish whose upload is still running also shows `PUBLISHING`, and the worker deliberately leaves
 it alone until that hour is up.
 
@@ -345,10 +352,10 @@ is Business or Creator; insights do not exist on a Personal account.
 
 **Nothing arrives at all.** Notifications need two things set, and both default to off: a
 `discord_webhook_url` and at least one of the three triggers, all on Settings → Notifications. They
-are also sent by the render worker, so that container has to be running.
+are also sent by the worker, so the `tubematic-worker` container has to be running.
 
-**A message is late.** Expected. The sweep runs at the top of the worker's tick, so it lands within
-a tick when the worker is idle and once the current render finishes when it is not.
+**A message is late.** Expected, by up to a tick. The sweep runs once each worker tick, about every
+twenty seconds; a render never holds it up.
 
 **Topics announced in two messages instead of one.** The bundle is a debounce, not a guarantee. It
 waits for the newest proposal to be still for a settle window; a research run that spaces its
@@ -401,7 +408,7 @@ Published videos reclaim their own space: the
 `unpublished_retention_days`. **Settings → Retention** shows how much disk they hold.
 `python scripts/cleanup_jobs.py` reclaims job directories by hand, for anything else. Leftover
 `/tmp/tubematic-audit-bundle-*` directories inside the API container mean text audits have been
-timing out. The render worker never cleans its own staging directory; recreating the container does.
+timing out. The renderer never cleans its own staging directory; recreating its container does.
 
 **A video vanished from the board, or its player is gone.** It was archived: someone pressed Delete,
 or the retention sweep removed its files: published more than `retention_days` ago, or failed or
@@ -435,7 +442,8 @@ containers:
 ```
 api.2026-09-06.jsonl        Flask — one record per request, with a request_id
 mcp.2026-09-06.jsonl        one record per tool call, with its duration and outcome
-renderer.2026-09-06.jsonl   the render worker, tagged with video_id
+worker.2026-09-06.jsonl     the worker: publishing, Auto Pilot, notifications, retention
+renderer.2026-09-06.jsonl   the renderer, tagged with video_id
 poll.2026-09-06.jsonl       the cron poller, which runs on the host
 ```
 
@@ -470,7 +478,8 @@ for `outcome`.
 
 Three things worth knowing before you go looking:
 
-- **Container stdout still works.** `docker compose logs -f tubematic-renderer` is unchanged; the
+- **Container stdout still works.** `docker compose logs -f tubematic-renderer` (or
+  `tubematic-worker`) is unchanged; the
   JSONL files are an additional sink, not a replacement.
 - **A missing file is not an error.** A service degrades to stdout-only if `/logs` is unwritable, so
   an empty Logs page for one service usually means that container is running from an image built

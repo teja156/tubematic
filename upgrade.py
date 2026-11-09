@@ -625,6 +625,32 @@ def _giffx_scenes(root: Path) -> tuple[list, list, list]:
 OPENAI_ONLY_IMAGES_MIGRATION = 16
 
 
+def _worker_split_pending() -> bool:
+    """Whether the running renderer predates tubematic-worker (TMDEV-188).
+    Until 2.1.0 the renderer ran publishing, Auto Pilot and notifications
+    itself, so recreating containers one at a time would leave the old renderer
+    doing all three beside the new worker.
+
+    Decided from the command the running renderer was created with, never from
+    whether a tubematic-worker container exists: a leftover one (a rollback
+    that did not remove it, a half-finished manual step) says nothing about
+    which code the renderer is running. A running renderer whose command
+    cannot be read counts as old: refusing only costs a re-run without
+    --no-stop."""
+    from onboard import stack
+    try:
+        renderer, _ = stack._container_state("tubematic-renderer")
+        # "restarting" and "paused" too: an old renderer in its crash backoff
+        # comes back under its restart policy, and a paused one resumes when
+        # Compose stops it, while the others are being recreated.
+        if renderer not in ("running", "restarting", "paused"):
+            return False
+        command = stack._container_command("tubematic-renderer")
+    except FileNotFoundError:
+        return False
+    return "render_agent.py" not in command
+
+
 def _has_openai_key(db_path) -> bool:
     """Whether the settings table holds a non-blank OpenAI key.
 
@@ -753,6 +779,12 @@ def run_upgrade(*, dry_run: bool, force: bool, no_stop: bool, install_mode: str 
         rep.warn("--no-stop is refused for this upgrade: it creates the service tokens, and "
                  "recreating containers one at a time would leave old and new ones refusing "
                  "each other's calls. Re-run without --no-stop.")
+        return 1
+    if no_stop and _worker_split_pending():
+        rep.warn("--no-stop is refused for this upgrade: it moves publishing, Auto Pilot and "
+                 "notifications out of the renderer into a new tubematic-worker container, and "
+                 "the old renderer would keep running them beside the new worker until it is "
+                 "recreated. Re-run without --no-stop.")
         return 1
     if no_stop and applied < OPENAI_ONLY_IMAGES_MIGRATION:
         rep.warn("--no-stop is refused for this upgrade: it retires the Gemini image provider, "

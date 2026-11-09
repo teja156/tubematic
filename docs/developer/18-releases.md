@@ -20,7 +20,7 @@ once they exist the run also publishes that release's docs (see
 | Artifact | What it is |
 |---|---|
 | A GitHub Release | Holds the release notes and two files: the tarball and a `CHECKSUMS.txt` for the tarball itself. A version with a `-prerelease` suffix is published as a GitHub **prerelease**, so GitHub never lists it as Latest |
-| Two GHCR images | `tubematic-backend` (from `renderer/Dockerfile` — this is the same image that runs as `tubematic-api`, `tubematic-mcp` and `tubematic-renderer`) and `tubematic-dashboard`, each pushed under a single version tag — see [Image tags](#image-tags) |
+| Two GHCR images | `tubematic-backend` (from `renderer/Dockerfile` — this is the same image that runs as `tubematic-api`, `tubematic-mcp`, `tubematic-worker` and `tubematic-renderer`) and `tubematic-dashboard`, each pushed under a single version tag — see [Image tags](#image-tags) |
 | The release tarball | `tubematic-vX.Y.Z.tar.gz`, the installer bundle a release install downloads, with its own internal `CHECKSUMS.txt` — written last, once everything else is staged, so it covers every *other* file the tarball contains, not itself |
 
 Nothing produces any of these by hand. `scripts/release.py` builds a local copy of the tarball for a
@@ -161,7 +161,7 @@ top of that:
   shipped — the check is only comparing your working tree to `HEAD`, though, so once that edit is
   itself committed, `git diff HEAD` has nothing left to show and the check passes. Immutability past
   that point is enforced by review and discipline, not by this script.
-- **Migrations apply automatically.** Every one of the three backend containers calls `migrate()` on
+- **Migrations apply automatically.** Every one of the four backend containers calls `migrate()` on
   its own first database touch after starting, so an upgrade does not require running a migration
   script by hand — `upgrade.py` deliberately never runs one; it stops the old stack and starts the
   new one, and the containers do the rest. Whichever container reaches `migrate()` first takes a real

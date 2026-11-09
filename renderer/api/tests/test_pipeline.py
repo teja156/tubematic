@@ -4531,9 +4531,9 @@ def test_a_failed_publish_releases_the_claim_so_it_can_be_retried(client, db_pat
     assert _publish_ok(client, db_path, vid).status_code == 201
 
 
-def test_a_video_with_no_project_resolves_the_worker_s_default_directory(client, db_path,
-                                                                        tmp_path, monkeypatch):
-    """worker.py:_stage_and_render writes to OUTPUT_DIR/"default_proj" when a
+def test_a_video_with_no_project_resolves_the_renderer_s_default_directory(client, db_path,
+                                                                          tmp_path, monkeypatch):
+    """render_agent.py::_stage_and_render writes to OUTPUT_DIR/"default_proj" when a
     video has no project_id. Rebasing to OUTPUT_DIR/"" here would make every
     such video fail publishing with "No rendered video file to publish" despite
     having a perfectly good render."""
@@ -4555,7 +4555,7 @@ def test_a_video_with_no_project_resolves_the_worker_s_default_directory(client,
     assert _publish_ok(client, db_path, "vid_noproj").status_code == 201
 
 
-def test_output_path_matches_the_workers_default_project_convention():
+def test_output_path_matches_the_renderers_default_project_convention():
     assert pipeline._output_path("", "v").parent.name == "default_proj"
     assert pipeline._output_path(None, "v").parent.name == "default_proj"
 

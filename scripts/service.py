@@ -24,7 +24,8 @@ Options:
   -f, --follow  With `logs`: keep following
   --help, -h    Show this and exit
 
-Services: tubematic-api, tubematic-mcp, tubematic-renderer, tubematic-dashboard.
+Services: tubematic-api, tubematic-mcp, tubematic-worker, tubematic-renderer,
+tubematic-dashboard.
 To upgrade, use upgrade.py instead — it owns the full sequence.
 """
 import os
@@ -37,7 +38,8 @@ COMMANDS = ("start", "stop", "restart", "status", "logs")
 OPTIONS = ("--force", "--dry-run", "-f", "--follow")
 # Keep in sync: onboard/stack.py SERVICES. Duplicated so argv can be checked
 # before the venv bootstrap, which may re-exec this script.
-SERVICES = ("tubematic-api", "tubematic-mcp", "tubematic-renderer", "tubematic-dashboard")
+SERVICES = ("tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer",
+            "tubematic-dashboard")
 
 
 def _bootstrap() -> None:

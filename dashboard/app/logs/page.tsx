@@ -67,7 +67,7 @@ export default function LogsPage() {
       <SectionLabel label="Logs" count={loaded && !error ? `${records.length} Records` : undefined} />
 
       <p style={{ ...mono, fontSize: 11, color: "var(--mute)", marginBottom: 20, maxWidth: 720 }}>
-        Structured logs from the API, MCP server, render worker and cron poller. Level filters by
+        Structured logs from the API, MCP server, worker, renderer and cron poller. Level filters by
         minimum severity, so <em>warning</em> also shows errors. How long these are kept is the
         <em> Keep logs for</em> setting on the Settings page.
       </p>

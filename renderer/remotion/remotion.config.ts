@@ -21,7 +21,7 @@ Config.setOverwriteOutput(true);
 //
 // When an NVIDIA GPU is configured and its probe has passed, the render
 // worker overrides this on the command line (CLI flags win over this file)
-// with the GPU flags in renderer/api/worker.py::_gl_args. Change the GPU path
+// with the GPU flags in renderer/api/render_agent.py::_gl_args. Change the GPU path
 // there, not here.
 Config.setChromiumOpenGlRenderer("swangle");
 

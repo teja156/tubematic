@@ -20,6 +20,7 @@ Four behaviours are load-bearing and would each be a real bug:
 
 Run from renderer/api/: pytest tests/test_notifications.py
 """
+import json
 import os
 import sqlite3
 import time
@@ -407,12 +408,55 @@ def test_the_sweep_never_raises(env, monkeypatch):
     worker._sweep_notifications()
 
 
-def test_the_sweep_runs_before_the_render_claim(env):
-    """A render holds the loop for ~20 minutes. The passes run at the top of
-    the tick so a notification is never stuck behind two renders."""
+def test_the_sweep_never_waits_behind_a_render(env):
+    """A render can hold a loop for an hour. The sweep runs in the worker,
+    whose loop has no render in it, so a notification never waits for one."""
     import inspect
     body = inspect.getsource(worker.main)
-    assert body.index("_sweep_notifications()") < body.index("_claim_next()")
+    assert "_sweep_notifications()" in body
+    assert "_claim_next" not in body and "_render_claimed" not in body
+
+
+def _auto_pilot(env, project="proj-1", enabled=True, paused=False):
+    _settings(env, auto_pilot_enabled=enabled, pipeline_paused=paused,
+              auto_pilot_config=json.dumps({"projects": {project: []}, "account_limits": {}}))
+
+
+def test_a_finished_video_auto_pilot_will_approve_is_not_announced(env):
+    """The renderer writes VIDEO_READY whenever a render ends, so one can land
+    after the worker's Auto Pilot pass and before this sweep. Auto Pilot
+    approves it on the next pass; asking a human to approve it is wrong."""
+    _on(env)
+    _auto_pilot(env)
+    _video(env, status="VIDEO_READY")
+    worker._sweep_notifications()
+    assert env.sent == []
+    # Skipped, not marked: switching Auto Pilot off before it acts announces it.
+    assert _marker(env) == ""
+
+
+def test_auto_pilot_skips_only_its_own_projects_finished_videos(env):
+    _on(env)
+    _auto_pilot(env, project="proj-1")
+    _video(env, "mine", status="VIDEO_READY", project="proj-1")
+    _video(env, "other", status="VIDEO_READY", project="proj-2")
+    _video(env, "script", status="SCRIPT_READY", project="proj-1")
+    worker._sweep_notifications()
+    assert len(env.sent) == 2
+    assert _marker(env, "mine") == ""
+    assert _marker(env, "other") == _arrival(env, "other")
+    assert _marker(env, "script") == _arrival(env, "script")
+
+
+@pytest.mark.parametrize("enabled, paused", [(False, False), (True, True)])
+def test_a_finished_video_is_announced_when_auto_pilot_will_not_act(env, enabled, paused):
+    """Auto Pilot switched off, or the pipeline paused (which pauses Auto
+    Pilot), leaves the approval to a human, so the human hears about it."""
+    _on(env)
+    _auto_pilot(env, enabled=enabled, paused=paused)
+    _video(env, status="VIDEO_READY")
+    worker._sweep_notifications()
+    assert len(env.sent) == 1
 
 
 # ── What the messages carry ──────────────────────────────────────────────────

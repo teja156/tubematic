@@ -567,7 +567,7 @@ export interface HostGpu {
 }
 
 /** The worker's last GPU probe: Chromium's WebGL renderer string, judged
- *  against the configured GPU. Written only by the render worker. */
+ *  against the configured GPU. Written only by the renderer. */
 export interface GpuProbe {
   at: string;
   reason: string;

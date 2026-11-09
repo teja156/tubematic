@@ -346,7 +346,7 @@ jobs:
           id || true
           ls -la "$HOME/.tubematic-data/data" || true
           echo "::endgroup::"
-          for svc in tubematic-api tubematic-mcp tubematic-renderer tubematic-dashboard; do
+          for svc in tubematic-api tubematic-mcp tubematic-worker tubematic-renderer tubematic-dashboard; do
             echo "::group::health $svc"
             docker inspect --format '{{json .State.Health}}' "$svc" 2>/dev/null | python3 -m json.tool || true
             echo "::endgroup::"

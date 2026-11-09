@@ -5,17 +5,18 @@ which videos need an agent, starts one session per video and stage, watches each
 end, and records what it cost and whether it moved the video. It is the only thing that ever starts
 an agent unattended.
 
-It is one of the two loops that advance the pipeline with nobody watching. The other is the render
-worker, which owns everything that is not agent work: rendering, review, publishing and Auto Pilot.
-See [The Worker](12-the-worker.md). The two never call each other; they meet only in the database,
-through a video's status.
+It is one of the three loops that advance the pipeline with nobody watching. The other two own
+everything that is not agent work: the worker (publishing, Auto Pilot and the timed sweeps, see
+[The Worker](12-the-worker.md)) and the renderer (rendering and review, see
+[Rendering and Review](11-rendering-and-review.md)). None of them calls another; they meet only in
+the database, through a video's status.
 
-| The poller | The worker |
-|---|---|
-| Runs on the host, started by cron | Runs in the `tubematic-renderer` container, always on |
-| Talks to the Flask API over HTTP, never the database | Reads and writes the database directly |
-| Starts agents for `TOPIC_APPROVED`, `VOICING`, `VOICE_READY`, `REVISION_REQUESTED` | Renders `RENDER_QUEUED`, settles `PUBLISHING`, and approves checkpoints under Auto Pilot |
-| Stops at human checkpoints | Is what moves a video past one, when Auto Pilot is on |
+| The poller | The worker | The renderer |
+|---|---|---|
+| Runs on the host, started by cron | Runs in the `tubematic-worker` container, always on | Runs in the `tubematic-renderer` container, always on |
+| Talks to the Flask API over HTTP, never the database | Reads and writes the database directly | Reads and writes the database directly |
+| Starts agents for `TOPIC_APPROVED`, `VOICING`, `VOICE_READY`, `REVISION_REQUESTED` | Settles `PUBLISHING`, and approves checkpoints under Auto Pilot | Renders `RENDER_QUEUED` and reviews the result |
+| Stops at human checkpoints | Is what moves a video past one, when Auto Pilot is on | Never moves a video past a checkpoint |
 
 How agents are installed, which agent a video is assigned to, and what the skills tell an agent to
 do are in [The Agent Layer](07-agent-layer.md). This page is the poller itself.

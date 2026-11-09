@@ -3,7 +3,7 @@
 The GPU is handed to `tubematic-renderer` by a Compose override file that the
 `gpu` onboarding step writes and `_compose()` loads when it exists. Everything
 here is host-side; the worker decides per render whether the GPU actually
-works (renderer/api/worker.py::_gl_args), so a stale or bypassed override
+works (renderer/api/render_agent.py::_gl_args), so a stale or bypassed override
 falls back to CPU rendering rather than failing a video.
 
 Why an override file, and why under the data root:

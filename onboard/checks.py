@@ -547,9 +547,14 @@ def check_installation() -> dict:
     services.append(CheckItem("MCP container healthy", r_mcp.stdout.strip() == "healthy",
                                hint="python3 scripts/service.py start tubematic-mcp"))
 
-    r_worker = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-renderer"],
+    r_worker = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-worker"],
                                capture_output=True, text=True)
-    services.append(CheckItem("Render worker container running", r_worker.stdout.strip() == "running",
+    services.append(CheckItem("Worker container running", r_worker.stdout.strip() == "running",
+                               hint="python3 scripts/service.py start tubematic-worker"))
+
+    r_renderer = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-renderer"],
+                                capture_output=True, text=True)
+    services.append(CheckItem("Renderer container running", r_renderer.stdout.strip() == "running",
                                hint="python3 scripts/service.py start tubematic-renderer"))
 
     r2 = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-dashboard"],

@@ -72,10 +72,11 @@ def test_build_sections_become_pinned_ghcr_images(services):
 
 
 def test_services_reusing_the_local_image_are_repointed_too(services):
-    """tubematic-mcp and tubematic-renderer carry `image: tubematic-renderer-image`
-    and no build section -- they reuse what tubematic-api builds. A release
-    install builds nothing, so that local tag would never resolve."""
-    for name in ("tubematic-mcp", "tubematic-renderer"):
+    """tubematic-mcp, tubematic-worker and tubematic-renderer carry `image:
+    tubematic-renderer-image` and no build section -- they reuse what
+    tubematic-api builds. A release install builds nothing, so that local tag
+    would never resolve."""
+    for name in ("tubematic-mcp", "tubematic-worker", "tubematic-renderer"):
         assert "build" not in services[name], name
         assert services[name]["image"] == (
             f"ghcr.io/{OWNER}/tubematic-backend:{VERSION}"
@@ -177,7 +178,8 @@ def test_the_output_names_itself_as_generated(rendered):
 def test_the_generated_yaml_parses(parsed):
     assert "services" in parsed
     assert set(parsed["services"]) == {
-        "tubematic-api", "tubematic-mcp", "tubematic-renderer", "tubematic-dashboard",
+        "tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer",
+        "tubematic-dashboard",
     }
 
 

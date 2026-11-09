@@ -448,7 +448,7 @@ SECTIONS = [
                    "reach, then pick which of them it may use on the Socials page."),
         # Off by default (TMDEV-165). "false" leads `choices` because a select
         # falls back to choices[0]. Keep in sync: the two fallbacks in
-        # actions.py, renderer/api/pipeline.py SETTINGS_SPEC, and worker.py.
+        # actions.py, renderer/api/pipeline.py SETTINGS_SPEC, and render_agent.py.
         Field("GEMINI_REVIEW_ENABLED", "Enable Gemini defect review? (Experimental)",
               kind="select", choices=["false", "true"], default="false",
               help="Off by default. After each render, sends the finished video to Gemini to "
@@ -456,7 +456,7 @@ SECTIONS = [
                    "Experimental: it needs the Gemini key, costs a Gemini call per render and "
                    "can flag a non-defect. If the review itself fails, the video goes to your "
                    "review as if it had passed. Off, renders go straight to your review."),
-        # Caps RENDER retries only (crash, timeout, worker-restart
+        # Caps RENDER retries only (crash, timeout, renderer-restart
         # reconciliation). It used to double as the AI-review loop cap; VQA-7
         # split those apart, and the review's own cap is asked in the
         # "AI review" section of the pipeline_settings step.
@@ -551,13 +551,13 @@ SECTIONS = [
     Section("rendering", "Rendering", [
         # Asked in minutes for readability; stored as render_timeout_secs (seconds)
         # in the settings table, which is what renderer/api/pipeline.py and
-        # worker.py actually read. The minutes<->seconds conversion happens at
+        # render_agent.py actually read. The minutes<->seconds conversion happens at
         # the load boundary (load_current_values, below) and the write boundary
         # (onboard/actions.py's apply_pipeline_settings) — this field's own key
         # is never itself a settings-table key.
         Field("render_timeout_mins", "Render timeout (minutes)", source="settings",
               kind="int", default="180", validator=_render_timeout_mins, advanced=True,
-              help="The ceiling on one render attempt before the worker kills it and retries. A "
+              help="The ceiling on one render attempt before the renderer kills it and retries. A "
                    "render that stops making progress is killed far sooner, by "
                    "render_stall_timeout_secs (10 minutes by default, on the Settings dashboard); "
                    "this ceiling only catches a render that keeps advancing but pathologically "

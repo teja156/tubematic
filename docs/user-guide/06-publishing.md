@@ -21,7 +21,7 @@ behind them — is on [Publishing internals](../developer/14-publishing.md).
 
 No tool the AI agent has can publish, schedule or approve a post, and a video waiting at
 `VIDEO_APPROVED` never wakes the agent. A post is started in one of two places only: by you, in the
-Publish dialog, or — for a project you have put on [Auto Pilot](#auto-pilot) — by the render worker.
+Publish dialog, or — for a project you have put on [Auto Pilot](#auto-pilot) — by the worker.
 Auto Pilot changes nothing about what the agent can do. See
 [why this is structural](../developer/14-publishing.md#the-agent-never-publishes-and-that-is-structural).
 
@@ -127,7 +127,7 @@ URL, and the reason for a failure. How a post is *performing* is on the **Analyt
 
 ### Analytics
 
-Once a video is published, the render worker reads each account's figures hourly; **Refresh metrics**
+Once a video is published, the worker reads each account's figures hourly; **Refresh metrics**
 on the Analytics page reads them at once. The figures are kept as a history, so they survive the
 [retention sweep](05-settings.md#video-retention) that deletes a published video's files: an
 archived video still shows its numbers. A figure a platform did not report shows `—`, never `0`.
@@ -206,7 +206,7 @@ change is saved.
 
 ### How approval works
 
-Every twenty seconds the render worker looks for videos of the selected projects at `TOPIC_PROPOSED`,
+Every twenty seconds the worker looks for videos of the selected projects at `TOPIC_PROPOSED`,
 `SCRIPT_READY` and `VIDEO_READY` and approves each one exactly as the dashboard would, with a comment
 saying Auto Pilot did it and that no human reviewed it. If you act on a video first, your decision
 wins. It is the worker that does this, never the agent, so the agent's rule that it never crosses a
@@ -219,8 +219,8 @@ checkpoint stays whole — see [why](../developer/14-publishing.md#auto-pilot).
 - **Pausing the pipeline pauses Auto Pilot.** Pause is the switch you reach for to stop spend, and
   approving a script spends. Nothing is approved and nothing is posted while paused. You can still
   approve by hand.
-- **An approval can wait behind a render.** The worker renders one video at a time, so a video that
-  reaches a checkpoint while another is rendering is approved when that render ends.
+- **An approval never waits behind a render.** The worker that approves does not render, so a video
+  is approved within about twenty seconds of reaching a checkpoint, whatever is rendering.
 - **No checkpoint notification is sent** for a video Auto Pilot approves: by the time notifications
   are sent, the video has already moved on.
 

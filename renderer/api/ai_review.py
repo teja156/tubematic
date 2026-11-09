@@ -421,7 +421,7 @@ def _review_usage(resp, model: str, sampled_fps) -> dict | None:
 def _error_result(message: str) -> dict:
     """Shared shape for every fail-open return path below — always includes
     a human-readable `feedback` alongside `error`, so the dashboard panel
-    and the comment worker.py posts are never silently empty. Empty
+    and the comment render_agent.py posts are never silently empty. Empty
     must_fix/suggestions route the caller the same way a clean review
     would — fail-open by shape, not by a boolean flag."""
     return {
@@ -438,7 +438,7 @@ def _normalize_finding(d, extra_key: str = None, extra_default: str = "",
     """Normalize one must-fix/suggestion entry to a dict with best-effort
     fields. Gemini may return a well-formed object, a bare string, or
     something malformed (missing keys, wrong types) — none of that may raise
-    here or one layer up in worker.py's persistence of these fields, so
+    here or one layer up in render_agent.py's persistence of these fields, so
     every field is defaulted rather than trusted. `extra_key` is "type" for
     must-fix entries and "area" for suggestions — the one field each shape
     has that the other doesn't. `bare_string_field` is where a bare-string

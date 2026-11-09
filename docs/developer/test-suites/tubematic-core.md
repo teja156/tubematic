@@ -79,7 +79,7 @@ lock between migrations and reopen the exact race two concurrent `migrate()` cal
 `migrate()`" made concrete.** Four threads call `migrate()` against the same brand-new database at
 once; the assertion is that exactly one of them actually applies anything and the database ends at
 the right version, not that all four somehow cooperate. That is what makes it safe for Flask, MCP,
-the render worker, onboarding, `clear_db.py` and the VQA seed generator to each call `migrate()`
+the worker, the renderer, onboarding, `clear_db.py` and the VQA seed generator to each call `migrate()`
 themselves with no coordination between them.
 
 **A backup filename is reserved atomically, and the concurrency tests force the race rather than

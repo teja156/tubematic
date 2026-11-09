@@ -53,7 +53,7 @@ settings this bootstrap seeds).
 | `.venv` (for the `vqa/*.py` utilities) | Claude Code skills/commands/MCP registration |
 | Seed DB (`vqa/make_seed_db.py`, at build time) | `mounted/` directories created |
 | `remotion-dev/skills` pre-fetched | DB seeded (only if not already present) |
-| — | `tubematic-api` + `tubematic-mcp` + `tubematic-renderer` built and started |
+| — | `tubematic-api` + `tubematic-mcp` + `tubematic-worker` + `tubematic-renderer` built and started |
 
 ## The code/state split — why two directories
 
@@ -116,7 +116,7 @@ automatically by the Kasm platform as `kasm-user` after session start, independe
 else in the container's boot chain. It's what actually does everything in the table above: refresh
 the working tree, refresh Claude Code's skills/commands/MCP registration, create `mounted/`, create
 any missing service token (`python3 -m tubematic_core.auth ensure`), seed the DB, and bring up
-`tubematic-api`/`tubematic-mcp`/`tubematic-renderer`. The MCP registration is redone on every launch
+`tubematic-api`/`tubematic-mcp`/`tubematic-worker`/`tubematic-renderer`. The MCP registration is redone on every launch
 rather than skipped when present: the server needs its token, which Claude Code fetches through
 `scripts/mcp_auth_header.py`, and a registration persisted from an older image has no such helper.
 The VQA stack runs no dashboard, so it needs no dashboard password.
@@ -236,7 +236,7 @@ Once the workspace is registered (above) and you launch a session:
    there's no domain-matching step to think about.
 
 8. **When you're done, just close the session.** Nothing to shut down manually —
-   `tubematic-api`/`tubematic-mcp`/`tubematic-renderer` stop with the container. Anything under `~/tubematic`
+   `tubematic-api`/`tubematic-mcp`/`tubematic-worker`/`tubematic-renderer` stop with the container. Anything under `~/tubematic`
    (rendered videos, the DB, Claude Code's login) is there again on your next launch, as long as
    the workspace has a Persistent Profile Path configured (see Registering, above).
 
@@ -278,14 +278,14 @@ needed.
 ## AI review: on-demand, not automatic
 
 The seed DB sets `gemini_review_enabled=false`, so a render lands straight at `VIDEO_READY`
-instead of looping through the worker's automatic post-render review. This is deliberate, not a
+instead of looping through the renderer's automatic post-render review. This is deliberate, not a
 gap: that automatic path bounces a video to `REVISION_REQUESTED` on *any* non-empty `suggestions`
 list. VQA-7 removed the prompt's "expect at least one suggestion on nearly every review" quota,
 which makes that far less likely than it was — but the routing rule itself is unchanged, so leaving
 the automatic review on here would still risk unwanted revision loops.
 
 Instead, review is a script you run when you want one: `/vqa-review <video_id>` (which runs
-`vqa/review_video.py` — see its docstring). It calls the exact same `run_ai_review()` the worker
+`vqa/review_video.py` — see its docstring). It calls the exact same `run_ai_review()` the renderer
 uses, but writes nothing to the DB — no `gemini_feedback`, no `ai_review_count`, no status change
 — so re-reviewing the same video any number of times is free of side effects. A review can take up
 to ~7 minutes worst case (Gemini's upload-processing poll is bounded at 60 × 5s, plus up to 120s
@@ -304,7 +304,7 @@ review prompt at all, and it can only do that if the sampling rate and model are
 a before/after pair. Change either with `/vqa-settings` (e.g.
 `edit_settings.py --set ai_review_fps=1`) and note that **the default is 10** — comparing a run
 made before a prompt change against one made after it, without pinning the rate, moves two
-variables at once. Keys absent from the seed DB fall back to the same defaults the worker uses
+variables at once. Keys absent from the seed DB fall back to the same defaults the renderer uses
 (`gemini-2.5-flash`, 10 fps).
 
 The feedback is shown in chat and also written to
@@ -373,10 +373,11 @@ masked secret from overwriting the real key — so a direct-SQL edit reusing `_c
 skip them.
 
 **No setting needs a restart to take effect.** Every reader queries the database live at use time —
-`renderer/api/worker.py::_setting`, `mcp/server.py::_get_setting` and
-`renderer/api/pipeline.py::_read_all_settings` are each called per-use, with no module-level reads
-and no in-process cache — so a write applies to the very next read. `--restart renderer` exists for
-a genuinely wedged render worker and nothing else. `--restart mcp` bounces the MCP server on port
+`renderer/api/worker.py::_setting`, `renderer/api/render_agent.py::_setting`,
+`mcp/server.py::_get_setting` and `renderer/api/pipeline.py::_read_all_settings` are each called
+per-use, with no module-level reads and no in-process cache — so a write applies to the very next
+read. `--restart renderer` and `--restart worker` exist for a genuinely wedged renderer or worker
+and nothing else. `--restart mcp` bounces the MCP server on port
 4100, dropping the Claude Code session's connection and every Tubematic tool with it, so it
 requires an explicit `--yes`; `--restart api` bounces Flask alone and needs no confirmation, since
 the two are separate containers.
@@ -448,7 +449,7 @@ ElevenLabs cost before asking, since that spend is non-refundable.
 - If `vqa/stage_script.py` or `vqa/review_video.py` fails with a plain permission error trying to
   create a file/directory under `mounted/`, that shouldn't happen — `kasm_post_run_user.sh`'s
   step 6 self-heals `mounted/`'s ownership to `kasm-user` on every launch specifically because
-  `tubematic-api`/`tubematic-renderer` run as root inside their containers, and either the
+  `tubematic-api`/`tubematic-worker`/`tubematic-renderer` run as root inside their containers, and either the
   container or dockerd's own bind-mount auto-create can leave content under `mounted/` root-owned
   on the host (invisible to the containers themselves, since root bypasses permission checks, but
   not to these host-side scripts). If you hit this anyway, it likely means that self-heal step

@@ -452,6 +452,6 @@ def assert_schema_current(db_path, *, migrations_dir=None) -> None:
         raise MigrationError(
             f"database schema is behind: at {current:04d}, "
             f"pending {', '.join(f'{v:04d}' for v in pending)}. "
-            f"Run scripts/migrate_db.py, or start tubematic-api, "
-            f"tubematic-renderer or tubematic-mcp — any of them calls "
+            f"Run scripts/migrate_db.py, or start tubematic-api, tubematic-mcp, "
+            f"tubematic-worker or tubematic-renderer — any of them calls "
             f"migrate() on startup.")

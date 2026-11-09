@@ -416,8 +416,18 @@ def test_an_unhealthy_dashboard_fails_the_start(monkeypatch):
         stack.start(ex, _Rep(), ["tubematic-dashboard"], confirm_down=lambda n: True)
 
 
+def test_a_worker_that_exited_fails_the_start(monkeypatch):
+    """It has no healthcheck either, so a worker that dies at startup (a bad
+    migration, a missing mount) would otherwise be reported as started."""
+    ex = _live_start(monkeypatch, {"tubematic-worker": ("exited", ""),
+                                   "tubematic-renderer": ("running", "")})
+    with pytest.raises(RuntimeError):
+        stack.start(ex, _Rep(), [], confirm_down=lambda n: True)
+
+
 def test_a_healthy_start_succeeds(monkeypatch):
-    ex = _live_start(monkeypatch, {"tubematic-renderer": ("running", "")})
+    ex = _live_start(monkeypatch, {"tubematic-worker": ("running", ""),
+                                   "tubematic-renderer": ("running", "")})
     stack.start(ex, _Rep(), [], confirm_down=lambda n: True)
 
 
@@ -437,3 +447,16 @@ def test_a_database_newer_than_this_version_is_incompatible(tmp_path, monkeypatc
     assert stack.report(rep, db_path=path, repo_root=tmp_path, mode="release") is False
     assert any("newer" in w for w in rep.warns)
     assert not any("schema" in o.lower() for o in rep.oks)
+
+
+@pytest.mark.parametrize("returncode, stdout, expected", [
+    (0, '["python3","/app/api/render_agent.py"]\n', "python3 /app/api/render_agent.py"),
+    (0, "null\n", ""),
+    (1, "", ""),  # no such container
+])
+def test_container_command_reads_the_created_command(monkeypatch, returncode, stdout, expected):
+    """upgrade.py tells a pre-2.1.0 renderer from its command, so the parse
+    has to survive both a real command and a container that is not there."""
+    monkeypatch.setattr(stack.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a[0], returncode, stdout=stdout, stderr=""))
+    assert stack._container_command("tubematic-renderer") == expected

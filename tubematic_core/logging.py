@@ -33,7 +33,7 @@ from pathlib import Path
 # "poll" is the host-side cron poller (scripts/poll.py). Its older, unstructured
 # ~/.tubematic-agent/logs/poll.log is a *different* store and is not managed by
 # anything in this module.
-SERVICES = ("api", "mcp", "renderer", "poll")
+SERVICES = ("api", "mcp", "worker", "renderer", "poll")
 
 # Ordering for the reader's minimum-level filter. "critical" is included even
 # though nothing emits it today: an unknown level must not silently sort below

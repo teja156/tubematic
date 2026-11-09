@@ -1,4 +1,4 @@
-"""docker-compose.yml topology — four services, one process each (TMDEV-87).
+"""docker-compose.yml topology — five services, one process each (TMDEV-87, TMDEV-188).
 
 Flask and MCP used to share the tubematic-api container: entrypoint.sh
 backgrounded Flask and exec'd MCP. When Flask died, MCP still held PID 1, so
@@ -36,11 +36,20 @@ def test_api_and_mcp_are_distinct_services(services):
     assert "tubematic-mcp" in services
 
 
-def test_the_four_runtime_services(services):
+def test_the_five_runtime_services(services):
     assert set(services) == {
-        "tubematic-api", "tubematic-mcp",
+        "tubematic-api", "tubematic-mcp", "tubematic-worker",
         "tubematic-renderer", "tubematic-dashboard",
     }
+
+
+def test_the_worker_and_the_renderer_run_different_loops(services):
+    """The housekeeping passes and the render claim used to share one loop, so
+    a render held every publish, approval and notification for its length.
+    Both containers starting the same file would put them back in one loop
+    twice over: two publishing polls, and a render in the worker."""
+    assert services["tubematic-worker"]["command"] == "python3 /app/api/worker.py"
+    assert services["tubematic-renderer"]["command"] == "python3 /app/api/render_agent.py"
 
 
 def test_api_starts_flask_only(services):
@@ -63,11 +72,12 @@ def test_api_and_mcp_both_run_through_the_shared_entrypoint(services):
         assert services[name]["command"].startswith("/app/entrypoint.sh ")
 
 
-def test_renderer_still_bypasses_the_entrypoint(services):
-    """The worker replaces the CMD outright and calls os.umask(0) itself.
-    Routing it through entrypoint.sh would change worker behaviour, which
-    TMDEV-87 deliberately did not do."""
-    assert services["tubematic-renderer"]["command"] == "python3 /app/api/worker.py"
+def test_the_worker_and_renderer_still_bypass_the_entrypoint(services):
+    """Both replace the CMD outright and call os.umask(0) themselves. Routing
+    them through entrypoint.sh would change their behaviour, which TMDEV-87
+    deliberately did not do."""
+    for name in ("tubematic-worker", "tubematic-renderer"):
+        assert not services[name]["command"].startswith("/app/entrypoint.sh"), name
 
 
 def test_mcp_reuses_the_api_image_without_a_second_build(services):
@@ -117,6 +127,10 @@ def test_renderer_depends_on_the_api_not_mcp(services):
     assert _depends(services["tubematic-renderer"]) == {"tubematic-api"}
 
 
+def test_worker_depends_on_the_api_not_mcp(services):
+    assert _depends(services["tubematic-worker"]) == {"tubematic-api"}
+
+
 def test_flask_depends_on_nothing(services):
     """The dashboard and poller path must work with MCP down. A depends_on
     from api to mcp would invert that."""
@@ -147,8 +161,9 @@ def test_the_api_no_longer_publishes_the_mcp_port(services):
     assert not any("4100" in p for p in services["tubematic-api"]["ports"])
 
 
-def test_the_renderer_publishes_nothing(services):
-    assert "ports" not in services["tubematic-renderer"]
+def test_the_renderer_and_the_worker_publish_nothing(services):
+    for name in ("tubematic-worker", "tubematic-renderer"):
+        assert "ports" not in services[name], name
 
 
 # ── Volumes: MCP gets the minimum its tools use ────────────────────────────
@@ -190,11 +205,21 @@ def test_renderer_mounts(services):
     }
 
 
-def test_the_three_writers_all_mount_the_shared_logs_directory(services):
-    """One directory, four writers (the fourth is host-side scripts/poll.py).
+def test_worker_mounts(services):
+    """Exact, like MCP's: retention deletes mp4s (/output_videos) and job
+    directories (/jobs); Auto Pilot and scheduling count host-zone days
+    (/etc/localtime). It never touches a scene, so no scenes-generated."""
+    assert _mounts(services["tubematic-worker"]) == {
+        "/output_videos", "/jobs", "/data", "/logs", "/backups",
+        "/etc/localtime", "/etc/timezone",
+    }
+
+
+def test_the_four_writers_all_mount_the_shared_logs_directory(services):
+    """One directory, five writers (the fifth is host-side scripts/poll.py).
     A service that logs but does not mount it degrades to stdout-only silently,
     so its absence would show up as a gap in the dashboard, not as an error."""
-    for name in ("tubematic-api", "tubematic-mcp", "tubematic-renderer"):
+    for name in ("tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer"):
         assert "/logs" in _mounts(services[name]), name
 
 

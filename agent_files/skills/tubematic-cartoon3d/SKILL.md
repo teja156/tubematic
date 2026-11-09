@@ -169,9 +169,9 @@ bare voice. Calling it again replaces the mix.
 ## Step 6 — validate and submit
 
 1. `validate_job(video_id)`: fix every error and read the warnings.
-2. `submit_render(video_id)`. It queues the video and returns; the render worker renders it in segments and
+2. `submit_render(video_id)`. It queues the video and returns; the renderer renders it in segments and
    muxes the soundtrack. Do not poll. From here the source is frozen: `write_scene_file` refuses the video
-   while it is queued or rendering, and the worker renders exactly the tree the judges passed (a tree that
+   while it is queued or rendering, and the renderer renders exactly the tree the judges passed (a tree that
    differs fails the render back to you). Change nothing until the video is `REVISION_REQUESTED` or done.
 3. `add_comment` with the shot table as sentence → what is on screen, the verifier's scores per round, the
    beat gate's verdict and the judges' words, and the soundtrack's section map.

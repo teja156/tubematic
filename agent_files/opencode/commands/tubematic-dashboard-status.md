@@ -13,7 +13,7 @@ Report:
 - Whether tubematic-api answered → URL: http://localhost:4000
 - Whether tubematic-mcp answered
 - The dashboard at http://localhost:3000 (fetch it; a response means the container is up)
-- tubematic-renderer (the render worker) exposes no port and no health endpoint, so it
+- tubematic-worker and tubematic-renderer expose no port and no health endpoint, so they
   cannot be checked this way. Say so rather than guessing, and tell the user to run
   `docker compose ps` themselves if they need to know.
 

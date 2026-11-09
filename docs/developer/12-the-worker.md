@@ -1,17 +1,23 @@
 # The Worker
 
-`renderer/api/worker.py` is the process that advances the pipeline without an agent. It runs in the
-`tubematic-renderer` container, has no HTTP server and no exposed ports, and is one endless loop
-over the database. Rendering is the pass it is named for, but most of what it does on a given tick
-is not rendering: it settles published posts, runs Auto Pilot, polls analytics, deletes old output,
-sends checkpoint notifications and flags stalled videos.
+`renderer/api/worker.py` is the process that does the pipeline's background housekeeping without an
+agent. It runs in the `tubematic-worker` container, has no HTTP server and no exposed ports, and is
+one endless loop over the database: it settles published posts, runs Auto Pilot, polls analytics,
+syncs prices, deletes old output, sends checkpoint notifications and flags stalled videos.
 
-It is one of the two loops that advance the pipeline with nobody watching. The other is the poller,
-which starts agent sessions. See [The Poller](13-the-poller.md). The two never call each other; they
-meet only in the database, through a video's status.
+It does not render. Rendering, the AI review and the GPU test are the renderer's,
+`renderer/api/render_agent.py` in the `tubematic-renderer` container, on
+[Rendering and Review](11-rendering-and-review.md). The two used to be one loop in one container,
+and a render held every other pass for as long as it took. Split, a post that falls due or a
+checkpoint Auto Pilot should approve never waits behind a render, and recreating the renderer
+(`onboard.py --step gpu` does) never interrupts them.
 
-This page is the loop: what runs, in what order, how often, and the rules every pass follows. What
-each pass decides is on the page that owns that subject, linked from the table below.
+The worker and the renderer are two of the loops that advance the pipeline with nobody watching.
+The third is the poller, which starts agent sessions. See [The Poller](13-the-poller.md). None of
+them calls another; they meet only in the database, through a video's status.
+
+This page is the worker's loop: what runs, in what order, how often, and the rules every pass
+follows. What each pass decides is on the page that owns that subject, linked from the table below.
 
 ---
 
@@ -19,22 +25,19 @@ each pass decides is on the page that owns that subject, linked from the table b
 
 ```mermaid
 flowchart TD
-    S[startup: migrate the database,<br/>requeue or fail rows stuck at RENDERING,<br/>test the GPU, start the stills server] --> P
+    S[startup: migrate the database] --> P
     P[1 · publishing: release due scheduled posts,<br/>settle posts in flight] --> A
     A[2 · Auto Pilot: approve checkpoints,<br/>start one post] --> M
     M[3 · analytics poll — hourly] --> PR
     PR[4 · price sync — weekly] --> R
     R[5 · retention sweep — hourly] --> N
     N[6 · checkpoint notifications] --> V
-    V[7 · stalled-voicing check] --> G
-    G[8 · GPU test, if one was requested] --> C{9 · a video at<br/>RENDER_QUEUED?}
-    C -->|no| SL[sleep 20 s] --> P
-    C -->|yes| RN[render it, review it,<br/>write the result] --> P
+    V[7 · stalled-voicing check] --> SL
+    SL[sleep 20 s] --> P
 ```
 
 | # | Pass | Symbol | Runs | Does nothing unless | Owned by |
 |---|---|---|---|---|---|
-| 0 | Startup reconciliation | `_reconcile_rendering_videos` | once, at start | a row is at `RENDERING` | [Rendering and Review](11-rendering-and-review.md#startup-reconciliation) |
 | 1 | Publishing | `_poll_publishing_videos` | every tick | publishing is on and a postforme key is stored | [Publishing](14-publishing.md#the-worker) |
 | 2 | Auto Pilot | `_sweep_auto_pilot` | every tick | Auto Pilot is on, the pipeline is not paused, a project is selected. The [in-progress limit](14-publishing.md#the-in-progress-limit) holds back only new scripts and topics, never finished videos or scheduling | [Publishing](14-publishing.md#auto-pilot) |
 | 3 | Analytics poll | `_poll_video_metrics` | hourly | publishing is on and a postforme key is stored | [Publishing](14-publishing.md#the-worker) |
@@ -42,117 +45,27 @@ flowchart TD
 | 5 | Retention sweep | `_sweep_retention` | hourly | either retention key is above 0 | [Rendering and Review](11-rendering-and-review.md#retention) |
 | 6 | Checkpoint notifications | `_sweep_notifications` | every tick | a webhook and at least one trigger are set | [The Pipeline](02-pipeline.md#notifications) |
 | 7 | Stalled-voicing check | `_sweep_stalled_voicing` | every tick | the pipeline is not paused | [The Pipeline](02-pipeline.md#script_ready--the-money-checkpoint) |
-| 0b | GPU test | `_run_gpu_probe` | once, at start, before any render | — (also runs on a CPU install, to report what Chromium gets) | [Rendering and Review](11-rendering-and-review.md#the-gl-renderer) |
-| 8 | GPU test on request | `_sweep_gpu_probe` | every tick | the dashboard's **Test GPU** asked after the last test started | [Rendering and Review](11-rendering-and-review.md#the-gl-renderer) |
-| 8b | Stills server | `_ensure_stills_server` | at start and every tick | `TUBEMATIC_STILLS_PORT` is set (it is, in Compose); starts the server once, again when it has died (at most once a minute) or when a GPU test moved renders between the GPU and the CPU | [below](#the-stills-server) |
-| 9 | Render | `_claim_next`, `_stage_and_render` | every tick | a video is at `RENDER_QUEUED` | [Rendering and Review](11-rendering-and-review.md) |
 
 The loop itself is `worker.py::main`.
 
-### The stills server
-
-The MCP container's Cartoon 3D tools (`cartoon_beat_gate`, `cartoon_still`) need stills of a
-video's composition, and this is the one container with the GPU. So the worker runs
-`renderer/remotion/cartoon-tools/stills-server.mjs` as a child process beside its renders: the
-project is bundled once, one Chromium stays open, and a still takes a few seconds instead of the
-25 to 30 seconds a cold software-GL still costs in the MCP container. It is started with exactly
-the GL options a render gets (`_gl_options`), so a passing GPU test moves it onto the GPU and a
-failing one moves it back, and it serves the shared `/jobs` volume as its public directory, so a
-video's files are `/public/<video_id>/…` to the composition with nothing copied. It listens on
-`TUBEMATIC_STILLS_PORT` (4455) on the Compose network only and is never published; the MCP
-container reaches it as `TUBEMATIC_STILLS_SERVER`, and when it does not answer the tools render
-their stills locally instead. Renders and stills share the GPU; the server renders one still at a
-time. It is also why the reaper that follows a killed render (`_kill_group_and_reap`) drains the
-killed group's orphans without blocking: a blocking wait on any child would sit on the healthy stills
-server forever, so it polls non-blocking until no child but the stills server is left. The generated
-source tree (`src/scenes/generated/`, the agents' per-video TypeScript) is part of the bundle, so before
-every still the server compares a stamp of that tree (every file's path, size and mtime) with the one its
-bundle was made from and re-bundles when it differs: an edit to a video's code is seen by its next still
-(about twenty seconds, once), an unchanged tree costs a directory walk.
-
-### Videos that render on the GPU only
-
-A Cartoon 3D video and a video with a mascot are both **GPU-only by policy**, not because the CPU path
-cannot draw them: a mascot adds about a tenth of a second of drawing to every frame, which on software
-GL would turn a 90-second Short into hours. The choice is refused where it is made (the dashboard, the
-API and the MCP server) unless the GPU test passed, so the worker's check is for a video approved
-*before* its GPU stopped working. If the video needs the GPU and `_render_on_gpu()` is false the
-worker runs the GPU test first when the result is still unknown, and otherwise moves the video
-**straight to `FAILED`** with a comment naming the live GPU status. It bypasses `max_render_retries`:
-a requeue would fail the same way, and sending it to `REVISION_REQUESTED` would hand it to an agent
-that cannot repair a GPU. The video is created again once the GPU works.
-
-The same holds when the GPU stops working **during** such a render. When a GPU-only render fails,
-stalls or times out, the worker re-tests the GPU *before* it routes the failure
-(`worker.py::_after_render_failure`). If the GPU no longer passes, the video goes straight to `FAILED`
-with the same comment plus the render's error, again without spending a retry or an agent session. If
-it still passes, the failure is the video's own and takes the usual path. An ordinary video keeps the
-older order (route the failure, then re-test), since its retry can fall back to the CPU.
-
-A mascot video is rendered with the version pinned in `videos.mascot_version`, never the mascot's
-current approved version. The worker reads that version's code (`tubematic_core/mascots.py::code_for`),
-stages it as `public/<video_id>/mascot.js` and passes `mascotPath` as a render prop (see
-[the Remotion project](09-remotion-project.md#the-mascot-layer)). A version of `0` (never pinned) or a
-version with no code fails the video the same way, with a comment saying the drawing code cannot be
-read. A Cartoon 3D video that also holds a mascot (the API and the MCP server refuse the pair, so only
-a row written some other way can) goes to `FAILED` the same way, with `MASCOT_NOT_ON_CARTOON_3D` in its
-comment, rather than rendering without the mascot a human chose.
-
-### Segmented Cartoon 3D renders
-
-A Cartoon 3D video is not rendered as one `remotion render`: a long single render of one hung silently
-part way on the GPU (most likely GPU memory, as every tab accumulates every set's textures and a
-crossfade opens a second WebGL context). `_render_cartoon` renders segments of `CARTOON_CHUNK_FRAMES`
-(450) frames, each its own Remotion process with a fresh browser, `--frames=a-b --muted` and
-`--concurrency=2`, under the same stall watcher as any render; a segment that stalls or fails is tried
-once more, fresh, and a second failure is the render's (a stall is reported as a timeout is, requeued
-and the GPU re-tested; an error goes to the agent). The segments are joined with ffmpeg's concat
-demuxer without re-encoding, and the soundtrack is muxed on: the synthesised mix
-(`<jobs>/<video_id>/cartoon/audio/mix/mix.wav`, written by the MCP server's `cartoon_soundtrack`)
-when it exists and is at least as new as the voice, else `audio.mp3` alone. The work directory beside
-the output is removed either way.
-
-`render_timeout_secs` caps the whole segmented render, every segment, retry and ffmpeg step included, as it
-caps an ordinary render: each segment gets what is left of the one deadline, and the concat and the mux get
-the lesser of what is left and `FFMPEG_TIMEOUT_SECS`. Every segment bundles the generated
-source tree afresh, so what is rendered has to be what the beat gate judged: `submit_render` recorded that
-tree's fingerprint under `<jobs>/<video_id>/cartoon/source.json`, and the worker compares the live tree
-with it before every segment and again before the join. A tree that differs (edited after the gate) or
-holds a symlink fails the render to the agent with the reason, and so does a missing or symlinked record
-(the record's and the mix's paths are built with `join_below`, so a link in any component on the way is
-refused too): only `submit_render` queues a Cartoon 3D video, and it always writes one. A render that cannot run at all (no `npx`, a full disk) is that video's failure, not an
-exception out of the worker: `_render_claimed` is the per-video boundary round `_stage_and_render`, and
-whatever escapes it is recorded with `_handle_render_failure` and requeued, so a row never stays
-`RENDERING` with the worker gone.
-
 ## What a tick is
 
-A tick is one trip round the loop. How long it takes depends on step 9:
-
-- **Nothing to render:** the worker sleeps `RENDER_POLL_INTERVAL_SECS` (default 20 seconds) and goes
-  round again. So an idle worker runs every pass about every 20 seconds. The interval is a plain
-  environment variable, not a settings row.
-- **A video to render:** the render runs inside the loop and holds it until it finishes: typically
-  around twenty minutes on the CPU and a few on the GPU; a render that stops advancing is killed after
-  `render_stall_timeout_secs` (default 10 minutes), and `render_timeout_secs` (default 3 hours) caps the whole render.
-  There is no sleep afterwards; the next tick starts at once.
-
-**So every pass waits behind a running render.** A post that falls due, a checkpoint Auto Pilot
-should approve, a notification: none of them happen until the render in progress ends. That is the
-cost of one loop, and it is accepted because the alternative is two writers racing on the same
-rows. Nothing is lost by the wait: every pass works from the database's current state, not from a
-queue of events, so it simply catches up on the next tick.
+A tick is one trip round the loop. Every pass is short, so after the last one the worker sleeps
+`WORKER_POLL_INTERVAL_SECS` (default 20 seconds) and goes round again. So every pass runs about
+every 20 seconds. The interval is a plain environment variable, not a settings row. When it is
+unset the worker falls back to `RENDER_POLL_INTERVAL_SECS`, which set this loop's interval when it
+still ran inside the renderer, so an existing override keeps applying.
 
 "Hourly" and "weekly" mean *at most* that often. Those passes are checked every tick and skipped
-until their interval has passed, so with a render in the way they run late, never early.
+until their interval has passed.
+
+Nothing is lost if a tick runs late: every pass works from the database's current state, not from
+a queue of events, so it simply catches up on the next tick.
 
 ## The order, and why
 
-The order is not arbitrary, and three positions are load-bearing.
+The order is not arbitrary, and two positions are load-bearing.
 
-- **Everything runs before the render claim.** A render is the one step that can take the loop away
-  for half an hour, so the short passes go first. A publish is then never delayed by more than one
-  render, and rendering is never starved, because every other pass returns quickly.
 - **Publishing runs before Auto Pilot.** The publishing pass releases scheduled posts that are due
   and settles posts in flight. Auto Pilot's slot calculation reads those same rows to see when each
   account last posted, so it must see them settled first. The in-progress limit counts posts
@@ -165,10 +78,9 @@ The order is not arbitrary, and three positions are load-bearing.
 ## Rules every pass follows
 
 **A pass never raises into the loop.** `main` has no exception handler, deliberately: an escaping
-exception ends the process, the container restarts, and startup reconciliation counts that restart
-as a failed render for whatever was at `RENDERING`. With the default retry cap of 1, two such
-restarts fail a video that did nothing wrong. So each pass catches its own exceptions, logs them and
-returns. A broken sweep costs that sweep, not a render.
+exception ends the process, and every other pass with it, publishing included, until the container
+restarts. A pass that fails every time would then crash-loop the container. So each pass catches
+its own exceptions, logs them and returns. A broken sweep costs that sweep, not the others.
 
 **A throttled pass stamps its time before it does its work.** The hourly and weekly passes record
 "last run" in a settings row first, then run. A pass that dies half-way is therefore not retried
@@ -181,8 +93,8 @@ on the next tick, with no restart.
 
 **Every status change is guarded on the status it expects.** A pass moves a video with
 `UPDATE … WHERE id = ? AND status = ?`, so a human or an agent who acted first wins and the pass
-does nothing. This is what makes it safe for the worker, the API and the MCP server to all write the
-same table.
+does nothing. This is what makes it safe for the worker, the renderer, the API and the MCP server
+to all write the same table.
 
 **A pass that only observes must not touch `updated_at`.** That column is the render queue's
 ordering key and the stalled-voicing clock. The notification sweep and the stalled-voicing check
@@ -190,39 +102,33 @@ record what they have seen in their own columns for that reason.
 
 **Pausing the pipeline stops very little here.** Pause is an instruction to the poller not to start
 agent sessions. In the worker only two passes read it: Auto Pilot does nothing while paused, and
-the stalled-voicing check stops its clock. Rendering, publishing, analytics, retention and
-notifications all carry on, because a video already queued or a post already scheduled is work the
-human has asked for.
+the stalled-voicing check stops its clock. Publishing, analytics, retention and notifications all
+carry on, because a post already scheduled is work the human has asked for. The renderer does not
+read it either.
 
 ## What it never does
 
-- **It never starts an agent.** Agent sessions are the poller's. When the worker needs agent work
-  done, for example after a failed review, it sets `REVISION_REQUESTED` and the poller picks the
-  video up.
+- **It never renders.** A video at `RENDER_QUEUED` or `RENDERING` is the renderer's; no pass here
+  moves one.
+- **It never starts an agent.** Agent sessions are the poller's. When work needs an agent, the
+  video's status says so and the poller picks it up.
 - **It never takes a request.** The dashboard's Publish, Retry and Cancel actions go to the Flask
   API, which acts at once and leaves rows for the worker to settle. The one thing the two share in
   code is `pipeline.py::start_publish`, which the API calls for a human and the worker calls for
-  Auto Pilot, so both run the same claim, upload and reconciliation rules. The one exception is
-  **Test GPU**: only this container can have a GPU, so the API just stamps a settings row and the
-  worker answers on its next pass, behind any render in progress.
-- **It never renders two videos at once.** One loop, one render. Videos queue at `RENDER_QUEUED` in
-  `updated_at` order.
-- **It never trusts a stored file path.** Every job file it stages and the mp4 it writes are found
-  from the video's and project's ids, not from the row's path columns. A video whose id or project
-  id would lead outside the jobs or output directory goes to `FAILED` with a comment, unrendered —
-  see [Staging and the render call](11-rendering-and-review.md#staging-and-the-render-call).
+  Auto Pilot, so both run the same claim, upload and reconciliation rules.
+- **It never trusts a stored file path.** The retention sweep finds a video's mp4 and job directory
+  from the video's and project's ids, not from the row's path columns, as the renderer does — see
+  [Staging and the render call](11-rendering-and-review.md#staging-and-the-render-call).
 
 ## Watching it
 
 ```bash
-docker compose logs -f tubematic-renderer
+docker compose logs -f tubematic-worker
 ```
 
 Every line is prefixed `[worker]`, and a line about one video carries its id in brackets. The same
-records go to the structured log the dashboard's Logs page reads, under the `renderer` service; see
-[Troubleshooting](../user-guide/08-troubleshooting.md#logs). A render's own output is not kept in full: a failure
-is logged here and a truncated copy goes into the video's comment thread — see
-[Rendering and Review](11-rendering-and-review.md#logs).
+records go to the structured log the dashboard's Logs page reads, under the `worker` service; see
+[Troubleshooting](../user-guide/08-troubleshooting.md#logs).
 
 A quiet log on an idle install is normal: a pass with nothing to do logs nothing.
 
@@ -232,8 +138,9 @@ A quiet log on an idle install is normal: a pass with nothing to do logs nothing
    Exception` and logs the exception. Copy `_sweep_stalled_voicing` for the shape.
 2. If it should not run every tick, gate it on a settings-row stamp written before the work, as
    `_sweep_retention` does.
-3. Call it from `main`, before `_claim_next`, and decide its position against the three ordering
-   rules above.
+3. Call it from `worker.py::main`, and decide its position against the two ordering rules above.
+   It must not block: a pass that waits on something slow delays every other pass by as long.
+   Rendering is in `render_agent.py` for exactly that reason.
 4. Guard every status write on the status you expect, and do not write `updated_at` unless the pass
    really is advancing the video.
 5. Add the row to the table on this page, and document what the pass decides on the page that owns

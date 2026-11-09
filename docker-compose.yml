@@ -195,17 +195,54 @@ services:
       tubematic-api:
         condition: service_healthy
 
-  # ── Render worker ────────────────────────────────────────────────────────
+  # ── Worker ───────────────────────────────────────────────────────────────
+  # Every background job that is not a render: publishing, Auto Pilot,
+  # video metrics, the weekly price sync, retention, Discord notifications
+  # and the stalled-VOICING backstop (renderer/api/worker.py). Its own
+  # container, apart from the renderer, so a render (which can take an hour)
+  # never holds up a publish or an approval, and recreating the renderer
+  # (onboard.py --step gpu does) never interrupts them. Reuses the
+  # tubematic-api image with a different command.
+  #
+  # /output_videos and /jobs because retention deletes a video's mp4 and job
+  # directory; /etc/localtime because Auto Pilot's daily limits and a
+  # scheduled post's wall time are host-zone days. No scenes-generated: it
+  # never reads or writes a scene.
+  tubematic-worker:
+    image: tubematic-renderer-image
+    container_name: tubematic-worker
+    restart: unless-stopped
+    command: python3 /app/api/worker.py
+    volumes:
+      - output-videos:/output_videos
+      - jobs-data:/jobs
+      - db-data:/data
+      - logs-data:/logs
+      - backups-data:/backups
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    networks:
+      - tubematic-net
+    # No env_file — same reason as tubematic-api above.
+    environment:
+      - OUTPUT_BASE_PATH=/output_videos
+      - TUBEMATIC_DB=/data/tubematic.db
+      - TUBEMATIC_JOBS_DIR=/jobs
+    depends_on:
+      tubematic-api:
+        condition: service_healthy
+
+  # ── Renderer ─────────────────────────────────────────────────────────────
   # The actual renderer (Remotion + Chromium + ffmpeg). Polls videos.status
-  # for RENDER_QUEUED, renders, and runs the AI-review tail. Its own
-  # container so a render OOM/crash only restarts this service, not the API
-  # or MCP (see renderer/api/worker.py). Reuses the tubematic-api image —
-  # no second build — with a different command.
+  # for RENDER_QUEUED, renders, and runs the AI-review tail; nothing else
+  # (renderer/api/render_agent.py). Its own container so a render OOM/crash
+  # only restarts this service, not the API, MCP or the worker. Reuses the
+  # tubematic-api image — no second build — with a different command.
   tubematic-renderer:
     image: tubematic-renderer-image
     container_name: tubematic-renderer
     restart: unless-stopped
-    command: python3 /app/api/worker.py
+    command: python3 /app/api/render_agent.py
     volumes:
       - output-videos:/output_videos
       - jobs-data:/jobs
@@ -223,7 +260,7 @@ services:
       - OUTPUT_BASE_PATH=/output_videos
       - TUBEMATIC_DB=/data/tubematic.db
       - TUBEMATIC_JOBS_DIR=/jobs
-      # The stills server the worker runs beside its renders, for the MCP
+      # The stills server the renderer runs beside its renders, for the MCP
       # container's Cartoon 3D tools. Compose network only, never published.
       - TUBEMATIC_STILLS_PORT=4455
     shm_size: '2gb'

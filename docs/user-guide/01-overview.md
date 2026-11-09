@@ -31,7 +31,7 @@ flowchart LR
         V["Voice<br/>ElevenLabs"]
         SC["Images + scene code"]
     end
-    subgraph AUTO["Worker"]
+    subgraph AUTO["Renderer"]
         RE["Render<br/>Remotion + Chromium"]
         RV["Review (optional)<br/>Gemini watches it"]
     end
@@ -60,7 +60,8 @@ work, before **voicing spends money**, and before a finished video goes out.
 |---|---|---|
 | **Pipeline API** | Flask. The state machine, settings, and every read/write the dashboard makes | `renderer/api/`, port 4000 |
 | **MCP server** | The AI agent's entire interface — 48 tools and nothing else | `mcp/`, its own container, port 4100 |
-| **Render worker** | Polls for queued videos, runs Remotion, runs AI review; also sends due scheduled posts and settles posts in flight, runs Auto Pilot, and does the periodic sweeps. See [The Worker](../developer/12-the-worker.md) | `renderer/api/worker.py` |
+| **Renderer** | Polls for queued videos, runs Remotion, runs AI review, tests the GPU. Its own container. See [Rendering and Review](../developer/11-rendering-and-review.md) | `renderer/api/render_agent.py` |
+| **Worker** | Sends due scheduled posts and settles posts in flight, runs Auto Pilot, and does the periodic sweeps (analytics, prices, retention, notifications). Its own container, so none of it waits behind a render. See [The Worker](../developer/12-the-worker.md) | `renderer/api/worker.py` |
 | **Remotion project** | The React video codebase — a curated component library plus per-video generated scenes | `renderer/remotion/` |
 | **Dashboard** | Next.js. Where a human creates videos, approves, configures, and watches — the way you run Tubematic | `dashboard/`, port 3000 |
 | **Agent skills** | Markdown that teaches the agent the workflow. The real "business logic" of the AI half | `agent_files/skills/` |

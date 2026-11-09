@@ -260,7 +260,7 @@ works that way is explained in [Where topics come from](02-pipeline.md#where-top
 
 `dashboard/components/KanbanBoard.tsx` renders 11 main columns in pipeline order plus 3 side columns
 (Rejected, Revision Requested, Failed). `RENDER_QUEUED` is folded into the Rendering column via
-`extraStatuses` — a video waiting for the worker and a video being rendered are the same thing from
+`extraStatuses` — a video waiting for the renderer and a video being rendered are the same thing from
 a human's point of view.
 
 `dashboard/components/ActionPane.tsx` is the more important surface: a "Quick Actions" inbox listing only

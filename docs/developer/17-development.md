@@ -90,7 +90,7 @@ image without maintaining a second exclude list.
 
 A disposable browser-accessible desktop running Docker-in-Docker, where you run
 `python3 onboard.py` by hand and answer every prompt exactly as a first-time installer would, then
-bring up all four containers. This is how the *installation experience* gets tested.
+bring up all five containers. This is how the *installation experience* gets tested.
 
 ```bash
 kasm_workspace_testing/build.sh [tag] [--no-cache] [--worktree <path|branch|dirname>]
@@ -119,7 +119,7 @@ so in-session edits survive relaunches of the *same* image. Pipeline data lives 
 entirely, and an explicit post-rsync check fails loudly if the database existed before the sync and
 is gone after.
 
-AI review is seeded **off** there, deliberately: the worker bounces any video with a non-empty
+AI review is seeded **off** there, deliberately: the renderer bounces any video with a non-empty
 suggestions list back to `REVISION_REQUESTED`, so leaving it on means few videos ever reach
 `VIDEO_READY` while you are iterating on visual quality.
 
@@ -245,7 +245,7 @@ The full model — where migrations live, why `0001` is Python, the write lock, 
   - A new video status needs `VALID_VIDEO_STATUSES`/`WORKABLE_STATUSES` in **both**
     `renderer/api/pipeline.py` and `mcp/server.py`, the `dashboard/lib/types.ts` copy, the state
     diagram in [The Pipeline](02-pipeline.md#the-states), and every place that branches on status —
-    the worker's transition table, the poller's workable-video query, and any skill or slash command
+    the worker's and the renderer's transitions, the poller's workable-video query, and any skill or slash command
     that names statuses.
 - **Prefer additive.** A rename is a one-way door — see `videos.animatability_score →
   producibility_score` in [Database](03-database.md#migrations) for what that costs to reverse.

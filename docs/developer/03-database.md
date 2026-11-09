@@ -10,7 +10,7 @@ queue — the database *is* the queue, the state machine, and the configuration 
 | Foreign keys | ON |
 | Access | Raw `sqlite3` from Python, no ORM |
 
-Three containers open it concurrently — `tubematic-api`, `tubematic-mcp` and
+Four containers open it concurrently — `tubematic-api`, `tubematic-mcp`, `tubematic-worker` and
 `tubematic-renderer`. WAL mode is what makes that safe, and it is also why the file cannot be made
 unreadable to the host user: WAL requires write access to the `-shm` sidecar even for readers.
 
@@ -228,7 +228,7 @@ The central table. One row per video, from proposed topic to published file.
 
 | Column | Type | Default | Meaning |
 |---|---|---|---|
-| `id` | TEXT PK | | `vid_<hex>` from MCP, a UUID from `POST /videos`. A caller-chosen id must be letters, digits, `_` and `-`, not starting with `-`, at most 128 characters, because it names the video's job directory. That is checked only when the row is created. Every use of an existing id as a path checks only that it is one component (no separator, not `.` or `..`, no control character, at most 255 bytes, the longest file name the filesystem allows), so a video filed earlier under an id with a dot, a space or more than 128 characters still renders. The render itself is written as `<id>.mp4`, so the id must also leave four bytes for that suffix: one of 252 to 255 bytes names a working job directory but no possible output file, and the worker moves it to `FAILED` with a comment before staging anything, rather than failing part-way through the render |
+| `id` | TEXT PK | | `vid_<hex>` from MCP, a UUID from `POST /videos`. A caller-chosen id must be letters, digits, `_` and `-`, not starting with `-`, at most 128 characters, because it names the video's job directory. That is checked only when the row is created. Every use of an existing id as a path checks only that it is one component (no separator, not `.` or `..`, no control character, at most 255 bytes, the longest file name the filesystem allows), so a video filed earlier under an id with a dot, a space or more than 128 characters still renders. The render itself is written as `<id>.mp4`, so the id must also leave four bytes for that suffix: one of 252 to 255 bytes names a working job directory but no possible output file, and the renderer moves it to `FAILED` with a comment before staging anything, rather than failing part-way through the render |
 | `project_id` | TEXT → `projects.id` | | The domain this video files into |
 | `topic` | TEXT NOT NULL | | The **full brief** — what the video is about, up to a few thousand characters |
 | `title` | TEXT NOT NULL | `''` | A **short display name**, capped at 70 characters. Legacy rows hold `''`; the UI falls back to `topic` |
@@ -245,7 +245,7 @@ The central table. One row per video, from proposed topic to published file.
 | `resolved_visual_style` | TEXT NOT NULL | `''` | Which **canvas** `auto` settled on (`dark` or `light`), written **once** by the agent at scene-config time. It stores a canvas rather than a register name because the canvas is the only thing `auto` must fix for the life of the video — everything else stays free per beat. `''` until it has. Meaningless unless `visual_style` is `auto`. Write-once is what makes a revision round render at the register the video already uses, without anything on the revision path knowing this column exists |
 | `resolved_renderer` | TEXT NOT NULL | `''` | Which **renderer** `auto` settled on: `dom` (the scene components) or `cartoon_3d` (one painted 3D world written as code for the video). Written **once** by the agent before any scene is authored, and never over HTTP; `''` until it has. A different axis from its neighbour, which stores a canvas: the renderer is the one choice a revision round must never flip, because flipping it discards every scene. Every video that predates the style is `dom`, backfilled by its migration |
 | `mascot_id` | TEXT NOT NULL | `''` | The [mascot](#mascots-and-mascot_versions) this video shows. `''` means none, and every video starts there: it is copied from the domain's, then the install's, default mascot when the video is created, only on an install whose renderer GPU test passes and never for Cartoon 3D. Settable only while the video is `TOPIC_PROPOSED`, like `visual_style` |
-| `mascot_version` | INTEGER NOT NULL | `0` | The mascot version the video was authored against, pinned by the **first** `write_scene_config` of a video that has a mascot and kept by every revision. `0` means not pinned yet. The worker renders this version, never the mascot's current one, so approving a changed mascot cannot alter a video already in flight |
+| `mascot_version` | INTEGER NOT NULL | `0` | The mascot version the video was authored against, pinned by the **first** `write_scene_config` of a video that has a mascot and kept by every revision. `0` means not pinned yet. The renderer renders this version, never the mascot's current one, so approving a changed mascot cannot alter a video already in flight |
 | `agent_model` | TEXT | `''` | This video's model. Empty means its agent's default, `models[0]`. A non-empty value must be one of that agent's models |
 | `agent_effort` | TEXT NOT NULL | `''` | How hard the agent thinks on this video: `low`, `medium`, `high`, `xhigh` or `max`. Empty means its agent's own `effort`. Settable at any human checkpoint and frozen between them, like `agent_model` — see [Frozen choices](02-pipeline.md#frozen-choices). Unlike the model, any of the five is always *storable*: the levels are a fixed set rather than a per-install list. Whether a level is *usable* depends on the model the video runs under — some models accept fewer — which is resolved when the run happens, not here |
 | `agent_id` | TEXT | `NULL` | The [agent](#agents) this video runs under. Dealt at creation; a human may move it to another live agent at a checkpoint, and nothing else changes it — see [Frozen choices](02-pipeline.md#frozen-choices). Never written back to `NULL`, which means the default agent at dispatch time — rows from before agents existed, or created while none was installed. Deliberately not a declared foreign key; an id that does not resolve makes the poller skip the video rather than reroute it |
@@ -255,7 +255,7 @@ The central table. One row per video, from proposed topic to published file.
 | `voice_file_path` | TEXT NOT NULL | `''` | Where `generate_voice` wrote `audio.mp3`. Server-written; see the path columns note below |
 | `timeline_path` | TEXT NOT NULL | `''` | Where `generate_voice` wrote `timeline.json`. Server-written |
 | `scene_config_path` | TEXT NOT NULL | `''` | Where `write_scene_config` wrote `scene-config.json`. Server-written |
-| `video_path` | TEXT NOT NULL | `''` | Where the render worker wrote the mp4. Server-written |
+| `video_path` | TEXT NOT NULL | `''` | Where the renderer wrote the mp4. Server-written |
 | `video_version` | INTEGER NOT NULL | `1` | Bumped on each re-render |
 | `gemini_feedback` | TEXT NOT NULL | `''` | The AI reviewer's full findings. Stored uncapped |
 | `ai_review_count` | INTEGER | `0` | Reviews run so far. Capped by `ai_review_max_loops` |
@@ -273,12 +273,12 @@ The central table. One row per video, from proposed topic to published file.
 | `cost_cents_claude` | INTEGER NOT NULL | `0` | **Unused**, as above |
 | `created_at` / `updated_at` | TEXT NOT NULL | | ISO-8601 UTC |
 
-**`updated_at` is load-bearing.** It is the FIFO ordering key for the render worker's atomic claim.
+**`updated_at` is load-bearing.** It is the FIFO ordering key for the renderer's atomic claim.
 Anything that writes to it changes render order.
 
 **The four path columns are written only by the code that writes the files, and no reader trusts
-them.** `generate_voice`, `write_scene_config` and the render worker fill them in; `PATCH` and MCP
-`update_video` refuse them. Every reader — the worker's staging, `validate_job`, archive and
+them.** `generate_voice`, `write_scene_config` and the renderer fill them in; `PATCH` and MCP
+`update_video` refuse them. Every reader — the renderer's staging, `validate_job`, archive and
 retention, publishing, the publish dialog's duration — derives the location from the ids instead:
 `<jobs>/<video_id>/audio.mp3`, `timeline.json` and `scene-config.json`, and
 `<output>/<project_id>/<video_id>.mp4` (`tubematic_core/jobfiles.py`). A symlink in any component
@@ -291,7 +291,7 @@ for a link in between. Closing it means opening every file beneath a directory d
 containers write there. A column is only a marker
 that its step completed: an empty one still reads as "not written yet". The columns used to be
 writable by any caller, so a row could name another video's render for its own archive to delete,
-or any readable file for the worker to stage into a render. Deriving the path makes a row tampered
+or any readable file for the renderer to stage into a render. Deriving the path makes a row tampered
 with before that was fixed harmless, with no migration. It also means a row written by an MCP
 server driven from a host shell, which stores host paths, renders as long as the files are in the
 jobs volume. The values are container-absolute (`/jobs/…`, `/output_videos/…`) in a normal install.
@@ -555,7 +555,7 @@ beside the database file.
 
 Every table, column and one-time data fixup above is defined by a numbered migration file in
 `tubematic_core/migrations/`, applied by `tubematic_core.db.migrate()`. This is the one schema
-authority for the whole project — `renderer/api/pipeline.py`, `mcp/server.py`, the render worker,
+authority for the whole project — `renderer/api/pipeline.py`, `mcp/server.py`, the worker, the renderer,
 `onboard.py`, `scripts/clear_db.py`, and the VQA seed-database generator all call `migrate()` rather
 than defining or asserting a schema of their own.
 

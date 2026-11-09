@@ -39,7 +39,7 @@ the skill and follow it.
 ### The operator skill
 
 `agent_files/skills/tubematic-operator/SKILL.md` is the entry point for every session. It performs a setup check first
-— MCP reachable, API healthy, worker running, Chromium alive, ElevenLabs key present — and stops
+— MCP reachable, API healthy, worker and renderer running, Chromium alive, ElevenLabs key present — and stops
 with a list of failures rather than starting work on a broken install.
 
 Then it routes:
@@ -50,9 +50,9 @@ Then it routes:
 | `VOICING` | Call `generate_voice`, which saves the paths itself, then advance to `VOICE_READY`. Already authorized by the human's approval at `SCRIPT_READY`, and the skill says so explicitly. An unattended agent once treated the spend as needing fresh consent, and the video stuck in `VOICING` |
 | `VOICE_READY` | Invoke the scene-config skill, verify the image floor, `validate_job`, `submit_render`. **Queue and stop** — do not poll |
 | `REVISION_REQUESTED` | Diagnose from the comment thread and route back, or escalate to `FAILED` |
-| `TOPIC_PROPOSED` · `SCRIPT_READY` · `VIDEO_READY` | **Stop.** A human decides — or, for a project on [Auto Pilot](14-publishing.md#auto-pilot), the render worker. The skill tells the agent that changes nothing for it: it still never moves a video out of a checkpoint, and a video it finds past one is authorized whoever moved it |
+| `TOPIC_PROPOSED` · `SCRIPT_READY` · `VIDEO_READY` | **Stop.** A human decides — or, for a project on [Auto Pilot](14-publishing.md#auto-pilot), the worker. The skill tells the agent that changes nothing for it: it still never moves a video out of a checkpoint, and a video it finds past one is authorized whoever moved it |
 | `VIDEO_APPROVED` | Not workable at all. Publishing is never the agent's — no MCP tool can do it, and the skill is told never to write `SCHEDULED`, `PUBLISHING` or `PUBLISHED` |
-| `RENDER_QUEUED` · `RENDERING` · `SCHEDULED` | Not agent-actionable. Worker-owned |
+| `RENDER_QUEUED` · `RENDERING` · `SCHEDULED` | Not agent-actionable. Owned by the renderer (the first two) and the worker (`SCHEDULED`) |
 
 Two ordering rules in it are easy to break:
 
