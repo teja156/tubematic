@@ -50,9 +50,11 @@ function hostRows(host: NonNullable<StorageUsage["host"]>): Row[] {
     { key: "images_current", label: "Current images", counted: true,
       note: "The Docker images this install runs", bytes: images ? images.current_bytes : null },
     { key: "images_old", label: "Old images", counted: true,
-      note: old
-        ? `${old} image${old === 1 ? "" : "s"} no longer used; the next upgrade removes them`
-        : "None — upgrades remove the previous version's images",
+      note: !images
+        ? "Docker did not report image sizes at the last measurement"
+        : old
+          ? `${old} image${old === 1 ? "" : "s"} no longer used; the next upgrade removes them`
+          : "None — upgrades remove the previous version's images",
       bytes: images ? images.old_bytes : null,
       // Each old image's figure leaves out layers it shares with another
       // image, so with two or more, layers only they share are missed.

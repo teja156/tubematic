@@ -110,6 +110,8 @@ describe("DiskUsage", () => {
     render(<DiskUsage />);
     await openPopup();
     expect(screen.getByTestId("disk-row-images_old").textContent).toContain("unknown");
+    expect(screen.getByTestId("disk-row-images_old").textContent).toContain("did not report");
+    expect(screen.getByTestId("disk-row-images_old").textContent).not.toContain("None");
     expect(screen.getByTestId("disk-row-containers").textContent).toContain("unknown");
   });
 
