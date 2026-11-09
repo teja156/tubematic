@@ -168,7 +168,7 @@ test.describe("Topics page", () => {
 
     const row = page.getByTestId(`domain-row-${slug}`);
     await expect(row).toBeVisible();
-    for (const label of ["Visual style", "Default voice", "Script profile", "Mascot", "Topic cap"]) {
+    for (const label of ["Visual style", "Default voice", "Script profile", "Mascot (exp.)", "Topic cap"]) {
       await expect(row.getByText(label, { exact: true })).toBeVisible();
     }
     const profile = page.getByTestId(`domain-profile-${slug}`);

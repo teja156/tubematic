@@ -66,7 +66,7 @@ function DomainMascotSelect({ testId, value, mascots, gpu, onChange }: {
       data-testid={testId}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      title={note || "Mascot this domain's new videos start with"}
+      title={note || "Experimental: the mascot this domain's new videos start with"}
       style={{
         fontFamily: "var(--mono)",
         fontSize: 10.5,
@@ -335,7 +335,7 @@ function DomainRow({
         />
       </DomainField>
 
-      <DomainField label="Mascot" width={120}>
+      <DomainField label="Mascot (exp.)" width={120}>
         <DomainMascotSelect
           testId={`domain-mascot-${project.id}`}
           value={project.default_mascot_id ?? ""}

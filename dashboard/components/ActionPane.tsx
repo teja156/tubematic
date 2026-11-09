@@ -411,7 +411,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
           </select>
         </PickerField>
         {mascotShown && (
-          <PickerField label="Mascot">
+          <PickerField label="Mascot (exp.)">
             <MascotPicker
               testId={`mascot-select-${video.id}`}
               mascots={mascots}

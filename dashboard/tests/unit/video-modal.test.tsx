@@ -1668,7 +1668,7 @@ describe("VideoModal — mascot picker", () => {
     const onAction = vi.fn();
     render(<VideoModal video={video} mascots={MASCOTS} gpu={gpu("working")} onClose={() => {}} onAction={onAction} />);
     const select = (await screen.findByTestId("video-modal-mascot-select")) as HTMLSelectElement;
-    expect(within(select.closest("label") as HTMLElement).getByText("Mascot")).toBeTruthy();
+    expect(within(select.closest("label") as HTMLElement).getByText("Mascot (experimental)")).toBeTruthy();
     fireEvent.change(select, { target: { value: "tubi" } });
     fireEvent.click(screen.getByText("Approve Topic"));
     expect(onAction.mock.calls[0][3]).toMatchObject({ mascot_id: "tubi" });

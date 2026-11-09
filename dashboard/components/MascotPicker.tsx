@@ -24,7 +24,7 @@ export function MascotPicker({
   const note = mascotGateNote(mascotGate(gpu));
   const title = locked
     ? "Cartoon 3D has no mascot layer"
-    : note || "A character that reacts to the narration";
+    : note || "Experimental: a character that reacts to the narration";
   return (
     <select
       data-testid={testId}

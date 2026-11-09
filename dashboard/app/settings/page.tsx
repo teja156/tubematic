@@ -883,7 +883,7 @@ export default function SettingsPage() {
         </button>
       </Row>
       <Row
-        label="Default mascot"
+        label="Default mascot (experimental)"
         note="The mascot new videos start with, unless their domain has its own. Off by default. A video only gets one while the GPU is working, and never on Cartoon 3D. Draw and approve mascots on the Profiles tab."
       >
         <select

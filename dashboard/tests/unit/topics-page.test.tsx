@@ -480,7 +480,7 @@ describe("TopicsPage — default mascot", () => {
     const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1") as HTMLSelectElement);
     await waitFor(() => expect([...select.options].map((o) => o.value)).toEqual(["", "none", "tubi"]));
     expect(select.value).toBe("tubi");
-    expect(screen.getByLabelText("Mascot", { selector: "[data-testid='domain-mascot-seed-1']" })).toBe(select);
+    expect(screen.getByLabelText("Mascot (exp.)", { selector: "[data-testid='domain-mascot-seed-1']" })).toBe(select);
     expect(screen.getAllByRole("option", { name: "Use install default" }).length).toBe(2);
   });
 

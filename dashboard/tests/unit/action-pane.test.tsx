@@ -1115,7 +1115,7 @@ describe("ActionPane — mascot picker", () => {
   it("offers None and each pickable mascot, with a Mascot caption", () => {
     const video = makeVideo("TOPIC_PROPOSED");
     render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} {...base} />);
-    const select = screen.getByLabelText("Mascot") as HTMLSelectElement;
+    const select = screen.getByLabelText("Mascot (exp.)") as HTMLSelectElement;
     expect(select).toBe(screen.getByTestId(`mascot-select-${video.id}`));
     expect([...select.options].map((o) => o.value)).toEqual(["", "tubi"]);
     expect(select.style.maxWidth).toBe("140px");

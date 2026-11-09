@@ -228,7 +228,7 @@ export default function MascotsPage() {
     <>
       <ProfilesNav />
       <SectionLabel
-        label="Mascots"
+        label="Mascots (experimental)"
         count={`${mascots.length} mascot${mascots.length !== 1 ? "s" : ""}`}
       />
 

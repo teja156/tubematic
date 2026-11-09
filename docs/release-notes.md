@@ -39,7 +39,7 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
 
 ### Added
 
-- **Mascots: a small character that reacts to your video.** A mascot is a watercolour-style
+- **Mascots (experimental): a small character that reacts to your video.** A mascot is a watercolour-style
   character that appears over a Short, walks on and off, and reacts to what the narration says: it
   looks surprised, has an idea, hops, glances at something. It is never the narrator and does not move
   its mouth with the words; its face only shows how it feels. Mascots are off by default, work with

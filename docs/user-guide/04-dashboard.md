@@ -86,7 +86,7 @@ no banner shows and nothing else is affected. There is no setting to switch it o
 | **Archive** | Videos whose files were deleted, by you or by the [retention setting](05-settings.md#video-retention). Each keeps its title, project, status, archive date, total views and post links; opening one shows its window read-only |
 | **Topics** | Where topics come from: which research modes are on, the mining URL list, and every project domain with its settings. See [Topics](#topics) |
 | **Projects** | Pick a domain on the left, see and act on its videos on the right. A domain at its topic cap carries an "expired" badge |
-| **Profiles** | Two pages under one tab. **Script profiles** teach the pipeline a writing style from YouTube videos ([Script Profiles](#script-profiles)); **Mascots** is the library of on-screen characters ([Mascots](#mascots)) |
+| **Profiles** | Two pages under one tab. **Script profiles** teach the pipeline a writing style from YouTube videos ([Script Profiles](#script-profiles)); **Mascots** (experimental) is the library of on-screen characters ([Mascots](#mascots)) |
 | **Socials** | Connect publishing accounts and choose which ones Tubematic may post to. Does nothing until publishing is enabled |
 | **Analytics** | Two tabs. **Videos**: views, likes, comments and shares of published videos. **Spend**: what the install has spent. See [Analytics](#analytics) |
 | **Logs** | Structured logs from every service, filtered by service, minimum level, text and number of rows. Logs refresh when a filter changes or you press the refresh button; there is no live tail |
@@ -178,7 +178,7 @@ pickers, since videos submitted in a row usually share them.
 
 A mascot is a small character that appears over a video, walks on and off, and **reacts** to what the
 narration says: it looks surprised, has an idea, hops, glances at something. It is never the narrator
-and never lip-syncs; its face shows only the emotion. Mascots are **off by default** everywhere, and
+and never lip-syncs; its face shows only the emotion. Mascots are **experimental** and **off by default** everywhere, and
 a video has one only if you pick it. They are drawn on the GPU, so **a mascot can only be chosen while
 the renderer's GPU is working** (Settings → Rendering → **Test GPU**; see
 [GPU rendering](10-gpu-rendering.md)). A mascot is not available in the Cartoon 3D style.
@@ -209,14 +209,15 @@ checkpoint keep rendering with it.
 
 You choose a mascot at three levels, each overriding the one before:
 
-1. **Settings → Rendering → Default mascot**: the install-wide default. Empty means none.
-2. **Topics**: each domain's **default mascot**. *Use install default* follows level 1, *None* means no
+1. **Settings → Rendering → Default mascot (experimental)**: the install-wide default. Empty means none.
+2. **Topics**: each domain's **default mascot**, the column labelled **Mascot (exp.)**. *Use install default* follows level 1, *None* means no
    mascot in this domain even when the install has a default.
 
 A default can only be set to a mascot while the renderer's GPU works (the API refuses it otherwise,
 as the dashboard's greyed pickers do). One set earlier stays set if the GPU goes, but seeds nothing
 until the GPU works again.
-3. **The topic checkpoint**: a mascot picker beside the other choices when you approve a topic. It is
+3. **The topic checkpoint**: a mascot picker beside the other choices when you approve a topic, labelled
+   **Mascot (experimental)** in the video's window and **Mascot (exp.)** in the Quick Actions row. It is
    fixed once the topic is approved.
 
 The agent decides when the mascot walks on and off and what it reacts to. How that works is in
@@ -239,7 +240,7 @@ The agent decides when the mascot walks on and off and what it reacts to. How th
   Every row has:
   - a **default visual style** and **default script profile**, which preselect those choices on the
     domain's curriculum videos
-  - a **default mascot**, which every new video in the domain starts with
+  - a **default mascot** (experimental), which every new video in the domain starts with
   - a **default voice**, which every new video in the domain starts with
   - a **Topic cap** (25–750) with "N filed" beside it — every topic the domain has ever had,
     archived and rejected ones included. A domain at its cap shows **EXPIRED** and receives no more
@@ -297,7 +298,7 @@ checkpoint is which, and why each exists, is in
 | Most statuses | **Delete** | Asks first, then deletes the video's files and moves it to the Archive. Not offered while something is working on the video, nor while it is scheduled, publishing, at Voice Ready or at Revision Requested |
 
 **The choices that ride with an approval.** A Topic Proposed row carries a script-profile picker, a
-visual-style picker, a mascot picker (shown once at least one mascot is approved; greyed out without a working GPU), a voice picker with a preview button, and agent, model and effort pickers.
+visual-style picker, a mascot picker (experimental; shown once at least one mascot is approved; greyed out without a working GPU), a voice picker with a preview button, and agent, model and effort pickers.
 Script Ready carries the voice, agent, model and effort pickers. In the video's window the same
 pickers are stacked, and at Video Ready they serve Request Revision, since approving a video hands
 nothing to an agent. Each picker has a small caption naming it.
@@ -347,7 +348,7 @@ work differently, noted below.
   comments to see whether a review ran.
 - **Images** — the OpenAI model for scene images and the one for the Illustrated style's characters.
   There is no provider choice: every image comes from OpenAI.
-- **Rendering** — the two render timeouts (the stall timeout that catches a hung render, the ceiling on a whole one), the retry count, the watermark and the **default mascot**, and a **GPU** section that says whether videos render on an
+- **Rendering** — the two render timeouts (the stall timeout that catches a hung render, the ceiling on a whole one), the retry count, the watermark and the **default mascot** (experimental), and a **GPU** section that says whether videos render on an
   NVIDIA GPU or the CPU, names the GPU and the graphics device Chromium actually gets, and says why
   when a chosen GPU is not being used. With a GPU chosen, **Test GPU** has the renderer check again;
   it answers within about a minute, or after the render in progress. The GPU is chosen on the host, not here — see

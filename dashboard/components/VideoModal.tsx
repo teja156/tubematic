@@ -1211,7 +1211,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                         </select>
                       </PickerField>
                       {showMascotPicker(mascots, video.mascot_id ?? "") && (
-                        <PickerField label="Mascot">
+                        <PickerField label="Mascot (experimental)">
                           <MascotPicker
                             testId="video-modal-mascot-select"
                             mascots={mascots}
