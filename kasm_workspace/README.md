@@ -1,37 +1,42 @@
-# Kasm Workspace — the published Tubematic workspace
+# The Tubematic workspace for Kasm Workspaces
 
-The installable Tubematic workspace for [Kasm Workspaces](https://kasmweb.com/). A user adds a
-workspace registry, installs this workspace, launches a session, and picks a **version** and an
-**install method** on the launch form. A terminal then opens by itself, downloads that version, and
-runs `onboard.py`, and the user finishes onboarding there.
+This folder builds the Tubematic workspace that people install in
+[Kasm Workspaces](https://kasmweb.com/), a platform that serves desktop sessions in a browser. A
+user adds the workspace registry, installs the workspace and launches a session. The launch form
+asks for a Tubematic version and an install method. A terminal then opens in the session,
+downloads that version and runs `onboard.py`.
 
-This is not the QA environment. [`kasm_workspace_testing/`](../kasm_workspace_testing/README.md)
-bakes a worktree's source into its image for testing a branch. This image bakes **no** Tubematic
-source.
+The image holds no Tubematic source. To test a branch, use
+[`kasm_workspace_testing/`](../kasm_workspace_testing/README.md), whose image is built from a
+worktree.
 
-User-facing instructions are in
-[Installing — Installing in Kasm Workspaces](../docs/user-guide/02-installing.md#installing-in-kasm-workspaces).
-The design is in
-[Development — `kasm_workspace/`](../docs/developer/17-development.md#kasm_workspace-the-published-workspace).
-
-## Layout
-
-| Path | What it is |
+| To read about | Go to |
 |---|---|
-| `dockerfile_tubematic_kasm_workspace` | The image. It shares its base, tooling and dind `/tmp` patch with the testing Dockerfile, and has no source |
-| `build.sh` | Builds (and, with `--push`, pushes) the image from `image/` |
-| `image/kasm_post_run_root.sh` | Baked over Kasm's root post-run hook: it waits for the desktop and opens the installer terminal as `kasm-user` |
-| `image/tubematic_bootstrap.py` | Reads the launch form, detects an existing install, then downloads and verifies, or clones, and runs `onboard.py` |
-| `image/tubematic-installer` | What the terminal runs: the bootstrap, then always an interactive shell |
-| `image/tubematic-installer.desktop` | Desktop launcher that reopens the installer |
-| `registry/Tubematic/` | The workspace registry entry (schema 1.1) and its icon. Its version list is a seed |
-| `sync_registry.py` | Writes the entry into a registry checkout with a given list of releases; run by `release.yml` |
+| Installing and using the workspace | [Installing in Kasm Workspaces](../docs/user-guide/02-installing.md#installing-in-kasm-workspaces) |
+| How the launch hook, the bootstrap and the registry entry work | [Development: `kasm_workspace/`](../docs/developer/17-development.md#kasm_workspace-the-published-workspace) |
+| The release job that publishes the registry entry | [Publishing the Kasm registry entry](../docs/developer/18-releases.md#publishing-the-kasm-registry-entry) |
 
-## The invariant: never rebuilt per release
+## What is in this folder
 
-The image never names a Tubematic version: the launch form picks one and the session downloads
-it. Rebuild it **only** when the base image or the tooling in the Dockerfile changes. Do not add a
-`COPY` of the repo; `scripts/tests/test_kasm_workspaces.py` fails if one appears.
+| Path | Contents |
+|---|---|
+| `dockerfile_tubematic_kasm_workspace` | The image. It has the same base image and tooling as the testing image, and the same patch that keeps the nested Docker daemon from hiding `/tmp` |
+| `build.sh` | Builds the image from `image/`. With `--push` it also pushes it |
+| `image/kasm_post_run_root.sh` | Replaces Kasm's root post-run hook. It waits for the desktop and opens the installer terminal as `kasm-user` |
+| `image/tubematic_bootstrap.py` | Reads the launch form's answers and looks for an existing install. It downloads and verifies the release, or clones the tag, then runs `onboard.py` |
+| `image/tubematic-installer` | The command the terminal runs: the bootstrap, then an interactive shell |
+| `image/tubematic-installer.desktop` | The desktop icon that opens the installer again |
+| `registry/Tubematic/` | The workspace registry entry (`workspace.json`, registry schema 1.1) and its icon |
+| `sync_registry.py` | Writes the entry into a checkout of the registry repository with a given list of releases. `release.yml` runs it |
+
+## When to rebuild the image
+
+Rebuild the image when its base image or the tooling in the Dockerfile changes. A Tubematic
+release needs no rebuild, because the image names no Tubematic version: the launch form picks one
+and the session downloads it.
+
+Do not add a `COPY` of the repository to the Dockerfile.
+`scripts/tests/test_kasm_workspaces.py` fails if one appears.
 
 ## Building and pushing
 
@@ -40,64 +45,47 @@ kasm_workspace/build.sh                     # local: tubematic/tubematic-kasm-wo
 kasm_workspace/build.sh --image ghcr.io/<owner>/tubematic-kasm-workspace --push 1.19.0
 ```
 
-The published image is built and pushed **by hand**, from a machine logged in to `ghcr.io` with a
-token that can write packages. No workflow builds it. The tag is the Kasm release line the image
-targets. It is not a Tubematic version.
+```
+build.sh [--image NAME] [--push] [--no-cache] [tag]
+```
 
-After the **first** push, open the package on GHCR and make sure it is **public**. Kasm pulls
-it anonymously.
+- The tag is the Kasm release line the image targets, and defaults to `1.19.0`. It is not a
+  Tubematic version.
+- No workflow builds the published image. Build and push it by hand, from a machine that is
+  logged in to `ghcr.io` with a token that can write packages.
+- After the first push, open the package on GHCR and make it public. Kasm pulls it without
+  logging in.
 
 ## Publishing the registry entry
 
-Each release writes the entry for you. `release.yml`'s `publish-kasm-registry` job runs
-`sync_registry.py`, which copies `registry/Tubematic/` into the registry repo's
-`workspaces/Tubematic/` and replaces the launch form's version list with every published release,
-newest first and the default. The registry repo is a copy of Kasm's workspace-registry template, on
-its schema branch `1.1`, served at `https://registry.tejaswaroop.com/` (the URL the user guide tells
-people to add). The job first checks the image above can be pulled anonymously, and writes nothing
-if it cannot. So **push the image before the first release**.
+Each release publishes the entry. `release.yml`'s `publish-kasm-registry` job runs
+`sync_registry.py`, which copies `registry/Tubematic/` into the registry repository's
+`workspaces/Tubematic/` and replaces the launch form's version list with the published releases,
+newest first. The newest is the form's default. The registry is served at
+`https://registry.tejaswaroop.com/`, the URL the install guide tells people to add.
 
-To edit anything else on the entry (description, sizing, image tag), change
-`registry/Tubematic/workspace.json` here; the next release carries it. The version list in this
-repo is only a seed, so do not maintain it by hand.
+- Push the image, and make it public, before a release that names it. The job checks that the
+  entry's image can be pulled without logging in, and writes nothing if it cannot.
+- To change the description, the sizing or the image tag, edit
+  `registry/Tubematic/workspace.json`. The next release carries the change.
+- Leave the version list in that file alone. It is a placeholder that the job replaces on each
+  release.
 
-The registry's build copies every key of `workspace.json` into `list.json` verbatim, and
-`launch_config` (including the form's own `file_mapping` for the answers) reaches Kasm that way.
-**A registry entry cannot carry the workspace's File Mappings**, which is why the hook and bootstrap
-are baked into the image rather than mapped like the testing workspace's.
+A registry entry carries the launch form (`launch_config`) to Kasm. It cannot carry File Mappings,
+the Kasm workspace setting that places a file in the session. For that reason the hook, the
+bootstrap and the desktop icon are built into the image.
 
-## Timezone
+## Session settings
 
-The image's clock is UTC (`TZ=Etc/UTC`, written to `/etc/localtime`). The session is Tubematic's
-host, so every time Tubematic shows is in UTC. The testing image keeps its own fixed zone; the
-published one is launched anywhere, so it names none.
+The registry entry asks for 4 cores, 8 GiB of memory, no GPU and privileged mode.
 
-## Sizing
-
-The registry entry asks for 4 cores and 8 GiB of memory, no GPU, and privileged mode.
-- **Privileged** is needed for Docker-in-Docker.
-- **No GPU:** an attached GPU crash-loops XFCE on an NVIDIA EGL failure.
-- **Disk:** about 15 GB for the image, plus about 15 GB inside the session for Tubematic's own
-  images.
-- **Persistent Profile Path:** recommended. Without one, the install, its data and the agent logins
-  go when the session does.
-
-## Live test (owed once v2.0.0 is published)
-
-Use a fresh install, on the branch build:
-
-1. Add the registry by URL. The workspace appears with its icon, description and sizing.
-2. Install it and confirm the **launch form came through the registry**. This is the one
-   assumption the published schema table does not back.
-3. Launch. The baked hook fires with no File Mapping, the terminal opens by itself, and the desktop
-   is usable (no blank screen).
-4. Release method, newest version: the checksum is verified, onboarding completes, and the dashboard
-   is reachable.
-5. Source method: it clones the tag and onboarding completes.
-6. Nothing the install created under `~` is root-owned.
-7. Close the terminal: the desktop launcher reopens it. Relaunch: the install is detected and not
-   clobbered. Pick a different version: it is refused, with the upgrade pointer.
-8. Serve a tarball with a corrupted checksum: it aborts before extraction.
-9. Check that `/tmp` is not hidden and that `/dockerstartup/tubematic_launch_selections.json` is
-   readable.
-10. The top bar of the dashboard shows UTC.
+- Privileged mode is needed for Docker-in-Docker, because Tubematic's containers run inside the
+  session.
+- The entry asks for no GPU (`gpu_count` is 0), because a GPU attached to this desktop makes XFCE
+  fail in a loop on an NVIDIA EGL error.
+- The image takes about 15 GB of disk. The install inside the session needs the same free disk as
+  any install, about 15 GB (see [Prerequisites](../docs/user-guide/02-installing.md#prerequisites)).
+- Set a Persistent Profile Path on the workspace. Without one, the install, its data and the
+  agent logins are deleted when the session ends.
+- The image's clock is UTC (`TZ=Etc/UTC`, also written to `/etc/localtime`). The session is the
+  machine Tubematic runs on, so the dashboard shows times in UTC.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stage the generated script as plain-text files for human review.
 
-Writes two files to mounted/jobs/<video_id>/:
+Writes two files to ~/.tubematic-data/jobs/<video_id>/:
 
   script_with_broll.txt — every segment's spoken text next to its
                            visual/b-roll direction, straight from

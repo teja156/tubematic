@@ -18,7 +18,7 @@ into the worker's review path: re-reviewing the same video any number of
 times is free of side effects. See vqa/README.md for the on-demand-review
 design rationale (VQA seeds gemini_review_enabled=false for the same reason).
 
-The feedback is also written to mounted/jobs/<video_id>/ai_review.txt —
+The feedback is also written to ~/.tubematic-data/jobs/<video_id>/ai_review.txt —
 overwritten on each re-run, so the file always reflects the most recent
 review (same convention as vqa/stage_script.py's two files).
 
@@ -69,7 +69,7 @@ def _data_root() -> Path:
 def review_video(video_id: str, root: Path, run_review=None) -> tuple[str, Path]:
     """Return (feedback, review_path) for video_id. Makes no DB writes — the
     only file this touches is review_path itself
-    (mounted/jobs/<video_id>/ai_review.txt), which it overwrites with the
+    (~/.tubematic-data/jobs/<video_id>/ai_review.txt), which it overwrites with the
     feedback on every call.
 
     run_review defaults to ai_review.run_ai_review, imported from this

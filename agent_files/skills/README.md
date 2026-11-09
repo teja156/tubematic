@@ -1,41 +1,68 @@
-# Tubematic Skills
+# Tubematic skills
 
-Skills are agent-agnostic instruction sets. Load the relevant skill at the start of any session — the skill contains everything the agent needs to complete the task.
+A skill is a folder with a `SKILL.md` file: Markdown instructions that an agent CLI (Claude Code,
+Codex or OpenCode) reads to learn one job. This folder holds the skills Tubematic ships. The
+installer copies each of them into the agent's skills directory:
 
-| Task | Skill file |
+```bash
+python3 onboard.py --install-agent <agent>     # claude, codex or opencode
+```
+
+Run it from the repository root. When each skill runs and how the agent layer works is in
+[The Agent Layer](../../docs/developer/07-agent-layer.md#the-skills).
+
+## The skills
+
+| Folder | What the agent does with it |
 |---|---|
-| Run the pipeline / advance statuses | `tubematic-operator/SKILL.md` |
-| Generate a `scene-config.json` | `tubematic-scene-config/SKILL.md` |
-| Author a Cartoon 3D Short as code against the renderer's kit and take it through the beat gate | `tubematic-cartoon3d/SKILL.md` |
-| Build a mascot's drawing code and take it through the model sheets | `tubematic-mascot-builder/SKILL.md` |
-| Research and propose topics | `tubematic-topic-research/SKILL.md` |
-| Write a video script | `tubematic-script-writing-skill/SKILL.md` |
-| Build a script profile from transcripts | `tubematic-create-script-writing-skill/SKILL.md` |
-| Troubleshoot an install and draft a bug report (explicit-only, see below) | `tubematic-troubleshooting/SKILL.md` |
-| Write Remotion scene components | `remotion-best-practices` skill *(installed by `python onboard.py --install-agent <agent>`, not committed to this repo)* |
+| `tubematic-operator/` | Runs the pipeline: moves each video to its next status with the MCP tools and stops at the human checkpoints |
+| `tubematic-topic-research/` | Researches and proposes topics in the curriculum, trending and mining research modes |
+| `tubematic-script-writing-skill/` | Writes a video's script as an ordered list of segments, in the style of the video's script profile |
+| `tubematic-create-script-writing-skill/` | Builds a script profile: extracts a creator's style from YouTube transcripts and stores it as profile Markdown |
+| `tubematic-scene-config/` | Writes `scene-config.json` and the scene TSX files for a voiced video |
+| `tubematic-cartoon3d/` | Writes a Cartoon 3D video as TypeScript against the renderer's kit, takes it through the beat gate and submits it |
+| `tubematic-mascot-builder/` | Writes or revises one mascot's p5.js drawing code, renders its three model sheets and submits it for human review |
+| `tubematic-troubleshooting/` | Diagnoses a broken install with a person, collects redacted evidence and drafts a bug report. A person must ask for it by name |
 
-## Notes
+`tubematic-script-writing-skill/` owns the scripting rules. The style it writes in comes from a
+script profile, a database row the agent fetches with `get_script_profile`.
+`tubematic-create-script-writing-skill/` builds that row when the poller finds a profile queued
+from the dashboard. See
+[Script profiles](../../docs/developer/08-scripting-and-voice.md#script-profiles).
 
-- `tubematic-script-writing-skill/` is committed and always installed. It owns the whole
-  scripting contract; the per-creator *style* it writes in is a **script profile** — a DB row
-  built from YouTube transcripts on the dashboard, selected per video, and fetched at write
-  time via `get_script_profile`. `tubematic-create-script-writing-skill/` is what builds one,
-  invoked by the poller for a profile the dashboard has queued.
-- Every skill in this directory is deployed to whichever agent is being installed, so its wording
-  must stay agent-neutral: name MCP tools, never one agent's own file or web tools. Each agent's
-  skills directory is declared by its adapter in `scripts/agent_adapters.py`
-  (`~/.claude/skills/` for Claude Code, `~/.codex/skills/` for Codex,
-  `~/.config/opencode/skills/` for OpenCode).
-- The official Remotion skills (`remotion-best-practices` and friends) are **not** vendored in this
-  repo — `python onboard.py --install-agent <agent>` installs them fresh from `remotion-dev/skills`
-  via the `npx skills add` CLI, which requires Node.js >= 22. They land in that agent's skills
-  directory, beside the ones committed here.
-- `tubematic-troubleshooting/` is **explicit-only**: no agent may pick it up by itself, so a
-  scheduled run can never wander into it. A person invokes it by name — `/tubematic-troubleshooting`
-  in Claude Code, `$tubematic-troubleshooting` in Codex, "use the tubematic-troubleshooting skill"
-  in OpenCode. Each CLI reads the switch from a different place: `disable-model-invocation` in the
-  frontmatter (Claude Code), `metadata: opencode/autoinvoke` (OpenCode), and
-  `agents/openai.yaml` (Codex). There is deliberately no slash command for it: in Claude Code a
-  command reaches a skill through the model, which is exactly what the switch blocks.
-- Skills are deployed by copying, so editing one here changes nothing for a running agent until you
-  re-run `python onboard.py --install-agent <agent>` and restart the agent session.
+## Remotion's skills
+
+`tubematic-scene-config/` tells the agent to invoke the `remotion-best-practices` skill. That skill
+and the other official Remotion skills are not in this repository. The installer fetches them from
+`remotion-dev/skills` with `npx skills add`. For Claude Code they land beside the skills from this
+folder. For Codex and OpenCode they land in `~/.agents/skills/`, which both CLIs also read.
+
+This step needs Node.js 22.20 or newer. With an older Node.js or none, the installer warns and
+Remotion's skills are not installed (see
+[Node.js](../../docs/user-guide/02-installing.md#nodejs)).
+
+## Rules for editing a skill
+
+- Keep the wording agent-neutral. The installer deploys each folder here to whichever agent you
+  install, so name MCP tools and do not name one CLI's own file or web tools.
+- Redeploy after an edit. Skills are copied, so a change here reaches an agent only after you run
+  `python3 onboard.py --install-agent <agent>` again and restart the agent session.
+- Each agent's skills directory comes from its adapter in `scripts/agent_adapters.py`:
+  `~/.claude/skills/` for Claude Code, `~/.codex/skills/` for Codex and
+  `~/.config/opencode/skills/` for OpenCode. See the
+  [Agent CLI Reference](../../docs/developer/22-agent-cli-reference.md).
+- When you delete a skill folder, add its name to `onboard/agent_install.py::RETIRED_SKILLS` and to
+  `_RETIRED_SKILLS` in `uninstall.py`, so that a redeploy removes the old copy. See
+  [Deployment](../../docs/developer/07-agent-layer.md#deployment).
+
+## The troubleshooting skill
+
+`tubematic-troubleshooting/` is the one skill an agent may not start by itself, so a scheduled run
+does not reach it. A person asks for it by name: `/tubematic-troubleshooting` in Claude Code,
+`$tubematic-troubleshooting` in Codex, or "use the tubematic-troubleshooting skill" in OpenCode.
+
+Each CLI reads its switch from a different place: `disable-model-invocation` and
+`metadata: opencode/autoinvoke` in the `SKILL.md` front matter, and `agents/openai.yaml` for
+Codex. Keep all three when you edit the skill, and do not add a slash command for it. The reason
+is in
+[The troubleshooting skill](../../docs/developer/07-agent-layer.md#the-troubleshooting-skill).

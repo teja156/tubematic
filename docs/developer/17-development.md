@@ -158,7 +158,7 @@ Its utilities also work on their own:
 
 | Script | Purpose |
 |---|---|
-| `vqa/edit_settings.py` | `--list`, `--set KEY=VALUE`, `--restart {renderer,api}` |
+| `vqa/edit_settings.py` | `--list`, `--set KEY=VALUE`, `--restart {renderer,worker,api,mcp}` |
 | `vqa/review_video.py <video_id>` | Runs the AI review and writes nothing to the database, so you can repeat it |
 | `vqa/stage_script.py <video_id>` | Writes out the script with its visual briefs, and the text that would go to ElevenLabs |
 | `vqa/reset_db.py --yes [--db-only]` | Rebuilds a seed database and optionally clears job, output and scene files |
