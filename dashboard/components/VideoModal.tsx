@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -383,6 +383,9 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // Whether `publications` is this video's real list. Mark as published reads
   // it to say which accounts failed, so it waits for "ok" (TMDEV-191).
   const [publicationsState, setPublicationsState] = useState<"loading" | "ok" | "error">("loading");
+  // Only the newest publications request may land: a slower one for the video
+  // shown before, or an older refresh of this one, would otherwise overwrite it.
+  const publicationsRequest = useRef(0);
   const [logs, setLogs] = useState<LogRecord[]>([]);
 
   const seedId = seed ? seed.id : null;
@@ -406,17 +409,25 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   }
 
   function refreshPublications(id: string) {
+    const request = ++publicationsRequest.current;
     fetch(`/api/proxy/videos/${id}/publications`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then((rows: VideoPublication[]) => {
+        if (request !== publicationsRequest.current) return;
         if (!Array.isArray(rows)) throw new Error("not a list");
         setPublications(rows);
         setPublicationsState("ok");
       })
-      .catch(() => setPublicationsState("error"));
+      .catch(() => {
+        if (request !== publicationsRequest.current) return;
+        // Cleared, not kept: after a retry, a cancel or a publish the old rows
+        // describe a state that no longer exists.
+        setPublications([]);
+        setPublicationsState("error");
+      });
   }
 
   useEffect(() => {

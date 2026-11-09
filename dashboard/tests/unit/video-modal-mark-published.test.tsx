@@ -148,4 +148,56 @@ describe("VideoModal — Mark as published", () => {
     expect((await screen.findByTestId("mark-published-pubs-error")).textContent).toMatch(/could not load/i);
     expect(screen.getByRole("button", { name: "Mark as published" })).toBeDisabled();
   });
+
+  it("ignores a late publication response for the video it showed before", async () => {
+    // Video A's request resolving after the modal moved to B must not mark B's
+    // list as loaded — that would unlock B's confirm behind A's rows.
+    let releaseA: (r: Response) => void = () => {};
+    const A = { ...makeVideo("PUBLISHED"), id: "vid-A" };
+    const B = { ...makeVideo("PARTIALLY_PUBLISHED"), id: "vid-B" };
+    vi.stubGlobal("fetch", vi.fn(async (url: unknown) => {
+      const u = String(url);
+      if (u.endsWith("/videos/vid-A/publications")) return new Promise<Response>((r) => { releaseA = r; });
+      if (u.endsWith("/videos/vid-B/publications")) return new Promise<Response>(() => {});
+      if (u.endsWith("/videos/vid-A")) return { ok: true, json: async () => A } as Response;
+      if (u.endsWith("/videos/vid-B")) return { ok: true, json: async () => B } as Response;
+      return { ok: true, json: async () => [] } as Response;
+    }));
+    const { rerender } = render(<VideoModal video={A} onClose={vi.fn()} onAction={vi.fn()} publishingEnabled />);
+    await settle();
+    rerender(<VideoModal video={B} onClose={vi.fn()} onAction={vi.fn()} publishingEnabled />);
+    await act(async () => {});
+    await act(async () => { releaseA({ ok: true, json: async () => PUBS } as Response); });
+    fireEvent.click(await screen.findByText("Mark as published…"));
+    await screen.findByTestId("mark-published-dialog");
+    expect(screen.getByRole("button", { name: "Mark as published" })).toBeDisabled();
+  });
+});
+
+describe("VideoModal — a failed publication refresh", () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it("clears the rows rather than keeping the ones from before the action", async () => {
+    const failedPub = { ...pub("b", "FAILED") };
+    let pubCalls = 0;
+    const video = makeVideo("FAILED");
+    vi.stubGlobal("fetch", vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/publish/retry") && init?.method === "POST") {
+        return { ok: true, json: async () => ({ outcome: "reconciling" }) } as Response;
+      }
+      if (u.endsWith("/publications")) {
+        pubCalls += 1;
+        if (pubCalls === 1) return { ok: true, json: async () => [failedPub] } as Response;
+        return { ok: false, status: 502, json: async () => ({ error: "down" }) } as Response;
+      }
+      if (u.endsWith(`/videos/${video.id}`)) return { ok: true, json: async () => video } as Response;
+      return { ok: true, json: async () => [] } as Response;
+    }));
+    render(<VideoModal video={video} onClose={vi.fn()} onAction={vi.fn()} publishingEnabled />);
+    fireEvent.click(await screen.findByText("Retry publishing"));
+    await waitFor(() => expect(pubCalls).toBe(2));
+    // The pre-retry FAILED row is gone, so nothing offers to retry it again.
+    await waitFor(() => expect(screen.queryByText("Retry publishing")).not.toBeInTheDocument());
+  });
 });
