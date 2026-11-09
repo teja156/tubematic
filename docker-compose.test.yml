@@ -7,11 +7,20 @@ networks:
     driver: bridge
 
 # Fixed, public test tokens (TMDEV-152) -- see dashboard/tests/e2e/secrets/.
+# The render gateway's TLS pair is the exception: a private key is never
+# committed, even a test one, so dashboard/tests/e2e/global-setup.ts creates
+# it there (gitignored) before `up` when it is missing.
 secrets:
   api_token:
     file: ./dashboard/tests/e2e/secrets/api_token
   session_secret:
     file: ./dashboard/tests/e2e/secrets/session_secret
+  builtin_renderer_token:
+    file: ./dashboard/tests/e2e/secrets/builtin_renderer_token
+  render_tls_key:
+    file: ./dashboard/tests/e2e/secrets/render_tls_key
+  render_tls_cert:
+    file: ./dashboard/tests/e2e/secrets/render_tls_cert
 
 volumes:
   test-db-data:
@@ -40,6 +49,7 @@ services:
       - RENDERER_URL=http://localhost:4000
       - MCP_PORT=4100
       - TUBEMATIC_STILLS_SERVER=http://tubematic-renderer:4455
+      - TUBEMATIC_GATEWAY_PORT=4443
       - ANTHROPIC_API_KEY=test
       - ELEVENLABS_API_KEY=test
       - GEMINI_API_KEY=test
@@ -50,15 +60,18 @@ services:
       - TZ=America/New_York
     secrets:
       - api_token
+      - builtin_renderer_token
+      - render_tls_key
+      - render_tls_cert
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:4000/health"]
       interval: 5s
       timeout: 5s
       retries: 20
 
-  # Worker — publishing, Auto Pilot, notifications and the other background
-  # passes (see docker-compose.yml's tubematic-worker for the production
-  # wiring). Same image, no build.
+  # Worker — publishing, Auto Pilot, notifications, the AI review of an
+  # uploaded render and the other background passes (see docker-compose.yml's
+  # tubematic-worker for the production wiring). Same image, no build.
   tubematic-worker-test:
     image: tubematic-renderer-test-image
     command: python3 /app/api/worker.py
@@ -72,6 +85,7 @@ services:
       - OUTPUT_BASE_PATH=/output_videos
       - TUBEMATIC_DB=/data/tubematic.db
       - TUBEMATIC_JOBS_DIR=/jobs
+      - GEMINI_API_KEY=test
       - TZ=America/New_York
     depends_on:
       tubematic-api-test:
@@ -79,24 +93,27 @@ services:
 
   # Renderer — same image, no build, so e2e specs that drive a video to
   # RENDER_QUEUED actually get rendered (see docker-compose.yml's non-test
-  # tubematic-renderer service for the equivalent production wiring).
+  # tubematic-renderer service for the equivalent production wiring). No
+  # database and no output mount: it renders through the API's render
+  # gateway, like the production one.
   tubematic-renderer-test:
     image: tubematic-renderer-test-image
     command: python3 /app/api/render_agent.py
     volumes:
-      - test-output-videos:/output_videos
-      - test-jobs-data:/jobs
-      - test-db-data:/data
+      - test-jobs-data:/jobs:ro
     networks:
       - tubematic-test-net
     environment:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-      - OUTPUT_BASE_PATH=/output_videos
-      - TUBEMATIC_DB=/data/tubematic.db
       - TUBEMATIC_JOBS_DIR=/jobs
+      - TUBEMATIC_SECRETS_DIR=/run/secrets
+      - TUBEMATIC_GATEWAY_URL=https://tubematic-api-test:4443
+      - TUBEMATIC_RENDERER_BUILTIN=1
       - TUBEMATIC_STILLS_PORT=4455
-      - GEMINI_API_KEY=test
       - TZ=America/New_York
+    secrets:
+      - builtin_renderer_token
+      - render_tls_cert
     shm_size: "2gb"
     depends_on:
       tubematic-api-test:

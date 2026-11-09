@@ -8,7 +8,10 @@ two change them later. Neither needs a container to be rebuilt:
 * A token rotation rewrites the files in place (a bind mount keeps its inode),
   restarts the three services that read a token at start-up, and has OpenCode
   re-read its config. Claude Code and Codex read the token through the helper
-  on every connection, so they need nothing.
+  on every connection, so they need nothing; nor does the built-in renderer's
+  token, which the render gateway and the renderer both read per request.
+  The gateway's TLS key and certificate are never rotated (a new certificate
+  would cut off every enrolled renderer).
 """
 from onboard.actions import REPO_ROOT, _compose, _upsert_settings
 from onboard.config import DB_PATH, read_agents
@@ -47,7 +50,7 @@ def run_set_password(*, dry_run: bool = False, rep=None, ex=None, ask=None) -> i
 
 def run_rotate_tokens(*, dry_run: bool = False, force: bool = False, rep=None, ex=None,
                       lock_path=None, adapters=None) -> int:
-    """Replace all three tokens. Waits for in-flight work like upgrade.py does,
+    """Replace every service token. Waits for in-flight work like upgrade.py does,
     because the services that hold a token are restarted."""
     from onboard import stack
     from tubematic_core import auth

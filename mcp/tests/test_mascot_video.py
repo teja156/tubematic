@@ -11,6 +11,7 @@ import pytest
 
 import server
 import text_audit
+from builtin_gpu import store_builtin_probe
 from tubematic_core import mascots as tmascots
 
 VID = "vid_m"
@@ -33,7 +34,7 @@ def db(tmp_path, monkeypatch):
 def _gpu(status="working"):
     probe = {"working": dict(configured=True, ok=True), "not_usable": dict(configured=True, ok=False),
              "not_configured": dict(configured=False)}.get(status)
-    server._set_setting("gpu_probe_result", json.dumps(probe) if probe else "")
+    store_builtin_probe(probe)
 
 
 def _mascot(mid="moss", approved=1, archived=0):

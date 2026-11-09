@@ -25,6 +25,7 @@ import json
 import pytest
 
 import server
+from builtin_gpu import store_builtin_probe
 
 
 def _now() -> str:
@@ -438,7 +439,7 @@ def test_a_legacy_video_still_writes_a_dark_canvas(db):
 # ── Cartoon 3D needs a working GPU (TMDEV-179) ───────────────────────────────
 
 def _probe(db, **probe):
-    server._set_setting("gpu_probe_result", json.dumps(probe))
+    store_builtin_probe(probe)
 
 
 def test_cartoon_3d_is_a_value_while_the_gpu_works(db):
@@ -469,6 +470,23 @@ def test_the_gpu_flag_is_reported_where_the_key_flag_is(db):
     _probe(db, configured=True, ok=True)
     assert server.get_video("vid_c5")["cartoon_3d_available"] is True
     assert server.get_pipeline_status()["cartoon_3d_available"] is True
+
+
+def test_the_gate_reads_every_renderer_not_a_settings_row(db):
+    """The status is the renderers table's aggregate (the same one the API's
+    gates read): a GPU on an enrolled remote renderer unlocks the style while
+    the built-in one has none, and the retired single-renderer row
+    gpu_probe_result counts for nothing."""
+    server._set_setting("gpu_probe_result", json.dumps({"configured": True, "ok": True}))
+    _video("vid_c6")
+    assert server.update_video("vid_c6", visual_style="cartoon_3d") == {"error": server.CARTOON3D_GPU_UNKNOWN}
+    _probe(db, configured=False, ok=False)
+    with server._conn() as con:
+        con.execute("INSERT INTO renderers (id, name, gpu_probe, gpu_verified, created_at) "
+                    "VALUES ('r_aaaaaaaaaaaa', 'Studio PC', ?, 1, '2026-01-01T00:00:00Z')",
+                    (json.dumps({"configured": True, "ok": True}),))
+    assert server.get_video("vid_c6")["cartoon_3d_available"] is True
+    assert "error" not in server.update_video("vid_c6", visual_style="cartoon_3d")
 
 
 def test_a_project_default_of_cartoon_3d_is_refused_only_on_change(db):

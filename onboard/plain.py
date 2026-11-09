@@ -239,7 +239,7 @@ def print_help() -> None:
         ("--list-agents", "List the supported agents and the installed ones, then exit"),
         ("--set-password", "Set or change the dashboard password. Changing it signs every "
                            "dashboard session out. Run it before upgrading from 1.2.x."),
-        ("--rotate-tokens", "Replace the three service tokens, restart the services that "
+        ("--rotate-tokens", "Replace the service tokens, restart the services that "
                             "read them, and have OpenCode reload. Waits for in-flight work "
                             "like upgrade.py; --force proceeds anyway."),
         ("--force", "Re-run every step regardless of done state"),

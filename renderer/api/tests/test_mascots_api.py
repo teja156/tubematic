@@ -20,6 +20,8 @@ import pipeline
 from pipeline import create_pipeline_blueprint
 from tubematic_core import mascots as tm
 
+from .builtin_gpu import store_builtin_probe
+
 NOW = "2026-01-01T00:00:00Z"
 
 
@@ -56,10 +58,7 @@ def _gpu(db_path, status):
     probe = {"working": {"configured": True, "ok": True},
              "not_usable": {"configured": True, "ok": False},
              "not_configured": {"configured": False}}.get(status)
-    _sql(db_path, "DELETE FROM settings WHERE key = ?", (pipeline.GPU_PROBE_RESULT_KEY,))
-    if probe is not None:
-        _sql(db_path, "INSERT INTO settings (key, value) VALUES (?, ?)",
-             (pipeline.GPU_PROBE_RESULT_KEY, json.dumps(probe)))
+    store_builtin_probe(db_path, probe)
 
 
 def _agent(db_path, aid="claude", models=("sonnet", "opus")):

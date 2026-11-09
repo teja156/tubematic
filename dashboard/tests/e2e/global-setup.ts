@@ -1,4 +1,5 @@
 import { execSync } from "child_process";
+import fs from "fs";
 import path from "path";
 import { request } from "@playwright/test";
 import { TEST_PASSWORD } from "./fixtures/seed";
@@ -19,7 +20,29 @@ async function waitForUrl(url: string, retries = 30, delayMs = 2000) {
   throw new Error(`Timed out waiting for ${url} after ${retries * delayMs}ms`);
 }
 
+// The render gateway's TLS pair (docker-compose.test.yml secrets). Never
+// committed, so it is made here once and kept (gitignored) for later runs. The
+// same shape tubematic_core/auth.py creates: EC P-256, self-signed, a CA so the
+// renderer can trust it as its own anchor.
+function ensureGatewayTls() {
+  const dir = path.join(__dirname, "secrets");
+  const key = path.join(dir, "render_tls_key");
+  const cert = path.join(dir, "render_tls_cert");
+  if (fs.existsSync(key) && fs.existsSync(cert)) return;
+  console.log("[E2E] Creating the render gateway's test TLS pair…");
+  execSync(
+    `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes ` +
+      `-keyout "${key}" -out "${cert}" -days 3650 -subj "/CN=tubematic-render-gateway" ` +
+      `-addext "basicConstraints=critical,CA:TRUE" ` +
+      `-addext "keyUsage=critical,digitalSignature,keyCertSign"`,
+    { stdio: "inherit" },
+  );
+  fs.chmodSync(key, 0o644);
+  fs.chmodSync(cert, 0o644);
+}
+
 async function globalSetup() {
+  ensureGatewayTls();
   console.log("\n[E2E] Building and starting test containers…");
   execSync(`docker compose -f "${COMPOSE_FILE}" up -d --build --wait`, {
     cwd: REPO_ROOT,

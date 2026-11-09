@@ -24,6 +24,8 @@ os.environ.setdefault("TUBEMATIC_DB", ":memory:")
 import pipeline
 import render_agent
 
+from .builtin_gpu import store_builtin_probe
+
 NVIDIA = "ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1650/PCIe/SSE2, OpenGL ES 3.2)"
 # Measured in this image (Plane TMDEV-178): the CPU default, and what an
 # integrated GPU / Mesa reports. Each must be refused when a GPU is configured.
@@ -412,9 +414,22 @@ def client(db_path):
         yield c
 
 
-def _store(db_path, key, value):
+def _remote(db_path, rid="r_aaaaaaaaaaaa", probe=None):
+    """An enrolled remote renderer, optionally with a GPU probe."""
     con = sqlite3.connect(db_path)
-    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+    con.execute("INSERT INTO renderers (id, name, gpu_probe, gpu_verified, created_at) "
+                "VALUES (?, 'Studio PC', ?, ?, '2026-01-01T00:00:00Z')",
+                (rid, json.dumps(probe) if probe else "", int(bool(probe and probe.get("ok")))))
+    con.commit()
+    con.close()
+
+
+def _rendering(db_path, renderer_id="builtin", uploaded=""):
+    con = sqlite3.connect(db_path)
+    con.execute("INSERT INTO videos (id, project_id, topic, strategy, producibility_score, status, "
+                "renderer_id, render_uploaded_at, created_at, updated_at) VALUES "
+                "('v', 'p', 't', 'manual', 8, 'RENDERING', ?, ?, "
+                "'2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')", (renderer_id, uploaded))
     con.commit()
     con.close()
 
@@ -430,43 +445,94 @@ def test_before_any_probe_the_status_is_unknown(client):
     ({"configured": True, "ok": True, "renderer": NVIDIA}, "working", "gpu"),
     ({"configured": True, "ok": False, "renderer": INTEL}, "not_usable", "cpu"),
 ])
-def test_the_status_follows_the_last_probe(client, db_path, probe, status, on):
-    _store(db_path, pipeline.GPU_PROBE_RESULT_KEY, json.dumps({"at": "2026-11-05T10:00:00.0Z", **probe}))
+def test_the_status_follows_the_built_in_renderers_probe(client, db_path, probe, status, on):
+    store_builtin_probe(db_path, {"at": "2026-11-05T10:00:00.0Z", **probe})
     body = client.get("/render/gpu").get_json()
     assert body["status"] == status and body["rendering_on"] == on
+    assert body["probe"]["renderer"] == probe["renderer"]
+
+
+def test_the_retired_settings_row_is_no_longer_read(client, db_path):
+    """A pre-upgrade gpu_probe_result row says nothing about any renderer now:
+    only a probe reported through the gateway counts."""
+    con = sqlite3.connect(db_path)
+    con.execute("INSERT INTO settings (key, value) VALUES ('gpu_probe_result', ?)",
+                (json.dumps({"configured": True, "ok": True, "at": "2026-11-05T10:00:00.0Z"}),))
+    con.commit()
+    con.close()
+    body = client.get("/render/gpu").get_json()
+    assert body["status"] == "unknown" and body["probe"] is None
+
+
+def test_the_status_is_the_aggregate_but_the_panel_fields_are_the_built_in_renderers(client, db_path):
+    """Every GPU gate reads "status", so a GPU on an enrolled remote renderer
+    makes it "working" even while the built-in renderer is on the CPU; the
+    rest of the body still describes the built-in renderer, which is what the
+    dashboard's GPU panel shows and tests."""
+    store_builtin_probe(db_path, {"at": "2026-11-05T10:00:00.0Z", "configured": False, "ok": False})
+    _remote(db_path, probe={"at": "2026-11-05T10:00:00.0Z", "configured": True, "ok": True,
+                            "gpu": {"uuid": "GPU-remote", "name": "RTX 4090"}})
+    body = client.get("/render/gpu").get_json()
+    assert body["status"] == "working"
+    assert body["rendering_on"] == "cpu" and body["configured"] is False and body["gpu"] is None
+    # The gates read the same aggregate.
+    con = sqlite3.connect(db_path)
+    try:
+        assert pipeline._cartoon3d_gpu_error(con, "cartoon_3d") == ""
+    finally:
+        con.close()
+
+
+def test_a_test_request_stamps_the_built_in_renderer_not_a_setting(client, db_path):
+    client.post("/render/gpu/test")
+    con = sqlite3.connect(db_path)
+    try:
+        requested = con.execute("SELECT gpu_probe_requested_at FROM renderers "
+                                "WHERE id = 'builtin'").fetchone()[0]
+        rows = con.execute("SELECT key FROM settings WHERE key LIKE 'gpu_probe%'").fetchall()
+    finally:
+        con.close()
+    assert requested and requested.endswith("Z")
+    assert rows == []
 
 
 def test_a_test_request_is_pending_until_a_newer_probe(client, db_path):
-    _store(db_path, pipeline.GPU_PROBE_RESULT_KEY,
-           json.dumps({"at": "2000-01-01T00:00:00.000000Z", "configured": False}))
+    store_builtin_probe(db_path, {"at": "2000-01-01T00:00:00.000000Z", "configured": False})
     r = client.post("/render/gpu/test")
     assert r.status_code == 202
     assert r.get_json()["pending"] is True
-    _store(db_path, pipeline.GPU_PROBE_RESULT_KEY,
-           json.dumps({"at": "2999-01-01T00:00:00.000000Z", "configured": False}))
+    store_builtin_probe(db_path, {"at": "2999-01-01T00:00:00.000000Z", "configured": False})
     assert client.get("/render/gpu").get_json()["pending"] is False
 
 
 def test_a_pending_request_says_it_waits_for_a_render(client, db_path):
-    con = sqlite3.connect(db_path)
-    con.execute("INSERT INTO videos (id, project_id, topic, strategy, producibility_score, status, "
-                "created_at, updated_at) VALUES ('v', 'p', 't', 'manual', 8, 'RENDERING', "
-                "'2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
-    con.commit()
-    con.close()
+    _rendering(db_path)
     body = client.post("/render/gpu/test").get_json()
     assert body["pending"] is True and body["waiting_for_render"] is True
 
 
+@pytest.mark.parametrize("renderer_id,uploaded", [
+    ("r_aaaaaaaaaaaa", ""),                    # another renderer's render
+    ("builtin", "2026-01-01T00:10:00Z"),       # uploaded: only the worker's review is left
+])
+def test_a_render_that_does_not_hold_the_built_in_renderer_does_not_delay_the_test(
+        client, db_path, renderer_id, uploaded):
+    _rendering(db_path, renderer_id, uploaded)
+    body = client.post("/render/gpu/test").get_json()
+    assert body["pending"] is True and body["waiting_for_render"] is False
+
+
 def test_the_two_processes_agree_on_the_row_names():
-    """render_agent.py writes what pipeline.py reads; onboard/gpu.py reads it too."""
-    assert render_agent.GPU_PROBE_RESULT_KEY == pipeline.GPU_PROBE_RESULT_KEY == "gpu_probe_result"
+    """onboard.py --step gpu writes the hold the render gateway reads before it
+    hands the built-in renderer a video, and onboard/gpu.py reads the built-in
+    renderer's probe from the same row the API's panel reads."""
     import pathlib
+    from tubematic_core import renderers
     src = (pathlib.Path(__file__).resolve().parents[3] / "onboard" / "gpu.py").read_text()
-    assert 'PROBE_RESULT_KEY = "gpu_probe_result"' in src
-    # onboard.py --step gpu writes the hold that render_agent.py::_claim_next reads.
     assert pipeline.RENDER_CLAIM_HOLD_KEY == "render_claim_hold_until"
     assert 'RENDER_HOLD_KEY = "render_claim_hold_until"' in src
+    assert f'BUILTIN_RENDERER_ID = "{renderers.BUILTIN_ID}"' in src
+    assert "SELECT gpu_probe FROM renderers WHERE id = ?" in src
 
 
 def test_a_malformed_driver_answer_is_no_answer(db_path, configured):

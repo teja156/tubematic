@@ -199,6 +199,18 @@ def test_top_level_name_and_volumes_pass_through_untouched(parsed, dev_text):
         assert parsed["services"][name].get("secrets") == svc.get("secrets"), name
 
 
+def test_the_release_renderer_reaches_the_gateway_with_no_database(services):
+    """A release install runs the built-in renderer exactly as a dev one does:
+    through the render gateway, holding its token and the gateway certificate,
+    and never the TLS key or a database mount."""
+    renderer = services["tubematic-renderer"]
+    assert not {"/data", "/output_videos", "/backups"} & {
+        v.split(":")[1] for v in renderer["volumes"]}
+    assert set(renderer["secrets"]) == {"builtin_renderer_token", "render_tls_cert"}
+    assert "render_tls_key" in services["tubematic-api"]["secrets"]
+    assert not any("4443" in p for p in services["tubematic-api"]["ports"])
+
+
 # ── version format ────────────────────────────────────────────────────────
 
 def test_check_version_is_tag_safe_accepts_plain_semver():

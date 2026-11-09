@@ -32,10 +32,10 @@ also take the real pipeline database and video library.
 
 | File | Role |
 |---|---|
-| `global-setup.ts` | Builds and starts the containers, waits for health endpoints — then sets the test dashboard password through `python3 -m tubematic_core.auth set-password` inside the API container, signs in once through the real login route, and saves that browser state to `tests/e2e/.auth/state.json` (gitignored) for every spec to start from. |
+| `global-setup.ts` | Creates the render gateway's test TLS pair in `secrets/` if it is missing (Compose refuses to start a service whose secret file is absent), builds and starts the containers, waits for health endpoints — then sets the test dashboard password through `python3 -m tubematic_core.auth set-password` inside the API container, signs in once through the real login route, and saves that browser state to `tests/e2e/.auth/state.json` (gitignored) for every spec to start from. |
 | `global-teardown.ts` | Tears the containers down and removes the test volumes |
 | `fixtures/seed.ts` | HTTP helpers that seed the test database before each test. `patchVideo` adds a placeholder publish title and description whenever it seeds a `script`, since the API refuses a script without them Every helper sends the test API token: the file shadows `fetch` with one that adds it, because the test API refuses any call without it. It also exports `API_AUTH` for the few specs that call the API directly, and `TEST_PASSWORD`. |
-| `secrets/` | Fixed, **public** tokens for the test stack only — it runs on throwaway volumes and is torn down after every run. A real install generates random ones |
+| `secrets/` | Fixed, **public** tokens for the test stack only — it runs on throwaway volumes and is torn down after every run. A real install generates random ones. The render gateway's TLS key and certificate are the exception: a private key is never committed, even a test one, so `global-setup.ts` makes the pair with `openssl` when it is missing (the same shape `tubematic_core.auth` creates: EC P-256, self-signed, a CA so the renderer can trust it as its own anchor) and the directory's `.gitignore` keeps it out of git |
 
 ## Config, and why
 

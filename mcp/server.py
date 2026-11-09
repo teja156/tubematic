@@ -71,6 +71,7 @@ try:
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import mascots as tmascots
+    from tubematic_core import renderers as trenderers
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
     from tubematic_core import youtube as tyoutube
@@ -81,6 +82,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import mascots as tmascots
+    from tubematic_core import renderers as trenderers
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
     from tubematic_core import youtube as tyoutube
@@ -305,9 +307,11 @@ RESOLVED_VISUAL_STYLES = VALID_CANVASES
 # (swangle) renders the style, at about 1.1 s a frame, so a 90-second Short takes
 # ~50 minutes and a long one over two hours. With the GPU onboarding step, the
 # dashboard panel and its Test button the refusal names something a person can
-# do. Gate on the probe's "working" status, never on "configured": a configured
-# GPU whose renders fall back to the CPU is the case the gate must catch, and the
-# worker's _render_on_gpu() asks the same question of the same probe.
+# do. Gate on the "working" status, never on "configured": a configured GPU
+# whose renders fall back to the CPU is the case the gate must catch. The status
+# is tubematic_core.renderers.gpu_status's aggregate over every renderer (each
+# one's probe arrives through the render gateway), the same rule the gateway
+# uses to decide which renderer may take a GPU render.
 # Keep in sync: the other copy of this block (pinned by an agreement test).
 CARTOON3D_NEEDS_GPU = (
     "Cartoon 3D renders on the GPU only (on the CPU a 90-second Short takes about 50 minutes). "
@@ -327,10 +331,13 @@ RENDERERS = ("dom", "cartoon_3d")
 
 
 def gpu_probe_status(raw_probe) -> str:
-    """The renderer's GPU state from the worker's stored probe (the settings
-    row gpu_probe_result, JSON): "unknown" (never probed), "not_configured"
-    (no GPU override), "working" (configured and the last probe passed) or
-    "not_usable" (configured, but renders fall back to the CPU).
+    """One renderer's GPU state from its stored probe (the JSON in
+    renderers.gpu_probe, as the renderer reported it through the render
+    gateway): "unknown" (never probed), "not_configured" (no GPU override),
+    "working" (configured and the last probe passed) or "not_usable"
+    (configured, but renders fall back to the CPU). The gates read the
+    install-wide aggregate, tubematic_core.renderers.gpu_status, which uses
+    these same values.
     Keep in sync: the other copy (pinned by an agreement test)."""
     import json as _json_
     try:
@@ -1124,10 +1131,12 @@ def _gemini_key() -> str:
 
 
 def _gpu_probe_status() -> str:
-    """The renderer's GPU state from the worker's stored probe. The settings
-    row is pipeline.GPU_PROBE_RESULT_KEY, read raw here because this server
-    cannot import the API (keep the key in sync)."""
-    return gpu_probe_status(_get_setting("gpu_probe_result", ""))
+    """Whether any renderer can render on a GPU: the install-wide aggregate
+    from tubematic_core.renderers.gpu_status, the same source as the API's
+    gates (pipeline.gpu_status's "status"), so the agent and the dashboard
+    refuse a GPU-only style on the same answer."""
+    with _conn() as con:
+        return trenderers.gpu_status(con)["status"]
 
 
 def _cartoon3d_gpu_error(style: str) -> str:
@@ -1345,8 +1354,8 @@ def get_video(video_id: str) -> dict:
     "illustrated" the style itself is the permission and there is nothing to
     check first.
 
-    cartoon_3d_available is true while the renderer's GPU probe says the GPU
-    is working. Cartoon 3D renders on the GPU only, so under "auto" read it
+    cartoon_3d_available is true while at least one renderer's GPU test says
+    its GPU is working. Cartoon 3D renders on the GPU only, so under "auto" read it
     here before resolving the renderer to cartoon_3d; when it is false, author
     the video with the scene components and say in the handback that a world
     was wanted but the install cannot render one.
@@ -1356,7 +1365,7 @@ def get_video(video_id: str) -> dict:
     been written, and until then the mascot's current approved version (the one
     it will be pinned to). When it is set, the scene-config carries the mascot's
     cue track (write_scene_config's "mascot" key). mascots_available is true
-    while the renderer's GPU probe says the GPU is working; a mascot is chosen
+    while at least one renderer's GPU is working; a mascot is chosen
     by a human at the topic, never by the video's agent.
     """
     _init_db()
@@ -2349,7 +2358,7 @@ def update_video(
 
     mascot_id: the video's mascot, or "" for none. Settable only while the
     video is at TOPIC_PROPOSED, and a human's choice at the topic: a new
-    mascot must exist, be approved and not archived, and the renderer's GPU
+    mascot must exist, be approved and not archived, and some renderer's GPU
     must be working (get_video's mascots_available). It is never allowed on a
     "cartoon_3d" video, and writing visual_style "cartoon_3d" clears it. Sending
     the mascot the video already has is not a change and is never refused.
@@ -2408,8 +2417,8 @@ def update_video(
     code per video by the tubematic-cartoon3d skill).
     Write it BEFORE authoring any scene and never again: a revision round
     renders with the renderer the video already uses, and flipping it would
-    discard every scene. "cartoon_3d" is refused while the renderer's GPU is
-    not working (get_video's cartoon_3d_available), with the reason. Not
+    discard every scene. "cartoon_3d" is refused while no renderer's GPU is
+    working (get_video's cartoon_3d_available), with the reason. Not
     writable when visual_style already names the renderer.
 
     agent_id: which installed agent does this video's next piece of work — the
@@ -2990,9 +2999,9 @@ def upsert_project(
         starts with, whatever its sourcing mode: "" to inherit the install's
         default mascot, "none" for no mascot even if the install has a default,
         or the id of an approved, unarchived mascot. Seeds only while the
-        renderer's GPU works and never a "cartoon_3d" video, and changing it
+        some renderer's GPU works and never a "cartoon_3d" video, and changing it
         never touches videos already filed. A new id is refused if it cannot
-        be chosen or the renderer's GPU is not working (the error says which);
+        be chosen or no renderer's GPU is working (the error says which);
         re-sending the stored one is never refused.
     topic_cap: how many topics the domain may ever hold, a whole number from
         25 to 750 (100 when the domain is created). Every video ever filed
@@ -4689,8 +4698,8 @@ def get_pipeline_status() -> dict:
     max_research_runs_per_day, research_window_resets_at, pronunciation_lexicon,
     elevenlabs_voices, elevenlabs_voice_id, agents, user_preferences,
     illustrated_available, cartoon_3d_available, mascots_available.
-    mascots_available is true while the renderer's GPU probe says the GPU is
-    working (a mascot is chosen by a human, so this is information only).
+    mascots_available is true while at least one renderer's GPU is working
+    (a mascot is chosen by a human, so this is information only).
     mining_available is true when a Gemini API key is stored (the key itself is
     never returned); without one, "mining" is left out of active_strategies.
     illustrated_available is true when an OpenAI key is stored (the key itself

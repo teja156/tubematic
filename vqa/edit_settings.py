@@ -180,7 +180,8 @@ def _api_token() -> str:
         return read_secret("api_token")
     except SecretMissing as exc:
         raise SystemExit(f"The pipeline API needs its token: {exc}.\n"
-                         f"Create it: PYTHONPATH={_repo_root()} python3 -m tubematic_core.auth ensure")
+                         f"Create it: PYTHONPATH={_repo_root()} /opt/tubematic/.venv/bin/python3 "
+                         "-m tubematic_core.auth ensure")
 
 
 def _http_json(method: str, url: str, body=None, timeout: int = 30) -> tuple[int, dict]:

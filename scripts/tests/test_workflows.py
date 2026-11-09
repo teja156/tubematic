@@ -547,6 +547,20 @@ def test_the_smoke_test_runs_after_the_image_push_and_before_the_release(release
             )
 
 
+def test_the_smoke_test_installs_cryptography_before_creating_the_secrets(release_jobs):
+    """`tubematic_core.auth ensure` writes the render gateway's TLS pair, which
+    imports `cryptography`. The runner's system Python does not ship it, so
+    without the install every tag run would stop before `up`."""
+    found = False
+    for job in release_jobs.values():
+        runs = [s.get("run", "") or "" for s in _steps_of(job)]
+        for i, run in enumerate(runs):
+            if "tubematic_core.auth ensure" in run:
+                found = True
+                assert any("pip install" in r and "cryptography" in r for r in runs[:i]), runs
+    assert found, "no release.yml step creates the service tokens"
+
+
 def test_release_requests_only_the_permissions_it_needs(release):
     """`contents: write` to create the Release, `packages: write` to push
     to GHCR -- nothing broader. A workflow holding registry credentials
@@ -654,8 +668,17 @@ def test_the_smoke_test_creates_every_secret_file_compose_mounts_before_up(relea
               and " up" in s.get("run", ""))
     assert tokens < up, f"{name}: the tokens must exist before `docker compose up`"
 
+    # `python3` is this test's own interpreter, which has the suite's
+    # requirements (cryptography among them, which the TLS pair needs) — the
+    # job installs it in the step before; whatever python3 the PATH happens to
+    # name here may not have it.
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "python3").symlink_to(sys.executable)
+    env = {k: v for k, v in os.environ.items() if k != "TUBEMATIC_SECRETS_DIR"}
+    env |= {"HOME": str(tmp_path), "PATH": f"{bindir}{os.pathsep}{env.get('PATH', '')}"}
     proc = subprocess.run(["bash", "-e", "-c", steps[tokens]["run"]], cwd=REPO_ROOT,
-                          capture_output=True, text=True, env={k: v for k, v in os.environ.items() if k != "TUBEMATIC_SECRETS_DIR"} | {"HOME": str(tmp_path)})
+                          capture_output=True, text=True, env=env)
     assert proc.returncode == 0, proc.stderr
 
     with open(os.path.join(REPO_ROOT, "docker-compose.yml")) as fh:

@@ -66,6 +66,12 @@ volumes:
 # it, so no secret ever appears in an environment variable or `docker inspect`.
 # A missing file stops `up` with "bind source path does not exist": the stack
 # fails closed rather than starting without a token.
+#
+# The render gateway (TMDEV-189) adds three: builtin_renderer_token, the
+# built-in renderer's credential (read per request on both sides, so a
+# rotation needs no restart), and render_tls_key / render_tls_cert, the
+# gateway's self-signed TLS pair. The certificate is what every renderer pins;
+# the key never leaves tubematic-api.
 secrets:
   api_token:
     file: ${HOME}/.tubematic-data/secrets/api_token
@@ -73,6 +79,12 @@ secrets:
     file: ${HOME}/.tubematic-data/secrets/mcp_token
   session_secret:
     file: ${HOME}/.tubematic-data/secrets/session_secret
+  builtin_renderer_token:
+    file: ${HOME}/.tubematic-data/secrets/builtin_renderer_token
+  render_tls_key:
+    file: ${HOME}/.tubematic-data/secrets/render_tls_key
+  render_tls_cert:
+    file: ${HOME}/.tubematic-data/secrets/render_tls_cert
 
 services:
   # ── Flask pipeline API ───────────────────────────────────────────────────
@@ -82,6 +94,12 @@ services:
   # `restart: unless-stopped` never fired. TMDEV-87 gave each its own service
   # so one dead process is one dead container. No rendering happens here
   # either — that is tubematic-renderer below (TMDEV-32).
+  #
+  # It also serves the render gateway (renderer/api/render_gateway.py), a
+  # second Flask app on HTTPS :4443 that renderers call to claim a video,
+  # fetch its files and upload the mp4. Not published: the built-in renderer
+  # reaches it over tubematic-net, and a remote renderer needs the port
+  # published by an override that onboarding writes only when one is set up.
   tubematic-api:
     build:
       context: .
@@ -117,9 +135,15 @@ services:
       - TUBEMATIC_JOBS_DIR=/jobs
       - RENDERER_URL=http://localhost:4000
       - TUBEMATIC_SECRETS_DIR=/run/secrets
-    # Every route but /health and /render/health needs this bearer token.
+      - TUBEMATIC_GATEWAY_PORT=4443
+    # Every route but /health and /render/health needs api_token. The gateway
+    # serves TLS with render_tls_key + render_tls_cert and accepts the
+    # built-in renderer by builtin_renderer_token.
     secrets:
       - api_token
+      - builtin_renderer_token
+      - render_tls_key
+      - render_tls_cert
     healthcheck:
       # Flask only — deliberately says nothing about MCP, so this container's
       # health reflects exactly the process it runs.
@@ -169,8 +193,8 @@ services:
       - TUBEMATIC_JOBS_DIR=/jobs
       - MCP_PORT=4100
       - TUBEMATIC_SECRETS_DIR=/run/secrets
-      # The Cartoon 3D tools post their gate and preview stills to the render
-      # worker's stills server, on the GPU when there is one (TMDEV-179);
+      # The Cartoon 3D tools post their gate and preview stills to the
+      # built-in renderer's stills server, on the GPU when there is one (TMDEV-179);
       # unreachable, they render on this container's CPU instead.
       - TUBEMATIC_STILLS_SERVER=http://tubematic-renderer:4455
     secrets:
@@ -233,23 +257,34 @@ services:
         condition: service_healthy
 
   # ── Renderer ─────────────────────────────────────────────────────────────
-  # The actual renderer (Remotion + Chromium + ffmpeg). Polls videos.status
-  # for RENDER_QUEUED, renders, and runs the AI-review tail; nothing else
-  # (renderer/api/render_agent.py). Its own container so a render OOM/crash
+  # The built-in renderer (Remotion + Chromium + ffmpeg;
+  # renderer/api/render_agent.py). Its own container so a render OOM/crash
   # only restarts this service, not the API, MCP or the worker. Reuses the
   # tubematic-api image — no second build — with a different command.
+  #
+  # It has NO database (TMDEV-189): it talks to the render gateway in
+  # tubematic-api over HTTPS exactly as a renderer on another machine does —
+  # claims a video, downloads its files as one bundle, uploads the finished
+  # mp4 — so the built-in renderer exercises the same path every remote one
+  # depends on. That is why /data, /output_videos and /backups are gone: the
+  # gateway writes the upload into the library, the worker runs the AI review,
+  # and this container never migrates anything. What stays:
+  # - scenes-generated: renders compile the shared generated-scene tree, as
+  #   before (a remote renderer stages the bundle's copy instead);
+  # - /jobs, read-only: the Cartoon 3D stills server it runs for the MCP
+  #   container reads a video's job files; renders use the bundle;
+  # - /logs: its own JSONL trail for the dashboard's Logs page.
+  # It authenticates with builtin_renderer_token and trusts exactly the
+  # gateway certificate in render_tls_cert (never the TLS key).
   tubematic-renderer:
     image: tubematic-renderer-image
     container_name: tubematic-renderer
     restart: unless-stopped
     command: python3 /app/api/render_agent.py
     volumes:
-      - output-videos:/output_videos
-      - jobs-data:/jobs
-      - db-data:/data
+      - jobs-data:/jobs:ro
       - scenes-generated:/app/remotion/src/scenes/generated
       - logs-data:/logs
-      - backups-data:/backups
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     networks:
@@ -257,12 +292,16 @@ services:
     # No env_file — same reason as tubematic-api above.
     environment:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-      - OUTPUT_BASE_PATH=/output_videos
-      - TUBEMATIC_DB=/data/tubematic.db
       - TUBEMATIC_JOBS_DIR=/jobs
+      - TUBEMATIC_SECRETS_DIR=/run/secrets
+      - TUBEMATIC_GATEWAY_URL=https://tubematic-api:4443
+      - TUBEMATIC_RENDERER_BUILTIN=1
       # The stills server the renderer runs beside its renders, for the MCP
       # container's Cartoon 3D tools. Compose network only, never published.
       - TUBEMATIC_STILLS_PORT=4455
+    secrets:
+      - builtin_renderer_token
+      - render_tls_cert
     shm_size: '2gb'
     depends_on:
       tubematic-api:

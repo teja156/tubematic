@@ -199,10 +199,23 @@ def test_mcp_does_not_mount_the_host_clock(services):
 
 
 def test_renderer_mounts(services):
+    """Exact: the built-in renderer has no database. It reaches the pipeline
+    only through the render gateway, as a renderer on another machine does, so
+    /data, /output_videos and /backups are gone (the gateway writes the
+    uploaded mp4; nothing here migrates). The scene tree stays because its
+    renders compile it; /jobs stays for the stills server; /logs for its trail."""
     assert _mounts(services["tubematic-renderer"]) == {
-        "/output_videos", "/jobs", "/data", "/logs", "/backups",
-        "/app/remotion/src/scenes/generated", "/etc/localtime", "/etc/timezone",
+        "/jobs", "/logs", "/app/remotion/src/scenes/generated",
+        "/etc/localtime", "/etc/timezone",
     }
+
+
+def test_the_renderer_reads_the_jobs_tree_only(services):
+    """Read-only: the stills server reads job files, and a render works from
+    its downloaded bundle, so nothing in this container may write a job's
+    files — the API, MCP and the worker own them."""
+    jobs = [v for v in services["tubematic-renderer"]["volumes"] if v.split(":")[1] == "/jobs"]
+    assert jobs == ["jobs-data:/jobs:ro"]
 
 
 def test_worker_mounts(services):
@@ -257,6 +270,64 @@ def test_mcp_is_given_no_renderer_url(services):
     """MCP never calls Flask over HTTP — nothing in mcp/ reads RENDERER_URL.
     Handing it one would imply a dependency that does not exist."""
     assert "RENDERER_URL" not in _env(services["tubematic-mcp"])
+
+
+def test_the_renderer_is_pointed_at_the_gateway_not_the_database(services):
+    env = _env(services["tubematic-renderer"])
+    assert env["TUBEMATIC_GATEWAY_URL"] == "https://tubematic-api:4443"
+    assert env["TUBEMATIC_RENDERER_BUILTIN"] == "1"
+    # A leftover TUBEMATIC_DB would let a stray import open a fresh empty
+    # database in the container's writable layer instead of failing.
+    assert "TUBEMATIC_DB" not in env
+    assert "OUTPUT_BASE_PATH" not in env
+
+
+def test_the_api_serves_the_gateway_on_4443_without_publishing_it(services):
+    """The built-in renderer reaches the gateway over the compose network.
+    Publishing 4443 is opt-in (an override for remote renderers), because it
+    is the one port meant to be reachable from other machines."""
+    api = services["tubematic-api"]
+    assert _env(api)["TUBEMATIC_GATEWAY_PORT"] == "4443"
+    assert not any("4443" in p for p in api["ports"])
+
+
+# ── Secrets ────────────────────────────────────────────────────────────────
+
+def test_every_secret_file_lives_in_the_secrets_directory(services):
+    """The names are the files tubematic_core.auth.ensure_secrets writes, which
+    onboarding and upgrade.py run before `up` (a missing file stops `up`)."""
+    from tubematic_core import auth
+    declared = yaml.safe_load(COMPOSE.read_text())["secrets"]
+    assert set(declared) == set(auth.SECRET_NAMES) | set(auth.TLS_NAMES)
+    for name, spec in declared.items():
+        assert spec["file"] == f"${{HOME}}/.tubematic-data/secrets/{name}", name
+
+
+def test_the_gateway_key_never_leaves_the_api(services):
+    """The TLS key is what a renderer's pin trusts; only the process serving
+    the gateway may hold it. The renderer gets the certificate to pin and its
+    own token, and nothing that would let it pass for the API or MCP."""
+    holders = {name for name, svc in services.items()
+               if "render_tls_key" in (svc.get("secrets") or [])}
+    assert holders == {"tubematic-api"}
+    assert set(services["tubematic-api"]["secrets"]) == {
+        "api_token", "builtin_renderer_token", "render_tls_key", "render_tls_cert"}
+    assert set(services["tubematic-renderer"]["secrets"]) == {
+        "builtin_renderer_token", "render_tls_cert"}
+
+
+def test_the_test_stack_renders_through_the_gateway_too():
+    """docker-compose.test.yml mirrors the production wiring: a test renderer
+    with a database mount would hide a renderer that still reads it."""
+    test = yaml.safe_load((REPO_ROOT / "docker-compose.test.yml").read_text())
+    renderer = test["services"]["tubematic-renderer-test"]
+    assert [v.split(":", 1)[1] for v in renderer["volumes"]] == ["/jobs:ro"]
+    assert _env(renderer)["TUBEMATIC_GATEWAY_URL"] == "https://tubematic-api-test:4443"
+    assert set(renderer["secrets"]) == {"builtin_renderer_token", "render_tls_cert"}
+    assert {"builtin_renderer_token", "render_tls_key", "render_tls_cert"} <= set(
+        test["services"]["tubematic-api-test"]["secrets"])
+    for name in ("builtin_renderer_token", "render_tls_key", "render_tls_cert"):
+        assert test["secrets"][name]["file"] == f"./dashboard/tests/e2e/secrets/{name}"
 
 
 def test_no_service_reintroduces_env_file(services):

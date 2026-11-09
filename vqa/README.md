@@ -115,7 +115,8 @@ a relaunch. Put it in the repo and rebuild.
 automatically by the Kasm platform as `kasm-user` after session start, independent of anything
 else in the container's boot chain. It's what actually does everything in the table above: refresh
 the working tree, refresh Claude Code's skills/commands/MCP registration, create `mounted/`, create
-any missing service token (`python3 -m tubematic_core.auth ensure`), seed the DB, and bring up
+any missing service token and the render gateway's TLS pair (`tubematic_core.auth ensure`, run with
+the image's `/opt/tubematic/.venv` because the TLS pair needs `cryptography`), seed the DB, and bring up
 `tubematic-api`/`tubematic-mcp`/`tubematic-worker`/`tubematic-renderer`. The MCP registration is redone on every launch
 rather than skipped when present: the server needs its token, which Claude Code fetches through
 `scripts/mcp_auth_header.py`, and a registration persisted from an older image has no such helper.
