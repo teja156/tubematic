@@ -462,6 +462,8 @@ and posts publicly with no human review.
 | `notify_topic_proposed` | bool | `false` | Announce newly proposed topics, bundled one message per research run |
 | `notify_script_ready` | bool | `false` | Announce a script waiting at its human checkpoint |
 | `notify_video_ready` | bool | `false` | Announce a finished render waiting for sign-off |
+| `notify_partially_published` | bool | `false` | Alert when a publish went out on some accounts and failed on others. Names each failed account and its error, and links the posts that went out |
+| `notify_failed` | bool | `false` | Alert when a video reaches `FAILED`, for any cause: rendering, publishing, or a refused job. The message says which, with the reason recorded on the video, and offers Retry publishing when it failed while publishing |
 | `dashboard_base_url` | str | `""` | Where the dashboard is reachable from wherever Discord is read, e.g. `http://192.168.1.20:3000`. Blank means messages carry no links |
 
 Notifications are off in **two independent ways** — no webhook URL, and no trigger enabled — so an

@@ -130,7 +130,8 @@ approvals stop while the limit is full as well, because each one starts a paid a
 What counts as in progress:
 
 - A video in an Auto Pilot domain that has been voiced and has not yet published or failed. A video
-  sent back for a revision keeps its place.
+  sent back for a revision keeps its place. A Partially Published video counts until you mark it
+  Published, so Auto Pilot slows down while an account is failing.
 - A post waiting to go out, anywhere on the install. That includes posts you schedule by hand, so
   a week of hand-scheduled posts can hold Auto Pilot back.
 

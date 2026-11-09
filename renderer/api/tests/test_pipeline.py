@@ -234,6 +234,25 @@ def test_patch_only_if_current_status_mismatch_returns_409(client, db_path):
     assert r.status_code == 409
 
 
+def test_mark_as_published_moves_a_partial_publish_to_published(client, db_path):
+    """The dashboard's Mark as published (TMDEV-191) is a guarded PATCH; the
+    only way out of PARTIALLY_PUBLISHED."""
+    _seed_video(db_path, "PARTIALLY_PUBLISHED")
+    r = client.patch("/videos/vid-1", json={
+        "status": "PUBLISHED", "onlyIfCurrentStatus": "PARTIALLY_PUBLISHED"})
+    assert r.status_code == 200
+    assert json.loads(client.get("/videos/vid-1").data)["status"] == "PUBLISHED"
+
+
+def test_mark_as_published_is_refused_once_the_video_has_moved(client, db_path):
+    """A second tab, or a video retried meanwhile: the guard refuses rather than
+    overwriting whatever state it is in now."""
+    _seed_video(db_path, "PUBLISHED")
+    r = client.patch("/videos/vid-1", json={
+        "status": "PUBLISHED", "onlyIfCurrentStatus": "PARTIALLY_PUBLISHED"})
+    assert r.status_code == 409
+
+
 def test_patch_invalid_status_returns_400(client, db_path):
     _seed_video(db_path, "TOPIC_PROPOSED")
     r = client.patch("/videos/vid-1", json={"status": "NOT_A_REAL_STATUS"})
@@ -2647,7 +2666,7 @@ def test_user_preferences_with_a_nul_are_rejected(client, db_path):
 
 def test_agent_model_is_no_longer_a_settings_key(client):
     assert "agent_model" not in pipeline.SETTINGS_SPEC
-    assert len(pipeline.SETTINGS_SPEC) == 42
+    assert len(pipeline.SETTINGS_SPEC) == 44
     assert "agent_model" not in json.loads(client.get("/settings").data)
 
 

@@ -27,6 +27,7 @@ All operations use the `tubematic` MCP server. Tool signatures and return shapes
 | `TOPIC_REJECTED` | — | terminal — human flat-rejected the topic, no further action |
 | `VIDEO_APPROVED` | **Human** | publish or schedule from the dashboard, or leave it — never agent-actionable |
 | `SCHEDULED` | **AUTO** | a post is waiting at postforme for its scheduled time; the worker moves it to PUBLISHING when it falls due. A human may cancel it back to VIDEO_APPROVED |
+| `PARTIALLY_PUBLISHED` | **Human** | live on some accounts, failed on others; the human posts the rest by hand and marks it published on the dashboard — never agent-actionable |
 | `FAILED` | — | terminal — unrecoverable render/pipeline failure, no further action |
 
 ---
@@ -111,7 +112,8 @@ Side exits:
   RENDERING           → REVISION_REQUESTED   (automatic: render crash or AI-review findings)
   RENDERING           → FAILED               (automatic: render retry cap exceeded, or a GPU-only video with no working GPU)
   SCHEDULED           → VIDEO_APPROVED       (human cancels the scheduled post)
-  PUBLISHING          → PUBLISHED | FAILED   (worker: polls the publish results; PUBLISHED if any target succeeded)
+  PUBLISHING          → PUBLISHED | PARTIALLY_PUBLISHED | FAILED   (worker: polls the publish results; PUBLISHED if every target succeeded, PARTIALLY_PUBLISHED for a mix, FAILED if none did)
+  PARTIALLY_PUBLISHED → PUBLISHED            (human posts to the failed accounts by hand, then marks it published)
   REVISION_REQUESTED  → FAILED               (agent judges the failure unfixable)
   REVISION_REQUESTED  → TOPIC_PROPOSED | SCRIPT_READY | VOICE_READY   (after agent fixes, back to the rejected checkpoint)
 ```
@@ -168,8 +170,9 @@ At every checkpoint: call `add_comment` explaining what was done and what decisi
 | `RENDER_QUEUED` | AUTO — do not take any action. The renderer will claim it (advancing to `RENDERING`) as soon as it's free; the renderer renders one video at a time, so this may sit for a while if another render is in progress. Fire and forget. |
 | `RENDERING` | AUTO — do not take any action. The renderer renders the video and automatically advances to `VIDEO_READY`, `REVISION_REQUESTED`, or `FAILED` (its own render-crash retry cap exceeded). Fire and forget. |
 | `REVISION_REQUESTED` | Read the comment(s), classify the revision, and route to the matching checkpoint — see **Handling REVISION_REQUESTED** below. If the failure is unfixable, escalate to `FAILED`. |
-| `VIDEO_APPROVED` | **Human-owned — take no action.** Publishing to real social accounts is decided on the dashboard — by a human, or by Auto Pilot for the projects the operator put on it — and there is no tool here that can do it. Never advance this video yourself, and in particular never `set_video_status` it to `SCHEDULED`, `PUBLISHING` or `PUBLISHED` — that would mark a video as scheduled or published when nothing was ever posted. |
+| `VIDEO_APPROVED` | **Human-owned — take no action.** Publishing to real social accounts is decided on the dashboard — by a human, or by Auto Pilot for the projects the operator put on it — and there is no tool here that can do it. Never advance this video yourself, and in particular never `set_video_status` it to `SCHEDULED`, `PUBLISHING`, `PUBLISHED` or `PARTIALLY_PUBLISHED` — that would mark a video as scheduled or published when nothing was ever posted. |
 | `SCHEDULED` | AUTO — do not take any action. A human or Auto Pilot scheduled the post and postforme is holding it; the worker moves the video to `PUBLISHING` when its time comes. |
+| `PARTIALLY_PUBLISHED` | **Human-owned — take no action.** The publish went out on some accounts and failed on others. The human posts it to the failed accounts by hand and marks it published on the dashboard. Never `set_video_status` it to `PUBLISHED` yourself — that hands it to the retention sweep, which can delete the file before the human has posted it. |
 | `FAILED` | Terminal — unrecoverable failure. Do nothing; stop processing this video. |
 
 ---

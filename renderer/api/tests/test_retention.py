@@ -117,7 +117,7 @@ def _setting(env, key, value):
 # ── the deletable set ────────────────────────────────────────────────────────
 
 DELETABLE = {"TOPIC_PROPOSED", "TOPIC_APPROVED", "TOPIC_REJECTED", "SCRIPT_READY",
-             "VIDEO_READY", "VIDEO_APPROVED", "PUBLISHED", "FAILED"}
+             "VIDEO_READY", "VIDEO_APPROVED", "PUBLISHED", "PARTIALLY_PUBLISHED", "FAILED"}
 BLOCKED = pipeline.VALID_VIDEO_STATUSES - DELETABLE
 
 
@@ -353,6 +353,20 @@ def test_a_video_that_is_not_published_is_never_swept(env, status):
     _sweep(env)
     assert _row(env)["archived_at"] is None
     assert mp4.exists() and job_dir.exists()
+
+
+def test_a_partially_published_video_keeps_its_files_until_marked_published(env):
+    """Deliberate (TMDEV-191), and covered by the parametrised test above too —
+    named here so nobody "fixes" it: the mp4 must survive for the human to post
+    to the failed accounts by hand. Marking it published is what hands it to
+    retention, timed from its first successful post."""
+    mp4, job_dir = _video(env, status="PARTIALLY_PUBLISHED")
+    _publication(env, published_at=_ago(100))
+    _sweep(env)
+    assert _row(env)["archived_at"] is None and mp4.exists() and job_dir.exists()
+    _sql(env, "UPDATE videos SET status = 'PUBLISHED'")
+    _sweep(env)
+    assert _row(env)["archived_at"] is not None and not mp4.exists()
 
 
 def test_a_published_video_with_no_usable_publish_time_is_never_swept(env):

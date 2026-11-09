@@ -467,6 +467,104 @@ def build_voicing_stalled_payload(video: dict, *, base_url: str = "") -> dict:
     }])}
 
 
+# Display names for the platforms postforme posts to; anything else is shown as
+# stored. Only for a human reading the message, never matched on.
+_PLATFORM_NAMES = {
+    "youtube": "YouTube", "instagram": "Instagram", "tiktok": "TikTok",
+    "facebook": "Facebook", "x": "X", "linkedin": "LinkedIn", "threads": "Threads",
+    "bluesky": "Bluesky", "pinterest": "Pinterest",
+}
+# Per-field budget for a failed account's error, so a long postforme message
+# cannot crowd the other accounts out of the 6000-character total.
+_ERROR_BUDGET = 300
+
+
+def _target(pub: dict) -> str:
+    platform = str(pub.get("platform") or "unknown")
+    return f"{_PLATFORM_NAMES.get(platform, platform)} · {pub.get('social_account_id') or '?'}"
+
+
+def build_partially_published_payload(video: dict, *, base_url: str = "") -> dict:
+    """A publish that went out on some accounts and failed on others (TMDEV-191).
+
+    `video["publications"]` is the video's publication rows. The video is
+    PARTIALLY_PUBLISHED and stays there until a human posts the rest by hand
+    and marks it published, so the message says exactly that.
+    """
+    pubs = video.get("publications") or []
+    ok = [p for p in pubs if p.get("status") == "PUBLISHED"]
+    failed = [p for p in pubs if p.get("status") == "FAILED"]
+
+    parts = []
+    link = _link(base_url, "/library")
+    if link:
+        parts.append(f"[Open it in the library]({link})")
+    parts.append("**Next:** download the video, post it to the failed account(s) by hand, "
+                 "then use **Mark as published** on the dashboard.")
+
+    fields = [{
+        "name": f"✗ {_target(p)}",
+        "value": _clip(p.get("error") or "No error was recorded.", _ERROR_BUDGET),
+    } for p in failed]
+    live = [f"{_target(p)}: {p['post_url']}" if p.get("post_url") else _target(p) for p in ok]
+    if live:
+        # Last: _enforce_limits drops trailing fields first, and the failed
+        # accounts are what the human has to act on.
+        fields.append({"name": "✓ Published", "value": "\n".join(live)})
+
+    return {"embeds": _enforce_limits([{
+        "title": f"⚠️ Published to {len(ok)} of {len(pubs)} accounts — "
+                 f"{_clip(_display_name(video), 180)}",
+        "description": "\n\n".join(parts),
+        "color": COLOR_ALERT,
+        "fields": fields,
+        "footer": {"text": f"Tubematic · {video.get('id', '')}"},
+    }])}
+
+
+def build_failed_payload(video: dict, *, base_url: str = "") -> dict:
+    """A video that reached FAILED (TMDEV-191): stuck, needs a person.
+
+    `video["failure_reason"]` is the agent comment written when it failed —
+    every FAILED path writes one for a human, so it is used as-is — or "" when
+    none was found. `video["publications"]` tells the causes apart with no
+    schema of its own: no rows means it failed before publishing; rows with a
+    post id mean the post went out and every account refused it; rows without
+    one mean no post was ever created before the deadline. Only the last two
+    can be retried, which is the same test retry_publish makes.
+    """
+    pubs = video.get("publications") or []
+    if not pubs:
+        cause = "Failed before publishing"
+    elif any(p.get("postforme_post_id") for p in pubs):
+        cause = "Publishing failed on every account"
+    else:
+        cause = "Publishing failed: no post was created before the deadline"
+
+    parts = []
+    link = _link(base_url, "/")
+    if link:
+        parts.append(f"[Open the pipeline]({link})")
+    reason = (video.get("failure_reason") or "").strip()
+    parts.append(_clip(reason, 1500) if reason else
+                 "No reason was recorded — the video's comments and logs say more.")
+    if pubs:
+        parts.append("**Retry publishing** on the video re-sends it — it checks postforme "
+                     "first, so a post that did go out is not posted twice.")
+
+    fields = [{"name": f"✗ {_target(p)}",
+               "value": _clip(p.get("error") or "No error was recorded.", _ERROR_BUDGET)}
+              for p in pubs if p.get("status") == "FAILED"]
+
+    return {"embeds": _enforce_limits([{
+        "title": f"❌ {cause} — {_clip(_display_name(video), 150)}",
+        "description": "\n\n".join(parts),
+        "color": COLOR_ALERT,
+        "fields": fields,
+        "footer": {"text": f"Tubematic · {video.get('id', '')}"},
+    }])}
+
+
 def elapsed(secs) -> str:
     """A coarse age for a human — "1h 31m", "2d 4h" — where _duration's
     seconds would be noise."""

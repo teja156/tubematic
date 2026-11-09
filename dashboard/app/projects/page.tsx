@@ -28,6 +28,7 @@ const STATUS_ACCENT: Record<VideoStatus, string> = {
   SCHEDULED:          "var(--cyan)",
   PUBLISHING:         "var(--blue)",
   PUBLISHED:          "var(--green)",
+  PARTIALLY_PUBLISHED: "var(--amber)",
   FAILED:             "var(--red)",
 };
 

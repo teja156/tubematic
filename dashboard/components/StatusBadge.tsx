@@ -15,6 +15,7 @@ const STATUS_CONFIG: Record<VideoStatus, { label: string; color: string }> = {
   SCHEDULED:               { label: "Scheduled",           color: "#38bdf8" },
   PUBLISHING:              { label: "Publishing",          color: "#4ade80" },
   PUBLISHED:               { label: "Published",           color: "#65d27a" },
+  PARTIALLY_PUBLISHED:     { label: "Partially Published", color: "#fbbf24" },
   FAILED:                  { label: "Failed",              color: "#ff3b3b" },
 };
 

@@ -271,7 +271,7 @@ Do this for each installed agent, then restart any open session.
 | A publish failed with "media upload took longer than 30 minutes" | The upload was too slow. Nothing was posted | Publish again |
 | A video stays at Publishing | Tubematic is waiting for the platforms. After an hour it marks accounts with no answer as failed | Check the worker: `python3 scripts/service.py logs tubematic-worker` |
 | A video is Failed and the post is live | The platform answered late | Press **Retry publishing**. Nothing is posted twice |
-| A video is Published and one account shows an error | At least one account has the post | Read the **Publishing Results** tab |
+| A video is Partially Published | The post reached some accounts and failed on others | See [When a publish partly fails](06-publishing.md#when-a-publish-partly-fails) |
 | A scheduled post is still Scheduled after its time | postforme sends it. The dashboard catches up within a few minutes, while publishing is on | Wait |
 | **Cancel schedule** is refused | postforme has started sending the post | Nothing |
 | A schedule is refused | The time is under 5 minutes or over 365 days away, or the clocks skip it | Pick another time |
@@ -282,7 +282,7 @@ Do this for each installed agent, then restart any open session.
 
 | Symptom | Meaning |
 |---|---|
-| Nothing arrives | Set the **Webhook URL** and turn on at least one of the three switches, on **Settings → Notifications**. The `tubematic-worker` container must be running |
+| Nothing arrives | Set the **Webhook URL** and turn on at least one of the switches, on **Settings → Notifications**. The `tubematic-worker` container must be running |
 | Saving the webhook URL is refused | Discord says the webhook does not exist. Create a new one and paste its URL |
 | Messages have no links | **Dashboard URL** is blank |
 | Topics arrive in two messages | A slow research run can be split in two |

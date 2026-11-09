@@ -192,8 +192,10 @@ Tubematic can send a message to a Discord channel when a video needs you.
 | **Topics are proposed** | Off | One message for each research run that proposed topics |
 | **A script is ready** | Off | A message when a script waits for your approval |
 | **A video is ready** | Off | A message when a video waits for your approval |
+| **A publish partly fails** | Off | An alert when a post reached some accounts and failed on others. It names each failed account and its error |
+| **A video fails** | Off | An alert when a video becomes Failed, with the reason |
 
-Nothing is sent until you set the webhook URL and turn on at least one of the three. Saving checks
+Nothing is sent until you set the webhook URL and turn on at least one of the switches. Saving checks
 that the webhook exists, without posting to it.
 
 Treat the webhook URL as a password. Anyone who has it can post to that channel.
@@ -202,7 +204,7 @@ Two details:
 
 - A video sent back to you after a revision is announced again.
 - If a webhook is set, Tubematic also sends an alert when a video sits in Voicing without being
-  voiced, whatever the three switches say. See
+  voiced, whatever the switches say. See
   [Troubleshooting](08-troubleshooting.md#a-video-is-stuck-in-voicing).
 
 ## Scheduling

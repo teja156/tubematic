@@ -148,8 +148,8 @@ SETTINGS_SPEC = {
     # worker that does it — still never the agent.
     "publishing_enabled":     ("bool",      "false"),
     # ── Discord notifications (TMDEV-5) ───────────────────────────────────────
-    # Off by default in two independent ways: no webhook URL, and all three
-    # triggers false. Both have to be set before anything is ever sent, so an
+    # Off by default in two independent ways: no webhook URL, and every
+    # trigger false. Both have to be set before anything is ever sent, so an
     # install that never opens this tab behaves exactly as it did before.
     #
     # discord_webhook_url is `secret`-typed, not `str`: the URL *is* the
@@ -159,6 +159,13 @@ SETTINGS_SPEC = {
     "notify_topic_proposed":  ("bool",      "false"),
     "notify_script_ready":    ("bool",      "false"),
     "notify_video_ready":     ("bool",      "false"),
+    # Alerts rather than checkpoints (TMDEV-191): a publish that failed on some
+    # accounts, and any video reaching FAILED. Off by default like the three
+    # above — not because off is the better default for a fresh install, but
+    # because a bool default also applies on upgrade, and an install that
+    # already has a webhook must not start receiving alerts it never asked for.
+    "notify_partially_published": ("bool",  "false"),
+    "notify_failed":          ("bool",      "false"),
     # Where the dashboard is reachable from wherever Discord is read, e.g.
     # "http://192.168.1.20:3000". Blank means notifications carry no links at
     # all — there is no sane default to guess, since the container has no idea
@@ -1596,7 +1603,7 @@ VALID_VIDEO_STATUSES = {
     "TOPIC_PROPOSED", "TOPIC_APPROVED", "TOPIC_REJECTED", "SCRIPT_READY",
     "VOICING", "VOICE_READY", "RENDER_QUEUED", "RENDERING", "VIDEO_READY",
     "VIDEO_APPROVED", "REVISION_REQUESTED", "SCHEDULED", "PUBLISHING", "PUBLISHED",
-    "FAILED",
+    "PARTIALLY_PUBLISHED", "FAILED",
 }
 
 # Statuses a human may delete a video from (TMDEV-84). Excluded are the four

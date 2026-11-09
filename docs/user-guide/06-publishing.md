@@ -87,12 +87,30 @@ Short from the file. The dialog warns you when this applies.
 |---|---|
 | Publishing | The post is created. Tubematic checks every 20 seconds for each platform's answer |
 | Scheduled | The post is uploaded and waiting for its time |
-| Published | At least one account has the post |
+| Published | Every account has the post, or you marked a partial publish as published |
+| Partially Published | Some accounts have the post and some failed. It waits for you |
 | Failed | Every account failed, or none succeeded within an hour |
 
-A video that reached two of four accounts is Published. The **Publishing Results** tab in the
-video's window lists each account with its status, the link to the post, and the reason for any
-failure.
+The **Publishing Results** tab in the video's window lists each account with its status, the link to
+the post, and the reason for any failure.
+
+### When a publish partly fails
+
+A video that reached some accounts and failed on others becomes Partially Published. A platform
+cannot take a post back, so the video is not Failed, and it is not finished either. It sits in the
+Published column with a **PARTIAL** tag, and under **Partially published** in the Library.
+
+1. Open the video and press **Mark as published…**.
+2. Press **Download video** in that dialog to save the mp4.
+3. Post the video to the failed accounts yourself.
+4. Press **Mark as published**.
+
+Download the video before you confirm. Tubematic keeps a Partially Published video's files. Once you
+mark it Published, the retention setting applies, counted from the first post. For a post older than
+your retention period, the file is deleted within a minute.
+
+To hear about a partial publish when it happens, turn on **A publish partly fails** on
+**Settings → Notifications**.
 
 ## Scheduling a post
 

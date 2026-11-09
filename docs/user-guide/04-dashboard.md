@@ -78,6 +78,8 @@ Rejected, Revision Requested and Failed. Click a card to open the video. A card 
 - how long ago the video was created,
 - **STUCK**, when the agent has stopped retrying it
   (see [When a video is STUCK](03-using-tubematic.md#when-a-video-is-stuck)),
+- **PARTIAL**, in the Published column, when the post reached some accounts and failed on others
+  (see [When a publish partly fails](06-publishing.md#when-a-publish-partly-fails)),
 - for a scheduled post, when it goes out.
 
 Two notices can appear on this page:
@@ -133,7 +135,8 @@ page keeps your picks, so you can enter the next video.
 
 ### Library and Archive
 
-**Library** lists videos at Video Ready, Video Approved, Scheduled, Publishing and Published. You can
+**Library** lists videos at Video Ready, Video Approved, Scheduled, Publishing, Partially Published
+and Published. You can
 filter by status and by how the topic was found, sort by date or score, and search titles and
 topics.
 
@@ -197,11 +200,13 @@ on the row.
 | Any of the three above | **Request Revision** | Opens a dialog for your comment. The agent reworks the topic, script or video |
 | Video Approved | **Publish…** | Opens the publish dialog. See [Publishing](06-publishing.md#publishing-a-video) |
 | Scheduled | **Cancel schedule** | Takes the post back. The video returns to Video Approved |
+| Partially Published | **Mark as published…** | Lets you download the video and, once you have posted it to the failed accounts yourself, marks it Published |
 | Failed, after a publish | **Retry publishing** | Checks whether a post went out anyway, then lets you publish again if none did |
 | A STUCK video | **Retry agent** | Lets the agent try again |
 | Most statuses | **Delete Video** | Deletes the video's files and moves its record to the Archive |
 
-**Publish…**, **Cancel schedule** and **Retry publishing** appear only when publishing is set up.
+**Publish…**, **Cancel schedule**, **Mark as published…** and **Retry publishing** appear only when
+publishing is set up.
 
 **Delete Video** is not offered while Tubematic is working on the video, while a post is scheduled
 or going out, or while a revision is pending.

@@ -50,7 +50,7 @@ flowchart TD
 | 3 | Analytics poll | `_poll_video_metrics` | hourly | publishing is on and a postforme key is stored | [Publishing](14-publishing.md#the-worker) |
 | 4 | Price sync | `_sync_prices_if_due` | weekly | always runs when due | [Settings](../user-guide/05-settings.md#costs) |
 | 5 | Retention sweep | `_sweep_retention` | hourly | either retention key is above 0 | [Rendering and Review](11-rendering-and-review.md#retention) |
-| 6 | Checkpoint notifications | `_sweep_notifications` | every tick | a webhook and at least one trigger are set | [The Pipeline](02-pipeline.md#notifications) |
+| 6 | Notifications: the three checkpoints, a partial publish, `FAILED` | `_sweep_notifications` | every tick | a webhook and at least one trigger are set | [The Pipeline](02-pipeline.md#notifications) |
 | 7 | Stalled-voicing check | `_sweep_stalled_voicing` | every tick | the pipeline is not paused | [The Pipeline](02-pipeline.md#script_ready--the-money-checkpoint) |
 | 8 | Render lease sweep | `_sweep_render_leases` | every tick | a `RENDERING` video, not yet uploaded, whose lease has run out or which no renderer holds | [Rendering and Review](11-rendering-and-review.md#leases-restarts-and-lost-renderers) |
 | 9 | GPU-wait sweep | `_sweep_gpu_waits` | every tick | a GPU-only video is queued and no renderer that could take it is online | [Rendering and Review](11-rendering-and-review.md#videos-that-render-on-the-gpu-only) |

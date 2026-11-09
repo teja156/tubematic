@@ -20,6 +20,7 @@ const STATUS_ACCENT: Record<VideoStatus, string> = {
   SCHEDULED:                "#38bdf8",
   PUBLISHING:               "#4ade80",
   PUBLISHED:                "#65d27a",
+  PARTIALLY_PUBLISHED:      "#fbbf24",
   FAILED:                   "#ff3b3b",
 };
 
@@ -39,7 +40,7 @@ interface KanbanCardProps {
 
 export function KanbanCard({ video, accent, onAction, onOpenModal }: KanbanCardProps) {
   const showProgress = video.status === "VOICING" || video.status === "VOICE_READY" || video.status === "RENDER_QUEUED" || video.status === "RENDERING";
-  const showThumb = video.status === "VIDEO_READY" || video.status === "VIDEO_APPROVED" || video.status === "SCHEDULED" || video.status === "PUBLISHING" || video.status === "PUBLISHED";
+  const showThumb = video.status === "VIDEO_READY" || video.status === "VIDEO_APPROVED" || video.status === "SCHEDULED" || video.status === "PUBLISHING" || video.status === "PUBLISHED" || video.status === "PARTIALLY_PUBLISHED";
   const isProposed = video.status === "TOPIC_PROPOSED";
   const isScriptReady = video.status === "SCRIPT_READY";
   const isVideoReady = video.status === "VIDEO_READY";
@@ -108,6 +109,11 @@ export function KanbanCard({ video, accent, onAction, onOpenModal }: KanbanCardP
               ▶ LIVE
             </div>
           )}
+          {video.status === "PARTIALLY_PUBLISHED" && (
+            <div style={{ position: "absolute", bottom: 6, right: 8, fontFamily: "var(--mono)", fontSize: 10, background: "rgba(0,0,0,0.7)", color: STATUS_ACCENT.PARTIALLY_PUBLISHED, padding: "1px 5px", letterSpacing: "0.04em" }}>
+              ◐ PARTIAL
+            </div>
+          )}
         </div>
       )}
 
@@ -151,6 +157,18 @@ export function KanbanCard({ video, accent, onAction, onOpenModal }: KanbanCardP
         )}
         {video.status === "PUBLISHED" && (
           <span style={{ color: "var(--green)" }}>LIVE</span>
+        )}
+        {/* Live on some accounts, failed on others (TMDEV-191): it shares the
+            Published column, so this tag is what says a human still owes it
+            an upload. */}
+        {video.status === "PARTIALLY_PUBLISHED" && (
+          <span
+            data-testid={`kanban-card-partial-${video.id}`}
+            title="Published to some accounts, failed on others. Open it to post the rest by hand."
+            style={{ color: STATUS_ACCENT.PARTIALLY_PUBLISHED }}
+          >
+            PARTIAL
+          </span>
         )}
         {video.agent_stuck_at && !video.archived_at && (
           <span

@@ -289,7 +289,7 @@ and the dashboard has no business overwriting it.
 | Status | Cause |
 |---|---|
 | `200` | Updated row plus `comments[]` |
-| `400` | Any of `voice_file_path`, `timeline_path`, `scene_config_path`, `video_path` present, with nothing applied; unknown-only body (`No updatable fields provided`); `status` not one of the 15 valid values; non-string or over-70-character `title`; `agent_id` blank, non-string, unknown or uninstalled (unless it is the video's current agent); `agent_model` containing a space or leading `-`; `agent_model` not one of the video's agent's models, or that agent uninstalled or not installed; `voice_id` not on the roster; `script_profile_id` not a non-archived `READY` profile; `visual_style` not one of `auto` / `motion_graphics` / `stick` / `illustrated` / `cartoon_3d`; `visual_style` of `illustrated` while no OpenAI key is stored; `agent_effort` not one of `low` / `medium` / `high` / `xhigh` / `max` or blank; `script` without both `publish_title` and `publish_description`; either of those non-string, blank, or over its cap (100 / 2000) — the same rule as MCP `update_video`, see [Publishing](14-publishing.md#schema) |
+| `400` | Any of `voice_file_path`, `timeline_path`, `scene_config_path`, `video_path` present, with nothing applied; unknown-only body (`No updatable fields provided`); `status` not one of the 16 valid values; non-string or over-70-character `title`; `agent_id` blank, non-string, unknown or uninstalled (unless it is the video's current agent); `agent_model` containing a space or leading `-`; `agent_model` not one of the video's agent's models, or that agent uninstalled or not installed; `voice_id` not on the roster; `script_profile_id` not a non-archived `READY` profile; `visual_style` not one of `auto` / `motion_graphics` / `stick` / `illustrated` / `cartoon_3d`; `visual_style` of `illustrated` while no OpenAI key is stored; `agent_effort` not one of `low` / `medium` / `high` / `xhigh` / `max` or blank; `script` without both `publish_title` and `publish_description`; either of those non-string, blank, or over its cap (100 / 2000) — the same rule as MCP `update_video`, see [Publishing](14-publishing.md#schema) |
 | `404` | Video not found |
 | `409` | The video is archived — an archived row is frozen, so a `PATCH` cannot move it back into the pipeline |
 | `409` | `script_profile_id`, `visual_style` or `mascot_id` present while the video is past `TOPIC_PROPOSED`; an approving `PATCH` while the video's mascot is archived |
@@ -365,7 +365,7 @@ most one session at a time. A report with no key is counted every time.
 | Status | Cause |
 |---|---|
 | `200` | `{"status", "count", "stuck", "replayed"}` — the video's status now, its no-progress count, whether it is stuck, and whether this report repeated an already-counted `session_key` |
-| `400` | `start_status` missing or not one of the 15 valid values; `session_key` not a string of 1 to 100 characters |
+| `400` | `start_status` missing or not one of the 16 valid values; `session_key` not a string of 1 to 100 characters |
 | `404` | Video not found |
 
 An archived video is reported as it stands and never counted.
@@ -436,12 +436,12 @@ whole tree, the same reason `DELETE` refuses to remove one. See [Retention](11-r
 ## Settings
 
 ### `GET /settings`
-Returns all 42 declared keys, coerced to their types, with `secret` keys masked. See
+Returns all 44 declared keys, coerced to their types, with `secret` keys masked. See
 [Settings](../user-guide/05-settings.md). There is no install-wide model or pronunciation mode: each voice in
 `elevenlabs_voices` carries its own `model_id`.
 
 ### `POST /settings`
-Body: any subset of the 42 keys.
+Body: any subset of the 44 keys.
 
 - An unknown key returns `400 {"error": "Unknown settings: [...]. Valid: [...]"}`.
 - **The whole write is atomic.** Every value is coerced first; the first failure returns `400` with
@@ -719,11 +719,11 @@ Three sets drive routing. All three are duplicated in `mcp/server.py` and
 `dashboard/lib/types.ts` and carry `# Keep in sync` comments.
 
 ```python
-VALID_VIDEO_STATUSES = {           # 15 — everything a status column may hold
+VALID_VIDEO_STATUSES = {           # 16 — everything a status column may hold
     "TOPIC_PROPOSED", "TOPIC_APPROVED", "TOPIC_REJECTED", "SCRIPT_READY",
     "VOICING", "VOICE_READY", "RENDER_QUEUED", "RENDERING", "VIDEO_READY",
     "VIDEO_APPROVED", "REVISION_REQUESTED", "SCHEDULED", "PUBLISHING", "PUBLISHED",
-    "FAILED",
+    "PARTIALLY_PUBLISHED", "FAILED",
 }
 
 ACTIONABLE_STATUSES = {            # 3 — a human decides (or Auto Pilot, per project)

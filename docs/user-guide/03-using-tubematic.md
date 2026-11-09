@@ -14,7 +14,8 @@ Open the **Pipeline** page. **Quick Actions** lists every video that needs a dec
 grouped as Topic Proposed, Script Ready and Video Ready.
 
 Tubematic can also tell you. On **Settings → Notifications**, enter a Discord webhook URL and choose
-which events send a message: new topics, a script ready, a video ready.
+which events send a message: new topics, a script ready, a video ready, a publish that partly
+failed, a video that failed.
 
 ### 2. Decide on topics
 

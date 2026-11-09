@@ -61,13 +61,15 @@ Every video has a status. The dashboard shows it as a column on the **Pipeline**
 | Video Approved | The video is finished | You, if you publish |
 | Scheduled | A post is waiting for its time | Tubematic |
 | Publishing | A post is going out | Tubematic |
-| Published | At least one account has the post | Nobody |
+| Partially Published | Some accounts have the post and some failed | You |
+| Published | Every account has the post | Nobody |
 | Revision Requested | The video is back with the agent for changes | The agent |
 | Rejected | You rejected the topic | Nobody |
 | Failed | The video could not be rendered or published | You |
 
 The developer docs and the logs write statuses as constants, such as `SCRIPT_READY`. A video waiting
-for a renderer has the status `RENDER_QUEUED`, which the dashboard shows under Rendering.
+for a renderer has the status `RENDER_QUEUED`, which the dashboard shows under Rendering. A
+Partially Published video is shown under Published, with a **PARTIAL** tag.
 
 ## What it costs and how long it takes
 
