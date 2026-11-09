@@ -55,7 +55,12 @@ _TICKET_ID_RE = re.compile(r"\b(?:TMDEV|VQA|EXQA)-\d+\b")
 # linking into docs/) and a bare filename (docs/19 linking to a sibling
 # page the way every file inside docs/ addresses another). A pure in-page
 # anchor like "(#rollback-policy)" has no ".md" in it and never matches.
-_MD_LINK_RE = re.compile(r"\]\(([^)\s]+\.md)(?:#[^)\s]*)?\)")
+# An image a page shows is the same kind of link and is held to the same
+# rule: a screenshot that is not in the archive is a broken picture for the
+# reader who has only the tarball.
+_MD_LINK_RE = re.compile(
+    r"\]\(([^)\s]+\.(?:md|png|jpe?g|gif|svg|webp))(?:#[^)\s]*)?(?:\s+\"[^\"]*\")?\)")
+_CODE_SPAN_RE = re.compile(r"`[^`\n]*`")
 _EXTERNAL_LINK_PREFIXES = ("http://", "https://", "mailto:")
 
 # Every path the brief's allowlist requires to be present, spelled as the
@@ -91,6 +96,7 @@ ALLOWLISTED_PATHS = [
     "docs/release-notes.md",
     "docs/user-guide/07-upgrading.md",
     "docs/developer/01-architecture.md",
+    "docs/images/walkthrough.png",
     "agent_files/skills",
     "agent_files/claude/commands",
     "uninstall.py",
@@ -230,6 +236,8 @@ def test_no_relative_docs_links_point_outside_the_archive(built):
             except UnicodeDecodeError:
                 continue
             member_dir = posixpath.dirname(member.name)
+            # Markdown inside a code span is an example of the syntax, not a link.
+            text = _CODE_SPAN_RE.sub("", text)
             for target in _MD_LINK_RE.findall(text):
                 if target.startswith(_EXTERNAL_LINK_PREFIXES) or target.startswith("/"):
                     continue
