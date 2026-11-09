@@ -42,8 +42,9 @@ install_auth(app, read_secret("api_token"))
 def start_render_gateway():
     """Make sure the built-in renderer's row exists, then serve the render
     gateway (render_gateway.py) over TLS in a daemon thread. Returns the
-    server, or None when the gateway's TLS pair is missing: then renderers
-    cannot reach the API, but the API still serves the dashboard."""
+    server, or None when the gateway cannot start (its TLS pair missing or
+    unusable, its port taken): then renderers cannot reach the API, but the
+    API still serves the dashboard."""
     db_path = os.getenv("TUBEMATIC_DB", "/data/tubematic.db")
     # The migration creates the row; this restores one a hand edit removed.
     # create_pipeline_blueprint() above has already migrated the database.

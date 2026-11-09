@@ -1845,6 +1845,20 @@ def test_an_unusable_tls_pair_means_no_gateway_server(env, tmp_path, caplog, dam
     assert {n: (tls / n).read_text() for n in tauth.TLS_NAMES} == before
 
 
+def test_a_port_that_cannot_be_bound_means_no_gateway_server(env, tmp_path, caplog):
+    """werkzeug answers a failed bind with sys.exit(1): that must not end the
+    API process, which serves the dashboard too."""
+    import socket
+    tls = tmp_path / "tls"
+    tauth.ensure_secrets(tls)
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        port = taken.getsockname()[1]
+        assert render_gateway.make_gateway_server(env.app, "127.0.0.1", port, secrets_dir=tls) is None
+    assert f"render gateway not started: it cannot listen on port {port}" in caplog.text
+
+
 # ── server.py starts it ───────────────────────────────────────────────────────
 
 @pytest.fixture
@@ -1904,4 +1918,20 @@ def test_the_api_runs_without_the_gateway_when_its_tls_pair_is_unusable(api_serv
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(server.app, "run", lambda **kw: ran.append(kw))
         server.main()
+    assert ran and ran[0]["port"] == 4000        # the dashboard's API still serves
+
+
+def test_the_api_runs_without_the_gateway_when_its_port_is_taken(api_server, monkeypatch, caplog):
+    import socket
+    server, _, _ = api_server
+    with socket.socket() as taken:
+        taken.bind(("0.0.0.0", 0))
+        taken.listen()
+        monkeypatch.setenv("TUBEMATIC_GATEWAY_PORT", str(taken.getsockname()[1]))
+        assert server.start_render_gateway() is None
+        assert "cannot listen on port" in caplog.text
+        ran = []
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(server.app, "run", lambda **kw: ran.append(kw))
+            server.main()
     assert ran and ran[0]["port"] == 4000        # the dashboard's API still serves
