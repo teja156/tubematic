@@ -782,7 +782,7 @@ Filenames are built from an allowlisted service name plus a date; nothing from t
 path. Malformed lines are skipped rather than failing the request, since a half-written final line is
 normal in a file being appended to. Retention is a writer's concern: this endpoint reads whatever
 files still exist and never deletes one. See [Settings](../user-guide/05-settings.md#logs) and
-[Troubleshooting](../user-guide/08-troubleshooting.md#logs).
+[Troubleshooting](16-infrastructure.md#the-log-files).
 
 ---
 

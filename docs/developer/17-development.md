@@ -262,7 +262,7 @@ Maintainer-only host CLIs for cutting a release. None of them run inside a conta
 normal install — they exist for whoever builds a release tarball and publishes it. This is a
 reference for what each one does. How a release fits together — its artifacts, release branches,
 image tags and what it expects of migrations — is [Releases](18-releases.md); the versioning and
-rollback policies are in [Upgrading](../user-guide/07-upgrading.md#versioning).
+rollback policies are in [Upgrading](../user-guide/07-upgrading.md#version-numbers).
 
 Every one of them reads the version through `tubematic_core.version.version()` — backed by the
 `VERSION` file at the repo root — rather than a literal, so a release script can never disagree with
@@ -274,7 +274,7 @@ what the running services report.
 | `scripts/migrate_db.py` | Runs `tubematic_core.db.migrate()` against a database from the host, outside any container. `--allow-no-backup` skips the pre-migration snapshot and prints a visible warning — the database's `settings` table is the credential store, so disabling its backup must never be silent |
 | `scripts/backup_db.py` | Takes an unconditional snapshot with `tubematic_core.db.backup_db()`, independent of any pending migration — a manual "back this up right now" |
 | `scripts/gen_release_compose.py` | Turns `docker-compose.yml` into the form a release install runs. Exactly two mechanical transformations: every `build:` section (and every service that reuses that locally-built image without a `build:` key of its own) becomes a pinned `ghcr.io/<owner>/tubematic-<role>:<version>` image, and every published port is forced onto a `127.0.0.1:` binding. Everything else — volumes, environment, healthchecks, `depends_on`, `restart`, `container_name`, the top-level `name:` — passes through untouched, which is the entire point: it is what stops the release compose becoming a second, silently-drifting copy of the development one. Owns the single definition of "a valid release version" (`check_version_is_tag_safe`): the version is interpolated straight into the image tag with no escaping, so a legal-SemVer `+build metadata` suffix — illegal in a Docker tag — is refused outright rather than emitted into a compose file every service then fails to pull. It also accepts the development branch's `develop` marker, which is tag-safe; refusing to *release* that is `check_release.py`'s job |
-| `scripts/build_release_tarball.py` | Builds `dist/tubematic-v<version>.tar.gz`, the artifact a release install downloads — see [Installing — Two ways to install](../user-guide/02-installing.md#two-ways-to-install). Built from an explicit allowlist, never a copy of the repo: the checkout also holds `renderer/`, `dashboard/`, `mcp/`, `vqa/`, `.env`, and other things a public download must never carry. Reproducible — the same commit built twice is byte-identical — so the archive's own `CHECKSUMS.txt` means something |
+| `scripts/build_release_tarball.py` | Builds `dist/tubematic-v<version>.tar.gz`, the artifact a release install downloads — see [Installing — Two ways to install](../user-guide/02-installing.md#ways-to-install). Built from an explicit allowlist, never a copy of the repo: the checkout also holds `renderer/`, `dashboard/`, `mcp/`, `vqa/`, `.env`, and other things a public download must never carry. Reproducible — the same commit built twice is byte-identical — so the archive's own `CHECKSUMS.txt` means something |
 | `scripts/check_release.py <version>` | Maintainer pre-flight. Reports every failing check in one pass instead of stopping at the first, accepts either `1.2.3` or `v1.2.3`, checks the version is tag-safe (reusing `gen_release_compose`'s definition, not restating it), mechanically enforces that no migration file git already has committed history for has since been modified, and — reusing the real builder against a scratch directory rather than restating its rules — that the tarball's exclusions actually hold, not just that its allowlist is satisfiable |
 | `scripts/release.py <version>` | Thin orchestrator: runs `check_release`'s checks, builds the tarball, and prints a release-notes skeleton plus — never runs — the `git tag`/push commands. It does **not** bump `VERSION`: that is a separate, reviewed commit a maintainer makes first, since bumping it here and then checking it would make `check_release`'s "VERSION matches" check vacuous. It does **not** create a tag or push, either — pushing the tag is what actually triggers the release ([Continuous Integration](#continuous-integration), below), and a script that tags on its own can ship a release nobody approved |
 
@@ -488,27 +488,66 @@ none. Symlink them from the main checkout to run the JS suites without a second 
 
 ## Keeping the docs true
 
-Every change that touches behaviour touches `docs/`. The rules that keep it from rotting:
+`docs/` is public. Its readers have not seen the code or the project's history. A change that
+touches behaviour is finished when the docs describe the new behaviour, on every page that mentions
+it.
 
-- **Cite symbols, never line numbers.** `pipeline.py::patch_video`, never a file path with a line number appended.
-- **No test counts, suite totals, or "as of" dates.** They are wrong within a week.
-- **Every path, route, tool name and settings key must exist.** Verify mechanically, not by reading.
-- **No links into `plan/` or `code_review/`** — they are internal and gitignored.
-- **No ticket identifiers.** Traceability lives in `git log`.
-- **No host paths, usernames, or credentials**, including in examples.
-- **Write for the page's audience, once.** `docs/user-guide/` says what a person running Tubematic
-  does and sees; `docs/developer/` says how it works and how to change it. Each explanation lives on
-  one page and the other links to it. Pages are numbered within their folder, and a new page needs a
-  row in `docs/README.md`.
-- **Shipped pages link only to shipped pages.** The release tarball carries `docs/README.md`,
-  `docs/quickstart.md`, `docs/release-notes.md`, `docs/user-guide/` and `docs/developer/`, and the
-  build fails on a link from one of them to anything else.
+### What to update
 
-A change that adds an MCP tool, an HTTP route, a settings key, a status, a schema column, an
-installed component, or a skill rule is **not finished** until the corresponding page reflects it —
-and until the neighbouring claims that the change invalidated have been re-checked. The count of MCP
-tools in `docs/developer/06-mcp-server.md` is the canonical example: it is wrong the moment a tool is added and
-nothing but a person will notice.
+When you add, change or remove one of these, search `docs/` for its name and fix every page that
+mentions it:
+
+- an MCP tool or its parameters,
+- an HTTP route, its request body, its response or its status codes,
+- a settings key, its type or its default,
+- a status or a transition,
+- a database table, column or migration,
+- an installed component or the shape of `scene-config.json`,
+- a skill, a slash command, or an onboarding step or question,
+- a Compose service, volume, port or image.
+
+A change often makes a sentence on a neighbouring page false. The tool count in
+[MCP Server](06-mcp-server.md) is one example: a test compares it with the code.
+
+### Facts
+
+- Cite code by symbol, such as `pipeline.py::patch_video`. Do not cite line numbers.
+- Give no test counts, suite totals or dates.
+- Every path, route, tool name and settings key in the docs must exist in the code. Check with
+  `grep`.
+- Use no ticket identifiers, host paths, user names or credentials, including in examples.
+- Link only to pages under `docs/`. The release tarball ships `docs/README.md`,
+  `docs/quickstart.md`, `docs/release-notes.md`, `docs/user-guide/`, `docs/developer/` and
+  `docs/images/`, and its build fails on a link from one of those to anything else.
+- Draw diagrams as `mermaid` code fences. Put screenshots in `docs/images/` and link them with a
+  relative path.
+
+### Where things go
+
+- `docs/user-guide/` says what a person running Tubematic does and sees. It uses the labels on the
+  dashboard.
+- `docs/developer/` says how Tubematic works and how to change it. It uses the names in the code.
+- Each explanation has one page that owns it. Other pages give one sentence and a link.
+- Pages are numbered inside their folder. A new page takes the next number and needs a row in
+  `docs/README.md`.
+- Version history belongs in the [release notes](../release-notes.md). Other pages describe
+  Tubematic as it is now.
+
+### Writing
+
+- Address the reader as "you", in the active voice. Software can be the subject of what software
+  does: "the wizard asks", "the API returns `409`".
+- Give one instruction per sentence, with its condition first.
+- State what something is. Avoid defining it by what it is not.
+- Use "never", "always" and "every" only where the code enforces the claim.
+- When a design looks wrong, give its reason in one sentence beside it. Leave out the story of how
+  the reason was found.
+- Use bold for the names of on-screen controls. Do not open a paragraph with a bold sentence.
+- Use full stops, commas and colons. Do not use em dashes.
+- Leave out words that add emphasis and no meaning: "simply", "actually", "exactly", "silently",
+  "deliberately", "on purpose", "by design".
+- Keep a table cell to a phrase or a sentence or two. Put anything longer under a heading.
+- Write host commands with `python3`, run from the install directory.
 
 ---
 

@@ -154,7 +154,7 @@ docker compose logs -f tubematic-worker
 
 Every line is prefixed `[worker]`, and a line about one video carries its id in brackets. The same
 records go to the structured log the dashboard's Logs page reads, under the `worker` service; see
-[Troubleshooting](../user-guide/08-troubleshooting.md#logs).
+[Troubleshooting](16-infrastructure.md#the-log-files).
 
 A quiet log on an idle install is normal: a pass with nothing to do logs nothing.
 

@@ -350,7 +350,7 @@ segmented ([Rendering and Review](11-rendering-and-review.md#segmented-cartoon-3
 A mascot is an optional on-screen character that **reacts** to the narration: it walks on, shows an
 emotion, glances at something, hops, walks off. It never speaks and is never the narrator. A video
 has one when a human picked it at the topic checkpoint (see
-[Mascots](../user-guide/04-dashboard.md#mascots) for the person's side). The per-video agent **never
+[Mascots](../user-guide/13-visual-styles-and-mascots.md#mascots) for the person's side). The per-video agent **never
 writes drawing code**. The mascot's code was written once and approved by a human
 ([Mascot authoring](06-mcp-server.md#mascot-authoring)); the video's agent writes only data, a cue
 track under the scene-config's top-level `mascot` key:

@@ -714,7 +714,7 @@ how success is judged, timeouts and orphaned sessions, and the logs.
 ### User preferences
 
 The operator can write standing preferences for every video on the dashboard's Preferences tab
-(the [`user_preferences`](../user-guide/05-settings.md#user-preferences) setting). They reach the agent by one of
+(the [`user_preferences`](../user-guide/05-settings.md#preferences) setting). They reach the agent by one of
 two routes, depending on how the run started:
 
 - **Scheduled runs.** The poller reads the setting at most once per pass, and only when it is about

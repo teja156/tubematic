@@ -60,7 +60,7 @@ to get it wrong.
 its counter and truncates input at the cap. Both count **code points**, which is what Python's
 `len()` counts. A textarea's `maxLength` was deliberately not used: it counts UTF-16 units, two per
 emoji, so it would stop input well before the limit the API allows. Why the cap exists at all is on
-the [settings reference](../user-guide/05-settings.md#user-preferences).
+the [settings reference](../user-guide/05-settings.md#preferences).
 
 ---
 
@@ -251,7 +251,7 @@ to a person running Tubematic is in the user guide's [Settings](../user-guide/05
 | `render_stall_timeout_secs` | int | `600` | How long the render's progress counter may stand still before the render is judged hung and retried. Remotion reports every frame it renders and encodes; a healthy render advances every few seconds, a wedged browser never does, so this catches a hang in minutes whatever the video's length. Minimum 60; neither setting needs a restart |
 | `max_render_retries` | int | `1` | Render **crash and timeout** retries only. A render lost to a renderer restart, or to a renderer that stopped reporting, counts as a failure too |
 | `text_layout_audit_enabled` | bool | `true` | Kill switch for the advisory text-overlap and safe-zone audit inside `validate_job` |
-| `default_mascot_id` | str | `''` | Experimental. The mascot a new video starts with, unless its domain says otherwise. `''` means none, which is what every install starts with. Set it on Settings → Rendering, where the choices are the approved mascots and are greyed out while no renderer's GPU is working; a new default is refused then too, from any client. A mascot that has since been archived (or was never approved) reads back as `''` and is refused on write. A domain's own default overrides it, and a video's pick at the topic checkpoint overrides both. See [Mascots](../user-guide/04-dashboard.md#mascots) |
+| `default_mascot_id` | str | `''` | Experimental. The mascot a new video starts with, unless its domain says otherwise. `''` means none, which is what every install starts with. Set it on Settings → Rendering, where the choices are the approved mascots and are greyed out while no renderer's GPU is working; a new default is refused then too, from any client. A mascot that has since been archived (or was never approved) reads back as `''` and is refused on write. A domain's own default overrides it, and a video's pick at the topic checkpoint overrides both. See [Mascots](../user-guide/13-visual-styles-and-mascots.md#mascots) |
 | `watermark_enabled` | bool | `true` | Burns the "Made with tubematic.ai" mark into every render. Sent to the renderer with each video it is handed, so it affects later renders only. **A setting rather than a `scene-config.json` key on purpose** — see [Watermark](09-remotion-project.md#watermark) |
 
 Which GPU renders, if any, is **not** a setting: a container's GPU is fixed when it is created, so it
@@ -447,11 +447,11 @@ publishing stays human-driven. See [Publishing](../user-guide/06-publishing.md).
 |---|---|---|---|
 | `auto_pilot_enabled` | bool | `false` | Lets the worker approve every human checkpoint and post the video, for the projects selected on Settings → Auto Pilot. On with no project selected, it does nothing |
 | `auto_pilot_gap_mins` | int | `240` | The shortest time between two posts on one account, in minutes. 0 to 10080 (a week). The dashboard takes minutes or hours |
-| `auto_pilot_max_in_flight` | int | `0` | How many videos may be in progress before Auto Pilot stops voicing new scripts and approving topics: voiced and unpublished videos in Auto Pilot projects, plus every post waiting to go out, including posts scheduled by hand. Finished videos are still approved and scheduled. Size it in days of posting. 0 to 500; 0 means no limit. Was `auto_pilot_max_scheduled` before v1.2.3. See [Publishing → the in-progress limit](../user-guide/06-publishing.md#the-in-progress-limit) |
+| `auto_pilot_max_in_flight` | int | `0` | How many videos may be in progress before Auto Pilot stops voicing new scripts and approving topics: voiced and unpublished videos in Auto Pilot projects, plus every post waiting to go out, including posts scheduled by hand. Finished videos are still approved and scheduled. Size it in days of posting. 0 to 500; 0 means no limit. Was `auto_pilot_max_scheduled` before v1.2.3. See [Publishing → the in-progress limit](../user-guide/14-auto-pilot.md#the-in-progress-limit) |
 
 All three are edited on **Settings → Auto Pilot**, which saves them through `POST /autopilot` together
 with the project list, behind a confirmation. `POST /settings` accepts them as well, with no
-confirmation. Read [Auto Pilot](../user-guide/06-publishing.md#auto-pilot) before turning it on: it spends money
+confirmation. Read [Auto Pilot](../user-guide/14-auto-pilot.md) before turning it on: it spends money
 and posts publicly with no human review.
 
 ### Notifications

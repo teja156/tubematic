@@ -193,7 +193,7 @@ these checks leave open.
 
 Rendered videos and their job directories (audio, timeline, scene config, images) are kept until
 something deletes them. The retention sweep does that for **published** videos, `retention_days`
-(default 7, see [Settings](../user-guide/05-settings.md#video-retention)) after they were published. If
+(default 7, see [Settings](../user-guide/05-settings.md#retention)) after they were published. If
 `unpublished_retention_days` is set (default 0, off), it does the same for **failed and rejected**
 videos that many days after they last changed. Either way it removes the mp4 and the job directory,
 clears `video_path`, and sets `archived_at`. The status is left as it was. The row is kept, and so are

@@ -691,7 +691,7 @@ health check or, for the worker and the renderer, is not running. Read-only `doc
 
 To pick up code changes, run `upgrade.py`, not a bare build and `up -d`. It stops the whole stack
 between the build and the start, so new code never migrates the database while old code is still
-running against it — see [Upgrading](../user-guide/07-upgrading.md#upgrading--user-instructions)
+running against it — see [Upgrading](../user-guide/07-upgrading.md#when-it-stops)
 for the full sequence.
 
 Remember what is baked in: `renderer/api/`, `mcp/`, the dashboard, and the Remotion `src/` tree —

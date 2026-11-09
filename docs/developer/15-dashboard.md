@@ -467,7 +467,7 @@ the comment has already been saved.
 ## The settings page
 
 What each tab holds, from the user's side, is in
-[The Dashboard — The settings page](../user-guide/04-dashboard.md#the-settings-page), and every key
+[The Dashboard — The settings page](../user-guide/05-settings.md), and every key
 is in [Settings](../user-guide/05-settings.md).
 
 **The pause switch sits above the tabs and applies immediately with no Save button.** Pause and

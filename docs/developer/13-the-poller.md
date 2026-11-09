@@ -381,6 +381,6 @@ parsers still read the complete output. A rejection printed after 4,000 characte
 still be caught.
 
 The poller also writes a structured `poll.<date>.jsonl` to the shared log directory, so its sessions
-show on the dashboard's Logs page — see [Troubleshooting](../user-guide/08-troubleshooting.md#logs). It is the one
+show on the dashboard's Logs page — see [Troubleshooting](16-infrastructure.md#the-log-files). It is the one
 writer there that runs as the host user rather than as root in a container, so it needs write access
 to `~/.tubematic-data/logs`. If it does not have it, `poll.log` says so every time the poller starts.
