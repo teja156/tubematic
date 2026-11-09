@@ -764,3 +764,88 @@ pre-migration data location kept ignored only so an un-migrated checkout does no
 untracked.
 
 Pipeline data is outside the checkout entirely and is therefore not a gitignore concern.
+
+---
+
+## Diagnosing a problem from the code's side
+
+[Troubleshooting](../user-guide/08-troubleshooting.md) in the user guide lists symptoms a person
+running Tubematic sees. The cases below need knowledge of the internals.
+
+**`validate_job` fails.**
+
+| Error | Cause |
+|---|---|
+| `Cannot find module '../installed/…'` | Wrong import depth. Generated scenes are two levels down — use `../../` |
+| A TypeScript error in a file you did not touch | The typecheck covers the **whole project**. A broken scene from any video blocks every render |
+| Frame count mismatch | `scene-config.totalFrames` must equal `timeline.totalFrames`. Usually a re-voice that changed the audio length |
+| An image path does not resolve | Image props must be `/public/<video_id>/images/…` and the file must exist |
+| `missing job file(s)` | The named file is not in `/jobs/<video_id>/`, or its path column is still empty because that step never finished. The render gateway looks only there when a renderer asks for the video — it derives the location from the id and ignores the stored path, so host paths in the database are harmless. A script driving the MCP server from a host shell must write into the same jobs volume (`~/.tubematic-data/jobs`, the default outside a container) |
+| `Render refused, moved to FAILED` | The video's id, or its project's id, cannot be used as a file path — for example a project id of `..`, which would put the render outside `/output_videos`. New ids are checked when created, so this means a row from before that check. No route changes a video's project, so the fix is an edit to the row in the database, or deleting the video |
+
+**A scene renders as a flat dark rectangle.** Its dynamic import failed. `GeneratedScene` logs to the
+console and continues rather than failing the render, so the video comes back with a silent gap.
+`validate_job` is the layer that should have caught it — check whether it was run.
+
+**Review reports a mispronunciation on a word you deliberately respelled.** The reviewer is sent both
+the authored script and the spoken `tts_text` precisely so this does not happen. If `tts_text` is
+empty on the video, the comparison has nothing to work with.
+
+**`ELEVENLABS_API_KEY not set` from a host script.** Keys live in the settings table, not the
+environment. A standalone script must read them from the database.
+
+**Video will not play.** The stream route serves only `.mp4` and `.mp3` files that really live
+under `/output_videos`, and answers `404` for anything else: a path that escapes it, a file that is
+not there, a symlink (or a symlinked directory) whose target is outside it, a directory, and any
+other extension. The player asks for `/stream/<project_id>/<video id>.mp4` whatever `video_path`
+says, so confirm a regular file exists at `/output_videos/<project_id>/<video id>.mp4` inside the
+container (`default_proj` for a video with no domain), not a link to one elsewhere. A `416` means the browser asked for a byte range past
+the end of the file, which usually means the file was replaced while it was open: reload the page.
+A `401` instead means the session expired: sign in again.
+
+**Every publishing route returns `503`.** Same cause: publishing disabled, or no key. Both are
+checked before any outbound call.
+
+**A publish returned `502` with `"reconciling": true`.** The post-creation call was ambiguous — it
+may have succeeded after the response was lost. **Do not retry.** The video stays `PUBLISHING` and
+the worker reconciles it by looking the post up by the video's own id: at once if the post exists,
+or it fails the video after the one-hour publish deadline if it does not.
+
+**`entrypoint: … is root-owned — falling back to world-writable`.** Something created the data
+directory before onboarding did — usually a bare `docker compose up`. Fix the ownership on the host.
+
+**Disk filling up.** Rendered video and `node_modules` dominate. Measure with `df -h /`, not
+`docker system df`, whose per-image sizes double-count shared layers. With the containerd
+snapshotter, image layers are not under `/var/lib/docker` at all.
+
+**A tool call's level says whether it failed, and why.** Most MCP tools fail by *returning* an error
+to the agent rather than crashing, so each call's one record carries an `outcome`, and its level
+follows the cause:
+
+| Level | `outcome` | Meaning |
+|---|---|---|
+| `error` | `error` | A paid provider call failed: ElevenLabs, Gemini or OpenAI answered with an error, sent a `200` with nothing usable in it, or never answered at all |
+| `error` | `partial` | The tool finished, but a provider call inside it failed. Mining carries on past a failed video URL |
+| `error` | `exception` | The tool itself crashed |
+| `warning` | `error` | The tool refused before any paid call, e.g. a paused or expired domain, a frozen field or an empty prompt. This is the agent being told no, not something broken |
+| `info` | `ok` | Success |
+
+A provider failure's line names the provider, model, HTTP status (or "no response") and the
+provider's reply, truncated and with credentials removed. For mining it also names the video URL.
+The same details sit in the record's `provider_service`, `provider_model`, `provider_operation`,
+`provider_status`, `provider_body` and `provider_detail` fields, for `jq`. Filtering the Logs page
+to level `error` therefore shows the incidents, not the refusals. To see refusals as well, search
+for `outcome`.
+
+### The log files
+
+Every service writes one JSONL file per day to `~/.tubematic-data/logs`, mounted `/logs` in the
+containers:
+
+```
+api.2026-09-06.jsonl        Flask — one record per request, with a request_id; the render gateway too
+mcp.2026-09-06.jsonl        one record per tool call, with its duration and outcome
+worker.2026-09-06.jsonl     the worker: AI review, publishing, Auto Pilot, notifications, retention
+renderer.2026-09-06.jsonl   the renderer, tagged with video_id
+poll.2026-09-06.jsonl       the cron poller, which runs on the host
+```
