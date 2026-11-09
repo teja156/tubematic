@@ -482,8 +482,8 @@ Where the line is drawn, and why:
 - A refusal names a rule or a line number and does not quote the text it found, because on the
   read side the message reaches the agent.
 
-`mcp/tests/test_script_profiles.py` pins every accepted and refused form, and
-[the MCP test suite page](test-suites/mcp.md) lists them.
+`mcp/tests/test_script_profiles.py` pins every accepted and refused form.
+[The MCP test suite page](test-suites/mcp.md) groups what it guards.
 
 #### What the schema cannot do
 

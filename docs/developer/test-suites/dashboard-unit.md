@@ -1,113 +1,702 @@
 # `dashboard/tests/unit`
 
-Component and route-handler tests for the Next.js dashboard. No browser, no containers, no network —
-everything is mocked at the `fetch` boundary.
+The suite covers the Next.js dashboard's pages, components, route handlers and `lib/` helpers. It
+runs under vitest with `@testing-library/react` and `@testing-library/jest-dom` in happy-dom, with
+`TZ=UTC` set by `vitest.config.ts`. Every test mocks `fetch`, so the suite needs no browser, container or network.
 
 ```bash
 cd dashboard
-npm test                 # vitest
-npm test -- --watch
-npm test -- settings-page
+npm test                      # vitest run
+npm run test:watch
+npm test -- settings-page     # one file
 ```
 
-**Stack:** vitest, `@testing-library/react`, `@testing-library/jest-dom`, jsdom.
+[Dashboard internals](../15-dashboard.md) owns the behaviour these tests guard, and gives the full
+reason behind each trap below. happy-dom does no layout, so widths, wrapping and breakpoints are
+tested in [the end-to-end suite](dashboard-e2e.md).
 
----
+Two rules recur across the entries:
+
+- An untouched picker (one nobody has changed) does not send a value the page worked out
+  ([What each approval sends](../15-dashboard.md#what-each-approval-sends)).
+- A metric nobody reported renders as a dash, because "not reported" and "reported as zero" are
+  different claims.
 
 ## Pages
 
-| File | Covers |
-|---|---|
-| `pipeline-client.test.tsx` | `PipelineClient` — the Kanban board's data loading, polling and action dispatch, including that the OpenAI-key state read from `/settings` reaches `ActionPane`, and the "Nothing can render" banner: shown, with a link to Settings → Rendering, when videos are queued and no renderer can take one — including when the only online renderer's credential has expired (it stays online until its last good heartbeat ages out, yet can claim nothing); not shown while one can, nor when `/renderers` cannot be read |
-| `library-page.test.tsx` | The Library page, including its search and strategy filters. It passes the modal `publishingEnabled` from `/settings`, off until that answers and on a failed read: the Library lists exactly the videos Publish…, Retry publishing and Cancel schedule apply to, and used to pass nothing, so none of them appeared there A `PARTIALLY_PUBLISHED` video is listed under its own **Partially published** state — the page filters on the client, so a status missing from its list never appears. |
-| `projects-page.test.tsx` | The Projects page — project list and the videos filed under each, and that the active/paused badge appears on curriculum seeds only. Pause does not exist on any other domain, so a badge there would describe a state nothing can change. The "expired" badge, by contrast, appears on any domain at its topic cap |
-| `projects-page-action-extra.test.tsx` | That the Projects page forwards the modal's fourth `extra` argument into the approval PATCH. It captures the `onAction` the page hands the modal and invokes it exactly as the Approve Topic button does. Worth its own file because the failure was invisible: the modal renders the pickers on that page, the request succeeds, and the picks are simply absent — and since all four are frozen at approval, they can never be applied afterwards. It also checks that the page hands the modal the voice roster from `/settings`, since without it the modal's voice pickers never render there. It also passes the modal `publishingEnabled` from the same `/settings` read as the voice roster, which used to drop it |
-| `projects-page-agent-picker.test.tsx` | The Projects page with the **real** `VideoModal`, not a stub, on the path where nobody touches the agent picker. The page fetches `/agents`, so the modal offers live agents there. Approving a topic sends no `agent_id`, and approving a script sends no agent field at all, both before and after `/agents` answers — a guessed value submitted as an explicit one is the defect this exists for, and a live test that always touched the picker could not catch it. A picked agent does reach the PATCH, with that agent's default model, as the negative control |
-| `topics-page.test.tsx` | The Topics page: mining sources, and the domain pause control. A refused mining save shows the API's own message, which names the bad entries, rather than a generic failure, and a successful one lists what the API stored rather than what the page sent. The control and its badge appear only on a curriculum seed and carry the "Pause topic generation" label. A plain "Pause" is what made the broader reading, stopping a subject everywhere, look plausible. A refused pause is alerted rather than shown as success. The Mining toggle is greyed out with its reason on hover when `GET /research/strategies` reports `mining_available: false`, and usable when it reports true; a refused toggle shows the API's message and leaves the toggles as they were, since nothing was stored. Also that Illustrated is disabled in both default-style pickers (the domain row's and the add form's) when `/settings` reports no OpenAI key, and offered when one is stored. Each domain row and the add form carry a default-voice picker labelled with each voice's model, and a default that has left the roster stays visible as "(removed)" rather than reading as the install default. **`POST /projects` is a full replace**, so every edit re-sends every field: changing the voice keeps the style, and changing the style keeps the voice. A field missing from the payload is silently cleared by any other edit. The third picker, the default script profile, offers only `READY` profiles, keeps a default that is no longer offered visible as "Unavailable profile" (never its UUID) or, when the list still names it, as that name marked unavailable, is re-sent by a style change, and is sent by the add form. It is capped at 220px on the row and in the add form, because profile names have no length limit and an unbounded select pushed the controls after it off-screen. A label test resolves it by its caption: three unlabelled dropdowns side by side read as one control. The **topic cap** field shows the cap with its 25–750 bounds and "N filed" beside it, saves only on blur (not per keystroke) and re-sends every other field, reverts an out-of-range, fractional, blank or non-numeric entry without saving, shows EXPIRED on any domain at its cap, seed or not, and shows it at once when the cap is lowered to the count. The count and expiry shown after a cap edit come from the row the API returns, never worked out from the count the page loaded: research may have filed in between, and a stale count once left a row reading open while the API refused research. An expired seed hides its ACTIVE badge (the two side by side read as a contradiction) but keeps PAUSED and the pause button. The voice and profile tests' exact payloads include `topic_cap`, since a full replace that dropped it would reset the cap to 100 on every other edit. The add form's description is a vertically resizable textarea; its interior newlines reach the `POST /projects` body intact with only the ends trimmed, input stops at 2000 characters and the counter reads `2000 / 2000`, and 2000 emoji fit, because the limit counts code points as the API does | The default **mascot** picker ("Use install default", "None", each pickable mascot) is covered like the profile picker: a held default that can no longer be picked stays visible as unavailable, the add form sends it, and every other edit re-sends `default_mascot_id`. The picker is GPU-gated like the per-video one (mascots disabled with the reason unless the GPU is working, failing closed while the status loads; "Use install default", "None" and a held value always selectable) (an omitted field would reset a domain to the install default, because `POST /projects` replaces the whole row).
-| `new-video-page.test.tsx` | The New Video page's POST body. An untouched picker must send the value that means "the default", never a guess: no `agent_id` under Automatic (so the API deals by weight), `agent_model` `""` there but the picked agent's default once one is picked (pinned, as topic approval pins it), and `agent_effort` `""`. Also covered: only live agents and READY profiles are offered; Illustrated is disabled with no OpenAI key; submit is blocked with a blank title or topic or a title over 70, counted in code points as the API counts it, so an emoji is one character; a refusal shows the API's reason and keeps the input; a success clears the form. The voice picker's "Default" names the voice the API will actually seed: the `manual` domain's default while it is still in the roster, else the install default |
-| `script-profiles-page.test.tsx` | The Script Profiles page — listing, the create form, and the empty state |
-| `mascots.test.tsx` | The Mascots page — the list with each status, the create form (name and description, or **Surprise me**, which sends `surprise: true` and nothing else; the picked agent, model and effort go out only when an agent was picked), the API's refusal shown on a failed create, and the status-specific detail: an `IN_REVIEW` mascot shows its draft and approved sheets through `/mascot-sheets/…` with the version history, and Approve sends no body; Request changes needs a non-blank comment; `FAILED` shows the error and Request changes but never Approve; a `READY` mascot offers Request changes only; `PENDING`/`BUILDING` offer no review action; a built-in offers **Ask for a variation** (`based_on`), never Request changes; Archive asks first and shows the API's error when refused, and is disabled while another action on the mascot is in flight (and that action's buttons while an archive is), since the two race at the API; an archived mascot offers nothing |
-| `mascots-lib.test.ts` | `lib/mascots.ts` — the picker gate (open only on a `working` GPU; unlike Cartoon 3D it fails **closed** while the status has not loaded, so an untouched picker can never send a mascot the API would refuse), the option list (a held mascot that is still pickable stays selectable, one that is not shows as unavailable and is never read as None), the sheet URL mapping and the Cartoon 3D approval value |
-| `mascot-sheets-route.test.ts` | `mascot-sheets/[...path]` — the authenticated image proxy. Same lock as `/api/proxy` (no session means `401` and Flask is never asked), serves only `<id>/versions/<n>/sheets/<turn\|feels\|act>` (anything else is a `404` before Flask is asked; ids follow the Python `MASCOT_ID_RE`, underscores included), relays only `image/png` and `image/jpeg`, and turns a Flask `401` into a `502` so the browser is not bounced to `/login` |
-| `profiles-nav.test.tsx` | The Script profiles / Mascots sub-nav shared by both pages: both links, and the current page marked. It exists because a twelfth top-bar tab does not fit the one-row layout |
-| `settings-page.test.tsx` | The Settings page — tab structure, API-key fields, the agent-model and agent-effort controls, the Discord notification tab, the AI Review tab's **Experimental** label (in its heading and beside the switch, whose note names the fail-open behaviour), the Images tab with no provider control — the scene-image model lists the OpenAI catalog and saves as `image_model` alone — and its character-model picker (the same catalog, saved as `character_model` alone), the Scheduling tab's two agent-session fields (the timeout shown in minutes and saved in seconds), the Preferences tab's textbox and character counter (which counts code points like the API, so an emoji is one character, not two), the Retention tab's failed-and-rejected field and its backlog line (left out, not an error, when `/retention/backlog` fails, so the field stays usable), and save behaviour. The effort select is pinned as usable even for an agent with an empty `models` list: its levels come from the CLI rather than from what this install probed, so a broken model list must not also take the effort control away. There is no install-wide model or pronunciation-mode select: each voice row picks its own model from the full catalog, the add row picks the new voice's, and a save carries the roster with the model on it and never an `elevenlabs_model_id` or `pronunciation_mode` key. The preview sends the row's model, so an unsaved change is what plays. The legend tells the reader that `eleven_v3` and `eleven_v4` take exact IPA. The add-voice row shows below the 10-voice cap and gives way to a cap note at it. The tab list it checks includes Auto Pilot. | The Rendering tab's default-mascot picker lists only pickable mascots and saves as `default_mascot_id` alone; the mascots are disabled with the reason while the GPU is not working, with "No mascot" and a held value still selectable. The same tab hosts the Renderers panel, which reads `/renderers` itself.
-| `renderers-panel.test.tsx` | Settings → Rendering → Renderers. One card per renderer, the built-in one first, each with its status chip, CPUs and RAM, each GPU with its VRAM and its verdict (verified, the probe's error in red, or not tested yet), the device Chromium really got in plain words with the raw WebGL renderer string kept beneath it as the evidence, the last error, and the credential's expiry on remote ones only. The built-in card with no GPU says how to add one (the onboarding step: the dashboard has no Docker access); a needs-upgrade card names the remote script's `upgrade`; a credential-expired one says to add it again. Actions send the right method and body: Enable/Disable and Rename are a PATCH (an empty name is refused before any request), Remove is a DELETE only after a confirm that names the renderer and is never offered on the built-in renderer, and Test GPU is a bodiless POST offered only on a renderer that reports a GPU — without one a test can only re-confirm the CPU. An API refusal shows on that card. Polling is every 20 s, and every 3 s only while a GPU test is outstanding, dropping back once it is answered; a queued test says it waits for the current render. Add renderer is disabled with the onboarding command while remote renderers are off; on, it asks a name, shows the token and the exact host command once with copy buttons (the command never contains the token, which is pasted when the script asks, so it stays out of the renderer machine's process list and shell history) and the one-hour, single-use validity, and forgets both on close, so reopening starts over — the token is never shown again. A 409 says how to turn remote renderers on. A response of the wrong shape (another suite's fetch mock, an error page) is never drawn as a renderer list. Removing the probe-only fast polling, the GPU-only Test gate, the token reset on close or the shape check was each checked to fail these tests. |
-| `costs-panel.test.tsx` | Settings → Costs. Each model names where its rate came from — and says so when it has none; rates are shown per million tokens; the last successful sync and a failed one are both visible, so stale prices never look current; Sync now posts to the sync route; an unpriced model can be given a price, typed per million tokens and sent **per token**; and only a manual rate offers Reset |
-| `auto-pilot-panel.test.tsx` | Settings → Auto Pilot. Auto Pilot spends money and posts in public with nobody watching, so these guard what keeps turning it on a deliberate act. The whole warning is always on screen. Saving a change that widens what it acts on — turning it on, or adding a project while it is on — opens a confirmation naming how many videos are approved at once (checkpoints only; videos already at Video Approved are not approvals), and **nothing is sent until it is confirmed**; cancelling keeps the edits unsaved. A change that widens nothing saves without asking. Only accounts that are both allowed and connected are offered, and an account chosen earlier that is no longer offered **stays visible and ticked so it can be removed** (hidden, it would be resent on every save); a selected project with no account, and an install with publishing off, both say the videos will stop at Video Approved. The gap is shown in hours when it is whole hours and sent in minutes. A refused save shows the API's reason and keeps the edits. **A response that is not a configuration is never rendered as one**: other suites' fetch mocks, and a proxy error in production, answer with some other object, and showing that as "off, no projects" would let a Save wipe the real configuration. The in-progress limit is sent with the rest, and a value out of range is ignored; at the limit the tab **says why nothing new starts** ("Paused — 10 of 10 videos in progress"), because an Auto Pilot that starts nothing for no stated reason is indistinguishable from a broken one. Below it the line only counts, a full limit is called a pause only while Auto Pilot is on, and with no limit there is no line. The help text tells you to size the limit in days of posting, because a number sized in posts is a day of cover or less. The count is **re-read while the tab stays open**, since videos publish behind it; the refresh changes only the count, so an unsaved edit survives it and stays savable |
-| `socials-page.test.tsx` | The Socials page — accounts grouped by platform, which are allowlisted, and that the count reflects only the enabled ones. Saving sends **ids only**, since display data is hydrated live and a stored username would be a second copy going stale. Also the two badges: an allowlisted account gone upstream is flagged and stays *untickable-only*, which is the only way a stale entry can be cleaned out. The Connect buttons: one per platform. The tab opens **inside the click**, because a popup blocker allows `window.open` only during the gesture, and the URL cannot be fetched ahead since its `state` is single-use. The tab is then pointed at the minted URL, or closed on a failure, which shows postforme's own message (a platform not enabled on the postforme project). One connect runs at a time, and a blocked tab falls back to a link. A connect error that only repeats the page's own error (publishing off or no key: the list and the connect fail with the same 503) is not shown twice, while a different one still is |
-| `analytics-page.test.tsx` | The Analytics page — cross-platform totals, that it counts published *videos* rather than publications, a row per publication linked to its live post, and platform and account filters applied **through the API** rather than in the browser. Pins that an unreported metric renders `—` and never `0`: "not reported" and "reported as zero" are different claims. The page has Videos and Spend tabs: Videos is the default, and the spend card mounts only when Spend is opened, so a visit does not fetch spend. The sort puts the highest value first and an **unreported metric below a real 0**, leaving the API's newest-first order untouched by default. The account filter reads `demo_channel (Instagram)` from `/publishing/accounts?feeds=0`, and when that lookup fails, or names an account postforme no longer has, it falls back to the id plus the platform, still filters by id, and shows no analytics error. Clicking a platform or account bar filters **through the API**, like the menus, and the month graph is drawn from `by_month` while a response without it still renders. The table renders 50 rows, adds 50 each time the sentinel at its end is reported in view — observed against the table's **own scroll box**, not the page — starts again from 50 when the sort changes, and renders every row where `IntersectionObserver` does not exist, since nothing could ask for more there |
-| `analytics-charts.test.tsx` | The Analytics page's graphs. Bars run highest first, scaled against the largest, with an entry nothing was reported for placed last as `—` and **no bar** — an empty bar would claim nobody watched, the same "not reported is not 0" rule as the table. Accounts are named `demo_channel (Instagram)`, falling back to the id with the platform. Clicking a bar calls the filter with its key, and clicking the selected bar clears it; every bar and month column carries its exact figure on hover. A month where views fell keeps its negative figure and draws no height, and each graph says when it has nothing to draw |
-| `spend-card.test.tsx` | The Analytics page's Spend tab — the only place spend that belongs to no video (research, mining, previews, the unscoped fallback) is visible. Unpriced calls are called out beside the total rather than folded in as `$0`; the ElevenLabs credit pool is shown when the key can read it and recorded credits otherwise, since `user_read` is an optional permission; an error response shows an error rather than a blank card; and the API-list-price disclaimer is present. The range: presets are sent **by name** (`?preset=month`) with no dates of the browser's own — `TimeZoneProvider` is UTC until the host zone arrives, so a browser-derived "today" could name the wrong days — and the label shows the days the API echoes; a preset change re-fetches, Custom starts from the days that were showing, a backwards or half-empty custom range is flagged and never sent — and the previous range's figures are hidden rather than left under the new label — and the pool is labelled as the billing period, since it does not follow the range |
-| `archive-page.test.tsx` | The Archive page — archived videos newest-first, requested as archived rather than filtered client-side. Guards that a deleted video keeps its publication links and summed views, which is what makes analytics survive the retention sweep, and that a video with nothing reported shows `—` rather than `0` |
-| `logs-page.test.tsx` | The Logs page — records rendered in the order the API returned them, service and level options taken from the response rather than a hardcoded local list, no service parameter sent until one is picked, and level/search/limit passed on the query string. Refresh is on demand: pins that there is no polling or live tail. An API error surfaces as an error, never as an empty list, which would read as "no logs" |
+### `pipeline-client.test.tsx`
+
+Covers `components/PipelineClient.tsx`, the root of
+[the pipeline board](../15-dashboard.md#the-pipeline-board).
+
+- Loading and 5-second polling. A stale response that arrives after a newer one is dropped.
+- The voice roster, the OpenAI-key state and the agents reach `ActionPane`.
+- The **Nothing can render** banner shows when videos are queued and no renderer can take one,
+  including when the only online renderer's credential has expired. It stays down when `/renderers`
+  cannot be read.
+
+### `library-page.test.tsx`
+
+Covers `app/library/page.tsx`.
+
+- Loading, polling, and a search over both the short title and the full topic.
+- Delete and Request Revision from the video window reach the API, and a refused action is
+  reported.
+- `publishingEnabled` comes from `/settings` and is off until that answers and after a failed read.
+
+Trap: the page filters statuses in the browser, so a status missing from its list does not appear.
+One case guards `PARTIALLY_PUBLISHED`, which is listed under its own **Partially published** state.
+
+Trap: the Library lists the videos that **Publish…**, **Retry publishing** and **Cancel schedule**
+apply to, so the video window needs the publishing flag here.
+
+### `projects-page.test.tsx`
+
+Covers `app/projects/page.tsx`: the domain list, the videos of the selected domain, polling and
+dates in the host timezone. The active or paused badge appears on a curriculum seed only, because
+no other domain can be paused. The expired badge appears on any domain at its topic cap.
+
+### `projects-page-action-extra.test.tsx`
+
+Covers the Projects page's own action dispatcher ([Actions](../15-dashboard.md#actions)).
+
+- The picks the video window passes as the action's `extra` argument travel in the same `PATCH` as
+  the status change.
+- The page hands the video window the voice roster and `publishingEnabled` from `/settings`.
+
+Trap: a dispatcher that drops `extra` still renders the pickers and the request still succeeds, so
+the picks are lost with no error. The API freezes them at approval, so they cannot be applied later.
+
+### `projects-page-agent-picker.test.tsx`
+
+Covers the Projects page with the real `VideoModal`, on the path where nobody touches the agent
+picker. Approving a topic sends no `agent_id` and approving a script sends no agent field, before
+and after `/agents` answers. A picked agent does reach the `PATCH`.
+
+Trap: a test that always picks an agent cannot catch a page that submits a guessed agent as an
+explicit value.
+
+### `topics-page.test.tsx`
+
+Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-page).
+
+- Mining sources: a refused save shows the API's message, and a successful save lists what the API
+  stored. The Mining toggle is disabled while the API reports `mining_available: false`.
+- The pause control appears on a curriculum seed only, labelled "Pause topic generation".
+- The default pickers on a domain row and in the add form (visual style, voice, script profile,
+  mascot) are found by their captions. A default that has left the roster or the profile list stays
+  visible as removed or unavailable.
+- The mascot default offers "Use install default", "None" and each pickable mascot. Mascots are
+  disabled with the reason unless the GPU is working, and while the GPU status has not loaded.
+- The topic cap field saves on blur and reverts an invalid entry. EXPIRED shows on any domain at
+  its cap, and an expired seed hides ACTIVE and keeps PAUSED.
+- The add form's description keeps interior newlines and stops at 2000 code points.
+
+Trap: [`POST /projects`](../05-http-api.md#post-projects) replaces the whole row, so every edit
+re-sends every field. A field left out is reset by that edit: an omitted `default_mascot_id` returns
+the domain to the install default, and an omitted `topic_cap` resets the cap to 100.
+
+Trap: after a cap edit, the count and the expired state come from the row the API returns. The count
+the page loaded can be stale, because research may have filed a topic in between.
+
+### `new-video-page.test.tsx`
+
+Covers the request body of [the New Video page](../15-dashboard.md#the-new-video-page).
+
+- Untouched pickers send no `agent_id` and `""` for `agent_model` and `agent_effort`. A picked
+  agent pins its default model.
+- The voice picker's **Default** names the voice the API will give the video.
+- Submit is blocked with a title over 70 code points, and a refusal keeps the input.
+
+### `script-profiles-page.test.tsx`
+
+Covers `app/script-profiles/page.tsx`: the list with each status, the create form (a name and one
+URL per line, both required), a `FAILED` profile's stored error and delete after a confirm.
+Selecting a row fetches the full row, because the list omits the markdown.
+
+### `mascots.test.tsx`
+
+Covers `app/mascots/page.tsx`.
+
+- The create form sends a name and description, or `surprise: true` alone for **Surprise me**.
+- An `IN_REVIEW` mascot shows its draft and approved sheets through `/mascot-sheets/…`. **Approve**
+  sends no body, and **Request changes** needs a comment.
+- The review actions follow the status. A built-in offers **Ask for a variation** (`based_on`) in
+  place of **Request changes**, and an archived mascot offers nothing.
+
+Trap: **Archive** is disabled while another action on the mascot is in flight, and that action's
+buttons are disabled during an archive, because the two requests race at the API.
+
+### `profiles-nav.test.tsx`
+
+Covers `components/ProfilesNav.tsx`, the sub-nav on the Script Profiles and Mascots pages: both
+links render and the current page is marked. The two pages share one top-bar tab, because another
+tab does not fit the bar's one-row layout.
+
+### `settings-page.test.tsx`
+
+Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-settings-page).
+
+- Staged saving: **SAVE** sends only the edited field, and switching tabs with unsaved edits asks
+  first. The pause switch applies at once.
+- Each tab saves only its own keys, with its bounds and units (timeouts shown in minutes and stored
+  in seconds).
+- An API key renders as the mask the server returned. Clearing the field posts an empty string.
+- Voice: each roster row picks its own model, and a save carries the roster with no
+  `elevenlabs_model_id` or `pronunciation_mode` key.
+- Agents: the default, weight, default model and effort each `PATCH` at once, and the tab issues no
+  `DELETE`.
+- The Rendering tab's default-mascot picker lists only pickable mascots and saves
+  `default_mascot_id` alone. Mascots are disabled with the reason while the GPU is not working, and
+  "No mascot" and a held value stay selectable. The same tab shows the Renderers panel.
+- The Retention tab's backlog line is left out when `/retention/backlog` fails, and the field stays
+  usable.
+
+Trap: the Discord webhook URL is the credential, because anyone who holds it can post to the
+channel. Its input stays a masked field on the Notifications tab, off the API keys tab.
+
+Trap: the effort select stays usable for an agent with an empty `models` list. The effort levels
+come from the CLI, so a broken model list must not remove the effort control.
+
+### `renderers-panel.test.tsx`
+
+Covers `components/RenderersPanel.tsx` ([Renderers](../15-dashboard.md#renderers)).
+
+- One card per renderer, the built-in one first, with its status chip, GPU verdict and the device
+  Chromium got.
+- Each button sends its request, and an API refusal shows on that renderer's card.
+- The panel polls every 3 seconds while a GPU test is outstanding and every 20 seconds otherwise.
+- **Add renderer** shows the token and the host command once and forgets both on close.
+- A response of the wrong shape is not drawn as a renderer list.
+
+Trap: the host command in the dialog does not contain the token. The script asks for it, which keeps
+the token out of the renderer machine's process list and shell history.
+
+### `costs-panel.test.tsx`
+
+Covers `components/CostsPanel.tsx`, the settings page's Costs tab. Each model names the source of
+its rate or says it has none, the last successful sync and a failed sync are both shown, and only a
+manual rate offers **Reset**.
+
+Trap: a price is typed per million tokens and sent per token.
+
+### `auto-pilot-panel.test.tsx`
+
+Covers `components/AutoPilotPanel.tsx` and `lib/autoPilot.ts`
+([Auto Pilot](../15-dashboard.md#auto-pilot)).
+
+- The whole warning is always on screen.
+- A save that widens what Auto Pilot acts on opens a confirmation that names how many videos are
+  approved at once, and nothing is sent until it is confirmed.
+- Only accounts that are allowed and connected are offered.
+- The gap shows in hours and is sent in minutes. At the in-progress limit the tab says why nothing
+  new starts.
+
+Trap: a response that is not a configuration (a proxy error, another suite's fetch mock) must not
+render as "off, no domains", because a **SAVE** on that view overwrites the real configuration.
+
+Trap: an account chosen earlier that is not offered any more stays visible and ticked. Hidden, it
+could not be removed, and every save would send it again.
+
+Trap: the periodic refresh changes only the in-progress count, so an unsaved edit survives it.
+
+### `socials-page.test.tsx`
+
+Covers `app/socials/page.tsx` ([Publishing surfaces](../15-dashboard.md#publishing-surfaces)).
+
+- Accounts are grouped by platform, and the count reflects only the enabled ones.
+- An allowlisted account that is gone upstream is flagged and can still be unticked, which is the
+  one way to clean a stale entry out.
+- Connect runs one at a time and falls back to a link when the browser blocks the tab.
+
+Trap: saving sends account ids only. Display data is read live on every load, and a stored username
+would be a second copy that goes stale.
+
+Trap: the Connect tab opens inside the click, because a popup blocker allows `window.open` only
+then. The URL cannot be fetched ahead, because its `state` is single-use.
+
+### `analytics-page.test.tsx`
+
+Covers `app/analytics/page.tsx`, the **Videos** tab.
+
+- The totals count published videos, and each publication has its own row.
+- Platform and account filters go to the API, from the menus and from a clicked graph bar.
+- An unreported metric renders a dash and sorts below a real 0.
+- When the account-name lookup fails, the page shows the id with the platform and still filters.
+- The table renders 50 rows and adds 50 when its end comes into view of the table's own scroll box.
+  A browser with no `IntersectionObserver` gets every row.
+
+### `analytics-charts.test.tsx`
+
+Covers `components/AnalyticsCharts.tsx`. Bars run highest first, scaled against the largest.
+Clicking a bar sets the filter and clicking the selected bar clears it. A month where views fell
+keeps its negative figure and draws no height.
+
+Trap: an entry with nothing reported comes last as a dash with no bar. An empty bar would claim that
+nobody watched.
+
+### `spend-card.test.tsx`
+
+Covers `components/SpendCard.tsx`, the Analytics page's **Spend** tab.
+
+- Unpriced calls are called out beside the total. The ElevenLabs pool shows when the key can read
+  it, labelled as the billing period, and recorded credits show otherwise.
+- A backwards or half-empty custom range is flagged and not sent, and the previous range's figures
+  are hidden.
+
+Trap: a preset is sent by name, and the label shows the days the API returns. The card sends no
+dates of the browser's own, because `TimeZoneProvider` is UTC until the host zone arrives
+([Time](../15-dashboard.md#time)).
+
+### `archive-page.test.tsx`
+
+Covers `app/archive/page.tsx`. The page asks the API for archived videos only and lists them most
+recently archived first. A deleted video keeps its publication links and its views summed across
+platforms, which is how analytics outlive the files.
+
+### `logs-page.test.tsx`
+
+Covers `app/logs/page.tsx`. Records render in the order the API returned them, the service and
+level options come from the response, the filters go on the query string and refresh is on demand
+with no polling.
+
+Trap: an API error shows as an error. Rendered as an empty list, it would read as "no logs".
 
 ## Components
 
-| File | Covers |
-|---|---|
-| `action-pane.test.tsx` | `ActionPane` — per-status buttons, the script-profile picker, the agent-model input, the agent-effort picker, the visual-style picker, and that frozen choices stay visible after the topic checkpoint. The effort tests pin that on the row it is greyed out with the model while the agent is unusable, and comes back when an installed agent is picked from the still-live agent dropdown. The reason for the grey is hover text only: the row carries no *not installed* line, which used to wrap the buttons. And — the regression that matters — that an untouched approval submits `""` rather than a guessed level. Projects and Library never fetch `/agents` at all, so resolving the picker to a literal default and submitting it would silently override an agent configured for anything else, unfixably, since `agent_effort` freezes at approval. The style tests also pin that a video left on Auto shows what the agent *actually* chose and marks it automatic: without that the board cannot explain why two videos look different, which is the whole reason the resolution is recorded. The label tests resolve every picker by its caption (`getByLabelText`), proving the caption is the control's accessible name and not merely nearby text. The style picker disables Illustrated, labelled with why, when told no OpenAI key is stored, and **leaves it enabled when not told**: the API is the authority, so a page that never loads settings gets the API's clear refusal rather than a wrongly greyed option. The SCRIPT_READY voice picker labels each voice with its model and disables any voice the API lists in `voice_conflicts`, with the reason as its title; it warns when the video's own voice can no longer speak its script. The TOPIC_PROPOSED voice picker starts on the video's own voice, and **an untouched Approve sends no `voice_id`** — the negative control: sending the shown voice would pin the install default over a voice the video was seeded with from its project. A second group renders the row before `/settings` answers and again after: the shown voice, and the one approve-script sends, must follow the late default. Seeding the picker at mount froze `""` there, so the row showed the roster's first voice while sending another. A voice no longer on the roster is listed as itself, disabled, rather than displayed as the first voice. A grouping-and-filter group feeds the pane a scrambled mix of statuses and pins that rows come out grouped in pipeline order with the API's order kept inside each group. A status pill hides its group, and toggling it back restores it (the negative control). Every status filtered out says *no actions match*, never INBOX ZERO, and keeps the pills, so the filter can be undone. The profile picker is capped at 220px like the voice picker, since profile names have no length limit. A curriculum video can arrive holding its domain's default profile, deleted since: the profile picker must show it as unavailable rather than display "No profile" while sending it, and must stay visible with no `READY` profile left so it can be cleared. A row that flashes away after an action leaves its pill count | The topic row's **Mascot** picker (next to Visual style): hidden when nothing can be picked, disabled with the reason ("Mascots need a working GPU", "GPU not tested yet") unless the GPU is working while "No mascot" stays selectable, failing closed while the GPU status has not loaded, carried as `mascot_id` in `approve-topic` only when the picker shows, and cleared and locked when Cartoon 3D is chosen (the payload then carries an empty mascot). An untouched picker re-sends a held, still-pickable mascot on approve, even with the GPU not usable (never stripped). A refused approval (`onAction` resolving `false`) brings the row back so the pick can be changed; a successful one still hides it.
-| `cost-breakdown.test.tsx` | The modal's cost breakdown. The rule it exists for: a shared agent session shows this video's **share** with the whole session beside it, and the total adds the share — adding whole sessions would count one session once per video in its batch. Also that the expansion lists each session under the stage the video was at with the ÷N split written out (a session now covers one video and one stage, so a `VOICING` session is labelled voicing alone, while a pre-upgrade `VOICING_WITH_SCENES` row reads "Voicing & scene writing"; the split still matters for sessions recorded before), that ElevenLabs is credits and never dollars, that unpriced calls are counted and never shown as `$0`, that a video from before cost tracking says so instead of `$0.00`, that a malformed response is reported rather than rendered, and that the disclaimer is always there. The Agent row lists each model as its own unwrappable line: joined into one string, the narrow sidebar broke it after a hyphen and the dangling `claude-` read as part of the value column beside it. jsdom cannot see a wrap, so the test pins the one-element-per-name structure and the `nowrap` that prevents the break; the look itself needs a browser |
-| `video-modal.test.tsx` | `VideoModal` — timestamps rendered in the host timezone, reject vs. revise, the Script tab's segmented and legacy-flat rendering, the script-profile picker, and the agent-model and agent-effort pickers with their read-only rows after the freeze. One effort test opens a *second* video in the still-mounted modal: the seed-change effect is the only thing clearing per-video picker state, and a level picked for the first video would otherwise be inherited and written on the second's approval. The label tests resolve every Actions-block picker by its caption, scoped to the Actions block so a read-only row elsewhere in the modal cannot satisfy them. Its style picker disables Illustrated the same way, and leaves it enabled by default. The Script tab shows the authored word for `<phoneme>`, `<respell>` and `<ipa>` tags, never the markup, the respelling or the IPA. The voice picker disables a voice listed in `voice_conflicts` and explains a conflicting current voice. At TOPIC_PROPOSED it is offered too, and an untouched Approve Topic sends no `voice_id`; a voice picked for one video is forgotten when another is opened, for the same reason as the effort pick; and Approve Script sends a default that arrived after the modal opened. A held profile deleted since shows by name with "(deleted)" and stays clearable with no `READY` profile left, as on the row. A scheduled video says when it goes out, in the zone it was picked in and in the host's, even where no publishing controls are offered (the Library); its waiting targets read SCHEDULED rather than PENDING; Cancel schedule calls the API only after a confirm and shows a refusal inline; and it offers no Delete. The read-only Voice and Voice model rows show the API's `voice_info` as given, adding "(current setting)" only when the model was not the one voiced with, and "(not in roster)" for a removed voice. They are hidden exactly where the voice picker is up, and shown at the same status when no roster was handed in or the video is archived, since then no picker shows. The Video tab plays the video's own `/stream/<project_id>/<id>.mp4` whatever `video_path` holds: a row naming another video's file must not play that file, and a legacy host path must still play. | The same Mascot picker in the topic checkpoint panel: its caption, the GPU gate, the `approve-topic` payload and the Cartoon 3D lock.
-| `video-modal-retry-publish.test.tsx` | `VideoModal`'s **Retry publishing** action and `canRetryPublish`: offered only for a video that failed while publishing (`FAILED` with publication rows), never for a render failure, an archived video, or with publishing off. It refreshes in place when the server adopted a live post, and opens the Publish dialog when nothing was live |
-| `video-modal-mark-published.test.tsx` | `VideoModal`'s **Mark as published** and `canMarkPublished`: offered only at `PARTIALLY_PUBLISHED`, never on an archived video, and **not** gated on publishing being enabled, since it is the only way out of that state. The confirm dialog must carry the account count, the download-first warning and a download link to the video's `/stream` URL, because retention dates from the first successful post rather than the click — a partial publish older than `retention_days` loses its file on the next pass. Confirming sends a PATCH guarded by `onlyIfCurrentStatus`; a refusal stays in the dialog. Confirm stays disabled until the publication rows have loaded, and a failed load says so: confirming hands the video to retention, so it must never happen behind a "0 of 0" before the human can see which accounts failed. Only the newest publications request for the video on screen may land — a late response for the video shown before, or a refresh started late by an action on it (a retry finishing after the next video opened), must neither unlock the next video's confirm nor swap the modal back to the old video (mutation-checked); and of two refreshes of the same video the newer always wins, so the modal's first fetch answering after a retry's refresh cannot restore the pre-retry status — and a failed refresh clears the rows instead of keeping the ones from before a retry, cancel or publish. |
-| `kanban-board.test.tsx` | `KanbanBoard` column placement: `PARTIALLY_PUBLISHED` has no column and must be folded into Published through `extraStatuses`. A status with neither simply vanishes from the board. |
-| `video-modal-retry-agent.test.tsx` | `VideoModal`'s **Retry agent** action, `isAgentStuck`, and the Kanban card's STUCK badge. Offered only for a video the scheduled agent gave up on, never an archived one — and the stuck statuses are all agent statuses, where the modal otherwise shows no Actions block, so the block's own condition has to admit it. Retrying posts to `agent-retry` and refetches the video without touching its status; a refusal shows the server's reason |
-| `publish-dialog.test.tsx` | `PublishDialog` — that it offers only allowlisted, still-connected accounts and **pre-ticks nothing**, so every target is an explicit choice; that it refuses to publish with no target or an empty title; that it prefills the title and description the agent wrote with the script but still opens on the video's own title when that call fails; and that it sends the edited metadata with the picked targets. Publishing is irreversible, which is why the no-default rule is pinned Scheduling: the dialog opens on Publish now, and on every reopen, so a schedule left from another video cannot hold one back; the timezone defaults to the browser's own; nothing is sent until both a date and a time are picked; the body carries the **wall time and the zone, never a UTC instant**, because the API owns the conversion and DST; a preset fills the date in the picked zone; and the API's refusal shows inline. The zone used is one whose name is the same in the browser's list, which is CLDR's (Asia/Calcutta, not Asia/Kolkata). |
-| `video-modal-delete.test.tsx` | `VideoModal`'s Delete action — confirmation required, fired exactly once, nothing deleted on cancel, and the Archived badge afterwards |
-| `revise-dialog.test.tsx` | `ReviseDialog`'s geometry and submission — it sizes itself inline and stays narrower than the `VideoModal` beneath it, with a shrinkable grid column so a long title cannot widen it. Send stays disabled until there is non-blank text, and submits trimmed |
-| `kanban-card.test.tsx` | `KanbanCard`'s display name, and its score: an unscored video (score 0, only ever from the New Video page) reads "—", never "0/10". Also `scoreLabel`, the shared helper the other score sites use A SCHEDULED card shows its time in the zone it was picked in; no other status shows one. A `PARTIALLY_PUBLISHED` card is tagged PARTIAL, never LIVE, since it shares the Published column. |
-| `summary-strip.test.tsx` | `SummaryStrip` tile grouping — In Pipeline counts SCHEDULED videos. Published counts `PARTIALLY_PUBLISHED` too. |
-| `mining-sources.test.tsx` | `MiningSources` — add and remove, and `canonicalYouTubeUrl`, the panel's copy of the API's URL rule: the same accepted forms come back as `https://www.youtube.com/watch?v=<id>`, and `file://`, internal addresses, look-alike hosts, userinfo, a port and a 10- or 12-character id are refused. Add appends the canonical form, so a second spelling of a listed video cannot be added. The rule is copied so the Add button lights only for what the API will store; a URL the API refuses anyway still comes back as its 400 |
-| `voice-preview-button.test.tsx` | `VoicePreviewButton` — request, playback and cached states. Play and pause are one button whose label follows the audio's own events (▶, then ❚❚ while playing, back to ▶ on pause or end), and a click while playing pauses rather than refetching. A model passed in is sent in a JSON body with its `Content-Type` (the proxy refuses a body without one), and a change of model or voice resets the button so the next play fetches a new sample. A slow response for a model no longer selected is dropped, never played, and a browser that blocks autoplay leaves the button on ▶ |
-| `timezone-provider.test.tsx` | `TimeZoneProvider`'s degradation matrix — what the UI shows when the timezone cannot be resolved |
-| `topbar-version.test.tsx` | The top bar's version badge. Guards the rule that it shows the real version or nothing: a missing field, a non-ok response, a rejected fetch and an empty string each render nothing, because a wrong version in a bug report is worse than none. Also guards that it is **polled**, not read once — it must pick up a new version after an upgrade and drop the old one while the API is down, which is the whole point of a badge used to confirm an upgrade landed. The disk-usage figure fetches first, so the sequenced mocks answer `/storage` separately (`besideDiskUsage`) |
-| `disk-usage.test.tsx` | The top bar's disk-usage figure and popup: the total from `/storage`, the data and Docker lines with their age, "not measured yet" without a snapshot, "unknown" for a size Docker could not give, and "≥" on the old-image line and both totals when two or more old images make the figure a floor. It renders nothing on a `404`, another body shape or a network error, because a wrong figure misleads more than none |
+### `action-pane.test.tsx`
+
+Covers `components/ActionPane.tsx`, [Quick Actions](../15-dashboard.md#quick-actions), and the
+pickers on its rows.
+
+- Rows are grouped by status in pipeline order, and a pill hides its group. With every status
+  filtered out the pane says no actions match and keeps the pills.
+- [Voice](../15-dashboard.md#voice-picker): a voice in `voice_conflicts` is disabled with the
+  reason, and a voice that left the roster is listed as itself, disabled.
+- Script profile: a held profile that is not offered stays visible and can be cleared.
+- [Agent, model and effort](../15-dashboard.md#agent-model-and-effort-pickers): a changed agent
+  swaps in its own models, and all three are greyed while no agent can run the video. An untouched
+  approval sends `""` for the effort.
+- [Visual style](../15-dashboard.md#visual-style-picker): a video left on Auto shows the style the
+  agent chose, marked automatic. A page that passes no key state leaves Illustrated enabled.
+- [Mascot](../15-dashboard.md#mascot-picker): the picker is hidden when nothing can be picked.
+  Mascots are disabled with the reason unless the GPU is working, and while the GPU status has not
+  loaded. `mascot_id` travels with `approve-topic` only when the picker shows. Choosing Cartoon 3D
+  clears and locks the picker and sends an empty mascot.
+- A refused approval (`onAction` resolving `false`) brings the row back so the pick can be changed.
+- Every picker is found by its caption (`getByLabelText`), which proves the caption is the control's
+  accessible name.
+
+Trap: a picker's shown value is recomputed on every render. A value captured at mount shows one
+voice and sends another when `/settings` answers late.
+
+Trap: at `TOPIC_PROPOSED` an untouched approval sends no `voice_id`. Sending the shown voice pins
+the install default over the voice the video got from its domain.
+
+Trap: an untouched mascot picker re-sends a held, still-pickable mascot, even with the GPU not
+usable. Stripping it would remove the mascot from a video nobody edited.
+
+### `video-modal.test.tsx`
+
+Covers `components/VideoModal.tsx`, [the video window](../15-dashboard.md#the-video-window).
+
+- **Reject Topic** fires at once. **Request Revision** opens the dialog, posts the comment and then
+  fires the revise action.
+- The Script tab renders segmented and legacy flat scripts, and shows pronunciation and pause
+  markup as the authored words.
+- The Video tab plays `/stream/<project_id>/<id>.mp4` whatever `video_path` holds.
+- The Actions block carries the same pickers as a Quick Actions row, under the same rules. The
+  mascot cases cover its caption, the GPU gate, the `approve-topic` payload and the Cartoon 3D lock.
+- Once the pickers are gone, their values show read-only. The Voice and Voice model rows come from
+  `voice_info` and are hidden while the voice picker is up.
+- A scheduled video says when it goes out, in the zone it was picked in. **Cancel schedule** calls
+  the API after a confirm, and the window offers no Delete.
+
+Trap: the component stays mounted between videos. A pick made for one video (agent, effort, voice)
+must be forgotten when another opens, or the second video's approval writes it.
+
+Trap: the picker label cases are scoped to the Actions block, because a read-only row elsewhere in
+the window carries the same caption.
+
+Trap: `publishingEnabled` defaults to off, so a page that does not fetch settings cannot publish.
+
+### `video-modal-delete.test.tsx`
+
+Covers the video window's Delete action: it is offered at the deletable statuses only, fires once
+after a confirm and deletes nothing on cancel. An archived video shows the Archived badge.
+
+### `video-modal-retry-agent.test.tsx`
+
+Covers **Retry agent**, `lib/videoStatus.ts::isAgentStuck` and the board card's STUCK tag. The
+control is offered for a stuck video that is not archived, posts to `agent-retry` and refetches the
+video.
+
+Trap: a stuck video sits at an agent status, where the window otherwise shows no Actions block, so
+the block's own condition must admit a stuck video.
+
+### `video-modal-retry-publish.test.tsx`
+
+Covers **Retry publishing** and `lib/videoStatus.ts::canRetryPublish`
+([`POST /videos/<id>/publish/retry`](../14-publishing.md#post-videosidpublishretry)).
+
+- The control is offered for a `FAILED` video that has publication rows. It is not offered for a
+  failed render, an archived video or an install with publishing off.
+- It refreshes in place when the server adopted a live post, and opens the Publish dialog when
+  nothing was live.
+
+### `video-modal-mark-published.test.tsx`
+
+Covers **Mark as published**, `lib/videoStatus.ts::canMarkPublished` and the window's handling of
+late responses ([A partial publish](../14-publishing.md#a-partial-publish)).
+
+- The control is offered at `PARTIALLY_PUBLISHED` only, with publishing switched off too, because
+  it is the only way out of that status.
+- Confirming sends a `PATCH` guarded by `onlyIfCurrentStatus`.
+- Only the newest response for the video on screen lands, and a failed refresh clears the rows.
+
+Trap: confirming hands the video to retention, which dates from the first successful post, so a
+partial publish older than `retention_days` loses its file on the next pass. The dialog carries a
+download link, and Confirm stays disabled until the publication rows have loaded.
+
+Trap: without the numbering of refreshes, a retry that finishes after the next video opened swaps
+the window back to the old video.
+
+### `publish-dialog.test.tsx`
+
+Covers `components/PublishDialog.tsx`.
+
+- The dialog offers only allowlisted, still-connected accounts and refuses to publish with no
+  target or an empty title.
+- It prefills the title and description the agent wrote, and opens on the video's own title when
+  that call fails.
+- Scheduling: the timezone defaults to the browser's, and nothing is sent until a date and a time
+  are picked.
+
+Trap: publishing cannot be undone. No account is ticked in advance, and on reopen the dialog drops
+the previous video's selection, metadata and schedule.
+
+Trap: the body carries the wall time and the zone, and the API converts
+([Scheduling a post](../14-publishing.md#scheduling-a-post)). The dialog sends no UTC instant,
+because the API owns daylight saving.
+
+Needs: a zone named as the browser's CLDR list names it. The scheduling case uses `Asia/Calcutta`,
+which the tz database calls `Asia/Kolkata`.
+
+### `revise-dialog.test.tsx`
+
+Covers `components/ReviseDialog.tsx`. The dialog sets an inline width narrower than the video
+window beneath it and uses a shrinkable grid column, so a long title cannot widen it. **Send** stays
+disabled until there is non-blank text.
+
+### `cost-breakdown.test.tsx`
+
+Covers `components/CostBreakdown.tsx`, the video window's cost card
+([Components](../15-dashboard.md#components)). ElevenLabs shows as credits, unpriced calls are
+counted and not shown as `$0`, and a video with no recorded usage says so.
+
+Trap: a shared agent session shows this video's share beside the whole session, and the total adds
+the share. Adding whole sessions counts one session once for every video in its batch.
+
+Trap: the Agent row case asserts one element per model name and its `nowrap`, because happy-dom
+cannot see a wrapped line. A joined string breaks after a hyphen in the narrow sidebar.
+
+### `kanban-board.test.tsx`
+
+Covers `components/KanbanBoard.tsx` column placement. `PARTIALLY_PUBLISHED` has no column of its
+own and is folded into Published through `extraStatuses`. A status with neither does not appear on
+the board.
+
+### `kanban-card.test.tsx`
+
+Covers `components/KanbanCard.tsx` and `lib/utils.ts::scoreLabel`.
+
+- The display name is the short title and falls back to the topic.
+- An unscored video (score 0, which only the New Video page creates) reads as a dash.
+- Only a `SCHEDULED` card shows a post time, in the zone it was picked in.
+- A `PARTIALLY_PUBLISHED` card is tagged PARTIAL, because it shares the Published column.
+
+### `summary-strip.test.tsx`
+
+Covers `components/SummaryStrip.tsx`. In Pipeline sums the eight in-flight statuses, `SCHEDULED`
+included, and leaves out the checkpoint statuses. Published counts `PARTIALLY_PUBLISHED` too.
+
+### `mining-sources.test.tsx`
+
+Covers `components/MiningSources.tsx` and `canonicalYouTubeUrl`, the panel's copy of the API's URL
+rule ([Mining sources](../05-http-api.md#mining-sources)). The accepted forms come back as
+`https://www.youtube.com/watch?v=<id>`, and **Add** does not add a second spelling of a listed
+video.
+
+Trap: the rule is copied so that the button lights only for what the API will store. The API still
+validates.
+
+### `voice-preview-button.test.tsx`
+
+Covers `components/VoicePreviewButton.tsx`.
+
+- A second click replays the cached sample without a fetch. One button shows play or pause and
+  follows the audio's own events.
+- A change of voice or model fetches a new sample, and a slow response for a model that is not
+  selected any more is dropped.
+- A model is sent in a JSON body with its `Content-Type`, because the proxy refuses a body without
+  one.
+
+### `timezone-provider.test.tsx`
+
+Covers `components/TimeZoneProvider.tsx` ([Time](../15-dashboard.md#time)). A valid IANA zone and
+label are accepted. A missing field, a human label in the zone slot, a non-ok response and a
+rejected fetch each degrade to UTC.
+
+### `topbar-version.test.tsx`
+
+Covers the top bar's [version badge](../15-dashboard.md#version). It shows the version the API
+reports and renders nothing when the version is unavailable. It is polled, so it picks up a new
+version after an upgrade and drops the version while the API is down.
+
+Trap: a wrong version in a bug report is worse than none, so the badge has no fallback text.
+
+Needs: the disk-usage figure fetches first, so the sequenced mocks answer `/storage` separately
+(`besideDiskUsage`).
+
+### `disk-usage.test.tsx`
+
+Covers `components/DiskUsage.tsx` ([Disk usage](../15-dashboard.md#disk-usage)).
+
+- The popup says "not measured yet" without a host snapshot and "unknown" for a figure Docker
+  could not give.
+- With two or more old images, the old-image line and both totals carry "≥".
+- The component renders nothing on a `404`, another body shape or a network error, because a wrong
+  figure misleads more than none.
+
+### `update-banner.test.tsx`
+
+Covers `components/UpdateBanner.tsx` ([Update check](../15-dashboard.md#update-check)).
+
+- The banner names both versions and links the release and the upgrade guide with `noopener`. It
+  renders nothing for no update, a failed request or a link that is not `https://`, and does not
+  check on `/login`.
+- ✕ hides that version for later page loads, and a newer version brings the banner back. When
+  storage throws, the dismissal lasts for the page.
 
 ## Routes and helpers
 
-| File | Covers |
-|---|---|
-| `update-check-lib.test.ts` | `lib/updateCheck.ts`, the update check's decision layer. **Only a newer stable release is offered**: a prerelease is recognised by its tag (`v2.1.0-rc.1`, `v2.1.0-beta`) even when GitHub does not flag it, and by GitHub's flag; drafts, tags that are not `vX.Y.Z` and malformed entries are ignored. The newest is chosen by version, not list order, because GitHub lists by creation date and a later patch to an older line would come first. SemVer precedence, numeric rather than string ordering and prerelease identifiers included, so an install on `2.1.0-rc.1` is offered `2.1.0`; the same or an older version, and `develop`, are offered nothing. `isRepo` refuses anything but a bare lowercase `owner/name`, since it is pasted into a URL. The cache: GitHub's release list is asked at most once per 2 hours, concurrent callers share one request, and a failure (a 403 rate limit, a network error, a body that is not a list) keeps the last good list and is retried after 15 minutes rather than on every request. The request is unauthenticated and carries a `User-Agent`, which GitHub requires |
-| `update-check-route.test.ts` | `GET /api/update-check`. No session: `401`, and neither the API nor GitHub is called. The API call carries the token and bypasses the Next.js Data Cache. `develop`, an API that sends no `github_repo` (one older than this route) and a malformed repo never call GitHub; an unreachable or refusing API, or an unreachable GitHub, answer "no update" rather than an error. The installed version is re-read on every request while GitHub's list stays cached, so the banner clears as soon as an upgrade lands |
-| `update-banner.test.tsx` | `UpdateBanner`. It names both versions and links the release and the upgrade guide in a new tab with `noopener`. It renders nothing for no update, a `401` or a failed request, and a link that is not `https://`, and never polls on `/login`. ✕ hides that version for this and later page loads, a newer version brings it back, and storage that throws still lets it show and dismiss for the page. Polled every 10 minutes |
-| `proxy-route.test.ts` | `proxy/[...path]` — the route every dashboard API call goes through, including query-string forwarding **The real lock of the login:** without a valid session it answers `401` and never calls Flask; every upstream call carries the API token, PATCH included; and a `401` from Flask becomes a `502` naming the fix, because past the session check it can only mean Flask refused the dashboard's own token — passed on as a `401` it would bounce the browser to `/login` forever. **Same-site forgery:** a signed-in `POST` or `DELETE` whose `Sec-Fetch-Site` is `same-site`, `cross-site` or `none` is a `403`, and a urlencoded, multipart or plain-text body — **even an empty one**, since a form always sends a `Content-Type` — or a body with no type is a `415`; in each case Flask is never called. `same-origin`, a missing header, and any `GET` pass. The browser's own JSON `Content-Type` is forwarded with its parameters, and a bodiless `POST` is forwarded with no body and no type, which is the shape of the dashboard's own Retry and Delete buttons. The SameSite=Strict cookie does not stop another port or a sibling subdomain, so these are what do |
-| `stream-route.test.ts` | `stream/[...path]` — video and voice-preview streaming, against a **real temporary directory tree**, with only the session mocked: the defects it guards are filesystem behaviour (a symlink followed by `open`, a FIFO blocking it), which a mocked `fs` cannot show. Without a session it answers `401` before `realpath` or `open` is called. **Containment:** a `..` escape, a symlinked leaf pointing outside the root — even at an `.mp4`, so the extension check alone cannot pass it — and a file reached through a symlinked directory are all `404`, with none of the target's bytes in the body; a symlink that stays inside the root still serves. Removing the `realpath` containment check fails the two outside-link cases. A directory (even one named `dir.mp4`), a FIFO named `.mp4` (which must answer rather than hang) and any extension but `.mp4`/`.mp3` are `404`. **The race after the check:** a directory on the way swapped for a symlink to outside the root *between* `realpath` and `open` — done inside a wrapped `open()` so the race is deterministic — is a `404` without the target's bytes, because the opened descriptor's `/proc/self/fd` path must equal the path that was checked (`O_NOFOLLOW` guards only the leaf). Removing that check fails the case that fakes the descriptor's path; an unreadable `/proc` fails closed. The same swap is run again with `process.platform` set to `darwin`, so the `/proc` check is skipped (and `readlink` never called) and the portable device-and-inode comparison against an `lstat` taken before the open is the only thing refusing it; removing that comparison serves the outside file there. Without the swap the fallback still serves. **File handles:** a request already aborted before the stream existed, a cancelled body and a mid-stream abort each close the handle (a 16 MiB file, so it cannot close by simply running out); a refused descriptor and a `304` close it too. **Content:** the whole file is a byte-exact `200` with `video/mp4` or `audio/mpeg`, `nosniff`, `Accept-Ranges` and `Cache-Control: private, no-cache` with an `ETag` (behind a login, so no shared cache may keep it; and a re-render overwrites the file at the same URL, so the browser must revalidate rather than replay the old one); `bytes=a-b`, `a-`, the suffix `-n` and an end past the file are byte-exact `206`s with the right `Content-Range` and `Content-Length`; an inverted, past-the-end or malformed range is a `416` with `bytes */<size>`; a multi-range request is the whole file. The body is a `ReadableStream`, never one buffer. **Revalidation:** a matching `If-None-Match` (exact, weak `W/`, in a list, or `*`) is a bodiless `304`, even with a `Range`; a file rewritten at the same path gets a new tag and its new bytes, including a same-size file renamed into place and one rewritten in place (same inode), each with its old mtime put back — the old tag must get a `200` with a new tag and the new bytes, and an old `If-Range` the whole file, not a `206` spliced onto old ranges. A size-and-mtime tag fails both; dropping `ctime` fails the in-place one (the renamed file's `ctime` also moves, so the inode is not pinned on its own); a `Range` with a matching `If-Range` is a `206`, and with a stale tag, a weak one or a date it is the whole file as a `200` |
-| `session.test.ts` | `lib/session.ts` and `lib/sessionCookie.ts`. A session it signs verifies; no cookie, garbage, another key's signature, an expired token and `alg: none` do not. **Rotating `session_secret` signs every browser out** — that is how `--set-password` does it — and a missing secret fails closed. Sessions last seven days, fixed. Both secrets are read per call, so a rotation needs no restart. The cookie is HttpOnly and SameSite=Strict everywhere, and Secure only when the browser came over HTTPS (directly or per `X-Forwarded-Proto`), since a Secure cookie would make plain-http access on a LAN impossible. `safeNext` keeps the post-login redirect same-site: `//host`, `/\\host` and absolute URLs fall back to `/` |
-| `auth-routes.test.ts` | The login and logout routes, on the real `next/server`. The password goes to Flask with the API token and only a `200` sets a cookie; a wrong password passes through as `401` with no cookie; the backoff passes through as `429` **with its Retry-After**; a refused dashboard token (Flask's `unauthorized`, as distinct from `wrong password`) is a `502`; an empty or non-string password never reaches Flask. Logout clears the cookie. Both refuse a `same-site` or `cross-site` request with `403` (login sets no cookie, logout leaves it alone) and a non-JSON body with `415` — an empty urlencoded form included — before anything else; `same-origin`, a missing `Sec-Fetch-Site` and logout's own bodiless `POST` pass |
-| `middleware.test.ts` | `middleware.ts`. A page load with no session cookie is redirected to `/login`, keeping its path and query in `next` (a bare `/login` for the root); with the cookie it passes. Presence only, by design — the signature is checked by the proxy and stream routes. The matcher covers pages and never the API routes, `/stream`, Next's assets, static files or `/login` itself, so a `fetch()` or a `<video>` gets a `401` rather than an HTML login page | `/mascot-sheets` is outside the matcher too: it is an `<img>` source that answers `401` itself.
-| `video-modal-utils.test.ts` | The two `/stream` URL builders. `videoStreamUrl` builds a render's URL from the video's own project and id, each URL-encoded as one segment, under `default_proj` when there is no project (where the renderer renders it); it never reads `video_path`. `videoToStreamUrl` rewrites the `/output_videos/…` path a voice preview comes back with, and leaves any other path unchanged |
-| `visual-styles.test.ts` | `cartoon3dAvailable`, `videoStyleLabel` with a resolved renderer (an auto video that settled on a world reads "Auto — Cartoon 3D" before any canvas), and the GPU-aware `styleOptions`: Cartoon 3D is disabled unless the GPU probe says working, an untested GPU is told apart from a missing one, and an unloaded status counts as available so the API gives the refusal. Also `illustratedAvailable` and `styleOptions`: the Illustrated style reads as available from the *masked* `openai_api_key` (`""` means unset, so the key itself is never needed), counts as available when settings have not loaded, and when unavailable only that one option is disabled |
-| `voices-lib.test.ts` | The rules both voice pickers share, in `lib/voices.ts`: approve-topic carries a voice only when one was picked, the shown voice is the pick, else the video's own, else the install default, and a voice with no roster entry is detected so the picker can list it rather than show a different one |
-| `agents-lib.test.ts` | The agent-picker rules `ActionPane` and `VideoModal` share, in `lib/agents.ts`. `agentOptions` offers only live agents, and shows a video's own uninstalled or unknown agent disabled rather than hiding it. Picking the current agent, or an unpinned video's default, is not a change. `agentPicksPayload` sends only what was touched — an untouched picker sends nothing at all at `SCRIPT_READY`, `VIDEO_READY` and a revision at `TOPIC_PROPOSED`, loaded or not — and a changed agent never carries over a model from the old agent's list. Only `topicApprovalPayload` pins a model, and with no agent list it sends a blank one, never a guess, because an approval nobody touched must not submit a value the page guessed |
-| `renderers-lib.test.ts` | `lib/renderers.ts`, the rules behind the Renderers panel and the Pipeline page's banner. The status chip's precedence: the first thing that stops a renderer taking work wins (disabled, then credential expired, then needs upgrade, then offline), and "busy" is only said of one that could otherwise take work. The built-in renderer never reads as credential expired, since it has no expiring credential. "Last seen" in words, CPUs/RAM and VRAM to one decimal, which renderers get a Test GPU button, the GPU verdict read only from the renderer's probe, and the plain words for each device string. The "Nothing can render" banner is raised only when a video is queued and no renderer is enabled, online, on this version and holding an unexpired credential (a busy one still counts; expiry is judged by the same rule and the same `now` as the status chip, so a card that says credential expired never keeps the banner down), and never on a list that could not be read, so a network blip does not raise a false alarm. Also the response shape check and the 1–60 character name rule |
-| `video-status.test.ts` | The delete helper — the deletable status set matched **exactly** against the API's own, an already-archived video refused at any status, the request sent through the proxy, and a conflict rethrown with the API's reason. The set living in two processes is why an exact match is asserted rather than a subset |
-| `datetime.test.ts` | `formatDate`, `formatDateShort`, `formatDateTime`, `formatClock`, and parsing of legacy rows stored without a `Z` suffix Also the scheduling helpers: `formatScheduled` names the zone, `wallClock` reads the date in the given zone (already tomorrow in Kolkata) and never renders midnight as 24, and `addDays` crosses month and year ends. |
-| `palette-contrast.test.ts` | The secondary text tokens in `app/globals.css`. It parses the stylesheet and computes real WCAG contrast ratios, and asserts that `--dim` and `--mute` each clear AA (4.5:1) on `--bg`, `--panel` and `--panel-2`. Both once shipped well below that, at 10–11px, where contrast matters most. It also pins the ordering `ink > ink-2 > dim > mute`, so secondary text cannot be brightened until it competes with primary text. Finally, every `--muted-foreground` declaration must be `var(--dim)`: a hardcoded copy of the old value is how the shadcn token drifted before |
+### `proxy-route.test.ts`
 
----
+Covers [`app/api/proxy/[...path]/route.ts`](../15-dashboard.md#dashboardappapiproxypathroutets),
+the route every dashboard API call goes through.
 
-## What these encode
+- Without a valid session the answer is `401` and Flask is not called. Every upstream call carries
+  the API token.
+- Responses are not cached.
+- A `POST` or `DELETE` whose `Sec-Fetch-Site` is not `same-origin` is a `403`, and a body that is
+  not JSON is a `415`. A missing header, any `GET` and a bodiless `POST` pass.
 
-**Timestamps are UTC in the database, host-local on display.** `updated_at` is the FIFO ordering key
-for the renderer's atomic claim, and local time is non-monotonic across DST; mixed `Z`/offset rows also
-sort wrong lexicographically. `datetime.test.ts` covers the legacy `Z`-less rows explicitly, because
-those predate the convention and still exist.
+Trap: a `401` from Flask becomes a `502` that names the fix. Relayed as a `401`, it sends the
+browser to `/login` in a loop.
 
-**The dashboard gets its timezone over HTTP**, not from `/etc/localtime` plus an `env_file`. A second
-source of truth could disagree, and an `env_file` would leak every API key into the Next.js process
-for the sake of one variable. `timezone-provider.test.tsx` covers each way that fetch can fail.
+Trap: the query string must reach Flask. A dropped `?status=PUBLISHED` returns every video, which
+looks like a fault in the page.
 
-**The proxy route must forward the query string.** A filter like `?status=PUBLISHED` has to reach
-Flask; dropping it silently returns everything, which looks like a UI bug and is not one.
+Trap: an empty form `POST` is a `415`, because a form always sends a `Content-Type`. The guard
+exists because `SameSite=Strict` does not stop a page on another port or a sibling subdomain
+([Cross-site request forgery](../15-dashboard.md#cross-site-request-forgery)).
 
-**Reject and revise are different actions.** A flat reject is terminal and its comment is optional; a
-revision requires a comment and routes to `REVISION_REQUESTED`. `video-modal.test.tsx` keeps them
-distinct because the UI presents them side by side.
+### `stream-route.test.ts`
 
-**Frozen choices stay visible.** After the topic checkpoint the script profile and agent model are no
-longer editable, but they must still be *shown* — a control that vanishes reads as data loss.
+Covers [`app/stream/[...path]/route.ts`](../15-dashboard.md#dashboardappstreampathroutets), on a
+real temporary directory tree with only the session mocked.
 
-**The Discord webhook URL is masked like an API key.** It *is* the credential — anyone holding it
-can post to that channel — so `settings-page.test.tsx` pins that its input is a password field that
-unmasks only while focused, and that it renders on the Notifications tab rather than API Keys, where
-it sits with the three triggers it configures.
+- Access: no session is a `401` before the filesystem is touched. A `..` escape, a symlink that
+  leads outside the root, a directory, a FIFO and any extension other than `.mp4` and `.mp3` are
+  each a `404`.
+- A directory swapped for a symlink between `realpath` and `open` is a `404`, by the descriptor's
+  `/proc/self/fd` path on Linux and by device and inode with `process.platform` set to `darwin`.
+- The file handle is closed on an abort, a cancelled body and a `304`.
+- The body is a stream. Single ranges, invalid ranges, `If-None-Match` and `If-Range` follow the
+  route's rules.
+
+Trap: the filesystem is real because the defects are filesystem behaviour (a symlink followed by
+`open`, a FIFO that blocks it), which a mocked `fs` cannot show.
+
+Trap: `O_NOFOLLOW` guards only the last path component, so the descriptor check is what refuses a
+swapped directory. The swap runs inside a wrapped `open()` so that the race is deterministic.
+
+Trap: an `ETag` built from size and mtime alone survives a same-size re-render with its mtime
+restored, and the browser replays the old video.
+
+Needs: `mkfifo` on the path, and a filesystem with symlinks.
+
+### `mascot-sheets-route.test.ts`
+
+Covers [`app/mascot-sheets/[...path]/route.ts`](../15-dashboard.md#dashboardappmascot-sheetspathroutets),
+the authenticated image relay.
+
+- No session is a `401`, and Flask is not asked.
+- Only `<id>/versions/<n>/sheets/<turn|feels|act>` is served, and any other path is a `404` before
+  Flask is asked. Ids follow the Python `MASCOT_ID_RE`, underscores included.
+- Only `image/png` and `image/jpeg` are relayed. A `401` from Flask is a `502`, so the browser is
+  not sent to `/login`.
+
+### `auth-routes.test.ts`
+
+Covers the login and logout routes ([Signing in](../15-dashboard.md#signing-in)), on the real
+`next/server`.
+
+- The password goes to Flask with the API token, and only a `200` sets the cookie. The backoff
+  passes through as `429` with its `Retry-After`.
+- Both routes refuse a request that is not `same-origin` with `403` and a non-JSON body with `415`.
+
+Trap: Flask refusing the dashboard's token (`unauthorized`) is a `502`. Shown as a wrong password,
+it would hide a broken install behind a login error.
+
+### `middleware.test.ts`
+
+Covers `middleware.ts`. A page load with no session cookie is redirected to `/login` with its path
+and query in `next`, and a request with the cookie passes.
+
+Trap: the middleware checks only that the cookie is present, and the proxy, stream and mascot-sheet
+routes verify the signature. The matcher leaves out the API routes, `/stream`, `/mascot-sheets`,
+Next's assets and `/login`, so that a `fetch()`, a `<video>` or an `<img>` gets a `401` from its
+route and never the login page's HTML.
+
+### `session.test.ts`
+
+Covers `lib/session.ts` and `lib/sessionCookie.ts`.
+
+- A forged, expired or `alg: none` token does not verify, and a missing `session_secret` fails
+  closed.
+- Rotating `session_secret` signs every browser out, which is how `--set-password` does it. Both
+  secrets are read on every call, so a rotation needs no restart.
+- `safeNext` keeps the post-login redirect same-site.
+
+Trap: the cookie is `Secure` only when the browser came over HTTPS. Always `Secure`, it would make
+sign-in over plain HTTP on a LAN impossible.
+
+### `update-check-route.test.ts`
+
+Covers `app/api/update-check/route.ts` ([Update check](../15-dashboard.md#update-check)).
+
+- Without a session the answer is `401`, and neither the API nor GitHub is called.
+- `develop`, an API that sends no `github_repo` and a malformed repository never reach GitHub. An
+  unreachable API or GitHub answers "no update".
+
+Trap: the installed version is read on every request while GitHub's list stays cached, so the banner
+clears as soon as an upgrade lands.
+
+### `update-check-lib.test.ts`
+
+Covers `lib/updateCheck.ts`, the update check's decision layer.
+
+- Only a newer stable release is offered. Versions compare by SemVer precedence, so an install on
+  `2.1.0-rc.1` is offered `2.1.0`, and `develop` is offered nothing.
+- `isRepo` accepts only a bare `owner/name`, because the value goes into a URL.
+- GitHub's list is asked at most once in 2 hours, and a failure keeps the last good list and is
+  retried after 15 minutes. The request carries a `User-Agent`, which GitHub requires.
+
+Trap: the newest release is chosen by version. GitHub lists by creation date, so a later patch to an
+older line comes first in the list.
+
+Trap: a prerelease is recognised by its tag as well as by GitHub's flag, because a release can be
+published without the flag.
+
+### `agents-lib.test.ts`
+
+Covers `lib/agents.ts`, the rules `ActionPane` and `VideoModal` share
+([Agent, model and effort pickers](../15-dashboard.md#agent-model-and-effort-pickers)).
+
+- `agentOptions` offers only live agents and shows a video's own uninstalled agent disabled.
+- A changed agent carries its own default model and never a model from the previous agent's list.
+
+Trap: only `topicApprovalPayload` pins a model. On every other action `agentPicksPayload` sends
+only what was touched, whether or not the agent list loaded, so a slow `GET /agents` cannot move a
+video to another agent.
+
+### `voices-lib.test.ts`
+
+Covers `lib/voices.ts` ([Voice picker](../15-dashboard.md#voice-picker)). `topicVoicePayload`
+carries a voice only when one was picked. `shownVoice` is the pick, else the video's own voice, else
+the install default. `voiceMissing` detects a voice with no roster entry, so the picker can list it.
+
+### `visual-styles.test.ts`
+
+Covers `lib/visualStyles.ts` ([Visual-style picker](../15-dashboard.md#visual-style-picker)).
+
+- `illustratedAvailable` reads the masked `openai_api_key`, where `""` means unset, so the key
+  never reaches the browser.
+- `cartoon3dAvailable` is true only while the GPU probe says working, and `styleOptions` tells an
+  untested GPU apart from a missing one.
+- `videoStyleLabel` names the world an Auto video settled on.
+
+Trap: settings and GPU status that have not loaded count as available, so the API gives the refusal
+and a page that loads neither does not grey an option out wrongly.
+
+### `mascots-lib.test.ts`
+
+Covers `lib/mascots.ts` ([Mascot picker](../15-dashboard.md#mascot-picker)).
+
+- `mascotGate` is open only while the GPU is working.
+- `mascotOptions` keeps a held mascot that is still pickable selectable. One that is not pickable
+  shows as unavailable and is never read as None.
+- `approvalMascot` sends no mascot for Cartoon 3D.
+
+Trap: the gate fails closed while the GPU status has not loaded, the opposite of the visual-style
+rule. An untouched picker could otherwise send a mascot the API refuses.
+
+### `renderers-lib.test.ts`
+
+Covers `lib/renderers.ts`, the rules behind the Renderers panel and the board's banner
+([Renderers](../15-dashboard.md#renderers)).
+
+- `rendererStatus` lets the first thing that stops a renderer taking work win: disabled, then
+  credential expired, then needs upgrade, then offline.
+- The GPU verdict is read from the renderer's probe only.
+- `nothingCanRender` is raised when a video is queued and no renderer is enabled, online, on this
+  version and holding an unexpired credential. A busy renderer still counts.
+
+Trap: `nothingCanRender` judges credential expiry by the same rule and the same `now` as the status
+chip, so a card that says credential expired cannot keep the banner down.
+
+### `video-status.test.ts`
+
+Covers `lib/videoStatus.ts`: `canDelete`, `deleteVideo` and `patchVideo`. An archived video is
+refused at any status, and `patchVideo` names a lost status race as a conflict and passes any other
+refusal on in the API's words.
+
+Trap: `DELETABLE_STATUSES` is asserted equal to the full allowed set, with no status missing or
+extra, because the set is copied from the API
+([Copied constants](../15-dashboard.md#copied-constants)).
+
+### `video-modal-utils.test.ts`
+
+Covers the two `/stream` URL builders in `lib/utils.ts`. `videoStreamUrl` builds a render's URL
+from the video's own domain id and video id, each encoded as one path segment, under `default_proj`
+when there is no domain (where the render gateway stores the file). `videoToStreamUrl` rewrites the
+`/output_videos/…` path a voice preview comes back with.
+
+Trap: `videoStreamUrl` never reads `video_path`. A row that names another video's file must not play
+that file.
+
+### `datetime.test.ts`
+
+Covers `lib/datetime.ts` ([Time](../15-dashboard.md#time)).
+
+- `formatDate`, `formatDateShort`, `formatDateTime` and `formatClock` use the zone they are given
+  and return a dash for unparseable input.
+- A timestamp stored with no zone designator is read as UTC.
+- The scheduling helpers `formatScheduled`, `wallClock` and `addDays`.
+
+Trap: the suite runs with `TZ=UTC` and asserts a non-UTC zone in the same file, which proves the
+explicit `timeZone` argument does the work and no host default does.
+
+### `palette-contrast.test.ts`
+
+Covers the secondary text tokens in `app/globals.css`. The test parses the stylesheet and computes
+WCAG contrast ratios.
+
+- `--dim` and `--mute` each clear AA (4.5:1) on `--bg`, `--panel` and `--panel-2`.
+- The order `ink > ink-2 > dim > mute` holds, so secondary text cannot be brightened until it
+  competes with primary text.
+- Every `--muted-foreground` declaration is `var(--dim)`, so the shadcn token cannot drift from the
+  palette.
+
+Trap: the secondary tokens are used at 10 and 11px, where contrast matters most.

@@ -1,169 +1,654 @@
 # `scripts/tests`
 
-Covers `scripts/poll.py` — the cron entrypoint — plus `status.py`, `service.py`, `uninstall.py`, the
-`print_version.py` / `migrate_db.py` / `backup_db.py` release CLIs, the release compose
-generator, the release tarball builder, the maintainer pre-flight checker
-(`check_release.py`), the release orchestrator (`release.py`), and — structurally, since neither
-runs here — the `.github/workflows/` CI and release definitions.
+Covers the host scripts in `scripts/`: the poller (`poll.py`), the agent adapters, the operations
+scripts (`service.py`, `status.py`, `uninstall.py`, `collect_diagnostics.py`), the release tooling
+and the remote-renderer script. It also checks files that no local test run executes: the GitHub
+Actions workflows, the two Kasm Workspace images and three agent skills. The suite needs `pytest`,
+PyYAML, `git` and the packages in `scripts/requirements.txt`.
 
 ```bash
 python -m pytest scripts/tests
 ```
 
-> **Must run separately from `renderer/api/tests`.** Neither parent has an `__init__.py`, so pytest
-> names both `tests/` directories the same top-level package and the second fails to import.
+Run each suite in its own pytest invocation. [`README.md`](README.md) lists the suites that fail to
+collect together.
 
----
+`conftest.py` points `TUBEMATIC_SECRETS_DIR` and the poller's heartbeat, session registry and session
+output files at a temporary directory, and creates the service tokens there. No test reads or writes
+the state under your home directory.
 
-| File | Guards |
-|---|---|
-| `test_poll_api_auth.py` | `poll.py`'s API token. One opener adds `Authorization: Bearer` to every request for `RENDERER_URL` and to **no other URL** — not one on a neighbouring port, not one that merely mentions the API in its query string. The token file is read per request, because the supervisor outlives a `--rotate-tokens`; and `main()` exits non-zero before doing anything when there is no token. The suite's conftest points `TUBEMATIC_SECRETS_DIR` at a temporary directory with a token in it, so no test reads or writes the host's own |
-| `test_poll_main.py` | `main()` — what each of the supervisor's lanes starts: the pause gate, the pipeline lane, the two independent research gates, and the script-profile lane, which runs beside the other two and still runs while paused. The mascot lane is guarded the same way: default or pinned agent/model/effort, a pinned agent that is gone is skipped and never rerouted (no attempt recorded), one mascot per pass, a capped-out mascot falls through to the next, and an unrecordable attempt starts nothing. Also that the user preferences reach every prompt, and that an idle pass never reads the settings at all |
-| `test_poll_supervisor.py` | The looping supervisor's mechanics, several with real processes and threads because a mocked `Popen` cannot show a `killpg` reaching a grandchild. The pipeline lane never exceeds `max_concurrent_agent_sessions`, fills oldest first, and never dispatches a video already in flight; research runs beside a full lane and **once per supervisor**, and not at all when no strategy is active (the API leaves mining out while no Gemini key is stored, so a mining-only install reports none) — without a run recorded against the daily cap; a pause starts nothing new and lets running sessions finish. The verdict read from the database: any status change is progress whatever the exit code; no progress on exit 0 is a warning, on a non-zero exit an error; a stuck flag is an error naming Retry agent; a `VOICING` session that ran on into scene work is flagged. The scene-claim cooldown, and its absence outside the claim window. A session past its deadline is killed with its children, and a child that ignores `SIGTERM` is killed at the end of the grace even though its leader exited at once. A session stays registered — output files included until its usage is recorded — until it is scored, and a successor records a finished-but-unrecorded session under its original run id without re-reporting a run already recorded, and reports its outcome under the session's own key. Every outcome carries its session key, and one the API reports as a replay is logged, never scored again. An adopted session's end is noticed within seconds, and an overdue orphan's `SIGTERM`-ignoring child gets `SIGKILL` within the grace. The registry holds a running session and is empty after it; a live orphan is adopted, holds its video and is scored when it exits; an adopted research session keeps the research lane to itself; one past its deadline is killed; a reused pid is never mistaken for an orphan. A stale heartbeat is logged by the next tick and kills nothing. Every log line names its session. The cooldown and its statuses are checked against the MCP server's `SCENE_CLAIM_TTL_SECS` and `_CLAIM_STATUSES` as source text, since `poll.py` cannot import the server. The stub API turns itself unreachable after a few hundred passes, so a regression that loops forever fails instead of hanging the suite |
-| `test_invoke_agent.py` | (OpenCode: that its ladder retries without the variant while **keeping** the model, that dropping its model necessarily drops its effort, and that three runs remains the ceiling) `invoke_agent()` command construction — the exact argv for each agent binary, the model flag, the effort flag, and the **fallback ladder**. Pins the two flags' opposite failure shapes (an unrecognised model exits 0 and must be read from the output; an unknown `--effort` exits non-zero having run nothing), that effort is dropped before the model, that no invocation ever runs more than three subprocesses, and that the effort marker is never matched against the agent's own words — matching the session's text would let one that merely discusses the flag strip it from every later run. Also that the row's agent id, not the poller, picks the argv, that a Codex row DOES retry when the API refuses the effort its model cannot use, and recovers when the fallback model refuses it too, without ever exceeding three runs, and that the agent's stdin is closed rather than inherited (Codex reads piped stdin and appends it to the prompt, so an inherited one can hang an unattended tick). Usage reporting: every run posts its parsed usage to `/usage/agent-session` with the batch's videos and stages — **including a retry**, which is a second billed session — while a run that never started (a rejected model) posts nothing, a dry run posts nothing, and a failed POST never costs the tick but logs the full payload, so the units (the part that cannot be recovered later) survive in poll.log A `200` that recorded fewer events than were sent is treated as a failure, so the lost units still land in the log rather than a success line. OpenCode's session-usage read is retried and every failed attempt is logged with its reason — seen in a live run, the read failed right after a session that ended on a provider error and worked moments later, and a silent miss leaves only the stream fallback, which can lose the last step. Logging: a run's log entry is the adapter's summary and never the raw stream (a marker inside a tool result must not reach the log), stderr is logged by its **tail**, and a model rejection printed past the log cap still triggers the retry — the pin that trimming is for the log only |
-| `test_agent_adapters.py` | `scripts/agent_adapters.py` — every argv shape pinned verbatim, because the Claude CLI treats an unrecognised subcommand as a *prompt*, so a malformed verification command silently becomes a billed model call. Also the two output matchers, including that a bad `--effort` **value** (exit 0, warning, work still done) is deliberately *not* a rejection: retrying it would be a second billed session for nothing. For Codex it additionally pins the `--` separator before the prompt (`codex exec` has `resume`/`fork`/`review` subcommands, so a bare prompt of exactly one of those words would be parsed as the subcommand), `--skip-git-repo-check` (the agent workspace is not a git repository and Codex otherwise refuses to start), that `"Logged in"` is a **prefix** test so the logged-out `"Not logged in"` cannot match, that the model matcher does **not** catch the CLI's "metadata not found" warning — which is printed for models the API then accepts, so treating it as a rejection would drop the model flag on healthy runs every tick — that Codex's rejected-model matcher covers **both** auth modes (a ChatGPT account and an API key word it completely differently, and matching only one leaves the other with no fallback), that it still ignores the benign "metadata not found" warning even when that warning sits directly beside a real rejection in the same transcript, that an effort the chosen model cannot use is a rejection worth retrying while a zero exit never is, that internal catalog entries marked `visibility: "hide"` are never suggested; that every Codex argv carries `approvals_reviewer="auto_review"` — without it `codex exec` refuses every MCP tool call and still exits 0, so the agent does nothing while looking healthy — and that no argv ever contains a `dangerously` bypass flag; and that a malformed model catalog yields no suggestions rather than raising. For OpenCode it pins that the effort appears **only** as a `#variant` suffix on a model and never alone (the effort has nowhere else to live, which is also what makes the poller's third fallback round unreachable for this agent); that `--auto` is on every argv and no bypass flag ever is — an unmatched permission resolves to `ask`, and a non-interactive `ask` is auto-rejected and cancels the whole session, so without `--auto` a run that merely reads the poll log dies having done nothing; that `logged_in` cannot lean on the exit code, because `opencode auth list` exits 0 logged out and prints `No authenticated integrations`, with empty output also counting as logged out; that a missing *variant* is told apart from a missing *model* (`Variant unavailable` vs `Model unavailable`), which is what lets the retry keep the chosen model; that `mcp_remove_argv` returns **None**, because no `opencode mcp remove` command exists and an argv that does not exist would have an uninstall reporting success for a command it never ran; that the permission rules deny edit, write, shell and `.env` reads while allowing `.env.example` *after* its deny, since last match wins; and that Code Mode is turned off on the server entry while `oauth` is deliberately left unset. It also covers OpenCode's config dialect: that the document name is **resolved** between `opencode.json` and `opencode.jsonc` in the order the CLI itself picks (probed — with only a `.jsonc` present, `mcp add --global` appends to that one), that a model slug with a **vendor segment** (`openrouter/qwen/qwen3.8-27b`) is suggested — requiring exactly two `/`-separated segments dropped every OpenRouter model while `opencode models` listed them, and a dropped line is indistinguishable from a header line that was meant to be dropped — while a decorated or malformed line still is not; that the JSONC parser is string-aware so a `//` inside a URL or a `, }` inside a string value survives it, and that a trailing comma **followed by a comment** parses — all three forms of that raised, because doing both transformations in one pass leaves the comma's lookahead staring at a comment that has not been removed yet. The comment-preserving removal has its own group: that it drops exactly one member and keeps comments across seven document shapes (including a `//` inside a URL and braces inside a string), and that it **refuses** rather than guessing on five malformed ones — every result is verified against the parsed original, which is what makes text surgery on a human-authored file acceptable. A separate test pins that the permission rules assert what the pipeline **needs**, not only what it must not do: deny-only left `webfetch`, `websearch` and the `tubematic_*` MCP namespace to be decided by the operator's global config, and a global deny of any of them won — silently, since the pipeline would then do nothing while looking healthy. The uninstall sweep is likewise pinned to remove Tubematic's own config documents from the agent workspace. Two whole-registry tests come from bugs found in review: every adapter that names a config document must also say how to parse it, and every root-resolving call must accept `respect_override=False` — honouring an environment override on some of them and not others removed the default skills while leaving the default commands and MCP registration in place. A whole-registry test keeps every adapter's effort levels equal to the shared tuple, another keeps `HAS_COMMANDS` honest against what is actually on disk, a third keeps every agent's command *set* identical so a command added for one cannot silently not exist for the other, a fourth forbids any agent's commands from naming another agent's CLI, and a fifth forbids a command from telling an agent to run a tool its own install denies — OpenCode's `shell: deny` is absolute inside the agent workspace and cannot be approved interactively the way an unlisted Claude tool can. The JSON output modes each argv now carries are how usage is read, and the usage parsers are pinned against trimmed copies of real probed output: Claude yields one event per model with its own list-price `costUSD`, a rejected-model run yields nothing; Codex sums its turns and splits cached input out of `input_tokens` (OpenAI counts it inside), falling back to the model in its `config.toml` when none was passed; OpenCode reads the session API rather than its stream, whose last `step_finish` can be missing, and falls back to the stream marked estimated. The JSON modes move Codex's and OpenCode's own errors onto stdout, so their effort matchers read the stream's **error events** — and a test pins that the same phrase inside the agent's own message is still not a rejection. The log summaries (`summarize_output`) are pinned per agent: the final message is the **last** one, not the first; Codex counts a call once although it appears as both `item.started` and `item.completed`; OpenCode dedupes a call by its call id; failed calls are counted and the CLI's error events are surfaced. Bulky tool results, arguments and Codex reasoning never reach a summary. A long message is clipped with a count of what went, output in no known shape is clipped rather than dropped (it may be the only clue to a crash), and empty output summarises to nothing **MCP authentication:** no registration ever carries the token itself — Claude's `add-json` entry names a `headersHelper`, OpenCode's header is a `{file:}` reference to the token file, and Codex's `mcp add` gets neither (it has no header flag) — and each adapter declares whether its `mcp add` replaces an existing entry, since Claude's refuses one. The Codex `http_headers_helper` patch is a line edit inside `[mcp_servers.tubematic]` only: it keeps the operator's comments and other tables, replaces rather than duplicates, quotes a path with specials into valid TOML, and returns `None` when the table is absent. |
-| `test_bootstrap_args.py` | The argv bootstrap, and that every prompt names one video and points at the absolute `poll.log`. Cron strips the environment to `HOME`/`LOGNAME`/`PATH`/`SHELL`, so the workspace path and agent binary arrive on argv from the cron line |
-| `test_workable_videos.py` | The `/videos/workable` path, exercised through the **real** functions rather than a reimplementation. Every workable video gets its own session under its own agent, model and effort. A pipeline session is tagged with its one video and the status it started at (the stage its cost is shown under). An unreachable endpoint starts no session at all: there is no unscoped fallback, because a session told to work "every workable video" crosses agent boundaries |
-| `test_poll_prompt.py` | `build_mascot_prompt` names the builder skill, the mascot id, the three tool steps and the "do not advance any video" scope, and carries the preferences block only when set. `build_research_prompt` — strategy blocks, per-run targets (the mining target only when mining is active, so a run without a Gemini key is never invited to mine), and the configured source lists, and that it deduplicates with `list_project_topics` (archived topics included) and skips an expired domain like a paused one. `build_pipeline_prompt` — one video and where its stage ends, for every workable status (a cross-copy check keeps the stage table in step with the API's `WORKABLE_STATUSES`, since a status with no stage would be skipped forever); the ban on looking for other work, and that it stays a ban on *looking for work* and never becomes a flat ban on `get_pipeline_status`, which the skills need for the pronunciation lexicon and the voice roster (a flat ban made agents skip those steps); that a revision is told not to stop at `VOICE_READY`, where the scene-work claim would refuse the next session; and that a pronunciation revision is told — in the prompt and in the operator skill's row — to end at `VOICING` without re-voicing, since a live session otherwise followed the skill straight through to a render. Also the USER PREFERENCES block on all three prompt builders: each names its own stage, scopes the text to that stage, and says it cannot override a checkpoint. Empty preferences must leave every prompt byte-identical, so an install that never sets them sends what it always did |
-| `test_voicing_authorization.py` | The wording that lets an unattended agent voice a video already in `VOICING`. An agent once refused `generate_voice` there, asking for approval of the spend and of sending the script to ElevenLabs — approval the human had given by moving the video out of `SCRIPT_READY` — and since `VOICING` is workable, every tick refused again: a wedge, not a delay. The cause was prose, so these pin prose, in two halves that are both needed. The operator skill's `VOICING` row and pronunciation re-voice row, the `build_pipeline_prompt` text and the `generate_voice` docstring each say the voicing is already authorized, naming both the spend and the disclosure (naming only one left the other to stop the agent), and the row says a refusal wedges the video. The `SCRIPT_READY` checkpoint stays, scoped to moving a video *into* `VOICING` rather than read as a ban on the tool. The `generate_voice` error row must not re-set the status, because that only rewrites `updated_at`, the clock the worker's stall alert measures |
-| `test_poll_json_logging.py` | The poller's structured `poll.<date>.jsonl` sink. Retention arrives over HTTP (this module has no database access, and a test pins that), `poll.log` is kept beside the JSONL file rather than replaced, and an unwritable shared log directory degrades to `poll.log` only. That degradation must be **reported**: `setup_json_logging` returns `None` quietly by design, and before this was checked a root-owned `~/.tubematic-data/logs` dropped every poll entry from the dashboard with nothing anywhere saying so. The test asserts the `poll.log` warning names the directory and the `chown` fix, and that a writable directory produces no warning |
-| `test_poll_lock.py` | Where `poll.py::LOCKFILE` lives and that a run never deletes it. It sits beside the poller's logs under the agent home, not in `/tmp`, so every poller sharing a home directory shares one lock. A finished run leaves the file in place: unlinking a `flock`'d file lets two pollers each hold a lock on a different inode, so the file must outlive every run |
-| `test_poll_disk_snapshot.py` | The poller's disk-usage measurement. It starts before the pass, so a paused pipeline or an unreachable API still gets a fresh figure, and it runs detached (`start_new_session`) at most once an hour, never on a dry run. A failure to start it is logged once. `conftest.py` makes it a no-op for every other poll test, because the real one runs Docker and writes into `~/.tubematic-data` |
-| `test_update_price_snapshot.py` | `update_price_snapshot.py`, the maintainer script that writes the built-in model prices a fresh install starts from. It must apply the **same** precedence as the runtime sync (OpenRouter, else LiteLLM), must refuse to write when a model Tubematic can select is in neither feed — a missing row means that model is unpriced on every new install — and the committed `tubematic_core/prices_snapshot.json` must cover every model in `KNOWN_MODELS` |
-| `test_status_spend.py` | `status.py`'s spend summary, which now reads the usage ledger instead of three per-video cost columns nothing writes any more. It keeps the dashboard's honesty rules — unpriced calls are called out rather than counted as `$0`, ElevenLabs is shown in credits, the API-list-price caveat is printed — and a database that has not been migrated yet says so instead of crashing the whole status report |
-| `test_clear_db_wipe.py` | `clear_db.py`'s "Wipe all videos" also clears the spend ledger — including when there are **no videos at all**, which is an ordinary state (research that filed nothing, voice previews, videos deleted one by one). It used to stop at "no videos" before reaching the ledger, leaving the destructive full reset as the only way to clear recorded spend. A genuinely empty database still asks for nothing |
-| `test_status_format.py` | `status.py`'s local-date formatting |
-| `test_mcp_url.py` | `config.py::_mcp_base`, which turns `MCP_URL` into the server root. `status.py` probes `{MCP_URL}/health`, and that route is served beside `/mcp`, not under it, so an `MCP_URL` in the endpoint form would build `/mcp/health`, get a 404, and report a healthy MCP container as unreachable. That form is the one someone would actually paste: `claude mcp add` takes it and the docs quote it. A trailing `/mcp` is stripped as a whole path segment only, so `/mcpx` is left alone and a reverse-proxy prefix survives |
-| `test_service.py` | `service.py` — `start` goes through data directories and volume reconciliation before `up`, which is the whole reason to prefer it to a bare `docker compose up -d`; `restart` is stop then start. `stop` and `restart` refuse while a render is in flight and `--force` overrides, the same gate `upgrade.py` uses; restarting the dashboard alone is not refused, since it holds no work. The exception is pinned in both directions: when a Docker volume has to be re-pointed, the reconcile runs `docker compose down` on every container, so a plain `start` and a dashboard-only restart are gated too — and refused **before anything stops**, so a refusal never leaves the dashboard stopped and not restarted. `status` is the shared report; `logs` hands the terminal to `docker compose logs`. Bad commands, unknown services and unknown options are refused before the venv bootstrap runs Starting the stack creates any missing service token just before `up`. |
-| `test_uninstall_config.py` | `uninstall.py`'s config read must survive deletion of the database it reads from. Also its non-Claude agent sweep: the whole-project uninstaller only ever removed Claude's files, so a Codex install used to survive it — these pin that `~/.codex/skills/` and the global MCP registration are removed, that a skill nobody else installed is left alone, and that a machine which never had Codex prints nothing at all. They now drive that through the single adapter-keyed entry point rather than a function per agent, which is the thing that stops a newly supported agent shipping with an uninstaller that quietly leaves it behind. Four more came out of review, each pinning a way the sweep used to miss files that were really there: a **project-scope** install is swept from its own workspace rather than the user directories (otherwise it found nothing, printed no header, and left the whole install behind), every skill the installer deploys is looked for rather than a hardcoded list that had fallen one behind (simulated by dropping a shipped name from the list), a retired skill an older release deployed is removed too, the config-root override is ignored on *every* path and not just the skills, and a `.jsonc` config is found — and left untouched, with the edit reported, when it carries comments. A user-level Claude Code uninstall removes from `~/.claude/commands/` only the command names it lists, so a further test pins that list to cover every file in `agent_files/claude/commands/`: four commands had been added there and never to the list, and survived an uninstall. The same Claude path now sweeps every shipped and retired skill rather than its literal list, and the step numbers printed never exceed the total (agent sweeps all share step 6). When the data root is kept, the GPU choice in it is named, since a reinstall over it would hand the GPU to the new renderer again, and so is the remote-renderers override, since a reinstall would publish the render gateway's port to other machines again |
-| `test_collect_diagnostics.py` | `collect_diagnostics.py`, whose report is meant to be pasted into a public issue. One fixture plants every value the collector could be handed — each secret-typed setting, every service token (the built-in renderer's included), the password hash, unstored OpenAI, ElevenLabs and Google keys, a Bearer and a Basic header, a session cookie, an email, a public IPv4 and IPv6, the home path, user and host name, a postforme account id, a voice id (and ones only a video or a domain's default still holds, after the voice left the roster), a handle, and a video's title, topic, domain name and id (an id is a slug of the domain's subject, so it is content too), a single sentence of its script, its review feedback, its publish description, one line of a human comment, the user's preferences and a pronunciation-lexicon entry — into all three log sources at once (structured logs, `poll.log`, container output), and the finished report is searched for each. Content stays out unless `--include-content`, except agent-authored comments: the worker and the renderer file their errors as those, so the test asserts such an error survives; ids become the same short hash wherever they appear, so lines about one account still match up; loopback addresses and timestamps survive. Content under 12 characters is replaced as a whole word only: a short comment once survived because short pieces were skipped outright, and plain substring matching would cut into longer words, so the test checks a short comment goes, a longer word starting with it and one ending with it stay, a placeholder that contains the same word is not rewritten, and anything under four characters is left. The residual scan is shown to **fail closed** by breaking the redactor on purpose: nothing is written and the surviving value is not echoed to the terminal either. A stored value with no recognisable shape is pinned separately, because only the literal check can see it. A secret straddling the 2,000-character line limit is pinned too: the cut once ran before redaction, leaving a prefix the stored value no longer matched, so lines are now cut only after redaction and the residual scan. `--since` is shown to bound `poll.log` both ways — a narrow window drops older lines (a continuation line takes its message's time) and a wide one reaches the dated rotations; `--lines 0` once meant `lines[-0:]`, the whole file, so non-positive windows are refused. It also refuses to write inside `~/.tubematic-data` (an agent reading the report would then need the directory that holds every key), refuses an existing `report.md` — including a symlink planted while the report is being built, which only opening with `O_EXCL` catches, the up-front check being a courtesy — writes 0700/0600, shell-quotes the path in the printed `gh` command, stops when a token file exists but cannot be read, and opens the database read-only. The Stack section carries the GPU readout `upgrade.py --check` prints, with GPU UUIDs removed: a UUID identifies a physical card, and the name is all a bug report needs. That readout comes from the built-in renderer's probe in the `renderers` table, so a test stores one there and checks the report still names the GPU the renderer confirmed |
-| `test_troubleshooting_skill.py` | The troubleshooting skill is explicit-only on all three CLIs — `disable-model-invocation` and `opencode/autoinvoke` in the frontmatter, `agents/openai.yaml` for Codex — and no scheduled prompt names it. Losing any switch is silent: the skill still works when asked for, so nothing else would fail. It also pins that the skill never tells the agent to query the database, read a token or file the issue itself, and that it reads no raw log — not `poll.log`, not container output — only the redacted report: seen live, an agent told to read the poller's log tail read the whole unredacted file and sent stored keys to its model provider |
-| `test_mascot_builder_skill.py` | The mascot builder skill is loadable by an unattended run: the poller's mascot lane invokes it by name, so — unlike the troubleshooting skill — it must not be explicit-only on any CLI (no `disable-model-invocation`, no `opencode/autoinvoke`, no `agents/openai.yaml`). Pins that it names the three MCP tools of the build loop, that the poller prompt names the skill, and that its guide keeps the rules whose loss is silent: the face record's required `bx` (a missing one makes every blush `NaN` with no error), seeding through `boilSeed` instead of `Math.random()`, and no talking mouth |
-| `test_release_clis.py` | `print_version.py`, `migrate_db.py`, `backup_db.py` — the CLI-level contract (exit codes, what lands on stdout vs stderr, and that `--allow-no-backup` prints a visible warning) over `tubematic_core.db`, which is covered separately in `tubematic_core/tests` |
-| `test_mcp_auth_header.py` | `mcp_auth_header.py`, the helper Claude Code and Codex run on every MCP connection, run for real as a subprocess. It prints one JSON object carrying `Authorization: Bearer <mcp_token>`; a missing token exits non-zero with nothing on stdout, so the CLI sends no header and the server's `401` is the visible failure; and it never reads the API token, which is a different credential |
-| `test_gen_release_compose.py` | `gen_release_compose.py` — drives `generate()` against the real `docker-compose.yml`, not a fixture, so a real topology change is what the test would catch: every `build:` section (and every service reusing the locally-built image under its `tubematic-renderer-image` tag) becomes a pinned `ghcr.io/<owner>/tubematic-<role>:<version>` image, every published port is forced onto a `127.0.0.1:` binding, and everything else — volumes, environment, healthchecks, `depends_on`, `shm_size`, `restart`, `container_name`, the top-level `name:` — passes through byte-for-byte. Also pins `check_version_is_tag_safe`/`invalid_version_chars`: a plain or `-prerelease` version passes, a `+build metadata` version (legal SemVer, illegal Docker tag) is rejected with every offending character named, and `generate()` itself refuses an unusable version rather than emitting a broken compose file The top-level `secrets:` block and every service's `secrets:` list pass through unchanged, so a release install mounts the same token files a dev one does. The release renderer, like the dev one, reaches the render gateway with no database mount, holding its token and the gateway certificate but never the TLS key, and the gateway port is not published. The default `--owner` is the owner part of `tubematic_core.version.GITHUB_REPO`, so the repo is spelled in one place. |
-| `test_build_release_tarball.py` | `build_release_tarball.py` — builds the real `dist/tubematic-v<version>.tar.gz` from this actual checkout (not a fixture), and asserts: every allowlisted path is present, including `upgrade.py`, `scripts/service.py` and the `onboard/stack.py` they share (a release user cannot upgrade or restart without them), the `LICENSE` file (Apache-2.0 requires a copy in every redistribution, and the tarball is one), and the public docs — `docs/README.md`, `docs/quickstart.md`, `docs/release-notes.md`, and the `docs/user-guide/`, `docs/developer/` and `docs/images/` trees, each named explicitly and never a bare `docs/` tree, which would sweep the gitignored `docs/superpowers/` in behind it; every excluded pattern (`renderer/`, `.env`, `HANDOFF.md`, `.onboard-state.json`, `docs/superpowers`, both packages' own `tests/`, …) is explicitly absent; the bundled compose file is the generated release one, named plainly `docker-compose.yml`; `tubematic_core/migrations/` survives; building the same commit twice is byte-identical; `CHECKSUMS.txt` covers every other file and no more; a missing allowlisted path raises rather than shipping a hole; no non-`.py` file it ships mentions a `TMDEV-`/`VQA-`/`EXQA-` ticket ID (the archive is a public download; `.py` files are exempt since internal `#` comments keep ticket IDs deliberately); no non-`.py` file it ships carries a relative markdown link to another `.md` file, resolved against the *linking file's own directory inside the archive*, or to an image, whose target isn't also in the archive (a link written inside a code span is an example of the syntax and is skipped) — catches both an explicit `docs/` prefix (a root guide linking into `docs/`) and a relative path between pages (a user-guide page linking `../developer/…`), since only part of the `docs/` tree ships; both shapes shipped broken once, before this guard covered it; and — the test of the allowlist itself — the extracted tree can `import onboard.actions`/`onboard.steps`/`onboard.config`/`tubematic_core.db` in a fresh subprocess. A dedicated fixture repo also drives the forbidden-name guard's fail-loud path itself (a "mounted" directory planted inside `onboard/`, whose own ignore set excludes only `tests`/`__pycache__`, still gets copied and must be caught by the whole-tree sweep) — previously only its *absence* on a clean build was ever exercised `scripts/mcp_auth_header.py` and `tubematic_core/auth.py` ship in the tarball: every agent registration points at the helper, so a release install without it would leave every agent refused by MCP. `scripts/collect_diagnostics.py` ships too, since the troubleshooting skill asks a release user to run it. So does `scripts/tubematic_remote_renderer.py`, the script a remote renderer host runs (it is also a Release asset of its own). The compose-file check matches compose files by name, not every `.yml`: a skill may carry agent config such as `agents/openai.yaml`. |
-| `test_build_release_tarball.py` (cont.) | One case is about the developer's machine rather than the archive: pytest writes a `.pytest_cache` *inside* each suite directory, and `.pytest_cache` is also a forbidden name — so before the per-tree prune sets excluded it, the build failed with "excluded pattern found in staged tree" for anyone who had run the tests, which is everyone about to cut a release. Git hides the problem entirely (pytest drops a `.gitignore` containing `*` into each cache, so `git status` is clean and the directories are invisible until a tool walks the filesystem directly). The test plants one in every shipped tree and asserts the build succeeds and the archive contains none |
-| `test_kasm_workspaces.py` | The two Kasm Workspace images, `kasm_workspace/` (published) and `kasm_workspace_testing/` (QA), which CI never builds. In both, the `dind` `/tmp` patch's `RUN` body is executed with `sh` against a fixture `custom_startup.sh`: with the anchor line it inserts exactly one line before `supervisord`, and with the anchor changed it fails — a skipped patch is a blank-screen session nobody notices until they launch one. Every hook and build script is `100755` in the git index (`COPY` keeps the mode, and an inert hook looks exactly like Kasm never calling it), parses with `bash -n`, and the published ones pass `shellcheck` where it is installed. The published Dockerfile must not `COPY` the repository — its whole point is that a release never needs a rebuild — and every file it copies exists in its context. It also runs on UTC (`ENV TZ=Etc/UTC`, linked into `/etc/localtime`): the session is Tubematic's host, so its zone is every time Tubematic shows, and a re-copy from the testing Dockerfile would otherwise bring that image's fixed zone along. The registry entry (`registry/Tubematic/workspace.json`) has the schema 1.1 keys, an icon that exists, `privileged`, `gpu_count: 0` (an attached GPU crash-loops XFCE), the answers mapped under `/dockerstartup/` rather than `/tmp`, a version list newest first whose first entry is the default and the only `(latest)`, every value matching the field's own `validator_regex`, and `allow_saving: false` on the version so a remembered pick never pins an old one. The form's keys, mapping path, methods and regex must equal the bootstrap's own constants |
-| `test_kasm_workspace_bootstrap.py` | `kasm_workspace/image/tubematic_bootstrap.py`, what the published workspace runs at launch. No test touches the network: downloads go through a fake `urlopen` and clones through a fake `run`. Every refusal downloads nothing — bad JSON, a missing key, a version that is not a plain `X.Y.Z` (a `v` prefix, a prerelease, shell metacharacters) or an unknown method, checked end to end through `main()` with the request log asserted empty. The relaunch cases: an empty profile installs, the same version is left alone, a different version is refused with the upgrade pointer (and, through `main()`, makes no request), and Tubematic data with no install marker — or an unreadable marker — is refused rather than installed over. A release is checksum-verified **before** extraction: a mismatch discards the download and extracts nothing, a `CHECKSUMS.txt` without the tarball's line is refused, an unpublished version (404) is refused, an archive with any path outside `tubematic-v<version>/` is refused, and an existing target directory is never extracted over. Source clones the version's tag, never the default branch. A fresh install writes the marker and runs `onboard.py` in the install directory. `GITHUB_REPO` must equal `tubematic_core.version.GITHUB_REPO`, since the image cannot import it. Trap: the fakes are installed by patching the module's `urllib.request.urlopen`/`subprocess.run`, so the functions must look those up at call time — a default argument bound at definition time made the "downloads nothing" tests pass while never seeing the fake |
-| `test_tubematic_remote_renderer.py` | `tubematic_remote_renderer.py`, the stdlib-only script that installs, upgrades, removes and reports on a renderer on another machine. It runs with no checkout, so it carries its own copies of several things, and each is checked against its original: the enrollment-token decoder against `tubematic_core.renderers.decode_enrollment_token` (tokens core encodes, a hand-built one, and malformed ones both refuse), the certificate pin against `cert_pin` on a real certificate, the image owner against `tubematic_core.version.GITHUB_REPO` (the release workflow overwrites it for a fork; `test_workflows.py` pins that) and the image name against the release compose generator, the container's command, shared-memory size and Chromium path against `docker-compose.yml`'s renderer, the `nvidia-smi` parsing against onboarding's, and the GPU environment and device against `onboard/gpu.py::render_override`. **Nothing is sent to a gateway before its certificate matches the token's pin**: a real TLS server built from an `ensure_secrets` pair sees the handshake and not one HTTP request line when the pin is wrong, both for the version check and for a whole `install` (which then pulls and starts nothing); with the right pin it sees exactly `GET /v1/version`, and the pinned context refuses a second, different certificate. Mutation-checked both ways: dropping the comparison, or sending the request before it, fails these. **The token is never written down, and the container left running does not hold it**: the state file is mode 0600 and holds neither the token nor its secret, the token is in no argv (the enrollment container gets a bare `-e TUBEMATIC_ENROLL_TOKEN` and the value only through that one `docker run` call's environment), and nothing printed contains it, including the refusal of a bad token. The fake Docker stores each container's environment the way Docker does (a bare `-e NAME` is resolved and kept in `Config.Env`, which `docker inspect` shows), so the tests see what Docker would keep: the enrollment container, `--restart no`, holds the token; once the renderer has enrolled it is removed and the renderer started again from the same argv minus the token, `--restart unless-stopped`, and no container left holds it. A refused enrollment, no enrollment within the wait, a `docker run` that created the container and then failed, and Ctrl-C while waiting all leave no container, and delete the state volume only when this install created it. Recreating without dropping the token was checked to fail these. **How the token is given**: a hidden `getpass` prompt by default (the dashboard's command has no token), one line of stdin with `--token-stdin`, an empty stdin refused, no terminal and no token pointing at `--token-stdin`, and `--token` refused — with a value, `=value`, bare, or beside `--token-stdin` — before Docker or the gateway is touched, without echoing the token (dropping the refusal was checked to fail every case; the bare form would otherwise be read as an abbreviation of `--token-stdin`). Docker is a fake `run_cmd`, never the real thing: the exact `docker run` argv for a CPU and a GPU install; a named GPU among several; several GPUs with no terminal refused naming `--gpu` (and asked for with one); an unknown GPU and a GPU with no `nvidia` runtime refused rather than silently rendered on the CPU; `--no-gpu` never runs `nvidia-smi`; an existing container refused before the gateway is contacted or anything pulled; Docker missing or without a daemon as a plain message; a local `--image` used without pulling, and an image that could be read as a docker flag refused. `upgrade` pulls before it stops anything (a failed pull leaves the old container running) and recreates the identical container on the new image with no token; `remove` with no terminal needs `--yes`, asks separately before deleting the saved credential and keeps it on a no; `status` shows the container and its last log lines; no connection after enrolling is reported, and a failed restart after enrolling says `upgrade` starts it again; every subcommand has `--help`; and the script imports only the standard library |
-| `test_kasm_registry_sync.py` | `kasm_workspace/sync_registry.py`, which `release.yml` runs to write the Tubematic entry into the workspace registry repo. The launch form has no free-text fallback, so the list it writes is exactly what can be installed. Pinned: versions sort numerically (`2.0.10` after `2.1.0`, before `2.0.9` — a string sort gets this wrong); tags and duplicates collapse; a prerelease or anything not `X.Y.Z` is never offered; an empty list is refused and writes nothing; the written entry passes the same checks `test_kasm_workspaces.py` applies to the in-repo one (newest first and the default, `(latest)` on the first only, the form keys the bootstrap reads); and nothing but the version list changes, so the in-repo entry stays the source of truth for every other key |
-| `test_check_release.py` | `check_release.py` — every pre-flight check exercised independently against a real git repository built in `tmp_path` (real `git init` and real commits, never a mocked git): a dirty tree, a version mismatch in both the plain and `v`-prefixed forms, a version that is not tag-safe (with every offending character named), a duplicate migration version, a modified vs. a merely-new-and-uncommitted migration file, a compose file that fails to generate, a missing allowlisted path, a forbidden name riding along inside an allowlisted directory tree, and the missing-workflow-files warning. The tag check is three real cases, not two: no such tag (pass), the tag already pointing at HEAD (pass — this is the release workflow running in CI *after* `actions/checkout` has already fetched the tag that triggered it, not a conflict), and the tag pointing at a different commit (fail, naming both SHAs — the actual danger, reusing a version for different code). Each tag case creates the tag for real with `git tag`, never a mocked lookup. A separate "all clear" fixture drives `run_checks()`/`main()` end to end and pins that the warning alone does not fail the exit code, while a real failure does |
-| `test_check_release.py` (cont.) | Two checks are **warnings, not failures**, and that is the behaviour under test. The release-line check reports when HEAD is not contained in `release/X.Y.x` — the mistake the line model makes easier, since the line and the development branch both look taggable — but warns rather than fails, because the first release of a minor version legitimately runs before the line exists and CI checks out a detached tag with no branches at all. A check that is permanently red in the two situations it is most often run is a check that gets ignored. The all-clear fixture creates the line so the pass path is exercised too, not only the warning. The development-branch marker `develop` is pinned on both sides of that line: the version-format check **fails** on it (every other check accepts it, so this one is all that stops a `vdevelop` tag), while the release-line check only warns and is skipped, because `develop` has no release line and one crashing check would take the whole report down with it |
-| `test_release.py` | `release.py` — the thin orchestrator: a failing pre-flight check aborts before any build is attempted (`run_checks` is proven to be consulted, not skipped); the all-clear path builds the tarball, prints the release-notes skeleton and the git tag/push/branch commands — and, checked against a real git repository, never actually runs them (no new tag, no new branch); a tarball build failure aborts after checks pass; and the `v`-prefixed version form is accepted |
-| `test_release_notes.py` | `release_notes.py` — extracting one version's section from the release-notes page: the matching section without its own heading, both the plain and `v`-prefixed argument forms, and the two things that end a section (the next version heading, a horizontal rule). Four failure cases are pinned because each is a different mistake: a version with no section at all, a section present but still an unfilled skeleton (the one that matters — a pasted skeleton looks written and says nothing), a prerelease whose base version is also absent (the error must name both), and an unreadable file. The prerelease fallback is pinned in both directions: `1.2.3-rc.1` with no section of its own publishes `1.2.3`'s notes, but a prerelease that *does* have its own section wins over the base. A final test runs the extractor against this repository's real page at the current `VERSION`, so a page that would fail its own pre-flight check fails here instead of at release time. On the development branch, where `VERSION` is `develop`, it checks the page's newest section instead: that is the release the branch is heading towards. `release_line()` is pinned here too, including that it refuses `develop` |
-| `test_workflows.py` | The `.github/workflows/*.yml` files — the only automated check they get, since GitHub Actions runs only on GitHub and `actionlint` is not installed here. Parses each workflow with PyYAML and asserts structure, not behavior: `ci.yml`'s test matrix is derived from the suite directories actually on disk (not restated), the e2e job's `if:` never has a path to `pull_request`, every third-party action across both files is pinned to a released version tag or a full SHA (never a floating branch), and every `needs:` reference resolves to a real job. For `release.yml` specifically: it triggers on `v*.*.*` tags only; it reuses `ci.yml` via `workflow_call` rather than re-declaring its jobs; `--owner` is always `github.repository_owner`, never a script's hardcoded default; `permissions:` is exactly `contents: write` + `packages: write`; its one Release-creating step sets `prerelease` from a `-` in the version, because the action's default (`false`) would publish a release candidate as an ordinary release GitHub can list as Latest; the remote renderer script is copied into the release artifact, named in the same `CHECKSUMS.txt` as the tarball, and uploaded as a Release asset, because the machine that runs it downloads it alone; the release owner is stamped into its `GITHUB_OWNER` before the tarball is built and the asset copied — run for real on a copy of the script with a non-default owner, which then selects that owner's image while only that one line changes and the repository's own file keeps its default — the step fails when the line is not there exactly once or the owner is unfit for an image name, so a fork's renderers never pull upstream's image of the same version, and the asset step fails unless the asset is byte-identical to the tarball's copy; the smoke-test job extracts the published tarball (never `actions/checkout`) into its own temp directory; it creates every secret file `docker-compose.yml` mounts before `up` — checked by running its token step against a scratch home and looking for each file the compose `secrets:` block names, because the smoke test skips onboarding and Compose refuses to start a service whose token file is missing (the first 2.0 tag run failed exactly there). That step also writes the render gateway's TLS pair, which needs `cryptography`, so a step before it in the same job must install the package (the runner's Python lacks it), and the test runs the token step with its own interpreter rather than whatever `python3` the PATH names; its ordering — walked transitively through `needs:`, not just one hop — places the smoke test after the image push and before the Release job, since reversing that lets a broken artifact become a published, un-un-publishable Release; and its `curl` checks against the running stack carry `--retry`/`--retry-connrefused`/a time bound, so a later "simplification" can't quietly reintroduce a race against a container that reports healthy before its process has actually bound its port. The docs-site sync is pinned too: `publish-docs` runs after `release` and nothing depends on it, so a docs failure can never block a release; every job that syncs (it and `docs-site.yml`) declares the `TubeMatic` environment and passes `TUBEMATIC_DOCS_TOKEN` itself, because an environment secret reads as an empty string in a job that does not name its environment; both share one concurrency group; `docs-site.yml` fires only on a push to `develop` or a `release/*.*.x` line touching `docs/`, or by hand, and checks out its own commit before the target ref so an older tag without the action can still be re-synced; its input resolution and release-line labelling steps are run for real in bash (the labelling against a scratch git repo), pinning that a manual run accepts only `develop`, a release version or a `release/X.Y.x` line, that a line is checked out with its tags and labelled with the newest stable release it contains (never a prerelease on it, never a newer line's tag), that a push syncs the pushed branch at the pushed commit, and that a line with no release yet is never synced, since as the highest line it would become Latest on the site (a push to one passes and skips the sync; asking for one by hand fails); and the shared action refuses an empty token and builds the site before it pushes. The Kasm workspace registry sync is pinned the same way: `publish-kasm-registry` runs after `release`, gates nothing, skips a prerelease (a release candidate must never be offered on the launch form), names the `TubeMatic` environment and passes `TUBEMATIC_KASM_REGISTRY_TOKEN`, reads this repository only, and has its own concurrency group; its action refuses an empty token, lists only published non-draft, non-prerelease Releases (and fails on a `gh` error rather than reporting no releases), takes the entry from the newest release's tree — fetched without writing a local tag, checked by running that step against a clone holding the lightweight tag `actions/checkout` leaves, because fetching the annotated tag onto it is refused and failed the first 2.0 registry sync — and checks the workspace image anonymously with `docker manifest inspect` before it checks out, writes or pushes anything. No workflow builds that image, and none may call `kasm_workspace/build.sh`: it carries no Tubematic version, so a per-release rebuild is exactly what it exists to avoid, and it is pushed by hand |
+## The poller
 
----
+### `test_poll_main.py`
 
-## What these encode
+Covers `poll.py::main`: what each of [the four lanes](../13-the-poller.md#the-four-lanes) starts in
+one pass.
 
-**`poll.py` has no database access, by design.** Everything it knows arrives over HTTP from the Flask
-API, or on argv from the cron line. Tests that need pipeline state stub the HTTP layer, never a DB.
+- The pause gate, the pipeline lane and the two [research caps](../13-the-poller.md#research-caps)
+  (`research_pending_cap` and `max_research_runs_per_day`), each tested on its own.
+- The script-profile lane and the mascot lane run beside the other two and still run while the
+  pipeline is paused. An item whose attempt cannot be recorded starts nothing, and an item that has
+  used its attempts falls through to the next.
+- A mascot runs on its pinned agent, model and effort, or on the defaults, one mascot per pass. A
+  mascot pinned to an agent that is gone is skipped and records no attempt.
+- The user preferences reach every prompt, an idle pass reads no settings, a dry run records nothing
+  and starts nothing, and an install with no agent stops before the profile and research lanes.
 
-**Research runs are attempt-counted, not completion-counted.** `poll.py` records the run *before*
-invoking the agent, and `_record_research_run` fails **closed** — if the API is unreachable, research
-is skipped this tick rather than invoking an uncapped agent session with no record. Completion
-counting fails open exactly when the cap matters: a crashed run leaves the counter at zero forever
-and re-fires every tick.
+Trap: The poller records a research run before the agent starts, and `_record_research_run` fails
+closed: it starts no research when the record request fails. A count taken when a run finishes never
+advances for a run that dies, so research would start again on every pass.
 
-**Two independent research gates.** `research_pending_cap` bounds queue breadth;
-`max_research_runs_per_day` bounds attempt frequency. A day where research keeps coming up dry cannot
-burn an unbounded number of agent sessions. Both are covered separately because they fail for
-different reasons.
+### `test_poll_supervisor.py`
 
-**One session per video, one stage per session.** The poller used to batch every video sharing the
-oldest one's (agent, model, effort) into one session a tick. It now runs a session per video, up to
-`max_concurrent_agent_sessions` at once, each told to stop where its stage ends. That makes cost
-attribution exact and removes the batch key: no video can ride along at another's model or effort.
-`test_workable_videos.py` covers dispatch **through the real function** — an earlier version
-reimplemented the rule in the test and therefore proved nothing.
+Covers the loop in `poll.py`: session slots, the progress verdict, the scene-work claim wait,
+timeouts and orphan adoption.
 
-**Success is read from the database, never the exit code.** The agent CLIs exit 0 on failures that
-matter (an unknown model; every MCP call refused), so the supervisor asks the API whether the
-video's status moved. Three sessions in a row that leave it where they found it flag the video
-stuck. That replaces the cron tick as the throttle on a video the agent cannot advance: the loop
-would otherwise re-run it every few minutes.
+- The pipeline lane never runs more than `max_concurrent_agent_sessions`, fills oldest first and
+  never dispatches a video that is already in flight. Research runs beside a full lane, once per
+  poller process. With no active research mode it starts nothing and records no run.
+- A pause starts nothing new and lets running sessions finish. The poller exits once idle.
+- The verdict comes from the API
+  ([Success is read from the database](../13-the-poller.md#success-is-read-from-the-database)). A
+  changed status is progress whatever the exit code. No progress is a warning on exit 0 and an error
+  otherwise. A stuck flag is an error that names **Retry agent**. A replayed outcome is logged and
+  not scored again.
+- A session past its deadline is killed with its children, including a child that ignores `SIGTERM`,
+  and a timed-out run is not retried.
+- A session stays registered until it is scored. A live orphan is adopted, holds its video and is
+  scored when it exits. A finished session that was never recorded is recorded by the next poller
+  under its original run id. A reused pid is not taken for an orphan, and a stale heartbeat is
+  logged and kills nothing ([Timeouts and orphans](../13-the-poller.md#timeouts-and-orphans)).
+- The claim wait and its statuses equal `SCENE_CLAIM_TTL_SECS` and `_CLAIM_STATUSES` in
+  `mcp/server.py`, compared as source text because `poll.py` cannot import the server.
 
-**A dry run has zero side effects.** `--dry-run` logs the intent to record a research run without
-making the request, matching `invoke_agent`'s own dry-run behaviour.
+Trap: The timeout and adoption tests start real processes and threads. A mocked `Popen` cannot show
+that `killpg` reached a grandchild, so replacing them with mocks removes the coverage of the kill
+path.
 
-**`--allow-no-backup` must never be silent.** It relaxes a safety guarantee (`migrate_db.py` skips
-the pre-migration backup), so its use prints a warning banner — the same rule onboarding already
-follows for `--disable-verification`. `test_allow_no_backup_prints_a_visible_warning` pins that the
-banner actually appears, not just that the flag works.
+Needs: real child processes. The stub API becomes unreachable after a few hundred passes, so a loop
+that never ends fails the test and does not hang the suite.
 
-**The release compose generator's transformation list is closed by design.** It exists so the
-release compose cannot become a second source of truth for the topology — every field it does not
-explicitly rewrite (volumes, environment, healthchecks, `depends_on`, `shm_size`, `restart`,
-`container_name`, the top-level `name:`) is asserted to survive byte-for-byte from the development
-file. Three services (`tubematic-mcp`, `tubematic-worker`, `tubematic-renderer`) carry no `build:` key at all — they reuse
-the image `tubematic-api` builds — so they are repointed at the same pinned image by matching on
-that shared local tag, not by name, so a future service adopting the same pattern is covered for
-free.
+### `test_workable_videos.py`
 
-**The release tarball is built from an explicit allowlist, never a copy of the repo.** The checkout
-also holds source trees (`renderer/`, `dashboard/`, `mcp/`, `vqa/`), local state
-(`.onboard-state.json`, `mounted/`), and `.env`/`.env.example` — none of which belong on a public
-download page. The allowlist test proves presence; a separate test proves absence of every excluded
-pattern explicitly, because the failure mode of assuming the allowlist implies exclusion is a future
-allowlist entry (a bare `docs/`, say) sweeping something forbidden in behind it. The forbidden-name
-guard itself (`_assert_no_forbidden_names`) has its own fail-loud path exercised directly, against a
-minimal fixture repo with a name planted where the per-tree ignore set does not reach it — proving
-the guard actually fires, not just that a clean build has nothing for it to catch.
+Covers the `GET /videos/workable` fetch and the per-video dispatch in `poll.py`, called through the
+real functions.
 
-**Reproducibility is what makes the shipped `CHECKSUMS.txt` mean anything.** Every archive entry gets
-a fixed mtime/uid/gid/uname/gname and entries are written in sorted-path order, so the same commit
-produces byte-identical output on every build. The gzip wrapper itself is also normalized (empty
-filename, fixed mtime) — gzip otherwise embeds the output path and the current time in its header.
+- Each workable video gets its own session under its own agent, model and effort. A blank value
+  falls back to the agent's default.
+- A video pinned to an archived or unknown agent is skipped with an error in the log. An install
+  with no active agent logs that and starts nothing. An unreachable `/agents` exits 1 and is told
+  apart from an empty list.
+- Each session is tagged with its one video and the status it started at, which is the stage its
+  cost is recorded under.
 
-**A release version must double as a Docker image tag, and that is one rule, defined once.**
-`gen_release_compose.py` interpolates the version straight into `image: ...:<version>` with no
-escaping, so a legal SemVer version carrying a `+build metadata` suffix (legal SemVer, illegal in a
-tag — `+` is not a tag character) would otherwise reach `docker compose pull`/`up` as a broken
-reference on every service, discovered by whoever runs the install rather than whoever cut the
-release. `check_version_is_tag_safe` is the single definition; `generate()` calls it itself (so a
-maintainer invoking `gen_release_compose.py`/`build_release_tarball.py` directly, not only through
-`check_release.py`, still gets a hard failure instead of a broken file) and `check_release.py`'s own
-`check_version_format` check imports it rather than restating the rule.
+Trap: An unreachable `/videos/workable` starts no session. A fallback prompt that covers every
+workable video would let one session work videos assigned to other agents. The tests call the real
+functions because a copy of the dispatch rule kept in the test file cannot fail when the code does.
 
-**`check_release.py` reports every failure in one pass, and treats "new" and "modified" migration
-files differently.** A maintainer fixing up a release wants the whole list, not five separate runs,
-so no check short-circuits the rest. The migration-immutability check specifically compares the
-working tree against `HEAD` for `tubematic_core/migrations/`: a file git already has committed
-history for that has since changed (`git diff` status `M`) is a violation — a shipped migration must
-never be edited, since editing one silently diverges every database that already applied it from
-every one that has not — but a file with no committed history yet (untracked, or staged but never
-committed) is ordinary in-progress work on a migration that has not shipped, and is not flagged. The
-missing-workflow-files check is a `WARNING`, not a failure — the CI/release workflows now exist in
-this repository and the check passes silently, but it warns rather than fails for a checkout that
-lacks them (an older fork, or `.github/` stripped some other way), since a maintainer's release
-should not be permanently blocked by a file this script does not itself need.
+### `test_invoke_agent.py`
 
-**The tarball allowlist check only ever proved satisfiability, not exclusion.** Every allowlisted
-path existing says nothing about whether a forbidden one also rides along inside one of those
-directory trees — that enforcement lives entirely in `build_release_tarball.py`'s own ignore filters
-and its whole-tree sweep. `check_tarball_exclusions` closes that gap by running the real builder
-against a scratch directory as part of pre-flight, rather than restating `_FORBIDDEN_NAMES` or any
-per-tree exclusion set a second time.
+Covers `poll.py::invoke_agent`: the argv for each agent, the fallback when a CLI rejects the model or
+the effort ([Rejected model or effort](../13-the-poller.md#rejected-model-or-effort)), usage
+reporting and what reaches the log.
 
-**`release.py` prints the tag/push/branch commands and must never run them** — publishing is a later
-phase's CI/CD, and a script that tags and pushes on its own can ship a release nobody approved.
-`test_release.py` checks this against a real git repository rather than mocking `subprocess`: after
-a full run, no new tag and no new branch exist. It also pins that a failing pre-flight check stops
-the script before `build_release_tarball.build()` is ever called, and that a build failure aborts
-after checks pass rather than being silently swallowed.
+- The agent row's id picks the adapter that builds the argv. A model that would corrupt the argv and
+  an unknown effort level are dropped before the run. A missing binary, an agent with no adapter and
+  a dry run start no process.
+- A rejected model is read from the output whatever the exit code, and the run repeats once without
+  it. A rejected effort is dropped before the model. No invocation runs more than three processes.
+  OpenCode retries without the variant and keeps the model.
+- Every run posts its parsed usage to `/usage/agent-session`. A retry posts too, since it is a second
+  billed session. A run whose model was rejected and a dry run post nothing. A failed POST, or a
+  `200` that recorded fewer events than were sent, logs the full payload.
+- The log entry is the adapter's summary and stderr is logged by its tail. A model rejection printed
+  past the log cap still triggers the retry.
 
-**`test_uninstall_config.py` exists because of an ordering bug.** The install config used to come
-from `.env`, which uninstall removes partway through — after which every later step read empty
-values. The test pins that the config survives removal of its own source.
+Trap: The effort marker is matched against the CLI's own error output and never against the agent's
+message. A session that discusses the flag would otherwise lose its effort on a retry. The agent's
+stdin is closed, because Codex appends piped stdin to the prompt and an inherited stdin can hang an
+unattended run.
 
----
+### `test_poll_prompt.py`
 
-## Known gap
+Covers `build_research_prompt`, `build_pipeline_prompt` and `build_mascot_prompt` in `poll.py`.
 
-`invoke_agent` treats a non-zero exit code as the failure signal. The agent CLI exits **0** when
-given an unrecognised `--model`, printing `unrecognized_model` and doing nothing, so a video carrying
-a bad model produces a tick that logs success and advances nothing. `_usable_model`'s docstring
-asserts the opposite. No test covers this because the code's own assumption is wrong — see the
-tracking ticket before adding one.
+- The research prompt names a mining target only when mining is active. It tells the agent to
+  deduplicate with `list_project_topics` and to skip a paused or expired domain.
+- The pipeline prompt names one video and where its stage ends, for every workable status. A
+  cross-copy check keeps the stage table equal to the API's `WORKABLE_STATUSES`, since a status with
+  no stage would never be dispatched.
+- The mascot prompt names the builder skill, the mascot and the three build tools, and tells the
+  agent not to advance any video.
+- The user preferences block names the stage of the run, limits itself to that stage and says it
+  cannot override a checkpoint ([User preferences](../07-agent-layer.md#user-preferences)). Empty
+  preferences leave every prompt byte-identical.
+
+Trap: The pipeline prompt forbids looking for other work, and it must still allow
+`get_pipeline_status`, because the skills read the pronunciation lexicon and the voice roster from
+that tool. A revision is told not to stop at `VOICE_READY`, where the scene-work claim would refuse
+the next session. A pronunciation revision is told, in the prompt and in the operator skill's row,
+to end at `VOICING` without voicing again.
+
+### `test_bootstrap_args.py`
+
+Covers the poller's command line and log directory ([The cron entry](../13-the-poller.md#the-cron-entry)).
+
+- `poll.LOG_DIR` is the fixed `~/.tubematic-agent/logs`, because logging starts before the first HTTP
+  call.
+- A crontab that still passes `--agent-run-path` or `--agent-binary` gets a warning that names
+  `--step cron`, and the run continues.
+- Each prompt names its one video and gives the absolute path of `poll.log`.
+
+Trap: An agent's working directory is its own workspace. A relative `./logs/poll.log` in a prompt
+points nowhere for any agent whose workspace is not the poller's log directory.
+
+### `test_poll_api_auth.py`
+
+Covers the API token `poll.py` sends.
+
+- One opener adds `Authorization: Bearer` to requests for `RENDERER_URL` and to no other URL.
+- `main()` exits non-zero before it does anything when there is no token.
+
+Trap: The token file is read on each request, because a running poller outlives
+`onboard.py --rotate-tokens`. A cached token would be refused until the poller restarts.
+
+### `test_poll_lock.py`
+
+Covers `poll.py::LOCKFILE` ([Lock and heartbeat](../13-the-poller.md#lock-and-heartbeat)).
+
+- The lock sits beside the poller's logs under the agent home and outside `/tmp`, so every poller
+  that shares a home directory shares one lock.
+- A finished run leaves the file in place.
+
+Trap: Deleting a file that is held with `flock` lets two pollers each lock a different inode.
+Cleanup code that removes the lock file allows two pollers to run at once.
+
+### `test_poll_disk_snapshot.py`
+
+Covers the poller's disk-usage measurement ([Disk usage](../13-the-poller.md#disk-usage)).
+
+- The measurement starts before the pass, so a paused pipeline or an unreachable API still gets a
+  fresh figure.
+- It runs detached (`start_new_session`), at most once an hour per poller, and never on a dry run.
+- A failure to start it is logged once and does not cost the pass.
+
+Needs: nothing outside the test. `conftest.py` replaces `poll._refresh_disk_snapshot` with a no-op for
+every other poller test, because the real function runs Docker and writes into `~/.tubematic-data`.
+
+### `test_poll_json_logging.py`
+
+Covers the poller's `poll.<date>.jsonl` log file.
+
+- `poll.py` has no database access, and a test reads its source to keep it that way. The log
+  retention setting arrives over HTTP and falls back to the default when the API is unreachable or
+  the value is out of range.
+- The JSONL file is written beside `poll.log`, and `poll.log` stays.
+- An unwritable shared log directory leaves `poll.log` working.
+
+Trap: `setup_json_logging` returns `None` without an error when the directory is unwritable, so the
+poller must report it. The `poll.log` warning names the directory and the `chown` fix. Without the
+warning, a root-owned `~/.tubematic-data/logs` drops every poller entry from the dashboard's Logs
+page and nothing says why.
+
+## Agent adapters and skills
+
+### `test_agent_adapters.py`
+
+Covers `scripts/agent_adapters.py`. The CLI behaviour behind each rule is in the
+[Agent CLI Reference](../22-agent-cli-reference.md).
+
+- Each argv is compared whole: the unattended run, the login check, the model probe and the MCP
+  registration, for Claude Code, Codex and OpenCode.
+- Claude Code: a bad `--effort` value (exit 0, a warning, the work done) does not count as a
+  rejection, since a retry would be a second billed session for nothing.
+- Codex: `--` precedes the prompt, and every argv carries `--skip-git-repo-check` and
+  `approvals_reviewer="auto_review"` and no `dangerously` bypass flag. `"Logged in"` is a prefix test,
+  so `"Not logged in"` cannot match. The model matcher covers the wording of both auth modes and
+  ignores the "metadata not found" warning, which Codex prints for models the API accepts.
+- OpenCode: the effort appears only as a `#variant` suffix on a model, and `--auto` is on every
+  argv. `logged_in` reads the output, since `opencode auth list` exits 0 when logged out. `Variant
+  unavailable` is told apart from `Model unavailable`, which lets the retry keep the model.
+  `mcp_remove_argv` returns `None`, because OpenCode has no `mcp remove` command. A model slug with a
+  vendor segment is suggested.
+- OpenCode's config: the document name is resolved between `opencode.json` and `opencode.jsonc` in
+  the order the CLI uses. The JSONC parser keeps a `//` inside a URL. Removing the server entry
+  keeps the comments and refuses a malformed document. The permission rules deny edit, write, shell
+  and `.env` reads, and allow `.env.example`, `webfetch`, `websearch` and the `tubematic_*` tools.
+  Code Mode is off on the server entry.
+- The usage parsers and `summarize_output` are checked against trimmed copies of real CLI output.
+  Codex's parser splits cached input out of `input_tokens`, because OpenAI counts it inside.
+  Codex and OpenCode print their errors on stdout in JSON mode, so their effort matchers read the
+  stream's error events and ignore the same phrase in the agent's message.
+- No MCP registration carries the token. Claude Code's entry names a `headersHelper`, OpenCode's
+  header is a `{file:}` reference, and Codex's `http_headers_helper` is a line edit inside
+  `[mcp_servers.tubematic]` that keeps the rest of `config.toml`.
+- Checks over the whole registry: every adapter offers the same effort levels, `HAS_COMMANDS` matches
+  the files on disk, every agent with commands ships the same set, no command names another agent's
+  CLI or a tool its own install denies, and every call that resolves a config root accepts
+  `respect_override=False`.
+
+Trap: The Claude CLI treats an unrecognised subcommand as a prompt, so a malformed login check or
+probe becomes a billed model call. Without `approvals_reviewer="auto_review"`, `codex exec` refuses
+every MCP tool call and still exits 0. OpenCode's rules allow what the pipeline needs because a
+global config that denies `webfetch` or `tubematic_*` would otherwise win, and each run would do
+nothing and exit 0.
+
+### `test_mcp_auth_header.py`
+
+Covers `scripts/mcp_auth_header.py`, the helper Claude Code and Codex run on each MCP connection,
+run as a real subprocess.
+
+- It prints one JSON object that carries `Authorization: Bearer <mcp_token>`.
+- With no token it exits non-zero and prints nothing on stdout, so the CLI sends no header and the
+  server's `401` is the visible failure.
+- It never reads the API token, which is a different credential.
+
+### `test_voicing_authorization.py`
+
+Covers the wording that lets an unattended agent voice a video in `VOICING`: the operator skill,
+`build_pipeline_prompt` and the `generate_voice` docstring.
+
+- The skill's `VOICING` row, its row for voicing again after a pronunciation fix, the pipeline prompt
+  and the docstring each say the voicing is already authorized. Each names both the spend and the
+  sending of the script to ElevenLabs.
+- The `SCRIPT_READY` checkpoint stays, limited to moving a video into `VOICING`.
+- The skill's `generate_voice` error row does not set the status again.
+
+Trap: `VOICING` is a workable status, so an agent that asks for approval there is dispatched and
+refuses again on every pass, and the video never moves. Naming only the spend, or only the
+disclosure, leaves the other as a reason to refuse. Setting the status again on an error rewrites
+`updated_at`, the clock [the stalled-voicing check](../12-the-worker.md#the-stalled-voicing-check)
+measures.
+
+### `test_troubleshooting_skill.py`
+
+Covers the files of [the troubleshooting skill](../07-agent-layer.md#the-troubleshooting-skill).
+
+- The skill is explicit-only on all three CLIs: `disable-model-invocation` and `opencode/autoinvoke`
+  in the frontmatter, and `agents/openai.yaml` for Codex. No scheduled prompt names it.
+- It never tells the agent to query the database, read a token or file the issue.
+- It reads the redacted report and no raw log: not `poll.log`, not container output.
+
+Trap: Losing one of the three switches breaks nothing visible, because the skill still works when
+you ask for it. A skill that reads a raw log sends stored keys to the agent's model provider.
+
+### `test_mascot_builder_skill.py`
+
+Covers the files of the mascot builder skill.
+
+- The skill is not explicit-only on any CLI, because [the mascot lane](../13-the-poller.md#mascots)
+  invokes it by name in an unattended run.
+- It names the three MCP tools of the build loop, and the poller's mascot prompt names the skill.
+- Its guide keeps three rules: each face record carries `bx`, randomness is seeded through
+  `boilSeed` and never `Math.random()`, and the mascot has no talking mouth.
+
+Trap: A face record without `bx` turns every blush into `NaN` with no error.
+
+## Operations scripts
+
+### `test_service.py`
+
+Covers `scripts/service.py`: `start`, `stop`, `restart`, `status` and `logs`.
+
+- `start` creates the data directories, reconciles the volumes and creates any missing service
+  token before `up`. `restart` is `stop` then `start`.
+- `stop` and `restart` refuse while a render is in flight, the same gate `upgrade.py` uses, and
+  `--force` overrides it. Restarting the dashboard alone is not gated.
+- `status` prints the shared report, and `logs` hands the terminal to `docker compose logs`. Bad
+  commands, unknown services and unknown options are refused before the venv bootstrap runs.
+
+Trap: When a Docker volume has to be re-pointed, the reconcile runs `docker compose down` on every
+container. A plain `start` and a dashboard-only restart are then gated too, and are refused before
+anything stops, so a refusal never leaves the dashboard stopped.
+
+### `test_status_format.py`
+
+Covers `status.py::_local_date`.
+
+- A UTC timestamp prints as the host's local calendar day, and an unparseable value falls back to
+  its first ten characters.
+
+### `test_status_spend.py`
+
+Covers the spend summary in `status.py`, read from the usage ledger.
+
+- Unpriced calls are named and are not counted as `$0`, ElevenLabs is shown in credits, and the
+  API-list-price caveat is printed.
+- A database that has not been migrated prints that there is no usage ledger yet and does not
+  raise.
+
+### `test_mcp_url.py`
+
+Covers `config.py::_mcp_base`, which turns `MCP_URL` into the server root.
+
+- A trailing `/mcp` is stripped as a whole path segment, so `/mcpx` is left alone and a
+  reverse-proxy path prefix survives.
+
+Trap: `status.py` probes `{MCP_URL}/health`, and the server serves that route beside `/mcp`. The
+endpoint form (ending in `/mcp`) is the one `claude mcp add` takes, so without the strip a healthy MCP
+container is reported unreachable.
+
+### `test_clear_db_wipe.py`
+
+Covers the "Wipe all videos" action of `clear_db.py`.
+
+- The wipe clears the spend ledger when there are no videos. That state is ordinary: research that
+  filed nothing, voice previews and videos deleted one at a time all leave spend with no video.
+- An empty database has nothing to wipe.
+
+### `test_uninstall_config.py`
+
+Covers `uninstall.py`: the install-config read, the agent sweeps, the scenes step and the data-root
+step.
+
+- The install scope and the agent workspace are read once, before anything is deleted, and the
+  values survive the deletion of the database. `--force` never stops at the scope prompt.
+- A kept data root names the GPU choice and the remote-renderers override in it, since a reinstall
+  over it would hand the GPU to the new renderer and publish the render gateway's port again.
+- The agent sweep goes through one adapter-keyed entry point. It removes each deployed and each
+  retired skill, the commands and the MCP registration, sweeps a project-scope install from its
+  workspace, and ignores a config-root override on every path. A config document that cannot be
+  edited safely is left alone and the edit is reported. A skill Tubematic did not install is kept.
+- The Claude command list covers every file in `agent_files/claude/commands/`.
+
+Trap: The database is deleted in an early step, and later steps need the install scope and the
+workspace path from it. Without the cached read, the agent step prompts under `--force` or skips a
+project-level workspace. The sweep is keyed by adapter so that a new agent cannot ship without an
+uninstall path.
+
+### `test_collect_diagnostics.py`
+
+Covers `scripts/collect_diagnostics.py`, whose report is meant to be pasted into a public issue.
+
+- One fixture plants every secret and personal value the collector can read into all three log
+  sources (structured logs, `poll.log`, container output), and the finished report is searched for
+  each: secret settings, service tokens, the password hash, provider keys, auth headers, a cookie,
+  an email, public addresses, the home path, user and host names, account, voice and domain ids, and
+  a video's content.
+- Ids become the same short hash wherever they appear, so lines about one account still match up.
+  Content stays out unless you pass `--include-content`. Content under 12 characters is replaced as
+  a whole word, and content under four characters is left.
+- The collector refuses to write inside `~/.tubematic-data`, refuses an existing `report.md` and a
+  symlink planted while the report is built (the file is opened with `O_EXCL`), writes modes 0700 and
+  0600, and opens the database read-only.
+- `--since` bounds `poll.log` and reaches its dated rotations. A non-positive `--lines` is refused,
+  because `lines[-0:]` is the whole file.
+- The GPU readout leaves out the GPU UUID, which identifies a physical card.
+
+Trap: The residual scan fails closed. With the redactor broken in the test, nothing is written and
+the surviving value is not printed. A line is cut to the length limit after redaction and the scan,
+because a cut made first can leave a prefix of a secret that the stored value does not match.
+Agent-authored comments stay in the report: the worker files render errors as agent comments, and
+those errors are the evidence a report exists to carry.
+
+## Release tooling
+
+The scripts and workflows these files cover are described in [Releases](../18-releases.md).
+
+### `test_release_clis.py`
+
+Covers the command-line contract of `print_version.py`, `migrate_db.py` and `backup_db.py`: exit
+codes and what goes to stdout and to stderr. The migration logic is covered in
+[`tubematic_core/tests`](tubematic-core.md).
+
+- `migrate_db.py` reports the backup path and exits 1 with the reason on stderr when a migration
+  fails.
+- `backup_db.py` prints the backup path and exits 1 when the database does not exist.
+
+Trap: `migrate_db.py --allow-no-backup` skips the pre-migration backup, so it must print a warning.
+The test asserts that the warning appears, since the flag would work the same without it.
+
+### `test_update_price_snapshot.py`
+
+Covers `update_price_snapshot.py`, the maintainer script that writes the model prices a new install
+starts from.
+
+- It applies the same source precedence as the runtime price sync: OpenRouter first, LiteLLM for a
+  model OpenRouter lacks.
+- It refuses to write when a model Tubematic can select is in neither feed.
+- The committed `tubematic_core/prices_snapshot.json` covers every model in `KNOWN_MODELS`.
+
+Trap: A model missing from the snapshot is unpriced on every new install.
+
+### `test_gen_release_compose.py`
+
+Covers `gen_release_compose.py::generate`, run against the real `docker-compose.yml`
+([`gen_release_compose.py`](../18-releases.md#gen_release_composepy)).
+
+- Every `build:` section becomes a pinned `ghcr.io/<owner>/tubematic-<role>:<version>` image, and so
+  does every service that reuses the locally built image under its `tubematic-renderer-image` tag.
+- Every published port is bound to `127.0.0.1`, and everything else passes through unchanged,
+  `secrets:` blocks and the top-level `name:` included.
+- The release renderer has no database mount and never holds the TLS key, and the gateway port is
+  not published.
+- `check_version_is_tag_safe` and `invalid_version_chars` reject `+build` metadata, and `generate()`
+  refuses such a version before it reads the compose file. A version goes into the image reference
+  with no escaping.
+- No healthcheck probes `localhost`. The servers bind IPv4, and the BusyBox `wget` in the dashboard
+  image resolves `localhost` to IPv6 first and does not fall back.
+
+Trap: The test reads the real compose file, because a fixture would not notice a topology change.
+Services are matched by the shared image tag, so a new service that reuses the image is repointed
+too.
+
+Needs: PyYAML.
+
+### `test_build_release_tarball.py`
+
+Covers `build_release_tarball.py`, which builds the real `dist/tubematic-v<version>.tar.gz` from the
+checkout ([The release tarball](../18-releases.md#the-release-tarball)).
+
+- Every allowlisted path is present, and a missing one fails the build. The list includes
+  `upgrade.py`, `scripts/service.py`, `onboard/stack.py`, `scripts/mcp_auth_header.py`,
+  `scripts/collect_diagnostics.py`,
+  `scripts/tubematic_remote_renderer.py`, `LICENSE`, and the public docs: `docs/README.md`,
+  `docs/quickstart.md`, `docs/release-notes.md` and the `docs/user-guide/`, `docs/developer/` and
+  `docs/images/` trees.
+- Every excluded pattern is asserted absent on its own: the source trees, `.env`, `HANDOFF.md`,
+  `.onboard-state.json`, `docs/superpowers` and both packages' `tests/`.
+- The bundled `docker-compose.yml` is the generated release file. Building one commit twice gives
+  byte-identical archives, and `CHECKSUMS.txt` covers every other file.
+- No shipped file other than `.py` and `.sql` names an issue-tracker id.
+- The dead-link guard reads every shipped file other than `.py`. Each relative link to a Markdown
+  page or to an image is resolved against the linking file's own directory inside the archive, and
+  its target must be in the archive. A link written inside a code span is skipped.
+- The extracted tree imports the `onboard` modules and `tubematic_core.db` in a fresh subprocess, so
+  a module the test session already imported cannot hide a file missing from the copy list.
+- A `.pytest_cache` planted in every shipped tree does not fail the build. pytest writes one inside
+  each suite directory and hides it from git, and the name is also forbidden.
+
+Trap: The allowlist test proves presence only. The absence test and `_assert_no_forbidden_names`
+exist because a later allowlist entry, such as a bare `docs/`, would bring `docs/superpowers/` in
+behind it. Only part of `docs/` ships, so a link from a shipped page to an unshipped page or image
+is dead for a reader who holds only the tarball.
+
+Needs: PyYAML.
+
+### `test_check_release.py`
+
+Covers `check_release.py`, each check run against a real git repository built in `tmp_path`
+([`check_release.py`](../18-releases.md#check_releasepy)).
+
+- Each check fails on its own condition: a dirty tree, a version mismatch, a version that is not
+  tag-safe, a duplicate migration number, a compose file that does not generate, a missing
+  allowlisted path, and a forbidden name inside an allowlisted tree.
+- The tag check has three cases. No such tag passes. A tag at `HEAD` passes, because the release
+  workflow runs after its checkout has fetched the tag. A tag at another commit fails and names both
+  SHAs.
+- The migration check fails on a committed migration file that has changed, and ignores a new file
+  that was never committed.
+- Two checks warn and do not change the exit code: missing workflow files, and `HEAD` outside
+  `release/X.Y.x`.
+- An all-clear fixture drives `run_checks()` and `main()` end to end, and a run with two faults
+  reports both.
+
+Trap: The release-line check is a warning because the first release of a minor version runs before
+the line exists, and CI checks out a detached tag with no branches. `check_version_format` is the
+one check that refuses the development marker `develop`, so it is what stops a `vdevelop` tag.
+`check_tarball_exclusions` runs the real builder against a scratch directory and keeps no second
+copy of `_FORBIDDEN_NAMES`.
+
+Needs: `git`. The tests create commits and tags for real, since a mocked git would only confirm the
+test's own idea of git.
+
+### `test_release.py`
+
+Covers `release.py` ([`release.py`](../18-releases.md#releasepy)).
+
+- A failing pre-flight check stops the run before `build_release_tarball.build()` is called. A build
+  failure stops it after the checks pass. The `v`-prefixed version form is accepted.
+- The all-clear path builds the tarball and prints the release-notes skeleton and the git tag, push
+  and branch commands.
+
+Trap: `release.py` prints the git commands and never runs them, because a script that tags and
+pushes can publish a release nobody approved. The test runs against a real git repository and
+asserts that no new tag and no new branch exist, which a mocked `subprocess` could miss.
+
+### `test_release_notes.py`
+
+Covers `release_notes.py`, which extracts one version's section from `docs/release-notes.md`, and
+`release_line()`.
+
+- The section comes back without its heading and ends at the next version heading or at a
+  horizontal rule.
+- Four failures are told apart: no section, a section that is still an unfilled skeleton, a
+  prerelease whose base version is also absent, and an unreadable file.
+- A prerelease with no section of its own gets its base version's notes, and its own section wins
+  when it has one.
+- The extractor runs against the repository's real page at the current `VERSION`. On the development
+  branch it checks the page's newest section.
+- `release_line()` groups patches onto one branch, ignores a prerelease suffix and refuses `develop`.
+
+Trap: An unfilled skeleton counts as missing. A pasted skeleton looks like written notes, and the
+release workflow would publish it as the Release body.
+
+### `test_workflows.py`
+
+Covers `.github/workflows/ci.yml`, `release.yml`, `docs-site.yml` and their composite actions. The
+files are parsed with PyYAML and checked for structure, since GitHub Actions runs only on GitHub
+([Continuous Integration](../18-releases.md#continuous-integration)).
+
+- In every workflow, each `needs:` names a real job, and each third-party action is pinned to a
+  version tag or a full SHA.
+- `ci.yml`: the Python matrix equals the suite directories on disk, and the e2e job has no path to
+  `pull_request`.
+- `release.yml` triggers on `v*.*.*` tags only and reuses `ci.yml`. Both images are pushed under the
+  bare version tag. The Release step sets `prerelease` from a `-` in the version, because the
+  action's default would publish a release candidate that GitHub can list as Latest.
+- The smoke test runs after the image push and before the Release job, walked through `needs:`
+  transitively. It extracts the published tarball and uses no checkout. It creates every secret
+  file `docker-compose.yml` mounts before `up`, because it skips onboarding and Compose refuses a
+  service whose token file is missing. Its `curl` checks carry `--retry`, because a container can
+  report healthy before its process has bound its port.
+- The remote-renderer script is a Release asset named in `CHECKSUMS.txt`. The release owner is
+  stamped into its `GITHUB_OWNER` before the tarball is built, so a fork's renderers do not pull
+  upstream's image. The stamp step fails when it cannot stamp, and the asset must be byte-identical
+  to the tarball's copy.
+- The docs sync: nothing depends on `publish-docs`. Each job that syncs names the `TubeMatic`
+  environment and passes `TUBEMATIC_DOCS_TOKEN`. `docs-site.yml` runs on a `docs/` push to `develop` or
+  a `release/*.*.x` line, or by hand. It labels a line with the newest stable release it contains
+  and does not sync a line with no release.
+- The Kasm registry sync: `publish-kasm-registry` gates nothing and skips a prerelease. Its action
+  lists published Releases that are neither draft nor prerelease, fails on a `gh` error, and checks
+  the workspace image with `docker manifest inspect` before it writes anything. No workflow calls
+  `kasm_workspace/build.sh`.
+
+Trap: If the Release job could run before the smoke test, a broken artifact would become a published
+Release. An environment secret reads as an empty string in a job that does not name its
+environment, which is why each syncing job declares it. A release line with no release yet would be
+the highest line and become Latest on the docs site. The registry action fetches the entry without
+writing a local tag, because `actions/checkout` leaves a lightweight tag and git refuses to fetch
+the annotated tag onto it.
+
+Needs: PyYAML, `bash` and `git`. Several steps (the token step, the owner stamp, the docs input and
+labelling steps, the registry fetch) are run for real against scratch directories.
+
+## The Kasm workspace and the remote renderer
+
+### `test_kasm_workspaces.py`
+
+Covers the two Kasm Workspace images, `kasm_workspace/` (published) and `kasm_workspace_testing/`,
+which CI does not build ([the published workspace](../17-development.md#kasm_workspace-the-published-workspace)).
+
+- In both images, the `dind` `/tmp` patch's `RUN` body is executed with `sh` against a fixture
+  `custom_startup.sh`. With the anchor line it inserts one line before `supervisord`, and with the
+  anchor changed it fails the build.
+- Every hook and build script is mode `100755` in the git index and parses with `bash -n`.
+- The published Dockerfile does not `COPY` the repository, and the image runs on UTC
+  (`ENV TZ=Etc/UTC`).
+- The registry entry (`registry/Tubematic/workspace.json`) has the schema 1.1 keys, `privileged`,
+  `gpu_count: 0`, a version list that is newest first, and `allow_saving: false` on the version so a
+  remembered pick does not pin an old one. The form's keys, mapping path, methods and regex equal
+  the bootstrap's constants.
+
+Trap: A skipped `/tmp` patch gives a blank-screen session that nobody sees until one is launched.
+`COPY` keeps the file mode, and a hook without its exec bit looks the same as Kasm never calling it.
+The published image carries no Tubematic source so that a release needs no rebuild.
+
+Needs: `shellcheck` for one test, which skips without it.
+
+### `test_kasm_workspace_bootstrap.py`
+
+Covers `kasm_workspace/image/tubematic_bootstrap.py`, which the published workspace runs at launch.
+
+- Every refusal downloads nothing: bad JSON, a missing key, a version that is not a plain `X.Y.Z`,
+  an unknown method.
+- On a relaunch, an empty profile installs, the same version is left alone, a different version is
+  refused with a pointer to the upgrade, and Tubematic data with no readable install marker is
+  refused.
+- A release is checksum-verified before extraction. A mismatch, an unpublished version, an archive
+  with a path outside `tubematic-v<version>/` and an existing target directory are each refused.
+- A source install clones the version's tag and never the default branch.
+- `GITHUB_REPO` equals `tubematic_core.version.GITHUB_REPO`, since the image cannot import it.
+
+Trap: The fakes replace the module's `urllib.request.urlopen` and `subprocess.run`, so the functions
+must look those names up at call time. A default argument bound at definition time lets the
+"downloads nothing" tests pass without ever seeing the fake.
+
+### `test_kasm_registry_sync.py`
+
+Covers `kasm_workspace/sync_registry.py`, which `release.yml` runs to write the Tubematic entry into
+the workspace registry
+([Publishing the Kasm registry entry](../18-releases.md#publishing-the-kasm-registry-entry)).
+
+- Versions sort numerically, newest first, so `2.0.10` comes before `2.0.9`. Tags and duplicates
+  collapse to one version.
+- A prerelease, or anything that is not `X.Y.Z`, is never offered. An empty list is refused and
+  nothing is written.
+- The written entry passes the checks `test_kasm_workspaces.py` applies to the in-repo entry, and
+  nothing but the version list changes.
+
+Trap: The launch form has no free-text field, so the written list is the set of versions a user can
+install from it. A string sort or a listed prerelease is a defect no other check sees before a
+session launches.
+
+### `test_tubematic_remote_renderer.py`
+
+Covers `scripts/tubematic_remote_renderer.py`, the stdlib-only script that installs, upgrades,
+removes and reports on a renderer on another machine
+([The host script](../20-gpu-and-remote-renderers.md#the-host-script)).
+
+- The script runs with no checkout and carries its own copies of shared code. Each copy is checked
+  against its original: the enrollment-token decoder and the certificate pin
+  (`tubematic_core.renderers`), the image owner and name, the container's command and
+  shared-memory size (`docker-compose.yml`), the `nvidia-smi` parsing, and the GPU environment
+  (`onboard/gpu.py::render_override`).
+- Nothing is sent to a gateway before its certificate matches the token's pin. A real TLS server
+  sees the handshake and no HTTP request line when the pin is wrong, for the version check and for
+  a whole `install`.
+- The token is never written down: it is in no argv, in no printed line and not in the state file.
+  The enrollment container gets it through its environment. Once the renderer has enrolled, that
+  container is removed and the renderer starts again without the token.
+- A refused enrollment, a failed `docker run` and Ctrl-C each leave no container.
+- The token comes from a hidden prompt, or from stdin with `--token-stdin`. `--token` is refused in
+  every form before Docker or the gateway is touched.
+- An unknown GPU, a GPU with no `nvidia` runtime and several GPUs with no terminal are refused, and
+  none of them falls back to the CPU.
+- `upgrade` pulls before it stops anything, and `remove` asks separately before it deletes the saved
+  credential.
+
+Trap: The fake Docker keeps each container's environment the way Docker does: a bare `-e NAME` is
+resolved and stored, and `docker inspect` shows it. That is what lets the tests see that a container
+recreated without dropping the token would keep it.
+
+Needs: PyYAML and `cryptography`. Docker is a fake `run_cmd`, and the TLS server is real.

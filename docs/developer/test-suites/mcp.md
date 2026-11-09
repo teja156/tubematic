@@ -1,128 +1,693 @@
 # `mcp/tests`
 
-Covers `mcp/server.py` — the MCP server the agent talks to, and the helper modules beside it
-(`mcp/text_audit.py`).
+Covers `mcp/server.py`, the MCP server the agent calls, and the modules beside it:
+`mcp/text_audit.py`, `mcp/cartoon.py` and `mcp/mascot_sheets.py`. The suite needs `fastmcp`,
+`httpx` and `pillow` from `mcp/requirements.txt`, and a missing package fails at collection. Run it
+in its own `pytest` invocation
+([Run each Python suite on its own](README.md#run-each-python-suite-on-its-own)).
 
 ```bash
 python -m pytest mcp/tests
 ```
 
-**Needs the MCP package dependencies** — `fastmcp`, `httpx`, `pillow` from
-`mcp/requirements.txt`. Several files import the server module directly, so a missing dependency
-fails at collection rather than in a single test.
+`conftest.py` provides `through_mcp`, which calls a tool over a real in-memory FastMCP client. Use
+it when a test is about what the middleware sees or logs, because only that path wraps the return
+value as production does. [The MCP Server](../06-mcp-server.md) describes each tool.
 
-`conftest.py` provides the shared fixtures, including `through_mcp`, which calls a tool over a real
-in-memory FastMCP client rather than as a plain function. Use it whenever a test is about what the
-**middleware** sees or logs: only that path wraps the return value the way production does. There is no `__init__.py` in this directory. Run this suite
-in its own `pytest` invocation: it fails to collect together with `tubematic_core/tests` (two shared test file names) and with
-`renderer/api/tests` (two modules named `server`).
+## Videos and pipeline state
 
----
+### `test_pipeline_status.py`
 
-## Agent read paths
+Covers `set_video_status`, `create_video`, `get_pipeline_status` and the research settings tools.
 
-The agent cannot read the filesystem — every path column in the database is container-absolute and
-unreachable from the agent sandbox. These tools are the only way it sees its own inputs.
+- The agent cannot set `TOPIC_REJECTED` or `SCHEDULED`, and the status lists of this server, the
+  Flask API and the dashboard's `VideoStatus` agree, read as source text.
+- `create_video` refuses an unknown domain or `strategy`, a score under the threshold and a voice
+  that is not on the roster.
+- `get_pipeline_status` returns `user_preferences` verbatim, and `illustrated_available` as a
+  boolean that does not carry the key. `get_video` reports the flag too, and a test checks that
+  the scene-config skill reads it there, where a scheduled session may look.
+- Mining is left out of `active_strategies` while no Gemini key is stored. Each Gemini call is
+  recorded in the usage ledger before its reply is parsed, and a run files at most its cap.
 
-| File | Guards |
-|---|---|
-| `test_get_scene_config.py` | `get_scene_config` — the only way to read a video's current `scene-config.json`. Added once the incremental revision work found the revision path was write-only |
-| `test_read_scene_file.py` | `read_scene_file` — the read half of the scene TSX pair. `write_scene_file` existed from the start; nothing ever read a scene back |
-| `test_get_timeline.py` | `get_timeline` — the only correct way to read `timeline.json` |
-| `test_read_image.py` | `read_image` — reads an image file already on disk and returns it as image content (`cartoon_still` and `render_mascot_sheets` return images too, each tested in its own file). Pins that reading **never** writes the coordinate grid back to disk: the file under `mounted/jobs/` is the real render input, so annotating in place would bake a grid into the finished video. A 251-character name is read (a character asset's `.png` is a 255-byte file name) and a 252-character one, which fits no extension, is refused |
+Trap: a save of the research modes made with no Gemini key keeps a stored `mining`. The agent sees
+only the filtered list, so storing what it sends back would remove mining for good.
 
-## Generation
+### `test_archived_videos.py`
 
-| File | Guards |
-|---|---|
-| `test_generate_image.py` | `generate_image` — OpenAI only, with the model from `image_model` (the default needs no stored row), the three aspect ratios sent as their mapped sizes, and the job-directory write. A missing OpenAI key, a ratio only Gemini took, and a stored model outside the catalog (a Gemini model, `gpt-image-2`) are each refused before any request — the last is the backstop if migration `0016` is ever bypassed, since this server reads the row raw. Also its usage recording: every `200` is recorded against the video with OpenAI's token split into text and image tokens, **including a `200` that carries no image**, which was still billed; an error status records nothing. Every failure branch (an error status, a `200` with no image, a request that never got a response) must log as **one** `error` record naming the provider, model, status and body, while the value returned to the agent stays byte-identical. A `200` whose JSON or image data is malformed is logged as HTTP `200`, never as "no response": the reply arrived and was billed. An empty prompt, refused before any call, is a `warning` with no provider fields. A `403` from a key whose OpenAI project lacks the model becomes an error naming the project and the model (OpenAI grants model access per project, and its model list shows models a project still cannot call). An image name with no room for the longest extension (`.webp`) in a file name is refused before the provider is called — the extension is known only after the billed reply — while a 250-character name is written |
-| `test_generate_voice.py` | Segment-derived TTS text, model and pronunciation-mode wiring, and the segment/word alignment that produces `timeline.json`. Voice spend is recorded as ElevenLabs plan credits read from the `character-cost` header — never a local character count, which strips markup ElevenLabs bills and ignores the Flash/Turbo half rate — and only a response without the header falls back to that count, marked estimated. Credits are recorded for every `200` **before** the body is used: a `200` with no audio used to raise out of the tool before the cost line ran, leaving paid spend unrecorded. A rejected call, a non-`200`, and a concurrent second call all record nothing. It also pins which models get `<phoneme>` tags — exactly `eleven_flash_v2` and `eleven_turbo_v2`, the two measured to apply them — because the 2.5 models silently drop a tagged word. A segmented script with a `<phoneme>` tag on any other model is **refused before spend** rather than stripped: its voice's model can change after approval, and a stripped tag voices the word as spelled on a paid request. `eleven_english_v1` must stay out of the catalog (ElevenLabs no longer has it), v3 and v4 must stay out of the break-tag set, and a bad `alphabet` or an over-long `<break>` in a script stored before those checks existed must still be refused before any spend. On `eleven_v3` an `<ipa>` tag must reach ElevenLabs as `"/…/"` (v3's own syntax) while `timeline.words` keeps the authored word, and it must be refused **before any spend** when the voice's model has changed away from v3 since the script was written — on the legacy flat-script path too, which must refuse rather than strip the tag and charge for a voicing that ignores it. That path has no `update_video` in front of it, so it validates the tag syntax itself: a stray `</ipa>` or a malformed tag is refused before any request, and the check runs before `<respell>` substitution, which would otherwise swallow an `<ipa>` nested inside a `<respell>` unchecked An `<ipa>` tag must beat the lexicon for its word, and `<respell>` plus the lexicon must still work on v3. On `eleven_v4` an `<ipa>` tag and a `[long pause]` reach ElevenLabs as v3's syntax, and the word after the pause starts after the tag — v4's alignment gives the tag's own characters the silence's duration, unlike v3 — while a `<break/>` there is refused before any spend. An ElevenLabs error status, a timeout and an unusable `200` each log as one `error` record naming the voice's model. So does a billed `200` whose alignment then fails the break-marker count or the segment lockstep: that is a paid failure, not a refusal. Its logged body leaves out the reply, which is mostly base64 audio |
-| `test_removed_tools.py` | The GIF tool stays removed. It ran agent-authored Python inside the container that mounts the credential database, and was deleted rather than sandboxed, so this pins that `write_gif_script` is absent from the tool list an agent sees, that nothing under `mcp/` imports the old GIF toolkit, `numpy` or `imageio`, and that `requirements.txt` no longer pulls them in while keeping `pillow`, which `read_image` and `generate_character` still need |
+Covers how the tools treat an archived video ([Archived videos](../03-database.md#archived-videos)).
 
-## Data model
+- `list_videos` and the counts in `get_pipeline_status` leave archived videos out. One is still
+  readable by id.
+- `set_video_status` and `update_video` refuse one with `video_archived`. A live video stays
+  writable, as the negative control.
 
-| File | Guards |
-|---|---|
-| `test_script_segments.py` | The `videos.script_segments` migration and the `update_video` / `get_video` support built on it, including the markup `update_video` refuses at authoring time. That includes two values ElevenLabs accepts without complaint and gets wrong: a `<phoneme>` alphabet other than `cmu-arpabet`/`ipa` (the word vanishes from the audio) and a `<break>` time that is not seconds in (0, 3s]. The attribute must be the real one, exactly once: a prefixed name (`data-alphabet`), a `time="…"` inside another attribute's quoted value, or a repeated attribute is refused, because a search for `name=` anywhere in the tag used to be fooled by all three. It also covers the `<ipa>` tag: it is refused on every model except `eleven_v3` and `eleven_v4`, because the others read the IPA aloud; a tag that is unclosed, has no `ph`, puts spaces or slashes in `ph`, wraps more than one word, or leaves a stray or malformed `</ipa` closer is refused, because each tag must stay one token for the caption lockstep; and the derived `script` keeps the wrapped word, so no IPA reaches the captions |
-| `test_voice_models.py` | Per-voice models on the MCP side. The agent learns a video's model and `pronunciation_mode` from `get_video`, per video — there is no install-wide value to read, and `get_pipeline_status` must not carry one, because a stale install-wide mode would script a v3 video's pauses as `<break/>` tags. `update_video` checks a script against the video's **own** voice, refusing `<phoneme>` for a voice that would strip it, and **pins** the voice it resolved to onto a video that had none — or was passed an explicit `voice_id=""`, which means the install default and must be recorded as it — so a later change of the install default cannot swap the model under a written script; it never overwrites a voice the video already has. A roster entry whose `model_id` is not a string (an unhashable list or dict) empties the roster like any other corrupt value instead of raising. A voice change alone is refused when the stored script cannot be spoken by it — including `<phoneme>` tags after the video's own voice was moved off a phoneme model — and re-setting the video's own voice — the negative control — never is. `generate_voice` sends the voice's model and refuses before spend when that voice's model changed under the script. A project's `default_voice_id` seeds every strategy, an explicit voice wins, a default that left the roster seeds nothing, and `upsert_project` stays partial: omitting the field keeps it, and re-sending a stored value that has left the roster is not refused. The cross-model revision path: at `REVISION_REQUESTED` a v3 voice alone is refused over a `<break/>` script, while the same voice together with a `[pause]` script in one `update_video` call goes through and pins it. A voice change at `TOPIC_PROPOSED` is not refused over an old script, and the same row at `SCRIPT_READY` still is. A voice written under that waiver is bound to the status: a test moves the video to `SCRIPT_READY` mid-call, and the write must fail and leave the old voice. `get_pipeline_status`'s roster carries each voice's `pronunciation_mode`, pinned equal to what `get_video` reports for a video on that voice, while the stored roster keeps its shape |
-| `test_script_profiles.py` | The script-profile tools — corpus-derived style stored as markdown, built once by a cron agent session and immutable afterwards. Most of it now guards the **profile schema**, which exists because a profile is distilled from other people's transcripts and then fed into every later scripting prompt: exactly the create skill's seven sections in order (the fixture is pinned to the skill's text so the two cannot drift), the character cap, and the refusal of links, registered tool names (the list is read from the FastMCP registry and checked against the source's `@mcp.tool` count, so a new tool cannot be silently missing) and fenced code. Links are tested in every form a reader could follow — scheme-relative `//host`, a bare `host.tld/path`, a host with a port, `javascript:`/`data:`/`file:` — and tool names in disguise: prefixed, suffixed, re-separated, and split by an invisible character or written in fullwidth letters, since both checks read an NFKC-normalised copy with invisible characters removed. A second group covers spellings a model decodes although the plain form never appears, each refused on write **and** withheld on read: HTML character references (numeric, hex, named, and without the semicolon) hiding a tool name or a link, raw HTML tags and comments, a heading underlined with `===` or `---` or nested in a blockquote or list item, a code fence inside a blockquote or list or inline, a backslash-escaped host, a numeric reference long enough (4,301 digits) that decoding it would raise rather than refuse, a scheme written straight onto its target with no `//` (`mailto:`, `tel:`, `magnet:?`, a made-up scheme), a bare email address (plain, with a `+tag` and several domain labels, with an escaped `@`, and with a domain GFM still links although it has a `.-`), which GFM renders as a `mailto:` link, Markdown's own link syntax with a relative destination (an inline link, an image, a reference definition at a line start, in a list or quote, with a label over two lines, or with an escaped `]` or a trailing escaped backslash in its label, used as a full or collapsed reference) and a `<mailto:…>` autolink. Inline code exempts a link shape only where a reader also sees code, so each of these renders a live link and is refused: the same `[claim](payoff)` with no backticks, a span opened on one line and closed on the next, one opened in a heading's line, an escaped backtick, a fullwidth backtick, a span split by a table cell's `|`, and a definition whose label holds a backtick. A link shape in a code span that also holds a `|` outside any table is pinned as refused too: it is an accepted over-refusal (a pipe may be a cell boundary), pinned so that changing it is a deliberate decision. A URL inside a code span is still refused. Each was checked against the dashboard's own Markdown parser (remark with GFM). The read-side warning must never quote the withheld text — it reaches the agent, so it names a line or a rule instead: no part of an extra heading, an underlined line, HTML, a link target or a character reference (a 300-digit one is checked digit run by digit run) may appear in it. The **negative controls** matter most: a realistic seven-section profile must save and come back byte-identical, and ordinary style prose (`Node.js`, `e.g.`, versions, `4.5/5`, a word followed by a colon and a space, a colon followed by a digit (`Step 1:Open`, `9:30am`), `**Hook:**`, `A:B`, `std::move`, `[topic]` placeholders including one that starts a line or sits in a list or quote, a link shape inside single or double backticks (`` `[claim](payoff)` ``), `@` prose that is not an email (`@handle`, `@studio.team`, `meet @ 10am`, `x@y`, `user@localhost`, `hello@world.`, `x@y.1` — each confirmed unlinked by GFM), tool-name words separated by spaces, `<5 seconds`, `a < b`, `16:9`, `1:30`, `R&D`/`AT&T`/`Q&A;`, a `---` rule after a blank line, nested bullets with a 4-space continuation, a lone backslash) must pass, or the schema would block honest profiles. Also that an old row failing the schema is served with empty markdown and a warning rather than an error (the skill then falls back to its generic style), that `provenance` is on both read tools and `corpus_summary` is not served, that the check holds when called over a real MCP client (bounded, so a hang fails instead of stalling the suite), that the tool-name check never asks the running server for its tools at call time (a fresh interpreter where listing tools from inside a tool call never answers, under a subprocess timeout — asking from inside a call can deadlock against the server's own event loop and leave a profile build `GENERATING` forever), and that `add_comment` refuses every author but `agent` and writes nothing when it does |
-| `test_publish_metadata.py` | The publish title and description `update_video` requires with every script write, flat `script=` included. The Publish dialog only reads them, so an optional pair would be one the agent eventually forgets, leaving the dialog on the bare topic with nothing to say it fell back. Also pins the length caps (YouTube's 100-character title; a description that keeps the combined caption under Instagram's 2200) and that the refusal tells the agent to resend the stored pair on a pronunciation-only fix — or to write one when the stored pair is blank, since a video scripted before the pair existed would otherwise resend blanks, be refused again, and never get re-voiced |
-| `test_video_title.py` | `videos.title` (short display name) and its length cap, kept distinct from `topic` (the full descriptive brief) |
-| `test_generate_character.py` | `generate_character` — the transparent-cut-out path for the illustrated register. Pins what was **probed, not read off a docs page**: every offered size is divisible by 16 (the real constraint, which is why the canvas's own 1080 width cannot be requested), `input_fidelity` is never sent (every OpenAI catalog model rejects it outright), the model comes from the `character_model` setting and one that cannot draw a transparent background (`gpt-image-2`) is refused **before** any request, a `403` from a project without access to the model becomes an error naming the project and the model, the four hand-kept copies of the OpenAI catalog (and the probe script's) agree, the `image_model` default matches `SETTINGS_SPEC`'s, and every catalog model has a built-in price, a reference routes to the edits endpoint, a missing OpenAI key refuses rather than silently producing an opaque image, and the **real** pixel dimensions are reported so a panel can be sized to the picture instead of cropping it. Every call is recorded against the video as one usage row — a regenerated pose overwrites the file but was paid for. An OpenAI refusal logs as one `error` record naming the provider and body, and a malformed `200` logs as HTTP `200`. A character name and a reference reserve room for `.png` only: 251 characters is accepted for both (a 255-byte file name) and 252 is refused before any request — the `.webp` reservation `generate_image` needs once stranded 251-character characters |
-| `test_agents.py` | Installed agents as the MCP server sees them, including that `get_pipeline_status`'s `agents` entries carry each agent's `effort` — the submit-new-job command tells the agent to mark that level as the default when offering the five, which an instruction written against a field the payload omits could not do: `create_video` pinning a video to one, `update_video`'s `agent_model` membership check against that video's *own* agent, and the `TOPIC_PROPOSED` freeze on both `agent_model` and `agent_effort`. Pins that the freeze is checked **before** membership, so a late edit reads as frozen rather than as a model problem, and that `agent_effort` needs no installed agent at all — its five levels are fixed by the CLI, so there is no per-agent list to consult and a video with no agent must not lose the human's pick |
-| `test_visual_style.py` | The per-video visual register, including the Cartoon 3D GPU gate (refused with the unknown-GPU message until the renderer has probed, with the no-GPU message after a failed or absent probe, allowed while it works; a stored project default re-sent unchanged is never refused). The gate reads `tubematic_core.renderers.gpu_status`'s aggregate over the `renderers` table, the same source as the API's gates: a GPU on an enrolled remote renderer unlocks the style while the built-in one has none, and the retired `gpu_probe_result` settings row counts for nothing (probes are written with the shared `builtin_gpu.py` helper, as the render gateway stores them). Pointing `_gpu_probe_status` back at the settings row was checked to fail these tests. Also `cartoon_3d_available` on `get_video` and `get_pipeline_status`, and `resolved_renderer`: write-once under `auto`, refused when the style already names the renderer, and `cartoon_3d` needing the same working GPU. Otherwise: the `TOPIC_PROPOSED` freeze on `visual_style`, the **write-once** `resolved_visual_style` (the only thing making a revision round reuse the register, with nothing on the revision path aware of it), the project default applying to curriculum videos alone, and `write_scene_config`'s canvas rules — a contradicting canvas rejected, an absent one filled in rather than refused. Also pins that `upsert_project` is a **partial update**: an omitted field is left alone on an existing row, `""` still clears one, and a new row still lands on the creation defaults. Its own slash-command callers are partial, so a full replace let an unrelated command blank a domain's description, style or seed flag. And that `illustrated` is refused — on `update_video` and as a *new* project default — while no OpenAI key is stored, with the environment fallback counting as stored. Before, the key was checked only by `generate_character`, after voicing, on a video whose style was already frozen. Re-sending a default that is already stored is deliberately not refused, or every later edit to that domain would fail once the key is removed. Also `write_scene_config`'s Cartoon 3D agreement: a `Cartoon3D` scene is refused on a DOM-style video and on an `auto` video already resolved to `dom`, DOM scenes are refused on a video that renders as Cartoon 3D, an unresolved `auto` video is resolved by its first config (to `cartoon_3d` under the GPU gate, or to `dom`, so a later Cartoon3D config cannot discard authored DOM scenes) and never by a config the scene-work guard refused, with the resolution a compare-and-set that refuses a config whose video resolved to the other renderer under it and rolled back with the same transaction when the staged file cannot be renamed into place (the retry may still pick either renderer), and a Cartoon 3D config must be one scene starting at frame 0 and spanning the video whose beats tile it (a gap, a late start, a short sheet and a second scene are each refused with the frame named) |
-| `test_project_pause.py` | Domain pause, which used to be prose only. `create_video` refuses a paused domain for every sourced strategy and accepts `manual`, because a human request outranks a pause. The refusal names the domain, tells the agent to **skip** the candidate, and **never mentions the manual exemption**: the agent supplies `strategy`, so an error advertising it would teach the agent to relabel a candidate past the pause. The check reads `status` alone, so a stray paused non-seed still refuses. Also pins that only a curriculum seed can be paused through `upsert_project` or `set_project_status`, that clearing the seed flag on a paused domain reactivates it rather than stranding it, and that a partial upsert leaves a paused seed paused. Two further pins: a pause that commits between `create_video`'s check and its `INSERT` still refuses, because the `INSERT` re-checks it (the early read holds no transaction). `mine_youtube_topics` refuses a paused domain before any paid Gemini call. The paused-domain refusal logs as a `warning`, not as a success and not as an incident |
-| `test_topic_cap.py` | A domain's whole topic history and the cap that bounds it. `list_project_topics` includes **archived and rejected** topics: `list_videos` hides archived ones, and deduplicating with it re-proposed deleted topics, which Auto Pilot then approved and paid for. It lists newest first, at most `topic_cap` rows, only the named domain, with each brief clipped at a word with "…" and an over-length legacy title clipped too. A domain at its cap is **expired**: `create_video` refuses curriculum, trending and mining there with a message naming the count and cap, saying "skip" and never mentioning the manual exemption, and accepts `manual`. Raising the cap re-opens the domain, and a pause still reads as a pause. A topic committed between the early count and the `INSERT` is still refused, because the `INSERT` re-counts (the early read holds no transaction). Mining refuses an expired domain before any Gemini call, asks only for the room left under the cap, and ends the run at the first refusal once another writer fills the domain; both tests count the Gemini calls, since asking after the domain closed is spend with nothing to file. `upsert_project` defaults the cap to 100, keeps it on a partial update, and refuses anything that is not a whole number from 25 to 750, `True` and `100.0` included. `list_projects` and `set_project_status` carry `topic_count` and `expired` |
-| `test_project_description.py` | A domain's description through `upsert_project`. A multi-line description is stored verbatim; 2000 characters is accepted (counted in code points) and 2001 refused, on a new domain and as a change, with nothing stored. The limit is checked only when the description changes: re-sending an over-limit description already stored is accepted (the negative control), an **omitted** description is never checked and keeps the stored one, and `""` still clears it |
-| `test_default_script_profile.py` | A domain's default script profile on the MCP side. `create_video` seeds it onto **curriculum** videos only, as with the default visual style, and seeds nothing when the profile has been deleted or is not `READY`, since the approving `PATCH` would refuse it. `upsert_project` stays a partial update: an omitted default is kept, `""` clears it, a change to an unusable profile is refused, and re-sending a stored default that was deleted since is accepted, so it never blocks an unrelated edit |
-| `test_pipeline_status.py` | Status-value handling — the `SCRIPTING` removal and its migration, and `FAILED` as an ordinary unrestricted value. Also that each mining call is recorded in the usage ledger before its reply is parsed, with no video attached — a reply that fails to parse is skipped but was still billed. A mining URL that Gemini refuses logs once, on the call's own `error` record with `outcome: partial` and the URL. It is not logged again per URL, while a reply that fails to parse keeps its own warning. Also that `get_pipeline_status()` returns `user_preferences` verbatim, since an interactive session has no other route to them, and `illustrated_available` — a boolean, never the key — which the scene-config skill reads before choosing generated character art. Mining is left out of `active_strategies` — in `get_pipeline_status` and `get_research_strategies` — while no Gemini key is stored, `mining_available` says so without ever carrying the key, adding a key brings it back without rewriting the stored row, and `set_research_strategies` refuses `mining` with no key and stores nothing. A list saved with no key keeps a stored `mining` and adds none that was not stored: the agent only sees the filtered list, so writing it back verbatim would drop mining for good. `get_video` reports the same flag, and the skill's text is checked to read it from there and never from `get_pipeline_status`: a scheduled session is warned off that tool for finding work, and with the check behind it, illustrated videos came out with no generated characters. The agent cannot set `SCHEDULED` (a video there needs a post postforme is holding, which no tool can create — set by hand it would only bounce to `FAILED`), and every copy of the status list agrees: this server's, the Flask API's and the dashboard's `VideoStatus`, read as source text. A stored roster over `MAX_VOICES` reads as empty, and one exactly at the cap reads in full. |
-| `test_mining_urls.py` | What mining may hand Gemini, and how much one run may spend. A URL becomes Gemini's `file_uri` on a paid call, so **one bad URL refuses the whole run with zero Gemini calls** — `file://`, a metadata or loopback address, a look-alike host, userinfo, a short id — counted on the fake client, never inferred. Gemini gets the canonical `watch?v=` form, and two spellings of one video are asked once. A run makes at most as many calls as topics it may file even when every URL comes back empty or every call fails, and the next run carries on from the next URL. A second run while one is in flight is refused and makes no call; the lock is released after a refused run and after one that raised. The guards from before are unchanged: no Gemini key is still an error with no call, and an empty list still points at `get_mining_sources`. `set_mining_sources` stores the canonical, deduplicated list, refuses a list with any bad entry naming each one and leaving the stored list as it was, and caps it at 50. Mutation-checked: dropping the URL check, the call bound or the lock each fails this file |
-| `test_archived_videos.py` | Archived videos are invisible to the agent: `list_videos` and `get_pipeline_status`'s counts leave them out, since their files are gone and those counts feed the same decisions the poller makes from the Flask copies of these queries. One is still readable by id. Listing filters cannot cover the stale-id window — the poller handed the agent a video that a human deleted before the agent acted — so `set_video_status` and `update_video` refuse an archived row with `video_archived` and change nothing. That includes a move to `VOICING` or `RENDER_QUEUED`, which would spend on, or render, files that no longer exist. A live video stays writable, as the negative control |
-| `test_pronunciation_rules.py` | `upsert_pronunciation_lexicon` / `remove_pronunciation_lexicon` — the install-wide `{term, respell}` lexicon that replaced ElevenLabs dictionaries. Also guards the **form** a respelling is written in (see below), and that the skill's pointer to ElevenLabs' docs keeps its guards: syntax only, not fetched for every script, and the skill wins any conflict. Without them the docs' 3s break and their contradictory model lists would override decisions the skill exists to hold |
-| `test_api_keys.py` | Keys are read from the settings table **per call**. Before this they were module-level constants captured at import, so a key rotated on the dashboard needed a restart |
+Trap: a listing filter cannot cover a video that a person deletes after the poller handed its id
+to the agent. Without the write refusal, a move to `VOICING` or `RENDER_QUEUED` would spend on
+files that are gone.
 
-## Scene resolution and validation
+### `test_video_title.py`
 
-| File | Guards |
-|---|---|
-| `test_scene_resolution.py` | The `generated/` vs `installed/` resolution surface — `list_scene_files`, `validate_job` |
+Covers `videos.title` and its length cap ([Video titles](../06-mcp-server.md#video-titles)).
 
-> The `validate_job` fixtures here, in `test_scene_subfolders.py` and in
-> `test_validate_job_segments.py` copy each job file to `JOBS_DIR/<video_id>/` after inserting the
-> row, because `validate_job` finds the files from the id rather than the stored path columns. A
-> file the test means to be missing is left out, so the missing-file cases still mean what they say.
-| `test_scene_subfolders.py` | Per-video namespacing: `generated/{video_id}/{scene}.tsx` instead of one shared pool. Two videos naming a scene the same thing used to overwrite each other, weeks apart, between sessions that never overlapped |
-| `test_validate_job_images.py` | `validate_job`'s image-reference checks. An unresolvable `src` is not a blank frame — Remotion's `<Img>` retries and then fails the render. The hint names only `generate_image`: pointing an agent at a tool that no longer exists sends it hunting for one |
-| `test_validate_job_segments.py` | Segment integrity — that `script_segments` are well-formed and that `timeline.json`'s segments line up with them |
-| `test_job_paths.py` | Ids that become paths, at the MCP server. Every tool that builds a path from a `video_id` refuses one that is not a single path component (`../x`, an absolute path, `a/b`, a backslash, `.`, `..`, 256 bytes, a trailing newline, a NUL, a non-string) before anything else, and accepts a legacy id filed before the creation rule (`a.b`, `Spaced Name`, 129 characters — the 128 cap is for new ids only): such a video's timeline is readable, its scene lands in its own directory, and the composed `src` `validate_job` checks is accepted. A `src` whose video half is `..`, `.`, empty or holds a backslash or control character is refused. With `jobs/vid_a` linked to `jobs/vid_b` and `generated/vid_a` linked to `generated/vid_b` — links that stay inside their directory, so containment alone passes them — every path tool given `vid_a` (`read_image`, `generate_image`, `generate_character`, `get_timeline`, `get_scene_config`, `write_scene_config`, `write_scene_file`, `read_scene_file` in both forms, `delete_scene_file`) is refused, makes no network call, returns none of B's content and leaves the whole tree byte-identical; `validate_job` reports a scene and an image reached through a link. The same tools still work on the real tree, on a video with no directory yet and on a legacy flat scene. Routing one tool around `tubematic_core.jobfiles` fails its case — the row lookup most of them also make was the only guard before, and `delete_scene_file` made none, so an absolute `video_id` replaced the scenes directory. The `delete_scene_file` cases leave a marker file outside `generated/` and check it survives, including through a symlinked video directory; a video scene and a legacy flat scene are still deletable. `update_video` no longer declares the four path columns, and a call over a real client passing one is refused with nothing applied. `validate_job` reports a planted path's file missing rather than reading it, and refuses a symlinked job file; an image reference cannot probe outside `images/`. `upsert_project` refuses a new malformed id and still edits a legacy `node.js` domain. `write_scene_file` refuses a 252-character scene name, whose `.tsx` file name would be 256 bytes, with an error and nothing written, and writes and reads back a 251-character one |
-| `test_text_audit.py` | The deterministic pre-render text-layout audit. **This is the only layer pytest can reach** — the browser half (`TextLayoutProbe.tsx`) and its Remotion driver need a browser, which the Remotion project's JS test runner (vitest) does not have, which is why every threshold lives in `mcp/text_audit.py` and the probe decides nothing |
+- `create_video` clips a long title at a word boundary, returns a warning and leaves `topic` whole.
+- `update_video` refuses a long title and writes nothing.
+- The title stays writable after the topic checkpoint, and the cap equals the Flask API's copy.
 
-## Logging
+### `test_publish_metadata.py`
 
-| File | Guards |
-|---|---|
-| `test_tool_call_logging.py` | The FastMCP middleware that writes one record per tool call. Argument values are dropped and only `video_id`/`profile_id` pass through, by allowlist. A tool that **returns** `{"error": …}` must not log like a success: that is how a depleted Gemini balance once left nothing in any log. The level follows the cause: `error` when a provider call failed (the call site reports it through `_provider_failed`), `warning` for a refusal with no provider call behind it, `error` with `outcome: partial` when the tool succeeded around a failed provider call, and `info` otherwise. It must be exactly one record per call, so a failure is never logged at the call site **and** again by the middleware. A provider failure's details must be in the record's **message**, not only its extra fields: the dashboard's Logs page renders the message alone. Reading the returned error is tested against **real** `ToolResult` objects from a throwaway FastMCP server, because FastMCP wraps the tool's dict before the middleware sees it, and a guessed shape would silently read every failure as a success. The reader must return nothing, never raise, on any other shape. Credentials are redacted in the record itself, and **before** the text is cut to length, not after. A key straddling the limit would otherwise survive as a fragment the stored value no longer matches. They are redacted there, not only by the JSONL formatter, because the stdout sink behind `docker logs` has no redacting formatter. This covers both a stored key and one supplied only through the environment |
-| `test_log_retention.py` | `server.py::_log_retention_days`, which configures logging **before** `mcp.run()`, so anything escaping it stops the server before it can answer even `/health`. A database that does not exist yet (a fresh install, or a container started before onboarding seeded it), one with no settings table, no row, a value `int()` rejects, and a value outside the bounds all fall back to the default instead of raising — the earlier form guarded only the empty string. A zero falls back too, since it would prune the file being written. This module cannot import `pipeline.py` (they run from different directories in the image), so a cross-copy test reads that file's source and asserts the bounds and the `SETTINGS_SPEC` default still match: the "keep in sync" comment alone never held them together |
+Covers the publish title and description that `update_video` requires with every script write
+([`update_video`](../06-mcp-server.md#update_video)).
 
-## Notes
+- A script without both values is refused and nothing is written, for `script_segments` and for the
+  flat `script=` form.
+- The caps hold and equal the Flask API's copies. The pair alone can be rewritten with no script.
 
-**A respelling must be written as one plain word, and the guidance is pinned so it stays that way.**
-`test_pronunciation_rules.py` asserts against the real strings an agent reads — both whitespace
-rejection messages, the `upsert_pronunciation_lexicon` docstring, and the script-writing skill's
-Pronunciation section on disk — that none of them recommends a hyphenated respelling, and that the
-skill never demonstrates a tag the server itself rejects. The reason is not style: ElevenLabs does
-not speak a hyphenated respelling correctly, and an unhonoured respelling returns from AI review as
-a `mispronunciation` must-fix, so each round costs a paid re-voice. Guidance that steered an agent
-to the hyphen therefore billed the user on a loop.
+Trap: the pair is required because the Publish dialog only reads it. The refusal tells the agent
+to resend the stored pair on a pronunciation fix, and to write one when the stored pair is blank.
+A video scripted before the pair existed would otherwise resend blanks and be refused each time.
 
-Two things about these tests are deliberate. They assert on the *old advice phrase* rather than the
-word "hyphen", because the replacement wording has to name the hyphenated form in order to warn
-against it. And the skill check looks only at the `as="..."` values demonstrated for **sounds** —
-spelling an acronym out letter by letter (`S-Y-N`) is a different intent and is still correct. Same
-spirit as `test_ai_review.py::test_mispronunciation_bar_is_not_lowered`.
+### `test_agents.py`
 
-## Concurrency
+Covers installed agents as the MCP server sees them: the agent a new video is dealt, and
+`update_video`'s `agent_id`, `agent_model` and `agent_effort`
+([The agent group](../02-pipeline.md#the-agent-group)).
 
-| File | Guards |
-|---|---|
-| `test_scene_claim.py` | The owner-keyed, TTL-refreshed in-process claim guarding `generate_image`, `write_scene_file`, `write_scene_config` and `submit_render` |
-| `test_submit_render.py` | `submit_render` as a pure DB write — no network call, an atomic guarded `VOICE_READY → RENDER_QUEUED` claim |
-| `test_watermark.py` | The "Made with tubematic.ai" watermark, as source guards — no test executes the component. Pins the property the feature exists for: **the agent cannot move or remove the mark.** The composition draws it once, with no props, after the captions and outside the scene list (a scene entry would be dissolved at every scene boundary); the only switch is the render prop the renderer sets from the `watermark_enabled` setting, never a `scene-config.json` key; and the test for that prop is `!== false`, so the audit and Studio preview, which send nothing, show what a render shows. It pins the maximum `z-index` too, since a positioned scene element with any positive `z-index` would otherwise paint over a later sibling. Also pins that the image is a local `staticFile()` and not a network fetch, and that the baked file is byte-identical to the plate-backed `smoke` source artwork in `logos/` — a plate-less variant lost its text on light backgrounds in real renders |
-| `test_cartoon_tools.py` | The Cartoon 3D authoring tools (`mcp/cartoon.py`, the `cartoon_*` tools), as far as Python can reach them: the renderer's command lines are stood in for by a stub `node` on PATH that plays back a plan, so nothing bundles or renders. Pins where a video's verdicts live, that a still's name can only ever be a plain file under that directory (a judge passes names back, so a traversal here would read any file the server can) and that the part gate's kind is gone, that the beat gate runs over the video's job directory (nothing staged: the jobs volume is the composition's public directory, the renderer's stills server is handed over) **and** its generated source tree (`--source`, the hash that keys the verdict), that a video without its `CartoonShort` cannot be gated, that a judge prompt names its stills by the `cartoon_read_still` call and ends in the record call the judge makes itself, that one video's rendering tools do not overlap while a recorder waits for the running tool instead of being refused (parallel judges all land their verdicts), that the kit is listed without its tests and read by a listed path only, that a malformed soundtrack spec is refused before anything runs and a sound one resamples the voice, runs the engine on the spec and the timeline and lands `mix.wav` where the renderer muxes it (a failing engine is reported with its last lines), and that `submit_render` refuses an ungated Cartoon 3D video with `cartoon_not_ready` while never asking readiness of any other video. `validate_job` carries the same errors and hands the scene tree over |
-| `test_cartoon_scene.py` | The shape of a Cartoon 3D scene-config (`_validate_cartoon_scene`), as far as `write_scene_config` can see it: a sound scene passes and a config without one is not looked at; two scenes, an installed scene, a `src` that is not this video's `CartoonShort`, a late start, a short span, an empty or untiled beat list, a beat without its `shot` note and a non-integer frame are each refused with a reason. The code itself is typechecked by `validate_job` and judged by the beat gate |
-| `test_mascot_tools.py` | The mascot builder tools (`get_mascot_job`, `render_mascot_sheets`, `submit_mascot`) with the sheet renderer faked by a function that writes a real PNG. Pins the status gates (rendering and submitting work only while `BUILDING`), the per-attempt render cap (checked before anything runs, and a failed render still counts, or an agent could loop on a broken script forever), that **changed code deletes the sheets rendered from the old code** and unchanged code keeps them (otherwise a human reviews pictures of code that is not the submitted code), that submit needs all three sheets for the current code and loses cleanly to a concurrent status change, that a change never touches the approved version, and what `get_mascot_job` hands over (kind, based-on code, builtin read from its repo file, and as previous code the version the human actually reviewed, which is an unapproved draft or a later draft than the approved version, never simply the approved one). An archive committing after a tool's BUILDING check wins: `render_mascot_sheets` stores no code, spends no render and runs no renderer, and `submit_mascot` leaves the mascot `BUILDING`, both saying it was archived |
-| `test_mascot_video.py` | A mascot on a video, mirroring the Flask copy of the rules (the GPU state is a probe on the built-in renderer's row, written with the shared `builtin_gpu.py` helper as the render gateway stores it): seeding in `create_video` for every strategy (GPU working only, never on `cartoon_3d`, `none` beating the install default), the per-video pick in `update_video` (frozen after the topic, pickable, GPU-gated with the unknown message, checked on change only, never on `cartoon_3d`, cleared by a switch to it even when the old value is echoed, and refused when a concurrent switch to it lands between the read and the `UPDATE`), approval refused for a withdrawn mascot or for a Cartoon 3D video (by style or resolved renderer) that holds one (also when a style write leaves that pair behind the check, or when the archive commits between `set_video_status`'s check and its `UPDATE`, with and without `only_if_current_status`), `get_video`'s `mascot`, the project default checked on change only and refused without a `working` GPU (with the unknown message for an untested one; `''`, `none` and an unchanged re-send always pass), the cue track in `write_scene_config` (bare list, refused without a mascot, invalid cues refused with the reasons and nothing written, version pinned by the first write and kept by a revision, Cartoon 3D scenes refused), `validate_job` and `submit_render` refusing a mascot video with no cues, and the audit's mascot-over-text warning. Also that the version pin follows the mascot (a different mascot, none, or a switch to Cartoon 3D resets it, echoing the same one keeps it), that a never-approved default seeds nothing, and that a `FAILED` mascot with an approved version is still pickable and seeds; and that `write_scene_config`'s description names every emotion, look and facing value plus the rest time and scale bounds, so the agent never learns them from refusals Also pins that `update_video` will not let `auto` settle on `cartoon_3d` while a mascot is chosen, which would leave no scene kind `write_scene_config` accepts |
-| `test_mascot_sheets.py` | `render_sheet`'s subprocess handling against a fake `node` on PATH: the argv and browser env, a non-zero exit carrying the stderr tail, exit 0 without a picture being a failure, a stale picture never passing for a new render, and a timeout killing the whole process group (a plain `run(timeout=)` orphans Chromium) |
-| `test_subtitles.py` | The burned-in captions, as far as Python can reach them — the config block `write_scene_config` accepts. Pins the two things that are decisions rather than plumbing: **absent means on** (the only reason the default reaches a video whose scene config predates the feature, so opting out has to be an explicit `enabled: false`), and the **1–7 word ceiling**, rejected rather than clamped so an impossible request is visible instead of silently altered. The `background` enum is pinned from both sides: a made-up value is refused, and every real style, `outline` included, is stored verbatim. Also pins, as source guards, the three decisions in the caption component that pytest cannot reach behaviourally: that the default font is not a webfont, that a caption's hold is capped so it cannot linger through a deliberate pause *while still* combining with the next caption's start, and that each webfont is loaded at one weight and subset list with Oswald at 700 — unifying the four families on one weight raises, because Oswald publishes no 800 |
-| `test_write_scene_config.py` | `write_scene_config` — the agent's only correct write path for `scene-config.json`. One test pins that it writes exactly where every reader derives the file (`tubematic_core.jobfiles`); `test_generate_voice.py` has the same agreement test for `audio.mp3` and `timeline.json`, plus a symlinked `audio.mp3`, and a job directory linked to another video's, refused before any ElevenLabs call |
+- A model must be on the list of the video's own agent. Changing the agent clears the model
+  unless one is sent with it.
+- The three fields are frozen between human checkpoints. The freeze is checked before membership,
+  so a late edit is reported as frozen.
+- `agent_effort` needs no installed agent, because the levels are the same for every agent.
+- A write is refused when the video's status or agent changes between the check and the `UPDATE`.
 
-> `test_submit_render.py` and `test_write_scene_config.py` being **unmodified** is the standing proof
-> that the scene claim is claim-on-first-use rather than claim-required: an unclaimed video behaves
-> exactly as it did before the feature existed. Do not "tidy" them into taking a claim.
+Trap: `test_the_tool_count_matches_the_docs` counts `@mcp.tool` in the source and compares it with
+the heading `## The N tools` in [The MCP Server](../06-mcp-server.md). Adding a tool fails the
+suite until that heading is updated, and rewording the heading fails it too.
 
-## Container health
+## Domains
 
-| File | Guards |
-|---|---|
-| `test_mcp_auth.py` | The bearer token on `/mcp`, on the real ASGI app the entry point serves. A missing, wrong, non-Bearer or extended token gets `401`; the right one gets through; `/health` stays open for the compose healthcheck. **A `401` must not advertise OAuth** — a bare `WWW-Authenticate: Bearer` and no `/.well-known/oauth-*` routes — because a client that finds OAuth discovery starts a browser login an unattended agent run can never finish. Importing the module needs no secret (tests and `vqa/stage_script.py` import it); only the entry point reads the token, and it does so before `mcp.run`, so a missing file stops the server rather than starting it open |
-| `test_health_route.py` | `GET /health`, the readiness probe of the `tubematic-mcp` container, which `docker-compose.yml`'s healthcheck curls. The probe it replaced POSTed an empty body to `/mcp` and accepted any response, so it could not tell a live server from an erroring one. Registration is not the same claim as serving: the tests build the real ASGI app with the same `path="/mcp"` the entry point uses and assert that `/health` answers at the server root and `/mcp/health` does not, because a FastMCP change that nested custom routes under `path` would leave the container never `healthy` and abort onboarding's renderer step — otherwise found only in a live session. The body matches the Flask API's `GET /health`, and the handler never touches the database: a probe that runs every few seconds reports only that the process accepts connections |
+### `test_project_pause.py`
+
+Covers the domain pause in `create_video`, `upsert_project`, `set_project_status` and
+`mine_youtube_topics` ([Domain pause](../02-pipeline.md#domain-pause)).
+
+- `create_video` refuses a paused domain for every research mode except `manual`. The refusal
+  tells the agent to skip the candidate and logs as a `warning`.
+- Only a curriculum seed can be paused, and clearing the seed flag on a paused domain reactivates
+  it.
+- A pause that commits between the early check and the `INSERT` still refuses, because the
+  `INSERT` repeats the check. Mining refuses a paused domain before any Gemini call.
+
+Trap: the refusal does not mention that `manual` is exempt. The agent supplies `strategy`, so a
+message naming the exemption would teach it to relabel a candidate past the pause.
+
+### `test_topic_cap.py`
+
+Covers `list_project_topics` and the topic cap ([Topic cap](../02-pipeline.md#topic-cap)).
+
+- `list_project_topics` includes archived and rejected topics, for the named domain only.
+- A domain at its cap refuses every research mode except `manual`, with the same wording rule as
+  the pause. Raising the cap re-opens it.
+- A topic committed between the early count and the `INSERT` is still refused, because the
+  `INSERT` counts again.
+- Mining asks Gemini only for the room left under the cap and ends the run at the first refusal.
+
+Trap: research must deduplicate against `list_project_topics`. `list_videos` hides archived
+videos, so a deleted topic would be proposed again and Auto Pilot would pay for it.
+
+### `test_project_description.py`
+
+Covers a domain's description through `upsert_project`
+([`upsert_project`](../06-mcp-server.md#upsert_project)).
+
+- A multi-line description is stored verbatim, and the limit counts code points.
+- An over-limit description is refused on a new domain and as a change, with nothing stored.
+
+Trap: the limit is checked only when the description changes. Re-sending a stored over-limit
+description is accepted, so an old value cannot block an unrelated edit.
+
+### `test_default_script_profile.py`
+
+Covers a domain's default script profile in `upsert_project` and `create_video`.
+
+- `create_video` puts the default on curriculum videos only, and on none when the profile is
+  deleted or not `READY`, because the approving `PATCH` would refuse it.
+- `upsert_project` keeps an omitted default, clears on `""`, and refuses a change to an unusable
+  profile. Re-sending a stored default that was deleted since is accepted.
+
+## Research
+
+### `test_mining_urls.py`
+
+Covers what `mine_youtube_topics` may hand Gemini, and `set_mining_sources`
+([`mine_youtube_topics`](../06-mcp-server.md#mine_youtube_topics)).
+
+- One URL that is not a YouTube video refuses the whole run with no Gemini call. Two spellings
+  of one video are asked once.
+- A run makes at most as many calls as the topics it may file, including when every call fails.
+- A second run while one is in flight is refused, and the lock is released after a run that was
+  refused or raised.
+- `set_mining_sources` stores the canonical, deduplicated list and refuses a list with a bad
+  entry, leaving the stored list as it was.
+
+Trap: a mining URL becomes the `file_uri` of a paid Gemini call. The URL check, the call bound
+and the lock each stand between a bad setting and repeated spend, so the fake client counts the
+calls.
+
+## Script and voice
+
+### `test_script_segments.py`
+
+Covers `videos.script_segments` in `update_video` and `get_video`, and the markup `update_video`
+refuses when a script is written ([Script segments](../08-scripting-and-voice.md#script-segments)).
+
+- The flat `script` is derived from the segments with every tag removed. It keeps the authored
+  word of a `<respell>` or `<ipa>` tag, so no markup reaches the captions.
+- Each segment needs a non-empty `voice`, a unique id, a `visual` key and one spoken word.
+- A `<respell>` or `<ipa>` tag must be closed and wrap one word. Pause markup and `<ipa>` must
+  suit the voice's model, and a stage direction in brackets is refused.
+
+Trap: two values are refused that ElevenLabs accepts and gets wrong: a `<phoneme>` alphabet other
+than `cmu-arpabet` or `ipa` (the word is dropped from the audio) and a `<break>` time outside 0 to
+3 seconds. The attribute must be the real one, once: a prefixed name, a repeat, or the text inside
+another attribute's value does not count.
+
+### `test_generate_voice.py`
+
+Covers `generate_voice`: the text it sends, the alignment it turns into `timeline.json`, and what
+it records ([Voicing](../08-scripting-and-voice.md#voicing)).
+
+- The spoken text applies the lexicon and `<respell>` tags, while captions and `timeline.words`
+  keep the authored spelling. The text sent is stored as `videos.tts_text`.
+- Markup is checked against the model of the video's voice before any request, on the segment
+  path and the legacy flat-script path. A tag the model cannot speak is refused and is not
+  stripped, because a stripped tag voices the word as spelled on a paid request.
+- One call runs at a time per video, only while `VOICING`. A symlinked job file is refused
+  before any request, and a reply whose alignment does not match the segments leaves no file and
+  logs as a provider failure, since the `200` was billed.
+- `enable_ssml_parsing` is set, and the normalised alignment read, only for a script with
+  `<phoneme>` tags, because that alignment expands numbers and would break the word count.
+- The model sets hold: `<phoneme>` tags go to `eleven_flash_v2` and `eleven_turbo_v2` alone
+  ([Phoneme mode](../08-scripting-and-voice.md#phoneme-mode)), and `eleven_english_v1`, which
+  ElevenLabs answers `model_not_found` for, stays out of the catalog.
+
+Trap: spend is recorded as the plan credits in ElevenLabs' `character-cost` header, for every
+`200` and before the body is used. A local character count misses markup ElevenLabs bills and the
+half rate of some models, so it is only the fallback, marked estimated, for a reply with no
+header.
+
+### `test_voice_models.py`
+
+Covers per-voice models at the MCP server
+([The model follows the voice](../08-scripting-and-voice.md#the-model-follows-the-voice)).
+
+- `get_video` reports the video's voice, its model and `pronunciation_mode`.
+  `get_pipeline_status` carries no install-wide model.
+- `update_video` checks a script against the video's own voice and writes the resolved voice onto
+  a video that has none.
+- A voice change that the stored script cannot be spoken by is refused. Setting the video's own
+  voice again passes, as the negative control.
+- A voice on another model is accepted only with the rewritten script in the same call. At
+  `TOPIC_PROPOSED` an old script blocks no voice, and that write is bound to the status.
+- `generate_voice` refuses before spend when the voice's model changed under the script.
+
+Trap: an explicit `voice_id=""` beside a script means the install default, and the resolved voice
+is still written on the video. Otherwise a later change of the default would swap the model under
+a written script.
+
+### `test_pronunciation_rules.py`
+
+Covers `upsert_pronunciation_lexicon` and `remove_pronunciation_lexicon`, and the guidance an agent
+reads about respellings
+([Respelling and the lexicon](../08-scripting-and-voice.md#respelling-and-the-lexicon)).
+
+- Entries are added, edited in place and removed with no HTTP call. One bad entry in a batch
+  writes nothing.
+- The two refusal messages, the tool's docstring and the script-writing skill's Pronunciation
+  section teach the one-plain-word form with its reason, and keep the letter-by-letter form for
+  an acronym. The skill shows no tag the server refuses.
+- The skill's pointer to ElevenLabs' documentation stays limited to syntax, and the skill wins a
+  conflict.
+
+Trap: the guidance tests search for the phrase that recommended a hyphenated token, because the
+correct wording has to name the hyphenated form to warn against it. The skill check covers `as`
+values that spell a sound, and an acronym such as `S-Y-N` stays allowed.
+
+### `test_script_profiles.py`
+
+Covers the script-profile tools, the profile schema `mcp/server.py::_script_profile_problem`, and
+`add_comment`'s author rule.
+[The profile schema](../08-scripting-and-voice.md#the-profile-schema) lists the rules.
+
+- Completing a profile stores the markdown and drops the transcripts. A `READY` or `FAILED`
+  profile cannot be written again, and a video can point at a `READY` profile only.
+- The schema refuses anything but the create skill's seven sections in order, a link in any form
+  a reader could follow, a registered tool name in any spelling, and a code fence.
+- Encoded forms are refused too: character references, raw HTML, backslash escapes, invisible and
+  fullwidth characters, and a heading or fence hidden in a blockquote or list.
+- Each refusal applies on write and on read. A stored profile that fails comes back with empty
+  markdown and a warning that does not quote the withheld text.
+- `add_comment` accepts the author `agent` only, so an agent cannot sign a comment as a person.
+
+Trap: the negative controls decide whether the schema is usable. A realistic profile must save
+and come back byte for byte, and ordinary style prose (dotted names, ratios, a `[topic]`
+placeholder, `@handle`, `R&D`, a link shape inside inline code) must pass. A code span that holds
+a `|` is refused although a reader sees code, and a test fixes that choice.
+
+Needs: one test starts a fresh interpreter under a timeout. It proves the tool-name check does
+not ask the running server for its tools, which can deadlock on the server's event loop and leave
+a profile at `GENERATING`.
+
+## Images
+
+### `test_generate_image.py`
+
+Covers `generate_image` ([`generate_image`](../06-mcp-server.md#generate_image)).
+
+- The request carries the model from `image_model`, the aspect ratio as its mapped size, and the
+  key in a header.
+- A missing OpenAI key, an unsupported ratio, a stored model outside the catalog and a video
+  another session has claimed are each refused before any request.
+- Usage is recorded for every `200`, including one with no image. Each failure logs as one
+  `error` record, and a `200` with a malformed body logs as HTTP `200`.
+- Keys are removed from every returned error, and the returned `public_path` passes
+  `validate_job`.
+
+Trap: an image name must leave room for the longest extension (`.webp`), checked before the paid
+call. The extension is known only from the reply, so a longer name would bill an image that
+cannot be written. A `403` from a project without access to the model becomes an error naming the
+project and the model, because OpenAI's model list shows models a project cannot call.
+
+### `test_generate_character.py`
+
+Covers `generate_character`, the transparent cut-out for the illustrated style
+([Generated characters](../10-scene-authoring.md#generated-characters)).
+
+- A model that cannot draw a transparent background and a missing OpenAI key are refused before
+  any request. Only an `auto` or `illustrated` video may generate characters.
+- A pose with a `reference` goes to the edits endpoint.
+- The tool reports the stored file's pixel dimensions, and every call is one usage row.
+- The four hand-kept copies of the OpenAI model catalog agree, the defaults match
+  `SETTINGS_SPEC`, and every catalog model has a built-in price.
+
+Trap: the request shape is what the provider was observed to accept. Every offered size is
+divisible by 16, which is why the canvas width of 1080 is not offered, and `input_fidelity` is not
+sent, because every catalog model answers `400` to it. A name reserves room for `.png` only, so
+the limit here is one character longer than `generate_image`'s
+([Scene and image names](../06-mcp-server.md#scene-and-image-names)).
+
+### `test_read_image.py`
+
+Covers `read_image` ([`read_image`](../06-mcp-server.md#read_image)).
+
+- It finds an image by its stem whatever the extension, and reports the stored dimensions. A
+  large image is scaled down and the reply says so.
+- Reading is not blocked by another session's scene-work claim and takes none.
+- The grid's font candidates are the fonts the renderer image installs, and the bitmap fallback
+  works on a Pillow whose default font has no size.
+
+Trap: the coordinate grid is drawn on a copy in memory. The file under the job directory is the
+render input, so a grid written back to it would appear in the finished video.
+
+## Scene files and scene config
+
+### `test_scene_resolution.py`
+
+Covers the `generated/` and `installed/` libraries in `list_scene_files`, `validate_job`,
+`write_scene_file` and `delete_scene_file`.
+
+- `list_scene_files` tags each scene with its source and filters by it.
+- `validate_job` finds a scene in the library its `type` names and reports a missing one with a
+  hint.
+- Writes and deletes touch `generated/` only.
+
+Needs: a `validate_job` fixture here, in `test_scene_subfolders.py` and in
+`test_validate_job_segments.py` must copy each job file to `JOBS_DIR/<video_id>/` after inserting
+the row. `validate_job` derives the files from the id and ignores the stored path columns.
+
+### `test_scene_subfolders.py`
+
+Covers per-video scene directories, `generated/<video_id>/<scene>.tsx`.
+
+- Two videos that use one scene name do not overwrite each other.
+- `write_scene_file` returns the composed `src`, which `write_scene_config` and `validate_job`
+  accept unchanged.
+- `list_scene_files` still lists legacy flat files, filters by video, and caps an unfiltered
+  listing with a truncation flag.
+- `validate_job` flags a flat `src` that a video-scoped file shadows.
+
+### `test_scene_modules.py`
+
+Covers a Cartoon 3D video's TypeScript modules through `write_scene_file`, `read_scene_file`,
+`list_scene_files` and `delete_scene_file`
+([`write_scene_file`](../06-mcp-server.md#write_scene_file),
+[`read_scene_file`](../06-mcp-server.md#read_scene_file)).
+
+- While a video is `RENDER_QUEUED` or `RENDERING`, a write, a delete, `write_scene_config` and
+  `cartoon_soundtrack` are refused with `status_mismatch`.
+- `submit_render` holds the per-video source lock from the readiness check to the queue and
+  records the source fingerprint. A write that was waiting on the lock is then refused.
+- A write that fails leaves the last good file and no temporary file.
+- A name reads and deletes as `list_scene_files` lists it.
+
+Trap: the module name parser reads its two arguments and does not look at the directories on
+disk. A composed name must agree with an explicit `video_id`, and a module directory named after
+its own video is refused, because that name already means the video's root module.
+
+### `test_read_scene_file.py`
+
+Covers `read_scene_file`.
+
+- It accepts the composed `<video_id>/<scene>` name and the bare stem with a `video_id`. A
+  composed name that disagrees with the `video_id` is an error.
+- `generated/` and `installed/` are searched separately, with no fallback from one to the other.
+- What `write_scene_file` wrote is what the read returns, so a scene can be copied from one video
+  to another.
+- The read is not blocked by a scene-work claim and takes none.
+
+### `test_write_scene_config.py`
+
+Covers `write_scene_config`'s write path.
+
+- It writes `scene-config.json` where `tubematic_core/jobfiles.py` derives it, which is where
+  every reader looks, and records the path on the video.
+- It overwrites an existing file, and refuses an unknown video and a malformed config.
+
+Trap: this file takes no scene-work claim. That shows the claim is taken on first use and an
+unclaimed video works without one. Do not add a claim to its set-up.
+
+### `test_get_scene_config.py`
+
+Covers `get_scene_config`, the agent's read of a video's `scene-config.json`.
+
+- Every scene entry comes back intact, and an unchanged round trip through `write_scene_config`
+  leaves the file byte for byte the same.
+- A missing config says it has not been authored yet. Malformed JSON is an error.
+- The read is not blocked by a scene-work claim and takes none.
+
+Trap: two tests fix the signal for an incremental revision. The config's `totalFrames` equals the
+timeline's when the audio is unchanged and differs after a new voicing, which means every scene
+must be derived again ([Revising an existing video](../10-scene-authoring.md#revising-an-existing-video)).
+
+### `test_get_timeline.py`
+
+Covers `get_timeline`, the agent's read of `timeline.json`.
+
+- It returns segments, and words on request. A video from before segments returns an empty list.
+- An unknown video, a missing file, malformed JSON and a `video_id` shaped like a path are errors.
+
+### `test_subtitles.py`
+
+Covers the `subtitles` block that `write_scene_config` accepts, and source guards on the caption
+component ([`subtitles`](../09-remotion-project.md#subtitles)).
+
+- An absent key means captions are on, and the tool does not write the defaults into the file.
+  Opting out is an explicit `enabled: false`.
+- `maxWords` outside 1 to 7 is refused and not clamped. An unknown key or `background` is refused,
+  and a refused block writes nothing.
+- Source guards: a caption's hold is capped so it does not stay through a long pause, and each
+  webfont loads one weight and subset list, with Oswald at 700, its heaviest.
+
+Trap: the absent-means-on rule is the only way the default reaches a video whose config was
+written before captions existed. The default font must be a system font, because captions are on
+for every render and a renderer with no network access would stall on a webfont fetch.
+
+### `test_visual_style.py`
+
+Covers `visual_style`, `resolved_visual_style` and `resolved_renderer` in `update_video`, the
+domain default in `create_video` and `upsert_project`, and `write_scene_config`'s canvas and
+renderer checks ([Visual styles](../10-scene-authoring.md#visual-styles),
+[The topic group](../02-pipeline.md#the-topic-group)).
+
+- `visual_style` is frozen after `TOPIC_PROPOSED`, and the freeze covers that field only. The two
+  `resolved_*` fields are write-once under `auto`.
+- `illustrated` needs a stored OpenAI key. `cartoon_3d` needs a working GPU. `_gpu_probe_status`
+  reads `tubematic_core.renderers.gpu_status` over the `renderers` table, so a GPU on a remote
+  renderer counts.
+- A domain's default style reaches curriculum videos only. `upsert_project` is a partial update:
+  an omitted field is kept and `""` clears.
+- `write_scene_config` refuses a canvas that contradicts the style, fills in an absent one, and
+  refuses a scene kind that disagrees with the video's renderer.
+- The first config resolves an unresolved `auto` video's renderer as a compare-and-set, and a
+  failed write or commit leaves the file and the row agreeing.
+
+Trap: write-once on `resolved_visual_style` is the only thing that keeps a revision round on the
+canvas the video already uses, since no code on the revision path reads the field. A domain
+default of `illustrated` or `cartoon_3d` is checked only when it changes: re-sending a stored
+default after the key or the GPU is gone must pass, or every later edit of that domain would fail.
+
+### `test_watermark.py`
+
+Covers the watermark, as guards on the source text of `CompositionBuilder` and `Watermark.tsx`
+([Watermark](../09-remotion-project.md#watermark)). No test runs the component.
+
+- The composition draws the mark once, after the captions and outside the scene list, with no
+  props. The only switch is the `watermark` render prop, tested as `!== false`.
+- The mark carries the largest `z-index`, loads its image with `staticFile()`, and the baked file
+  is byte for byte the plate-backed artwork in `logos/`.
+
+Trap: these guards keep the agent from moving or removing the mark. A prop, a `scene-config.json`
+key or a scene entry would each hand that control to whoever writes the scene config.
+
+## Validation, paths and the render queue
+
+### `test_validate_job_images.py`
+
+Covers `validate_job`'s check of image references in scene props
+([`validate_job`](../06-mcp-server.md#validate_job)).
+
+- A reference must name a file under this video's `images/`. A container path, a bare relative
+  path, another video's image and a missing file are each flagged.
+- References are found by path shape, in any prop at any depth.
+
+Trap: an image `src` that does not resolve fails the whole render, because Remotion's `<Img>`
+retries and then cancels. The hint names `generate_image` only, since a hint that names a tool
+the server does not have sends the agent looking for it.
+
+### `test_validate_job_segments.py`
+
+Covers `validate_job`'s checks on a segmented script.
+
+- Stored `script_segments` must pass the same rules as `update_video`.
+- `timeline.json`'s segments must be contiguous and cover the video. A normal pause between
+  sentences passes and a long unexplained gap fails.
+- A legacy video with no segments gets none of these checks and keeps the older ones.
+
+### `test_text_audit.py`
+
+Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
+([The text-layout audit](../11-rendering-and-review.md#the-text-layout-audit)).
+
+- On the fixtures, real collisions and safe-zone breaches are reported once with the worst frame,
+  and nested, rotated, faint and boundary cases are not.
+- Sampling takes several frames per scene, inside a window that leaves out the entrance and both
+  crossfades.
+- The driver's result is read from a file, because Remotion writes browser console lines to its
+  own stdout.
+- Every failure of the subprocess returns a warning and does not raise. A timeout kills the
+  process group, and staged files are removed.
+
+Trap: every threshold lives in this module, because it is the only layer the tests reach. The
+browser probe and its driver need a browser, so a threshold moved into the probe leaves the
+tested code.
+
+### `test_job_paths.py`
+
+Covers ids that become paths, at every tool that builds one
+([Video ids in paths](../06-mcp-server.md#video-ids-in-paths)).
+
+- Each path tool refuses a `video_id` that is not one path component and accepts a legacy id that
+  the creation rule would refuse today.
+- With one video's job and scene directories symlinked to another's, every path tool is refused,
+  makes no network call and leaves the tree unchanged.
+- `update_video` does not declare the four path columns, and `validate_job` reports a planted
+  path's file as missing.
+- A scene name with no room for `.tsx` in a file name is refused with an error.
+
+Trap: each tool checks the id's shape itself and does not rely on the video lookup.
+`delete_scene_file` makes no lookup, so without its own check an absolute `video_id` would
+replace the scenes directory.
+
+### `test_scene_claim.py`
+
+Covers the scene-work claim
+([The scene-work claim](../06-mcp-server.md#the-scene-work-claim)).
+
+- The first owner gets the claim, a second is refused and told who holds it, and an expired claim
+  can be taken by anyone.
+- A refused guarded tool makes no request and writes nothing. An unclaimed video passes every
+  guard.
+- `submit_render` and a status change out of the claim window release the claim. A change inside
+  the window keeps it.
+
+Trap: a caller with no session identity takes no claim and is not blocked by one. Every such
+caller shares one identity, so a claim under it could not be released by its owner and would
+block a real session until it expired.
+
+### `test_submit_render.py`
+
+Covers `submit_render` for an ordinary video ([`submit_render`](../06-mcp-server.md#submit_render)).
+
+- It moves `VOICE_READY` to `RENDER_QUEUED` with one guarded `UPDATE` and makes no network call.
+- A status change between the check and the `UPDATE` loses.
+
+Trap: like `test_write_scene_config.py`, this file takes no scene-work claim. Keep it that way.
+
+## Cartoon 3D
+
+### `test_cartoon_tools.py`
+
+Covers `mcp/cartoon.py` and the `cartoon_*` tools
+([Cartoon 3D authoring](../06-mcp-server.md#cartoon-3d-authoring)). A stub `node` on `PATH` plays
+back a plan, so nothing is bundled or rendered.
+
+- The beat gate runs over the video's job directory and its generated source tree.
+- One video's rendering tools do not overlap, while a verdict recorder waits for the running tool
+  so that parallel judges all land.
+- `cartoon_soundtrack` refuses a malformed spec before anything runs, publishes new files with
+  `mix.wav` last, and leaves the previous mix when a run fails.
+- `submit_render` refuses an ungated Cartoon 3D video with `cartoon_not_ready`. `validate_job`
+  carries the same errors and skips the text-layout audit.
+
+Trap: a still's name can only be a plain file name under the video's stills directory, checked
+before any path is built. A judge passes names back, so a traversal there would read any file the
+server can. A symlink under the job's `cartoon/` directory or in the source tree is refused too.
+
+### `test_cartoon_scene.py`
+
+Covers `_validate_cartoon_scene`, the shape of a Cartoon 3D scene config in `write_scene_config`
+([Cartoon 3D](../10-scene-authoring.md#cartoon-3d)).
+
+- A config with no Cartoon 3D scene is not looked at.
+- A second scene, an installed scene, a `src` that is not this video's `CartoonShort`, a late
+  start, a short span and beats that leave a gap are each refused with a reason.
+
+## Mascots
+
+### `test_mascot_tools.py`
+
+Covers `get_mascot_job`, `render_mascot_sheets` and `submit_mascot`
+([Mascot authoring](../06-mcp-server.md#mascot-authoring)). The sheet renderer is replaced by a
+function that writes a real PNG.
+
+- Rendering and submitting work only while the mascot is `BUILDING`.
+- `get_mascot_job` hands over, as previous code, the version the person last reviewed.
+- Submitting needs all three sheets for the current code, and a change request does not touch the
+  approved version.
+- A status change or an archive that commits after a tool's check wins: nothing is stored or
+  rendered.
+
+Trap: the render cap is checked before anything runs and counts a render that failed, or an agent
+could loop on a broken script. Changed code deletes the sheets rendered from the old code, or a
+person would review pictures of code that was not submitted.
+
+### `test_mascot_video.py`
+
+Covers a mascot on a video: `create_video`, `update_video`, `set_video_status`, `upsert_project`,
+`write_scene_config`, `validate_job`, `submit_render` and the audit's mascot warning
+([Mascots](../10-scene-authoring.md#mascots)).
+
+- A new video gets the default mascot only while a GPU works, and none on a Cartoon 3D video.
+- The pick is frozen after the topic stage, needs a working GPU when it changes, and is cleared by
+  a switch to `cartoon_3d` in the same write.
+- Topic approval is refused for a withdrawn mascot and for a Cartoon 3D video that holds one,
+  including when the other write commits between the check and the `UPDATE`.
+- Invalid cues are refused with their reasons and nothing written. The mascot version is fixed by
+  the first config write and kept by a revision.
+- `validate_job` and `submit_render` refuse a mascot video with no cues.
+
+Trap: `update_video` does not let `auto` settle on `cartoon_3d` while a mascot is chosen. That
+pair leaves no scene kind `write_scene_config` accepts, so the video could not move. A test also
+compares `write_scene_config`'s description with the shared cue rules, so the agent does not learn
+the allowed values from refusals.
+
+### `test_mascot_sheets.py`
+
+Covers `mcp/mascot_sheets.py::render_sheet`, the subprocess around the sheet renderer, with a fake
+`node` on `PATH`.
+
+- A non-zero exit carries the stderr tail, and exit 0 with no picture is a failure.
+- A picture left by an earlier render does not pass for a new one.
+
+Trap: a timeout kills the whole process group. A plain `subprocess.run(timeout=…)` would leave
+Chromium running.
+
+## The server
+
+### `test_tool_call_logging.py`
+
+Covers the FastMCP middleware that writes one record for each tool call
+([Tool-call records](../16-infrastructure.md#tool-call-records)).
+
+- Argument values are dropped. `video_id` and `profile_id` pass through by allowlist.
+- The level follows the cause, which a call site reports through `_provider_failed`. There is one
+  record per call, and a raised exception still reaches the agent.
+- Credentials are removed in the record itself, before the text is cut to length, for a stored
+  key and for one supplied through the environment.
+- A provider failure's details go in the record's message, because the dashboard's Logs page shows
+  the message alone.
+
+Trap: a tool that returns `{"error": …}` must not log as a success. The reader of the returned
+error is tested against real `ToolResult` objects from a throwaway FastMCP server, because FastMCP
+wraps the tool's dict and a guessed shape would read every failure as a success.
+
+### `test_log_retention.py`
+
+Covers `server.py::_log_retention_days`, which reads `log_retention_days` before the server
+starts.
+
+- A missing database, a missing table or row, a value `int()` rejects and an out-of-range value
+  each fall back to the default.
+- The bounds and the default equal `pipeline.py`'s, read from that file's source.
+
+Trap: this read runs before `mcp.run()`, so an exception here stops the server before it can
+answer `/health`. A new install has no database when the container first starts.
+
+### `test_mcp_auth.py`
+
+Covers the bearer token on `/mcp`, on the ASGI app the entry point serves
+([Authentication](../16-infrastructure.md#authentication)).
+
+- A missing, wrong, non-Bearer or extended token gets `401`, and `/health` stays open for the
+  Compose healthcheck.
+- Importing the module needs no secret. The entry point reads the token before `mcp.run`, so a
+  missing file stops the server.
+
+Trap: a `401` must not advertise OAuth: a bare `WWW-Authenticate: Bearer` and no
+`/.well-known/oauth-*` routes. A client that finds OAuth discovery starts a browser login, which
+an unattended agent run cannot finish.
+
+### `test_health_route.py`
+
+Covers `GET /health`, the readiness probe of the `tubematic-mcp` container
+([Readiness](../06-mcp-server.md#readiness)).
+
+- The route answers at the server root with the Flask API's body, and `/mcp/health` does not
+  exist.
+- The handler does not touch the database.
+
+Trap: the tests build the ASGI app with the entry point's `path="/mcp"`. A FastMCP change that
+moved custom routes under that path would leave the container unhealthy and stop onboarding's
+renderer step.
+
+### `test_api_keys.py`
+
+Covers how the server reads provider keys
+([How credentials are stored](../04-settings.md#how-credentials-are-stored)).
+
+- A key comes from the settings table on each call, and the settings row wins over the
+  environment.
+- The environment is the fallback when the row is missing or blank, which keeps the test stack
+  working.
+
+Trap: one test asserts that no key is held in a module-level constant. Such a constant would
+bring back the restart after a key change, and no other test would fail.
+
+### `test_removed_tools.py`
+
+Covers the removal of the GIF tool
+([No agent-authored Python](../06-mcp-server.md#no-agent-authored-python)).
+
+- `write_gif_script` is absent from the tool list an agent sees.
+- Nothing under `mcp/` imports the GIF toolkit, `numpy` or `imageio`. `requirements.txt` keeps
+  `pillow`, and lists `numpy` for the Cartoon 3D soundtrack engine alone.

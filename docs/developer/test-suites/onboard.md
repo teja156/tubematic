@@ -1,120 +1,511 @@
 # `onboard/tests`
 
-Covers the onboarding wizard: `onboard/config.py` (field and section specs), `steps.py`,
-`actions.py`, `checks.py`, `executor.py`, `prompt.py`, `plain.py`, `api_keys.py`. Also covers
-`stack.py` and the root `upgrade.py`, which reuse those actions for upgrades and service control.
+Covers the onboarding wizard (`onboard/`), the stack control in `onboard/stack.py` that
+`scripts/service.py` shares, and the root `upgrade.py`. The suite needs `pyyaml` and the packages
+of the requirements files, and no Docker: Docker and agent commands go to a recording executor
+or a patched `subprocess`. Run it in its own `pytest` invocation
+([Run each Python suite on its own](README.md#run-each-python-suite-on-its-own)).
 
 ```bash
 python -m pytest onboard/tests
 ```
 
-`onboard/` has an `__init__.py`, so this suite's `tests` package does not collide with another suite's by
-name. Run it in its own `pytest` invocation all the same: collected ahead of `mcp/tests`, two of its files put
-`renderer/api` on the import path and `mcp/tests` then imports the wrong `server` module. `conftest.py` holds the shared fixtures; among them, it points both Compose override paths
-(`compose.gpu.json`, `compose.renderers.json`) at a temporary directory, because `_compose()` adds
-a `-f` for each one that exists and a developer machine's own would change every argv a test asserts.
-It also makes `tubematic_core.disk_usage.refresh_snapshot` a no-op, because onboarding and
-`upgrade.py` measure disk use with Docker and write into `~/.tubematic-data`. A test that needs it
-passes its own.
+`conftest.py` keeps every test off the real machine. It points the poller's session registry, the
+secrets directory (`TUBEMATIC_SECRETS_DIR`) and both Compose override paths at a temporary
+directory, and makes `tubematic_core.disk_usage.refresh_snapshot` do nothing. The override paths
+matter because `_compose()` adds a `-f` for each override that exists, and a developer machine's
+own file would change every command line a test asserts.
 
----
+The steps and questions are listed in the
+[Command Reference](../../user-guide/15-command-reference.md#steps).
 
-## Structure and flow
+## Flow and state
 
-| File | Guards |
-|---|---|
-| `test_steps.py` | Step-order invariants — build and container-start steps must come last; `directories` and `database` must precede them, because Docker creates missing bind-mount targets as root The `auth` step sits after `database` (the password lives in it) and before every container step, because Compose refuses to start a service whose token file is missing. The `gpu` step sits immediately before `renderer`, so the first `up` already carries the GPU override; after it, a fresh install would start on the CPU and need the renderer recreated. `renderers` is the one opt-in step and comes after every step of a full install: it publishes the render gateway's port to other machines, which a full install must never do unasked. The eleven-step count is of the default flow, opt-in steps excluded. |
-| `test_fields_for_step.py` | Every section maps to exactly one step (`SECTION_TO_STEP`), and `fields_for_step` drives the actual prompting. This is the single chokepoint where `advanced` and `condition` filtering happens. It also pins the required set — the ElevenLabs key and the OpenAI key — and that the voice roster and default voice are advanced, with defaults that pass the roster parser and put the default voice on the roster, since a skipped question writes its default unchecked. It also pins that the Gemini key stays optional, its help naming mining and review and nothing about images. OpenAI is the only image provider, so its help must say it draws every scene image and that model access is per project, the one failure onboarding cannot check for free; the old "optional — leave it blank" advice would now produce an install that cannot draw a single scene |
-| `test_executor.py` | `Executor` is the only dry-run chokepoint: in dry mode it records intents and performs **zero** real mutations; in live mode it actually acts |
-| `test_config.py` | Default loading and pre-fill — from a seeded settings table, falling back to each field's declared default. A new install with no database is offered the pre-loaded voices, and a stored empty roster stays empty, so voices someone deleted never come back on a re-run |
-| `test_state_migration.py` | Bringing an older `.onboard-state.json` forward as steps are renamed or split |
-| `test_bootstrap.py` | `onboard/bootstrap.py`, the venv and dependency bootstrap that runs before anything can be imported — so its two failure messages are the whole interface for a Python that cannot host the wizard. Debian and Ubuntu ship `venv` with the base interpreter but package pip's bootstrap (`ensurepip`) separately, which makes both failures routine on a fresh server: `python3 -m venv` creates the directory, fails at the pip step and leaves an interpreter with no `pip` beside it. Guards that the hint names the apt package when `ensurepip` is what is missing and never repeats the `python3 -m venv` command that just failed, that it stays generic for any other failure (nobody should be sent to apt for an unrelated problem), that a virtualenv holding an interpreter but no `pip` is created again rather than re-executed into — keying readiness on the interpreter alone reported the same cause later as a different problem, `No module named pip` — that a `venv` run reporting success while seeding no `pip` is still a failure, that a complete virtualenv is re-used without rebuilding it and the caller's own flags survive the re-exec, and that the dependency install failure names the package too. Nothing here runs a real `venv` or `pip`: both are patched, and the assertions are on what the user is told and which argv was attempted |
-| `test_onboard_cli.py` | `onboard.py`'s own argv handling for `--install-agent`, `--uninstall-agent` and `--list-agents`. The module is loaded by path with `_ensure_venv` and `_ensure_deps` stubbed, because a real `main()` would create a `.venv` in the checkout and pip-install into it before parsing a single flag. An unknown or missing agent name is refused with the supported list; installing and uninstalling both still need a terminal (one asks questions, the other asks for confirmation), while `--list-agents` is a pipeable report that runs nothing else; and the shared flags reach the install with their real meaning (`--disable-verification` is `verify_keys=False`). Also pins that onboarding's `POLL_LOG_DIR` equals `scripts/config.py`'s, so the cron line's `cron.log` and the poller's `poll.log` land in one directory — two hand-kept copies with nothing else holding them together `--set-password` needs a terminal (it asks twice, hidden) while `--rotate-tokens` does not, so a script can run it; both dispatch with the shared flags. |
+### `test_steps.py`
+
+Covers the step list in `onboard/steps.py`.
+
+- `directories` and `database` come before the two container steps, which come last in a full
+  install, because Docker creates a missing bind-mount target as root.
+- `auth` comes after `database`, which holds the password, and before every container step,
+  because Compose refuses to start a service whose token file is missing.
+- `gpu` comes before `renderer`, so the first `up` carries the GPU override.
+- Every step is reachable with `--step`, and agent setup is not a step.
+
+Trap: `renderers` is the one opt-in step and comes after every step of a full install. It
+publishes the render gateway's port to other machines, which a full install must not do unasked.
+One test fixes the number of steps in the default flow, so adding a step means editing it.
+
+### `test_fields_for_step.py`
+
+Covers `onboard/config.py::fields_for_step` and `SECTION_TO_STEP`, the one place where `advanced`
+and `condition` filtering happens.
+
+- Every section maps to one step, and field keys are unique.
+- The default questionnaire and the required set are written out as lists, so widening either is
+  an edit to the test. The required set is the ElevenLabs key and the OpenAI key.
+- A required field is not `advanced`, and the postforme key is asked only after publishing is
+  switched on, in that order.
+- Every field has help text with no ticket identifier. The OpenAI help says it draws every scene
+  image, and the Gemini help says what is off without it.
+
+Trap: a skipped question stores its default without passing the prompt's validation. One test
+runs every advanced default through its own validator, and another checks that the default voice
+is on the default roster.
+
+### `test_executor.py`
+
+Covers `onboard/executor.py::Executor`, the one place a dry run is decided.
+
+- In dry mode it records each intent and changes nothing.
+- In live mode it performs the action.
+
+### `test_config.py`
+
+Covers `load_current_values` and the settings readers in `onboard/config.py`.
+
+- Each field is pre-filled from its settings row, and from the field's default when there is no
+  row or no database. A leftover `.env` file is ignored.
+- An ephemeral field is not read from disk.
+
+Trap: a new install is offered the pre-loaded voices, and a stored empty roster stays empty.
+Voices that someone deleted must not return on a re-run.
+
+### `test_state_migration.py`
+
+Covers bringing an older `.onboard-state.json` forward.
+
+- A state from before `install_config` existed loses its retired marker and every step derived
+  from the old configuration, so those steps run again. Unrelated steps keep their mark.
+- Retired steps are dropped from any state, and the migration can run twice.
+
+### `test_bootstrap.py`
+
+Covers `onboard/bootstrap.py`, the virtualenv and dependency bootstrap that runs before anything
+else can be imported. `venv` and `pip` are patched.
+
+- A virtualenv that holds an interpreter and no `pip` is created again. A complete one is reused.
+- A `venv` run that reports success and installs no `pip` is a failure.
+- When `ensurepip` is missing, the message names the apt package. For any other failure it stays
+  generic.
+
+Trap: readiness is judged on `pip` as well as the interpreter. Debian and Ubuntu package
+`ensurepip` apart from Python, so `python3 -m venv` can leave an interpreter with no `pip`, and
+re-running into that virtualenv fails later with an unrelated message.
+
+### `test_onboard_cli.py`
+
+Covers `onboard.py`'s own flag handling. The module is loaded by path with `_ensure_venv` and
+`_ensure_deps` stubbed, because a real `main()` would create a `.venv` in the checkout.
+
+- `--install-agent` and `--uninstall-agent` refuse an unknown or missing name and need a terminal.
+  `--list-agents` is a report that needs none.
+- `--set-password` needs a terminal. `--rotate-tokens` does not, so a script can run it.
+- The shared flags reach the install with their meaning.
+
+Trap: onboarding's `POLL_LOG_DIR` must equal the one in `scripts/config.py`. The cron line's
+`cron.log` and the poller's `poll.log` land in one directory only because these two hand-kept
+copies agree.
+
+### `test_install_mode.py`
+
+Covers the choice between a source checkout and a release tarball, and what each does at the
+container steps.
+
+- The mode is detected from the presence of `renderer/Dockerfile`. `--install-mode` overrides it,
+  and the resolved mode is printed and recorded in `.onboard-state.json`.
+- A release install pulls images and runs no build. A source install builds as before.
+- A failed pull shows Docker's own reason (`actions.py::_pull_failure_hint`), with no
+  `docker compose logs` hint and no login instruction, since a failed pull creates no container
+  and the images are public.
+- The Node and `npx` checks run in both modes, and the Node check compares major and minor
+  against 22.20. They warn and do not block.
+- The dashboard step measures disk use once its image is in place, and a failure there warns.
+
+Trap: precedence is the explicit flag, then the recorded mode, then detection. Without the
+recorded mode, a later `--step renderer` in a checkout that was installed in release mode would
+detect a source install and build.
+
+Needs: the stubs patch `onboard.plain.*`, which binds the check functions at import. Patching
+`onboard.checks.*` leaves the real checks running, so each site asserts its mock was called.
 
 ## Fields and validators
 
-| File | Guards |
-|---|---|
-| `test_agent_model.py` | The agent model passed to `claude -p … --model <value>`. Deliberately permissive — blank means no `--model` flag at all, and only shapes that would corrupt the argv are rejected |
-| `test_agent_install.py` | The whole `--install-agent` flow. Its schema test is the interesting one: it compares `AGENTS_SCHEMA` against a **fully migrated** database rather than any migration's source text, because a later `ALTER TABLE … ADD COLUMN` leaves `0001` untouched — and the comparison includes each column's *position*, since `ADD COLUMN` always appends. Also the effort question: skipped by the minimal questionnaire (it carries `advanced`, which this flow has to honour itself because it builds its own field list), still storing `high`; asked under `--full-questionnaire`; and the install-time `--effort` probe, which runs even when the question was skipped — the default install is the one that never asks and is also the common one — but only warns, never blocks. A test also pins that what a skipped install stores is the field's own `default` rather than a second copy of the literal. Since the flow became agent-driven it also pins the deployment asymmetries: that a Codex install writes to `~/.codex/skills/`, registers MCP with Codex's own argv, and creates **no** `.claude` path at all — no commands, no allowlist, no trust record, no second skills copy in the workspace — while every pre-existing Claude assertion stands unmodified, which is what proves the refactor did not change the agent that already worked. Also that the scope question is asked only when the agent has more than one scope, that a stored scope the agent cannot honour is clamped rather than passed to deploy, and that the install-time effort probe is skipped for an agent that cannot reject the flag, since it would be a billed run that could never produce a verdict. A last group covers the post-install checklist, which is adapter-driven for the same reason: a correct Codex install used to report eight phantom problems and tell the user to re-run the install forever, while the skills check itself was a **false pass** — it tested only that a skills *directory* existed, and the Remotion installer creates one, so an agent whose own skills never landed still reported installed. It now looks for a named skill in the agent's own root. A last group covers OpenCode, which is the first agent to need a permission *document* of its own and the first with no MCP-deregistration command: that its install writes to `~/.config/opencode/` and registers with `--global` at user scope but neither at project scope, that it creates no `.claude` path, and that the managed rules and the MCP options go into Tubematic's **own** document (`<workspace>/.opencode/opencode.json`) rather than any file the operator owns — measured, the workspace's *direct* file is overridden by a developer's `~/.opencode/opencode.json`, while the managed one outranks every other document. Also that the document carries the **complete** MCP server entry rather than just its options (an options-only entry connects but leaves Code Mode on); that the managed rules are re-asserted at the **end**, since permissions resolve last-match-wins and a contradicting later rule would otherwise stay in force while a membership test passed; and that the checklist asserts that same shape, and flags a server registered without its Code Mode option separately from one not registered at all, because those two answer different questions. The sharpest one guards ownership: `.opencode/opencode.json` is a documented OpenCode project-config location and the agent workspace is a directory the operator chooses, and the workspace is Tubematic's own directory, so the document there is written on install and removed on uninstall with no ownership test. The one case worth refusing — a workspace that is already somebody's OpenCode project — is pinned at the workspace **question**, beside the existing rule that each agent needs a directory of its own, so it runs before anything is copied and needs no gate of its own. Several tests pin what that rule got wrong on the way: the exemption must be Tubematic's own **files**, since exempting nothing breaks every re-install and `upgrade.py` with it, while exempting the whole directory lets a document dropped in afterwards survive a redeploy; only a **live** agents row makes a workspace ours, because an uninstall archives the row and keeps the workspace, so a document there afterwards is the operator's; a foreign document must not relocate the agent, because the pre-fill feeds `upgrade.py`, which asks nothing; Tubematic writes **every** basename OpenCode loads, with identical content, since whichever loads last wins — and the checklist watches for a missing one, which reopens that slot; and the rule must cover every basename OpenCode loads, since `.opencode/opencode.jsonc` is read after `.opencode/opencode.json` and one rule in the sibling outranks every rule in ours — with a checklist item for a sibling that appears later, which the permissions check alone calls healthy. Uninstalling preserves the operator's comments while still removing the entry, and a document the editor cannot read safely is reported rather than mangled. One more guards the generalised config-root check: it used to compare against a hardcoded `~/.<name>`, which is right for Codex and would have reported every ordinary OpenCode install as running under an override MCP registration carries authentication: `mcp_auth()` names the token **file** and a helper built from this install's own absolute interpreter and script (quoted, so a path with spaces survives), never the token; Claude's old entry is removed **before** the new one is added, because its `mcp add` refuses an existing name; and Codex's helper is patched into `config.toml` after `mcp add` — parsed before it is written, refused with a warning naming the `401` when the table is missing, and never written under `--dry-run`. An OpenCode (re)install runs `opencode reload` after registering — its background service otherwise keeps a stale, token-less connection — and Claude and Codex, which cache nothing, are never reloaded. **Retired skills:** `_copy_skills` only ever adds, so a skill this repository stopped shipping would survive every upgrade and keep teaching the agent a tool the server no longer has. A redeploy at every scope and for every agent removes the names in `RETIRED_SKILLS` from each skills directory it writes to, and leaves a skill that is not Tubematic's beside it untouched; under `--dry-run` the removal is only recorded. No retired name may still ship, `deployed_paths` includes the retired names so an install never upgraded since is still uninstalled cleanly, and `uninstall.py`'s standalone copy of the list must match. The data directory (the database with every API key, and the service tokens) is denied to the agent's reads: Claude's allowlist carries `Read(//<abs>/**)` — a test pins the double slash, because Claude Code reads a single leading slash as relative to the settings file's project and the rule would deny nothing — merged beside an operator's own denies; OpenCode's managed rules end with an `external_directory` and a `read` deny on it (last, since `read *` is allowed earlier and the last match wins); and both checklists fail when the deny is missing. The same tests pin that the poll logs and the workspace stay outside the denied tree. |
-| `test_ai_review_settings.py` | The review model, sampling-rate and loop-cap fields, their validators, and the rows `apply_pipeline_settings` seeds from them. AI review is **off by default**, and the default lives in four places: the field (whose `choices` lead with `false`, because a select falls back to its first choice), both fallbacks in `actions.py` and `SETTINGS_SPEC`. A skipped or garbled answer must land on off — the apply-side fallbacks are the easy miss, since drifting them back to `true` would switch review on for exactly the installs that never answered |
-| `test_render_timeout.py` | The minutes↔seconds conversion at the load and write boundaries, plus the one-minute floor |
-| `test_retention_days.py` | The `retention_days` field and the row `apply_pipeline_settings` seeds from it. The field is advanced, so a minimal install never asks it and the seed comes entirely from the apply step's fallback literal — a second copy of the default, which must equal `SETTINGS_SPEC`'s or a skipped question silently seeds a different number. `0` is seeded as `0`, never clamped, because it is the off switch and a floor of 1 would quietly turn deletion back on. The bounds and the validator mirror the settings API's, so onboarding cannot accept a value the dashboard would refuse |
-| `test_voices.py` | The ElevenLabs voice roster and default-voice dependent pair, corrupt stored-value handling, and the default-voice fallback. Every voice carries its own model, and onboarding writes no install-wide model row. The trap it guards: onboarding reads stored values **before** its database step migrates, so on a re-run against an older install the roster is still `{name, voice_id}`. The strict parser would read that as empty and the apply would wipe the real roster, so `load_current_values` stamps each legacy voice with the install's old model first, falling back to the default for a blank or retired one exactly as migration `0006` does |
-| `test_image_generation.py` | The image model, a plain select over the OpenAI catalog with no provider question, and the OpenAI-key gate in `apply_install_config`: a missing key fails the step even with a Gemini key, after everything typed has been stored for the re-prompt. No `image_provider` row is seeded. A stored retired model (`gpt-image-2`, a Gemini model) is corrected to `gpt-image-2.5-flare` on a re-run: onboarding reads settings before its database step migrates, so it can still see one |
-| `test_api_keys.py` | Live key validation. **Every "invalid" case replays the body a provider actually returned to a deliberately bogus token** — these are observed, not read off a docs page. Gemini is probed only for the text model mining and review use: its image probe went with the Gemini image models, and a free-tier key must not be warned about a capability nothing asks it for |
+### `test_agent_model.py`
 
-## What each action writes
+Covers the model-name validator.
 
-| File | Guards |
-|---|---|
-| `test_install_config.py` | Configuration is seeded into the **settings table**, not written to `.env`. The step refuses to finish without an OpenAI key, Gemini or not, since no scene image can be drawn without one |
-| `test_database_step.py` | `apply_database` defers entirely to `tubematic_core.db.migrate()` rather than asserting a schema of its own — it used to be a fourth hand-maintained copy, already stale by six columns and three tables. Also guards that a dry run creates no database file |
-| `test_apply_cron.py` | A single `poll.py` cron line, with no separate research entry. `subprocess.run` for the read-only `crontab -l` is monkeypatched, so the suite never touches a real crontab |
-| `test_volume_reconcile.py` | Named volumes must be recreated when their bind device moves. Docker fixes a volume's `driver_opts` at creation, and Compose answers "no" non-interactively when asked to recreate |
-| `test_renderer_step.py` | The `renderer` step, `actions.py::apply_renderer`: one image build covers every service that runs it, and `tubematic-api`, `tubematic-mcp` and `tubematic-renderer` are all started (the step starts `tubematic-worker` too; its topology is pinned by `test_compose_topology.py`). It waits on **two** healthchecks, because since the MCP server got its own container a healthy Flask no longer says the agent's tools are reachable. `_await_health` names the container that is actually unhealthy — a combined check that pointed at the API for an MCP failure was useless — and a container still `starting` at the timeout is a warning, not a failure, since it may yet come up. A sick API ends the step before the MCP wait, rather than spending another minute on a container gated behind it. A dry run stops before any waiting |
-| `test_compose_topology.py` | `docker-compose.yml`'s topology, parsed as YAML rather than through `docker compose config` (which needs a daemon and interpolates `${HOME}`). Five services, one process each: Flask and MCP once shared a container, and when Flask died MCP still held PID 1, so the container stayed up and `restart: unless-stopped` never fired — a dead dashboard behind a live-looking container. Pins that the worker runs `worker.py` and the renderer `render_agent.py`: the background passes and the render claim used to share one loop, so a render held every publish, approval and notification for its length, and both containers starting the same file would mean two publishing polls and a render in the worker. Pins that the API and MCP run through the shared `entrypoint.sh` while the worker and the renderer bypass it, that MCP reuses the API image, and that each healthcheck probes only its own port with `curl -fs` (asserting the port, not the loopback spelling, which had to change). The dependency direction: Flask depends on nothing, so the dashboard and poller work with MCP down; MCP and the worker wait for a healthy API at startup only. Ports bind to loopback, because MCP spends money and renders agent-authored scene code with no authentication, and the worker and the renderer publish none. MCP's mounts and the worker's are each an **exact** set, so adding one forces a yes-or-no answer (the worker has no `scenes-generated`: it never touches a scene); every service that logs mounts the shared logs directory, while the dashboard mounts neither logs nor backups (it reads logs over HTTP and must have no route to a copy of the credential store). No service reintroduces `env_file`, and the Dockerfile `CMD` names a process, since `entrypoint.sh` ends in `exec "$@"`. **The render gateway:** the renderer's mounts are an exact set with no `/data`, `/output_videos` or `/backups` — it has no database and reaches the pipeline only through the API's gateway, like a renderer on another machine — and `/jobs` is read-only (only its stills server reads job files). It is pointed at `https://tubematic-api:4443` as the built-in renderer with no `TUBEMATIC_DB`, so a stray database open fails instead of creating an empty file. The API serves the gateway on 4443 without publishing it (publishing is the opt-in a remote renderer needs). Every declared secret is a file under `~/.tubematic-data/secrets/` named exactly as `tubematic_core.auth` writes it, the gateway's TLS key is held by the API alone, and the renderer gets only its token and the certificate to pin. `docker-compose.test.yml`'s renderer is held to the same shape, since a test renderer with a database mount would hide a renderer that still reads one |
-| `test_data_dir_checks.py` | The prerequisite check's write probe on each `~/.tubematic-data` subdirectory. An existing directory this user cannot write or search is a **warning** with a `sudo chown` hint, never an error, since the containers run as root and keep working. Write without search (`0600`) is covered on purpose: it cannot create a file, yet a write-only probe passed it. A missing one is not judged, because the directories step creates it with the right owner. The probe and the directories step share one list (`DATA_SUBDIRS`), so they cannot disagree. The names are patched on `onboard.checks`, where they are looked up; patching `onboard.config` would silently probe the real home directory |
-| `test_auth_onboarding.py` | The onboarding side of authentication. The `auth` step creates the tokens and asks for the password only when none is set, so a re-run never silently changes it; under `--dry-run` it asks nothing and writes nothing; and the database holds the hash, never the password. The Executor's two secret operations record the directory and the token names, **never a value**. `--set-password` works before an upgrade (a 1.2.x install has no secrets directory yet), and changing an existing password rotates `session_secret`, which signs every dashboard session out. `--rotate-tokens` waits for in-flight work and changes nothing when there is some, rewrites every token in place (same inode), restarts the three services that read one, and reloads only the agents that cache it (OpenCode), never an archived one. The checklist reports a missing password or token, a world-readable secrets directory (as a warning), runs the real header helper, and probes MCP live: a stopped stack is *unknown*, never *open* A rotation whose restart or OpenCode reload fails **exits non-zero**: the files already hold the new tokens, so a zero exit would report a half-rotated, unauthenticating install as a success. |
-| `test_gpu_step.py` | The `gpu` step and the Compose override it writes, `onboard/gpu.py`. A GPU reaches the renderer only through that override, and Docker refuses to create a container whose GPU it cannot hand over, so a wrong override is a stack that will not start and a missing one is a GPU nobody uses. **nvidia-smi parsing** reads every GPU, keeps a name containing a comma whole, and skips a row it cannot parse instead of guessing, because a mangled UUID offered as a choice would write an override that fails at `up`. A missing or failing `nvidia-smi` means no GPUs, which is how a driver that is not loaded presents, including a module Secure Boot refused. The `nvidia` runtime is read from `docker info`. **The override** reserves exactly the chosen GPU (`device_ids`, never `count`, which Compose refuses alongside it), changes `tubematic-renderer` only, and sets `NVIDIA_DRIVER_CAPABILITIES=graphics,utility`: older NVIDIA Container Toolkits leave the EGL/GL libraries out unless `graphics` is asked for. It reads back, and a foreign file at its path is an error, not a GPU. `override_problems` names a missing runtime, a missing driver and a GPU no longer present, each with the command that fixes it. **`_compose()`** is exactly `docker compose` with no override, so every install without a GPU keeps its argv, and names both files when one exists. **The step** asks nothing and writes nothing without a GPU; removes a stale override when the GPU is gone; with Docker unreachable, warns and keeps an existing override, which may be fine; with Docker answering and no `nvidia` runtime, asks nothing on a clean install but, with an override in place, offers going back to the CPU (the default) or keeping it — found live, the step used to point back at itself while every `up` failed, and dry-run neither asks nor removes; offers every GPU plus the CPU, defaulting to the current choice, or to the first GPU on a fresh install; rewrites or removes the override on a change; and writes nothing under `--dry-run`. On a running install it recreates **only** `tubematic-renderer`, with `up`, because a device reservation is fixed when a container is created and `restart` keeps the old one. It recreates nothing when the choice is unchanged, and never kills a render in progress for it: it holds the renderer's render claims (a settings row) before it looks, keeps the hold while compose runs and always releases it, because looking first and recreating second let a render be claimed in between and killed. A second run while one holds the recreate lock recreates nothing and leaves the first run's hold alone, since the hold is a single row and a second release would lift it mid-recreate. A database it cannot read, or a hold it cannot write, defers the recreate rather than guessing; a video being voiced or uploaded does not, since voicing runs in the MCP container and uploads in the API or `tubematic-worker`. The commands go to a recording executor, so no test can reach a real `docker compose`. **The `--check` readout** says CPU without an override, names the GPU only when the renderer's probe confirmed it, and warns both when the chosen GPU is not usable and when the running renderer never received the override (a hand-run `docker compose up`) — but never adds that recreate advice when the override itself cannot apply, which would fail the same way (found live). The probe is read from the built-in renderer's row of the `renderers` table, where the render gateway stores it: a probe left in the retired `gpu_probe_result` settings row is ignored, and a database from before that table reads as "not reported", never a crash (`--check` runs before the containers migrate). A probe made with a different GPU than the one chosen, or with a GPU after it was switched off, is reported as the renderer still being on the previous choice: that is what a recreate deferred behind a render leaves, and the probe describes the container that ran it. Removing the mid-render refusal, the override in `_compose()` or the vanished-GPU problem each fails these tests. |
-| `test_remote_renderers_step.py` | The opt-in `renderers` step and the Compose override it writes, `onboard/remote_renderers.py` — the only way the render gateway's port reaches other machines. **The address** accepts a host name, an IPv4 address or a bracketed IPv6 address, with or without `:port` (default 4443), and stores it with the port; it refuses a scheme, a path, whitespace, a bare IPv6 address, a port outside 1-65535, an all-numeric name that is not an IPv4 address, and the loopback, `localhost`, "any", multicast, broadcast and IPv6 link-local addresses, which a renderer on another machine can never dial — each with a sentence saying why. An IPv4 address written as IPv6 (`[::ffff:127.0.0.1]`, `[::ffff:0.0.0.0]`, the old `[::127.0.0.1]`) is judged as that IPv4 address, because Python's IPv6 checks do not look inside it; ordinary unicast addresses, mapped ones included, still pass. Removing the unwrapping was checked to fail these tests. **The override** publishes `0.0.0.0:<port>:4443` on `tubematic-api` only, adds `[::]:<port>:4443` only for an IPv6 address (a host with IPv6 off refuses that bind and `up` would fail), reads back for every port the step can write, and anything else at its path is a problem naming the step: unparseable, foreign ports, a host port of 0 (Compose would publish a random one) or above 65535, duplicate, misordered or conflicting entries, a lone `[::]` entry, an extra key or service. Removing the port-range check was checked to fail these tests. **`_compose()`** names every existing override, GPU first then renderers, in that fixed order, and stays bare with none. **The local check** runs against a real TLS server on `127.0.0.1:0` with a key pair from `auth.ensure_secrets`: the gateway's certificate passes, another certificate is `wrong_cert` (another program or a TLS-terminating proxy on the port), a closed port and a non-TLS answer are told apart; waiting retries the two that a starting container produces (Docker's port proxy accepts then drops a connection) and stops at once on a wrong certificate. **The step** writes the override and the `render_gateway_address` row, recreates only `tubematic-api` with the override named, checks the port against `gateway_pin()`, says the advertised address itself was not tested from another machine, and prints the firewall note (Docker-published ports bypass ufw, so the note says where to restrict it); offers the stored address as the default and defaults to off on a fresh install; recreates nothing on an unchanged re-run but checks again; turning off removes the override, blanks the row and recreates the API; under `--dry-run` writes, stores, recreates, checks and offers nothing. **The file, the row and the container change as one.** An API that is not exactly `running` — no container, or `exited` (what `service.py stop` leaves), `created`, `dead`, `restarting`, `paused` — is neither started (`up -d tubematic-api` there would start the API alone) nor checked: the choice is stored for the next full start. A publish upload in flight changes nothing at all — not the file, not the row — for enabling, disabling and changing the port alike, so the dashboard and the published port keep agreeing; a render does not hold it (renderers reach the API only through the gateway and retry). A failed `up` puts the previous file and row back and runs `up` again on them (Compose may already have removed the old container), for all three changes, and says how to start the API when that fails too. Moving the gate after the writes, and loosening `_api_running` to "the container exists", were each checked to fail these tests. A failed check warns with a hint and offers no token. A first enrollment token is printed only when confirmed: it decodes to `https://<address>` and this gateway's pin, its secret is stored only hashed, and the host command is printed with it — without the token, which the script asks for. A missing gateway certificate or database stops the step. **Opt-in:** a full install and `--force` both skip the step, naming it with `--step` runs it, and `--status` lists it without counting it as missing progress. **Pre-flight and readout:** a broken override is a prerequisite warning naming the step; the `--check` readout says off, names the address when on, and warns when half set up (an address with no published port, a port with no address, or the two disagreeing). Running the opt-in step in a full install was checked to fail these tests. |
-| `test_stack.py` | The stack control `upgrade.py` and `scripts/service.py` share. **The in-flight gate**: a video `RENDERING` or `VOICING`, a publish whose upload has not finished (a publication row with no post id yet — one whose post id is set is only polled, which survives a restart — or a `PUBLISHING` video with no rows at all, which is how an upload in progress looks on a 1.0.0 install, the code an upgrade to 1.0.1 meets), or a held poll lock each block, and so does an agent session a dead poller left running (read from the poller's session registry, a reused pid never mistaken for one), and `--force` proceeds while still naming the work. An unreadable database also blocks, with a plain "cannot read the database" message and never a raw SQLite error, because WAL mode needs write access to its sidecar files even to read. The lock and the session registry are pinned to the paths `scripts/poll.py` uses — any other path would exclude nothing — and the lock file must outlive every holder, for the reason `poll.py` never unlinks it. `start` must create the data directories and reconcile the volumes **before** `up`: these are `local`-driver bind volumes, which fail the mount rather than create a missing path, and Compose will not move a volume whose device changed. `stop` must issue `docker compose stop`, never `down`. Reconciling a moved volume runs `docker compose down`, which takes down every container whatever service was named, so when it would and something is running, `start` must get a yes from its caller's gate first (a required argument, so no caller can forget it), and afterwards brings back **every** service, not only the named one. A requested service that fails its health check, or a worker or renderer that is not running (neither has a healthcheck), fails the start rather than warning, because callers report success from the exit code. The status report must survive a machine with no database, no crontab and no Docker, since it is what someone runs when unsure whether an upgrade worked. A database whose schema is **newer** than this code's migrations is reported as incompatible, never healthy: older code may not understand a renamed or dropped column Starting the stack creates any missing service token just before `up` — and only after the stale-volume question, so a start that is refused changes nothing. `_container_command` reads the command a container was created with, which is how `upgrade.py` tells a pre-2.1.0 renderer from a new one; an absent container reads as empty. The report also says whether remote renderers are on and the address they dial, and a half-set-up pair (an address stored with no port published) makes it unhealthy. |
-| `test_upgrade.py` | `upgrade.py`, loaded by path. Every step records itself on one dry-run executor, so a single list proves the order: images, then stop, then directories, volumes and `up`, then cron. Stopping before the start is what keeps new code from migrating the database under old code. The gate refuses before anything changes, and **is checked again after the images**, because a long build is exactly when a queued render can start — the late-render test inserts one mid-build and asserts nothing is stopped. `tubematic_core.db.migrate` is replaced by a stub that fails the test: the containers apply migrations under their own lock, and a fourth process racing them adds a failure mode. Only non-archived agents are redeployed, and a missing agent binary warns without failing the upgrade. The previous install is read from the old cron line before it is rewritten, and its `.onboard-state.json` is carried forward. Only the steps an upgrade actually re-ran are marked done, never `install_config`. It refuses outright when the database is newer than this version's migrations — running an older version's `upgrade.py` there is a rollback, which needs the matching backup restored first. The command runs with no terminal, which is the reason it exists. Each behaviour was checked by breaking the code and watching the test fail **Authentication:** with no dashboard password the upgrade refuses before changing anything and names `--set-password` (it never asks a question itself); `--no-stop` is refused while a token file is missing, because old and new containers would refuse each other's calls; missing tokens are created before `up`; and an agent left without a working MCP registration — a missing binary, or a redeploy whose registration carries no token — still lets the rest of the upgrade finish but **fails it**, naming the agent, since the server would refuse every call it makes. `--check` fails on an auth problem alone. **OpenAI-only images:** with no OpenAI key stored — absent, blank or whitespace — the upgrade refuses before changing anything and points at the Settings dashboard, and a Gemini key alone does not satisfy it; otherwise it would succeed and then fail every scene image on a video whose voicing was already paid for. `--no-stop` is refused while migration `0016` is pending, because old containers recreated one at a time would keep reading the `image_provider` row it deletes; a normal upgrade across it is not, and the constant naming the migration is checked against the real file. The same holds for migration `0019` (the renderers table): from it the renderer has no database and claims through the render gateway, so an old renderer recreated last would keep claiming straight from the database beside the gateway, and a new API recreated first would wait for a renderer that is not there yet. A normal upgrade across it still runs, a later `--no-stop` upgrade is allowed, and its constant is checked against the real file; removing the refusal and mis-numbering the constant were each checked to fail these tests. **The worker split:** `--no-stop` is refused, before anything changes, while the running renderer was created with the old combined loop, because the old renderer recreated last would keep publishing beside the new worker. It is decided from the renderer's own command, never from whether a `tubematic-worker` container exists: a leftover worker (exited, created or running) beside an old renderer still refuses, a renderer in its crash-restart backoff (`restarting`) or `paused` is judged by its command like a running one, and a renderer whose command cannot be read counts as old. A normal upgrade across it stops the old renderer before `up`, and `--no-stop` is allowed when nothing old is running. **Removed GifFX component:** the renderer compiles every generated scene together, so a scene that still imports `installed/GifFX` would fail every render on the install — the upgrade refuses before changing anything and names the file, and passes with clean scenes or none at all. The check is a small lexer over the scene, not a substring search: module paths are read only in code, so comments and strings never count. Normalised spellings (`installed/./GifFX`, `installed//GifFX`, `GifFX.tsx`, `a/../`), a multi-line import, `export … from`, a bare `import`, a dynamic `import()` and `require()` all refuse, as do the other call shapes webpack bundles (`(require)(…)`, `require?.(…)`, `require.resolve(…)`, `require.resolveWeak(…)`, and the bracket spellings `require["resolve"](…)`, `require["resolveWeak"](…)` and `(require)["resolve"](…)`, comments around the key included) and — deliberate fail-closed choices, since the lexer cannot tell them from webpack's — `loader.require(…)` and a call on any other key of `require` (`require["cache"](…)`, `require[key](…)`) whose argument names GifFX; and so do a block or line comment between the keyword (or `(`) and the string, a webpack magic comment holding its own quoted string, `import type`, and an import following a `"https://…"` string on the same line (the guard against ever "simplifying" to a string-unaware comment strip, which would swallow it). Escapes in the path (`\u0047`, `\u{47}`, `\x47`, an identity escape, a line continuation, inside a no-substitution template too) are decoded before the comparison. A computed `import()`/`require()` argument — `"../../installed/" + "GifFX"`, a `${"GifFX"}` template, a variable plus `"GifFX"` — refuses when its string parts, joined, spell `GifFX`, because webpack folds constant parts into one path. A computed path naming only a sibling `./GifFX` refuses too, because a computed path is not resolved: a known limitation, pinned so that changing it is deliberate. A path with an escape that cannot be decoded (`\8`, a short `\x`, `\u{110000}`), in a plain or a computed argument, refuses with a message saying so — fail closed, since it could be hiding the path. Negative controls pass: `GifFXLegacy`, `GifFXNew`, `ImageFX`, a local `./GifFX`, a comment naming GifFX, a string holding `//`, an ordinary `\u2014` escape, a computed `import()` of `ImageFX`, a bracket key naming GifFX (`delete require["cache"]["…/GifFX"]`), `require["cache"]("./local")`, `registry["resolve"](…GifFX…)` on another object, and the **whole old import kept as a note** — in a line comment, a one-line or multi-line block comment, a quoted string, a template, or a plain string holding just the path — since none of them imports anything. **The lexer is heuristic about JSX and regexes, so those tests pin the direction a misreading may go:** an apostrophe, backtick and `src/*` in JSX text open nothing, so a real `require` after them still refuses while the same scene with only a commented-out import passes; a regex holding a quote or a backtick is not a string or a template; a stray quote (text the lexer failed to see as JSX) never hides the lines after it. A generic arrow's type parameters (`<T extends unknown>`, `<T,>`, `<T extends object = {}>`, `<const T extends …>`, and `<É extends unknown>`, since a name may start with any Unicode letter, as a tag may) keep the lexer in code: an escaped, joined or template-built import after one refuses, a note in a comment or string after one passes, and a `require(pick({…}))` after one passes — read as JSX text, that call would be cut off at its `{` and refuse, which is what happens after a bare `<T>` (JSX in TSX), the stand-in for code misread as JSX. Text misread as JSX is lexed as code, so the same imports after a bare `<T>` refuse and the same notes pass; JSX text holding only import words passes, while a call a `{…}` cuts off there refuses because it cannot be judged. Misread text is lexed in pieces split at every `<` and `{`, even one inside a comment or a bracket key, so a piece that ends — or ends in a comment — while `import` or `require` awaits its path or call refuses: `require /* < */ (…)`, `import /* { */ (…)`, `require // <`, `require /* < */ .resolve(…)`, `require["<"](…)` `import G from /* < */ "…"` and `import G from // <` all refuse after both the Unicode generic and the bare `<T>`. Its known cost is pinned: JSX text ending in `require.` before a tag refuses, while `<p>Packets from {src} to {dst}</p>` passes, since `from` refuses there only before a comment. A comment, template, attribute value or closing tag that never closes hides nothing: escaped and joined imports after one refuse, notes after one pass. Every `.tsx` in the repository scans clean. Removing the comment skipping, the string-versus-module-path distinction, the computed-argument check, its undecodable refusal, the JSX tracking, the regex handling, the stray-quote recovery, the generic-arrow recognition, each call-shape rule, the bracket-key rule, the Unicode generic name, lexing misread JSX text as code, the cut-off refusal, each part of the refusal of a piece that ends awaiting a path (an open bracket key, a pending word, a comment cut off after one — line or block), or lexing on past an unclosed comment, template, attribute value or closing tag was each checked to fail these tests. An unreadable scene refuses too (fail closed: the renderer could not compile it either). A scene planted mid-build — the old MCP server keeps serving — is refused by the **second** check, after the last work gate and before the stop, with nothing stopped, with and without `--no-stop`; removing that second check, or the unreadable refusal, was checked to fail these tests. A `scene-config.json` that names `GifFX` only loses that overlay if its video is rendered again (the renderer skips a scene it cannot load), so it is a warning and the upgrade continues. **GPU override:** an override whose GPU Docker cannot hand over (no `nvidia` runtime, or a GPU no longer present) refuses before anything changes and names `python3 onboard.py --step gpu`; otherwise the upgrade would stop the stack and then fail to start the renderer. A usable override is carried into the new install's `up` (it lives under the data root, not the install), and without one the start is the bare `docker compose up`. Removing the pre-flight check was checked to fail these tests. **Remote-renderers override:** one Compose cannot parse, or one it would accept but should not (host port 0 or 70000, a duplicate or conflicting entry), refuses before anything changes and names `python3 onboard.py --step renderers`; a usable one is carried into `up` (or the upgrade would silently close the gateway's port and take every remote renderer offline), after the GPU override when both exist. Old images: a successful upgrade removes them one at a time, by tag or by id, without `-f`, and reports the drop in Docker's image total as the space freed (floored at the images' own sizes, since Docker rounds it). An upgrade that needs attention, a stranded agent or a failed step removes nothing (removing that guard fails these tests), and a refusal from Docker is a warning that leaves the exit code alone |
-| `test_install_mode.py` | Dev checkout vs. release tarball. Mode is auto-detected from `renderer/Dockerfile`'s presence (a release tarball ships no source trees), overridable with `--install-mode`; a release install pulls container images instead of building them. It used to skip the Node/npx prerequisite checks too, and a test pinned that; both now run in every mode, because the host-side consumer of Node is the Remotion skills installer that `--install-agent` runs whichever way Tubematic was installed, not the local build — so skipping them hid a prerequisite a release install needs just as much, and the user met it later as a warning from a different command. Also guards that dev-mode behavior is untouched, that the resolved mode is both printed and recorded in `.onboard-state.json`, that a later flagless run (e.g. `--step renderer`) reuses the recorded mode instead of re-detecting, that an explicit `--install-mode` still overrides a recorded one, and that a failed release-mode pull shows Docker's own reason rather than the build-path's `docker compose logs` hint (which would show an empty log — a pull failure creates no container), and never a login instruction: the images are public. Its prerequisite/installation stubs patch `onboard.plain.*`, never `onboard.checks.*`: `plain` binds both names at import, so patching the defining module leaves those aliases pointing at the real functions and the stub never runs. Each site asserts the mock was actually called, because an inert patch does not fail — it silently exercises the real check and passes wherever Docker happens to be running. The Node check compares major **and** minor against 22.20, the Remotion skills installer's floor: a check on the major alone passed 22.0, which then crashes that installer. It stays a warning, never blocking onboarding The dashboard step measures disk use once its image is in place. A failure there is a warning, and a dry run measures nothing |
+- An alias and a full model id pass. A value with a space, or one shaped like a flag, is refused,
+  because it would corrupt the agent's command line.
+- The main flow asks nothing about an agent and `install_config` writes no agent row.
+
+### `test_ai_review_settings.py`
+
+Covers the review model, sampling rate and loop cap fields, and the rows
+`apply_pipeline_settings` writes from them ([AI Review](../21-ai-review.md)).
+
+- The sampling-rate and loop-cap validators hold Gemini's range and the one-or-two rounds bound.
+  A loop cap of 0 is refused.
+- An out-of-range stored value is clamped, an unparseable one falls back to the default, and an
+  unknown model is not stored.
+- The review loop cap and the render retry cap are separate fields.
+
+Trap: AI review is off by default, and that default lives in four places: the field (whose
+choices lead with `false`, because a select falls back to its first choice), both fallbacks in
+`actions.py`, and `SETTINGS_SPEC`. A skipped or garbled answer must land on off. A fallback left
+at `true` would switch review on for the installs that never answered.
+
+### `test_render_timeout.py`
+
+Covers the render timeout question, asked in minutes and stored as `render_timeout_secs`.
+
+- Stored seconds are shown as minutes, and a corrupt stored value shows the default.
+- The answer is written as seconds, with a floor of one minute so that onboarding cannot store a
+  value the settings API refuses.
+
+### `test_retention_days.py`
+
+Covers the `retention_days` field and the row written from it.
+
+- The bounds and the validator equal the settings API's.
+- `0` is stored as `0` and is not clamped, because it is the off switch.
+
+Trap: the field is advanced, so a default install takes the value from the apply step's fallback
+literal. That literal, the field default and `SETTINGS_SPEC`'s default are three copies, and a
+test holds them equal.
+
+### `test_voices.py`
+
+Covers the voice roster and default-voice questions, `_parse_voices`, and the rows written from
+them ([The roster](../08-scripting-and-voice.md#the-roster)).
+
+- A corrupt or misshapen stored roster, or one over the cap, reads as empty. Every voice needs a
+  known model.
+- The default-voice choices follow the roster just answered, and a default that is not on the
+  roster falls back to the first voice.
+
+Trap: onboarding reads stored values before its `database` step migrates. A roster stored without
+per-voice models would read as empty and the apply step would then erase it, so
+`load_current_values` gives each such voice the install's stored model first.
+
+### `test_image_generation.py`
+
+Covers the image model question and the OpenAI-key gate in `apply_install_config`.
+
+- The image model is one select over the OpenAI catalog, with no provider question and no
+  `image_provider` row.
+- A missing OpenAI key fails the step, with or without a Gemini key.
+- A stored model outside the catalog is corrected on a re-run.
+
+Trap: the gate fires after the settings write. Everything already typed is stored first, so the
+step that asks again starts from those answers.
+
+### `test_api_keys.py`
+
+Covers `onboard/api_keys.py`, the live check of each key as it is entered. Every invalid case
+replays the body a provider returned for a bad key.
+[Rejection signatures](../04-settings.md#rejection-signatures) lists how each provider answers,
+and [A pasted key is checked before it is sent](../04-settings.md#a-pasted-key-is-checked-before-it-is-sent)
+covers the local check.
+
+- A key is refused on a positive rejection only. A timeout, a server error or a rate limit is
+  unknown, and onboarding accepts the key with a warning, so an offline install completes.
+- ElevenLabs is probed once per permission the pipeline needs, and every missing permission is
+  reported at once. The speech probe names a voice that cannot exist, so no audio is generated.
+- OpenAI is probed on the image generation endpoint with an empty body, the one call Tubematic
+  makes. A key that authenticates and lacks that permission is refused.
+- Gemini is probed for the text model that mining and review use, and for nothing about images.
+- Every secret field has a checker, and the postforme probe is read-only.
+
+Trap: no checker may return the key in its message. OpenAI's `401` quotes part of the submitted
+key, so that message is replaced, and a long rejection body is scrubbed before it is cut to
+length.
+
+### `test_auto_pilot.py`
+
+Covers the Auto Pilot question and the row written from it.
+
+- The question is advanced, off in the field default and in `SETTINGS_SPEC`, and stored off when
+  skipped.
+- Its help carries the warning.
+
+Trap: only an explicit `true` turns it on. A blank, `yes` or `1` reads as off, because this
+switch removes every human checkpoint.
+
+## What each step writes
+
+### `test_install_config.py`
+
+Covers `apply_install_config`.
+
+- Every prompted field goes to its settings row, in lowercase, and no `.env` file is written or
+  read.
+- A dry run writes nothing, and a missing database warns.
+- The step fails without an OpenAI key, after storing what was typed.
+
+Trap: each `v.get(key, "<literal>")` fallback in an apply function is a second copy of a field's
+default. `load_current_values` pre-fills every field, so a skipped question is the same as its
+default only while the two copies agree. A test compares them for the publishing switch.
+
+### `test_database_step.py`
+
+Covers `apply_database`.
+
+- It calls `tubematic_core.db.migrate()` and holds no schema of its own, so a new database gets
+  the schema the services expect.
+- A dry run creates no database file.
+
+### `test_apply_cron.py`
+
+Covers `apply_cron`. The read of the existing crontab is patched.
+
+- It writes one `poll.py` line that names no agent, at the chosen interval, and removes an older
+  separate research line.
+- The log directory is created before the line is written, because the line's shell redirect
+  fails without it.
+
+### `test_volume_reconcile.py`
+
+Covers `actions.py::_reconcile_volume_devices`.
+
+- A named volume whose bind device differs from the configured path is removed so that Compose
+  recreates it. Matching volumes are left alone.
+- A dry run removes nothing.
+
+Trap: Docker fixes a volume's `driver_opts` when it creates the volume, and Compose does not
+move an existing one. Without this step a moved data directory keeps its volumes on the old
+path ([Volumes](../16-infrastructure.md#volumes)).
+
+### `test_renderer_step.py`
+
+Covers `actions.py::apply_renderer`.
+
+- One image build covers every service that runs it, and the step starts the API, the MCP server
+  and the renderer.
+- It waits on the API's healthcheck and then on the MCP server's. A sick API ends the step before
+  the MCP wait.
+- `_await_health` names the container that is unhealthy. A container still `starting` at the
+  timeout is a warning.
+
+### `test_data_dir_checks.py`
+
+Covers the prerequisite check's write probe on each subdirectory of `~/.tubematic-data`.
+
+- A directory this user cannot write or search is a warning with a `sudo chown` hint. The
+  containers run as root and keep working, so it is not an error.
+- A missing directory is not judged, because the `directories` step creates it.
+- The probe and the `directories` step share one list, `DATA_SUBDIRS`.
+
+Trap: the probe needs write and search permission together. A directory with write and no search
+cannot hold a new file, and a write-only probe passes it.
+
+Needs: patch the directory names on `onboard.checks`, where they are looked up. A patch on
+`onboard.config` leaves the probe reading the real home directory.
+
+### `test_auth_onboarding.py`
+
+Covers the `auth` step, `--set-password`, `--rotate-tokens` and the Executor's two secret
+operations ([Authentication](../16-infrastructure.md#authentication)).
+
+- The step creates the tokens and asks for a password only when none is set. The database holds
+  the hash.
+- Under `--dry-run` the Executor records the directory and the token names and no value.
+- Changing a password rotates `session_secret`, which signs every dashboard session out.
+  `--set-password` works before the secrets directory exists.
+- `--rotate-tokens` changes nothing while work is in flight. It rewrites each token in place,
+  restarts the services that read one and reloads only the agents that cache it.
+- The checklist reports a missing password or token and probes the MCP server. A stopped stack
+  reads as unknown.
+
+Trap: a rotation whose restart or reload fails exits non-zero. The files already hold the new
+tokens, so exit 0 would report as a success an install whose services refuse each other's calls.
+
+## Agent install
+
+### `test_agent_install.py`
+
+Covers `onboard/agent_install.py`: `--install-agent`, `--uninstall-agent`, `--list-agents` and the
+post-install checklist, for Claude Code, Codex and OpenCode. Every agent CLI call is stubbed,
+because a model probe is a billed run. [Deployment](../07-agent-layer.md#deployment) describes the
+flow, and the [Agent CLI Reference](../22-agent-cli-reference.md) has each CLI's paths and
+commands.
+
+- Before any question: a database, the binary, a login checked with the CLI's own command line,
+  and the default config root. A workspace may not overlap the poll logs or another agent's
+  workspace. `--dry-run` turns each stop into a warning and makes no probe.
+- A model or effort probe reads a rejection marker as invalid even with exit 0, and a failure
+  without the marker as unknown. The effort question is advanced and stores `high` when skipped.
+  Its probe runs anyway and only warns.
+- Each agent deploys to its own paths with its own MCP command line, and a Codex or OpenCode
+  install creates no `.claude` path. The registration (`mcp_auth()`) names the token file and
+  this install's helper and does not hold the token. Codex's helper is patched into `config.toml`
+  after `mcp add`, and OpenCode is reloaded after registering.
+- The data directory is denied to the agent's reads. Claude's rule is `Read(//<abs>/**)`, with a
+  double leading slash, because Claude Code reads one slash as relative to the project.
+  OpenCode's rules and MCP entry go into Tubematic's own document in the workspace
+  ([OpenCode](../22-agent-cli-reference.md#opencode)).
+- Uninstall removes what the install deployed and archives the row. A redeploy removes the
+  skills in `RETIRED_SKILLS`, because `_copy_skills` only adds files. The checklist's skills
+  check looks for a named Tubematic skill, because the Remotion installer creates the skills
+  directory too.
+
+Trap: OpenCode resolves permissions by the last matching rule and loads
+`.opencode/opencode.jsonc` after `.opencode/opencode.json`. A membership test would pass while a
+later rule or a sibling document overrides the managed rules, so the tests and the checklist
+assert that the managed rules come last and that both files are Tubematic's. The schema test
+compares `AGENTS_SCHEMA` with a fully migrated database, column positions included, because a
+later `ADD COLUMN` appends and leaves the first migration's text untouched.
+
+## Compose files and overrides
+
+### `test_compose_topology.py`
+
+Covers `docker-compose.yml` and the test stack's renderer, parsed as YAML
+([Services](../16-infrastructure.md#services)).
+
+- Five services with one process each. The worker runs `worker.py` and the renderer
+  `render_agent.py`. The API and the MCP server start through `entrypoint.sh`, and the other two
+  bypass it.
+- Each healthcheck probes its own port with `curl -fs`. The API depends on nothing, and the MCP
+  server and the worker wait for a healthy API at startup only.
+- Ports bind to loopback, and the worker and the renderer publish none. The API serves the render
+  gateway on 4443 without publishing it.
+- The renderer has no database mount, reads `/jobs` read-only and is pointed at the gateway. The
+  gateway's TLS key is mounted in the API alone. The test stack's renderer has the same shape.
+- No service uses `env_file`, and every secret is a file in the secrets directory under the name
+  `tubematic_core.auth` writes. The Dockerfile's `CMD` names a process, because `entrypoint.sh`
+  ends in `exec "$@"`.
+
+Trap: the mounts of the MCP server, the worker and the renderer are each asserted as an exact
+set, so a new mount is a decision. The dashboard mounts neither the logs nor the backups
+directory, because a backup is a copy of the database that holds every key.
+
+### `test_gpu_step.py`
+
+Covers the `gpu` step and the Compose override it writes, `onboard/gpu.py`
+([GPU override](../16-infrastructure.md#gpu-override),
+[The Compose override](../20-gpu-and-remote-renderers.md#the-compose-override)).
+
+- `nvidia-smi` output is parsed for every GPU. A row that does not parse is skipped, and a
+  missing or failing `nvidia-smi` means no GPU.
+- The override reserves the chosen GPU by `device_ids`, changes `tubematic-renderer` only and sets
+  `NVIDIA_DRIVER_CAPABILITIES`. A foreign file at its path is an error. `_compose()` is the bare
+  command when no override exists.
+- The step asks nothing without a GPU, removes a stale override when the GPU is gone, and keeps
+  one when Docker cannot be reached. With no `nvidia` runtime it offers the CPU.
+- On a running install a changed choice recreates `tubematic-renderer` only, with `up`. An
+  unchanged choice recreates nothing.
+- The `--check` readout names the GPU only when the renderer's probe confirmed it, and warns when
+  the renderer still runs on the previous choice. The probe is read from the built-in renderer's
+  row in the `renderers` table, and a `gpu_probe_result` settings row counts for nothing.
+
+Trap: the step does not kill a render to apply a change. It writes the hold on render claims
+before it looks for a render and releases it afterwards, because a render claimed between the
+look and the recreate would be killed. A second run that cannot take the recreate lock leaves the
+first run's hold alone. A database it cannot read, or a hold it cannot write, defers the recreate.
+
+### `test_remote_renderers_step.py`
+
+Covers the opt-in `renderers` step and the Compose override it writes,
+`onboard/remote_renderers.py`
+([Remote-renderers override](../16-infrastructure.md#remote-renderers-override)).
+
+- The address is a host name or IP address with an optional port. An address another machine
+  cannot dial (loopback, "any", multicast, link-local) is refused with the reason, and an IPv4
+  address written as IPv6 is judged as that IPv4 address.
+- The override publishes the gateway on `tubematic-api` only, adds an IPv6 binding only for an
+  IPv6 address, and anything else at its path is a problem that names the step.
+- The local check runs against a real TLS server on a loopback port and compares the certificate
+  with `gateway_pin()`. It tells another certificate (`wrong_cert`) from a closed port and from a
+  port that does not speak TLS.
+- The step is skipped by a full install and by `--force`, and runs when named with `--step`.
+- A first enrollment token is printed only when confirmed, and its secret is stored hashed.
+
+Trap: the override file, the `render_gateway_address` row and the API container change together.
+A publish upload in flight changes none of them. A failed `up` puts the previous file and row back
+and runs `up` again. An API that is not `running` is neither started nor checked, because
+`up -d tubematic-api` on a stopped install would start the API alone.
+
+## Stack control and upgrade
+
+### `test_stack.py`
+
+Covers `onboard/stack.py`, the stack control that `upgrade.py` and `scripts/service.py` share.
+
+- The in-flight gate blocks on a video that is `RENDERING` or `VOICING`, a publish whose upload
+  has not finished, a held poll lock, an agent session a stopped poller left running, and a
+  database it cannot read. `--force` proceeds and still names the work.
+- The lock and the session registry are the paths `scripts/poll.py` uses, since any other path
+  excludes nothing, and the lock file is not deleted
+  ([Lock and heartbeat](../13-the-poller.md#lock-and-heartbeat)).
+- `start` creates the data directories and missing tokens and reconciles the volumes before
+  `up`. `stop` runs `docker compose stop` and does not remove containers.
+- A service that fails its healthcheck, or a worker or renderer that is not running, fails the
+  start. `_container_command` reads the command a container was created with, which is how
+  `upgrade.py` tells an old renderer from a new one.
+- The status report works with no database, no crontab and no Docker. A database newer than this
+  code's migrations is reported as incompatible.
+
+Trap: reconciling a moved volume runs `docker compose down`, which stops every container. `start`
+therefore takes its caller's gate as a required argument, asks it first, and afterwards brings
+back every service, including those the caller did not name.
+
+### `test_upgrade.py`
+
+Covers `upgrade.py`, loaded by path. Every step records itself on one dry-run executor, so one
+list proves the order ([`upgrade.py` in detail](../18-releases.md#upgradepy-in-detail)).
+
+- The order is images, stop, directories, volumes and `up`, then cron. The in-flight gate runs
+  before anything changes and again after the images, because a long build is when a queued
+  render can start.
+- Pre-flight refusals, each before anything changes: no dashboard password, no stored OpenAI key,
+  a database newer than this code, a GPU or remote-renderers override Docker cannot apply, and a
+  generated scene that imports the removed component
+  ([Pre-flight refusals](../18-releases.md#pre-flight-refusals)).
+- `--no-stop` is refused while a token file is missing, while one of two named migrations is
+  pending (each constant is checked against the real file), and while the running renderer was
+  created with the combined loop ([`--no-stop`](../18-releases.md#--no-stop)). That last refusal
+  reads the renderer container's own command, and a command that cannot be read counts as old.
+- `upgrade.py` runs no migration: `tubematic_core.db.migrate` is replaced by a stub that fails
+  the test, and the containers migrate under their own lock when they start. The command runs
+  with no terminal.
+- Live agents are redeployed, and an agent left without a working MCP registration fails the
+  exit code after the upgrade finishes. A successful upgrade removes the old images one at a time
+  without forcing, and one that needs attention removes none.
+
+Trap: the removed-component check is a lexer and fails closed
+([The removed-component check](../18-releases.md#the-removed-component-check)). Do not replace
+it with a substring search: comments and strings that mention the component must pass, and an
+escaped, computed or split import must refuse. The check runs a second time after the last work
+gate, because the old MCP server keeps serving during the build and can write such a scene.
 
 ## Presentation
 
-| File | Guards |
-|---|---|
-| `test_prompt.py` | The pure logic in `prompt.py` — real questionary interaction is stubbed, so this covers field dispatch, the per-step summary, and secret masking in that summary. With nothing stored, a blank roster answer is accepted rather than re-asked: on a new install the current value is the pre-loaded pair, so an empty one means voices were removed on purpose. The roster prompt asks each voice's model, offering the model that voice already had, else the previous voice's, so a roster on one model is a string of Enters The full questionnaire's field count for the pipeline-settings step is pinned alongside the minimal list, so a new advanced field (the Auto Pilot question is one) has to be added to it deliberately. |
-| `test_auto_pilot.py` | The Auto Pilot question. It is advanced, so the default questionnaire never asks it; it is off in the field default and in `SETTINGS_SPEC` alike; a skipped question seeds it off; and **only an explicit `true` seeds it on** — a blank, a `yes` or a `1` all read as off, because this is the switch that removes every human checkpoint. The question's help must carry the warning |
-| `test_plain.py` | `plain.py` regressions, including two real bugs found in review of the questionary rewrite |
+### `test_prompt.py`
 
----
+Covers the logic of `onboard/prompt.py`, with `ask_field`'s questionary calls stubbed.
 
-## What these encode
+- `prompt_step` asks the fields of one step, skips advanced fields unless the full questionnaire
+  is on, and writes the answers into the config.
+- A required key is asked again until supplied, unless `--allow-skipping` is set.
+  `--disable-verification` makes no provider call and still refuses a malformed paste.
+- A condition reads the answer given earlier in the same step and not the pre-filled value.
+- The model list keeps its order with the first as the default. A rejected model is dropped and
+  one that cannot be verified is kept.
+- The summary at the end of a step lists only the questions that were asked.
 
-**The API-key rejection signatures are observations.** Each provider answers a bad key differently,
-and two of the differences are traps the tests pin:
+Trap: a blank roster answer with nothing stored is accepted. On a new install the current value
+is the pre-loaded roster, so an empty answer means the voices were removed. Colours and live
+prompt behaviour are not tested, because `onboard.py` refuses to run without a terminal.
 
-- **Gemini answers `400`, not `401`.** A shared "401/403 means invalid" rule silently accepts every
-  bad Gemini key. The discriminator is `error.details[].reason == "API_KEY_INVALID"`, never status.
-- **OpenAI's 401 message echoes a masked slice of the submitted key** — twelve real characters of a
-  live secret. It is the one provider message that must never be surfaced or logged.
+### `test_plain.py`
 
-**A pasted key fails in two ways that do not look like failures.**
-`httpx.LocalProtocolError` subclasses `httpx.HTTPError`, so a routine handler catches a trailing
-newline off a terminal copy and reports it as a network problem. A non-ASCII character raises
-`UnicodeEncodeError`, which is not an httpx exception at all and escapes such a handler entirely.
-Both are covered.
+Covers `onboard/plain.py`, the printed reports and the frame around each question.
 
-**`load_current_values()` pre-fills every field before any question is asked.** That is why a skipped
-question is identical to answering it with its default, and why no apply-side plumbing was needed for
-minimal onboarding. The corollary is the trap: every `apply_*` action's `v.get(key, "<literal>")`
-fallback is a **second copy** of each default, and must move with the field spec or a skipped
-question silently seeds the old value.
+- `--steps` lists for each step the questions `fields_for_step` would ask.
+- A dry run continues past a failed hard prerequisite.
+- The question frame encloses the help, the progress and the prompt line.
 
-**Secrets are masked in the end-of-step summary.** That summary prints to scrollback, so a test pins
-it. Do not "simplify" `_display_answer`.
-
-**The questionary `Style` lives in `prompt.py`, not `plain.py`.** `--status` and `--steps` import
-`plain.py` and are documented as pipeable non-interactive reports, so that module must not start
-requiring the interactive prompt library.
-
-**Prompting is never exercised against a real terminal.** `onboard.py` blocks non-interactive runs,
-so colours, glyphs and live prompt behaviour are only ever driven with `ask_field` stubbed. Any claim
-about how the wizard *looks* needs a human in a TTY.
-
-**Install-mode precedence is explicit flag, then recorded state, then live detection.** Without the
-middle tier, a later flagless run inside a real dev checkout (e.g. `onboard.py --step renderer`)
-would always re-detect "dev" — even for an install that was deliberately done in release mode — since
-detection only ever looks at `renderer/Dockerfile`, not at what actually happened before. Recording
-the resolved mode once and reusing it is what lets a later step agree with the run that came before
-it; an explicit `--install-mode` still wins over both.
-
-**A failed release-mode pull shows Docker's own reason.** The hint used to be copy-pasted from the
-build path (`docker compose logs <service>`), which shows nothing at all for a pull failure — no
-container was ever created. When the images were private it pointed at `docker login ghcr.io`; they
-are public now, so a failed pull is a network problem or a version with no published images, and the
-hint (`actions.py::_pull_failure_hint`, shared with `upgrade.py`) shows the tail of Docker's error
-plus where to look. The test also pins that it never tells anyone to log in.
+Trap: the summary printed at the end of a step masks every secret (`_display_answer`), because it
+stays in the terminal's scrollback. `plain.py` must not import the interactive prompt library,
+since `--status` and `--steps` are reports that run without a terminal.

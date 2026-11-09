@@ -419,12 +419,22 @@ unreachable provider says nothing about the key, so onboarding accepts it with a
 
 | Service | Probe | A bad key answers |
 |---|---|---|
-| ElevenLabs | `GET /v1/user`, `xi-api-key` | `401`, `{"detail": {"status": "invalid_api_key"}}` |
+| ElevenLabs | Four requests with `xi-api-key`, one per permission Tubematic needs (see below) | `401`, `{"detail": {"status": "invalid_api_key"}}` |
 | Gemini | `GET /v1beta/models`, `x-goog-api-key` | `400`, with `error.details[].reason == "API_KEY_INVALID"` |
-| OpenAI | `GET /v1/models`, `Authorization: Bearer` | `401`, `{"error": {"code": "invalid_api_key"}}` |
+| OpenAI | `POST /v1/images/generations` with an empty body, `Authorization: Bearer` | `401`, `{"error": {"code": "invalid_api_key"}}` |
 | youtube-transcript.io | `POST /api/transcripts`, `Authorization: Basic`, body `{"ids": []}` | `401`, plain text |
 | postforme.dev | `GET /v1/social-accounts`, `Authorization: Bearer` | `401`, `{"error": {"code": "err:frontline:client:invalid_key"}}` |
 
+- ElevenLabs keys are scoped when they are created, so the check probes each permission:
+  text-to-speech (a `POST` to a voice that does not exist), voices, studio projects and
+  pronunciation dictionaries (`_ELEVENLABS_PROBES`). A `401` with `missing_permissions` means the
+  key is real and lacks that permission. The check tries all four and names every one that is
+  missing.
+- The OpenAI check calls the endpoint `generate_image` uses. OpenAI evaluates the key before the
+  body, so a key that may generate images answers `400` for the missing prompt, and nothing is
+  generated or spent. `GET /v1/models` needs a permission the pipeline does not use, so a
+  restricted key that works would fail it. A `401` or `403` with `insufficient_permissions` means
+  the key is real and cannot generate images.
 - Gemini answers `400`. A shared "401 or 403 means invalid" rule would accept every bad Gemini key,
   so the check reads `error.details[].reason`.
 - postforme answers `401` for a wrong key (`invalid_key`) and for a request with no
