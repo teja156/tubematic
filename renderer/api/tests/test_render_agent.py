@@ -22,8 +22,9 @@ path, end to end. What they guard:
 - every job request names the claim (X-Render-Claim); an upload the gateway
   discards as claim_lost throws the render away, one over its size limit or
   refused for disk space is not retried, one the gateway cannot take yet
-  (upload_in_progress, busy) is tried again after its Retry-After; a result's
-  error is cut to fit the gateway's JSON limit;
+  (upload_in_progress, busy) is tried again after its Retry-After without
+  spending a failure attempt, for up to UPLOAD_WAIT_SECS while the claim
+  holds; a result's error is cut to fit the gateway's JSON limit;
 - a bundle member that could land outside the job directory is refused;
 - a network error never escapes: it is noted as last_error and retried;
 - enrollment checks the certificate pin before sending anything, the state
@@ -717,6 +718,83 @@ def test_an_upload_the_gateway_cannot_take_yet_is_tried_again_after_a_pause(env,
     assert env.rec.paths("PUT") == ["/v1/jobs/vid-1/output"] * 2
     assert _results(env)[0]["outcome"] == "success" and env.video()["render_uploaded_at"]
     assert sleeps and sleeps[0] == (7 if answer.status_code == 503 else 0)
+
+
+def _fake_wait_clock(monkeypatch, on_sleep=None):
+    """The upload's busy-wait clock, advanced only by its sleeps (recorded)."""
+    clock = {"now": 1000.0, "sleeps": []}
+
+    def sleep(s):
+        clock["sleeps"].append(s)
+        clock["now"] += s
+        if on_sleep is not None:
+            on_sleep(clock)
+    monkeypatch.setattr(render_agent, "_monotonic", lambda: clock["now"])
+    monkeypatch.setattr(render_agent.time, "sleep", sleep)
+    return clock
+
+
+def test_an_upload_waits_on_a_busy_gateway_long_past_its_failure_attempts(env, monkeypatch):
+    """Every upload slot is taken (by the real gateway's admission, cap 0)
+    for 15 minutes — far past the three failure attempts' ~20 s — then one
+    frees: the finished render is uploaded and reported a success, never a
+    failure."""
+    monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 0)
+
+    def free_a_slot(clock):
+        if clock["now"] - 1000.0 >= 900:
+            monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 4)
+    clock = _fake_wait_clock(monkeypatch, free_a_slot)
+    _render(env)
+    puts = env.rec.paths("PUT")
+    assert len(puts) > render_agent.UPLOAD_ATTEMPTS * 10
+    assert all(s == render_gateway.BUSY_RETRY_AFTER_SECS for s in clock["sleeps"])   # its Retry-After
+    [result] = _results(env)
+    assert result["outcome"] == "success" and env.video()["render_uploaded_at"]
+
+
+def test_an_upload_gives_up_on_a_busy_gateway_after_its_wait(env, monkeypatch):
+    monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 0)
+
+    def runaway(clock):
+        if clock["now"] - 1000.0 > render_agent.UPLOAD_WAIT_SECS + 3600:
+            raise AssertionError("the busy wait never ended")
+    clock = _fake_wait_clock(monkeypatch, runaway)
+    _render(env)
+    assert render_agent.UPLOAD_WAIT_SECS <= sum(clock["sleeps"]) < render_agent.UPLOAD_WAIT_SECS + 60
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "stayed busy (busy)" in result["error"]
+    assert env.video()["status"] == "RENDER_QUEUED"
+
+
+def test_a_stop_ends_the_wait_on_a_busy_gateway(env, monkeypatch):
+    monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 0)
+
+    def stop(clock):
+        if len(clock["sleeps"]) == 5:
+            render_agent._st.job.stopped = True
+    _fake_wait_clock(monkeypatch, stop)
+    _render(env)
+    assert len(env.rec.paths("PUT")) == 5 and _results(env) == []
+
+
+def test_busy_answers_do_not_spend_the_failure_attempts(env, monkeypatch):
+    """Two busy answers, then network errors: the errors still get all three
+    attempts."""
+    answers = []
+
+    def busy_then_down(request):
+        if request.method == "PUT":
+            answers.append(1)
+            if len(answers) <= 2:
+                return httpx.Response(503, json={"error": "busy"}, headers={"Retry-After": "1"})
+            raise httpx.WriteError("broken pipe", request=request)
+    env.rec.hook = busy_then_down
+    _fake_wait_clock(monkeypatch)
+    _render(env)
+    assert len(env.rec.paths("PUT")) == 2 + render_agent.UPLOAD_ATTEMPTS
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "could not be uploaded" in result["error"]
 
 
 def test_an_upload_refused_for_disk_space_is_reported_as_an_error(env):

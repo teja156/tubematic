@@ -34,6 +34,18 @@ database too; all are unset in Compose, so their defaults apply. `TUBEMATIC_MAX_
 (8 GiB) caps one uploaded render, `TUBEMATIC_MAX_CONCURRENT_UPLOADS` (4) caps the uploads streaming
 at once, and `TUBEMATIC_MIN_FREE_BYTES` (2 GiB) is the free space an upload must leave — see
 [HTTP API — The render gateway](05-http-api.md#the-render-gateway) for the answers past each.
+No variable sets the gateway's time bounds; they are fixed (see
+[HTTP API — Time bounds](05-http-api.md#time-bounds)).
+
+**Uploads land in `output_videos/.gateway-uploads/` first.** The gateway writes each upload there,
+then renames it to `<project_id>/<video_id>.mp4` once it is complete — a rename, since the directory
+is on the same volume. It is the gateway's own: it is created when missing (with the same
+permissions as everything else the container writes there, so the host user can delete it), the
+temporary files (`*.upload`) a crash mid-upload leaves behind are deleted when the gateway starts,
+and any older than six hours that no upload is writing are deleted whenever an upload is admitted.
+Only `*.upload` files are ever deleted there, and nothing in it is followed; a symlink in place of
+the directory itself is refused (every upload then fails, and the gateway logs why). Keeping these
+files out of the project directories is what keeps them away from everything that lists videos.
 When the TLS pair is missing the gateway does not start and logs an error saying so; the API still
 serves the dashboard, and renderers cannot reach it until the secrets exist and the API is restarted.
 

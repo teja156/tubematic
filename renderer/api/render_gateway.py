@@ -44,6 +44,21 @@ per claim (409 upload_in_progress), MAX_CONCURRENT_UPLOADS at once in all
 (503 busy), and never below MIN_FREE_BYTES of free space on the output
 filesystem (507 insufficient_storage).
 
+And for how long, since a byte limit alone lets a client hold a thread by
+sending slowly (see _GatewayRequestHandler): every read and write on a
+connection must make progress within GATEWAY_IDLE_TIMEOUT_SECS; the TLS
+handshake, request line and headers must all arrive within REQUEST_HEAD_SECS;
+a JSON body within JSON_BODY_SECS (408 body_timeout). A protected route is
+authenticated from its headers before a byte of its body is read, so only
+the open enroll route reads a body for a caller nobody knows, and at most
+MAX_ENROLL_READERS do at once (503 busy). An upload has no total deadline,
+only the idle one: a slow home link is a legitimate reason for a long
+upload, and the per-claim and global upload caps bound how many there are.
+
+Uploads are written into UPLOAD_TMP_DIR under the output directory and
+renamed into place, so a temp file a crash left behind is never beside a
+video: the directory's leftovers are cleared when the gateway starts.
+
 A renderer renders one video at a time, and the claim enforces it: a renderer
 that already holds an unfinished claim is answered that claim again (the same
 reply, the same claim id — what a renderer whose claim reply was lost needs),
@@ -57,10 +72,12 @@ import ssl
 import stat
 import tarfile
 import threading
+import time
 import uuid
 from pathlib import Path
 
 from flask import Flask, Response, g, jsonify, request
+from werkzeug.exceptions import ClientDisconnected
 
 import db
 import pipeline
@@ -111,13 +128,54 @@ MAX_CONCURRENT_UPLOADS = _env_int("TUBEMATIC_MAX_CONCURRENT_UPLOADS", 4)
 # streams (a chunked body declares nothing, and other writers share the disk).
 MIN_FREE_BYTES = _env_int("TUBEMATIC_MIN_FREE_BYTES", 2 << 30)
 DISK_CHECK_BYTES = 64 << 20
-UPLOAD_RETRY_AFTER_SECS = 10
+# The Retry-After of every 503 busy (uploads, enrollment, a renderer's
+# requests at once).
+BUSY_RETRY_AFTER_SECS = 10
 # Every other route takes a small JSON body (enroll, heartbeat, claim,
 # result): at most MAX_JSON_BYTES, counted as it is read, before any parse.
 # The enroll route is open, so this is what an unauthenticated caller can
 # make the gateway hold.
 MAX_JSON_BYTES = 64 << 10
 JSON_ENDPOINTS = {"gateway_enroll", "heartbeat_route", "claim_route", "result_route"}
+
+# Time bounds (the werkzeug server gives a thread to every connection and,
+# by itself, waits forever on a client that stops sending):
+# - every read and write on a connection must make progress within
+#   GATEWAY_IDLE_TIMEOUT_SECS (the socket timeout);
+# - the TLS handshake, the request line and the headers must all arrive
+#   within REQUEST_HEAD_SECS of the connection, so a client trickling header
+#   bytes cannot hold a thread either;
+# - a JSON body must arrive within JSON_BODY_SECS (408 body_timeout); it is
+#   at most 64 KiB, which any working link sends in far less;
+# - an upload has no total deadline, only the idle one. A long video over a
+#   slow home link takes as long as it takes, and a renderer that gave up on
+#   an upload is refused a second one for the same claim while it streams;
+# - once the reply is out, werkzeug reads what is left of an unread body so
+#   the client sees the reply rather than a reset. That courtesy gets
+#   DRAIN_SECS, then the connection is closed.
+GATEWAY_IDLE_TIMEOUT_SECS = 60
+REQUEST_HEAD_SECS = 30
+JSON_BODY_SECS = 30
+DRAIN_SECS = 5
+# Unauthenticated bodies being read at once (the enroll route): past it, 503
+# busy before a byte is read.
+MAX_ENROLL_READERS = 4
+# Requests one renderer may have in the gateway at once. A renderer makes at
+# most three (its heartbeat, and one job request from its loop, or a retry
+# overlapping one the gateway is still finishing); past it, 503 busy.
+MAX_REQUESTS_PER_RENDERER = 8
+# Where uploads are written before they are renamed into place: a directory
+# of the gateway's own on the output filesystem (os.replace stays a rename).
+# Its leftovers (a crash mid-upload) are cleared when the gateway starts, and
+# any older than UPLOAD_ORPHAN_SECS that no upload of this process is writing
+# are swept whenever an upload is admitted. Only names ending UPLOAD_SUFFIX
+# are ever removed, and nothing in it is followed.
+UPLOAD_TMP_DIR = ".gateway-uploads"
+UPLOAD_SUFFIX = ".upload"
+UPLOAD_ORPHAN_SECS = 6 * 3600
+# The connection's bounded reader, in the WSGI environ, so a route can set
+# its body's deadline (absent under a test client).
+READER_KEY = "tubematic.gateway_reader"
 _TAR_BLOCK = tarfile.BLOCKSIZE          # 512
 _TAR_RECORD = tarfile.RECORDSIZE        # 10240
 
@@ -143,24 +201,65 @@ class _BodyTooLarge(Exception):
     pass
 
 
+class _BodyUnread(Exception):
+    """The request body could not be read: it stopped arriving in time
+    (`timed_out`), or the client went away."""
+
+    def __init__(self, timed_out: bool):
+        super().__init__("timed out" if timed_out else "incomplete")
+        self.timed_out = timed_out
+
+
+def _read_chunk(stream, n: int) -> bytes:
+    """One read of the request body. A read that timed out (the socket's idle
+    timeout, or the body's deadline) or found the client gone raises
+    _BodyUnread: werkzeug reports both as ClientDisconnected for a body with
+    a Content-Length and as the OSError itself for a chunked one."""
+    try:
+        return stream.read(n)
+    except (ClientDisconnected, OSError) as e:
+        raise _BodyUnread(isinstance(e, TimeoutError) or isinstance(e.__context__, TimeoutError)) from None
+
+
+def _body_unread(e: _BodyUnread, what: str):
+    if e.timed_out:
+        log.warning(f"gateway: {request.method} {request.path} ended: {what} stopped arriving in time")
+        return _err(408, "body_timeout")
+    log.warning(f"gateway: {request.method} {request.path} ended: the client left before sending {what}")
+    return _err(400, "body_incomplete")
+
+
 def _read_json_body() -> dict:
     """The request's JSON object, read with a counted limit: a declared
     Content-Length over MAX_JSON_BYTES is refused before a byte is read, and
     a chunked (or lying) body is read only until it passes the limit. Never
     request.get_json(), which reads whatever arrives. Anything but a JSON
-    object is {}."""
+    object is {}. The whole body must arrive within JSON_BODY_SECS, or
+    _BodyUnread(timed_out=True): checked between reads, and (on the real
+    server) by the connection's reader, so a read blocked on a trickle ends
+    at the deadline too."""
     length = request.content_length
     if length is not None and length > MAX_JSON_BYTES:
         raise _BodyTooLarge()
-    stream = request.stream
-    buf = bytearray()
-    while True:
-        chunk = stream.read(min(64 << 10, MAX_JSON_BYTES + 1 - len(buf)))
-        if not chunk:
-            break
-        buf += chunk
-        if len(buf) > MAX_JSON_BYTES:
-            raise _BodyTooLarge()
+    deadline = time.monotonic() + JSON_BODY_SECS
+    reader = request.environ.get(READER_KEY)
+    if reader is not None:
+        reader.deadline = deadline
+    try:
+        stream = request.stream
+        buf = bytearray()
+        while True:
+            if time.monotonic() >= deadline:
+                raise _BodyUnread(timed_out=True)
+            chunk = _read_chunk(stream, min(64 << 10, MAX_JSON_BYTES + 1 - len(buf)))
+            if not chunk:
+                break
+            buf += chunk
+            if len(buf) > MAX_JSON_BYTES:
+                raise _BodyTooLarge()
+    finally:
+        if reader is not None:
+            reader.deadline = None
     if not buf:
         return {}
     try:
@@ -180,6 +279,12 @@ def _str(value, cap: int = 2000) -> str:
 
 def _err(code: int, error: str, **extra):
     return jsonify({"error": error, **extra}), code
+
+
+def _busy():
+    resp, code = _err(503, "busy")
+    resp.headers["Retry-After"] = str(BUSY_RETRY_AFTER_SECS)
+    return resp, code
 
 
 def _who() -> str:
@@ -315,6 +420,46 @@ def _is_plain_file(path: Path) -> bool:
     return path.is_file() and not path.is_symlink()
 
 
+def _upload_dir(output_dir) -> Path:
+    """The gateway's upload temp directory under `output_dir`, created when
+    missing. UnsafePath when something has put a symlink under its name."""
+    d = tjobs.join_below(output_dir, UPLOAD_TMP_DIR)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _sweep_uploads(output_dir, live=frozenset(), older_than=None) -> int:
+    """Remove leftover temp uploads from the upload directory: entries named
+    *UPLOAD_SUFFIX that are not `live` (being written by this process) and,
+    when `older_than` is given, were last written more than that many
+    seconds ago. A symlink is removed, never followed; a directory is left
+    alone. Returns how many were removed. Never raises."""
+    try:
+        d = _upload_dir(output_dir)
+        entries = list(os.scandir(d))
+    except (tjobs.UnsafePath, OSError) as e:
+        log.warning(f"gateway: the upload directory cannot be swept: {e}")
+        return 0
+    now = time.time()
+    removed = 0
+    for entry in entries:
+        if not entry.name.endswith(UPLOAD_SUFFIX) or entry.name in live:
+            continue
+        try:
+            st = entry.stat(follow_symlinks=False)
+            if stat.S_ISDIR(st.st_mode):
+                continue
+            if older_than is not None and now - st.st_mtime < older_than:
+                continue
+            os.unlink(entry.path)
+            removed += 1
+        except OSError:
+            continue
+    if removed:
+        log.info(f"gateway: removed {removed} abandoned upload temp file(s) from {d}")
+    return removed
+
+
 # ── the app ───────────────────────────────────────────────────────────────────
 
 def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion_dir=None) -> Flask:
@@ -327,6 +472,9 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
     output_dir = Path(output_dir)
     remotion = Path(remotion_dir) if remotion_dir is not None else _remotion_dir()
     generated = remotion / "src" / "scenes" / "generated"
+    # Before any request: nothing is uploading yet, so every temp upload
+    # left in the directory is a crash's leftover.
+    _sweep_uploads(output_dir)
     app = Flask("render_gateway")
 
     def builtin_token():
@@ -337,22 +485,18 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
             # authenticate, and nothing else matches an absent token.
             return None
 
-    @app.before_request
-    def _bound_json_body():
-        # Registered first, so it runs before authentication: the open
-        # enroll route's body is bounded like every other.
-        if request.endpoint not in JSON_ENDPOINTS:
-            return None
-        try:
-            g.json_body = _read_json_body()
-        except _BodyTooLarge:
-            log.warning(f"gateway: {request.method} {request.path} refused: body over the "
-                        f"{MAX_JSON_BYTES}-byte limit")
-            return _err(413, "body_too_large", limit=MAX_JSON_BYTES)
-        return None
+    # Requests in the gateway now, per renderer id, and unauthenticated
+    # (enroll) bodies being read: both counted under one lock, and checked
+    # against the module's limits when each request arrives.
+    counts_lock = threading.Lock()
+    in_flight = {}
+    enroll_readers = [0]
 
     @app.before_request
     def _authenticate():
+        # Registered first: a protected route's caller is known from its
+        # headers before a byte of its body is read, so an unknown caller
+        # cannot make the gateway wait on a body at all.
         if request.endpoint in OPEN_ENDPOINTS:
             return None
         scheme, _, token = request.headers.get("Authorization", "").partition(" ")
@@ -374,7 +518,57 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
         if row is None:
             log.warning(f"gateway: {request.method} {request.path} refused: unknown credential")
             return _err(401, "unauthorized")
+        with counts_lock:
+            if in_flight.get(row["id"], 0) >= MAX_REQUESTS_PER_RENDERER:
+                busy = True
+            else:
+                busy = False
+                in_flight[row["id"]] = in_flight.get(row["id"], 0) + 1
+                g.counted = row["id"]
+        if busy:
+            log.warning(f"gateway: {request.method} {request.path} from renderer {row['id']} refused: "
+                        f"it already has {MAX_REQUESTS_PER_RENDERER} requests in the gateway")
+            return _busy()
         g.renderer = row
+        return None
+
+    @app.teardown_request
+    def _uncount(_exc):
+        rid = g.pop("counted", None)
+        if rid is not None:
+            with counts_lock:
+                left = in_flight.get(rid, 1) - 1
+                if left > 0:
+                    in_flight[rid] = left
+                else:
+                    in_flight.pop(rid, None)
+
+    @app.before_request
+    def _bound_json_body():
+        # After authentication: only the open enroll route reads a body for
+        # a caller nobody knows, and only MAX_ENROLL_READERS at once.
+        if request.endpoint not in JSON_ENDPOINTS:
+            return None
+        enrolling = request.endpoint == "gateway_enroll"
+        if enrolling:
+            with counts_lock:
+                if enroll_readers[0] >= MAX_ENROLL_READERS:
+                    log.warning(f"gateway: an enrollment refused: {MAX_ENROLL_READERS} enrollment bodies "
+                                "are already being read")
+                    return _busy()
+                enroll_readers[0] += 1
+        try:
+            g.json_body = _read_json_body()
+        except _BodyTooLarge:
+            log.warning(f"gateway: {request.method} {request.path} refused: body over the "
+                        f"{MAX_JSON_BYTES}-byte limit")
+            return _err(413, "body_too_large", limit=MAX_JSON_BYTES)
+        except _BodyUnread as e:
+            return _body_unread(e, "its body")
+        finally:
+            if enrolling:
+                with counts_lock:
+                    enroll_readers[0] -= 1
         return None
 
     # ── open routes ──────────────────────────────────────────────────────────
@@ -747,12 +941,13 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
         return Response(_stream_tar(members), mimetype="application/x-tar",
                         headers={"Content-Disposition": f'attachment; filename="{video_id}.tar"'})
 
-    # Uploads streaming now, by claim id: one per claim, MAX_CONCURRENT_UPLOADS
-    # in all. Admission happens before the body is read or a temp file made,
-    # so neither a renderer retrying an upload that is still streaming nor
-    # many claims at once can multiply what the disk holds in flight.
+    # Uploads streaming now, claim id -> its temp file's name: one per claim,
+    # MAX_CONCURRENT_UPLOADS in all. Admission happens before the body is
+    # read or a temp file made, so neither a renderer retrying an upload that
+    # is still streaming nor many claims at once can multiply what the disk
+    # holds in flight.
     uploads_lock = threading.Lock()
-    uploading = set()
+    uploading = {}
 
     def free_bytes() -> int:
         return shutil.disk_usage(output_dir).free
@@ -783,17 +978,21 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
             if len(uploading) >= MAX_CONCURRENT_UPLOADS:
                 log.warning(f"[{video_id}] upload from renderer {me} refused: {len(uploading)} uploads "
                             "already streaming", extra={"video_id": video_id})
-                resp, code = _err(503, "busy")
-                resp.headers["Retry-After"] = str(UPLOAD_RETRY_AFTER_SECS)
-                return resp, code
-            uploading.add(claim_id)
+                return _busy()
+            # The name is chosen here, under the lock, so the sweep below
+            # (and any other admission's) knows it is being written.
+            # (No video id in it: a long id leaves no room in a file name.)
+            tmp_name = f"{uuid.uuid4().hex}{UPLOAD_SUFFIX}"
+            uploading[claim_id] = tmp_name
+            live = set(uploading.values())
         try:
-            return receive_output(video, video_id, me, claim_id, limit, declared)
+            _sweep_uploads(output_dir, live=live, older_than=UPLOAD_ORPHAN_SECS)
+            return receive_output(video, video_id, me, claim_id, limit, declared, tmp_name)
         finally:
             with uploads_lock:
-                uploading.discard(claim_id)
+                uploading.pop(claim_id, None)
 
-    def receive_output(video, video_id, me, claim_id, limit, declared):
+    def receive_output(video, video_id, me, claim_id, limit, declared, tmp_name):
         try:
             free = free_bytes()
         except OSError as e:
@@ -804,14 +1003,22 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
             out = tjobs.output_file(output_dir, video["project_id"], video_id)
         except tjobs.UnsafePath as e:
             return _err(409, "unsafe_path", detail=str(e))
-        out.parent.mkdir(parents=True, exist_ok=True)
-        tmp = out.with_name(f".{out.name}.{uuid.uuid4().hex}.upload")
+        try:
+            tmp_dir = _upload_dir(output_dir)
+            out.parent.mkdir(parents=True, exist_ok=True)
+        except (tjobs.UnsafePath, OSError) as e:
+            log.warning(f"[{video_id}] upload from renderer {me} failed: {e}", extra={"video_id": video_id})
+            return _err(500, "upload_failed", detail=str(e))
+        tmp = tmp_dir / tmp_name
         written = 0
         next_check = DISK_CHECK_BYTES
         try:
-            with open(tmp, "wb") as fh:
+            # O_EXCL | O_NOFOLLOW: a fresh file of our own, never one planted
+            # under the name (nor a link) — the directory is in a bind mount.
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o666)
+            with os.fdopen(fd, "wb") as fh:
                 while True:
-                    chunk = request.stream.read(CHUNK_BYTES)
+                    chunk = _read_chunk(request.stream, CHUNK_BYTES)
                     if not chunk:
                         break
                     written += len(chunk)
@@ -845,6 +1052,11 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
                                 "it uploaded", extra={"video_id": video_id})
                     return _err(409, "claim_lost")
                 os.replace(tmp, out)
+        except _BodyUnread as e:
+            # A stalled (or abandoned) upload: the temp file goes below and
+            # the claim's slot is released by the caller, so the renderer
+            # can try again at once.
+            return _body_unread(e, f"the rest of its upload ({written} bytes received)")
         except OSError as e:
             log.warning(f"[{video_id}] upload from renderer {me} failed: {e}",
                         extra={"video_id": video_id})
@@ -956,10 +1168,167 @@ def tls_context(secrets_dir=None) -> ssl.SSLContext:
     return ctx
 
 
+class _BoundedReader:
+    """A connection's read side (the handler's rfile) with time bounds.
+
+    The socket timeout alone bounds one read, not a request: a client that
+    sends a byte just inside it, again and again, would hold the thread for
+    ever. So every read here is made of single reads of what has arrived
+    (read1/peek), each under a socket timeout of the idle bound or what is
+    left of the current deadline, whichever is less:
+    - `deadline` (monotonic): a read past it raises TimeoutError (the
+      request head; a JSON body).
+    - `eof_at` (monotonic): a read past it is end of input — set once the
+      reply is out, so werkzeug's drain of an unread body ends quietly.
+    After a read timed out the connection is done: later reads are end of
+    input (a socket file refuses every read after a timeout anyway)."""
+
+    def __init__(self, raw, sock, idle: float):
+        self._f = raw
+        self._sock = sock
+        self.idle = idle
+        self.deadline = None
+        self.eof_at = None
+        self._dead = False
+
+    def _arm(self) -> bool:
+        """Set the socket timeout for the next read. False = end of input."""
+        if self._dead:
+            return False
+        now = time.monotonic()
+        if self.eof_at is not None and now >= self.eof_at:
+            return False
+        if self.deadline is not None and now >= self.deadline:
+            self._dead = True
+            raise TimeoutError("the request did not arrive in time")
+        limit = self.idle
+        for t in (self.deadline, self.eof_at):
+            if t is not None:
+                limit = min(limit, t - now)
+        self._sock.settimeout(max(limit, 0.01))
+        return True
+
+    def _one(self, op, *args):
+        try:
+            return op(*args)
+        except TimeoutError:
+            self._dead = True
+            raise
+
+    def read1(self, n: int = -1) -> bytes:
+        if not self._arm():
+            return b""
+        return self._one(self._f.read1, n if n is not None and n >= 0 else 1 << 16)
+
+    def read(self, n: int = -1) -> bytes:
+        out = bytearray()
+        while n is None or n < 0 or len(out) < n:
+            want = (1 << 16) if n is None or n < 0 else n - len(out)
+            chunk = self.read1(want)
+            if not chunk:
+                break
+            out += chunk
+        return bytes(out)
+
+    def readinto(self, b) -> int:
+        chunk = self.read1(len(b))
+        b[:len(chunk)] = chunk
+        return len(chunk)
+
+    def readline(self, limit: int = -1) -> bytes:
+        out = bytearray()
+        while limit is None or limit < 0 or len(out) < limit:
+            if not self._arm():
+                break
+            data = self._one(self._f.peek, 1)
+            if not data:
+                break
+            want = len(data) if limit is None or limit < 0 else min(len(data), limit - len(out))
+            nl = data.find(b"\n", 0, want)
+            if nl >= 0:
+                want = nl + 1
+            out += self._f.read(want)         # already buffered: no socket read
+            if nl >= 0:
+                break
+        return bytes(out)
+
+    def reply_started(self, drain_secs: float) -> None:
+        """The reply is going out: no body deadline any more, writes get the
+        idle bound, and what is left of an unread body gets `drain_secs`."""
+        self.deadline = None
+        self.eof_at = time.monotonic() + drain_secs
+        self._sock.settimeout(self.idle)
+
+    def __getattr__(self, name):
+        return getattr(self._f, name)
+
+
+def _handler_class():
+    from werkzeug.serving import WSGIRequestHandler
+
+    class _GatewayRequestHandler(WSGIRequestHandler):
+        """werkzeug's handler with the gateway's time bounds. `timeout` is
+        what socketserver's StreamRequestHandler.setup applies as the
+        connection's socket timeout; the TLS handshake is made here, in the
+        connection's own thread under REQUEST_HEAD_SECS, instead of in the
+        server's accept loop, where a client that never finishes it would
+        stop every other connection from being accepted."""
+
+        timeout = GATEWAY_IDLE_TIMEOUT_SECS
+
+        def setup(self):
+            super().setup()
+            self.rfile = _BoundedReader(self.rfile, self.connection, self.timeout)
+            self.rfile.deadline = time.monotonic() + REQUEST_HEAD_SECS
+
+        def handle(self):
+            if isinstance(self.connection, ssl.SSLSocket):
+                try:
+                    # do_handshake's timeout covers the whole handshake.
+                    self.connection.settimeout(max(self.rfile.deadline - time.monotonic(), 0.01))
+                    self.connection.do_handshake()
+                except (OSError, ValueError):
+                    return
+            super().handle()
+
+        def make_environ(self):
+            environ = super().make_environ()
+            environ[READER_KEY] = self.rfile
+            return environ
+
+        def run_wsgi(self):
+            # The head has arrived; the route sets its body's bound (or none,
+            # for an upload), and writes get the idle bound.
+            self.rfile.deadline = None
+            self.connection.settimeout(self.timeout)
+            super().run_wsgi()
+
+    return _GatewayRequestHandler
+
+
+def _bounded_app(app):
+    """The gateway app, wrapped so that once a reply starts, the connection's
+    reader gives werkzeug's drain of an unread body DRAIN_SECS, and a body
+    deadline a route left behind no longer applies."""
+    def wsgi(environ, start_response):
+        reader = environ.get(READER_KEY)
+
+        def started(status, headers, exc_info=None):
+            if reader is not None:
+                reader.reply_started(DRAIN_SECS)
+            return start_response(status, headers, exc_info)
+        return app(environ, started)
+    return wsgi
+
+
 def make_gateway_server(app, host: str, port: int, secrets_dir=None):
     """A threaded werkzeug server for the gateway over TLS, not yet serving
     (the caller runs serve_forever in a thread). None, with an error logged,
-    when the TLS pair is missing: the API must still serve the dashboard."""
+    when the TLS pair is missing: the API must still serve the dashboard.
+
+    The listening socket is wrapped here rather than by werkzeug, with
+    do_handshake_on_connect=False, so the handshake happens in each
+    connection's thread under its time bound (see _handler_class)."""
     from werkzeug.serving import make_server
     try:
         ctx = tls_context(secrets_dir)
@@ -968,4 +1337,8 @@ def make_gateway_server(app, host: str, port: int, secrets_dir=None):
                   "Renderers cannot reach the API until the secrets exist "
                   "(python3 -m tubematic_core.auth ensure) and the API is restarted.")
         return None
-    return make_server(host, port, app, threaded=True, ssl_context=ctx)
+    server = make_server(host, port, _bounded_app(app), threaded=True, request_handler=_handler_class())
+    server.socket = ctx.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
+    # werkzeug reads it for the environ's https scheme and its SSL error log
+    server.ssl_context = ctx
+    return server

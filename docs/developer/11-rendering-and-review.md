@@ -353,9 +353,12 @@ It is launched with `start_new_session=True`, which puts npx, node, Chromium and
 process group.
 
 **The finished mp4 is uploaded, not written into the library.** `PUT /v1/jobs/<video_id>/output`
-streams it from disk; the gateway writes it to a temporary file beside
-`<output>/<project_id>/<video_id>.mp4`, flushes it to disk and renames it into place, so a reader
-never sees half a video. An upload is at most `TUBEMATIC_MAX_OUTPUT_BYTES` (default 8 GiB, set in
+streams it from disk; the gateway writes it to a temporary file in its own directory on the output
+volume, `<output>/.gateway-uploads/`, flushes it to disk and renames it to
+`<output>/<project_id>/<video_id>.mp4`, so a reader never sees half a video. The temporary files
+never sit beside a video, so nothing that lists a project's videos meets one, and the gateway clears
+the leftovers a crash mid-upload leaves there when it starts (see
+[Infrastructure](16-infrastructure.md#tubematic-api)). An upload is at most `TUBEMATIC_MAX_OUTPUT_BYTES` (default 8 GiB, set in
 `tubematic-api`'s environment): a larger `Content-Length` is refused with `413 output_too_large` before
 anything is read, and a body sent without one (chunked) is counted as it arrives and abandoned, its
 temporary file deleted, the moment it passes the limit. A renderer's body is untrusted input, and the
@@ -375,11 +378,26 @@ before any reached the final claim check. So the gateway also bounds what is in 
   nothing, and the disk is shared), which abandons the upload and deletes its temporary file.
 
 The first two are decided before the body is read or a temporary file made; the slot is released
-however the upload ends. The renderer tries an upload up to three times while its lease holds,
-pausing between tries (at least the `Retry-After` the gateway asks for, up to 60 seconds, after a
-`409 upload_in_progress` or `503 busy`). It never tries again after a `413` or a `507`, which are
-reported as the render's error (the video goes back to the queue); a `403` or `409 claim_lost`
-throws the render away. Then it reports the result. A result's `error` is cut to its first 8,000
+however the upload ends, a stalled one included: a body that stops arriving for 60 seconds ends the
+upload with `408 body_timeout` (see [the gateway's time bounds](05-http-api.md#time-bounds)). An
+upload has no total deadline, because a long video over a slow home link is a legitimate reason for a
+long upload.
+
+The renderer treats the two kinds of answer differently:
+
+- **A failure is tried three times.** A network error, or any answer not listed below, counts as a
+  failed attempt; after the third the render is reported as an `error` (the video goes back to the
+  queue).
+- **`409 upload_in_progress` and `503 busy` are not failures.** They mean "wait": every slot is held
+  by other renders' uploads, or the gateway is still receiving this claim's earlier attempt. The
+  renderer waits the `Retry-After` the gateway asks for (at most 60 seconds) and tries again, for up
+  to two hours (`render_agent.py::UPLOAD_WAIT_SECS`), without spending an attempt. Its heartbeat keeps
+  the lease alive meanwhile, and a heartbeat that stops the job, or an upload answered `403` because
+  the claim was lost, ends the wait. Counting these as failures would turn ordinary contention — four
+  multi-hundred-megabyte uploads over home links hold every slot for minutes — into a discarded
+  render and a spent render retry, and repeated contention into a `FAILED` video.
+- **`413` and `507` are not tried again** and are reported as the render's error; a `403` or
+  `409 claim_lost` throws the render away. Then it reports the result. A result's `error` is cut to its first 8,000
 characters (`render_agent.py::RESULT_ERROR_CHARS`) so the body fits the gateway's 64 KiB JSON limit;
 the comment it becomes keeps far fewer. The job directory, the staged `public/<video_id>/` and (remote) the staged scenes
 are removed however the job ended.

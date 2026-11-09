@@ -134,6 +134,9 @@ def _progress_of(line: str):
 # Indirections so the loop below can be driven by a test clock.
 _clock = time.monotonic
 _sleep = time.sleep
+# The upload's busy wait has its own clock (the render watcher's is sped up
+# in tests).
+_monotonic = time.monotonic
 _POLL_SECS = 0.5
 
 
@@ -764,6 +767,11 @@ OUTPUT_NAME = "output.mp4"
 NETWORK_RETRY_SECS = 30
 ENROLL_RETRY_SECS = 60
 UPLOAD_ATTEMPTS = 3
+# How long an upload waits on a gateway that answers busy (all its upload
+# slots taken, or this claim's earlier attempt still being received) before
+# the render is reported as an error. Waiting costs nothing but the lease's
+# heartbeats; giving up throws a finished render away.
+UPLOAD_WAIT_SECS = 2 * 3600
 RESULT_ATTEMPTS = 3
 RETRY_PAUSE_SECS = 5
 MAX_RETRY_AFTER_SECS = 60
@@ -1626,19 +1634,26 @@ def _succeeded(job: _Job, output_path: str, on_gpu: bool, frames: int, seconds: 
 
 
 def _upload(job: _Job, out: Path) -> None:
-    """PUT the mp4, streamed from disk, at most UPLOAD_ATTEMPTS times while the
-    lease holds (a 403, or a 409 claim_lost, means the claim was lost: another
-    claim took the video over). A 409 upload_in_progress (an earlier attempt
-    of this claim is still being received) and a 503 busy (the gateway's
-    upload slots are full) are tried again after a pause, at least the
-    Retry-After the gateway asks for. A 413 (over the gateway's size limit)
-    and a 507 (the main machine is short of disk space) are not tried again:
-    the render is reported as an error."""
+    """PUT the mp4, streamed from disk, while the lease holds (a 403, or a
+    409 claim_lost, means the claim was lost: another claim took the video
+    over). A failed attempt (a network error, any other answer) is tried
+    again, at most UPLOAD_ATTEMPTS times in all. A 409 upload_in_progress (an
+    earlier attempt of this claim is still being received) and a 503 busy
+    (the gateway's upload slots are full) are not failures but the gateway
+    asking to wait: they are tried again after the Retry-After it asks for,
+    for as long as UPLOAD_WAIT_SECS, while the claim holds (the heartbeat
+    keeps its lease alive, and a heartbeat's stop ends the wait). Other
+    renders' uploads over home links can hold every slot for many minutes,
+    and a finished render is worth waiting for. A 413 (over the gateway's
+    size limit) and a 507 (the main machine is short of disk space) are not
+    tried again: the render is reported as an error."""
     last = None
-    for attempt in range(1, UPLOAD_ATTEMPTS + 1):
-        pause = RETRY_PAUSE_SECS * attempt
+    failures = 0
+    waited_since = None
+    while True:
         if job.stopped:
             raise _Stopped()
+        pause = RETRY_PAUSE_SECS * (failures + 1)
         try:
             with open(out, "rb") as fh:
                 resp = _client.send("PUT", _job_path(job.video_id, "output"), content=fh,
@@ -1651,25 +1666,35 @@ def _upload(job: _Job, out: Path) -> None:
                 return
             if resp.status_code == 403:
                 raise _LeaseLost("the gateway refused the upload: this renderer does not hold the video any more")
-            if resp.status_code == 409 and _error_code(resp) == "claim_lost":
+            code = _error_code(resp)
+            if resp.status_code == 409 and code == "claim_lost":
                 raise _LeaseLost("the gateway discarded the upload: the claim was lost while it was sent")
             if resp.status_code == 413:
                 # never smaller on a second try: reported as this render's error
                 raise GatewayError(f"the rendered video ({out.stat().st_size} bytes) is larger than the "
-                                   "gateway accepts (TUBEMATIC_MAX_OUTPUT_BYTES on the main machine)", 413,
-                                   _error_code(resp))
+                                   "gateway accepts (TUBEMATIC_MAX_OUTPUT_BYTES on the main machine)", 413, code)
             if resp.status_code == 507:
                 raise GatewayError("the rendered video could not be uploaded: the main machine is short of disk "
                                    "space for it (insufficient_storage; it keeps TUBEMATIC_MIN_FREE_BYTES free)",
-                                   507, _error_code(resp))
-            if resp.status_code in (409, 503):
-                pause = max(pause, min(_retry_after(resp), MAX_RETRY_AFTER_SECS))
-            last = f"the upload answered {resp.status_code} {_error_code(resp)}".strip()
-        log.warning(f"[{job.video_id}] upload attempt {attempt}/{UPLOAD_ATTEMPTS} failed: {last}",
+                                   507, code)
+            if (resp.status_code, code) in ((409, "upload_in_progress"), (503, "busy")):
+                now = _monotonic()
+                waited_since = now if waited_since is None else waited_since
+                if now - waited_since >= UPLOAD_WAIT_SECS:
+                    raise GatewayError(f"the rendered video could not be uploaded: the gateway stayed busy "
+                                       f"({code}) for {UPLOAD_WAIT_SECS}s")
+                wait = max(RETRY_PAUSE_SECS, min(_retry_after(resp), MAX_RETRY_AFTER_SECS))
+                log.info(f"[{job.video_id}] the gateway cannot take the upload yet ({code}); "
+                         f"trying again in {wait:g}s", extra={"video_id": job.video_id})
+                time.sleep(wait)
+                continue
+            last = f"the upload answered {resp.status_code} {code}".strip()
+        failures += 1
+        log.warning(f"[{job.video_id}] upload attempt {failures}/{UPLOAD_ATTEMPTS} failed: {last}",
                     extra={"video_id": job.video_id})
-        if attempt < UPLOAD_ATTEMPTS:
-            time.sleep(pause)
-    raise GatewayError(f"the rendered video could not be uploaded: {last}")
+        if failures >= UPLOAD_ATTEMPTS:
+            raise GatewayError(f"the rendered video could not be uploaded: {last}")
+        time.sleep(pause)
 
 
 def _retry_after(resp: httpx.Response) -> float:
