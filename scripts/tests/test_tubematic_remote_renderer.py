@@ -326,6 +326,8 @@ def main_version(monkeypatch):
     return seen
 
 
+_real_exists = os.path.exists
+
 TOKEN = core.encode_enrollment_token("https://main.lan:4443", "the-one-time-secret", PIN_OK)
 
 
@@ -335,14 +337,19 @@ def _run_call(docker):
     return runs[0]
 
 
-def test_a_cpu_install_runs_exactly_this_container(docker, main_version):
+def test_a_cpu_install_runs_exactly_this_container(docker, main_version, monkeypatch):
     docker.gpus = ""
+    monkeypatch.setattr(trr.socket, "gethostname", lambda: "garage-host")
+    monkeypatch.setattr(trr.os.path, "exists", lambda p: p == "/etc/localtime" or _real_exists(p))
     assert trr.main(["install", "--token", TOKEN, "--name", "garage box", "--yes"]) == 0
     call = _run_call(docker)
     assert call["argv"] == [
         "docker", "run", "-d", "--name", "tubematic-remote-renderer",
         "--restart", "unless-stopped", "--shm-size", "2g",
         "-v", "tubematic-renderer-state:/state",
+        # the host's name (the dashboard shows it) and clock (log times)
+        "--hostname", "garage-host",
+        "-v", "/etc/localtime:/etc/localtime:ro",
         "-e", "PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium",
         "-e", "TUBEMATIC_RENDERER_STATE=/state",
         "-e", "TUBEMATIC_GATEWAY_URL=https://main.lan:4443",

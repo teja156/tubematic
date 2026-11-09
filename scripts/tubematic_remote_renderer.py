@@ -353,7 +353,13 @@ def run_argv(state: dict, *, with_token: bool) -> list:
     with a bare `-e TUBEMATIC_ENROLL_TOKEN`, so Docker copies its value from
     this call's environment and it never appears on a command line."""
     argv = ["docker", "run", "-d", "--name", CONTAINER, "--restart", "unless-stopped",
-            "--shm-size", SHM_SIZE, "-v", f"{STATE_VOLUME}:{STATE_MOUNT}"]
+            "--shm-size", SHM_SIZE, "-v", f"{STATE_VOLUME}:{STATE_MOUNT}",
+            # The host's own name and clock: the dashboard shows the renderer's
+            # host (a container ID otherwise) and its log times read in the
+            # host's timezone, like main's containers (which mount the same file).
+            "--hostname", socket.gethostname()]
+    if os.path.exists("/etc/localtime"):
+        argv += ["-v", "/etc/localtime:/etc/localtime:ro"]
     env = BASE_ENV + [
         f"TUBEMATIC_RENDERER_STATE={STATE_MOUNT}",
         f"TUBEMATIC_GATEWAY_URL={state['gateway_url']}",

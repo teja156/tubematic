@@ -29,12 +29,12 @@ EMOTIONS = ("neutral", "happy", "excited", "thinking", "idea",
 # like renderer/api/pipeline.py's CARTOON3D_* copies; the pipeline imports these.
 MASCOT_NEEDS_GPU = (
     "Mascots render on the GPU only (on the CPU a 90-second Short would take hours). "
-    "The renderer has no working GPU: configure one with `python onboard.py --step gpu`, test it "
-    "on the dashboard Settings page under GPU, or turn the mascot off."
+    "No renderer has a working GPU: configure one with `python onboard.py --step gpu` or add a GPU "
+    "renderer, test it under Settings → Rendering → Renderers on the dashboard, or turn the mascot off."
 )
 MASCOT_GPU_UNKNOWN = (
-    "Mascots render on the GPU only, and the renderer has not tested its GPU yet (it does so "
-    "when it starts, and on Test GPU on the dashboard Settings page). Test it first, then choose "
+    "Mascots render on the GPU only, and no renderer has tested its GPU yet (each does so "
+    "when it starts, and on Test GPU under Settings → Rendering → Renderers). Test it first, then choose "
     "a mascot."
 )
 
