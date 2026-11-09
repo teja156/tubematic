@@ -85,6 +85,9 @@ _SCRIPTS_FILES = [
     "mcp_auth_header.py",   # the agent CLIs run it on every MCP connection (TMDEV-152)
     "service.py",
     "collect_diagnostics.py",   # the troubleshooting skill asks the human to run it (TMDEV-167)
+    # Copied to another machine to run a remote renderer there (TMDEV-190). It
+    # is also its own Release asset, since that machine has no tarball.
+    "tubematic_remote_renderer.py",
 ]
 
 # The public documentation, copied by explicit path -- never a bare "docs/"

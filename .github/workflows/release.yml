@@ -134,7 +134,8 @@ jobs:
           tags: |
             ghcr.io/${{ needs.preflight.outputs.owner }}/tubematic-dashboard:${{ needs.preflight.outputs.version }}
 
-  # 4. Build the tarball and write CHECKSUMS.txt.
+  # 4. Build the tarball and write CHECKSUMS.txt (the tarball and the remote
+  # renderer script).
   #
   # build_release_tarball.py already writes a CHECKSUMS.txt *inside* the
   # tarball (per-file hashes of the staged tree). The CHECKSUMS.txt built
@@ -163,9 +164,16 @@ jobs:
             --version "${{ needs.preflight.outputs.version }}" \
             --out-dir dist
 
-      - name: Write tarball checksum
+      # The remote renderer script is a Release asset of its own: the machine
+      # it runs on downloads it alone, with no tarball and no checkout.
+      - name: Add the remote renderer script
+        run: cp scripts/tubematic_remote_renderer.py dist/
+
+      - name: Write release checksums
         working-directory: dist
-        run: sha256sum tubematic-v${{ needs.preflight.outputs.version }}.tar.gz > CHECKSUMS.txt
+        run: |
+          sha256sum tubematic-v${{ needs.preflight.outputs.version }}.tar.gz \
+            tubematic_remote_renderer.py > CHECKSUMS.txt
 
       # The GitHub Release body comes from docs/release-notes.md, which is
       # the single source for release notes -- written once, reviewed in the
@@ -369,7 +377,8 @@ jobs:
         working-directory: ${{ env.SMOKE_DIR }}
         run: docker compose down -v
 
-  # 6. Create the GitHub Release and upload the tarball and checksums.
+  # 6. Create the GitHub Release and upload the tarball, the remote renderer
+  # script and the checksums.
   # `latest` is never set here -- a convenience tag, if one is ever added,
   # is not the documented install target.
   release:
@@ -395,6 +404,7 @@ jobs:
           # listed here: it is the Release body, not a downloadable asset.
           files: |
             dist/tubematic-v${{ needs.preflight.outputs.version }}.tar.gz
+            dist/tubematic_remote_renderer.py
             dist/CHECKSUMS.txt
 
   # 7. Publish this release's docs to docs.tubematic.ai: sync docs/ into the site repo as this

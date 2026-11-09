@@ -710,6 +710,30 @@ def test_a_prerelease_version_is_published_as_a_github_prerelease(release_jobs):
     assert "preflight" in _ancestors(name, release_jobs)
 
 
+def test_the_remote_renderer_script_is_a_checksummed_release_asset(release_jobs):
+    """A remote renderer host downloads tubematic_remote_renderer.py on its
+    own, with no tarball, so it must be an asset of the Release and covered by
+    the CHECKSUMS.txt published beside it -- and the copy must come from the
+    tagged checkout, in the job that writes the checksums."""
+    build = release_jobs["build-tarball"]
+    run = _run_text(build)
+    assert "cp scripts/tubematic_remote_renderer.py dist/" in run
+    checksum_steps = [st for st in _steps_of(build) if "CHECKSUMS.txt" in st.get("run", "")]
+    assert len(checksum_steps) == 1
+    checksum = checksum_steps[0]["run"]
+    assert "tubematic_remote_renderer.py" in checksum
+    assert "tubematic-v${{ needs.preflight.outputs.version }}.tar.gz" in checksum
+    steps = _steps_of(build)
+    copy_at = next(i for i, st in enumerate(steps) if "tubematic_remote_renderer.py dist/" in st.get("run", ""))
+    assert copy_at < steps.index(checksum_steps[0])
+
+    release_step = next(st for job in release_jobs.values() for st in _steps_of(job)
+                        if "action-gh-release" in st.get("uses", ""))
+    files = release_step["with"]["files"].split()
+    assert "dist/tubematic_remote_renderer.py" in files
+    assert "dist/CHECKSUMS.txt" in files
+
+
 # ── Docs site (docs.tubematic.ai) ─────────────────────────────────────────
 # release.yml's publish-docs job and docs-site.yml both run the composite
 # action .github/actions/sync-docs-site, which syncs docs/ into the

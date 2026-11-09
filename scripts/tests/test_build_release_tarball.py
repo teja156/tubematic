@@ -85,6 +85,7 @@ ALLOWLISTED_PATHS = [
     "tubematic_core/auth.py",
     "scripts/service.py",
     "scripts/collect_diagnostics.py",
+    "scripts/tubematic_remote_renderer.py",
     "docs/README.md",
     "docs/quickstart.md",
     "docs/release-notes.md",
