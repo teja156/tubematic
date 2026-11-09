@@ -441,7 +441,7 @@ Returns all 42 declared keys, coerced to their types, with `secret` keys masked.
 `elevenlabs_voices` carries its own `model_id`.
 
 ### `POST /settings`
-Body: any subset of the 42 keys.
+Body: any subset of the 44 keys.
 
 - An unknown key returns `400 {"error": "Unknown settings: [...]. Valid: [...]"}`.
 - **The whole write is atomic.** Every value is coerced first; the first failure returns `400` with
@@ -718,11 +718,11 @@ Three sets drive routing. All three are duplicated in `mcp/server.py` and
 `dashboard/lib/types.ts` and carry `# Keep in sync` comments.
 
 ```python
-VALID_VIDEO_STATUSES = {           # 15 — everything a status column may hold
+VALID_VIDEO_STATUSES = {           # 16 — everything a status column may hold
     "TOPIC_PROPOSED", "TOPIC_APPROVED", "TOPIC_REJECTED", "SCRIPT_READY",
     "VOICING", "VOICE_READY", "RENDER_QUEUED", "RENDERING", "VIDEO_READY",
     "VIDEO_APPROVED", "REVISION_REQUESTED", "SCHEDULED", "PUBLISHING", "PUBLISHED",
-    "FAILED",
+    "PARTIALLY_PUBLISHED", "FAILED",
 }
 
 ACTIONABLE_STATUSES = {            # 3 — a human decides (or Auto Pilot, per project)

@@ -119,8 +119,23 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   checks your machine's certificate before sending anything, and later upgrades or removes the
   renderer. The container it leaves running does not keep the token (`--token-stdin` reads it from a
   pipe for scripted installs). It is listed in the release's `CHECKSUMS.txt`, so you can verify it before running it.
+- **Mark as published, for a video that went out on only some of its accounts.** Open the video and
+  press **Mark as published…**: the dialog says how many accounts it reached, has a **Download video**
+  link, and reminds you to download before confirming, so you can post it to the failed accounts by
+  hand first.
+- **Two new Discord alerts in Settings → Notifications**: **A publish partly fails** names each
+  account that failed and its error and links the posts that went out; **A video fails** says why a
+  video stopped — a render that kept failing, a publish that failed everywhere, and so on — and
+  offers Retry publishing when the failure happened while publishing.
 
 ### Changed
+
+- **A publish that fails on some accounts no longer shows as Published.** It used to read
+  `PUBLISHED` as long as one account succeeded, so nothing told you the other accounts still needed
+  the video. It now stops at the new status **Partially published** — in the Published column of the
+  Pipeline board tagged PARTIAL, and under its own state in the Library — and waits for you. Its
+  video file is kept until you mark it published, and an Auto Pilot video keeps its place in the
+  in-progress limit until then.
 
 - **Publishing, Auto Pilot and notifications no longer wait for a render to finish.** They used to
   run in the same loop as rendering, so while a video rendered — up to an hour or more for a long
@@ -167,6 +182,12 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   with a mascot whose GPU stops working, before or during its render, is not rendered on the CPU or
   handed back to the agent: it fails with a comment saying why, and is created again once the GPU is
   back.
+- **The two new Discord alerts are off.** Switch on **A publish partly fails** and **A video fails** in
+  Settings → Notifications if you want them. They are off after the upgrade so that an install with a
+  webhook does not start receiving messages it never asked for.
+- **Videos that published partially before the upgrade stay Published.** Only publishes that settle
+  after the upgrade can become Partially published. To find older ones, open each Published video's
+  Publishing Results tab and look for a failed account.
 - **Restart open agent sessions after upgrading.** The upgrade redeploys every installed agent's
   skills, which adds the mascot-drawing skill, and re-registers the MCP server, whose tools changed.
   An agent session that was already open keeps the old tools until you restart it.

@@ -102,12 +102,33 @@ post to postforme.
 |---|---|
 | `PUBLISHING` | The video was uploaded and the post created; Tubematic is waiting for each platform to report back. It checks every twenty seconds |
 | `SCHEDULED` | The post is uploaded and waiting at postforme for its time — see [Scheduling a post](#scheduling-a-post) |
-| `PUBLISHED` | **At least one** account published it. If some accounts failed, their errors are on the video's **Publishing Results** tab |
+| `PUBLISHED` | **Every** account published it — or, after a partial publish, you marked it published |
+| `PARTIALLY_PUBLISHED` | **Some** accounts published it and some failed. It waits for you — see [When a publish partly fails](#when-a-publish-partly-fails) |
 | `FAILED` | **Every** account failed, or none reported success within an hour |
 
-A video live on two of four accounts reads `PUBLISHED`, because it genuinely is published and none of
-these platforms can un-publish it. The failures are recorded per account rather than hidden. See
-[the design decisions](../developer/14-publishing.md#design-decisions-that-will-look-wrong-later).
+### When a publish partly fails
+
+A video live on two of four accounts cannot be `FAILED` — none of these platforms can un-publish it —
+but it is not done either, because the other two still need it. So it stops at
+`PARTIALLY_PUBLISHED`, in the Published column of the Pipeline board tagged **PARTIAL**, and under
+**Partially published** in the Library. The video's **Publishing Results** tab has the error for each
+account that failed.
+
+1. Open the video and press **Mark as published…**.
+2. Use **Download video** in that dialog to save the mp4.
+3. Post it to the failed accounts yourself.
+4. Press **Mark as published**.
+
+**Download before you confirm.** While a video waits at `PARTIALLY_PUBLISHED`, retention never
+deletes its files. Once it is marked published, retention deletes them on its usual schedule,
+counted from when the video *first* published — so a partial publish older than your retention
+period loses its file within a minute of the click.
+
+Until you mark it published, an [Auto Pilot](#auto-pilot) video keeps its place in the
+[in-progress limit](#the-in-progress-limit), so Auto Pilot slows down rather than publishing more
+videos while an account is broken. To hear about a partial publish as it happens, switch on
+**A publish partly fails** under [Settings → Notifications](05-settings.md#notifications). Why it
+works this way is on [Publishing internals](../developer/14-publishing.md#a-partial-publish).
 
 The **Publishing Results** tab of a video shows each target: its platform, status, the live post's
 URL, and the reason for a failure. How a post is *performing* is on the **Analytics** page.
@@ -293,7 +314,7 @@ flowchart LR
 
 - **Every video in an Auto Pilot project that has been voiced and has not yet published or failed.**
   A video sent back for revision keeps its place in the count, and does not need a second slot to be
-  voiced again. Videos in projects that are not on Auto Pilot never count.
+  voiced again. A partially published video counts until you mark it published. Videos in projects that are not on Auto Pilot never count.
 - **Every post waiting to go out at a future time, across the whole install** — including posts you
   schedule by hand, because they share the accounts' calendar. So scheduling a week of posts by
   hand can hold Auto Pilot back.

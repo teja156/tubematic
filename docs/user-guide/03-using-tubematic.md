@@ -290,8 +290,9 @@ Better still, have the pipeline tell you. **Settings → Notifications** takes a
 and sends a message when topics are proposed, a script is ready, or a video is ready — each
 switchable on its own. Topics arrive bundled, one message per research run. Set **Dashboard URL**
 there too (for example `http://192.168.1.20:3000`) and each message links to the right page. Saving
-the URL checks the webhook exists without posting anything. Beyond the three triggers, a video that
-nothing is voicing raises an alert whenever a webhook is set — see
+the URL checks the webhook exists without posting anything. Two more switches send alerts for a
+video that needs you: a publish that failed on some accounts, and a video that failed outright. Beyond
+those, a video that nothing is voicing raises an alert whenever a webhook is set — see
 [Settings — Notifications](05-settings.md#notifications).
 
 ### 2. Approve topics
