@@ -160,6 +160,12 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   - Changes to the render timeouts and the watermark setting apply from the next video the renderer
     is handed, as before.
 
+- **The documentation is reorganised.** The quickstart and the user guide are shorter and follow
+  the labels on the dashboard. Agents, visual styles and mascots, Auto Pilot and the command-line
+  reference each have a page of their own. Sections that moved: uninstalling one agent is now under
+  Agents, the wizard's steps and flags are in the Command Reference, and Auto Pilot left the
+  Publishing page.
+
 ### Fixed
 
 - **The renderer's container no longer grows with every video it renders.** It used to keep a copy of
