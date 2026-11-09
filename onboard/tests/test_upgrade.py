@@ -1068,11 +1068,14 @@ OLD = [{"id": "sha256:old1", "refs": ["ghcr.io/o/tubematic-backend:2.0.0"], "byt
        {"id": "sha256:old2", "refs": [], "bytes": 300 * 1024**2}]
 
 
-def _finish(upgrade, tmp_path, *, healthy=True, dry_run=False, old=OLD, refuse=()):
+def _finish(upgrade, tmp_path, *, healthy=True, dry_run=False, old=OLD, refuse=(),
+            totals=(None, None)):
     rep, ex, refreshed = _Rep(), _RmEx(refuse), []
+    answers = iter(totals)
     upgrade._finish_images(ex, rep, tmp_path, healthy=healthy, dry_run=dry_run,
                            find=lambda: old,
-                           refresh=lambda *a: refreshed.append(a))
+                           refresh=lambda *a: refreshed.append(a),
+                           total=lambda: next(answers))
     return ex, rep, refreshed
 
 
@@ -1083,6 +1086,18 @@ def test_a_successful_upgrade_removes_old_images_by_tag_or_id(upgrade, tmp_path)
     assert "Removed 2 old images (about 2.3 GB freed)" in rep.text()
     assert all("-f" not in c and "--force" not in c for c in ex.calls)
     assert refreshed == [(tmp_path, upgrade.REPO_ROOT)]
+
+
+def test_freed_space_counts_layers_only_the_old_images_shared(upgrade, tmp_path):
+    # The two images' own sizes add to 2.3 GB; the machine's image total fell by
+    # 3 GB, because a layer both of them used went too.
+    _, rep, _ = _finish(upgrade, tmp_path, totals=(10 * 1024**3, 7 * 1024**3))
+    assert "about 3.0 GB freed" in rep.text()
+
+
+def test_a_rounded_total_never_reports_less_than_the_images_own_sizes(upgrade, tmp_path):
+    _, rep, _ = _finish(upgrade, tmp_path, totals=(10 * 1024**3, 9 * 1024**3))
+    assert "about 2.3 GB freed" in rep.text()
 
 
 def test_an_upgrade_that_needs_attention_keeps_the_old_images(upgrade, tmp_path):
@@ -1122,7 +1137,7 @@ def test_an_unwritable_snapshot_is_a_warning_not_a_failure(upgrade, tmp_path):
     def refresh(*a):
         raise PermissionError("data/ is root-owned")
     upgrade._finish_images(_RmEx(), rep, tmp_path, healthy=True, dry_run=False,
-                           find=lambda: [], refresh=refresh)
+                           find=lambda: [], refresh=refresh, total=lambda: None)
     assert "disk-usage figure" in rep.text()
 
 

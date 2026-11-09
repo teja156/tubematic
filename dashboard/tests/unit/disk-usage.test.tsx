@@ -64,6 +64,22 @@ describe("DiskUsage", () => {
     expect(popup.textContent).toContain("measured 20 min ago");
   });
 
+  it("shows several old images' size as a floor, one image's as exact", async () => {
+    mockFetch(usage(HOST));
+    render(<DiskUsage />);
+    await openPopup();
+    expect(screen.getByTestId("disk-row-images_old").textContent).toContain("≥ 4.5 GB");
+  });
+
+  it("shows a single old image's size without the floor mark", async () => {
+    mockFetch(usage({ ...HOST, images: { current_bytes: 5 * GB, old_bytes: GB, old_count: 1 } }));
+    render(<DiskUsage />);
+    await openPopup();
+    const row = screen.getByTestId("disk-row-images_old").textContent ?? "";
+    expect(row).toContain("1.0 GB");
+    expect(row).not.toContain("≥");
+  });
+
   it("marks the build cache as outside the total", async () => {
     mockFetch(usage(HOST));
     render(<DiskUsage />);

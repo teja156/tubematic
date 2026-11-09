@@ -37,7 +37,11 @@ function ago(iso: string, now: number): string {
   return `${Math.floor(hours / 24)} days ago`;
 }
 
-type Row = { key: string; label: string; note: string; bytes: number | null; counted: boolean };
+type Row = {
+  key: string; label: string; note: string; bytes: number | null; counted: boolean;
+  /** The figure is a floor: shown as "≥ 4.5 GB". */
+  atLeast?: boolean;
+};
 
 function hostRows(host: NonNullable<StorageUsage["host"]>): Row[] {
   const images = host.images;
@@ -49,7 +53,10 @@ function hostRows(host: NonNullable<StorageUsage["host"]>): Row[] {
       note: old
         ? `${old} image${old === 1 ? "" : "s"} no longer used; the next upgrade removes them`
         : "None — upgrades remove the previous version's images",
-      bytes: images ? images.old_bytes : null },
+      bytes: images ? images.old_bytes : null,
+      // Each old image's figure leaves out layers it shares with another
+      // image, so with two or more, layers only they share are missed.
+      atLeast: old > 1 },
     { key: "containers", label: "Container scratch", counted: true,
       note: "Files the containers wrote inside themselves", bytes: host.containers_bytes },
     { key: "install", label: "Install folder", counted: true,
@@ -71,7 +78,7 @@ function UsageRow({ row, max }: { row: Row; max: number }) {
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
         <span style={{ color: "var(--ink)" }}>{row.label}</span>
         <span style={{ color: row.counted ? "var(--ink)" : "var(--mute)" }}>
-          {known ? formatBytes(row.bytes as number) : "unknown"}
+          {known ? `${row.atLeast ? "≥ " : ""}${formatBytes(row.bytes as number)}` : "unknown"}
         </span>
       </div>
       <div style={{ height: 3, background: "var(--border)", margin: "4px 0 3px" }}>

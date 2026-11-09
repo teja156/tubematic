@@ -146,7 +146,8 @@ the steps in the order that keeps your data safe:
 9. **Removes the previous version's images**, once everything above has succeeded. That is every
    Tubematic image no Tubematic container uses: the older `tubematic-backend` and
    `tubematic-dashboard` tags on a release install, and the untagged images earlier builds left on a
-   source install. It then re-measures disk use for the dashboard's
+   source install. It reports how much space that freed, measured as the drop in Docker's total for
+   all images, and then re-measures disk use for the dashboard's
    [disk-usage badge](04-dashboard.md#the-top-bar). Images are removed one at a time and never
    forced. If Docker refuses one, for example because a container still uses it, the upgrade warns
    and still succeeds. An upgrade that needs attention (a failed health check, an agent left without

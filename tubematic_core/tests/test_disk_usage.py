@@ -39,13 +39,15 @@ class FakeDocker:
     is a list of (image id, writable-layer bytes)."""
 
     def __init__(self, *, containers, images, dangling=(), sizes=None,
-                 build_cache="1.5GB", fail=()):
+                 build_cache="1.5GB", fail=(), short_df_ids=False, images_total="40GB"):
         self.containers = containers
         self.images = images
         self.dangling = list(dangling)
         self.sizes = sizes or {}
         self.build_cache = build_cache
         self.fail = set(fail)
+        self.short_df_ids = short_df_ids
+        self.images_total = images_total
         self.calls = []
 
     def __call__(self, argv):
@@ -68,10 +70,11 @@ class FakeDocker:
             out = "\n".join(self.images)
         elif args[:3] == ["system", "df", "-v"]:
             out = json.dumps({"Images": [
-                {"ID": i, "Size": s, "UniqueSize": u, "SharedSize": "0B"}
+                {"ID": i.split(":")[1][:12] if self.short_df_ids else i,
+                 "Size": s, "UniqueSize": u, "SharedSize": "0B"}
                 for i, (s, u) in self.sizes.items()], "BuildCache": []})
         elif args[:2] == ["system", "df"]:
-            out = "\n".join([json.dumps({"Type": "Images", "Size": "40GB"}),
+            out = "\n".join([json.dumps({"Type": "Images", "Size": self.images_total}),
                              json.dumps({"Type": "Build Cache", "Size": self.build_cache})])
         else:
             raise AssertionError(f"unexpected docker call: {args}")
@@ -216,6 +219,29 @@ def test_measure_host_sums_what_removal_would_free(tmp_path):
     assert snap["containers_bytes"] == 3500
     assert snap["build_cache_bytes"] == 1_500_000_000
     assert snap["install_bytes"] >= 10_000
+
+
+def test_sizes_join_when_docker_truncates_ids_in_system_df(tmp_path):
+    # Some Docker versions print `system df -v` ids as 12 hex digits, while
+    # `image ls --no-trunc` and `container inspect` give sha256:<64>.
+    full = disk_usage.measure_host(tmp_path, run=_release_install())["images"]
+    short = disk_usage.measure_host(tmp_path, run=_release_install(short_df_ids=True))["images"]
+    assert short == full
+    assert short["current_bytes"] > 0 and short["old_bytes"] > 0
+    old = {e["id"]: e["bytes"] for e in disk_usage.old_images(run=_release_install(short_df_ids=True))}
+    assert old[OLD_BACKEND] == 1_200_000_000
+
+
+def test_an_in_use_image_named_by_a_short_id_is_still_in_use():
+    docker = _release_install()
+    docker.containers.append((OLD_BACKEND.split(":")[1][:12], 0))
+    assert OLD_BACKEND not in {e["id"] for e in disk_usage.old_images(run=docker)}
+
+
+def test_images_total_counts_each_layer_once_machine_wide():
+    assert disk_usage.images_total_bytes(run=_release_install(images_total="112.9GB")) \
+        == 112_900_000_000
+    assert disk_usage.images_total_bytes(run=_release_install(fail={"system df"})) is None
 
 
 def test_measure_host_without_docker_reports_unknown_not_zero(tmp_path):

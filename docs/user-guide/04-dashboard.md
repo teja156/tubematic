@@ -45,7 +45,8 @@ Every page shares one bar. From left to right it holds the page tabs, then:
   - **Your data**, measured live: finished videos, voice previews, job files (each video's voice
     audio, scene images and timeline), generated scenes, the database, mascot sheets, backups and
     logs.
-  - **Docker & install**: the images this install runs, **old images** no container uses any more,
+  - **Docker & install**: the images this install runs, **old images** no container uses any more
+    (shown as "≥" when there are several: they can share layers that no per-image figure counts),
     the containers' own scratch space and the install folder (code plus its Python and Node
     packages). No container can see Docker, so the host measures these about once an hour, and
     right after an upgrade or onboarding. The popup says how long ago. Until the first measurement

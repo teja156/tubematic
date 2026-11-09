@@ -446,9 +446,11 @@ How much disk Tubematic uses, for the dashboard's disk-usage badge. Read-only.
   own writable layers or the install folder; the poller writes this file about hourly, and
   `upgrade.py` and onboarding write it right after they change images (see
   [The poller](13-the-poller.md)). It is `null` until the first one is written, or when the file
-  cannot be read. Inside it, a figure is `null` when Docker could not be read. `old_bytes` counts
-  only what removing those images would free (their unique size), and `old_count` how many there
-  are. Both follow the same rule `upgrade.py` deletes by: `tubematic_core/disk_usage.py::old_images`.
+  cannot be read. Inside it, a figure is `null` when Docker could not be read. `old_bytes` is the sum
+  of each old image's unique size (what removing that image alone would free), and `old_count` how
+  many there are. With two or more it is a floor: a layer only old images share is in none of their
+  unique sizes, yet goes when they all do, and Docker reports no per-layer figure to add it from. The
+  dashboard shows it as "≥". Both follow the same rule `upgrade.py` deletes by: `tubematic_core/disk_usage.py::old_images`.
 - **`total_bytes`** is `data.total_bytes` plus the host's images, container layers and install
   folder. The build cache is not added, because BuildKit's cache is shared with anything else built
   on the machine.

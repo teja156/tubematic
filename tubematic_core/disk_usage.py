@@ -126,6 +126,15 @@ def _docker(run, *args) -> str | None:
     return r.stdout or ""
 
 
+def _key(image_id) -> str:
+    """An image id as one comparable form. Docker prints ids in two shapes:
+    `sha256:<64 hex>` where a command is asked not to truncate, and the bare
+    first 12 hex digits where it truncates (some CLI versions do in
+    `system df -v`). Every lookup between commands goes through this, so the
+    two shapes always meet."""
+    return str(image_id or "").split(":", 1)[-1][:12].lower()
+
+
 def _json_lines(text):
     rows = []
     for line in (text or "").splitlines():
@@ -179,8 +188,9 @@ def _dangling_ours(run) -> set:
 
 def _image_sizes(run) -> dict:
     """{image id: {"size": bytes, "unique": bytes}} from `docker system df -v`.
-    `unique` is what removing the image would free: layers it shares with
-    another image stay. Empty when Docker can't be read."""
+    `unique` is what removing the image alone would free: layers it shares
+    with another image stay. Keyed by `_key`. Empty when Docker can't be
+    read."""
     out = _docker(run, "system", "df", "-v", "--format", "{{json .}}")
     try:
         doc = json.loads(out or "")
@@ -192,19 +202,33 @@ def _image_sizes(run) -> dict:
             continue
         size = parse_size(row.get("Size"))
         unique = parse_size(row.get("UniqueSize"))
-        sizes[row.get("ID") or ""] = {"size": size or 0,
+        sizes[_key(row.get("ID"))] = {"size": size or 0,
                                       "unique": unique if unique is not None else (size or 0)}
     return sizes
 
 
-def _build_cache_bytes(run) -> int | None:
+def _df_total(run, kind) -> int | None:
+    """One row of plain `docker system df`: the machine's total for `kind`
+    ("images", "buildcache"), counting each layer once."""
     out = _docker(run, "system", "df", "--format", "{{json .}}")
     if out is None:
         return None
     for row in _json_lines(out):
-        if str(row.get("Type", "")).lower().replace(" ", "") == "buildcache":
+        if str(row.get("Type", "")).lower().replace(" ", "") == kind:
             return parse_size(row.get("Size"))
     return None
+
+
+def _build_cache_bytes(run) -> int | None:
+    return _df_total(run, "buildcache")
+
+
+def images_total_bytes(run=_default_run) -> int | None:
+    """Disk every image on the machine takes, each layer once. upgrade.py
+    reads it before and after removing old images: the difference is what
+    went, including layers only old images shared, which no per-image figure
+    shows."""
+    return _df_total(run, "images")
 
 
 def old_images(run=_default_run) -> list:
@@ -231,25 +255,26 @@ def old_images(run=_default_run) -> list:
 def _old_images(run, containers, sizes) -> list:
     if not containers:
         return []
-    in_use = {c["image"] for c in containers}
+    in_use = {_key(c["image"]) for c in containers}
     images = _images(run)
     if images is None:
         return []
     found = {}
     for row in images:
-        if row["id"] in in_use or not _OUR_REPOSITORY.match(row["repository"]):
+        if _key(row["id"]) in in_use or not _OUR_REPOSITORY.match(row["repository"]):
             continue
         entry = found.setdefault(row["id"], _old_entry(row["id"], sizes))
         if row["tag"] and row["tag"] != "<none>":
             entry["refs"].append(f"{row['repository']}:{row['tag']}")
     for image_id in _dangling_ours(run):
-        if image_id not in in_use:
+        if _key(image_id) not in in_use and not any(
+                _key(e) == _key(image_id) for e in found):
             found.setdefault(image_id, _old_entry(image_id, sizes))
     return sorted(found.values(), key=lambda e: e["id"])
 
 
 def _old_entry(image_id, sizes) -> dict:
-    return {"id": image_id, "refs": [], "bytes": sizes.get(image_id, {}).get("unique", 0)}
+    return {"id": image_id, "refs": [], "bytes": sizes.get(_key(image_id), {}).get("unique", 0)}
 
 
 def measure_host(install_dir, run=_default_run) -> dict:
@@ -262,10 +287,13 @@ def measure_host(install_dir, run=_default_run) -> dict:
         return snapshot
     sizes = _image_sizes(run)
     snapshot["containers_bytes"] = sum(c["size_rw"] for c in containers)
-    current = {c["image"] for c in containers}
+    current = {_key(c["image"]) for c in containers}
     old = _old_images(run, containers, sizes)
     snapshot["images"] = {
         "current_bytes": sum(sizes.get(i, {}).get("size", 0) for i in current),
+        # Each old image's unique size. With two or more, a layer only old
+        # images share is in none of those figures but goes with them, so the
+        # sum is a floor, and the dashboard says "at least".
         "old_bytes": sum(e["bytes"] for e in old),
         "old_count": len(old),
     }
