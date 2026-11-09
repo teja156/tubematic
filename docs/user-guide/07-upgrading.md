@@ -60,6 +60,23 @@ It asks no questions, so you can run it over SSH or from a script.
 5. Points your scheduled job at this directory.
 6. Copies this version's skills and commands to each installed agent.
 7. Prints the version, the state of each container and the scheduled job.
+8. Removes the previous version's images, once everything above has succeeded. See
+   [Old images](#old-images).
+
+### Old images
+
+The images `upgrade.py` removes are the Tubematic images that no Tubematic container uses. On a
+release install they are the older `tubematic-backend` and `tubematic-dashboard` tags. On a source
+install they are the untagged images that earlier builds left.
+
+- It removes them one at a time and does not force a removal. If Docker refuses an image because a
+  container still uses it, the upgrade warns and still succeeds.
+- It reports the space freed, and measures disk use again for the dashboard's
+  [disk figure](04-dashboard.md#the-disk-figure).
+- An upgrade that needs attention (a failed health check, or an agent left without its MCP
+  registration) keeps the old images, so going back costs nothing. The next successful upgrade
+  removes them.
+- Docker's build cache stays.
 
 ## When it stops
 
@@ -147,6 +164,9 @@ changes. Files rendered since then stay on disk, with no record pointing at them
 
 3. Go back to the older version's directory. On a release install, use the directory you kept, or
    download and extract that release again. On a source install, run `git checkout v<old>`.
+
+   A successful upgrade removed the older version's images. Step 4 pulls them again on a release
+   install and rebuilds them on a source install, which takes time and needs nothing from you.
 
 4. Start the older version from there:
 

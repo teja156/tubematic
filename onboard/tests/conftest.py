@@ -33,3 +33,11 @@ def _no_real_compose_overrides(tmp_path, monkeypatch):
     monkeypatch.setattr(gpu, "OVERRIDE_PATH", tmp_path / "compose.gpu.json")
     # Same for the remote-renderers override (TMDEV-190).
     monkeypatch.setattr(remote_renderers, "OVERRIDE_PATH", tmp_path / "compose.renderers.json")
+
+
+@pytest.fixture(autouse=True)
+def _no_real_disk_snapshot(monkeypatch):
+    """Onboarding and upgrade.py re-measure disk use (TMDEV-192): docker calls
+    plus a write into ~/.tubematic-data/data. Tests that care pass their own."""
+    from tubematic_core import disk_usage
+    monkeypatch.setattr(disk_usage, "refresh_snapshot", lambda *a, **kw: False)

@@ -24,10 +24,31 @@ The bar at the top of every page holds the page tabs. To their right it shows:
 
 | Item | Meaning |
 |---|---|
+| A disk figure, such as `◔ 14.2 GB` | How much disk space Tubematic takes up. Click it for a breakdown. See [The disk figure](#the-disk-figure) |
 | A version, such as `v2.0.0` | The version that is running. It disappears while the dashboard cannot reach the API |
 | A timezone | The timezone every time on the dashboard is shown in. See [Times](#times) |
 | `SYS ● NOMINAL` | Tubematic is reachable. It turns red and reads `ERROR` when the API stops answering. Hover over it for the reason |
 | **Sign out** | Ends your session |
+
+### The disk figure
+
+The breakdown has two parts.
+
+- Your data, measured when you open it: finished videos, voice previews, job files (each video's
+  voice audio, scene images and timeline), generated scenes, the database, mascot sheets, backups
+  and logs.
+- Docker and the install: the images this install runs, old images that no container uses, the
+  containers' own scratch space, and the install folder with its Python and Node packages. Your
+  machine measures these about once an hour, and right after an upgrade or the install wizard. The
+  popup says how long ago. Until the first measurement, the total counts your data only, and the
+  popup says so.
+
+Old images can share layers that no single image's size includes. With two or more of them, their
+size and the total show "≥". A source install also lists Docker's build cache. The cache stays out
+of the total, because anything else built on the machine shares it.
+
+[Upgrading](07-upgrading.md) removes the old images. The figure disappears while the API does not
+answer.
 
 ### The update banner
 

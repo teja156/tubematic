@@ -454,7 +454,7 @@ The data folder also holds `secrets/` and the two override files, `compose.gpu.j
 
 `docker volume prune` removes every volume no container uses, and these hold the database and the
 video library, so remove a volume by name. `docker image prune` without `-a` removes untagged
-images only.
+images only. `upgrade.py` removes old Tubematic images itself. See [Old images](#old-images).
 
 ### Backups
 
@@ -710,9 +710,29 @@ python3 scripts/collect_diagnostics.py  # a redacted report to attach to a bug r
 What the collector removes, and what it cannot, is in
 [Reporting a bug](../user-guide/08-troubleshooting.md#reporting-a-bug).
 
+### Old images
+
+Each upgrade leaves the previous version's images behind. A release install pulls new
+`ghcr.io/<owner>/tubematic-backend` and `tubematic-dashboard` tags beside the old ones. A source
+rebuild moves the `tubematic-renderer-image` and `tubematic-tubematic-dashboard` tags and leaves the
+old images untagged. `upgrade.py` removes them once an upgrade has succeeded
+(`upgrade.py::_finish_images`), and the dashboard's disk figure counts them until then. Both use
+one rule, `tubematic_core/disk_usage.py::old_images`:
+
+- A candidate is any image under those four repositories, whatever its tag, and any untagged image
+  labelled `com.docker.compose.project=tubematic`, which Compose puts on each image it builds. Any
+  owner matches, because a fork publishes under its own.
+- Every image that a `tubematic`-project container uses, running or stopped, is excluded.
+- With no Tubematic containers at all, no image is old. With the stack gone, the images in use
+  cannot be told apart from the rest, so the rule names none.
+
+The e2e stack (project `tubematic-test`) and the Kasm workspace image do not match. `upgrade.py`
+removes one image at a time, by tag (or by id for an untagged one), without forcing, so Docker
+refuses to remove an image that another container uses.
+
 ### Disk
 
-Rendered video and `node_modules` take the most space.
+Rendered video, old images and `node_modules` take the most space.
 [Troubleshooting](../user-guide/08-troubleshooting.md#the-disk-is-filling-up) says how to free
 it. Measure with `df -h /`: `docker system df` double-counts shared layers in its per-image
 sizes, and with the containerd snapshotter the image layers are outside `/var/lib/docker`.

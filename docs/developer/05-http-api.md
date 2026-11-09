@@ -42,6 +42,7 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `POST` | [`/videos/<video_id>/comments`](#post-videosvideo_idcomments) | Add a comment |
 | `DELETE` | [`/videos/<video_id>`](#delete-videosvideo_id) | Delete files, archive the row |
 | `GET` | [`/retention/backlog`](#get-retentionbacklog) | Size of unpublished leftovers |
+| `GET` | [`/storage`](#get-storage) | Disk space Tubematic uses |
 
 ### Project routes
 
@@ -540,6 +541,43 @@ archived, whatever its age and whether or not the setting is on. Read-only.
 `bytes` is the rendered mp4 plus everything under the job directory. A missing or unreadable file
 counts as 0. So does a job directory that is not a direct child of the jobs directory, because
 video ids are supplied by callers. See [Video retention](04-settings.md#video-retention).
+
+### `GET /storage`
+
+How much disk Tubematic uses, for the disk figure in the dashboard's top bar. Read-only.
+
+```json
+{"data": {"measured_at": "2026-11-09T10:00:00Z", "total_bytes": 4400000000,
+          "items": [{"key": "videos", "bytes": 3221225472}, {"key": "voice_previews", "bytes": 2097152},
+                    {"key": "jobs", "bytes": 1073741824}, {"key": "scenes", "bytes": 5242880},
+                    {"key": "database", "bytes": 41943040}, {"key": "mascots", "bytes": 0},
+                    {"key": "backups", "bytes": 209715200}, {"key": "logs", "bytes": 62914560}]},
+ "host": {"measured_at": "2026-11-09T09:40:12Z",
+          "images": {"current_bytes": 5000000000, "old_bytes": 4500000000, "old_count": 2},
+          "containers_bytes": 31457280, "build_cache_bytes": 2000000000, "install_bytes": 943718400},
+ "total_bytes": 14875176000}
+```
+
+| Field | Notes |
+|---|---|
+| `data` | The API's own mounts, counted the way `du` counts: allocated blocks, a hardlinked file once, symlinks not followed, anything unreadable as 0. Voice previews are left out of `videos`, and mascot sheets out of `database` |
+| `host` | The host's snapshot, `~/.tubematic-data/data/disk-usage.json`, read on each request. `null` until one is written, and when the file cannot be read. A figure inside it is `null` when Docker could not be read |
+| `host.images.old_bytes` | The sum of each old image's unique size, which is what removing that image alone frees. With two or more old images it is a floor |
+| `host.images.old_count` | How many old images there are |
+| `total_bytes` | `data.total_bytes` plus the host's images, container layers and install folder. An `images` of `null` adds nothing. The build cache is left out |
+
+- The walk behind `data` is cached for 60 seconds (`pipeline.py::STORAGE_CACHE_SECS`), so open tabs
+  that poll the route share one walk of the jobs tree.
+- No container has the Docker socket, so the API cannot measure images, the containers' writable
+  layers or the install folder. The poller writes the snapshot about hourly, and `upgrade.py` and
+  onboarding write it after they change images. See [The poller](13-the-poller.md#disk-usage).
+- `old_bytes` is a floor with two or more old images because a layer that only old images share
+  appears in none of their unique sizes, and Docker reports no per-layer size to add. `total_bytes`
+  is then a floor too, and the dashboard shows both with "≥".
+- The build cache stays out of the total because anything else built on the machine shares
+  BuildKit's cache.
+- Which images are old is decided by `tubematic_core/disk_usage.py::old_images`, the rule
+  `upgrade.py` deletes by. See [Old images](16-infrastructure.md#old-images).
 
 ## Projects
 

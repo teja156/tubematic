@@ -476,6 +476,10 @@ What a migration means for someone upgrading is in
 10. Records the steps it ran in this directory's `.onboard-state.json` (`_carry_state`,
     `UPGRADE_STEPS`), starting from the previous install's file when this directory has none.
 11. Prints the report (`stack.report`): version, schema, cron, containers.
+12. Removes the previous version's images when the report found no fault and every agent is
+    registered (`_finish_images`), then measures disk use again for the dashboard. A faulty
+    upgrade keeps the images. The rule for which images are old is in
+    [Infrastructure](16-infrastructure.md#old-images).
 
 The exit code is non-zero when the report finds a fault, or when an agent is left without a
 working MCP registration. Such an agent is refused on every tool call, so the pipeline would

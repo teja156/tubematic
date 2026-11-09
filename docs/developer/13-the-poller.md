@@ -70,6 +70,7 @@ setting or a newly installed agent applies on the next one.
 |---|---|---|---|
 | 1 | Adopt | `_Supervisor._adopt` | Before the first pass only: takes over sessions a dead poller left running |
 | 2 | Heartbeat | `_touch_heartbeat` | Touches `poll.heartbeat` |
+| 2a | Disk-usage snapshot | `_refresh_disk_snapshot` | When `~/.tubematic-data/data/disk-usage.json` is an hour old, starts a detached measurement. See [Disk usage](#disk-usage) |
 | 3 | Reap | `_Supervisor._reap` | Collects finished sessions, and starts the wait for a video whose scene-work claim may still be held |
 | 4 | Read state | `_Supervisor._pass` | `GET /pipeline/status` and `GET /agents`. If either fails, nothing starts this pass |
 | 5 | Tend adopted sessions | `_Supervisor._tend_adopted` | Stops an adopted session past its deadline, and scores one that has ended |
@@ -97,9 +98,28 @@ With nothing running and nothing started in the pass just finished, the poller:
 
 ### `--dry-run`
 
-`--dry-run` runs one pass, logs what each lane would start, and starts nothing. It skips adoption
-and the heartbeat, and records no research run and no build attempt. It still needs the API token
+`--dry-run` runs one pass, logs what each lane would start, and starts nothing. It skips adoption,
+the heartbeat and the disk-usage snapshot, and records no research run and no build attempt. It still needs the API token
 and takes the lock, so beside a live poller it exits at once like any other tick.
+
+## Disk usage
+
+The dashboard's disk figure ([Dashboard internals](15-dashboard.md#disk-usage)) needs sizes that no
+container can measure, because no container has the Docker socket. The poller runs on the host on a
+schedule, so it starts the measurement: `python3 -m tubematic_core.disk_usage`. That command runs
+`docker ps`, `docker container inspect --size`, `docker image ls` and `docker system df` (all
+read-only), walks the install folder, and writes the result atomically to
+`~/.tubematic-data/data/disk-usage.json` for the API. It touches Docker and files only, so the
+poller still has no database access.
+
+- `_refresh_disk_snapshot` runs before the poller reads state, so a paused pipeline, an unreachable
+  API or an install with no agent still gets a fresh figure.
+- It acts when the file is an hour old. `upgrade.py` and onboarding measure again after they change
+  images.
+- The measurement runs in a detached process (`start_new_session`), because Docker can take minutes
+  to size containers on a slow storage driver. A file lock lets one measurement run at a time.
+- A poller starts at most one measurement an hour. The measurement's errors go to
+  `~/.tubematic-agent/logs/disk-usage.log`, and a failure to start one is logged once as a warning.
 
 ## Lock and heartbeat
 

@@ -52,6 +52,7 @@ sys.path.insert(0, str(SCRIPTS_DIR.parent))
 from config import (  # noqa: E402
     DATA_ROOT, RENDERER_URL, POLL_LOG_DIR, LOCAL_TZ_LABEL,
 )
+from tubematic_core import disk_usage  # noqa: E402
 from tubematic_core import logging as tlog  # noqa: E402
 from agent_adapters import ADAPTERS, clip  # noqa: E402
 
@@ -1395,6 +1396,44 @@ def _touch_heartbeat() -> None:
         log.warning("Could not touch %s: %s", HEARTBEAT, e)
 
 
+# The dashboard's disk-usage figure (TMDEV-192). No container can see Docker
+# or the install folder, so the host measures them and leaves a snapshot in the
+# data folder for the API. Hourly is plenty: images only change when someone
+# upgrades, re-onboards or rebuilds, and upgrade.py and onboarding re-measure
+# right after they do. The measurement runs in a detached process: on a slow
+# storage driver Docker takes minutes to size containers, and a tick must not
+# wait for that.
+DISK_SNAPSHOT_MAX_AGE_SECS = 3600
+DISK_SNAPSHOT_LOG = POLL_LOG_DIR / "disk-usage.log"
+_disk_snapshot_retry_at = 0.0
+
+
+def _refresh_disk_snapshot() -> None:
+    """Start a measurement when the snapshot is an hour old, at most once an
+    hour per supervisor. Never raises and never waits: a failure here must
+    not cost a tick. The measurement's own errors go to disk-usage.log."""
+    global _disk_snapshot_retry_at
+    if time.monotonic() < _disk_snapshot_retry_at:
+        return
+    try:
+        age = disk_usage.snapshot_age(DATA_ROOT)
+        if age is not None and 0 <= age < DISK_SNAPSHOT_MAX_AGE_SECS:
+            return
+        _disk_snapshot_retry_at = time.monotonic() + DISK_SNAPSHOT_MAX_AGE_SECS
+        DISK_SNAPSHOT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(DISK_SNAPSHOT_LOG, "a") as err:
+            subprocess.Popen(
+                [sys.executable, "-m", "tubematic_core.disk_usage",
+                 "--data-root", str(DATA_ROOT), "--install-dir", str(SCRIPTS_DIR.parent),
+                 "--max-age", str(DISK_SNAPSHOT_MAX_AGE_SECS)],
+                cwd=SCRIPTS_DIR.parent, stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=err, start_new_session=True)
+        log.debug("Disk-usage measurement started")
+    except Exception as e:  # noqa: BLE001 - bookkeeping, never fatal
+        log.warning("Could not start the disk-usage measurement: %s. The dashboard's disk "
+                    "figure leaves out images and the install folder until it can.", e)
+
+
 def _check_heartbeat() -> None:
     """Called by a tick that found the lock held. Logs; never kills."""
     try:
@@ -1490,6 +1529,9 @@ class _Supervisor:
             while True:
                 if not self.dry_run:
                     _touch_heartbeat()
+                    # Before _pass, which returns early when paused, when the
+                    # API is down or when no agent exists.
+                    _refresh_disk_snapshot()
                 self._reap()
                 self.dispatched = False
                 code = self._pass()

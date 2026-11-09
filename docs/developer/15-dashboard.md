@@ -37,6 +37,7 @@ under an open page.
 | Settings page's pipeline status, top-bar health indicator, top-bar version badge | 30 s |
 | Renderers panel, and the renderer list behind the **Nothing can render** banner | 20 s. The panel polls every 3 s while a GPU test it asked for is outstanding |
 | Auto Pilot tab's in-progress count | 20 s |
+| Top-bar disk figure (`/storage`) | 5 min, and each time its popup opens. The API keeps its own walk for 60 s |
 | Update banner (`/api/update-check`) | 10 min. GitHub is asked at most every 2 hours |
 | Settings values, timezone, voice roster, script-profile list, agent list | Once on mount |
 
@@ -546,7 +547,7 @@ Components that a section above covers are left out of this table.
 | `Toast.tsx` | `useToasts()` and a stack renderer. Success toasts dismiss after 3 s. Error toasts stay |
 | `SummaryStrip.tsx` | Six stat tiles: Topics Awaiting, Scripts Ready, Videos Ready, In Pipeline, Published, Failed |
 | `StatusBadge.tsx`, `SectionLabel.tsx` | The coloured dot and label for each of the 16 statuses, and the section heading rule |
-| `TopBar.tsx` | Sticky navigation, version badge, timezone badge, health indicator and **Sign out**. Renders nothing on `/login` |
+| `TopBar.tsx` | Sticky navigation, the disk figure (`DiskUsage.tsx`), version badge, timezone badge, health indicator and **Sign out**. Renders nothing on `/login` |
 | `components/ui/*` | shadcn/ui primitives: `badge`, `button`, `dialog`, `tabs`, `textarea` |
 
 `TopBar.tsx` keeps its content on one row down to a 1640px viewport, the bar's own maximum width.
@@ -784,6 +785,31 @@ The route asks `GET https://api.github.com/repos/<repo>/releases?per_page=100`.
 
 ---
 
+## Disk usage
+
+The top bar's disk figure (`components/DiskUsage.tsx`) shows how much disk Tubematic takes up and
+opens a breakdown on click, in a `@base-ui/react` Popover. What a user reads from it is in
+[the user guide](../user-guide/04-dashboard.md#the-disk-figure). It reads
+[`GET /storage`](05-http-api.md#get-storage) every 5 minutes and when the popup opens.
+
+The figure has two halves because no container can see Docker. The API measures the data folders it
+mounts. Images, the containers' writable layers and the install folder exist on the host, so the
+poller (hourly), `upgrade.py` and onboarding measure them into
+`~/.tubematic-data/data/disk-usage.json`, which the API passes on as `host`. A container with the
+Docker socket would have root on the machine, which is too high a price for a disk figure.
+
+- Until a snapshot exists, the figure is the data alone, and the popup says the Docker half is not
+  measured yet.
+- A host figure Docker could not give reads "unknown".
+- With two or more old images, their size and the total show "≥". The reason is on
+  [`GET /storage`](05-http-api.md#get-storage).
+- The component renders nothing when `/storage` answers with anything other than the expected
+  shape: a `404` from an older API during an upgrade, a network error, or any other body.
+- It sits first in the right-hand cluster, so a test that sequences `fetch` answers for another
+  badge answers `/storage` separately (`tests/unit/topbar-version.test.tsx::besideDiskUsage`).
+
+---
+
 ## Time
 
 Every timestamp is shown in the host's timezone, whatever the browser's zone is (what a user sees:
@@ -824,6 +850,7 @@ suite can test them without React.
 | `renderers.ts` | The renderer status chip, the GPU verdict, the device description and the **Nothing can render** condition |
 | `costs.ts` | The cost disclaimer, and money, credit, service, operation and stage labels |
 | `datetime.ts` | Timestamp formatting with an explicit timezone |
+| `format.ts` | `formatBytes`, in binary units so a figure matches `du -h` on the host |
 | `platforms.ts` | Platform display names and the account label |
 | `utils.ts` | `cn`, `codePoints`, the stream URLs, and `isScored` and `scoreLabel` (a score of 0 means unscored) |
 | `session.ts`, `sessionCookie.ts`, `requestGuard.ts` | The session, the cookie name and lifetime with the post-login redirect rule, and the same-origin JSON check. `sessionCookie.ts` is separate because `middleware.ts` imports it and cannot read the secret files |

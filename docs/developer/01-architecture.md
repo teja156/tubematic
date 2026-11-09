@@ -140,6 +140,8 @@ Pipeline data lives at a fixed absolute path outside the checkout:
 ```
 ~/.tubematic-data/
 ├── data/tubematic.db              # state machine, settings, credentials
+├── data/disk-usage.json           # the host's measurement of images and the install folder,
+                                   # for the dashboard's disk figure
 ├── jobs/<video_id>/               # audio.mp3, timeline.json, scene-config.json, images/
 ├── scenes/generated/<video_id>/   # agent-authored scene TSX
 ├── output_videos/<project_id>/    # rendered mp4s, and voice-previews/
@@ -180,7 +182,7 @@ Editing the repository changes nothing in a running container until you rebuild 
 ```
 tubematic/
 ├── onboard.py, onboard/       # the installer, the canonical setup path
-├── upgrade.py                 # the upgrade: gate, images, stop, start, cron, agents
+├── upgrade.py                 # the upgrade: gate, images, stop, start, cron, agents, old images
 ├── uninstall.py
 ├── mcp/                       # MCP server and the text-audit decision layer
 ├── renderer/
@@ -223,6 +225,7 @@ would be dangerous. Everything else that two processes share stays a copy.
 | `db.py`, `migrations/` | The schema and `migrate()`, which every process that opens the database calls | Two definitions of the schema ([Database](03-database.md#migrations)) |
 | `version.py` | The version string, read from `VERSION` | Release tooling and services that report different versions |
 | `auth.py` | The service tokens, the gateway's TLS pair and the admin password | Processes that look for a secret in different files |
+| `disk_usage.py` | The host's disk measurement, and which Docker images count as old | `upgrade.py` deleting an image in use, or the dashboard promising a removal the upgrade does not make ([Old images](16-infrastructure.md#old-images)) |
 | `usage.py`, `prices.py` | The spend ledger and the model prices | One paid call priced three ways by three containers |
 | `voice_models.py` | What each ElevenLabs model can speak | The dashboard approving a voice that `generate_voice` then refuses ([The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice)) |
 | `youtube.py` | Which YouTube URLs mining accepts | A stored URL list that the mining tool refuses to send to Gemini |

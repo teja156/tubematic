@@ -297,7 +297,12 @@ Do this for each installed agent, then restart any open session.
 
 ### The disk is filling up
 
-Rendered videos take most of the space. Measure with `df -h ~`.
+Click the disk figure in the dashboard's top bar for a breakdown of what Tubematic holds
+([The disk figure](04-dashboard.md#the-disk-figure)). Rendered videos and old Docker images usually
+take the most space. For the machine as a whole, measure with `df -h ~`.
+
+Each successful upgrade removes the previous version's images. An upgrade that needs attention
+keeps them until the next successful one.
 
 Tubematic deletes a published video's files 7 days after it is published. It keeps failed and
 rejected videos unless you set **Delete failed and rejected videos after** on

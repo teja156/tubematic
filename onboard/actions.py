@@ -1473,6 +1473,20 @@ def apply_dashboard(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
         rep.info("[dry-run] would confirm the container is running")
         return
     rep.ok("tubematic-dashboard running at http://localhost:3000")
+    _refresh_disk_snapshot(rep)
+
+
+def _refresh_disk_snapshot(rep: Reporter) -> None:
+    """Measure the images just pulled or built for the dashboard's disk
+    figure (TMDEV-192), rather than leave it to the poller's next hourly
+    measurement. Never fails the step."""
+    from tubematic_core import disk_usage
+    try:
+        with rep.spinner("Measuring disk use for the dashboard…"):
+            disk_usage.refresh_snapshot(DATA_ROOT, REPO_ROOT)
+    except OSError as e:
+        rep.warn(f"Could not record disk usage for the dashboard: {e}. "
+                 "The poller retries within the hour.")
 
 
 # ── Dispatch ─────────────────────────────────────────────────────────────────

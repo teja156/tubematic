@@ -385,7 +385,8 @@ deletes your database, your videos' working files and your rendered videos, and 
 of those defaults to no. The [Command Reference](15-command-reference.md#uninstallpy) lists every
 step and what the uninstaller leaves behind.
 
-To finish removing Tubematic after the uninstaller:
+While Tubematic is installed, each successful upgrade removes the previous version's images. To
+finish removing Tubematic after the uninstaller:
 
 ```bash
 docker images | grep tubematic      # then: docker rmi <each image>
