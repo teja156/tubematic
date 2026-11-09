@@ -58,12 +58,12 @@ STEP_DEFS = [
     ),
     Step(
         "directories", "Directories",
-        "Creates mounted/jobs, mounted/data, mounted/output_videos, mounted/scenes/generated. "
-        "Must precede container start.",
+        "Creates the data directories under ~/.tubematic-data: jobs, data, output_videos, "
+        "scenes/generated, logs and backups. Must precede container start.",
     ),
     Step(
         "database", "Database",
-        "Initialises mounted/data/tubematic.db with the canonical schema. Must precede container "
+        "Initialises ~/.tubematic-data/data/tubematic.db with the canonical schema. Must precede container "
         "start for the same root-ownership reason as directories.",
     ),
     Step(

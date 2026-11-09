@@ -172,7 +172,7 @@ def show_status_summary() -> None:
 
     if not videos:
         print(f"  {DIM}No videos in the database yet.{RESET}")
-        print(f"  {DIM}Run install.py to set up, then start Phase 1 work.{RESET}")
+        print(f"  {DIM}Create one on the dashboard's New Video page.{RESET}")
         return
 
     counts: dict[str, int] = {}

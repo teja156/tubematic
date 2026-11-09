@@ -221,7 +221,7 @@ def _install_config() -> dict[str, str]:
 def stop_containers() -> None:
     header(
         1, "Stop & remove containers",
-        "Stops the Tubematic containers (renderer + dashboard) and removes them. "
+        "Stops the five Tubematic containers and removes them. "
         "This does NOT delete the Docker images — a future 'docker compose up' "
         "will reuse the cached image without rebuilding.",
     )
@@ -271,9 +271,9 @@ def _compose_volume_names() -> list[str]:
 def remove_docker_volumes() -> None:
     header(
         2, "Remove Docker named volumes",
-        "Tubematic uses named Docker volumes as bind mounts to the mounted/ directory. "
+        "Tubematic uses named Docker volumes as bind mounts to ~/.tubematic-data. "
         "Removing them forces Docker to re-create them on next 'docker compose up'. "
-        "The actual data (database, jobs, output videos) lives in mounted/ on your "
+        "The actual data (database, jobs, output videos) lives in ~/.tubematic-data on your "
         "host — removing volumes here does NOT delete that data.",
     )
 
@@ -289,7 +289,7 @@ def remove_docker_volumes() -> None:
         return
 
     info(f"Found volumes: {', '.join(existing)}")
-    if confirm("Remove these Docker volumes? (host data in mounted/ is unaffected)", default=True):
+    if confirm("Remove these Docker volumes? (host data in ~/.tubematic-data is unaffected)", default=True):
         for v in existing:
             run_silent(["docker", "volume", "rm", v])
         ok(f"Removed {len(existing)} volume(s)")
@@ -749,8 +749,7 @@ def _remove_project_level_integration(env: dict) -> None:
 def remove_cron() -> None:
     header(
         7, "Cron jobs",
-        "Removes the two Tubematic cron entries added by onboard.py: "
-        "the pipeline poll and the daily research run. "
+        "Removes the Tubematic cron entry added by onboard.py. "
         "Other cron entries on your system are untouched.",
     )
     result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
@@ -790,7 +789,7 @@ def remove_env() -> None:
         "present, also pre-dates this version and is no longer read at runtime — but it "
         "does still contain your API keys in plaintext. Neither is committed; both exist "
         "only on this machine.\n"
-        "Your keys now live in the pipeline database, which step 6 covers.",
+        "Your keys now live in the pipeline database, which step 3 covers.",
     )
 
     override = REPO_ROOT / "docker-compose.override.yml"
@@ -911,7 +910,7 @@ def main() -> None:
         print("  Running in --force mode: all steps auto-confirmed.")
     else:
         print("  Each step will ask for confirmation before deleting anything.")
-        print("  All prompts default to NO to prevent accidental data loss.")
+        print("  Prompts that delete your data default to NO.")
     print("═" * 60)
 
     if not FORCE:

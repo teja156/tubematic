@@ -261,7 +261,7 @@ def print_help() -> None:
                                          "picks release when renderer/Dockerfile is absent (a "
                                          "release tarball ships no source trees) and dev "
                                          "otherwise. Release installs pull container images "
-                                         "instead of building them and don't require Node/npx."),
+                                         "instead of building them."),
         ("--allow-skipping", "Let required settings (the ElevenLabs and OpenAI keys) be left "
                              "blank at the prompt. Without it the wizard re-asks "
                              "until they are supplied, since the pipeline cannot run without "

@@ -610,6 +610,6 @@ def check_installation() -> dict:
 
     r3 = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
     agent_items.append(CheckItem("Cron entries written", r3.returncode == 0 and "poll.py" in r3.stdout,
-                                  hint="see docs/user-guide/02-installing.md -> Manual cron setup"))
+                                  hint="see docs/user-guide/15-command-reference.md -> Manual cron setup"))
 
     return {"SERVICES": services, "AGENT": agent_items}
