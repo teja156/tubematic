@@ -169,12 +169,35 @@ def video_scene_is_cartoon3d(video_id: str) -> bool:
         return False
 
 
-def fail_without_gpu(video_id: str, cartoon: bool, render_error: str | None = None) -> None:
+# The claim columns a render result lets go of, whichever way it ended.
+_RELEASE = "renderer_id = '', render_lease_until = '', render_claim_id = ''"
+
+
+def _claim_guard(claim) -> tuple[str, list]:
+    """The WHERE clause that pins a result to the claim it was made under.
+
+    `claim` is (renderer_id, claim_id) from the render gateway, or None for a
+    caller with no claim to check. A result is authorized when it arrives, but
+    the lease can run out, the worker re-queue the video and a renderer (even
+    the same one) claim it again before the result is routed; the claim id is
+    new on every claim, so only the claim the result belongs to matches, and a
+    stale result changes nothing at all."""
+    if claim is None:
+        return "", []
+    renderer_id, claim_id = claim
+    return " AND renderer_id = ? AND render_claim_id = ?", [renderer_id, claim_id]
+
+
+def fail_without_gpu(video_id: str, cartoon: bool, render_error: str | None = None, claim=None) -> bool:
     """Move a GPU-only video (Cartoon 3D, or one with a mascot) straight to
     FAILED because no renderer's GPU can take it, naming every renderer and
     its GPU state. After a render on the GPU failed and the renderer's re-test
     found the GPU gone (`render_error` is then that render's error, maybe "");
-    `render_error` None says nothing was rendered."""
+    `render_error` None says nothing was rendered.
+
+    One transaction: the status change, the released claim and the comment
+    happen together, only while the video is still RENDERING (under `claim`
+    when given — see _claim_guard). Returns whether the video was moved."""
     try:
         with db.conn(DB_PATH) as con:
             reason = renderers.gpu_unavailable_reason(con)
@@ -182,17 +205,26 @@ def fail_without_gpu(video_id: str, cartoon: bool, render_error: str | None = No
         reason = f"The renderers' GPU state could not be read: {exc}."
     lead = ("Not rendered, moved to FAILED" if render_error is None else "Render failed, moved to FAILED")
     render_error = (render_error or "").strip()
-    db.add_comment(DB_PATH, video_id, "agent", _truncate_comment(
+    comment = _truncate_comment(
         f"{lead}: this video {'is Cartoon 3D' if cartoon else 'has a mascot'}, "
         f"which renders on the GPU only. {reason}"
         " Configure or fix the GPU (python onboard.py --step gpu; Test GPU on the dashboard "
         "Settings page), then create the video again." +
-        (f" The render's error: {render_error}" if render_error else "")))
-    db.set_status(DB_PATH, video_id, "FAILED", only_if="RENDERING")
+        (f" The render's error: {render_error}" if render_error else ""))
+    guard, params = _claim_guard(claim)
+    now = db._now()
+    with db.conn(DB_PATH) as con:
+        cur = con.execute(f"UPDATE videos SET status = 'FAILED', {_RELEASE}, updated_at = ? "
+                          f"WHERE id = ? AND status = 'RENDERING'{guard}", [now, video_id, *params])
+        if cur.rowcount == 0:
+            return False
+        con.execute("INSERT INTO comments (video_id, author, content, created_at) VALUES (?, 'agent', ?, ?)",
+                    (video_id, comment, now))
+    return True
 
 
 def after_render_failure(video_id: str, error_msg: str, retry_status: str, on_gpu: bool,
-                         needs_gpu: bool, cartoon: bool, gpu_ok) -> None:
+                         needs_gpu: bool, cartoon: bool, gpu_ok, claim=None) -> bool:
     """Route a render that failed or hung.
 
     The renderer re-tests a GPU a render ran on before it reports, and sends
@@ -200,44 +232,55 @@ def after_render_failure(video_id: str, error_msg: str, retry_status: str, on_gp
     straight to FAILED with the renderers' GPU state, spending no retry and no
     agent session, since neither a requeue nor the agent can bring a GPU back.
     Anything else — a GPU that still works, an unanswered re-test (None), a
-    render on the CPU — is the video's own failure and takes the usual path."""
+    render on the CPU — is the video's own failure and takes the usual path.
+    `claim` pins the routing to the claim the result belongs to (_claim_guard).
+    Returns whether the video was moved."""
     if needs_gpu and on_gpu and gpu_ok is False:
-        fail_without_gpu(video_id, cartoon, error_msg or "")
-        return
-    handle_render_failure(video_id, error_msg, retry_status=retry_status)
+        return fail_without_gpu(video_id, cartoon, error_msg or "", claim=claim)
+    return handle_render_failure(video_id, error_msg, retry_status=retry_status, claim=claim)
 
 
-def handle_render_failure(video_id: str, error_msg: str, retry_status: str = "REVISION_REQUESTED") -> None:
+def handle_render_failure(video_id: str, error_msg: str, retry_status: str = "REVISION_REQUESTED",
+                          claim=None) -> bool:
     """Increment render_fail_count; escalate to FAILED past the cap, else
     move to retry_status (REVISION_REQUESTED for a real render crash — the
     agent likely needs to fix something; RENDER_QUEUED for a stall, a timeout
-    or a renderer error)."""
+    or a renderer error).
+
+    The count, the status change, the released claim and the comment are one
+    transaction that does nothing unless the video is still RENDERING (under
+    `claim` when given — see _claim_guard). Returns whether it was moved."""
     error_msg = _truncate_comment(error_msg)
+    # capped by max_render_retries so a persistently crashing render doesn't
+    # cycle forever with no backstop. Since VQA-7 that key caps render
+    # retries ONLY; the AI review loop has its own (ai_review_max_loops).
+    max_retries = max_render_retries()
+    guard, params = _claim_guard(claim)
+    now = db._now()
     try:
-        # Atomically increment render_fail_count — capped by max_render_retries
-        # so a persistently crashing render doesn't cycle forever with no
-        # backstop. Since VQA-7 that key caps render retries ONLY; the AI
-        # review loop has its own (ai_review_max_loops).
         with db.conn(DB_PATH) as con:
-            con.execute(
-                "UPDATE videos SET render_fail_count = render_fail_count + 1, updated_at = ? WHERE id = ?",
-                (db._now(), video_id),
-            )
-            row = con.execute("SELECT render_fail_count FROM videos WHERE id = ?", (video_id,)).fetchone()
-            fail_count = row["render_fail_count"] if row else 1
-
-        max_retries = max_render_retries()
-
-        if fail_count > max_retries:
-            db.add_comment(DB_PATH, video_id, "agent",
-                           f"Render failed {fail_count} times (limit {max_retries}) — "
-                           f"giving up. Last error: {error_msg}")
-            db.set_status(DB_PATH, video_id, "FAILED", only_if="RENDERING")
-        else:
-            db.add_comment(DB_PATH, video_id, "agent", f"Render failed: {error_msg}")
-            db.set_status(DB_PATH, video_id, retry_status, only_if="RENDERING")
+            # The guarded UPDATE takes the write lock, so nothing can move the
+            # row between it and the status change below.
+            cur = con.execute(
+                "UPDATE videos SET render_fail_count = render_fail_count + 1, updated_at = ? "
+                f"WHERE id = ? AND status = 'RENDERING'{guard}", [now, video_id, *params])
+            if cur.rowcount == 0:
+                return False
+            fail_count = con.execute("SELECT render_fail_count FROM videos WHERE id = ?",
+                                     (video_id,)).fetchone()["render_fail_count"]
+            if fail_count > max_retries:
+                status, comment = "FAILED", (f"Render failed {fail_count} times (limit {max_retries}) — "
+                                             f"giving up. Last error: {error_msg}")
+            else:
+                status, comment = retry_status, f"Render failed: {error_msg}"
+            con.execute(f"UPDATE videos SET status = ?, {_RELEASE}, updated_at = ? WHERE id = ?",
+                        (status, now, video_id))
+            con.execute("INSERT INTO comments (video_id, author, content, created_at) VALUES (?, 'agent', ?, ?)",
+                        (video_id, comment, now))
+        return True
     except Exception as exc:
         log.error(f"[{video_id}] failed to update DB after render failure: {exc}", extra={"video_id": video_id})
+        return False
 
 
 def requeue_interrupted(video_id: str, reason_comment: str, renderer_id: str | None = None,
@@ -272,7 +315,8 @@ def requeue_interrupted(video_id: str, reason_comment: str, renderer_id: str | N
     with db.conn(DB_PATH) as con:
         cur = con.execute(
             "UPDATE videos SET render_fail_count = render_fail_count + 1, renderer_id = '', "
-            "render_lease_until = '', render_started_at = '', render_uploaded_at = '', updated_at = ? "
+            "render_lease_until = '', render_claim_id = '', render_started_at = '', render_uploaded_at = '', "
+            "updated_at = ? "
             f"WHERE {where}", [now, *params])
         if cur.rowcount == 0:
             return False

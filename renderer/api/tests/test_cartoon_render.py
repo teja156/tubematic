@@ -11,12 +11,15 @@ re-encoding and muxes the soundtrack on: the synthesised mix when it is there
 and at least as new as the voice, else the voice. Pins the segment plan, the
 audio choice, that a stalled segment is tried again fresh and reported as
 "hung" (requeued by the caller), that a failed segment is "failed", and the
-ffmpeg commands.
+ffmpeg commands — run like the segments, as the job's own process in a
+process group of its own, so a stop from the gateway or the timeout kills them.
 """
 import json
 import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -24,6 +27,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import render_agent  # noqa: E402
+
+_REAL_POPEN = subprocess.Popen     # before any fixture stubs it
+_REAL_KILL = render_agent._kill_group_and_reap
 
 
 def test_the_segment_plan_tiles_the_video_and_folds_a_short_tail():
@@ -57,7 +63,8 @@ def test_the_mix_is_muxed_only_when_it_is_at_least_as_new_as_the_voice(tmp_path)
 @pytest.fixture
 def stubs(tmp_path, monkeypatch):
     """Popen renders a segment by writing its output file (or hangs / fails
-    per the plan), subprocess.run stands in for ffmpeg; both are logged."""
+    per the plan), or stands in for ffmpeg (its output written when it is
+    communicated with, or a timeout per the plan); all are logged."""
     (tmp_path / "jobs" / "vid-1").mkdir(parents=True)
     voice = tmp_path / "jobs" / "vid-1" / "audio.mp3"
     voice.write_bytes(b"v")
@@ -71,8 +78,8 @@ def stubs(tmp_path, monkeypatch):
     record = tmp_path / "jobs" / "vid-1" / "cartoon" / "source.json"
     record.parent.mkdir(parents=True)
     record.write_text(json.dumps({"fingerprint": tjobs.source_fingerprint(generated / "vid-1"), "at": "now"}))
-    calls = {"popen": [], "run": []}
-    plan = {"fail_once": set(), "hang_always": set()}
+    calls = {"popen": [], "run": [], "ffmpeg_kw": [], "timeouts": []}
+    plan = {"fail_once": set(), "hang_always": set(), "ffmpeg_hangs": False}
 
     class FakeProc:
         def __init__(self, argv):
@@ -97,17 +104,32 @@ def stubs(tmp_path, monkeypatch):
         def poll(self):
             return self.returncode
 
+    class FakeFfmpeg:
+        def __init__(self, argv):
+            self.args = argv
+            self.pid = 4343
+            self.returncode = None
+
+        def communicate(self, timeout=None):
+            calls["timeouts"].append(timeout)
+            if plan["ffmpeg_hangs"]:
+                raise subprocess.TimeoutExpired(self.args, timeout)
+            Path(self.args[-1]).write_bytes(b"out")
+            self.returncode = 0
+            return "", ""
+
+        def poll(self):
+            return self.returncode
+
     def popen(argv, **kw):
+        if argv[0] == "ffmpeg":
+            calls["run"].append(argv)
+            calls["ffmpeg_kw"].append(kw)
+            return FakeFfmpeg(argv)
         calls["popen"].append(argv)
         return FakeProc(argv)
 
-    def run(argv, **kw):
-        calls["run"].append(argv)
-        Path(argv[-1]).write_bytes(b"out")
-        return subprocess.CompletedProcess(argv, 0, "", "")
-
     monkeypatch.setattr(subprocess, "Popen", popen)
-    monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(render_agent, "_kill_group_and_reap", lambda proc: calls.setdefault("killed", []).append(proc.args))
     # a stall is detected at once: the fake clock jumps past stall_secs on every look
     ticks = iter(range(0, 10_000, 100))
@@ -252,13 +274,7 @@ def test_ffmpeg_spends_what_is_left_of_the_same_deadline(stubs, monkeypatch):
     render_timeout_secs), so the whole render, ffmpeg included, stays under
     the one ceiling; a deadline already spent is a hang, not a mux."""
     calls, _, voice, out = stubs
-    timeouts = []
-    real_run = subprocess.run
-
-    def run(argv, **kw):
-        timeouts.append(kw.get("timeout"))
-        return real_run(argv, **kw)
-    monkeypatch.setattr(subprocess, "run", run)
+    timeouts = calls["timeouts"]
     # the fake clock advances 100 per look: of the 1000 s, 400 are left at the concat and 300 at the mux
     outcome, detail = render_agent._render_cartoon("vid-1", voice.parent, "{}", str(out), [], {}, 1000, 60, 100, voice)
     assert outcome == "ok" and timeouts == [400, 300]
@@ -268,3 +284,79 @@ def test_ffmpeg_spends_what_is_left_of_the_same_deadline(stubs, monkeypatch):
     timeouts.clear()
     outcome, detail = render_agent._render_cartoon("vid-1", voice.parent, "{}", str(out), [], {}, 450, 60, 100, voice)
     assert outcome == "hung" and detail == "joining the segments: the render ran past 450s in all" and not timeouts
+
+
+# ── the ffmpeg steps are job processes ───────────────────────────────────────
+
+def test_ffmpeg_runs_as_the_jobs_own_process_in_a_group_of_its_own(stubs, monkeypatch):
+    """Registered on the job like a segment, so a stop from the gateway finds
+    it, and in its own process group, so killing it reaps the whole step."""
+    calls, _, voice, out = stubs
+    monkeypatch.setattr(render_agent, "_st", render_agent._AgentState())
+    job = render_agent._st.job = render_agent._Job("vid-1", "c-1")
+    outcome, _ = render_agent._render_cartoon("vid-1", voice.parent, "{}", str(out), [], {}, 6000, 60, 100, voice)
+    assert outcome == "ok" and len(calls["ffmpeg_kw"]) == 2
+    assert all(kw["start_new_session"] is True and kw["stdout"] == subprocess.PIPE for kw in calls["ffmpeg_kw"])
+    assert job.proc.args == calls["run"][-1]           # the mux was the job's live process
+
+
+def test_a_stopped_job_never_starts_ffmpeg(stubs, monkeypatch):
+    calls, _, voice, out = stubs
+    monkeypatch.setattr(render_agent, "_st", render_agent._AgentState())
+    job = render_agent._st.job = render_agent._Job("vid-1", "c-1")
+    stub_popen = subprocess.Popen
+
+    def stop_while_the_segment_renders(argv, **kw):
+        job.stopped = True           # the stop lands mid-segment: _spawn then refuses the join
+        return stub_popen(argv, **kw)
+    monkeypatch.setattr(subprocess, "Popen", stop_while_the_segment_renders)
+    with pytest.raises(render_agent._Stopped):
+        render_agent._render_cartoon("vid-1", voice.parent, "{}", str(out), [], {}, 6000, 60, 100, voice)
+    assert not calls["run"]
+
+
+def test_an_ffmpeg_step_past_its_timeout_is_killed_and_reaped(stubs):
+    calls, plan, voice, out = stubs
+    plan["ffmpeg_hangs"] = True
+    outcome, detail = render_agent._render_cartoon("vid-1", voice.parent, "{}", str(out), [], {}, 6000, 60, 100, voice)
+    assert outcome == "failed" and detail.startswith("ffmpeg did not finish")
+    assert calls["killed"] == [calls["run"][0]]        # the join's group, killed and reaped
+    assert not out.exists() and not (out.parent / ".vid-1.segments").exists()
+
+
+def test_a_stop_during_a_blocked_ffmpeg_kills_it_promptly(stubs, monkeypatch, tmp_path):
+    """A real (fake) ffmpeg that would block for a minute: a stop from the
+    heartbeat thread kills its process group at once and the render returns,
+    instead of the step running out its 900 s timeout."""
+    calls, _, voice, out = stubs
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "ffmpeg").write_text("#!/bin/sh\nexec sleep 60\n")
+    (bin_dir / "ffmpeg").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}")
+    monkeypatch.setattr(render_agent, "_kill_group_and_reap", _REAL_KILL)
+    stub_popen = subprocess.Popen
+    started = {}
+
+    def popen(argv, **kw):
+        if argv[0] == "ffmpeg":
+            started["proc"] = _REAL_POPEN(argv, **kw)
+            return started["proc"]
+        return stub_popen(argv, **kw)
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    monkeypatch.setattr(render_agent, "_st", render_agent._AgentState())
+    job = render_agent._st.job = render_agent._Job("vid-1", "c-1")
+    result = {}
+    t = threading.Thread(target=lambda: result.update(out=render_agent._render_cartoon(
+        "vid-1", voice.parent, "{}", str(out), [], {}, 6000, 60, 100, voice)), daemon=True)
+    t.start()
+    deadline = time.monotonic() + 10
+    while "proc" not in started and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert "proc" in started and job.proc is started["proc"]
+    t0 = time.monotonic()
+    render_agent._stop_job(job)
+    t.join(10)
+    assert not t.is_alive() and time.monotonic() - t0 < 10
+    assert started["proc"].returncode is not None      # killed, not left to run out its minute
+    assert result["out"][0] == "failed" and job.stopped

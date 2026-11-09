@@ -13,13 +13,17 @@ HTTPS through the render gateway (render_gateway.py) and nothing else:
      heartbeat, which says `started` so the gateway re-queues whatever this
      renderer held before it restarted;
   3. a heartbeat thread reports every HEARTBEAT_SECS what it is doing (which
-     keeps the lease on the video it renders alive), carries any new probe,
-     and applies the reply: stop a render the gateway no longer wants, run a
-     probe the dashboard asked for, save a rotated credential;
+     keeps the lease on the claim it renders alive), carries any new probe,
+     and applies the reply: stop a render the gateway no longer wants (the
+     stop names a claim, and is applied only to the job the heartbeat
+     reported, never to a newer claim of the same video started since), run
+     a probe the dashboard asked for, save a rotated credential;
   4. the loop claims a video, downloads its bundle (the job's files as one tar
      stream) into a job directory of its own, stages it for Remotion, renders
      with the settings the claim carried, uploads the mp4 and reports how the
-     render ended. What a failed render does to its video — a retry, a
+     render ended. The bundle, the upload and the result name the claim
+     (its claim id, the X-Render-Claim header), so a renderer that lost its
+     lease cannot touch the claim that took the video over. What a failed render does to its video — a retry, a
      revision, FAILED — is decided by the gateway (render_results.py), and the
      AI review runs in tubematic-worker; the renderer only reports what
      happened, and whether a GPU it rendered on still passes its test.
@@ -81,6 +85,12 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 log = logging.getLogger("render_agent")
+# httpx logs every request at INFO: a claim every 20 s and a heartbeat every
+# 30 s would be thousands of lines a day of noise. Their warnings and errors
+# still show; the renderer's own INFO lines (the "enrolled" and "first
+# heartbeat" markers the remote host script waits for among them) are kept.
+for _noisy in ("httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 
 def _now_precise() -> str:
@@ -260,6 +270,26 @@ def _cartoon_source_error(video_id: str, job_dir: Path) -> str | None:
     return None
 
 
+def _run_ffmpeg(argv: list, timeout: float, **kwargs) -> subprocess.CompletedProcess:
+    """One ffmpeg step of a Cartoon 3D render, as a job process: started in a
+    process group of its own through _spawn, so it is the job's live process
+    and a stop from the gateway kills it (and a stopped job never starts it).
+    Past `timeout` its group is killed and reaped and TimeoutExpired raised,
+    as subprocess.run's timeout did."""
+    proc = _spawn(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
+                  **kwargs)
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_group_and_reap(proc)
+        try:
+            proc.communicate(timeout=5)     # closes the pipes
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            pass
+        raise
+    return subprocess.CompletedProcess(argv, proc.returncode, stdout, stderr)
+
+
 def _render_cartoon(video_id: str, job_dir: Path, props: str, output_path: str, gl_argv: list, gl_env: dict,
                     timeout_secs: int, stall_secs: int, total_frames: int, voice_path: Path) -> tuple:
     """Render a Cartoon 3D video in segments and mux its soundtrack. Returns
@@ -327,19 +357,17 @@ def _render_cartoon(video_id: str, job_dir: Path, props: str, output_path: str, 
         list_file = work / "segments.txt"
         list_file.write_text("".join(f"file '{p.name}'\n" for p in segments), encoding="utf-8")
         silent = work / "video.mp4"
-        joined = subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
-                                 "-c", "copy", str(silent)], cwd=str(work), capture_output=True, text=True,
-                                timeout=min(FFMPEG_TIMEOUT_SECS, remaining))
+        joined = _run_ffmpeg(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
+                              "-c", "copy", str(silent)], min(FFMPEG_TIMEOUT_SECS, remaining), cwd=str(work))
         if joined.returncode != 0 or not silent.is_file():
             return "failed", f"joining the {len(segments)} segments failed: {(joined.stderr or joined.stdout).strip()[-800:]}"
         remaining = deadline - _clock()
         if remaining <= 0:
             return "hung", f"muxing the soundtrack: the render ran past {timeout_secs}s in all"
         audio = _soundtrack_for(job_dir, voice_path)
-        muxed = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(silent), "-i", str(audio),
-                                "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-                                "-shortest", "-movflags", "+faststart", str(tmp_out)],
-                               capture_output=True, text=True, timeout=min(FFMPEG_TIMEOUT_SECS, remaining))
+        muxed = _run_ffmpeg(["ffmpeg", "-v", "error", "-y", "-i", str(silent), "-i", str(audio),
+                             "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+                             "-shortest", "-movflags", "+faststart", str(tmp_out)], min(FFMPEG_TIMEOUT_SECS, remaining))
         if muxed.returncode != 0 or not tmp_out.is_file():
             tmp_out.unlink(missing_ok=True)
             return "failed", f"muxing the soundtrack failed: {(muxed.stderr or muxed.stdout).strip()[-800:]}"
@@ -738,6 +766,11 @@ ENROLL_RETRY_SECS = 60
 UPLOAD_ATTEMPTS = 3
 RESULT_ATTEMPTS = 3
 RETRY_PAUSE_SECS = 5
+MAX_RETRY_AFTER_SECS = 60
+# A result's error, at most: even escaped six bytes a character it stays
+# under the gateway's 64 KiB JSON limit, and the comment it becomes keeps
+# only its first 2000 characters.
+RESULT_ERROR_CHARS = 8000
 CONNECT_TIMEOUT_SECS = 30
 # Generous read/write timeouts: a bundle with many images, or a long video's
 # upload over a home connection, moves hundreds of megabytes.
@@ -919,10 +952,10 @@ class GatewayClient:
         return httpx.Client(base_url=url, verify=ctx, timeout=timeout)
 
     def send(self, method: str, path: str, *, json_body=None, content=None, auth: bool = True,
-             timeout=REQUEST_TIMEOUT) -> httpx.Response:
+             timeout=REQUEST_TIMEOUT, headers=None) -> httpx.Response:
         """One request; the response whatever its status. GatewayError when
         there was no answer at all."""
-        headers = self._headers(auth)
+        headers = {**self._headers(auth), **(headers or {})}
         try:
             with self._http(timeout) as http:
                 return http.request(method, path, json=json_body, content=content, headers=headers)
@@ -930,8 +963,8 @@ class GatewayClient:
             raise GatewayError(f"{method} {path}: {type(e).__name__}: {e}") from None
 
     @contextmanager
-    def stream(self, method: str, path: str, timeout=REQUEST_TIMEOUT):
-        headers = self._headers(True)
+    def stream(self, method: str, path: str, timeout=REQUEST_TIMEOUT, headers=None):
+        headers = {**self._headers(True), **(headers or {})}
         try:
             with self._http(timeout) as http:
                 with http.stream(method, path, headers=headers) as resp:
@@ -950,6 +983,16 @@ def _error_code(resp: httpx.Response) -> str:
 
 def _job_path(video_id: str, tail: str) -> str:
     return f"/v1/jobs/{urllib.parse.quote(video_id, safe='')}/{tail}"
+
+
+# Every job route names the claim it acts for: the gateway refuses the
+# bundle, the upload and the result of a claim the renderer no longer holds,
+# even when it has claimed the same video again since.
+CLAIM_HEADER = "X-Render-Claim"
+
+
+def _job_headers(job) -> dict:
+    return {CLAIM_HEADER: job.claim_id}
 
 
 # ── Enrollment ───────────────────────────────────────────────────────────────
@@ -1097,12 +1140,14 @@ def _compute_report() -> dict:
 # ── Shared state between the loop and the heartbeat thread ───────────────────
 
 class _Job:
-    """The render in progress. `proc` is its current Remotion process, so a
+    """The render in progress, and the claim (`claim_id`) it renders under.
+    `proc` is its current process (Remotion, or a Cartoon 3D ffmpeg step), so a
     stop from the gateway can kill it; `stopped` tells the loop to throw the
     render away without reporting a result."""
 
-    def __init__(self, video_id: str):
+    def __init__(self, video_id: str, claim_id: str = ""):
         self.video_id = video_id
+        self.claim_id = claim_id
         self.lock = threading.Lock()
         self.proc = None
         self.stopped = False
@@ -1199,6 +1244,7 @@ def _beat() -> bool:
             body = {"started": _st.started, "version": current_version(), "compute": _st.compute,
                     "state": "rendering" if job is not None else "idle",
                     "video_id": job.video_id if job is not None else "",
+                    "claim_id": job.claim_id if job is not None else "",
                     "last_error": _st.last_error}
         if probe is not None:
             body["gpu_probe"] = probe
@@ -1231,17 +1277,26 @@ def _beat() -> bool:
             was_behind, _st.needs_upgrade = _st.needs_upgrade, reply.get("needs_upgrade") is True
             if reply.get("probe_now") is True:
                 _st.probe_now = True
-            current = _st.job
         if _st.needs_upgrade and not was_behind:
             log.warning(f"this renderer needs upgrade: it runs {current_version()}, main runs "
                         f"{reply.get('main_version')}, and it takes no work until it is upgraded")
         credential = reply.get("credential")
-    if isinstance(credential, str) and credential:
-        _client.identity.save_rotated(credential, str(reply.get("credential_expires_at") or ""))
+        # Saved before the lock is let go: a second heartbeat sent with the
+        # old credential while this one is still unsaved would be issued
+        # another replacement, and whichever save landed last could be one the
+        # gateway no longer accepts. The other requests never rotate.
+        if isinstance(credential, str) and credential:
+            _client.identity.save_rotated(credential, str(reply.get("credential_expires_at") or ""))
+    # The stop list names claims. It answers the request that was sent, so it
+    # is applied to the job that request reported — never to whatever job is
+    # current by the time the reply arrives: that may be a newer claim of the
+    # same video, started while this reply was delayed, which the gateway
+    # still wants. Entries for anything else (a stale row it once held) are
+    # ignored.
     stop = reply.get("stop") if isinstance(reply.get("stop"), list) else []
-    # Ignore ids it is not rendering: a stale row it once held, already gone.
-    if current is not None and current.video_id in stop:
-        _stop_job(current)
+    if job is not None and any(isinstance(e, dict) and e.get("video_id") == job.video_id
+                               and e.get("claim_id") == job.claim_id for e in stop):
+        _stop_job(job)
     return True
 
 
@@ -1313,7 +1368,7 @@ def _download_bundle(job: _Job, work: Path) -> None:
     must be a regular file, and is created fresh (no overwrite, no symlink
     followed); each keeps its modification time."""
     vid = job.video_id
-    with _client.stream("GET", _job_path(vid, "bundle")) as resp:
+    with _client.stream("GET", _job_path(vid, "bundle"), headers=_job_headers(job)) as resp:
         if resp.status_code == 403:
             raise _LeaseLost("the gateway refused the bundle: this renderer does not hold the video any more")
         if resp.status_code == 409:
@@ -1572,14 +1627,22 @@ def _succeeded(job: _Job, output_path: str, on_gpu: bool, frames: int, seconds: 
 
 def _upload(job: _Job, out: Path) -> None:
     """PUT the mp4, streamed from disk, at most UPLOAD_ATTEMPTS times while the
-    lease holds (a 403 means another renderer took the video over)."""
+    lease holds (a 403, or a 409 claim_lost, means the claim was lost: another
+    claim took the video over). A 409 upload_in_progress (an earlier attempt
+    of this claim is still being received) and a 503 busy (the gateway's
+    upload slots are full) are tried again after a pause, at least the
+    Retry-After the gateway asks for. A 413 (over the gateway's size limit)
+    and a 507 (the main machine is short of disk space) are not tried again:
+    the render is reported as an error."""
     last = None
     for attempt in range(1, UPLOAD_ATTEMPTS + 1):
+        pause = RETRY_PAUSE_SECS * attempt
         if job.stopped:
             raise _Stopped()
         try:
             with open(out, "rb") as fh:
-                resp = _client.send("PUT", _job_path(job.video_id, "output"), content=fh)
+                resp = _client.send("PUT", _job_path(job.video_id, "output"), content=fh,
+                                    headers=_job_headers(job))
         except GatewayError as e:
             last = str(e)
         else:
@@ -1588,21 +1651,46 @@ def _upload(job: _Job, out: Path) -> None:
                 return
             if resp.status_code == 403:
                 raise _LeaseLost("the gateway refused the upload: this renderer does not hold the video any more")
+            if resp.status_code == 409 and _error_code(resp) == "claim_lost":
+                raise _LeaseLost("the gateway discarded the upload: the claim was lost while it was sent")
+            if resp.status_code == 413:
+                # never smaller on a second try: reported as this render's error
+                raise GatewayError(f"the rendered video ({out.stat().st_size} bytes) is larger than the "
+                                   "gateway accepts (TUBEMATIC_MAX_OUTPUT_BYTES on the main machine)", 413,
+                                   _error_code(resp))
+            if resp.status_code == 507:
+                raise GatewayError("the rendered video could not be uploaded: the main machine is short of disk "
+                                   "space for it (insufficient_storage; it keeps TUBEMATIC_MIN_FREE_BYTES free)",
+                                   507, _error_code(resp))
+            if resp.status_code in (409, 503):
+                pause = max(pause, min(_retry_after(resp), MAX_RETRY_AFTER_SECS))
             last = f"the upload answered {resp.status_code} {_error_code(resp)}".strip()
         log.warning(f"[{job.video_id}] upload attempt {attempt}/{UPLOAD_ATTEMPTS} failed: {last}",
                     extra={"video_id": job.video_id})
         if attempt < UPLOAD_ATTEMPTS:
-            time.sleep(RETRY_PAUSE_SECS * attempt)
+            time.sleep(pause)
     raise GatewayError(f"the rendered video could not be uploaded: {last}")
+
+
+def _retry_after(resp: httpx.Response) -> float:
+    try:
+        return max(0.0, float(resp.headers.get("Retry-After", "")))
+    except ValueError:
+        return 0.0
 
 
 def _post_result(job: _Job, body: dict) -> bool:
     """Report how the render ended. Retried a few times; a result that cannot
-    be delivered is left to the lease, whose expiry re-queues the video."""
+    be delivered is left to the lease, whose expiry re-queues the video. The
+    error is cut to RESULT_ERROR_CHARS (Remotion's stderr is unbounded) so the
+    body stays under the gateway's JSON limit; the comment it becomes keeps
+    far fewer characters than that anyway."""
     vid = job.video_id
+    if isinstance(body.get("error"), str) and len(body["error"]) > RESULT_ERROR_CHARS:
+        body = {**body, "error": body["error"][:RESULT_ERROR_CHARS]}
     for attempt in range(1, RESULT_ATTEMPTS + 1):
         try:
-            resp = _client.send("POST", _job_path(vid, "result"), json_body=body)
+            resp = _client.send("POST", _job_path(vid, "result"), json_body=body, headers=_job_headers(job))
         except GatewayError as e:
             log.warning(f"[{vid}] reporting the result failed (attempt {attempt}/{RESULT_ATTEMPTS}): {e}",
                         extra={"video_id": vid})
@@ -1629,10 +1717,13 @@ def _run_job(claim: dict) -> None:
     result. The job directory, the staged public files and (remote) the staged
     scenes are removed however it ended."""
     vid = claim.get("video_id")
-    if not isinstance(vid, str) or not vid:
-        _note_error("the gateway handed out a claim with no video id")
+    claim_id = claim.get("claim_id")
+    if not isinstance(vid, str) or not vid or not isinstance(claim_id, str) or not claim_id:
+        # Nothing could be fetched or reported for it; its lease runs out and
+        # the video is re-queued.
+        _note_error("the gateway handed out a claim with no video id or no claim id")
         return
-    job = _Job(vid)
+    job = _Job(vid, claim_id)
     with _st.lock:
         _st.job = job
     work = public = None

@@ -1401,6 +1401,15 @@ def _sweep_gpu_waits_once() -> None:
         if not waiting:
             return
         capable = renderers.gpu_capable_exists(con)
+        # No GPU-capable renderer would mean "fail at once" — except while a
+        # renderer has not probed yet. Right after an upgrade or a renderer
+        # restart the built-in row has no probe (it runs at start and arrives
+        # with the first heartbeat), so nothing is GPU-capable for those
+        # minutes even on a machine whose GPU works; failing every queued GPU
+        # video in that window would throw away work the renderer is about to
+        # take. Deliberate, and bounded: an unprobed install waits at most
+        # GPU_WAIT_SECS from when the video was queued, like an offline GPU
+        # renderer, then fails it with the same comment.
         unprobed = renderers.gpu_status(con)["status"] == "unknown"
         ready = _gpu_ready_now(con, now, main)
         reason = renderers.gpu_unavailable_reason(con, now, main)
@@ -1486,7 +1495,7 @@ def main() -> None:
         _poll_publishing_videos()
         # Before the notification sweep, so a checkpoint Auto Pilot approves
         # never also sends a "waiting for you" message. A VIDEO_READY the
-        # renderer writes after this pass is excluded by the sweep itself.
+        # review thread writes after this pass is excluded by the sweep itself.
         _sweep_auto_pilot()
         _poll_video_metrics()
         _sync_prices_if_due()

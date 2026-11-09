@@ -25,16 +25,38 @@ The gateway decides; the renderer only renders. Which video a renderer gets
 (an unusable id, missing job files, a Cartoon 3D video holding a mascot, a
 mascot whose code cannot be staged), and what a failed render does to its
 video (render_results) all happen here, against the database. A claim holds
-its video by a lease that every heartbeat extends; the bundle, the upload and
-the result are refused (403) to anyone but the lease holder, so a renderer
-that lost its lease cannot overwrite the work of the one that took over.
+its video by a lease that every heartbeat extends, and is named by a claim id
+that is new on every claim (videos.render_claim_id). The bundle, the upload
+and the result must carry it (the X-Render-Claim header) and are refused (403)
+to anyone but the holder of that very claim, so a renderer that lost its
+lease — even one that has since claimed the same video again — cannot
+overwrite the work of the claim that took over: an upload is checked against
+the claim once more just before it is renamed into place (409 claim_lost),
+and a failure result moves the video only while its claim still holds. The
+heartbeat is fenced the same way: it reports the claim it renders, extends
+only that claim's lease, and its stop list names claims, so a heartbeat for an
+earlier claim of a video can neither extend nor stop a newer one.
+
+What an untrusted renderer can make the gateway hold is bounded: the JSON
+routes read at most MAX_JSON_BYTES (413 past it, before any parse — the open
+enroll route included); an upload is at most MAX_OUTPUT_BYTES, one at a time
+per claim (409 upload_in_progress), MAX_CONCURRENT_UPLOADS at once in all
+(503 busy), and never below MIN_FREE_BYTES of free space on the output
+filesystem (507 insufficient_storage).
+
+A renderer renders one video at a time, and the claim enforces it: a renderer
+that already holds an unfinished claim is answered that claim again (the same
+reply, the same claim id — what a renderer whose claim reply was lost needs),
+never a second video.
 """
 import json
 import logging
 import os
+import shutil
 import ssl
 import stat
 import tarfile
+import threading
 import uuid
 from pathlib import Path
 
@@ -60,6 +82,42 @@ OUTCOMES = ("success", "failed", "stalled", "timeout", "error")
 # cap only bounds a queue that keeps changing under it.
 MAX_CLAIM_ATTEMPTS = 50
 CHUNK_BYTES = 1 << 20
+CLAIM_HEADER = "X-Render-Claim"
+
+
+def _env_int(name: str, default: int) -> int:
+    """A positive integer from the environment, else `default`."""
+    try:
+        value = int(os.getenv(name, ""))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+# A renderer's body is untrusted, so every byte it can make the gateway hold
+# is bounded. The output volume holds the database too: a full disk there
+# stops the whole install, not only renders.
+#
+# The largest mp4 one upload may be: TUBEMATIC_MAX_OUTPUT_BYTES, default
+# 8 GiB (a 3-minute Short is a few hundred MB).
+MAX_OUTPUT_BYTES = _env_int("TUBEMATIC_MAX_OUTPUT_BYTES", 8 << 30)
+# Uploads streaming at once, across every claim: TUBEMATIC_MAX_CONCURRENT_UPLOADS
+# (default 4). One claim never has two (its renderer's retry of an upload
+# still streaming is refused), so this bounds the temp files in flight.
+MAX_CONCURRENT_UPLOADS = _env_int("TUBEMATIC_MAX_CONCURRENT_UPLOADS", 4)
+# The free space an upload must leave on the output filesystem:
+# TUBEMATIC_MIN_FREE_BYTES, default 2 GiB. Checked against the declared size
+# before anything is written, and again every DISK_CHECK_BYTES while it
+# streams (a chunked body declares nothing, and other writers share the disk).
+MIN_FREE_BYTES = _env_int("TUBEMATIC_MIN_FREE_BYTES", 2 << 30)
+DISK_CHECK_BYTES = 64 << 20
+UPLOAD_RETRY_AFTER_SECS = 10
+# Every other route takes a small JSON body (enroll, heartbeat, claim,
+# result): at most MAX_JSON_BYTES, counted as it is read, before any parse.
+# The enroll route is open, so this is what an unauthenticated caller can
+# make the gateway hold.
+MAX_JSON_BYTES = 64 << 10
+JSON_ENDPOINTS = {"gateway_enroll", "heartbeat_route", "claim_route", "result_route"}
 _TAR_BLOCK = tarfile.BLOCKSIZE          # 512
 _TAR_RECORD = tarfile.RECORDSIZE        # 10240
 
@@ -81,9 +139,39 @@ def _remotion_dir() -> Path:
     return Path(os.getenv("TUBEMATIC_REMOTION_DIR", "/app/remotion"))
 
 
-def _body() -> dict:
-    data = request.get_json(silent=True)
+class _BodyTooLarge(Exception):
+    pass
+
+
+def _read_json_body() -> dict:
+    """The request's JSON object, read with a counted limit: a declared
+    Content-Length over MAX_JSON_BYTES is refused before a byte is read, and
+    a chunked (or lying) body is read only until it passes the limit. Never
+    request.get_json(), which reads whatever arrives. Anything but a JSON
+    object is {}."""
+    length = request.content_length
+    if length is not None and length > MAX_JSON_BYTES:
+        raise _BodyTooLarge()
+    stream = request.stream
+    buf = bytearray()
+    while True:
+        chunk = stream.read(min(64 << 10, MAX_JSON_BYTES + 1 - len(buf)))
+        if not chunk:
+            break
+        buf += chunk
+        if len(buf) > MAX_JSON_BYTES:
+            raise _BodyTooLarge()
+    if not buf:
+        return {}
+    try:
+        data = json.loads(bytes(buf))
+    except (ValueError, RecursionError):
+        return {}
     return data if isinstance(data, dict) else {}
+
+
+def _body() -> dict:
+    return getattr(g, "json_body", None) or {}
 
 
 def _str(value, cap: int = 2000) -> str:
@@ -250,6 +338,20 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
             return None
 
     @app.before_request
+    def _bound_json_body():
+        # Registered first, so it runs before authentication: the open
+        # enroll route's body is bounded like every other.
+        if request.endpoint not in JSON_ENDPOINTS:
+            return None
+        try:
+            g.json_body = _read_json_body()
+        except _BodyTooLarge:
+            log.warning(f"gateway: {request.method} {request.path} refused: body over the "
+                        f"{MAX_JSON_BYTES}-byte limit")
+            return _err(413, "body_too_large", limit=MAX_JSON_BYTES)
+        return None
+
+    @app.before_request
     def _authenticate():
         if request.endpoint in OPEN_ENDPOINTS:
             return None
@@ -320,6 +422,7 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
         now = renderers.now_ts()
         state = body.get("state") if body.get("state") in ("idle", "rendering") else "idle"
         video_id = _str(body.get("video_id"), 300) if state == "rendering" else ""
+        claim_id = _str(body.get("claim_id"), 64) if video_id else ""
         compute = body.get("compute") if isinstance(body.get("compute"), dict) else None
         probe = body.get("gpu_probe") if isinstance(body.get("gpu_probe"), dict) else None
         reported_version = _str(body.get("version"), 64)
@@ -331,29 +434,37 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
                  video_id, _str(body.get("last_error")), now, me))
             if probe is not None:
                 _store_probe(con, me, probe)
-            if video_id:
-                # Only the video it says it is rendering, and only while it
-                # still holds it: a renderer that went idle never keeps a
-                # lease alive, so the worker's sweep re-queues an orphan.
+            if video_id and claim_id:
+                # Only the claim it says it is rendering, and only while that
+                # very claim still holds the video: a renderer that went idle
+                # never keeps a lease alive (the worker's sweep re-queues an
+                # orphan), and a heartbeat sent for an earlier claim of the
+                # same video — delayed until the video was re-queued and
+                # claimed again — never extends the claim that took over.
                 con.execute(
                     "UPDATE videos SET render_lease_until = ? WHERE id = ? AND status = 'RENDERING' "
-                    "AND renderer_id = ? AND render_uploaded_at = '' AND archived_at IS NULL",
-                    (renderers.ts_add(now, renderers.LEASE_SECS), video_id, me))
+                    "AND renderer_id = ? AND render_claim_id = ? AND render_uploaded_at = '' "
+                    "AND archived_at IS NULL",
+                    (renderers.ts_add(now, renderers.LEASE_SECS), video_id, me, claim_id))
+            # Stop instructions name a claim, not only a video, so the
+            # renderer can tell "the render you reported" from a newer claim
+            # of the same video it may have started since.
             stop = []
             if video_id:
                 held = con.execute(
                     "SELECT 1 FROM videos WHERE id = ? AND status = 'RENDERING' AND renderer_id = ? "
-                    "AND archived_at IS NULL", (video_id, me)).fetchone()
+                    "AND render_claim_id = ? AND archived_at IS NULL", (video_id, me, claim_id)).fetchone()
                 if held is None:
-                    stop.append(video_id)
+                    stop.append({"video_id": video_id, "claim_id": claim_id})
             # Rows this renderer was holding that moved on without it
             # (archived, moved by a human, re-queued by lease expiry): stopped
             # too, and let go of so they are not listed again.
-            for r in con.execute("SELECT id FROM videos WHERE renderer_id = ? AND "
+            for r in con.execute("SELECT id, render_claim_id FROM videos WHERE renderer_id = ? AND "
                                  "(status != 'RENDERING' OR archived_at IS NOT NULL)", (me,)).fetchall():
-                if r["id"] not in stop:
-                    stop.append(r["id"])
-            con.execute("UPDATE videos SET renderer_id = '', render_lease_until = '' "
+                entry = {"video_id": r["id"], "claim_id": r["render_claim_id"] or ""}
+                if entry not in stop:
+                    stop.append(entry)
+            con.execute("UPDATE videos SET renderer_id = '', render_lease_until = '', render_claim_id = '' "
                         "WHERE renderer_id = ? AND status != 'RENDERING'", (me,))
             row = con.execute("SELECT * FROM renderers WHERE id = ?", (me,)).fetchone()
             credential, expires = renderers.maybe_rotate(con, me, now)
@@ -452,7 +563,10 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
             return tmascots.code_for(con, remotion, video["mascot_id"], version)
 
     _VIDEO_COLS = ("id, project_id, updated_at, visual_style, resolved_renderer, mascot_id, mascot_version, "
-                   "voice_file_path, timeline_path, scene_config_path, render_started_at, renderer_id")
+                   "voice_file_path, timeline_path, scene_config_path, render_started_at, renderer_id, "
+                   "render_claim_id, archived_at")
+    # A renderer's unfinished claim: what it is rendering, until it uploads.
+    _HELD = "status = 'RENDERING' AND renderer_id = ? AND render_uploaded_at = ''"
 
     def scheduler_inputs(con):
         queue = [_video_facts(jobs_dir, r) for r in con.execute(
@@ -472,6 +586,18 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
             rows.append(d)
         return queue, rows, renderers.recent_timings(con)
 
+    def claim_reply(video, claim_id):
+        kind = renderers.video_kind(video)
+        return jsonify({
+            "video_id": video["id"], "claim_id": claim_id, "kind": kind,
+            "needs_gpu": renderers.requires_gpu(video), "cartoon": kind == "cartoon_3d",
+            "mascot": bool(video["mascot_id"]), "total_frames": video["frames"] or 0,
+            "lease_secs": renderers.LEASE_SECS,
+            "settings": {"render_timeout_secs": render_results.render_timeout_secs(),
+                         "render_stall_timeout_secs": render_results.render_stall_timeout_secs(),
+                         "watermark": render_results.watermark_enabled()},
+        })
+
     @app.post("/v1/claim")
     def claim_route():
         me = g.renderer["id"]
@@ -487,6 +613,23 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
                     log.warning(f"gateway: claim by renderer {me} refused: runs {caller['version']}, "
                                 f"main runs {main}")
                     return _err(409, "needs_upgrade")
+                held = con.execute(f"SELECT {_VIDEO_COLS} FROM videos WHERE {_HELD} "
+                                   "ORDER BY render_started_at, id LIMIT 1", (me,)).fetchone()
+                if held is not None:
+                    if held["archived_at"] is not None:
+                        # Archived while held: it can no longer be bundled or
+                        # uploaded, and its lease is left to run out (the
+                        # worker re-queues it); no second video before then.
+                        return "", 204
+                    # The renderer asked again while its claim is unfinished:
+                    # its reply was lost, or it is confused. The same claim,
+                    # never a second video — one render at a time.
+                    con.execute("UPDATE videos SET render_lease_until = ? WHERE id = ? AND render_claim_id = ? "
+                                f"AND {_HELD}", (renderers.ts_add(db._now(), renderers.LEASE_SECS), held["id"],
+                                                 held["render_claim_id"], me))
+                    log.info(f"[{held['id']}] renderer {me} claimed again; answered its unfinished claim",
+                             extra={"video_id": held["id"]})
+                    return claim_reply(_video_facts(jobs_dir, held), held["render_claim_id"])
                 if caller["builtin"] and con.execute(
                         "SELECT 1 FROM settings WHERE key = ? AND value > ?",
                         (pipeline.RENDER_CLAIM_HOLD_KEY, db._now())).fetchone():
@@ -499,46 +642,52 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
             if pre_render_refusal(me, video):
                 continue
             stamp = db._now()
-            hold = ("AND NOT EXISTS (SELECT 1 FROM settings WHERE key = ? AND value > ?)"
+            claim_id = uuid.uuid4().hex
+            hold = (" AND NOT EXISTS (SELECT 1 FROM settings WHERE key = ? AND value > ?)"
                     if caller["builtin"] else "")
-            params = [me, renderers.ts_add(stamp, renderers.LEASE_SECS), stamp, stamp, vid, me]
+            params = [me, claim_id, renderers.ts_add(stamp, renderers.LEASE_SECS), stamp, stamp, vid, me, me]
             if caller["builtin"]:
                 params += [pipeline.RENDER_CLAIM_HOLD_KEY, stamp]
             # Guarded in the UPDATE's own WHERE clause (not SELECT-then-
             # compare): two renderers picking the same video cannot both get
-            # it, and the built-in renderer's onboarding hold is in the same
-            # statement, so onboarding (which writes the hold, then looks for a
-            # RENDERING row) either sees this claim or prevents it.
+            # it; one renderer cannot get a second video while it holds an
+            # unfinished claim (two claims racing, or a retry after a lost
+            # reply — the next pass answers the claim it holds); and the
+            # built-in renderer's onboarding hold is in the same statement, so
+            # onboarding (which writes the hold, then looks for a RENDERING
+            # row) either sees this claim or prevents it.
             with db.conn(db_path) as con:
                 cur = con.execute(
-                    "UPDATE videos SET status = 'RENDERING', renderer_id = ?, render_lease_until = ?, "
-                    "render_started_at = ?, render_uploaded_at = '', updated_at = ? "
+                    "UPDATE videos SET status = 'RENDERING', renderer_id = ?, render_claim_id = ?, "
+                    "render_lease_until = ?, render_started_at = ?, render_uploaded_at = '', updated_at = ? "
                     "WHERE id = ? AND status = 'RENDER_QUEUED' AND archived_at IS NULL "
                     "AND EXISTS (SELECT 1 FROM renderers WHERE id = ? AND enabled = 1 AND removed_at IS NULL) "
-                    + hold, params)
+                    f"AND NOT EXISTS (SELECT 1 FROM videos WHERE {_HELD})" + hold, params)
             if cur.rowcount != 1:
                 continue
-            kind = renderers.video_kind(video)
-            log.info(f"[{vid}] claimed by renderer {me} ({kind})", extra={"video_id": vid})
-            return jsonify({
-                "video_id": vid, "kind": kind, "needs_gpu": renderers.requires_gpu(video),
-                "cartoon": kind == "cartoon_3d", "mascot": bool(video["mascot_id"]),
-                "total_frames": video["frames"] or 0, "lease_secs": renderers.LEASE_SECS,
-                "settings": {"render_timeout_secs": render_results.render_timeout_secs(),
-                             "render_stall_timeout_secs": render_results.render_stall_timeout_secs(),
-                             "watermark": render_results.watermark_enabled()},
-            })
+            log.info(f"[{vid}] claimed by renderer {me} ({renderers.video_kind(video)})",
+                     extra={"video_id": vid})
+            return claim_reply(video, claim_id)
         return "", 204
 
     # ── jobs ─────────────────────────────────────────────────────────────────
 
+    def request_claim():
+        """The claim id the request names (X-Render-Claim), or ''."""
+        return request.headers.get(CLAIM_HEADER, "").strip()[:64]
+
     def held_video(vid):
-        """The video (as _video_facts) when the caller holds its lease:
-        RENDERING, its renderer_id, not archived. Else None."""
+        """The video (as _video_facts) when the caller holds the claim the
+        request names: RENDERING, its renderer_id, that render_claim_id, not
+        archived. Else None."""
+        claim_id = request_claim()
+        if not claim_id:
+            return None
         with db.conn(db_path) as con:
             row = con.execute(
                 f"SELECT {_VIDEO_COLS} FROM videos WHERE id = ? AND status = 'RENDERING' "
-                "AND renderer_id = ? AND archived_at IS NULL", (vid, g.renderer["id"])).fetchone()
+                "AND renderer_id = ? AND render_claim_id = ? AND archived_at IS NULL",
+                (vid, g.renderer["id"], claim_id)).fetchone()
         return _video_facts(jobs_dir, row) if row else None
 
     def bundle_members(video) -> list:
@@ -598,12 +747,59 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
         return Response(_stream_tar(members), mimetype="application/x-tar",
                         headers={"Content-Disposition": f'attachment; filename="{video_id}.tar"'})
 
+    # Uploads streaming now, by claim id: one per claim, MAX_CONCURRENT_UPLOADS
+    # in all. Admission happens before the body is read or a temp file made,
+    # so neither a renderer retrying an upload that is still streaming nor
+    # many claims at once can multiply what the disk holds in flight.
+    uploads_lock = threading.Lock()
+    uploading = set()
+
+    def free_bytes() -> int:
+        return shutil.disk_usage(output_dir).free
+
+    def insufficient_storage(video_id, me, free, need):
+        log.warning(f"[{video_id}] upload from renderer {me} refused: {free} bytes free on the output "
+                    f"filesystem, {need} needed to keep {MIN_FREE_BYTES} free", extra={"video_id": video_id})
+        return _err(507, "insufficient_storage", min_free_bytes=MIN_FREE_BYTES)
+
     @app.put("/v1/jobs/<video_id>/output")
     def output_route(video_id):
         video = held_video(video_id)
         if video is None:
             log.warning(f"[{video_id}] upload refused: {_who()} does not hold its lease", extra={"video_id": video_id})
             return _err(403, "not_lease_holder")
+        me, claim_id = g.renderer["id"], request_claim()
+        limit = MAX_OUTPUT_BYTES
+        declared = request.content_length
+        if declared is not None and declared > limit:
+            log.warning(f"[{video_id}] upload from renderer {me} refused: {declared} bytes "
+                        f"is over the {limit}-byte limit", extra={"video_id": video_id})
+            return _err(413, "output_too_large", limit=limit)
+        with uploads_lock:
+            if claim_id in uploading:
+                log.warning(f"[{video_id}] upload from renderer {me} refused: an upload for this claim is "
+                            "still streaming", extra={"video_id": video_id})
+                return _err(409, "upload_in_progress")
+            if len(uploading) >= MAX_CONCURRENT_UPLOADS:
+                log.warning(f"[{video_id}] upload from renderer {me} refused: {len(uploading)} uploads "
+                            "already streaming", extra={"video_id": video_id})
+                resp, code = _err(503, "busy")
+                resp.headers["Retry-After"] = str(UPLOAD_RETRY_AFTER_SECS)
+                return resp, code
+            uploading.add(claim_id)
+        try:
+            return receive_output(video, video_id, me, claim_id, limit, declared)
+        finally:
+            with uploads_lock:
+                uploading.discard(claim_id)
+
+    def receive_output(video, video_id, me, claim_id, limit, declared):
+        try:
+            free = free_bytes()
+        except OSError as e:
+            return _err(500, "upload_failed", detail=str(e))
+        if free - (declared or 0) < MIN_FREE_BYTES:
+            return insufficient_storage(video_id, me, free, (declared or 0) + MIN_FREE_BYTES)
         try:
             out = tjobs.output_file(output_dir, video["project_id"], video_id)
         except tjobs.UnsafePath as e:
@@ -611,19 +807,46 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
         out.parent.mkdir(parents=True, exist_ok=True)
         tmp = out.with_name(f".{out.name}.{uuid.uuid4().hex}.upload")
         written = 0
+        next_check = DISK_CHECK_BYTES
         try:
             with open(tmp, "wb") as fh:
                 while True:
                     chunk = request.stream.read(CHUNK_BYTES)
                     if not chunk:
                         break
-                    fh.write(chunk)
                     written += len(chunk)
+                    if written > limit:
+                        # A chunked (or lying) body: counted as it arrives,
+                        # never trusted to end. The temp file goes below.
+                        log.warning(f"[{video_id}] upload from renderer {me} aborted: over the "
+                                    f"{limit}-byte limit", extra={"video_id": video_id})
+                        return _err(413, "output_too_large", limit=limit)
+                    if written >= next_check:
+                        next_check = written + DISK_CHECK_BYTES
+                        free = free_bytes()
+                        if free < MIN_FREE_BYTES:
+                            # The temp file goes below.
+                            return insufficient_storage(video_id, me, free, MIN_FREE_BYTES)
+                    fh.write(chunk)
                 fh.flush()
                 os.fsync(fh.fileno())
-            os.replace(tmp, out)
+            # The lease may have run out while the body streamed, and another
+            # claim (another renderer, or this one again) uploaded since: the
+            # claim is checked again, and the rename made, inside one write
+            # transaction, so no claim can change hands between the two.
+            with db.conn(db_path) as con:
+                con.execute("BEGIN IMMEDIATE")
+                still = con.execute(
+                    "SELECT 1 FROM videos WHERE id = ? AND status = 'RENDERING' AND renderer_id = ? "
+                    "AND render_claim_id = ? AND render_uploaded_at = '' AND archived_at IS NULL",
+                    (video_id, me, claim_id)).fetchone()
+                if still is None:
+                    log.warning(f"[{video_id}] upload from renderer {me} discarded: its claim was lost while "
+                                "it uploaded", extra={"video_id": video_id})
+                    return _err(409, "claim_lost")
+                os.replace(tmp, out)
         except OSError as e:
-            log.warning(f"[{video_id}] upload from renderer {g.renderer['id']} failed: {e}",
+            log.warning(f"[{video_id}] upload from renderer {me} failed: {e}",
                         extra={"video_id": video_id})
             return _err(500, "upload_failed", detail=str(e))
         finally:
@@ -631,13 +854,13 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
                 tmp.unlink(missing_ok=True)
             except OSError:
                 pass
-        log.info(f"[{video_id}] output uploaded by renderer {g.renderer['id']}: {written} bytes",
+        log.info(f"[{video_id}] output uploaded by renderer {me}: {written} bytes",
                  extra={"video_id": video_id})
         return jsonify({"bytes": written})
 
     @app.post("/v1/jobs/<video_id>/result")
     def result_route(video_id):
-        me = g.renderer["id"]
+        me, claim_id = g.renderer["id"], request_claim()
         video = held_video(video_id)
         if video is None:
             log.warning(f"[{video_id}] late result from renderer {me} dropped: it does not hold the lease",
@@ -662,8 +885,9 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
                 with db.conn(db_path) as con:
                     cur = con.execute(
                         "UPDATE videos SET video_path = ?, render_uploaded_at = ?, renderer_id = '', "
-                        "render_lease_until = '', updated_at = ? WHERE id = ? AND status = 'RENDERING' "
-                        "AND renderer_id = ?", (str(out), stamp, stamp, video_id, me))
+                        "render_lease_until = '', render_claim_id = '', updated_at = ? WHERE id = ? "
+                        "AND status = 'RENDERING' AND renderer_id = ? AND render_claim_id = ?",
+                        (str(out), stamp, stamp, video_id, me, claim_id))
                     if cur.rowcount != 1:
                         return _err(403, "not_lease_holder")
                     frames, seconds = body.get("frames"), body.get("seconds")
@@ -693,11 +917,15 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
             error = {"failed": "the render failed with no error output", "stalled": "Render stalled",
                      "timeout": "Render timed out", "error": "The renderer hit an error"}[outcome]
         log.warning(f"[{video_id}] renderer {me} reported {outcome}: {error[-300:]}", extra={"video_id": video_id})
-        render_results.after_render_failure(video_id, error, retry_status, on_gpu,
-                                            renderers.requires_gpu(video), kind == "cartoon_3d", gpu_ok)
-        with db.conn(db_path) as con:
-            con.execute("UPDATE videos SET renderer_id = '', render_lease_until = '' "
-                        "WHERE id = ? AND renderer_id = ?", (video_id, me))
+        # Routed only while this claim still holds the video: one guarded
+        # transaction (render_results._claim_guard), so a lease that ran out
+        # after the check above, and a claim that took the video over since,
+        # are never touched by this stale result. It releases the claim too.
+        if not render_results.after_render_failure(video_id, error, retry_status, on_gpu,
+                                                   renderers.requires_gpu(video), kind == "cartoon_3d", gpu_ok,
+                                                   claim=(me, claim_id)):
+            log.warning(f"[{video_id}] result from renderer {me} changed nothing: its claim was lost first",
+                        extra={"video_id": video_id})
         return jsonify({})
 
     return app

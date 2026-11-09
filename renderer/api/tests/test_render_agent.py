@@ -16,12 +16,21 @@ path, end to end. What they guard:
   comment has always carried, a hung render's whole process group is killed
   and reaped (never waiting on the stills server), and the job directory and
   the staged public files are gone afterwards, whatever happened;
-- a stop from the gateway kills the render and no result is sent;
+- a stop from the gateway kills the render and no result is sent; a stop
+  must name the claim the heartbeat reported, and a delayed heartbeat reply
+  for an earlier claim never stops a newer claim of the same video;
+- every job request names the claim (X-Render-Claim); an upload the gateway
+  discards as claim_lost throws the render away, one over its size limit or
+  refused for disk space is not retried, one the gateway cannot take yet
+  (upload_in_progress, busy) is tried again after its Retry-After; a result's
+  error is cut to fit the gateway's JSON limit;
 - a bundle member that could land outside the job directory is refused;
 - a network error never escapes: it is noted as last_error and retried;
 - enrollment checks the certificate pin before sending anything, the state
   file is written atomically and readable by its owner only, a rotated
-  credential is saved before it is used;
+  credential is saved before it is used, and before another heartbeat can go
+  out with the old one;
+- httpx's per-request INFO lines are kept out of the renderer's log;
 - one test runs the real gateway over real TLS: enrollment and a heartbeat
   through the pinned context, and a wrong pin that sends nothing.
 
@@ -113,6 +122,9 @@ def test_a_queued_video_is_rendered_uploaded_and_left_for_the_review(env):
     assert result["outcome"] == "success" and result["frames"] == 90 and result["seconds"] > 0
     assert env.rec.paths() == ["/v1/heartbeat", "/v1/claim", "/v1/jobs/vid-1/bundle",
                                "/v1/jobs/vid-1/output", "/v1/jobs/vid-1/result"]
+    # every job request names the claim the video was handed out under
+    jobs = [r for r in env.rec.requests if r["path"].startswith("/v1/jobs/")]
+    assert len({r["claim"] for r in jobs}) == 1 and len(jobs[0]["claim"]) == 32
 
 
 def test_the_job_is_staged_while_it_renders_and_gone_afterwards(env):
@@ -214,9 +226,11 @@ def test_a_heartbeat_during_a_render_reports_it_and_extends_its_lease(env):
         assert render_agent._beat()
         seen["beat"] = env.rec.beats()[-1]
         seen["lease"] = env.video()["render_lease_until"]
+        seen["claim"] = env.video()["render_claim_id"]
     with mock.patch("subprocess.Popen", side_effect=FakeRemotion(on_start=beat_mid_render)):
         render_agent._loop_once()
     assert seen["beat"]["state"] == "rendering" and seen["beat"]["video_id"] == "vid-1"
+    assert seen["beat"]["claim_id"] and seen["beat"]["claim_id"] == seen["claim"]
     assert seen["lease"] > "2026"
 
 
@@ -472,12 +486,79 @@ def test_a_stopped_job_never_starts_a_render_process(env):
 
 def test_a_stop_for_a_video_it_is_not_rendering_is_ignored(env):
     env.start()
-    env.seed("vid-1", status="RENDERING", renderer_id="builtin")
-    env.seed("vid-9", status="REVISION_REQUESTED", renderer_id="builtin")   # a stale row it once held
-    job = render_agent._Job("vid-1")
+    env.seed("vid-1", status="RENDERING", renderer_id="builtin", render_claim_id="c-1")
+    env.seed("vid-9", status="REVISION_REQUESTED", renderer_id="builtin", render_claim_id="c-9")  # a stale row
+    job = render_agent._Job("vid-1", "c-1")
     render_agent._st.job = job
     assert render_agent._beat() is True
     assert job.stopped is False
+
+
+@pytest.mark.parametrize("stop", [["vid-1"], [{"video_id": "vid-1"}], [{"video_id": "vid-1", "claim_id": "other"}],
+                                  [{"video_id": "vid-2", "claim_id": "c-1"}]])
+def test_a_stop_must_name_the_reported_claim(env, stop):
+    env.start()
+    job = render_agent._Job("vid-1", "c-1")
+    render_agent._st.job = job
+    env.rec.hook = lambda request: (httpx.Response(200, json={"enabled": True, "needs_upgrade": False,
+                                                              "stop": stop})
+                                    if request.url.path == "/v1/heartbeat" else None)
+    assert render_agent._beat() is True
+    assert job.stopped is False
+    env.rec.hook = lambda request: httpx.Response(200, json={"stop": [{"video_id": "vid-1", "claim_id": "c-1"}]})
+    assert render_agent._beat() is True
+    assert job.stopped is True
+
+
+@pytest.mark.parametrize("reclaimed_before_the_gateway_saw_it", [False, True])
+def test_a_delayed_heartbeat_for_claim_a_never_stops_or_extends_claim_b(env, reclaimed_before_the_gateway_saw_it):
+    """Claim A's heartbeat is slow. While it is in flight, A is re-queued and
+    the same renderer claims the same video again as claim B and starts it.
+    Whether the gateway handled A's heartbeat before or after B's claim, its
+    reply is applied to A only: B is not stopped, and B's lease is not
+    extended by A's heartbeat."""
+    env.start()
+    env.seed("vid-1", status="RENDERING", renderer_id="builtin", render_claim_id="claim-a",
+             render_lease_until="2999-01-01T00:00:00Z")
+    job_a = render_agent._Job("vid-1", "claim-a")
+    render_agent._st.job = job_a
+    jobs = {}
+
+    def requeue_and_claim_b():
+        import render_results
+        assert render_results.requeue_interrupted("vid-1", "Render lost — automatically re-queued.",
+                                                  renderer_id="builtin")
+        reply = render_agent._client.send("POST", "/v1/claim", json_body={}).json()
+        assert reply["video_id"] == "vid-1" and reply["claim_id"] != "claim-a"
+        env.sql("UPDATE videos SET render_lease_until = '2000-01-01T00:00:00Z'")
+        jobs["b"] = render_agent._Job("vid-1", reply["claim_id"])
+        with render_agent._st.lock:
+            render_agent._st.job = jobs["b"]
+
+    def delayed(request):
+        if request.url.path != "/v1/heartbeat" or jobs:
+            return None
+        env.rec.hook = None
+        if reclaimed_before_the_gateway_saw_it:
+            requeue_and_claim_b()
+            return env.rec.inner.handle_request(request)
+        env.sql("UPDATE videos SET status = 'RENDER_QUEUED', renderer_id = '' WHERE id = 'vid-1'")
+        resp = env.rec.inner.handle_request(request)
+        env.sql("UPDATE videos SET status = 'RENDERING', renderer_id = 'builtin' WHERE id = 'vid-1'")
+        requeue_and_claim_b()
+        return resp
+    env.rec.hook = delayed
+    assert render_agent._beat() is True
+    beat = env.rec.beats()[-1]
+    assert beat["video_id"] == "vid-1" and beat["claim_id"] == "claim-a"
+    assert jobs["b"].stopped is False and render_agent._st.job is jobs["b"]
+    assert job_a.stopped is True
+    v = env.video()
+    assert v["status"] == "RENDERING" and v["render_claim_id"] == jobs["b"].claim_id
+    assert v["render_lease_until"] == "2000-01-01T00:00:00Z"
+    # B's own heartbeat extends B's lease and stops nothing
+    assert render_agent._beat() is True
+    assert jobs["b"].stopped is False and env.video()["render_lease_until"] > "2026"
 
 
 # ── the bundle's members ──────────────────────────────────────────────────────
@@ -593,6 +674,81 @@ def test_a_result_that_cannot_be_delivered_never_raises(env):
     _render(env)
     assert len(_results(env)) == render_agent.RESULT_ATTEMPTS
     assert render_agent._st.job is None and "lease will expire" in render_agent._st.last_error
+
+
+def test_a_claim_with_no_claim_id_is_not_rendered(env):
+    env.seed()
+    env.start()
+
+    def old_reply(request):
+        if request.url.path == "/v1/claim":
+            return httpx.Response(200, json={"video_id": "vid-1", "kind": "dom"})
+    env.rec.hook = old_reply
+    with mock.patch("subprocess.Popen") as popen:
+        render_agent._loop_once()
+    popen.assert_not_called()
+    assert not any(p.startswith("/v1/jobs/") for p in env.rec.paths())
+    assert "no claim id" in render_agent._st.last_error and render_agent._st.job is None
+
+
+def test_an_upload_discarded_as_claim_lost_throws_the_render_away(env):
+    def lost(request):
+        if request.method == "PUT":
+            return httpx.Response(409, json={"error": "claim_lost"})
+    env.rec.hook = lost
+    _render(env)
+    assert len(env.rec.paths("PUT")) == 1                # never retried
+    assert _results(env) == [] and "claim was lost" in render_agent._st.last_error
+
+
+@pytest.mark.parametrize("answer", [httpx.Response(409, json={"error": "upload_in_progress"}),
+                                    httpx.Response(503, json={"error": "busy"}, headers={"Retry-After": "7"})])
+def test_an_upload_the_gateway_cannot_take_yet_is_tried_again_after_a_pause(env, monkeypatch, answer):
+    sleeps = []
+    monkeypatch.setattr(render_agent.time, "sleep", lambda s: sleeps.append(s))
+    answers = []
+
+    def busy_once(request):
+        if request.method == "PUT" and not answers:
+            answers.append(1)
+            return answer
+    env.rec.hook = busy_once
+    _render(env)
+    assert env.rec.paths("PUT") == ["/v1/jobs/vid-1/output"] * 2
+    assert _results(env)[0]["outcome"] == "success" and env.video()["render_uploaded_at"]
+    assert sleeps and sleeps[0] == (7 if answer.status_code == 503 else 0)
+
+
+def test_an_upload_refused_for_disk_space_is_reported_as_an_error(env):
+    def full(request):
+        if request.method == "PUT":
+            return httpx.Response(507, json={"error": "insufficient_storage"})
+    env.rec.hook = full
+    _render(env)
+    assert len(env.rec.paths("PUT")) == 1                # not retried
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "short of disk space" in result["error"]
+    assert env.video()["status"] == "RENDER_QUEUED"
+
+
+def test_a_long_render_error_is_cut_to_fit_the_gateways_json_limit(env):
+    remotion = FakeRemotion(returncode=1, stderr="E" * 200_000)
+    _render(env, remotion=remotion)
+    [result] = _results(env)
+    assert result["outcome"] == "failed" and result["error"] == "E" * render_agent.RESULT_ERROR_CHARS
+    assert env.video()["status"] == "REVISION_REQUESTED"
+
+
+def test_an_upload_over_the_gateways_limit_is_not_retried(env):
+    def too_big(request):
+        if request.method == "PUT":
+            return httpx.Response(413, json={"error": "output_too_large", "limit": 3})
+    env.rec.hook = too_big
+    _render(env)
+    assert len(env.rec.paths("PUT")) == 1
+    [result] = _results(env)
+    assert result["outcome"] == "error" and "larger than the gateway accepts" in result["error"]
+    assert env.video()["status"] == "RENDER_QUEUED"
 
 
 def test_a_lost_lease_discards_the_render(env):
@@ -780,6 +936,52 @@ def test_a_rotated_credential_is_saved_before_it_is_used(env, monkeypatch):
     assert render_agent._beat() is True                    # the new one authenticates
     assert env.rec.requests[-1]["auth"] == f"Bearer {saved['credential']}"
     assert env.renderer(rid)["previous_credential_hash"] == ""
+
+
+def test_a_heartbeat_waits_while_a_rotated_credential_is_being_saved(env, monkeypatch):
+    """Heartbeat A receives a rotated credential C1 and is slow to save it.
+    Heartbeat B must not go out with the old credential meanwhile: the gateway
+    would issue C2 in C1's place, and if A's save of C1 landed last the
+    renderer would keep a credential nothing accepts."""
+    r = _remote_env(env, monkeypatch)
+    rid = r.identity.renderer_id
+    env.sql("UPDATE renderers SET credential_issued_at = '2020-01-01T00:00:00Z' WHERE id = ?", (rid,))
+    monkeypatch.setattr(render_agent, "_client", render_agent.GatewayClient(r.identity, transport=env.rec))
+    real_save = r.identity.save_rotated
+    in_save, release = threading.Event(), threading.Event()
+
+    def slow_first_save(credential, expires_at):
+        if not in_save.is_set():
+            in_save.set()
+            assert release.wait(10)
+        real_save(credential, expires_at)
+    monkeypatch.setattr(r.identity, "save_rotated", slow_first_save)
+    results = {}
+    a = threading.Thread(target=lambda: results.update(a=render_agent._beat()))
+    a.start()
+    assert in_save.wait(10)
+    sent = len(env.rec.beats())
+    b = threading.Thread(target=lambda: results.update(b=render_agent._beat()))
+    b.start()
+    b.join(0.3)
+    assert b.is_alive() and len(env.rec.beats()) == sent       # B waits for A's save
+    release.set()
+    a.join(10)
+    b.join(10)
+    assert results == {"a": True, "b": True}
+    saved = json.loads(r.state.read_text())["credential"]
+    assert r.identity.credential() == saved
+    assert render_agent._beat() is True                         # what was kept is what the gateway accepts
+    assert env.rec.requests[-1]["auth"] == f"Bearer {saved}"
+
+
+def test_httpx_request_lines_stay_out_of_the_renderers_log():
+    """A claim every 20 s and a heartbeat every 30 s: httpx's INFO line per
+    request would be thousands of lines a day. Its warnings still show."""
+    import logging
+    assert logging.getLogger("httpx").level == logging.WARNING
+    assert logging.getLogger("httpcore").level == logging.WARNING
+    assert logging.getLogger("render_agent").level == logging.NOTSET     # its own INFO lines are untouched
 
 
 def test_a_rotated_credential_that_cannot_be_saved_is_not_used(env, monkeypatch):

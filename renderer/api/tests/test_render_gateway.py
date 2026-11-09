@@ -4,8 +4,12 @@ Who may call (the built-in renderer's token read per request, an enrolled
 remote credential with expiry and rotation, never the API's own token), which
 video a claim hands out (the scheduler's pick, GPU videos only to a renderer
 whose GPU passed its probe, the pre-render refusals), the lease that keeps a
-lost renderer from touching a video another one took over, the bundle and the
-upload, and how each result moves the video.
+lost renderer from touching a video another one took over (a heartbeat
+included: it extends and stops by claim, not by video), the bundle and the
+upload, how each result moves the video, and the bounds on what a renderer
+can make the gateway hold (the JSON body limit on every JSON route, the open
+enroll route included; one upload per claim, a global upload cap and a free
+space floor).
 
 Driven through Flask's test client against a migrated temporary database; one
 test serves the app over real TLS to prove the pinned certificate is what a
@@ -71,6 +75,12 @@ B = {"Authorization": f"Bearer {BUILTIN_TOKEN}"}
 
 def bearer(token):
     return {"Authorization": f"Bearer {token}"}
+
+
+def J(env, headers=B, claim=None):
+    """`headers` plus the X-Render-Claim of the claim a job route acts for
+    (by default the last one _claimed made)."""
+    return {**headers, "X-Render-Claim": claim if claim is not None else env.claim}
 
 
 def _sql(env, sql, params=()):
@@ -328,30 +338,58 @@ def test_a_started_heartbeat_requeues_what_the_renderer_held(env):
     assert _video(env, "vid-3")["status"] == "RENDERING"     # another renderer's
 
 
-def test_a_heartbeat_extends_the_lease_of_the_video_it_renders(env):
-    _seed(env, status="RENDERING", renderer_id="builtin", render_lease_until="2026-01-01T00:00:00Z")
-    _beat(env, state="rendering", video_id="vid-1")
+def test_a_heartbeat_extends_the_lease_of_the_claim_it_renders(env):
+    _seed(env, status="RENDERING", renderer_id="builtin", render_claim_id="c-1",
+          render_lease_until="2026-01-01T00:00:00Z")
+    _beat(env, state="rendering", video_id="vid-1", claim_id="c-1")
     lease = _video(env)["render_lease_until"]
     assert renderers.age_secs(renderers.now_ts(), lease) > renderers.LEASE_SECS - 60
-    # idle, or reporting another video: the lease is left to run out
+    # idle, another video, another claim of this video, or no claim at all:
+    # the lease is left to run out
     _sql(env, "UPDATE videos SET render_lease_until = '2026-01-01T00:00:00Z'")
     _beat(env)
-    _beat(env, state="rendering", video_id="vid-9")
+    _beat(env, state="rendering", video_id="vid-9", claim_id="c-1")
+    _beat(env, state="rendering", video_id="vid-1", claim_id="c-0")
+    _beat(env, state="rendering", video_id="vid-1")
     assert _video(env)["render_lease_until"] == "2026-01-01T00:00:00Z"
 
 
-def test_the_stop_list_names_videos_that_moved_on(env):
-    _seed(env, status="RENDERING", renderer_id="builtin")
-    assert _beat(env, state="rendering", video_id="vid-1").get_json()["stop"] == []
+def test_the_stop_list_names_claims_that_moved_on(env):
+    _seed(env, status="RENDERING", renderer_id="builtin", render_claim_id="c-1")
+    assert _beat(env, state="rendering", video_id="vid-1", claim_id="c-1").get_json()["stop"] == []
     # a human moved it; then a lease sweep requeued another the renderer held
     _sql(env, "UPDATE videos SET status = 'REVISION_REQUESTED' WHERE id = 'vid-1'")
-    _seed(env, "vid-2", status="RENDER_QUEUED", renderer_id="builtin")
-    stop = _beat(env, state="rendering", video_id="vid-1").get_json()["stop"]
-    assert sorted(stop) == ["vid-1", "vid-2"]
+    _seed(env, "vid-2", status="RENDER_QUEUED", renderer_id="builtin", render_claim_id="c-2")
+    stop = _beat(env, state="rendering", video_id="vid-1", claim_id="c-1").get_json()["stop"]
+    assert sorted(stop, key=lambda e: e["video_id"]) == [{"video_id": "vid-1", "claim_id": "c-1"},
+                                                         {"video_id": "vid-2", "claim_id": "c-2"}]
     assert _video(env)["renderer_id"] == "" and _video(env, "vid-2")["renderer_id"] == ""
     # an archived render is stopped too
-    _seed(env, "vid-3", status="RENDERING", renderer_id="builtin", archived_at="2026-01-01T00:00:00Z")
-    assert _beat(env, state="rendering", video_id="vid-3").get_json()["stop"] == ["vid-3"]
+    _seed(env, "vid-3", status="RENDERING", renderer_id="builtin", render_claim_id="c-3",
+          archived_at="2026-01-01T00:00:00Z")
+    assert _beat(env, state="rendering", video_id="vid-3", claim_id="c-3").get_json()["stop"] == [
+        {"video_id": "vid-3", "claim_id": "c-3"}]
+
+
+def test_a_heartbeat_for_an_earlier_claim_never_touches_the_newer_one(env):
+    """Claim A's heartbeat is delayed; meanwhile A is re-queued and the same
+    renderer claims the video again as claim B. When A's heartbeat arrives it
+    neither extends B's lease nor fails to say A is over — and the stop it
+    returns names claim A, which the renderer applies to A only."""
+    a = _claimed(env)["claim_id"]
+    assert render_results.requeue_interrupted("vid-1", "Render lost — automatically re-queued.",
+                                              renderer_id="builtin")
+    b = env.client.post("/v1/claim", json={}, headers=B).get_json()["claim_id"]
+    assert b != a
+    _sql(env, "UPDATE videos SET render_lease_until = '2026-01-01T00:00:00Z'")
+    reply = _beat(env, state="rendering", video_id="vid-1", claim_id=a).get_json()
+    assert reply["stop"] == [{"video_id": "vid-1", "claim_id": a}]
+    v = _video(env)
+    assert v["render_lease_until"] == "2026-01-01T00:00:00Z"         # B's lease not extended by A
+    assert v["status"] == "RENDERING" and v["render_claim_id"] == b
+    # B's own heartbeat extends it and stops nothing
+    assert _beat(env, state="rendering", video_id="vid-1", claim_id=b).get_json()["stop"] == []
+    assert _video(env)["render_lease_until"] > "2026-01-02"
 
 
 # ── claim ─────────────────────────────────────────────────────────────────────
@@ -369,12 +407,14 @@ def test_a_claim_hands_out_the_oldest_video_with_its_settings(env):
               "('render_stall_timeout_secs', '60'), ('watermark_enabled', 'false')")
     resp = env.client.post("/v1/claim", json={}, headers=B)
     assert resp.status_code == 200
+    claim_id = resp.get_json()["claim_id"]
+    assert len(claim_id) == 32
     assert resp.get_json() == {
-        "video_id": "vid-1", "kind": "dom", "needs_gpu": False, "cartoon": False, "mascot": False,
+        "video_id": "vid-1", "claim_id": claim_id, "kind": "dom", "needs_gpu": False, "cartoon": False, "mascot": False,
         "total_frames": 123, "lease_secs": renderers.LEASE_SECS,
         "settings": {"render_timeout_secs": 5000, "render_stall_timeout_secs": 60, "watermark": False}}
     v = _video(env)
-    assert v["status"] == "RENDERING" and v["renderer_id"] == "builtin"
+    assert v["status"] == "RENDERING" and v["renderer_id"] == "builtin" and v["render_claim_id"] == claim_id
     assert v["render_lease_until"] > v["render_started_at"] and v["render_uploaded_at"] == ""
     assert _video(env, "vid-2")["status"] == "RENDER_QUEUED"
 
@@ -510,7 +550,7 @@ def test_a_tampered_row_bundles_the_derived_files_not_the_planted_ones(env):
     planted = env.secrets / "planted.json"
     planted.write_text('{"secret": true}')
     _claimed(env, written=str(planted))
-    members = _members(env.client.get("/v1/jobs/vid-1/bundle", headers=B))
+    members = _members(env.client.get("/v1/jobs/vid-1/bundle", headers=J(env)))
     assert members["audio.mp3"] == b"AUDIO" and b"secret" not in members["timeline.json"]
 
 
@@ -571,26 +611,109 @@ def _claimed(env, headers=B, **seed):
     _seed(env, **seed)
     reply = env.client.post("/v1/claim", json={}, headers=headers)
     assert reply.status_code == 200, reply.data
+    env.claim = reply.get_json()["claim_id"]
     return reply.get_json()
 
 
 def test_only_the_lease_holder_reaches_the_job(env):
     _claimed(env)
     _rid, h = _remote(env)
-    assert env.client.get("/v1/jobs/vid-1/bundle", headers=h).status_code == 403
-    assert env.client.put("/v1/jobs/vid-1/output", data=b"mp4", headers=h).status_code == 403
-    assert env.client.post("/v1/jobs/vid-1/result", json={"outcome": "success"}, headers=h).status_code == 403
+    assert env.client.get("/v1/jobs/vid-1/bundle", headers=J(env, h)).status_code == 403
+    assert env.client.put("/v1/jobs/vid-1/output", data=b"mp4", headers=J(env, h)).status_code == 403
+    assert env.client.post("/v1/jobs/vid-1/result", json={"outcome": "success"}, headers=J(env, h)).status_code == 403
     assert not (env.out / "proj-1" / "vid-1.mp4").exists()
     assert _video(env)["status"] == "RENDERING" and _video(env)["renderer_id"] == "builtin"
+
+
+def test_a_job_route_without_the_claim_id_is_refused(env):
+    """The lease holder's credential alone is not enough: the request must
+    name the claim (X-Render-Claim), and only the current one."""
+    _claimed(env)
+    for claim in ("", "0" * 32):
+        h = J(env, claim=claim) if claim else B
+        assert env.client.get("/v1/jobs/vid-1/bundle", headers=h).status_code == 403
+        assert env.client.put("/v1/jobs/vid-1/output", data=b"mp4", headers=h).status_code == 403
+        assert env.client.post("/v1/jobs/vid-1/result", json={"outcome": "failed"}, headers=h).status_code == 403
+    assert not (env.out / "proj-1" / "vid-1.mp4").exists()
+    assert _video(env)["status"] == "RENDERING" and _comments(env) == []
 
 
 def test_a_lost_lease_drops_a_late_result(env):
     _claimed(env)
     _sql(env, "UPDATE videos SET status = 'RENDER_QUEUED', renderer_id = ''")
-    assert env.client.get("/v1/jobs/vid-1/bundle", headers=B).status_code == 403
-    resp = env.client.post("/v1/jobs/vid-1/result", json={"outcome": "failed", "error": "x"}, headers=B)
+    assert env.client.get("/v1/jobs/vid-1/bundle", headers=J(env)).status_code == 403
+    resp = env.client.post("/v1/jobs/vid-1/result", json={"outcome": "failed", "error": "x"}, headers=J(env))
     assert resp.status_code == 403
     assert _video(env)["status"] == "RENDER_QUEUED" and _comments(env) == []
+
+
+# ── one claim, one render ─────────────────────────────────────────────────────
+
+def test_a_lost_claim_reply_is_answered_again_with_the_same_claim(env):
+    """The claim committed but its reply never arrived: the renderer's retry
+    gets the same video and the same claim id, never a second video."""
+    first = _claimed(env)
+    _seed(env, "vid-2", updated="2026-01-02T00:00:00Z")
+    again = env.client.post("/v1/claim", json={}, headers=B)
+    assert again.status_code == 200 and again.get_json() == first
+    assert _video(env, "vid-2")["status"] == "RENDER_QUEUED"
+    assert _video(env)["render_claim_id"] == first["claim_id"]
+
+
+def test_a_renderer_holding_a_claim_cannot_get_another(env, monkeypatch):
+    """Two claims from one renderer racing: the second already looked and saw
+    no claim of its own, then the first took vid-1. The NOT EXISTS in the
+    claim's own UPDATE refuses it vid-2; its next pass answers vid-1's claim."""
+    _beat(env)
+    _seed(env)
+    _seed(env, "vid-2", updated="2026-01-02T00:00:00Z")
+    real_pick = renderers.pick_video
+    inner = {}
+
+    def racing_pick(*args):
+        if not inner:
+            inner["racing"] = True
+            inner["reply"] = env.client.post("/v1/claim", json={}, headers=B).get_json()
+            return "vid-2"
+        return real_pick(*args)
+    monkeypatch.setattr(renderers, "pick_video", racing_pick)
+    outer = env.client.post("/v1/claim", json={}, headers=B).get_json()
+    assert inner["reply"]["video_id"] == "vid-1"
+    assert outer == inner["reply"]
+    assert _video(env, "vid-2")["status"] == "RENDER_QUEUED" and _video(env, "vid-2")["renderer_id"] == ""
+
+
+def test_an_archived_claim_holds_the_renderer_until_its_lease_runs_out(env):
+    _claimed(env)
+    _seed(env, "vid-2", updated="2026-01-02T00:00:00Z")
+    _sql(env, "UPDATE videos SET archived_at = '2026-01-03T00:00:00Z' WHERE id = 'vid-1'")
+    assert env.client.post("/v1/claim", json={}, headers=B).status_code == 204
+    assert _video(env, "vid-2")["status"] == "RENDER_QUEUED"
+
+
+def test_a_stale_failure_result_never_touches_the_claim_that_took_over(env, monkeypatch):
+    """The result is authorized; then, before it is routed, the lease runs
+    out, the worker re-queues the video and the same renderer claims it again.
+    The stale result must change nothing: no retry counted, no comment, no
+    status — the new claim is left exactly as it was."""
+    first = _claimed(env)
+    real_guard = render_results._claim_guard
+    second = {}
+
+    def reclaim_first(claim):
+        if not second:
+            second["n"] = 1
+            assert render_results.requeue_interrupted("vid-1", "Render lost — automatically re-queued.",
+                                                      renderer_id="builtin")
+            second.update(env.client.post("/v1/claim", json={}, headers=B).get_json())
+        return real_guard(claim)
+    monkeypatch.setattr(render_results, "_claim_guard", reclaim_first)
+    assert _result(env, outcome="failed", error="late crash").status_code == 200
+    assert second["video_id"] == "vid-1" and second["claim_id"] != first["claim_id"]
+    v = _video(env)
+    assert v["status"] == "RENDERING" and v["renderer_id"] == "builtin"
+    assert v["render_claim_id"] == second["claim_id"] and v["render_fail_count"] == 1    # the re-queue's only
+    assert _comments(env) == ["Render lost — automatically re-queued."]
 
 
 # ── bundle ────────────────────────────────────────────────────────────────────
@@ -622,7 +745,7 @@ def test_the_bundle_streams_the_jobs_files(env):
     (env.generated / "Legacy.tsx").write_text("legacy")
     (env.generated / "Lib.tsx").write_text("not this one")
     (env.generated / "Unrelated.tsx").write_text("nor this")
-    resp = env.client.get("/v1/jobs/vid-1/bundle", headers=B)
+    resp = env.client.get("/v1/jobs/vid-1/bundle", headers=J(env))
     assert resp.status_code == 200 and resp.mimetype == "application/x-tar" and resp.is_streamed
     members = _members(resp)
     assert members == {
@@ -638,7 +761,7 @@ def test_the_bundle_streams_in_chunks(env, monkeypatch):
     monkeypatch.setattr(render_gateway, "CHUNK_BYTES", 1000)
     _claimed(env)
     (env.jobs / "vid-1" / "audio.mp3").write_bytes(os.urandom(4500))
-    resp = env.client.get("/v1/jobs/vid-1/bundle", headers=B, buffered=False)
+    resp = env.client.get("/v1/jobs/vid-1/bundle", headers=J(env), buffered=False)
     chunks = list(resp.response)
     # never a whole file at once (the last chunk is the end-of-archive padding)
     assert max(len(c) for c in chunks[:-1]) <= 1024
@@ -654,11 +777,11 @@ def test_the_mix_is_bundled_only_when_it_is_not_older_than_the_voice(env):
     mix.write_bytes(b"MIX")
     (job / "cartoon" / "source.json").write_text('{"fingerprint": "f"}')
     os.utime(mix, (time.time() - 100, time.time() - 100))
-    members = _members(env.client.get("/v1/jobs/vid-1/bundle", headers=B))
+    members = _members(env.client.get("/v1/jobs/vid-1/bundle", headers=J(env)))
     assert "cartoon/audio/mix/mix.wav" not in members           # a re-voice made it stale
     assert members["cartoon/source.json"] == b'{"fingerprint": "f"}'
     os.utime(mix, (time.time() + 100, time.time() + 100))
-    members = _members(env.client.get("/v1/jobs/vid-1/bundle", headers=B))
+    members = _members(env.client.get("/v1/jobs/vid-1/bundle", headers=J(env)))
     assert members["cartoon/audio/mix/mix.wav"] == b"MIX"
 
 
@@ -667,18 +790,18 @@ def test_a_mascot_video_bundles_its_pinned_versions_code(env):
     _sql(env, "INSERT INTO mascots (id, name, status, approved_version) VALUES ('m1', 'M', 'READY', 2)")
     _sql(env, "INSERT INTO mascot_versions (mascot_id, version, code) VALUES ('m1', 1, 'v1 code'), ('m1', 2, 'v2')")
     _claimed(env, mascot_id="m1", mascot_version=1)
-    assert _members(env.client.get("/v1/jobs/vid-1/bundle", headers=B))["mascot.js"] == b"v1 code"
+    assert _members(env.client.get("/v1/jobs/vid-1/bundle", headers=J(env)))["mascot.js"] == b"v1 code"
 
 
 def test_a_video_without_a_mascot_gets_no_mascot_code(env):
     _claimed(env)
-    assert "mascot.js" not in _members(env.client.get("/v1/jobs/vid-1/bundle", headers=B))
+    assert "mascot.js" not in _members(env.client.get("/v1/jobs/vid-1/bundle", headers=J(env)))
 
 
 def test_a_bundle_whose_files_vanished_is_refused(env):
     _claimed(env)
     (env.jobs / "vid-1" / "audio.mp3").unlink()
-    resp = env.client.get("/v1/jobs/vid-1/bundle", headers=B)
+    resp = env.client.get("/v1/jobs/vid-1/bundle", headers=J(env))
     assert resp.status_code == 409 and resp.get_json()["error"] == "bundle_unavailable"
 
 
@@ -688,7 +811,7 @@ def test_the_output_is_streamed_into_place(env, monkeypatch):
     _claimed(env)
     monkeypatch.setattr(render_gateway, "CHUNK_BYTES", 7)
     data = os.urandom(100)
-    resp = env.client.put("/v1/jobs/vid-1/output", data=io.BytesIO(data), headers=B)
+    resp = env.client.put("/v1/jobs/vid-1/output", data=io.BytesIO(data), headers=J(env))
     assert resp.status_code == 200 and resp.get_json() == {"bytes": 100}
     out = env.out / "proj-1" / "vid-1.mp4"
     assert out.read_bytes() == data
@@ -699,17 +822,300 @@ def test_the_upload_never_reads_the_whole_body_into_memory(env, monkeypatch):
     import flask
     _claimed(env)
     monkeypatch.setattr(flask.Request, "get_data", lambda *a, **k: pytest.fail("read whole"))
-    assert env.client.put("/v1/jobs/vid-1/output", data=b"x" * 10, headers=B).status_code == 200
+    assert env.client.put("/v1/jobs/vid-1/output", data=b"x" * 10, headers=J(env)).status_code == 200
+
+
+def _raw_put(env, stream, headers, length=None, path="/v1/jobs/vid-1/output", method="PUT"):
+    """A request whose body is `stream`, read as the server reads it: with a
+    Content-Length, or (length None) as a chunked body that ends at EOF."""
+    from werkzeug.test import EnvironBuilder
+    b = EnvironBuilder(path=path, method=method, headers=headers)
+    environ = b.get_environ()
+    b.close()
+    environ["wsgi.input"] = stream
+    if length is None:
+        environ.pop("CONTENT_LENGTH", None)
+        environ["wsgi.input_terminated"] = True
+    else:
+        environ["CONTENT_LENGTH"] = str(length)
+    from werkzeug.wrappers import Response as WResponse
+    resp = WResponse.from_app(env.app, environ)
+    resp.get_json = lambda: json.loads(resp.get_data())
+    return resp
+
+
+class _Body(io.RawIOBase):
+    """An upload body of `total` bytes handed out in `chunk`-sized reads,
+    calling `on_read(n)` before the n-th read (1-based)."""
+
+    def __init__(self, total, chunk=4, fill=b"A", on_read=None):
+        self.left, self.chunk, self.fill, self.on_read, self.reads = total, chunk, fill, on_read, 0
+
+    def readable(self):
+        return True
+
+    def readinto(self, b):
+        self.reads += 1
+        if self.on_read is not None:
+            self.on_read(self.reads)
+        take = min(self.left, self.chunk, len(b))
+        b[:take] = self.fill * take
+        self.left -= take
+        return take
+
+
+def _upload_dir(env):
+    d = env.out / "proj-1"
+    return sorted(p.name for p in d.iterdir()) if d.is_dir() else []
+
+
+def test_an_upload_over_the_declared_limit_is_refused_before_reading(env, monkeypatch):
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "MAX_OUTPUT_BYTES", 10)
+
+    def never(n):
+        pytest.fail("the body of an over-limit upload was read")
+    resp = _raw_put(env, _Body(11, on_read=never), J(env), length=11)
+    assert resp.status_code == 413
+    assert resp.get_json() == {"error": "output_too_large", "limit": 10}
+    assert _upload_dir(env) == []
+
+
+def test_a_chunked_upload_over_the_limit_is_aborted_and_its_temp_file_removed(env, monkeypatch):
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "MAX_OUTPUT_BYTES", 10)
+    monkeypatch.setattr(render_gateway, "CHUNK_BYTES", 4)
+    seen = []
+    body = _Body(1 << 20, chunk=4, on_read=lambda n: seen.append(_upload_dir(env)))
+    resp = _raw_put(env, body, J(env))
+    assert resp.status_code == 413 and resp.get_json()["error"] == "output_too_large"
+    assert any(name.endswith(".upload") for name in seen[-1])     # it was being written ...
+    assert _upload_dir(env) == []                                  # ... and is gone
+    assert body.reads <= 4                                         # stopped at the limit, not at EOF
+
+
+def test_a_chunked_upload_under_the_limit_lands(env, monkeypatch):
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "MAX_OUTPUT_BYTES", 10)
+    resp = _raw_put(env, _Body(10, fill=b"Z"), J(env))
+    assert resp.status_code == 200 and resp.get_json() == {"bytes": 10}
+    assert (env.out / "proj-1" / "vid-1.mp4").read_bytes() == b"Z" * 10
+
+
+def test_a_stale_upload_never_replaces_the_new_claims_output(env):
+    """Renderer A's upload is slow; meanwhile its lease runs out, the video is
+    re-queued, renderer B claims it and uploads its own render. When A's body
+    finally ends, A is told its claim was lost and B's file is left intact."""
+    _claimed(env)
+    a_claim = env.claim
+    rid, h = _remote(env)
+    took_over = {}
+
+    def take_over(n):
+        if n == 1:
+            assert render_results.requeue_interrupted("vid-1", "Render lost — automatically re-queued.",
+                                                      renderer_id="builtin")
+            reply = env.client.post("/v1/claim", json={}, headers=h).get_json()
+            took_over["claim"] = reply["claim_id"]
+            assert env.client.put("/v1/jobs/vid-1/output", data=b"B-OUTPUT",
+                                  headers=J(env, h, reply["claim_id"])).status_code == 200
+    resp = _raw_put(env, _Body(8, fill=b"A", on_read=take_over), J(env, B, a_claim), length=8)
+    assert resp.status_code == 409 and resp.get_json() == {"error": "claim_lost"}
+    assert (env.out / "proj-1" / "vid-1.mp4").read_bytes() == b"B-OUTPUT"
+    assert _upload_dir(env) == ["vid-1.mp4"]                       # A's temp file is gone
+    v = _video(env)
+    assert v["renderer_id"] == rid and v["render_claim_id"] == took_over["claim"]
+
+
+def test_a_second_upload_for_the_same_claim_is_refused_while_the_first_streams(env, monkeypatch):
+    """A renderer whose first PUT timed out on its side retries while the
+    gateway is still receiving the first: the retry is refused before its
+    body is read or a temp file made, and the first one lands."""
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "CHUNK_BYTES", 4)
+    seen = {}
+
+    def second(n):
+        if n == 2:
+            seen["temps"] = [p for p in _upload_dir(env) if p.endswith(".upload")]
+            body = _Body(8, on_read=lambda _n: pytest.fail("the second upload's body was read"))
+            r = _raw_put(env, body, J(env), length=8)
+            seen["status"], seen["json"] = r.status_code, r.get_json()
+            seen["temps_after"] = [p for p in _upload_dir(env) if p.endswith(".upload")]
+    resp = _raw_put(env, _Body(12, fill=b"F", on_read=second), J(env), length=12)
+    assert seen["status"] == 409 and seen["json"] == {"error": "upload_in_progress"}
+    assert len(seen["temps"]) == 1 and seen["temps_after"] == seen["temps"]     # no second temp file
+    assert resp.status_code == 200 and (env.out / "proj-1" / "vid-1.mp4").read_bytes() == b"F" * 12
+    # the claim's slot is released once the first is done, however it ended
+    assert env.client.put("/v1/jobs/vid-1/output", data=b"AGAIN", headers=J(env)).status_code == 200
+    monkeypatch.setattr(render_gateway, "MAX_OUTPUT_BYTES", 1)
+    assert env.client.put("/v1/jobs/vid-1/output", data=b"TOO BIG", headers=J(env)).status_code == 413
+    monkeypatch.setattr(render_gateway, "MAX_OUTPUT_BYTES", 100)
+    assert env.client.put("/v1/jobs/vid-1/output", data=b"OK", headers=J(env)).status_code == 200
+
+
+def test_uploads_across_claims_are_capped(env, monkeypatch):
+    _claimed(env)
+    a_claim = env.claim
+    _rid, h = _remote(env)
+    _seed(env, "vid-2", updated="2026-01-02T00:00:00Z")
+    b = env.client.post("/v1/claim", json={}, headers=h).get_json()
+    assert b["video_id"] == "vid-2"
+    monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 1)
+    seen = {}
+
+    def other(n):
+        if n == 1:
+            r = env.client.put("/v1/jobs/vid-2/output", data=b"B", headers=J(env, h, b["claim_id"]))
+            seen["status"], seen["json"] = r.status_code, r.get_json()
+            seen["retry_after"] = r.headers.get("Retry-After")
+            seen["files"] = sorted(p.name for p in (env.out / "proj-1").iterdir())
+    resp = _raw_put(env, _Body(4, on_read=other), J(env, B, a_claim), length=4)
+    assert resp.status_code == 200
+    assert seen["status"] == 503 and seen["json"] == {"error": "busy"} and seen["retry_after"]
+    assert not any("vid-2" in name for name in seen["files"])                 # no temp file for it
+    assert env.client.put("/v1/jobs/vid-2/output", data=b"B", headers=J(env, h, b["claim_id"])).status_code == 200
+
+
+def _free(monkeypatch, frees):
+    """shutil.disk_usage answering each free figure in turn (the last one
+    from then on)."""
+    import collections
+    import shutil
+    usage = collections.namedtuple("usage", "total used free")
+    calls = []
+
+    def disk_usage(path):
+        calls.append(path)
+        return usage(10 << 40, 0, frees[min(len(calls), len(frees)) - 1])
+    monkeypatch.setattr(shutil, "disk_usage", disk_usage)
+    return calls
+
+
+def test_an_upload_that_would_leave_too_little_free_space_is_refused(env, monkeypatch):
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "MIN_FREE_BYTES", 1000)
+    _free(monkeypatch, [1050])
+
+    def never(n):
+        pytest.fail("the body of a refused upload was read")
+    resp = _raw_put(env, _Body(100, on_read=never), J(env), length=100)      # 1050 - 100 < 1000
+    assert resp.status_code == 507 and resp.get_json()["error"] == "insufficient_storage"
+    assert _upload_dir(env) == []
+    resp = _raw_put(env, _Body(40, fill=b"S"), J(env), length=40)            # 1050 - 40 >= 1000
+    assert resp.status_code == 200
+
+
+def test_a_chunked_upload_is_stopped_when_free_space_runs_low(env, monkeypatch):
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "MIN_FREE_BYTES", 1000)
+    monkeypatch.setattr(render_gateway, "CHUNK_BYTES", 4)
+    monkeypatch.setattr(render_gateway, "DISK_CHECK_BYTES", 8)
+    calls = _free(monkeypatch, [5000, 5000, 900])
+    seen = []
+    body = _Body(1 << 20, chunk=4, on_read=lambda n: seen.append(_upload_dir(env)))
+    resp = _raw_put(env, body, J(env))
+    assert resp.status_code == 507 and resp.get_json()["error"] == "insufficient_storage"
+    assert len(calls) == 3                                         # before, at 8 bytes, at 16 bytes
+    assert any(name.endswith(".upload") for name in seen[-1])      # it was being written ...
+    assert _upload_dir(env) == []                                  # ... and is gone
+    assert body.reads <= 5
+
+
+# ── JSON bodies ───────────────────────────────────────────────────────────────
+
+def _enrollment_rows(env):
+    return _sql(env, "SELECT secret_hash, used_at, renderer_id FROM renderer_enrollments")
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+def test_an_oversized_enrollment_is_refused_before_it_is_read_or_used(env, monkeypatch, chunked):
+    """The enroll route is open: an unauthenticated body is bounded too, and
+    an oversized one never reaches the enrollment, even with a valid secret."""
+    monkeypatch.setattr(render_gateway, "MAX_JSON_BYTES", 1024)
+    con = sqlite3.connect(env.db)
+    secret, _ = renderers.create_enrollment(con, "")
+    con.commit()
+    con.close()
+    before, renderers_before = _enrollment_rows(env), _sql(env, "SELECT id FROM renderers")
+    payload = json.dumps({"secret": secret, "machine_id": "m-1", "version": VERSION,
+                          "pad": "x" * 100_000}).encode()
+    reads = []
+
+    class Stream(io.RawIOBase):
+        def __init__(self):
+            self.data = io.BytesIO(payload)
+
+        def readable(self):
+            return True
+
+        def readinto(self, b):
+            n = self.data.readinto(b)
+            reads.append(n)
+            return n
+    resp = _raw_put(env, Stream(), {"Content-Type": "application/json"},
+                    length=None if chunked else len(payload), path="/v1/enroll", method="POST")
+    assert resp.status_code == 413 and resp.get_json() == {"error": "body_too_large", "limit": 1024}
+    assert _enrollment_rows(env) == before and before[0]["used_at"] is None
+    assert _sql(env, "SELECT id FROM renderers") == renderers_before
+    if chunked:
+        assert 1024 < sum(reads) < 20_000                       # stopped just past the limit, not at EOF
+    else:
+        assert reads == []                                      # refused on the declared length alone
+
+
+def test_a_json_body_at_the_limit_is_read(env, monkeypatch):
+    monkeypatch.setattr(render_gateway, "MAX_JSON_BYTES", 1024)
+    con = sqlite3.connect(env.db)
+    secret, _ = renderers.create_enrollment(con, "")
+    con.commit()
+    con.close()
+    body = {"secret": secret, "machine_id": "m-1", "version": VERSION, "pad": ""}
+    body["pad"] = "x" * (1024 - len(json.dumps(body).encode()))
+    payload = json.dumps(body).encode()
+    assert len(payload) == 1024
+    resp = _raw_put(env, io.BytesIO(payload), {"Content-Type": "application/json"},
+                    path="/v1/enroll", method="POST")
+    assert resp.status_code == 200 and resp.get_json()["renderer_id"]
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+def test_an_oversized_heartbeat_is_refused(env, monkeypatch, chunked):
+    monkeypatch.setattr(render_gateway, "MAX_JSON_BYTES", 1024)
+    payload = json.dumps({"version": VERSION, "state": "idle", "last_error": "e" * 2000}).encode()
+    resp = _raw_put(env, io.BytesIO(payload), {**B, "Content-Type": "application/json"},
+                    length=None if chunked else len(payload), path="/v1/heartbeat", method="POST")
+    assert resp.status_code == 413 and resp.get_json()["error"] == "body_too_large"
+    assert _renderer(env)["last_heartbeat_at"] == ""
+
+
+@pytest.mark.parametrize("path", ["/v1/claim", "/v1/jobs/vid-1/result"])
+def test_the_claim_and_result_bodies_are_bounded_too(env, monkeypatch, path):
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "MAX_JSON_BYTES", 1024)
+    payload = json.dumps({"outcome": "failed", "error": "e" * 2000}).encode()
+    resp = _raw_put(env, io.BytesIO(payload), {**J(env), "Content-Type": "application/json"},
+                    path=path, method="POST")
+    assert resp.status_code == 413
+    assert _video(env)["status"] == "RENDERING" and _comments(env) == []
+
+
+def test_the_gateway_never_parses_json_with_get_json(env, monkeypatch):
+    import flask
+    monkeypatch.setattr(flask.Request, "get_json", lambda *a, **k: pytest.fail("get_json"))
+    _claimed(env)
+    assert _beat(env, state="rendering", video_id="vid-1", claim_id=env.claim).status_code == 200
+    assert _result(env, outcome="failed", error="x").status_code == 200
 
 
 # ── result ────────────────────────────────────────────────────────────────────
 
 def _upload(env, headers=B, data=b"MP4DATA"):
-    assert env.client.put("/v1/jobs/vid-1/output", data=data, headers=headers).status_code == 200
+    assert env.client.put("/v1/jobs/vid-1/output", data=data, headers=J(env, headers)).status_code == 200
 
 
 def _result(env, headers=B, **body):
-    return env.client.post("/v1/jobs/vid-1/result", json=body, headers=headers)
+    return env.client.post("/v1/jobs/vid-1/result", json=body, headers=J(env, headers))
 
 
 def test_a_success_marks_the_render_uploaded_for_the_review(env):
@@ -719,7 +1125,7 @@ def test_a_success_marks_the_render_uploaded_for_the_review(env):
     v = _video(env)
     assert v["status"] == "RENDERING"                # the worker's review thread finishes it
     assert v["render_uploaded_at"] and v["video_path"] == str(env.out / "proj-1" / "vid-1.mp4")
-    assert v["renderer_id"] == "" and v["render_lease_until"] == ""
+    assert v["renderer_id"] == "" and v["render_lease_until"] == "" and v["render_claim_id"] == ""
     [t] = _sql(env, "SELECT renderer_id, kind, on_gpu, frames, seconds FROM render_timings")
     assert t == {"renderer_id": "builtin", "kind": "dom", "on_gpu": 0, "frames": 90, "seconds": 45.0}
 
@@ -742,7 +1148,7 @@ def test_each_failure_outcome_routes_as_before(env, outcome, status):
     _result(env, outcome=outcome, error="Render stalled: no progress for 600s", on_gpu=False, gpu_ok=None)
     v = _video(env)
     assert v["status"] == status and v["render_fail_count"] == 1
-    assert v["renderer_id"] == "" and v["render_lease_until"] == ""
+    assert v["renderer_id"] == "" and v["render_lease_until"] == "" and v["render_claim_id"] == ""
     assert _comments(env) == ["Render failed: Render stalled: no progress for 600s"]
 
 
@@ -789,7 +1195,8 @@ def test_a_remote_renderer_claims_renders_and_uploads(env):
     _seed(env)
     reply = env.client.post("/v1/claim", json={}, headers=h).get_json()
     assert reply["video_id"] == "vid-1"
-    assert env.client.get("/v1/jobs/vid-1/bundle", headers=h).status_code == 200
+    env.claim = reply["claim_id"]
+    assert env.client.get("/v1/jobs/vid-1/bundle", headers=J(env, h)).status_code == 200
     _upload(env, h)
     assert _result(env, h, outcome="success", frames=90, seconds=9.0).status_code == 200
     assert _video(env)["render_uploaded_at"]

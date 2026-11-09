@@ -31,16 +31,16 @@ def db_path(tmp_path, monkeypatch):
 
 
 def _seed_video(db_path, video_id="vid-1", status="RENDERING", render_fail_count=0, script="",
-                tts_text="", video_path=OUT, renderer_id="", lease="", uploaded="2026-01-01T00:00:05Z"):
+                tts_text="", video_path=OUT, renderer_id="", lease="", uploaded="2026-01-01T00:00:05Z", claim=""):
     con = sqlite3.connect(db_path)
     con.execute(
         """INSERT INTO videos
            (id, project_id, topic, strategy, producibility_score, status, render_fail_count,
             script, tts_text, video_path, renderer_id, render_lease_until, render_uploaded_at,
-            render_started_at, created_at, updated_at)
-           VALUES (?, 'proj-1', 'DNS resolution', 'curriculum', 8, ?, ?, ?, ?, ?, ?, ?, ?,
+            render_claim_id, render_started_at, created_at, updated_at)
+           VALUES (?, 'proj-1', 'DNS resolution', 'curriculum', 8, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')""",
-        (video_id, status, render_fail_count, script, tts_text, video_path, renderer_id, lease, uploaded))
+        (video_id, status, render_fail_count, script, tts_text, video_path, renderer_id, lease, uploaded, claim))
     con.commit()
     con.close()
 
@@ -448,15 +448,66 @@ def test_after_render_failure_routes_on_the_renderers_gpu_answer(db_path, needs_
         assert comment == "Render failed: Error: WebGL context lost"
 
 
+# ── the claim a result belongs to ─────────────────────────────────────────────
+#
+# The gateway routes a failure result with claim=(renderer_id, claim_id). A
+# lease can run out between the gateway's check and the routing, and the video
+# be claimed again (by the same renderer, under a new claim id): the stale
+# result must then change nothing at all.
+
+def _claimed_video(db_path, **kw):
+    _seed_video(db_path, uploaded="", renderer_id="r_a", lease="2026-01-01T00:05:00Z", claim="c-new", **kw)
+
+
+@pytest.mark.parametrize("claim", [("r_a", "c-old"), ("r_b", "c-new")])
+def test_a_stale_failure_result_changes_nothing(db_path, claim):
+    _claimed_video(db_path)
+    assert render_results.handle_render_failure("vid-1", "late crash", claim=claim) is False
+    assert render_results.after_render_failure("vid-1", "late", "RENDER_QUEUED", True, True, True, False,
+                                               claim=claim) is False
+    assert render_results.fail_without_gpu("vid-1", cartoon=True, render_error="x", claim=claim) is False
+    video = _read_video(db_path)
+    assert (video["status"], video["render_fail_count"], video["renderer_id"], video["render_claim_id"]) == \
+        ("RENDERING", 0, "r_a", "c-new")
+    assert _read_comments(db_path) == []
+
+
+def test_the_current_claims_failure_moves_the_video_and_releases_it(db_path):
+    _claimed_video(db_path)
+    assert render_results.handle_render_failure("vid-1", "crash", retry_status="RENDER_QUEUED",
+                                                claim=("r_a", "c-new")) is True
+    video = _read_video(db_path)
+    assert (video["status"], video["render_fail_count"]) == ("RENDER_QUEUED", 1)
+    assert (video["renderer_id"], video["render_lease_until"], video["render_claim_id"]) == ("", "", "")
+    assert [c["content"] for c in _read_comments(db_path)] == ["Render failed: crash"]
+
+
+def test_the_current_claims_gpu_failure_moves_the_video_and_releases_it(db_path):
+    _claimed_video(db_path)
+    assert render_results.fail_without_gpu("vid-1", cartoon=True, render_error="gone",
+                                           claim=("r_a", "c-new")) is True
+    video = _read_video(db_path)
+    assert (video["status"], video["render_fail_count"], video["render_claim_id"]) == ("FAILED", 0, "")
+    assert len(_read_comments(db_path)) == 1
+
+
+def test_a_failure_for_a_video_no_longer_rendering_changes_nothing(db_path):
+    """Moved by a human while its render ended: not counted, not commented."""
+    _seed_video(db_path, status="REVISION_REQUESTED")
+    assert render_results.handle_render_failure("vid-1", "crash") is False
+    assert render_results.fail_without_gpu("vid-1", cartoon=False) is False
+    assert _read_video(db_path)["render_fail_count"] == 0 and _read_comments(db_path) == []
+
+
 # ── requeue_interrupted ───────────────────────────────────────────────────────
 
 def test_an_interrupted_render_is_requeued_with_a_retry_counted(db_path):
-    _seed_video(db_path, uploaded="", renderer_id="r_a", lease="2026-01-01T00:05:00Z")
+    _seed_video(db_path, uploaded="", renderer_id="r_a", lease="2026-01-01T00:05:00Z", claim="c1")
     assert render_results.requeue_interrupted("vid-1", render_results.RESTART_COMMENT) is True
     video = _read_video(db_path)
     assert video["status"] == "RENDER_QUEUED" and video["render_fail_count"] == 1
     assert (video["renderer_id"], video["render_lease_until"], video["render_started_at"],
-            video["render_uploaded_at"]) == ("", "", "", "")
+            video["render_uploaded_at"], video["render_claim_id"]) == ("", "", "", "", "")
     assert _read_comments(db_path)[-1]["content"] == \
         "Render interrupted by renderer restart — automatically re-queued."
 
