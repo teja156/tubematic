@@ -126,8 +126,6 @@ Each agent has its own copy because some commands depend on the CLI:
 - OpenCode's copies check health over HTTP, because its install denies the `shell` tool.
 - `tubematic.md` lists the [troubleshooting skill](#the-troubleshooting-skill) as
   `/tubematic-troubleshooting` for Claude Code and by name for OpenCode.
-- Claude Code's `tubematic-submit-new-job.md` can move the new video to an agent you name.
-  OpenCode's copy keeps the agent the video was dealt.
 
 Tests in `scripts/tests/test_agent_adapters.py` pin that every agent ships the same set of
 filenames, that no copy names another agent's CLI, and that no copy tells an agent to run a tool
