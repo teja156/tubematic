@@ -208,6 +208,40 @@ describe("VideoModal — an action that finishes after the modal moved on", () =
   });
 });
 
+describe("VideoModal — two refreshes of the same video", () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it("keeps the newer video snapshot when the older one answers last", async () => {
+    // The modal's first fetch is still out when Retry publishing's refresh
+    // returns PUBLISHING; the first fetch's stale FAILED must not win.
+    let releaseFirst: (r: Response) => void = () => {};
+    let videoCalls = 0;
+    const failed = makeVideo("FAILED");
+    vi.stubGlobal("fetch", vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/publish/retry") && init?.method === "POST") {
+        return { ok: true, json: async () => ({ outcome: "reconciling" }) } as Response;
+      }
+      if (u.endsWith("/publications")) {
+        return { ok: true, json: async () => [pub("b", "FAILED")] } as Response;
+      }
+      if (u.endsWith("/videos/vid-1")) {
+        videoCalls += 1;
+        if (videoCalls === 1) return new Promise<Response>((r) => { releaseFirst = r; });
+        return { ok: true, json: async () => makeVideo("PUBLISHING") } as Response;
+      }
+      return { ok: true, json: async () => [] } as Response;
+    }));
+    render(<VideoModal video={failed} onClose={vi.fn()} onAction={vi.fn()} publishingEnabled />);
+    fireEvent.click(await screen.findByText("Retry publishing"));
+    await waitFor(() => expect(videoCalls).toBe(2));
+    await act(async () => {});
+    await act(async () => { releaseFirst({ ok: true, json: async () => failed } as Response); });
+    await act(async () => {});
+    expect(screen.queryByText("Retry publishing")).not.toBeInTheDocument();
+  });
+});
+
 describe("VideoModal — a failed publication refresh", () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 

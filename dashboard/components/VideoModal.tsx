@@ -390,18 +390,25 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // back to the old video, and its publication rows could unlock the new
   // video's Mark as published (TMDEV-191).
   const shownVideoId = useRef<string | null>(null);
-  // Only the newest publications request may land: an older refresh of the
-  // same video would otherwise overwrite a newer one.
+  // And of the requests for that video, only the newest of each kind may land:
+  // the modal's first fetch answering after a retry's refresh would otherwise
+  // restore the pre-retry snapshot. Numbers only grow, so this also covers a
+  // video closed and reopened while its old requests were still out.
+  const videoRequest = useRef(0);
   const publicationsRequest = useRef(0);
+  const logsRequest = useRef(0);
   const [logs, setLogs] = useState<LogRecord[]>([]);
 
   const seedId = seed ? seed.id : null;
 
   function refreshVideo(id: string) {
     if (id !== shownVideoId.current) return;
+    const request = ++videoRequest.current;
     fetch(`/api/proxy/videos/${id}`)
       .then((r) => r.json())
-      .then((full: Video) => { if (id === shownVideoId.current) setVideo(full); })
+      .then((full: Video) => {
+        if (request === videoRequest.current && id === shownVideoId.current) setVideo(full);
+      })
       .catch(() => {});
   }
 
@@ -409,12 +416,15 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     // No service filter: one video's trail spans the renderer that rendered it,
     // the MCP tools that voiced and staged it, and the API calls that moved it
     // between statuses.
+    if (id !== shownVideoId.current) return;
+    const request = ++logsRequest.current;
+    const current = () => request === logsRequest.current && id === shownVideoId.current;
     fetch(`/api/proxy/logs?video_id=${encodeURIComponent(id)}&limit=200`)
       .then((r) => r.json())
       .then((data: Partial<LogsResponse>) => {
-        if (id === shownVideoId.current) setLogs(Array.isArray(data.records) ? data.records : []);
+        if (current()) setLogs(Array.isArray(data.records) ? data.records : []);
       })
-      .catch(() => { if (id === shownVideoId.current) setLogs([]); });
+      .catch(() => { if (current()) setLogs([]); });
   }
 
   function refreshPublications(id: string) {
