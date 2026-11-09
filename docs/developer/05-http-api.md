@@ -827,7 +827,7 @@ result — is on [Rendering and Review](11-rendering-and-review.md); this sectio
 | `POST /v1/heartbeat` | Body `{started, version, compute, state, video_id, claim_id, last_error, gpu_probe?}` — `video_id` and `claim_id` name the claim it is rendering (both `""` when idle). `200 {enabled, needs_upgrade, main_version, probe_now, stop, credential_expires_at, credential?}`, where `stop` is a list of `{video_id, claim_id}`: claims this renderer reported or held that it no longer holds. Only the reported claim's lease is extended |
 | `POST /v1/claim` | `204` nothing for this renderer; `409 disabled` or `409 needs_upgrade`; or `200 {video_id, claim_id, kind, needs_gpu, cartoon, mascot, total_frames, lease_secs, settings: {render_timeout_secs, render_stall_timeout_secs, watermark}}`. A renderer that already holds an unfinished claim gets that claim again, the same `claim_id` included, never a second video |
 | `GET /v1/jobs/<video_id>/bundle` | `200 application/x-tar`, streamed; `409 bundle_unavailable` when the job's files cannot be read |
-| `PUT /v1/jobs/<video_id>/output` | The raw mp4 as the body, streamed, at most `TUBEMATIC_MAX_OUTPUT_BYTES` (default 8 GiB). `200 {bytes}`; `413 output_too_large {limit}` for a larger `Content-Length` (refused before reading) or a chunked body that passes the limit (abandoned there, nothing kept); `409 upload_in_progress` while another upload for the same claim is still streaming; `503 busy` with `Retry-After` when `TUBEMATIC_MAX_CONCURRENT_UPLOADS` uploads are already streaming; `507 insufficient_storage {min_free_bytes}` when the upload would leave less than `TUBEMATIC_MIN_FREE_BYTES` free on the output filesystem (checked before reading, and again as it streams); `409 claim_lost` when the claim was lost while the body streamed (the file is discarded); `409 unsafe_path`; `500 upload_failed` |
+| `PUT /v1/jobs/<video_id>/output` | The raw mp4 as the body, streamed, at most `TUBEMATIC_MAX_OUTPUT_BYTES` (default 8 GiB). `200 {bytes}`; `413 output_too_large {limit}` for a larger `Content-Length` (refused before reading) or a chunked body that passes the limit (abandoned there, nothing kept); `409 upload_in_progress` while another upload for the same claim is still streaming; `503 busy` with `Retry-After` when `TUBEMATIC_MAX_CONCURRENT_UPLOADS` uploads are already streaming; `507 insufficient_storage {min_free_bytes}` when the upload would leave less than `TUBEMATIC_MIN_FREE_BYTES` free on the output filesystem (checked before reading, and again as it streams); `409 claim_lost` when the claim was lost while the body streamed (the file is discarded); `408 body_timeout` when the body stops arriving for 60 seconds (the file is discarded and the upload's slots released); `409 unsafe_path`; `500 upload_failed` |
 | `POST /v1/jobs/<video_id>/result` | Body `{outcome, error, on_gpu, gpu_ok, frames, seconds, gpu_probe?}`, `outcome` one of `success`, `failed`, `stalled`, `timeout`, `error`. `200 {}`; `400 bad_outcome` |
 
 The three `/v1/jobs/` routes need the claim they act for in an `X-Render-Claim: <claim_id>` header,
@@ -836,15 +836,16 @@ and answer `403 not_lease_holder` unless the caller holds exactly that claim: th
 whose lease ran out is refused even after it has claimed the same video again. Why, and the two
 checks made again later (before an upload is renamed into place, and inside the transaction that
 routes a failure), is in [Leases](11-rendering-and-review.md#leases-restarts-and-lost-renderers). A
-missing or unknown credential is `401 unauthorized`; an expired one is `401 credential_expired`.
+missing or unknown credential is `401 unauthorized`; an expired one is `401 credential_expired`. Any
+route can also answer `408 body_timeout` or `503 busy`, see [Time bounds](#time-bounds).
 
 **Every route but the upload takes a small JSON body, and reads at most 64 KiB of it**
 (`render_gateway.py::MAX_JSON_BYTES`, fixed). A larger `Content-Length` is refused with
 `413 body_too_large {limit}` before a byte is read; a chunked body is read only until it passes the
-limit, then refused the same way. The check runs before authentication and before any parse, so
-the open enroll route bounds what an unauthenticated caller can make the gateway hold, and nothing
-on these routes ever reads an unbounded body. Only `PUT /output` streams a large body, under its
-own limits:
+limit, then refused the same way. The check runs before any parse, on the open enroll route too, so
+nothing on these routes ever reads an unbounded body. A protected route is authenticated first, from
+its headers alone, so a caller without a credential is answered `401` without a byte of its body
+being read. Only `PUT /output` streams a large body, under its own limits:
 
 | Limit | Environment variable | Default | Answer past it |
 |---|---|---|---|
@@ -855,6 +856,41 @@ own limits:
 
 The concurrency answers come before the body is read or a temp file made. Why each exists is in
 [The bundle, staging and the render call](11-rendering-and-review.md#the-bundle-staging-and-the-render-call).
+An upload is written to a temporary file in `<output>/.gateway-uploads/` and renamed into place
+once it is complete and its claim still holds; see
+[Infrastructure](16-infrastructure.md#tubematic-api) for that directory.
+
+### Time bounds
+
+A byte limit alone does not bound a request: a client that sends one byte a minute never reaches
+64 KiB and holds a gateway thread for ever, and the werkzeug server under the gateway gives every
+connection a thread and, left to itself, waits on a silent client indefinitely. So every connection
+is also bounded in time (`render_gateway.py::_GatewayRequestHandler`, constants in
+`render_gateway.py`, all fixed):
+
+| Bound | Value | When it runs out |
+|---|---|---|
+| Each read or write makes progress (the socket timeout) | 60 s | A body read: `408 body_timeout`, and the connection is closed. Anything else: the connection is closed |
+| The TLS handshake, request line and headers, all together | 30 s | The connection is closed |
+| A JSON body, all of it | 30 s | `408 body_timeout` |
+| Reading what is left of an unread body after the reply | 5 s | The connection is closed |
+| An upload's body | No total limit; the 60 s per read applies | `408 body_timeout`, its temporary file deleted and its upload slot released |
+
+Each bound is a deadline across many reads, not a timeout per read: a client trickling a byte just
+inside the per-read timeout still runs into it. The TLS handshake is made in the connection's own
+thread rather than in the server's accept loop, where one client that never finished it would stop
+every other connection from being accepted.
+
+An upload has no total limit on purpose: a long video over a slow home link takes as long as it
+takes, and the upload caps above already bound how many there are. A renderer whose upload stalls is
+cut off after 60 seconds of silence and simply tries again.
+
+Two caps bound how many requests can be waiting on a body at once:
+
+| Cap | Value | Answer past it |
+|---|---|---|
+| Enrollment bodies being read at once — the only body the gateway reads for a caller it does not know | 4 | `503 busy`, `Retry-After: 10`, before a byte is read |
+| Requests one renderer has in the gateway at once (a renderer makes at most three: its heartbeat, one job request, and a retry overlapping an upload still being received) | 8 | `503 busy`, `Retry-After: 10` |
 
 **Why a port of its own, and why renderer credentials work only here.** Port 4000 is bound to
 loopback and takes the API token, which can change any setting, approve paid work and publish. A renderer on another machine needs a port it can reach, and must be

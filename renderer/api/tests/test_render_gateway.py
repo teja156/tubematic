@@ -9,11 +9,14 @@ included: it extends and stops by claim, not by video), the bundle and the
 upload, how each result moves the video, and the bounds on what a renderer
 can make the gateway hold (the JSON body limit on every JSON route, the open
 enroll route included; one upload per claim, a global upload cap and a free
-space floor).
+space floor), and for how long (authentication before any body is read, the
+idle, head, JSON-body and drain deadlines, the enrollment-reader and
+per-renderer caps, a stalled upload releasing its slot), and the upload
+temporary directory (cleared at start, swept by age, never followed).
 
-Driven through Flask's test client against a migrated temporary database; one
-test serves the app over real TLS to prove the pinned certificate is what a
-client trusts.
+Driven through Flask's test client against a migrated temporary database; the
+time bounds and one TLS test serve the app over real TLS on 127.0.0.1 and talk
+to it over raw sockets.
 
 Run from renderer/api/: pytest tests/test_render_gateway.py
 """
@@ -815,7 +818,8 @@ def test_the_output_is_streamed_into_place(env, monkeypatch):
     assert resp.status_code == 200 and resp.get_json() == {"bytes": 100}
     out = env.out / "proj-1" / "vid-1.mp4"
     assert out.read_bytes() == data
-    assert sorted(p.name for p in out.parent.iterdir()) == ["vid-1.mp4"]     # no temp left behind
+    assert sorted(p.name for p in out.parent.iterdir()) == ["vid-1.mp4"]
+    assert _temps(env) == []                                                  # no temp left behind
 
 
 def test_the_upload_never_reads_the_whole_body_into_memory(env, monkeypatch):
@@ -869,6 +873,12 @@ def _upload_dir(env):
     return sorted(p.name for p in d.iterdir()) if d.is_dir() else []
 
 
+def _temps(env):
+    """The gateway's upload temp directory, which is never beside a video."""
+    d = env.out / render_gateway.UPLOAD_TMP_DIR
+    return sorted(p.name for p in d.iterdir()) if d.is_dir() else []
+
+
 def test_an_upload_over_the_declared_limit_is_refused_before_reading(env, monkeypatch):
     _claimed(env)
     monkeypatch.setattr(render_gateway, "MAX_OUTPUT_BYTES", 10)
@@ -886,11 +896,11 @@ def test_a_chunked_upload_over_the_limit_is_aborted_and_its_temp_file_removed(en
     monkeypatch.setattr(render_gateway, "MAX_OUTPUT_BYTES", 10)
     monkeypatch.setattr(render_gateway, "CHUNK_BYTES", 4)
     seen = []
-    body = _Body(1 << 20, chunk=4, on_read=lambda n: seen.append(_upload_dir(env)))
+    body = _Body(1 << 20, chunk=4, on_read=lambda n: seen.append(_temps(env)))
     resp = _raw_put(env, body, J(env))
     assert resp.status_code == 413 and resp.get_json()["error"] == "output_too_large"
     assert any(name.endswith(".upload") for name in seen[-1])     # it was being written ...
-    assert _upload_dir(env) == []                                  # ... and is gone
+    assert _temps(env) == [] and _upload_dir(env) == []            # ... and is gone
     assert body.reads <= 4                                         # stopped at the limit, not at EOF
 
 
@@ -922,7 +932,7 @@ def test_a_stale_upload_never_replaces_the_new_claims_output(env):
     resp = _raw_put(env, _Body(8, fill=b"A", on_read=take_over), J(env, B, a_claim), length=8)
     assert resp.status_code == 409 and resp.get_json() == {"error": "claim_lost"}
     assert (env.out / "proj-1" / "vid-1.mp4").read_bytes() == b"B-OUTPUT"
-    assert _upload_dir(env) == ["vid-1.mp4"]                       # A's temp file is gone
+    assert _upload_dir(env) == ["vid-1.mp4"] and _temps(env) == []  # A's temp file is gone
     v = _video(env)
     assert v["renderer_id"] == rid and v["render_claim_id"] == took_over["claim"]
 
@@ -937,11 +947,11 @@ def test_a_second_upload_for_the_same_claim_is_refused_while_the_first_streams(e
 
     def second(n):
         if n == 2:
-            seen["temps"] = [p for p in _upload_dir(env) if p.endswith(".upload")]
+            seen["temps"] = _temps(env)
             body = _Body(8, on_read=lambda _n: pytest.fail("the second upload's body was read"))
             r = _raw_put(env, body, J(env), length=8)
             seen["status"], seen["json"] = r.status_code, r.get_json()
-            seen["temps_after"] = [p for p in _upload_dir(env) if p.endswith(".upload")]
+            seen["temps_after"] = _temps(env)
     resp = _raw_put(env, _Body(12, fill=b"F", on_read=second), J(env), length=12)
     assert seen["status"] == 409 and seen["json"] == {"error": "upload_in_progress"}
     assert len(seen["temps"]) == 1 and seen["temps_after"] == seen["temps"]     # no second temp file
@@ -969,11 +979,11 @@ def test_uploads_across_claims_are_capped(env, monkeypatch):
             r = env.client.put("/v1/jobs/vid-2/output", data=b"B", headers=J(env, h, b["claim_id"]))
             seen["status"], seen["json"] = r.status_code, r.get_json()
             seen["retry_after"] = r.headers.get("Retry-After")
-            seen["files"] = sorted(p.name for p in (env.out / "proj-1").iterdir())
+            seen["temps"] = _temps(env)
     resp = _raw_put(env, _Body(4, on_read=other), J(env, B, a_claim), length=4)
     assert resp.status_code == 200
     assert seen["status"] == 503 and seen["json"] == {"error": "busy"} and seen["retry_after"]
-    assert not any("vid-2" in name for name in seen["files"])                 # no temp file for it
+    assert len(seen["temps"]) == 1                                            # only the first one's temp file
     assert env.client.put("/v1/jobs/vid-2/output", data=b"B", headers=J(env, h, b["claim_id"])).status_code == 200
 
 
@@ -1013,12 +1023,12 @@ def test_a_chunked_upload_is_stopped_when_free_space_runs_low(env, monkeypatch):
     monkeypatch.setattr(render_gateway, "DISK_CHECK_BYTES", 8)
     calls = _free(monkeypatch, [5000, 5000, 900])
     seen = []
-    body = _Body(1 << 20, chunk=4, on_read=lambda n: seen.append(_upload_dir(env)))
+    body = _Body(1 << 20, chunk=4, on_read=lambda n: seen.append(_temps(env)))
     resp = _raw_put(env, body, J(env))
     assert resp.status_code == 507 and resp.get_json()["error"] == "insufficient_storage"
     assert len(calls) == 3                                         # before, at 8 bytes, at 16 bytes
     assert any(name.endswith(".upload") for name in seen[-1])      # it was being written ...
-    assert _upload_dir(env) == []                                  # ... and is gone
+    assert _temps(env) == [] and _upload_dir(env) == []            # ... and is gone
     assert body.reads <= 5
 
 
@@ -1186,6 +1196,396 @@ def test_a_bad_outcome_is_refused(env):
     _claimed(env)
     assert _result(env, outcome="done").status_code == 400
     assert _video(env)["status"] == "RENDERING"
+
+
+# ── concurrency caps (test client) ────────────────────────────────────────────
+
+def _enroll_body(env):
+    con = sqlite3.connect(env.db)
+    secret, _ = renderers.create_enrollment(con, "")
+    con.commit()
+    con.close()
+    return json.dumps({"secret": secret, "machine_id": f"m-{secret[:6]}", "version": VERSION}).encode()
+
+
+def test_unauthenticated_enrollment_bodies_are_capped(env, monkeypatch):
+    """Only MAX_ENROLL_READERS enrollment bodies are read at once: one more
+    is refused busy before a byte of it is read, and the slot comes back."""
+    monkeypatch.setattr(render_gateway, "MAX_ENROLL_READERS", 1)
+    seen = {}
+    payload = _enroll_body(env)
+
+    def second(n):
+        if n == 1:
+            body = _Body(8, on_read=lambda _n: pytest.fail("the refused enrollment's body was read"))
+            r = _raw_put(env, body, {"Content-Type": "application/json"}, length=8,
+                         path="/v1/enroll", method="POST")
+            seen["status"], seen["json"], seen["retry"] = r.status_code, r.get_json(), r.headers.get("Retry-After")
+
+    class Slow(io.RawIOBase):
+        def __init__(self):
+            self.data, self.reads = io.BytesIO(payload), 0
+
+        def readable(self):
+            return True
+
+        def readinto(self, b):
+            self.reads += 1
+            second(self.reads)
+            return self.data.readinto(b)
+    resp = _raw_put(env, Slow(), {"Content-Type": "application/json"}, length=len(payload),
+                    path="/v1/enroll", method="POST")
+    assert resp.status_code == 200
+    assert seen["status"] == 503 and seen["json"] == {"error": "busy"} and seen["retry"]
+    assert _raw_put(env, io.BytesIO(_enroll_body(env)), {"Content-Type": "application/json"},
+                    path="/v1/enroll", method="POST").status_code == 200
+
+
+def test_one_renderers_requests_at_once_are_capped(env, monkeypatch):
+    _claimed(env)
+    _rid, h = _remote(env)
+    monkeypatch.setattr(render_gateway, "MAX_REQUESTS_PER_RENDERER", 1)
+    seen = {}
+
+    def during(n):
+        if n == 1:
+            r = _beat(env)
+            seen["builtin"], seen["json"] = r.status_code, r.get_json()
+            seen["other"] = _beat(env, h).status_code
+    resp = _raw_put(env, _Body(4, on_read=during), J(env), length=4)
+    assert resp.status_code == 200
+    assert seen["builtin"] == 503 and seen["json"] == {"error": "busy"}
+    assert seen["other"] == 200                                    # another renderer is not held up
+    assert _beat(env).status_code == 200                           # and the count comes back
+
+
+def test_a_json_body_is_bounded_in_time(env, monkeypatch):
+    """Checked between reads too, so a body trickled slower than its deadline
+    ends with 408 even where no socket deadline applies."""
+    monkeypatch.setattr(render_gateway, "JSON_BODY_SECS", 0.2)
+    payload = json.dumps({"version": VERSION, "state": "idle"}).encode()
+
+    class Trickle(io.RawIOBase):
+        def __init__(self):
+            self.data = io.BytesIO(payload)
+
+        def readable(self):
+            return True
+
+        def readinto(self, b):
+            time.sleep(0.05)
+            return self.data.readinto(b[:2])
+    resp = _raw_put(env, Trickle(), {**B, "Content-Type": "application/json"}, path="/v1/heartbeat", method="POST")
+    assert resp.status_code == 408 and resp.get_json() == {"error": "body_timeout"}
+    assert _renderer(env)["last_heartbeat_at"] == ""
+
+
+class _Stalls(io.RawIOBase):
+    """A body that hands out `first` bytes, then times out (as a socket read
+    whose idle timeout ran out does)."""
+
+    def __init__(self, first):
+        self.left = first
+
+    def readable(self):
+        return True
+
+    def readinto(self, b):
+        if self.left <= 0:
+            raise TimeoutError("timed out")
+        take = min(self.left, len(b), 4)
+        b[:take] = b"S" * take
+        self.left -= take
+        return take
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+def test_an_upload_that_stalls_releases_its_slot_and_its_temp_file(env, monkeypatch, chunked):
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "CHUNK_BYTES", 4)
+    monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 1)
+    resp = _raw_put(env, _Stalls(12), J(env), length=None if chunked else 100)
+    assert resp.status_code == 408 and resp.get_json() == {"error": "body_timeout"}
+    assert _temps(env) == [] and _upload_dir(env) == []
+    # neither the claim's slot nor the only global one is still held
+    assert env.client.put("/v1/jobs/vid-1/output", data=b"AGAIN", headers=J(env)).status_code == 200
+
+
+# ── upload temp files ─────────────────────────────────────────────────────────
+
+def test_leftover_temp_uploads_are_cleared_when_the_gateway_starts(env, tmp_path):
+    temps = env.out / render_gateway.UPLOAD_TMP_DIR
+    temps.mkdir(exist_ok=True)                              # made by the env's own gateway
+    (temps / "abc.upload").write_bytes(b"orphan")
+    (env.out / "proj-1").mkdir()
+    final = env.out / "proj-1" / "vid-1.mp4"
+    final.write_bytes(b"VIDEO")
+    outside = tmp_path / "precious.upload"
+    outside.write_bytes(b"keep")
+    (temps / "link.upload").symlink_to(outside)
+    (temps / "notes.txt").write_text("not ours")
+    (temps / "dir.upload").mkdir()
+    render_gateway.create_gateway_app(env.db, env.jobs, env.out, secrets_dir=env.secrets, remotion_dir=env.remotion)
+    assert _temps(env) == ["dir.upload", "notes.txt"]       # only temp uploads go; a directory stays
+    assert final.read_bytes() == b"VIDEO"                   # the video beside it is untouched
+    assert outside.read_bytes() == b"keep"                  # a link is removed, never followed
+
+
+def test_a_symlinked_upload_dir_is_never_used(env, tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "x.upload").write_bytes(b"keep")
+    (env.out / render_gateway.UPLOAD_TMP_DIR).rmdir()      # made by the env's own gateway
+    (env.out / render_gateway.UPLOAD_TMP_DIR).symlink_to(elsewhere)
+    app = render_gateway.create_gateway_app(env.db, env.jobs, env.out, secrets_dir=env.secrets,
+                                            remotion_dir=env.remotion)
+    assert (elsewhere / "x.upload").read_bytes() == b"keep"
+    env.client = app.test_client()
+    _claimed(env)
+    resp = env.client.put("/v1/jobs/vid-1/output", data=b"MP4", headers=J(env))
+    assert resp.status_code == 500 and resp.get_json()["error"] == "upload_failed"
+    assert sorted(p.name for p in elsewhere.iterdir()) == ["x.upload"]
+
+
+def test_old_orphans_are_swept_when_an_upload_is_admitted(env):
+    _claimed(env)
+    temps = env.out / render_gateway.UPLOAD_TMP_DIR
+    temps.mkdir(exist_ok=True)
+    old, fresh = temps / "old.upload", temps / "fresh.upload"
+    old.write_bytes(b"o")
+    fresh.write_bytes(b"f")
+    then = time.time() - render_gateway.UPLOAD_ORPHAN_SECS - 60
+    os.utime(old, (then, then))
+    assert env.client.put("/v1/jobs/vid-1/output", data=b"MP4", headers=J(env)).status_code == 200
+    assert _temps(env) == ["fresh.upload"]
+
+
+def test_the_sweep_never_takes_an_upload_being_written(env, monkeypatch):
+    """Even with no age margin, a second claim's admission leaves the first
+    claim's temp file alone while it streams."""
+    _claimed(env)
+    a_claim = env.claim
+    _rid, h = _remote(env)
+    _seed(env, "vid-2", updated="2026-01-02T00:00:00Z")
+    b = env.client.post("/v1/claim", json={}, headers=h).get_json()
+    monkeypatch.setattr(render_gateway, "UPLOAD_ORPHAN_SECS", 0)
+    monkeypatch.setattr(render_gateway, "CHUNK_BYTES", 4)
+    seen = {}
+
+    def other(n):
+        if n == 2:
+            seen["b"] = env.client.put("/v1/jobs/vid-2/output", data=b"B", headers=J(env, h, b["claim_id"])).status_code
+    resp = _raw_put(env, _Body(12, fill=b"A", on_read=other), J(env, B, a_claim), length=12)
+    assert seen["b"] == 200
+    assert resp.status_code == 200 and (env.out / "proj-1" / "vid-1.mp4").read_bytes() == b"A" * 12
+
+
+# ── time bounds on a real server ──────────────────────────────────────────────
+
+@pytest.fixture
+def live(env, tmp_path, monkeypatch):
+    """The gateway served over real TLS on 127.0.0.1, with short time bounds
+    (set them on render_gateway before calling `start`)."""
+    tls = tmp_path / "live-tls"
+    tauth.ensure_secrets(tls)
+    started = []
+
+    def start(**bounds):
+        for k, v in bounds.items():
+            monkeypatch.setattr(render_gateway, k, v)
+        server = render_gateway.make_gateway_server(env.app, "127.0.0.1", 0, secrets_dir=tls)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        started.append((server, thread))
+        return server.server_port
+
+    def connect(port, handshake=True):
+        import socket
+        raw = socket.create_connection(("127.0.0.1", port), timeout=10)
+        if not handshake:
+            return raw
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx.wrap_socket(raw)
+    yield type("Live", (), {"start": staticmethod(start), "connect": staticmethod(connect)})
+    for server, thread in started:
+        server.shutdown()
+        thread.join(5)
+
+
+def _request_threads():
+    return [t for t in threading.enumerate() if "process_request_thread" in t.name]
+
+
+def _wait_no_request_threads(secs=5.0):
+    end = time.monotonic() + secs
+    while _request_threads() and time.monotonic() < end:
+        time.sleep(0.05)
+    return _request_threads()
+
+
+def _reply(sock, timeout=10.0) -> tuple[bytes, float]:
+    """Everything the server sends until it closes, and how long that took."""
+    sock.settimeout(timeout)
+    t0 = time.monotonic()
+    data = b""
+    while True:
+        try:
+            chunk = sock.recv(65536)
+        except (ssl.SSLError, OSError):
+            break
+        if not chunk:
+            break
+        data += chunk
+    return data, time.monotonic() - t0
+
+
+def _head(path, headers, method="POST") -> bytes:
+    lines = [f"{method} {path} HTTP/1.1", "Host: gateway"] + [f"{k}: {v}" for k, v in headers.items()]
+    return ("\r\n".join(lines) + "\r\n\r\n").encode()
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+def test_a_json_body_that_stalls_is_ended_and_its_thread_freed(env, live, chunked):
+    port = live.start(GATEWAY_IDLE_TIMEOUT_SECS=1)
+    sock = live.connect(port)
+    framing = {"Transfer-Encoding": "chunked"} if chunked else {"Content-Length": "500"}
+    sock.sendall(_head("/v1/enroll", {"Content-Type": "application/json", **framing}))
+    sock.sendall(b"5\r\n{\"sec\r\n" if chunked else b"{\"sec")         # well under the limit, then nothing
+    data, took = _reply(sock)
+    sock.close()
+    assert data.startswith(b"HTTP/1.1 408") and b"body_timeout" in data
+    assert took < 5
+    assert _wait_no_request_threads() == []
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+def test_a_json_body_trickled_past_its_deadline_is_ended(env, live, chunked):
+    """Each byte arrives inside the idle timeout, so only the body's total
+    deadline can end it. Chunked, one large chunk is announced and trickled:
+    werkzeug then asks for the whole chunk in one read, which only the
+    connection's reader can cut short."""
+    port = live.start(GATEWAY_IDLE_TIMEOUT_SECS=5, JSON_BODY_SECS=1)
+    sock = live.connect(port)
+    framing = {"Transfer-Encoding": "chunked"} if chunked else {"Content-Length": "60000"}
+    sock.sendall(_head("/v1/enroll", {"Content-Type": "application/json", **framing})
+                 + (b"ea60\r\n" if chunked else b""))
+    stop = threading.Event()
+
+    def trickle():
+        while not stop.wait(0.2):
+            try:
+                sock.sendall(b" ")
+            except OSError:
+                return
+    t = threading.Thread(target=trickle, daemon=True)
+    t.start()
+    try:
+        data, took = _reply(sock, timeout=8)
+    finally:
+        stop.set()
+        t.join(2)
+        sock.close()
+    assert data.startswith(b"HTTP/1.1 408") and took < 4
+    assert _wait_no_request_threads() == []
+
+
+@pytest.mark.parametrize("length", ["1000", str(1 << 40)])
+def test_a_protected_route_answers_401_without_reading_its_body(env, live, length):
+    """The body is announced and never sent: authentication needs only the
+    headers, so the refusal comes at once, not after a read times out."""
+    port = live.start(GATEWAY_IDLE_TIMEOUT_SECS=5)
+    sock = live.connect(port)
+    sock.sendall(_head("/v1/heartbeat", {"Authorization": "Bearer nope", "Content-Type": "application/json",
+                                         "Content-Length": length}))
+    data, took = _reply(sock)
+    sock.close()
+    assert data.startswith(b"HTTP/1.1 401") and b"unauthorized" in data
+    assert took < 2
+
+
+def test_an_unread_body_after_a_reply_is_drained_only_briefly(env, live):
+    """werkzeug reads what is left of a body after the reply so the client
+    sees it (as long as more keeps arriving within 10 ms, up to 10 GB); a
+    client that keeps trickling gets DRAIN_SECS of that, then the connection
+    closes."""
+    port = live.start(GATEWAY_IDLE_TIMEOUT_SECS=5, DRAIN_SECS=1)
+    sock = live.connect(port)
+    sock.sendall(_head("/v1/heartbeat", {"Authorization": "Bearer nope", "Content-Length": str(1 << 30)})
+                 + b"x" * 100)
+    stop = threading.Event()
+
+    def trickle():
+        while not stop.wait(0.003):
+            try:
+                sock.sendall(b"x")
+            except OSError:
+                return
+    t = threading.Thread(target=trickle, daemon=True)
+    t.start()
+    try:
+        data, took = _reply(sock, timeout=10)
+    finally:
+        stop.set()
+        t.join(2)
+        sock.close()
+    assert data.startswith(b"HTTP/1.1 401") and took < 4
+    assert _wait_no_request_threads() == []
+
+
+def test_a_request_head_trickled_past_its_deadline_is_closed(env, live):
+    port = live.start(GATEWAY_IDLE_TIMEOUT_SECS=5, REQUEST_HEAD_SECS=1)
+    sock = live.connect(port)
+    sock.sendall(b"GET /v1/version HTTP/1.1\r\n")
+    stop = threading.Event()
+
+    def trickle():
+        while not stop.wait(0.2):
+            try:
+                sock.sendall(b"X-Slow: 1\r\n")
+            except OSError:
+                return
+    t = threading.Thread(target=trickle, daemon=True)
+    t.start()
+    try:
+        data, took = _reply(sock, timeout=8)
+    finally:
+        stop.set()
+        t.join(2)
+        sock.close()
+    assert b"200" not in data and took < 4
+    assert _wait_no_request_threads() == []
+
+
+def test_a_client_that_never_finishes_its_handshake_holds_up_no_one(env, live):
+    """The handshake happens in the connection's own thread under the head
+    deadline, never in the accept loop."""
+    port = live.start(REQUEST_HEAD_SECS=30)
+    silent = live.connect(port, handshake=False)        # TCP only; no ClientHello ever
+    try:
+        sock = live.connect(port)
+        sock.sendall(_head("/v1/version", {}, method="GET"))
+        data, took = _reply(sock, timeout=5)
+        sock.close()
+        assert data.startswith(b"HTTP/1.1 200") and took < 3
+    finally:
+        silent.close()
+
+
+def test_a_stalled_upload_on_a_real_server_frees_its_slot(env, live, monkeypatch):
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 1)
+    port = live.start(GATEWAY_IDLE_TIMEOUT_SECS=1)
+    sock = live.connect(port)
+    sock.sendall(_head("/v1/jobs/vid-1/output", {**J(env), "Content-Length": "1000000"}, method="PUT"))
+    sock.sendall(b"M" * 1000)
+    data, took = _reply(sock)
+    sock.close()
+    assert data.startswith(b"HTTP/1.1 408") and took < 5
+    assert _temps(env) == [] and _upload_dir(env) == []
+    assert _wait_no_request_threads() == []
+    assert env.client.put("/v1/jobs/vid-1/output", data=b"AGAIN", headers=J(env)).status_code == 200
 
 
 # ── the whole path, twice, by the scheduler ───────────────────────────────────
