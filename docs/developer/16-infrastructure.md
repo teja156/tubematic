@@ -18,16 +18,23 @@ Everything runs from `docker-compose.yml`. Five services, six volumes, one netwo
 | | |
 |---|---|
 | Build | `renderer/Dockerfile`, context = repo root, tagged `tubematic-renderer-image` |
-| Ports | `127.0.0.1:4000` Flask |
+| Ports | `127.0.0.1:4000` Flask; 4443, the render gateway over HTTPS, on the Compose network only (not published) |
 | Command | `entrypoint.sh python3 /app/api/server.py` |
 | Restart | `unless-stopped` |
 | Healthcheck | `curl -fs localhost:4000/health`, every 15s, 5 retries |
 | Mounts | all six data volumes, plus `/etc/localtime` and `/etc/timezone` read-only |
-| Secrets | `api_token` |
+| Secrets | `api_token`, `builtin_renderer_token`, `render_tls_key`, `render_tls_cert` |
 | Depends on | nothing |
 
-Flask and nothing else. The healthcheck names only port 4000, so this container's health reflects
-exactly the process it runs.
+Flask, and in a thread of the same process the render gateway (`TUBEMATIC_GATEWAY_PORT=4443`), the
+second Flask app every renderer calls — see [HTTP API — The render gateway](05-http-api.md#the-render-gateway).
+The healthcheck names only port 4000, so this container's health says nothing about the gateway.
+When the TLS pair is missing the gateway does not start and logs an error saying so; the API still
+serves the dashboard, and renderers cannot reach it until the secrets exist and the API is restarted.
+
+**4443 is not published by `docker-compose.yml`.** The built-in renderer reaches it as
+`https://tubematic-api:4443` over the Compose network, which needs no published port. A renderer on
+another machine would need it published, and nothing in this release does that.
 
 `tubematic-api` deliberately depends on no other service. The dashboard and the poller reach the
 pipeline through Flask, and that path has to keep working when the MCP server is down.
@@ -54,7 +61,7 @@ door, but the narrowest reach is still the right default behind it.
 
 `logs-data` is a write path, not a read one: MCP appends its own `mcp.*.jsonl` and never reads
 another service's — Flask is the only reader. `backups-data` is a write path too, and it is not
-optional: every one of the four backend services calls `migrate()` itself rather than assuming
+optional: every one of the three services that open the database calls `migrate()` itself rather than assuming
 another process already has, and each one that migrates must be able to back up first — one that
 silently could not would fail closed on every start. See [Backups](#backups).
 
@@ -74,18 +81,42 @@ stalled-voicing check — see [The Worker](12-the-worker.md).
 
 Its mounts are `output-videos`, `jobs-data`, `db-data`, `logs-data`, `backups-data` and the two
 timezone files, and nothing else. `output-videos` and `jobs-data` because retention deletes a video's
-mp4 and job directory; the timezone files because Auto Pilot's daily numbers and a scheduled post's
-wall time are host-zone days. No `scenes-generated`: it never reads or writes a scene.
+mp4 and job directory, and the AI review reads the uploaded mp4 and the job's scene-config; the
+timezone files because Auto Pilot's daily numbers and a scheduled post's wall time are host-zone days.
+No `scenes-generated`: it never reads or writes a scene. It holds no secret file: the API keys it uses
+(Gemini for the review, postforme for publishing) are rows in the settings table.
 
 Like the renderer, its `command:` is the bare interpreter, so it never runs `entrypoint.sh` and
 applies its own umask at startup.
 
 ### `tubematic-renderer`
 
-The same image, no `build:` section, `command: python3 /app/api/render_agent.py`. Same six volumes and
-the same timezone mounts as the API, no published ports, `shm_size: 2gb` for Chromium, and
-`depends_on: tubematic-api: service_healthy`. It renders, reviews and tests the GPU, and nothing else
-— see [Rendering and Review](11-rendering-and-review.md). It runs one child process beside its
+The same image, no `build:` section, `command: python3 /app/api/render_agent.py`. The built-in
+renderer. No published ports, `shm_size: 2gb` for Chromium, and
+`depends_on: tubematic-api: service_healthy`. It renders and tests its GPU, and nothing else — see
+[Rendering and Review](11-rendering-and-review.md).
+
+**It has no database and no output volume.** It talks to the render gateway in `tubematic-api` over
+HTTPS exactly as a renderer on another machine would: it claims a video, downloads the job's files as
+one bundle and uploads the finished mp4. So `db-data`, `output-videos` and `backups-data` are not
+mounted — the gateway writes the upload into the library, the worker runs the AI review, and this
+container never migrates anything. What it mounts:
+
+| Mount | Why |
+|---|---|
+| `scenes-generated` | Renders compile the shared generated-scene tree, as they always did (a remote renderer would stage the bundle's copy instead) |
+| `jobs-data`, **read-only** | The stills server below reads a video's job files; renders use the bundle |
+| `logs-data` | Its own JSONL log for the dashboard's Logs page |
+| `/etc/localtime`, `/etc/timezone` | Log timestamps in the host zone |
+
+| Environment / secret | |
+|---|---|
+| `TUBEMATIC_GATEWAY_URL=https://tubematic-api:4443` | Where the gateway is |
+| `TUBEMATIC_RENDERER_BUILTIN=1` | Authenticate as the built-in renderer rather than from an enrollment state file |
+| `builtin_renderer_token` | Its credential, read on every request |
+| `render_tls_cert` | The only certificate it trusts. It never gets the key |
+
+It runs one child process beside its
 renders: the Cartoon 3D stills server on `TUBEMATIC_STILLS_PORT` (4455), reachable on the Compose network only,
 which the MCP container's gate and preview tools use so their stills render on this container's GPU
 (see [Rendering and Review](11-rendering-and-review.md#the-stills-server)).
@@ -93,7 +124,8 @@ which the MCP container's gate and preview tools use so their stills render on t
 Its `command:` is the bare interpreter, so unlike the API and the MCP server it **never runs
 `entrypoint.sh`** — which is why it applies its own umask at startup rather than inheriting one.
 
-It is the only service that can get a GPU, and only through the override below.
+It is the only service that can get a GPU, and only through the override below. Its GPU test
+travels to the API in its heartbeats, so the API, which has no GPU, never guesses.
 
 #### GPU override
 
@@ -173,8 +205,8 @@ a rebuild of `tubematic-api` is a rebuild of the other three.
 
 Flask and the MCP server publish on `127.0.0.1` rather than every interface. This costs nothing
 internally: container-to-container traffic goes over the compose network by service name and never
-touches a published port, which is why the worker and the renderer can talk to the same database with no `ports:`
-entry at all. Publishing exists only for callers on the host — the poller, the status script, `curl`
+touches a published port, which is why the worker can use the database and the renderer can reach
+the render gateway with no `ports:` entry at all. Publishing exists only for callers on the host — the poller, the status script, `curl`
 and the agent's MCP client, all of which use `localhost`.
 
 The MCP port is the one that matters. Its tools mutate pipeline state, write files, spend money on
@@ -186,12 +218,13 @@ reachable from another device on the network — behind its login. A release ins
 
 ## Authentication
 
-Three containers listen, and each one checks every request:
+Three containers listen, and each one checks every request (the API on two ports):
 
 | Service | Callers | Check |
 |---|---|---|
 | `tubematic-dashboard` | browsers | A signed session cookie, set after the dashboard password |
 | `tubematic-api` | the dashboard, the poller, `vqa/edit_settings.py`, `curl` | `Authorization: Bearer <api_token>` |
+| `tubematic-api`, render gateway (4443) | renderers | TLS with a pinned certificate, then `Authorization: Bearer <renderer credential>` |
 | `tubematic-mcp` | the agent CLIs | `Authorization: Bearer <mcp_token>` |
 
 **Sessions for people, tokens for programs.** A browser cannot hold a bearer token safely, and a
@@ -201,7 +234,8 @@ Flask), which return nothing a caller could use.
 
 **The worker and the renderer have no check because they have nothing to protect**: neither
 publishes a port, and the worker listens on none. The renderer's one listener, the stills server, is
-on the Compose network only.
+on the Compose network only. The renderer is a *caller* instead: of the render gateway, with its own
+credential.
 
 The dashboard makes one outbound call of its own: the [update check](15-dashboard.md#update-check)
 reads `api.github.com` at most every two hours, unauthenticated. Without internet access it fails
@@ -209,13 +243,22 @@ quietly and nothing else is affected.
 
 ### The secrets directory
 
-`~/.tubematic-data/secrets/` holds one file per secret, each a random 256-bit value:
+`~/.tubematic-data/secrets/` holds one file per secret. The four tokens are each a random 256-bit
+value; the last two are the render gateway's TLS pair:
 
 | File | Read by | What it is |
 |---|---|---|
 | `api_token` | Flask, the dashboard, the poller, host scripts | Flask's bearer token |
 | `mcp_token` | the MCP server, the agent CLIs | The MCP server's bearer token |
 | `session_secret` | the dashboard | The key its session cookies are signed with |
+| `builtin_renderer_token` | the render gateway, the built-in renderer | The built-in renderer's credential at the gateway |
+| `render_tls_key` | the render gateway (`tubematic-api` only) | The gateway's EC P-256 private key |
+| `render_tls_cert` | the render gateway, the built-in renderer | Its self-signed certificate, the one every renderer pins. Why it is pinned and never rotated: [HTTP API — TLS and the certificate pin](05-http-api.md#tls-and-the-certificate-pin) |
+
+The TLS pair is made by `tubematic_core.auth.ensure_secrets` with the `cryptography` package, which is
+why onboarding's and the upgrade's own dependency bootstrap (`onboard/bootstrap.py::ensure_deps`)
+installs it: a single `--step` run, or an upgrade, reaches the secrets before `python_deps` has run.
+The pair is created together whenever either file is missing or empty, and never replaced once whole.
 
 Onboarding's `auth` step creates them, and so does any stack start or upgrade that finds one missing.
 Nothing ever replaces an existing one except `onboard.py --rotate-tokens`. Compose mounts each file
@@ -226,7 +269,8 @@ source path does not exist": the stack fails closed rather than starting open.
 **The directory is `0700` but the files are `0644`, on purpose.** Compose mounts each file on its own,
 which bypasses the directory's permissions inside the container — and the dashboard runs as uid
 1001, not your user, so a `0600` file would be unreadable there. The `0700` directory is what keeps
-other users on the host out.
+other users on the host out. The TLS key follows the same rule, so there is one rule for every file;
+only `tubematic-api` mounts it.
 
 **A rotation rewrites each file in place.** A bind mount pins the inode it was started with, so an
 atomic rename would leave every running container reading the old value until it was recreated.
@@ -236,6 +280,8 @@ outside the settings API, so `GET /settings` never returns it and `POST /setting
 
 ### How each caller gets its token
 
+- **The built-in renderer** reads `builtin_renderer_token` and `render_tls_cert` on every request,
+  and the gateway reads the token on every request too, so a rotation needs no restart of either.
 - **The dashboard** reads `api_token` and `session_secret` on every request rather than once at
   start-up, so a new password or a rotation takes effect without restarting it.
 - **The poller** adds the token to every request it makes to Flask, reading the file each time,
@@ -251,10 +297,10 @@ outside the settings API, so `GET /settings` never returns it and `POST /setting
 | Command | Effect |
 |---|---|
 | `python onboard.py --set-password` | Sets or changes the dashboard password. A change also rotates `session_secret`, which signs every browser out |
-| `python onboard.py --rotate-tokens` | Replaces all three secrets, restarts the API, MCP and dashboard containers (they hold the old values), and has OpenCode reload its config. It waits for in-flight work like `upgrade.py` does; `--force` proceeds anyway. If a restart or a reload fails it still tries the rest, then **exits non-zero** naming what to run: the new tokens are already in place, so whatever kept an old one cannot authenticate until it picks them up |
+| `python onboard.py --rotate-tokens` | Replaces the four tokens (never the TLS pair), restarts the API, MCP and dashboard containers (they hold the old values), and has OpenCode reload its config. It waits for in-flight work like `upgrade.py` does; `--force` proceeds anyway. If a restart or a reload fails it still tries the rest, then **exits non-zero** naming what to run: the new tokens are already in place, so whatever kept an old one cannot authenticate until it picks them up |
 
-Claude Code and Codex need nothing after a rotation, because their helper reads the file on every
-connection. Signing in again in the browser is the only other visible effect.
+Claude Code, Codex and the built-in renderer need nothing after a rotation, because each reads the
+file on every connection. Signing in again in the browser is the only other visible effect.
 
 Failed logins back off install-wide: five free attempts, then an exponentially growing wait of up
 to 15 minutes. Only one password check runs at a time — see
@@ -306,9 +352,10 @@ only drops its own record, despite the warning it prints.
 ### Backups
 
 `backups-data` (`~/.tubematic-data/backups` on the host, `/backups` in the containers) holds
-pre-migration snapshots of the database file — nothing else. It is mounted in the four backend
-services (`tubematic-api`, `tubematic-mcp`, `tubematic-worker`, `tubematic-renderer`), each of which calls `migrate()`
-itself, but **deliberately not in `tubematic-dashboard`**: the dashboard has no database access at
+pre-migration snapshots of the database file — nothing else. It is mounted in the three services
+that open the database (`tubematic-api`, `tubematic-mcp`, `tubematic-worker`), each of which calls
+`migrate()` itself, but **deliberately not in `tubematic-dashboard`** or `tubematic-renderer`, which
+have no database access: the dashboard has no database access at
 all, and a backup is a full copy of a database whose `settings` table is the credential store, so it
 has no reason to be able to read or write one.
 
@@ -323,7 +370,7 @@ itself fails, the migration does not run either — see
 The snapshot's permission *bits* are set to match the source database's rather than left at SQLite's
 own default — it is a full copy of the same credential-store file, so it must never come out more
 permissive than the file it was copied from. Bits are all that's copied, though, not ownership: the
-four backend containers run as root, so every snapshot lands **owned by root**, unlike the live
+containers that migrate run as root, so every snapshot lands **owned by root**, unlike the live
 database, which `renderer/entrypoint.sh` deliberately keeps group-writable by the host user. A
 backup that fails partway (disk full, mid-copy) is deleted rather than left behind: a
 correctly-named, partially-written `.db` file here would be indistinguishable from a good one until
@@ -331,7 +378,7 @@ someone actually tried to restore it.
 
 **Nothing prunes this directory automatically.** Every upgrade that has anything pending adds **at
 least one** file — usually two: the backup happens before `migrate()` takes its write lock, not
-inside it, so when more than one of the four backend containers reaches that point before any of
+inside it, so when more than one of the three containers that migrate reaches that point before any of
 them has committed, each writes its own snapshot (the loser gets a collision-suffixed name rather
 than overwriting the first). Nothing ever removes one. Clean it out by hand if it grows large; the
 timestamp in each filename is enough to tell which ones are safe to delete.
@@ -364,6 +411,7 @@ migration ran, so the services that come back up will migrate it forward again o
 | 3000 | Dashboard — all interfaces in a checkout, `127.0.0.1` in a release install; behind its login either way |
 | 4000 | Flask API — `127.0.0.1` only |
 | 4100 | MCP server — `127.0.0.1` only |
+| 4443 | The render gateway (HTTPS) — Compose network only, not published |
 | 4455 | The renderer's stills server — Compose network only, never published |
 | 3001 / 4001 | The end-to-end test stack |
 
@@ -498,7 +546,7 @@ python3 scripts/service.py status                        # version, schema, cron
 python3 scripts/service.py logs tubematic-api -f         # Flask
 python3 scripts/service.py logs tubematic-mcp -f         # the agent's tools
 python3 scripts/service.py logs tubematic-worker -f      # publishing, Auto Pilot, notifications
-python3 scripts/service.py logs tubematic-renderer -f    # render output lands here
+python3 scripts/service.py logs tubematic-renderer -f    # render output, gateway connection problems
 python3 scripts/service.py restart tubematic-renderer
 python3 upgrade.py                                       # picks up code changes
 ```
@@ -552,8 +600,9 @@ Video and `node_modules` dominate. Two things are worth knowing before you go lo
 Container logs are unrotated unless you configure `log-opts` in the daemon config. That change needs
 a daemon restart, which bounces every container on the host.
 
-The renderer also never cleans its own staging directory: one copy of each rendered video's
-assets accumulates in the renderer container's writable layer. Recreating the container clears it.
+The renderer cleans up after itself: each job's directory under `/tmp/tubematic-render/` and its
+staged `public/<video_id>/` are removed when the job ends, and `/tmp/tubematic-render/` is cleared at
+start, so a job killed half-way does not leave its copy behind either.
 
 ---
 
@@ -565,6 +614,9 @@ its teardown destroys it, so it is safe to run alongside a dev stack.
 
 It uses fixed, public tokens from `dashboard/tests/e2e/secrets/` rather than random ones, because
 it lives only for one run, and a known test password that its global setup sets before signing in.
+The render gateway's TLS pair is the exception: a private key, even a test one, does not belong in
+the repository, so the global setup generates the pair with `openssl` into that directory when it is
+missing, and `.gitignore` keeps it there for later runs.
 
 Its API container is pinned to a timezone that is deliberately neither UTC nor the browser's
 configured zone. That is the assertion: if the dashboard ever started formatting in the browser's

@@ -94,6 +94,21 @@ docker compose ps tubematic-renderer
 docker compose logs -f tubematic-renderer
 ```
 
+The renderer has no database: it asks the API's render gateway (HTTPS port 4443 inside
+`tubematic-api`) for every video, so a renderer that is running but never starts anything is usually
+one that cannot reach the gateway or is refused by it. Its log says which:
+
+| The renderer's log says | Cause and fix |
+|---|---|
+| `heartbeat failed` or `claim failed` with a connection error, again every 30 seconds | The gateway is not running. `docker compose logs tubematic-api` shows why; `render gateway not started: its TLS key or certificate is missing` means `~/.tubematic-data/secrets/render_tls_key` or `render_tls_cert` is gone. `python3 scripts/service.py start` creates the pair again; then restart `tubematic-api` and `tubematic-renderer` |
+| `heartbeat answered 401 unauthorized` | The renderer's token does not match the API's: one of the two containers is still running with an old `builtin_renderer_token` mount. Restart both |
+| `the gateway's certificate cannot be loaded`, or a TLS certificate error | The renderer's copy of `render_tls_cert` is not the one the API serves. Restart both containers so they mount the same file |
+| `this renderer needs upgrade` | The renderer runs a different version from the API, so it gets no work. Recreate it from the same install: `python3 scripts/service.py restart tubematic-renderer`, or re-run the upgrade |
+
+`python3 scripts/service.py status` reports the containers; a renderer that is up but silent for
+minutes after `first heartbeat accepted` simply has nothing queued that it may take — a GPU-only
+video waits for a renderer whose GPU test passed.
+
 **`validate_job` fails.**
 
 | Error | Cause |
@@ -102,7 +117,7 @@ docker compose logs -f tubematic-renderer
 | A TypeScript error in a file you did not touch | The typecheck covers the **whole project**. A broken scene from any video blocks every render |
 | Frame count mismatch | `scene-config.totalFrames` must equal `timeline.totalFrames`. Usually a re-voice that changed the audio length |
 | An image path does not resolve | Image props must be `/public/<video_id>/images/…` and the file must exist |
-| `missing job file(s)` | The named file is not in `/jobs/<video_id>/`, or its path column is still empty because that step never finished. The renderer looks only there — it derives the location from the id and ignores the stored path, so host paths in the database are harmless. A script driving the MCP server from a host shell must write into the same jobs volume (`~/.tubematic-data/jobs`, the default outside a container) |
+| `missing job file(s)` | The named file is not in `/jobs/<video_id>/`, or its path column is still empty because that step never finished. The render gateway looks only there when a renderer asks for the video — it derives the location from the id and ignores the stored path, so host paths in the database are harmless. A script driving the MCP server from a host shell must write into the same jobs volume (`~/.tubematic-data/jobs`, the default outside a container) |
 | `Render refused, moved to FAILED` | The video's id, or its project's id, cannot be used as a file path — for example a project id of `..`, which would put the render outside `/output_videos`. New ids are checked when created, so this means a row from before that check. No route changes a video's project, so the fix is an edit to the row in the database, or deleting the video |
 
 **A video bounces between `RENDER_QUEUED` and `RENDERING`.** The render is being killed: its
@@ -111,10 +126,12 @@ the `render_timeout_secs` ceiling (a render that advances, but too slowly). Rais
 look for a scene doing something expensive — a full-bleed blur across hundreds of frames is the
 classic case.
 
-**A Cartoon 3D video, or a video with a mascot, went straight to `FAILED` with "renders on the GPU only".** The style or the mascot is
-refused unless the renderer's GPU works, but a video approved before the GPU went away reaches the
-renderer anyway. Fix the GPU (Settings → Rendering → Test GPU, or `python onboard.py --step gpu`)
-and create the video again; the failed one is not retried.
+**A Cartoon 3D video, or a video with a mascot, went to `FAILED` with "renders on the GPU only".** The style or the mascot is
+refused unless the renderer's GPU works, but a video approved before the GPU went away is queued
+anyway. It fails at once when no renderer has a working GPU, after 30 minutes when the one that does
+is offline, and during its render when the GPU stops working part-way. The comment names the
+renderer and what state it was in. Fix the GPU (Settings → Rendering → Test GPU, or
+`python onboard.py --step gpu`) and create the video again; the failed one is not retried.
 
 **Renders are slow although the machine has an NVIDIA GPU.** Open Settings → Rendering. Red means a
 GPU is chosen but the renderer could not use it, with the reason; grey **Rendering on the CPU**
@@ -408,7 +425,7 @@ Published videos reclaim their own space: the
 `unpublished_retention_days`. **Settings → Retention** shows how much disk they hold.
 `python scripts/cleanup_jobs.py` reclaims job directories by hand, for anything else. Leftover
 `/tmp/tubematic-audit-bundle-*` directories inside the API container mean text audits have been
-timing out. The renderer never cleans its own staging directory; recreating its container does.
+timing out.
 
 **A video vanished from the board, or its player is gone.** It was archived: someone pressed Delete,
 or the retention sweep removed its files: published more than `retention_days` ago, or failed or
@@ -440,9 +457,9 @@ Every service writes one JSONL file per day to `~/.tubematic-data/logs`, mounted
 containers:
 
 ```
-api.2026-09-06.jsonl        Flask — one record per request, with a request_id
+api.2026-09-06.jsonl        Flask — one record per request, with a request_id; the render gateway too
 mcp.2026-09-06.jsonl        one record per tool call, with its duration and outcome
-worker.2026-09-06.jsonl     the worker: publishing, Auto Pilot, notifications, retention
+worker.2026-09-06.jsonl     the worker: AI review, publishing, Auto Pilot, notifications, retention
 renderer.2026-09-06.jsonl   the renderer, tagged with video_id
 poll.2026-09-06.jsonl       the cron poller, which runs on the host
 ```

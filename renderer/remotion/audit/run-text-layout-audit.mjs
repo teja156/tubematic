@@ -130,7 +130,7 @@ const main = async () => {
     // — without it "angle" fails to acquire a WebGL context and any
     // @remotion/three scene would behave differently in the audit than in the
     // render. It stays "swangle" even on an install whose renders use a GPU
-    // (worker.py::_gl_args): the audit runs in the MCP container, which never
+    // (render_agent.py::_gl_args): the audit runs in the MCP container, which never
     // gets one, and it measures text, which is the same on either GL path.
     browser = await openBrowser("chrome", {
       browserExecutable: cfg.browserExecutable ?? null,

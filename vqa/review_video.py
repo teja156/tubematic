@@ -42,7 +42,7 @@ except ModuleNotFoundError:  # pragma: no cover - the normal host-side case
 
 # Fallbacks for when the settings rows are absent, which is the normal case
 # here: vqa/make_seed_db.py deliberately seeds only the keys that differ from
-# SETTINGS_SPEC's defaults. These must match those defaults (and worker.py's
+# SETTINGS_SPEC's defaults. These must match those defaults (and render_agent.py's
 # own `_setting` fallbacks) or /vqa-review would sample a video differently
 # from the pipeline it exists to assess. Keep in sync with
 # renderer/api/pipeline.py's SETTINGS_SPEC.

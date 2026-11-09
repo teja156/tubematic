@@ -374,7 +374,7 @@ masked secret from overwriting the real key — so a direct-SQL edit reusing `_c
 skip them.
 
 **No setting needs a restart to take effect.** Every reader queries the database live at use time —
-`renderer/api/worker.py::_setting`, `renderer/api/render_agent.py::_setting`,
+`renderer/api/worker.py::_setting`, `renderer/api/render_results.py::_setting`,
 `mcp/server.py::_get_setting` and `renderer/api/pipeline.py::_read_all_settings` are each called
 per-use, with no module-level reads and no in-process cache — so a write applies to the very next
 read. `--restart renderer` and `--restart worker` exist for a genuinely wedged renderer or worker

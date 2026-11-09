@@ -268,7 +268,7 @@ a target that has not published yet simply has no row. The worker counts non-`PE
 the post's creation rather than from before the upload. It is a
 wall clock rather than a retry counter because a publish has no crash to count, and it keys off that
 column rather than `videos.updated_at` because `updated_at` is the FIFO ordering key for the
-renderer's atomic claim — a polling loop writing to it would reorder the render queue.
+render gateway's atomic claim — a polling loop writing to it would reorder the render queue.
 
 **The publication rows are written at the claim, before the upload, with an empty post id.** An empty
 `postforme_post_id` means "a publish is in flight", and the worker leaves such rows alone until the

@@ -103,6 +103,28 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   back. They now run in a container of their own, `tubematic-worker`, and `tubematic-renderer` only
   renders. Re-running `python3 onboard.py --step gpu`, which recreates the renderer, no longer pauses
   them either.
+- **The renderer no longer touches the database; it gets its work from the API.** `tubematic-renderer`
+  now asks `tubematic-api` for each video over an encrypted connection inside Docker, downloads that
+  video's files, and uploads the finished video, instead of reading the database and the video
+  library itself. Nothing changes in how you use Tubematic, and publishing, Auto Pilot and Discord
+  notifications are unaffected. What you may notice:
+  - A render interrupted by a restart of the renderer is still put back in the queue automatically,
+    as before. A renderer that stops responding without restarting now has its render put back too,
+    after five minutes.
+  - The AI review of a finished video now runs in `tubematic-worker`, so it no longer holds up the
+    next render; its log lines are in `python3 scripts/service.py logs tubematic-worker`. While it
+    runs, the video still shows as Rendering.
+  - A Cartoon 3D or mascot video that is waiting for a GPU now fails, with a comment saying why, if
+    the renderer with the working GPU stays unavailable for 30 minutes (for example, its container
+    is stopped). Before, it waited indefinitely.
+  - Changes to the render timeouts and the watermark setting apply from the next video the renderer
+    is handed, as before.
+
+### Fixed
+
+- **The renderer's container no longer grows with every video it renders.** It used to keep a copy of
+  each rendered video's audio, images and scene files until the container was recreated; it now
+  removes them when the render ends.
 - **A render that stops making progress is now killed within ten minutes** instead of forty, and
   the ceiling on a whole render is three hours instead of forty minutes. The renderer watches
   the render's own progress as it runs, so a hung browser is caught quickly whatever the video's
@@ -149,14 +171,23 @@ and what a release consists of in [Releases](developer/18-releases.md). This pag
   was removed, or the GPU was taken out. It stops before changing anything and tells you to run
   `python3 onboard.py --step gpu` to pick again or go back to the CPU.
 - **The upgrade adds a fifth container, `tubematic-worker`.** Nothing to do: it is created when the
-  stack starts. Publishing, Auto Pilot and notification activity is now in
+  stack starts. Publishing, Auto Pilot, notification and AI review activity is now in
   `python3 scripts/service.py logs tubematic-worker`; rendering stays in `tubematic-renderer`'s log.
+- **The upgrade creates three new files in `~/.tubematic-data/secrets/`**: `builtin_renderer_token`,
+  a fourth token alongside the three 2.0.0 created, and `render_tls_key` / `render_tls_cert`, the
+  key and certificate for the renderer's encrypted connection to the API. Nothing to do: the upgrade
+  creates them, and installs the `cryptography` Python package it needs to, into the install's
+  `.venv`. `python3 onboard.py --rotate-tokens` now replaces four tokens; it never replaces the key
+  and certificate, so do not delete those two files by hand.
 - **`python3 upgrade.py --no-stop` is refused for this upgrade.** Recreating containers one at a
-  time would leave the old renderer publishing beside the new worker. Run the upgrade without
-  `--no-stop`; later upgrades accept it again.
+  time would leave the old renderer publishing beside the new worker, and claiming videos straight
+  from the database beside the API that now hands them out. Run the upgrade without `--no-stop`;
+  later upgrades accept it again. A video that was rendering when you upgraded is put back in the
+  queue automatically, which counts as one of its render retries.
 - **Going back to 2.0.x needs one extra step: remove the worker.** The older version's Compose file
   has no `tubematic-worker` and will not stop it, so run `docker rm -f tubematic-worker` before you
-  restore the backup, or it keeps publishing with the newer code beside the older stack.
+  restore the backup, or it keeps publishing with the newer code beside the older stack. The new
+  files in `~/.tubematic-data/secrets/` can stay; 2.0.x ignores them.
 - **Going back to 2.0.0 ignores the GPU choice.** The renderer then runs on the CPU; nothing else is
   affected.
 

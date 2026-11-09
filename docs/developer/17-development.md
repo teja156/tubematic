@@ -119,7 +119,7 @@ so in-session edits survive relaunches of the *same* image. Pipeline data lives 
 entirely, and an explicit post-rsync check fails loudly if the database existed before the sync and
 is gone after.
 
-AI review is seeded **off** there, deliberately: the renderer bounces any video with a non-empty
+AI review is seeded **off** there, deliberately: the review bounces any video with a non-empty
 suggestions list back to `REVISION_REQUESTED`, so leaving it on means few videos ever reach
 `VIDEO_READY` while you are iterating on visual quality.
 
@@ -245,7 +245,7 @@ The full model — where migrations live, why `0001` is Python, the write lock, 
   - A new video status needs `VALID_VIDEO_STATUSES`/`WORKABLE_STATUSES` in **both**
     `renderer/api/pipeline.py` and `mcp/server.py`, the `dashboard/lib/types.ts` copy, the state
     diagram in [The Pipeline](02-pipeline.md#the-states), and every place that branches on status —
-    the worker's and the renderer's transitions, the poller's workable-video query, and any skill or slash command
+    the worker's and the render gateway's transitions (`render_results.py`), the poller's workable-video query, and any skill or slash command
     that names statuses.
 - **Prefer additive.** A rename is a one-way door — see `videos.animatability_score →
   producibility_score` in [Database](03-database.md#migrations) for what that costs to reverse.
@@ -343,8 +343,10 @@ The job order is load-bearing:
 4. **Build the release tarball** with `scripts/build_release_tarball.py` and write a `CHECKSUMS.txt`
    for the archive itself.
 5. **Smoke-test the published artifact** — extract the tarball into a fresh temporary directory
-   (never the checkout), create the data directories and service tokens onboarding would have made
-   (Compose refuses to start a service whose token file is missing), bring up its own
+   (never the checkout), create the data directories, service tokens and the render gateway's TLS
+   pair onboarding would have made (Compose refuses to start a service whose secret file is missing;
+   the TLS pair needs `cryptography`, which the job installs first because the runner's own Python
+   does not ship it), bring up its own
    `docker-compose.yml` against the images just pushed, assert
    every service reaches healthy and the API answers, then tear down.
 6. **Create the GitHub Release** and attach the tarball and its checksum.

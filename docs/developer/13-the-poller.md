@@ -7,15 +7,16 @@ an agent unattended.
 
 It is one of the three loops that advance the pipeline with nobody watching. The other two own
 everything that is not agent work: the worker (publishing, Auto Pilot and the timed sweeps, see
-[The Worker](12-the-worker.md)) and the renderer (rendering and review, see
-[Rendering and Review](11-rendering-and-review.md)). None of them calls another; they meet only in
-the database, through a video's status.
+[The Worker](12-the-worker.md)) and the renderer (rendering, see
+[Rendering and Review](11-rendering-and-review.md)). None of them calls another; the poller and the
+worker meet the rest only in the database, through a video's status, and the renderer reaches it only
+through the render gateway in the API.
 
 | The poller | The worker | The renderer |
 |---|---|---|
 | Runs on the host, started by cron | Runs in the `tubematic-worker` container, always on | Runs in the `tubematic-renderer` container, always on |
-| Talks to the Flask API over HTTP, never the database | Reads and writes the database directly | Reads and writes the database directly |
-| Starts agents for `TOPIC_APPROVED`, `VOICING`, `VOICE_READY`, `REVISION_REQUESTED` | Settles `PUBLISHING`, and approves checkpoints under Auto Pilot | Renders `RENDER_QUEUED` and reviews the result |
+| Talks to the Flask API over HTTP, never the database | Reads and writes the database directly | Talks to the API's render gateway over HTTPS, never the database |
+| Starts agents for `TOPIC_APPROVED`, `VOICING`, `VOICE_READY`, `REVISION_REQUESTED` | Settles `PUBLISHING`, approves checkpoints under Auto Pilot, and runs the AI review of uploaded renders | Renders what the gateway hands it from `RENDER_QUEUED` |
 | Stops at human checkpoints | Is what moves a video past one, when Auto Pilot is on | Never moves a video past a checkpoint |
 
 How agents are installed, which agent a video is assigned to, and what the skills tell an agent to

@@ -48,14 +48,14 @@ For contributors and anyone integrating with or extending Tubematic.
 | **[2 · The Pipeline](developer/02-pipeline.md)** | The state machine in full — every status, every transition, the human checkpoints, and the revision loop |
 | **[3 · Database](developer/03-database.md)** | Every table and column, the migration model, and how to add one |
 | **[4 · Settings internals](developer/04-settings.md)** | How settings and credentials are stored, masked and verified, and how to add a setting |
-| **[5 · HTTP API](developer/05-http-api.md)** | Every Flask route — parameters, responses, status codes, and known quirks |
+| **[5 · HTTP API](developer/05-http-api.md)** | Every Flask route — parameters, responses, status codes, and known quirks — and the render gateway renderers call |
 | **[6 · MCP Server](developer/06-mcp-server.md)** | Every agent tool, `validate_job`'s checks, and the scene-work claim |
 | **[7 · The Agent Layer](developer/07-agent-layer.md)** | Skills, slash commands, installing an agent and how videos are assigned to one |
 | **[8 · Scripting and Voice](developer/08-scripting-and-voice.md)** | Script segments, length budget, pronunciation and pause markup, `timeline.json`, script profiles |
 | **[9 · The Remotion Project](developer/09-remotion-project.md)** | The frame model, compositions, dynamic scene dispatch, `scene-config.json`, the installed component library |
 | **[10 · Scene Authoring](developer/10-scene-authoring.md)** | How a scene gets written — the two visual registers, the PHOTO / HYBRID / DIAGRAM / STICK taxonomy, cadence, the revision path, adding a component |
-| **[11 · Rendering and Review](developer/11-rendering-and-review.md)** | The renderer: rendering, the GPU test, the Cartoon 3D stills server, timeouts and retries, Gemini video review, the text-layout audit |
-| **[12 · The Worker](developer/12-the-worker.md)** | The always-on loop that settles posts, runs Auto Pilot and the timed sweeps — every pass, its order and how often it runs |
+| **[11 · Rendering and Review](developer/11-rendering-and-review.md)** | The renderer and the render gateway: claims and scheduling, leases, the job bundle, the GPU test and GPU-only videos, the Cartoon 3D stills server, timeouts and retries, Gemini video review, the text-layout audit |
+| **[12 · The Worker](developer/12-the-worker.md)** | The always-on loop that settles posts, runs Auto Pilot, the AI review thread and the timed sweeps — every pass, its order and how often it runs |
 | **[13 · The Poller](developer/13-the-poller.md)** | `poll.py`, the cron-started supervisor that runs agent sessions — the loop, the four lanes, one stage per session, timeouts and orphans |
 | **[14 · Publishing internals](developer/14-publishing.md)** | The postforme client, schema, routes, the worker's publishing passes, and the design decisions behind them |
 | **[15 · Dashboard internals](developer/15-dashboard.md)** | The Next.js app — stack, the request guard, the proxy and stream routes, components, the action model |

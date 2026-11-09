@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { AbsoluteFill, Composition } from "remotion";
 
-// The worker (renderer/api/worker.py::_run_gpu_probe) renders this as a still,
+// The renderer (renderer/api/render_agent.py::_run_gpu_probe) renders this as a still,
 // through gpu-probe/run-gpu-probe.mjs, with the same browser and GL options a
 // real render gets, and the driver picks the tagged line out of the page's
 // console through Remotion's onBrowserLog.
