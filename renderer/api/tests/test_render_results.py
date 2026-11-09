@@ -545,3 +545,30 @@ def test_a_cartoon_scene_config_is_recognised(tmp_path, db_path):
     (job / "scene-config.json").write_text('{"scenes": [{"type": "generated", "src": "vid-1/C"}]}')
     assert render_results.video_scene_is_cartoon3d("vid-1") is False
     assert render_results.video_scene_is_cartoon3d("../x") is False
+
+
+def test_the_scene_config_marker_is_the_cartoon3d_props(tmp_path):
+    """Moved from the renderer with the check itself: only a generated scene
+    whose props carry a `cartoon3d` object is a Cartoon 3D world."""
+    p = tmp_path / "scene-config.json"
+    p.write_text(json.dumps({"scenes": [{"src": "v/CartoonShort", "props": {"cartoon3d": {"beats": []}}}]}))
+    assert render_results.scene_config_is_cartoon3d(p)
+    p.write_text(json.dumps({"scenes": [{"src": "Cartoon3D", "source": "installed", "props": {"world": {}}}]}))
+    assert not render_results.scene_config_is_cartoon3d(p)          # the data-driven marker of 2.0 is not one any more
+    p.write_text(json.dumps({"scenes": [{"src": "v/intro", "props": {"cartoon3d": "yes"}}]}))
+    assert not render_results.scene_config_is_cartoon3d(p)
+    p.write_text("not json")
+    assert not render_results.scene_config_is_cartoon3d(p)
+
+
+def test_the_failure_count_persists_across_attempts(db_path):
+    """render_fail_count is never reset between attempts, mirroring ai_review_count."""
+    _seed_video(db_path, render_fail_count=0)
+    render_results.handle_render_failure("vid-1", "crash 1")
+    assert _read_video(db_path)["render_fail_count"] == 1
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET status = 'RENDERING' WHERE id = 'vid-1'")
+    con.commit()
+    con.close()
+    render_results.handle_render_failure("vid-1", "crash 2")
+    assert _read_video(db_path)["render_fail_count"] == 2

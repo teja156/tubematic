@@ -80,8 +80,7 @@ def _read_comments(db_path, video_id="vid-1"):
 
 
 def _job_files(tmp_path, video_id="vid-1"):
-    """Create real audio/timeline/scene-config files for tests that exercise
-    the full _stage_and_render staging step."""
+    """Create real audio/timeline/scene-config files under the jobs dir."""
     job_dir = tmp_path / "jobs" / video_id
     job_dir.mkdir(parents=True)
     audio = job_dir / "audio.mp3"

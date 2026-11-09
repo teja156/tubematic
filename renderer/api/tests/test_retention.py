@@ -432,7 +432,7 @@ def test_one_video_failing_does_not_stop_the_pass(env, monkeypatch):
 
 def test_an_error_inside_the_pass_never_escapes(env, monkeypatch):
     """main() has no error handling; an escaping exception restarts the
-    container, which _reconcile_rendering_videos counts as a render failure."""
+    container and every housekeeping sweep with it."""
     def boom():
         raise sqlite3.OperationalError("database is locked")
 
