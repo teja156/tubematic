@@ -1,10 +1,13 @@
 # Architecture
 
-Tubematic runs as five Docker containers plus one cron job, all on a single machine, coordinating
-through one SQLite file. The renderer never opens it: it works through the
-render gateway the API serves. That is also what lets other machines render: an optional **remote
-renderer** is the same renderer in a container on another host, reaching the gateway over the
-network ([Remote renderers](../user-guide/11-remote-renderers.md)).
+Tubematic runs as five Docker containers and one cron job on one machine. Three of the containers
+(the API, the MCP server and the worker) open one SQLite file and coordinate through it. The
+dashboard reaches the data through the API. A renderer works through the **render gateway**, an HTTPS
+endpoint the API container serves for renderers. A **remote renderer** is the same renderer in a
+container on another machine, reaching the gateway over the network
+([Remote renderers](../user-guide/11-remote-renderers.md)).
+
+The main install is the machine that runs the dashboard and the database.
 
 ```mermaid
 flowchart TB
@@ -17,8 +20,8 @@ flowchart TB
         subgraph NET["Docker network: tubematic-net"]
             FLASK["tubematic-api<br/>Flask Pipeline API :4000<br/>render gateway :4443 (TLS)"]
             MCP["tubematic-mcp<br/>MCP server :4100"]
-            WORKER["tubematic-worker<br/>worker.py — no ports"]
-            RENDER["tubematic-renderer<br/>render_agent.py — no database"]
+            WORKER["tubematic-worker<br/>worker.py, no ports"]
+            RENDER["tubematic-renderer<br/>render_agent.py, no database"]
             DASH["tubematic-dashboard<br/>Next.js :3000"]
         end
 
@@ -29,7 +32,7 @@ flowchart TB
     EXT["ElevenLabs · Gemini · OpenAI<br/>youtube-transcript.io · postforme.dev · Discord"]
 
     subgraph REMOTE["Other machines (optional)"]
-        RREND["tubematic-remote-renderer<br/>render_agent.py — no database"]
+        RREND["tubematic-remote-renderer<br/>render_agent.py, no database"]
     end
 
     CRON --> POLL
@@ -61,95 +64,78 @@ flowchart TB
 
 | Container | Image | Ports | Role |
 |---|---|---|---|
-| `tubematic-api` | built from `renderer/Dockerfile` | 4000, and 4443 on the Compose network (published on the host only once remote renderers are turned on) | The Flask Pipeline API, and the render gateway renderers call ([HTTP API — The render gateway](05-http-api.md#the-render-gateway)) |
-| `tubematic-mcp` | **the same image** | 4100 | The MCP server — the agent's entire interface |
-| `tubematic-worker` | **the same image** | none | The worker: publishing, Auto Pilot, analytics, price sync, retention, notifications, the stalled-voicing check, the AI review of uploaded renders, and the render-lease and GPU-wait backstops. See [The Worker](12-the-worker.md) |
-| `tubematic-renderer` | **the same image** | 4455, Compose network only | The built-in renderer: renders what the render gateway hands it, tests its GPU, and runs the Cartoon 3D stills server beside it. No database. See [Rendering and Review](11-rendering-and-review.md) |
-| `tubematic-dashboard` | built from `dashboard/Dockerfile` | 3000 | Next.js |
+| `tubematic-api` | built from `renderer/Dockerfile` | 4000, and 4443 on the Compose network | The Flask Pipeline API, and the render gateway that renderers call ([The Render Gateway](19-render-gateway.md)) |
+| `tubematic-mcp` | the same image | 4100 | The MCP server, the agent's only interface to the pipeline |
+| `tubematic-worker` | the same image | none | Publishing, Auto Pilot, analytics, price sync, retention, notifications, the stalled-voicing check, the AI review of uploaded renders, and the render-lease and GPU-wait sweeps ([The Worker](12-the-worker.md)) |
+| `tubematic-renderer` | the same image | 4455, Compose network only | The built-in renderer. It renders what the gateway hands it, tests its GPU and runs the Cartoon 3D stills server ([Rendering and Review](11-rendering-and-review.md)) |
+| `tubematic-dashboard` | built from `dashboard/Dockerfile` | 3000 | The Next.js dashboard |
 
-The first four are one image with a different `command:`. Only the API service declares `build:`;
-the other three reuse the tag, so one build covers all four.
+The first four run one image with a different `command:`. Only the API service declares `build:`
+and the other three reuse its tag, so one build covers all four
+([Infrastructure](16-infrastructure.md#services)). Those four mount a shared logs directory at
+`/logs` and each appends a daily JSONL file there. The dashboard mounts neither the logs nor a
+Docker socket, and reads the logs through the API's `GET /logs`.
 
-Those same four mount a shared logs directory at `/logs` and each append a daily JSONL file there.
-The dashboard deliberately does not — it reads them back through Flask's `GET /logs`, so it needs
-neither a log mount nor a Docker socket. See [Infrastructure](16-infrastructure.md#volumes).
+The reasons behind the split:
 
-**One foreground process per container, deliberately.** Flask and the MCP server used to share
-`tubematic-api`, started by an entrypoint that backgrounded Flask and `exec`ed the MCP server. When
-Flask died the MCP server still held PID 1, so the container stayed up, reported at most
-`unhealthy`, and `restart: unless-stopped` had nothing to act on — a dead API behind a container
-that looked alive. Splitting them makes a dead process a dead container, which the restart policy
-can act on, and gives each an independent healthcheck.
-
-**Why the renderer is separate.** Rendering runs Chromium and ffmpeg for twenty minutes and can be
-OOM-killed. Isolating it means a render crash restarts only the renderer.
-
-**Why the renderer has no database.** A renderer may be another machine, and the built-in one goes
-through the same gateway so that path is the one every install exercises. Through the gateway a
-renderer holds one credential, sees one job at a time, and can move a video only by reporting on a
-render it holds; it never sees the stored API keys. See
-[Rendering and Review](11-rendering-and-review.md).
-
-**Why the worker is separate from the renderer.** They used to be one loop in one container, so a
-render held up every post, Auto Pilot approval and notification behind it, and recreating the
-renderer (as `onboard.py --step gpu` does) stopped them too. Apart, neither waits on the other. The
-worker touches a render-stage video only in three guarded cases: its review thread finishes an
-uploaded render, its lease sweep re-queues a render whose renderer stopped reporting, and its GPU-wait
-sweep fails a GPU-only video no renderer can take — see [The Worker](12-the-worker.md).
-
-**The dependency direction is one-way.** `tubematic-api` depends on nothing; the dashboard, the
-worker, the renderer and the MCP server all wait on it. So the dashboard and poller path keeps working with the
-MCP server down, and an agent session survives a Flask restart.
+- Each container runs one foreground process, so a process that dies stops its container and
+  `restart: unless-stopped` starts it again.
+- A render runs Chromium and ffmpeg for minutes at a time and can be killed for memory. In its own
+  container, a renderer that stops takes no other service with it.
+- The renderer has no database because a renderer may be another machine, and the built-in one uses
+  the same gateway so every install exercises that path. Through the gateway a renderer holds one
+  credential, sees one job at a time and can move a video only by reporting on a render it holds.
+  It never sees the stored API keys.
+- The worker is separate from the renderer so that a render does not hold up a post, an Auto Pilot
+  approval or a notification, and so that recreating the renderer (as `onboard.py --step gpu` does)
+  does not stop them. The worker changes a video at the render stage in three guarded cases: its
+  review thread finishes an uploaded render, its lease sweep requeues a render whose renderer
+  stopped reporting, and its GPU-wait sweep fails a GPU-only video that no renderer can take
+  ([The Worker](12-the-worker.md)).
+- `tubematic-api` depends on no other service, and the other four wait for it to be healthy. The
+  dashboard and the poller keep working while the MCP server is down, and an agent session survives
+  an API restart.
 
 ## Ports
 
-| Port | Service |
-|---|---|
-| 3000 | Dashboard — all interfaces in a checkout, `127.0.0.1` in a release install; behind a login either way |
-| 4000 | Flask Pipeline API — `127.0.0.1` only |
-| 4100 | MCP server — `127.0.0.1` only |
-| 4443 | The render gateway, HTTPS — Compose network only, until `onboard.py --step renderers` publishes it on every interface (the host port is the one the operator picked, 4443 by default) for remote renderers |
-| 4455 | The renderer's stills server — Compose network only, never published |
-| 3001 / 4001 | The isolated end-to-end test stack |
+The API (4000) and the MCP server (4100) are published on `127.0.0.1` only. The dashboard (3000) is
+published on every interface in a source checkout and on `127.0.0.1` in a release install.
+Containers reach each other by service name over the Compose network, which does not use the
+published ports. The end-to-end test stack uses 3001 and 4001.
+[Infrastructure: Ports](16-infrastructure.md#ports) has the full table.
 
-Loopback binding costs nothing between containers: they reach each other over the compose network by
-service name, which never touches a published port. See
-[Infrastructure — Why the ports bind to loopback](16-infrastructure.md#why-the-ports-bind-to-loopback).
+The gateway (4443) is the one port that can face the network, because remote renderers have to
+reach it. It is published only by an override file that `onboard.py --step renderers` writes, on
+the host port you pick, so an install without remote renderers exposes nothing more. It serves TLS
+only and authenticates every route except its version and enrollment endpoints
+([Remote-renderers override](16-infrastructure.md#remote-renderers-override)).
 
-**The gateway is the one port that may face the network, and it is opt-in.** Remote renderers have
-to reach it, so it cannot be bound to loopback; it is published only by an override file the
-`renderers` step writes, so an install that never asked for remote renderers exposes nothing new.
-It serves TLS only and authenticates every route but its version and enrollment endpoints — see
-[Infrastructure — Remote-renderers override](16-infrastructure.md#remote-renderers-override).
-
-Binding is not the only lock. The dashboard needs a sign-in, and the API and the MCP server each need
-their own bearer token on every request but their health probes — see
-[Infrastructure — Authentication](16-infrastructure.md#authentication).
+The dashboard needs a sign-in, and the API and the MCP server each need their own bearer token on
+every request except their health probes ([Authentication](16-infrastructure.md#authentication)).
 
 ---
 
 ## How the pieces talk
 
-Everything is HTTP or the shared database. There is no message broker, no socket, and no shared
-in-process state between containers.
+Processes talk over HTTP or through the shared database. There is no message broker and no shared
+in-process state between containers, and no container mounts the Docker socket.
 
 | From | To | Via |
 |---|---|---|
 | Browser | Dashboard | HTTP |
-| Dashboard | Flask API | A server-side proxy route — the browser never learns the API's address or its token |
-| Dashboard | Rendered files | Direct `fs` reads off the shared volume, with Range support |
+| Dashboard | Flask API | A server-side proxy route. The browser never learns the API's address or its token |
+| Dashboard | Rendered files | Direct `fs` reads from the shared volume, with Range support |
 | AI agent | MCP server | MCP over HTTP on 4100, with the MCP token |
-| Cron poller | Flask API | HTTP with the API token, including which agent runs each video. It has **no database access, by design** |
-| Installer | Database | Direct SQLite from the host — the only writer of the `agents` table |
-| Renderer (built-in, or remote on another machine) | Render gateway | HTTPS on 4443 with a renderer credential, trusting exactly the gateway's pinned certificate: heartbeat, claim, bundle download, mp4 upload, result. The built-in renderer over the Compose network, a remote one over the published port |
-| Worker and render gateway | Database | Guarded `UPDATE`s |
-| Every process that opens the database | Database | SQLite in WAL mode |
+| Poller | Flask API | HTTP with the API token, including which agent runs each video. The poller has no database access |
+| Installer | Database | Direct SQLite from the host. It is the only process that adds or archives rows in the `agents` table |
+| Renderer, built-in or remote | Render gateway | HTTPS on 4443 with a renderer credential, trusting only the gateway's pinned certificate: heartbeat, claim, bundle download, mp4 upload, result. The built-in renderer uses the Compose network and a remote one the published port |
+| API, MCP server, worker | Database | SQLite in WAL mode. The worker and the render gateway change a status with a guarded `UPDATE` |
 
 ---
 
 ## Where things live on disk
 
-Pipeline data lives at a fixed absolute path **outside the checkout**:
+Pipeline data lives at a fixed absolute path outside the checkout:
 
 ```
 ~/.tubematic-data/
@@ -163,31 +149,29 @@ Pipeline data lives at a fixed absolute path **outside the checkout**:
                                    # renderer) and the render gateway's TLS key and certificate
 ```
 
-This location is not configurable, and the reason is worth knowing: it used to be a directory inside
-the repository, which meant `rm -rf tubematic && git clone` silently destroyed the database and the
-entire video library, and running Compose from the wrong directory created a second, empty data tree.
+The location is not configurable. Because it is outside the repository, deleting or re-cloning the
+checkout leaves the database and the video library in place, and Compose finds the same data tree
+from any directory.
 
-Compose exposes the first six as named volumes with `o=bind` device paths under `${HOME}` — see
-[Infrastructure — Volumes](16-infrastructure.md#volumes). `secrets/` is not a volume: each secret file
-is mounted read-only into the services that need it, as a Compose secret — see
-[Infrastructure — Authentication](16-infrastructure.md#authentication).
-`${HOME}` rather than `${PWD}` is deliberate: cron strips the environment down to `HOME`, `LOGNAME`,
-`PATH` and `SHELL`, so `HOME` still resolves from a cron-invoked `docker compose`.
+Compose exposes the first six as named volumes with `o=bind` device paths under `${HOME}`
+([Infrastructure: Volumes](16-infrastructure.md#volumes)). `secrets/` is not a volume: each secret
+file is mounted read-only into the services that need it, as a Compose secret
+([Infrastructure: Authentication](16-infrastructure.md#authentication)).
 
-**Paths stored in the database are container-absolute** (`/jobs/…`, `/output_videos/…`), because the
-processes that consume them run inside containers. No process reads a file's location back out of
-them: each derives it from the video's ids, and the dashboard plays a render from
+Paths stored in the database are container-absolute (`/jobs/…`, `/output_videos/…`), because the
+processes that use them run inside containers. No process reads a file's location from those
+columns. Each derives it from the video's ids, and the dashboard plays a render from
 `/stream/<project_id>/<id>.mp4` (`dashboard/lib/utils.ts::videoStreamUrl`).
 
 ### What is baked in and what is mounted
 
 | | |
 |---|---|
-| **Baked into the image** | `renderer/api/`, `mcp/`, the dashboard, the Remotion project's `src/` including `scenes/installed/` |
-| **Bind-mounted** | The data directories above that are volumes, including `scenes/generated/` |
+| Baked into the image | `renderer/api/`, `mcp/`, the dashboard, the Remotion project's `src/` including `scenes/installed/` |
+| Bind-mounted | The six data directories above that are volumes, including `scenes/generated/` |
 
-Editing this repository changes nothing in a running container until the image is rebuilt.
-`scenes/generated/` is the exception — it is a volume, so agent-written scenes appear immediately.
+Editing the repository changes nothing in a running container until you rebuild the image.
+`scenes/generated/` is a volume, so agent-written scenes appear without a rebuild.
 
 ---
 
@@ -195,7 +179,7 @@ Editing this repository changes nothing in a running container until the image i
 
 ```
 tubematic/
-├── onboard.py, onboard/       # the installer — the canonical setup path
+├── onboard.py, onboard/       # the installer, the canonical setup path
 ├── upgrade.py                 # the upgrade: gate, images, stop, start, cron, agents
 ├── uninstall.py
 ├── mcp/                       # MCP server and the text-audit decision layer
@@ -204,7 +188,7 @@ tubematic/
 │   ├── remotion/              # the Remotion video project
 │   ├── Dockerfile             # one image for tubematic-api, -mcp, -worker and -renderer
 │   └── entrypoint.sh
-├── tubematic_core/             # the one shared Python package — schema/migrations, logging, version
+├── tubematic_core/            # the one shared Python package: schema and migrations, logging, version
 ├── dashboard/                 # Next.js app
 ├── agent_files/
 │   ├── skills/                # what the agent knows how to do
@@ -226,82 +210,66 @@ tubematic/
 ## Duplication is intentional
 
 Several constants and helpers are hand-copied across `mcp/`, `renderer/api/`, `dashboard/` and
-`onboard/`. That is not drift. These are separate deployable units — the MCP server and the Flask API
-ship in the same image but the dashboard does not, and the installer runs on the host before any
-image exists.
+`onboard/`. These are separate deployable units: the MCP server and the Flask API ship in one
+image, the dashboard ships in another, and the installer runs on the host before any image exists.
 
-There is now exactly one shared Python package, `tubematic_core/`, copied into the image at
-`/app/lib` and reachable on the host from the repo root. Everything in it was added only because a
-copy of it would be genuinely dangerous to let drift: structured logging (a redactor that
-strips credentials out of every log line, where three copies quietly diverging is a security bug
-rather than an inconvenience), schema migrations (`tubematic_core/migrations/`, see
-[Database](03-database.md#migrations)), the canonical version string, and the spend ledger with its
-model prices (`usage.py`, `prices.py` — every container records paid calls, and a pricing rule
-copied into three processes would price the same call three ways; see
-[Settings — Costs](../user-guide/05-settings.md#costs)), and what each ElevenLabs model can speak
-(`voice_models.py` — the API refuses a voice whose model cannot speak a script, and `generate_voice`
-refuses the same thing before spend, so two copies disagreeing would let the dashboard approve what
-voicing then rejects; see [The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice)),
-and which YouTube URLs mining accepts (`youtube.py` — each becomes Gemini's `file_uri` on a paid
-call, so a writer that accepted what the mining tool refuses would store a list that can never be
-mined; see [HTTP API — Mining sources](05-http-api.md#mining-sources)), and the rules for ids that
-become paths and where a video's files live (`ids.py`, `jobfiles.py` — the worker, the API, the
-MCP server and a VQA script all build those paths, and a copy that drifted would be a path
-traversal rather than a cosmetic difference; see [`videos`](03-database.md#videos)), and the
-renderer rules (`renderers.py` — which renderer may take which video, whether the install's GPU
-works, credentials and enrollment tokens: the gateway, the worker's sweeps and the API's and the MCP
-server's GPU gates must all agree, or a style the dashboard offers would be one no renderer is handed;
-see [Rendering and Review](11-rendering-and-review.md)).
-The dashboard keeps a TypeScript copy of the model sets, pinned by a source-text test. It is not a general home
-for anything two processes happen to share — the copies below stay copies.
+`tubematic_core/` is the one shared Python package. The image copies it to `/app/lib`, and host
+scripts import it from the repository root. A module goes there only when two copies that disagreed
+would be dangerous. Everything else that two processes share stays a copy.
 
-The copies that matter:
+| Module | What it holds | What a second copy would risk |
+|---|---|---|
+| `logging.py` | Structured JSONL logging, with a redactor that strips credentials from every log line | A credential in a log |
+| `db.py`, `migrations/` | The schema and `migrate()`, which every process that opens the database calls | Two definitions of the schema ([Database](03-database.md#migrations)) |
+| `version.py` | The version string, read from `VERSION` | Release tooling and services that report different versions |
+| `auth.py` | The service tokens, the gateway's TLS pair and the admin password | Processes that look for a secret in different files |
+| `usage.py`, `prices.py` | The spend ledger and the model prices | One paid call priced three ways by three containers |
+| `voice_models.py` | What each ElevenLabs model can speak | The dashboard approving a voice that `generate_voice` then refuses ([The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice)) |
+| `youtube.py` | Which YouTube URLs mining accepts | A stored URL list that the mining tool refuses to send to Gemini |
+| `ids.py`, `jobfiles.py` | The rules for ids that become paths, and where a video's files live | A path traversal in one of the programs that build those paths |
+| `renderers.py` | Which renderer may take which video, whether the install's GPU works, credentials and enrollment tokens | The dashboard offering a style that no renderer is handed |
+| `mascots.py` | The mascot statuses, the attempt cap and the cue checks | The API, the MCP server, the worker, the renderer and the poller applying different rules |
 
-| Duplicated | Copies |
+`renderer/api/pipeline.py::_init_db` and `mcp/server.py::_init_db` define no schema. Both call
+`tubematic_core.db.migrate()`. The dashboard keeps a TypeScript copy of the ElevenLabs model sets,
+pinned by a source-text test.
+
+### The hand-copied constants
+
+| Duplicated | Copies, and what holds them together |
 |---|---|
-| `VALID_VIDEO_STATUSES` / `WORKABLE_STATUSES` | `renderer/api/pipeline.py`, `mcp/server.py`, `dashboard/lib/types.ts` |
+| `VALID_VIDEO_STATUSES`, `WORKABLE_STATUSES` | `renderer/api/pipeline.py`, `mcp/server.py`, and for the full list the `VideoStatus` type in `dashboard/lib/types.ts` ([The status sets](02-pipeline.md#the-status-sets)) |
 | Safe-zone pixel constants | `TextRevealScene.tsx`, `mcp/text_audit.py`, `renderer/api/ai_review.py`, `tubematic_core/mascots.py` |
-| Timezone detection | `renderer/api/hosttz.py`, `scripts/config.py`, `onboard.py` |
-| `_truncate_title` | `renderer/api/pipeline.py`, `mcp/server.py` — with a test that execs both copies and asserts they agree |
-| The mining URL rule | `tubematic_core/youtube.py`, `dashboard/components/MiningSources.tsx` (only so the Add button lights for what the API stores — the API stays the authority, and a disagreement shows as its 400), and migration `0014`'s frozen copy. The dashboard's copy is held to the same accept-and-refuse table as the Python one rather than by source text, since the two regex dialects differ |
-| The `agents` table schema | `tubematic_core/migrations/` plus `onboard/agent_install.py::AGENTS_SCHEMA` — the installer runs on the host, where it may create the table before any container has started, so it cannot just import the schema from the running services. Pinned against a fully migrated database, column positions included |
-| `AGENT_EFFORTS` | `renderer/api/pipeline.py`, `mcp/server.py`, `scripts/agent_adapters.py::AGENT_EFFORTS` (the CLI-facing copy, shared by every adapter), `dashboard/lib/agents.ts` — pinned by a test that reads all four as source text |
-| `_pick_agent_id`, `_agent_model_error` | `renderer/api/pipeline.py`, `mcp/server.py` — `_pick_agent_id` is pinned by an agreement test |
+| Timezone detection | `renderer/api/hosttz.py`, `scripts/config.py` |
+| `_truncate_title` | `renderer/api/pipeline.py`, `mcp/server.py`. A test executes both copies and asserts they agree |
+| The mining URL rule | `tubematic_core/youtube.py`, `dashboard/components/MiningSources.tsx`, and migration `0014`'s frozen copy. The dashboard's copy only lights the Add button, and the API's `400` is the authority. Both pass one accept-and-refuse table, because the two regex dialects differ |
+| The `agents` table schema | `tubematic_core/migrations/` and `onboard/agent_install.py::AGENTS_SCHEMA`, because the installer may create the table on the host before any container has started. A test pins it against a migrated database, column positions included |
+| `AGENT_EFFORTS` | `renderer/api/pipeline.py`, `mcp/server.py`, `scripts/agent_adapters.py::AGENT_EFFORTS`, `dashboard/lib/agents.ts`. A test reads all four as source text |
+| `_pick_agent_id`, `_agent_model_error` | `renderer/api/pipeline.py`, `mcp/server.py`. An agreement test pins `_pick_agent_id` |
 | `POLL_LOG_DIR` | `scripts/config.py`, `onboard/config.py` |
-| API-key redaction in error strings | `renderer/api/ai_review.py`, `mcp/server.py` — predates `tubematic_core` and is a reasonable future move into it |
-| Enrollment token decoding, the certificate pin, the `nvidia-smi` parse, the GPU environment, the backend image name | `scripts/tubematic_remote_renderer.py` and their originals in `tubematic_core/renderers.py`, `onboard/gpu.py` and `scripts/gen_release_compose.py`. The script runs on a machine with no checkout, so it imports nothing of ours; each copy is pinned by an agreement test in `scripts/tests/test_tubematic_remote_renderer.py` |
+| API-key redaction in error strings | `renderer/api/ai_review.py`, `mcp/server.py` |
+| Enrollment token decoding, the certificate pin, the `nvidia-smi` parse, the GPU environment, the backend image name | `scripts/tubematic_remote_renderer.py`, which runs on a machine with no checkout and imports nothing from the repository. Tests in `scripts/tests/test_tubematic_remote_renderer.py` pin each copy against `tubematic_core/renderers.py`, `onboard/gpu.py` and `scripts/gen_release_compose.py` |
 | The remote-renderer host command and the `render_gateway_address` row name | `onboard/remote_renderers.py`, `renderer/api/pipeline.py` |
 
-The rest of the schema is **not** a copy any more. `renderer/api/pipeline.py::_init_db` and
-`mcp/server.py::_init_db` used to each define the whole thing by hand; both now do nothing but call
-`tubematic_core.db.migrate()`, which is the one place the schema is defined.
-
-Most carry `# Keep in sync` comments. **Grep before changing one.** Several settings defaults are
-additionally repeated in three to five places without such a comment, so grep for the *value* too.
+Most copies carry a `# Keep in sync` comment. Grep before you change one. Several settings defaults
+are repeated in three to five places with no such comment, so grep for the value too.
 
 ---
 
 ## Failure model
 
+A failure stops one part and leaves a trace: a comment on the video, a banner or a log line.
+
 | Failure | Result |
 |---|---|
-| Render crashes | Retry, then `REVISION_REQUESTED`, then `FAILED` past the cap |
-| Render times out | Requeued automatically; nothing is known to be wrong with the job |
-| Renderer container dies mid-render | Its first heartbeat after the restart makes the gateway count the render as a failure and requeue or escalate it |
-| A renderer stops reporting (switched off, network gone) | Its lease runs out after five minutes, and the worker counts the render as a failure and requeues or escalates it |
-| No renderer is enabled, online and on main's version while videos are queued | They wait; the Pipeline page shows a **NOTHING CAN RENDER** banner. A GPU-only video is failed by the worker's GPU-wait sweep instead, after at most 30 minutes |
-| A remote renderer runs another version than main (main was upgraded) | It keeps heartbeating, is listed as needing an upgrade and claims nothing until its host script's `upgrade` is run |
-| The render gateway is unreachable | The renderer claims nothing, logs the error and tries again every 30 seconds. A render already running finishes, but its heartbeats no longer extend its lease, so after five minutes the worker re-queues the video, and the late result is dropped |
-| AI review errors | **Fails open** — the video advances to `VIDEO_READY`, and the error is written to `gemini_feedback` and the comment thread |
-| MCP server dies | Container restarts; the in-memory scene claim is lost, which is harmless |
-| Flask API unreachable | The poller starts nothing; an idle supervisor exits non-zero and cron starts a new one on the next tick |
-| No agent installed | The poller logs `No agent installed` and exits cleanly; nothing runs until `--install-agent` |
-| A video's agent is uninstalled or missing | That video is skipped, loudly, and never rerouted to another agent |
-| An agent session crashes mid-authoring | The poller waits out its 15-minute scene claim before starting the video's next session |
-| An agent session hangs | It is killed with its whole process group after `agent_session_timeout_secs` |
-| Three agent sessions in a row leave a video where they found it | The video is flagged stuck, with a comment, and skipped until a human changes its status or presses Retry agent — never marked `FAILED` |
-| The poller itself dies mid-session | Its sessions keep running; the next cron tick's poller adopts them, and records their usage and outcome when they end |
-| The poller hangs | The next cron tick logs an error about its stale heartbeat, and kills nothing |
+| A render fails | `REVISION_REQUESTED` for the agent to fix, then `FAILED` past the retry cap ([Rendering and Review](11-rendering-and-review.md)) |
+| A render times out, or its renderer stops or stops reporting | The video is requeued, and each requeue counts toward the retry cap. A renderer's lease on a video lasts five minutes without a heartbeat ([The Render Gateway](19-render-gateway.md)) |
+| No renderer is enabled, online and on the main install's version | Queued videos wait and the Pipeline page shows a **NOTHING CAN RENDER** banner. The worker fails a GPU-only video after at most 30 minutes ([GPU and Remote Renderers](20-gpu-and-remote-renderers.md)) |
+| The AI review errors | The video advances to `VIDEO_READY`. The error is written to `gemini_feedback` and the comment thread ([AI Review](21-ai-review.md)) |
+| The MCP server stops | The container restarts. The in-memory scene-work claims are lost, and the next session takes a new one |
+| The Flask API is unreachable | The poller starts nothing. With nothing running it exits non-zero, and the next cron tick starts a new one |
+| No agent is installed | The poller logs `No agent installed` and exits with code 0 |
+| An agent session hangs, or leaves its video where it found it | The poller kills a session after `agent_session_timeout_secs`, and flags a video stuck after three sessions without progress. It does not mark the video `FAILED` |
+| The poller dies or hangs | Its sessions keep running, and the poller started by the next cron tick adopts them. A hung poller is logged and nothing is killed |
 
-The pattern is consistent: prefer degrading to stopping, and make the degradation *visible* rather
-than silent.
+[The Poller](13-the-poller.md) covers the last four rows.

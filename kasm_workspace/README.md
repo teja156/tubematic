@@ -12,7 +12,7 @@ source.
 User-facing instructions are in
 [Installing — Installing in Kasm Workspaces](../docs/user-guide/02-installing.md#installing-in-kasm-workspaces).
 The design is in
-[Development — `kasm_workspace/`](../docs/developer/17-development.md#kasm_workspace--the-published-workspace).
+[Development — `kasm_workspace/`](../docs/developer/17-development.md#kasm_workspace-the-published-workspace).
 
 ## Layout
 

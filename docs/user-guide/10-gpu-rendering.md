@@ -169,7 +169,7 @@ no device, means CPU rendering.
 
 A GPU that stops working therefore slows ordinary videos down and does not fail them. Cartoon 3D and
 mascot videos are the exception, because they render on a GPU only. How the test works is in
-[Rendering and Review](../developer/11-rendering-and-review.md#the-gl-renderer).
+[GPU and Remote Renderers](../developer/20-gpu-and-remote-renderers.md#the-gpu-test).
 
 ---
 

@@ -1,48 +1,26 @@
 # Database
 
-Tubematic stores everything in one SQLite file. There is no second store, no cache, and no message
-queue — the database *is* the queue, the state machine, and the configuration store.
+Tubematic keeps its state in one SQLite file: the videos and their statuses, the settings, the
+credentials, the render queue and the spend ledger. Processes coordinate through it and use no
+message broker or cache.
 
 | | |
 |---|---|
 | File | `~/.tubematic-data/data/tubematic.db` on the host, `/data/tubematic.db` inside the containers |
-| Journal mode | WAL |
+| Journal mode | WAL, so several processes can read while one writes |
 | Foreign keys | ON |
 | Access | Raw `sqlite3` from Python, no ORM |
 
-Three containers open it concurrently — `tubematic-api`, `tubematic-mcp` and `tubematic-worker`.
-A renderer never does: it reaches the database only through the render gateway in `tubematic-api`
-(see [Rendering and Review](11-rendering-and-review.md)). WAL mode is what makes that safe, and it is also why the file cannot be made
-unreadable to the host user: WAL requires write access to the `-shm` sidecar even for readers.
+Three containers open the file: `tubematic-api`, `tubematic-mcp` and `tubematic-worker`. A renderer
+reaches the database only through the render gateway in `tubematic-api` (see
+[Rendering and Review](11-rendering-and-review.md)).
 
-Schema creation and evolution is no longer something concurrency merely tolerates — it is made safe
-by construction. Every process that opens this database calls `tubematic_core.db.migrate()` before
-doing anything else, and that function holds a real write lock for its whole run, so two processes
-racing on a brand-new database serialize rather than corrupt it. See [Migrations](#migrations).
+Every process that opens the database calls `tubematic_core.db.migrate()` first. The call holds a
+write lock for its whole run, so processes that start together on a new database apply the schema
+once. See [Migrations](#migrations).
 
-> **Security note.** Since API keys moved out of environment variables, this file contains them as
-> plaintext rows in the `settings` table. It is not a secret store. `renderer/entrypoint.sh`
-> restricts it to the host user's group where it can (`0660` plus setgid on the directory), falling
-> back to world-writable only when the mount directory is root-owned. The agent is denied reading
-> the data directory that holds it, on Claude Code and OpenCode (Codex's read-only sandbox has no
-> per-path rule) — see [Deployment](07-agent-layer.md#deployment).
-
-## Schema creation
-
-The schema lives in one place, `tubematic_core/migrations/`, applied by `migrate()` and shared by
-every process — see [Migrations](#migrations) for the full model. `renderer/api/pipeline.py` and
-`mcp/server.py` each keep a thin `_init_db()` that does nothing but call `migrate()`; there is no
-per-process schema definition left to keep in sync between them. The one schema definition that is
-still hand-duplicated is the `agents` table, in `onboard/agent_install.py::AGENTS_SCHEMA` — see
-[below](#agents) for why.
-
-Besides those implied by primary keys, the indexes are `idx_video_publications_video`,
-`idx_video_metrics_publication`, the usage ledger's four (migration `0005`: `idx_usage_events_created_at`, `idx_usage_events_model`,
-the unique `idx_usage_events_event_key` and `idx_usage_event_videos_video_id`) and
-`idx_videos_project_id` (migration `0013`) and `idx_render_timings_renderer` (migration `0019`).
-`idx_videos_project_id` exists because the [topic cap](02-pipeline.md#topic-cap) counts a domain's
-videos on every insert; `idx_render_timings_renderer` because every claim reads each renderer's
-last few timings per kind.
+The `settings` table holds the API keys in plain text, so treat the file and every backup of it as
+a secret. [Settings internals](04-settings.md#how-credentials-are-stored) covers who can read it.
 
 ---
 
@@ -63,325 +41,230 @@ erDiagram
     renderers  ||--o{ videos : "holds the lease on"
     renderers  ||--o{ render_timings : "timed by"
     renderer_enrollments |o--o| renderers : "enrolled"
-
-    agents {
-        TEXT    id PK
-        TEXT    name
-        TEXT    binary
-        TEXT    run_path
-        TEXT    install_scope
-        TEXT    models
-        INTEGER is_default
-        INTEGER weight
-        TEXT    effort
-        TEXT    verified_at
-        TEXT    archived_at
-        TEXT    created_at
-        TEXT    updated_at
-    }
-    projects {
-        TEXT    id PK
-        TEXT    name
-        TEXT    description
-        INTEGER is_curriculum_seed
-        TEXT    status
-        TEXT    default_visual_style
-        TEXT    default_voice_id
-        TEXT    default_script_profile_id
-        INTEGER topic_cap
-        TEXT    created_at
-    }
-    videos {
-        TEXT    id PK
-        TEXT    project_id FK
-        TEXT    topic
-        TEXT    title
-        TEXT    status
-        TEXT    strategy
-        INTEGER producibility_score
-        TEXT    script
-        TEXT    script_segments
-        TEXT    tts_text
-        TEXT    voice_id
-        TEXT    notified_status
-        TEXT    script_profile_id
-        TEXT    visual_style
-        TEXT    resolved_visual_style
-        TEXT    resolved_renderer
-        TEXT    mascot_id
-        INTEGER mascot_version
-        TEXT    agent_model
-        TEXT    agent_effort
-        TEXT    agent_id
-        INTEGER agent_no_progress_count
-        TEXT    agent_stuck_at
-        TEXT    agent_last_outcome_key
-        TEXT    voice_file_path
-        TEXT    timeline_path
-        TEXT    scene_config_path
-        TEXT    video_path
-        INTEGER video_version
-        TEXT    gemini_feedback
-        INTEGER ai_review_count
-        INTEGER render_fail_count
-        TEXT    renderer_id
-        TEXT    render_lease_until
-        TEXT    render_started_at
-        TEXT    render_uploaded_at
-        TEXT    render_claim_id
-        TEXT    youtube_url
-        TEXT    publish_title
-        TEXT    publish_description
-        TEXT    scheduled_at
-        TEXT    scheduled_timezone
-        INTEGER auto_pilot_hold
-        TEXT    auto_pilot_blocked
-        TEXT    archived_at
-        INTEGER cost_cents_elevenlabs
-        INTEGER cost_cents_gemini
-        INTEGER cost_cents_claude
-        TEXT    created_at
-        TEXT    updated_at
-    }
-    comments {
-        INTEGER id PK
-        TEXT    video_id FK
-        TEXT    author
-        TEXT    content
-        TEXT    created_at
-    }
-    settings {
-        TEXT key PK
-        TEXT value
-    }
-    script_profiles {
-        TEXT    id PK
-        TEXT    name
-        TEXT    status
-        TEXT    markdown
-        TEXT    corpus_summary
-        TEXT    source_urls
-        TEXT    error
-        INTEGER attempt_count
-        INTEGER archived
-        TEXT    created_at
-        TEXT    updated_at
-    }
-    video_publications {
-        TEXT    id PK
-        TEXT    video_id FK
-        TEXT    platform
-        TEXT    social_account_id
-        TEXT    postforme_post_id
-        TEXT    status
-        TEXT    post_url
-        TEXT    error
-        TEXT    published_at
-        TEXT    created_at
-        TEXT    updated_at
-    }
-    video_metrics {
-        INTEGER id PK
-        TEXT    publication_id FK
-        TEXT    fetched_at
-        INTEGER views
-        INTEGER likes
-        INTEGER comments
-        INTEGER shares
-        TEXT    raw_json
-    }
-    script_profile_transcripts {
-        INTEGER id PK
-        TEXT    profile_id FK
-        TEXT    source_url
-        TEXT    youtube_id
-        TEXT    text
-        TEXT    created_at
-    }
-    usage_events {
-        INTEGER id PK
-        TEXT    created_at
-        TEXT    session_id
-        TEXT    service
-        TEXT    model
-        TEXT    operation
-        TEXT    units
-        TEXT    raw_usage
-        TEXT    request_id
-        REAL    cost_usd
-        TEXT    cost_basis
-        TEXT    price_snapshot
-        INTEGER estimated
-        TEXT    event_key
-    }
-    usage_event_videos {
-        INTEGER event_id FK
-        TEXT    video_id
-        TEXT    stage
-    }
-    model_prices {
-        TEXT    service PK
-        TEXT    model PK
-        TEXT    unit_kind PK
-        REAL    usd_per_unit
-        TEXT    source
-        TEXT    effective_from
-        INTEGER user_override
-        INTEGER tiered
-    }
-    renderers {
-        TEXT    id PK
-        TEXT    name
-        INTEGER builtin
-        INTEGER enabled
-        TEXT    machine_id
-        TEXT    credential_hash
-        TEXT    version
-        TEXT    gpu_probe
-        INTEGER gpu_verified
-        TEXT    last_heartbeat_at
-        TEXT    removed_at
-    }
-    renderer_enrollments {
-        TEXT    secret_hash PK
-        TEXT    expires_at
-        TEXT    used_at
-        TEXT    renderer_id
-    }
-    render_timings {
-        INTEGER id PK
-        TEXT    renderer_id
-        TEXT    kind
-        INTEGER frames
-        REAL    seconds
-    }
 ```
+
+Declared foreign keys with `ON DELETE CASCADE`: `comments.video_id`,
+`video_metrics.publication_id`, `script_profile_transcripts.profile_id` and
+`usage_event_videos.event_id`. Declared without a cascade: `videos.project_id`,
+`video_publications.video_id` and `mascot_versions.mascot_id`. The code resolves the other links.
+
+---
+
+## Ids that become paths
+
+A video id names the video's job directory and its output file. A domain id (`projects.id`) names
+the domain's output directory. `tubematic_core/ids.py` holds both rules that follow from that.
+
+| Rule | Applied | What it allows |
+|---|---|---|
+| `ids.py::check_segment` | When a row is created | Letters, digits, `_` and `-`, not starting with `-`, at most 128 characters |
+| `ids.py::is_component` | Every time an id is joined onto a directory | One path component: no `/` or `\`, not `.` or `..`, no control character, at most 255 bytes |
+
+The second rule is looser so that a row created under an id with a dot, a space or more than 128
+characters still renders and stays editable.
+
+The render is written as `<id>.mp4`, and `jobfiles.py::_check_name_length` counts the suffix. A
+video id of 252 to 255 bytes names a job directory but no possible output file. The render gateway
+moves such a video to `FAILED` with a comment when a renderer would claim it.
 
 ---
 
 ## `videos`
 
-The central table. One row per video, from proposed topic to published file.
+One row per video, from proposed topic to published file.
 
 | Column | Type | Default | Meaning |
 |---|---|---|---|
-| `id` | TEXT PK | | `vid_<hex>` from MCP, a UUID from `POST /videos`. A caller-chosen id must be letters, digits, `_` and `-`, not starting with `-`, at most 128 characters, because it names the video's job directory. That is checked only when the row is created. Every use of an existing id as a path checks only that it is one component (no separator, not `.` or `..`, no control character, at most 255 bytes, the longest file name the filesystem allows), so a video filed earlier under an id with a dot, a space or more than 128 characters still renders. The render itself is written as `<id>.mp4`, so the id must also leave four bytes for that suffix: one of 252 to 255 bytes names a working job directory but no possible output file, and the render gateway moves it to `FAILED` with a comment when a renderer would claim it, rather than letting it fail part-way through the render |
-| `project_id` | TEXT → `projects.id` | | The domain this video files into |
-| `topic` | TEXT NOT NULL | | The **full brief** — what the video is about, up to a few thousand characters |
-| `title` | TEXT NOT NULL | `''` | A **short display name**, capped at 70 characters. Legacy rows hold `''`; the UI falls back to `topic` |
+| `id` | TEXT PK | | `vid_<hex>` from MCP, a UUID from `POST /videos`. See [Ids that become paths](#ids-that-become-paths) |
+| `project_id` | TEXT → `projects.id` | | The domain the video files into |
+| `topic` | TEXT NOT NULL | | The full brief: what the video is about, up to a few thousand characters |
+| `title` | TEXT NOT NULL | `''` | A short display name, at most 70 characters. When it is `''` the UI shows `topic` |
 | `status` | TEXT NOT NULL | `TOPIC_PROPOSED` | See [The Pipeline](02-pipeline.md) |
-| `strategy` | TEXT NOT NULL | `manual` | `curriculum` · `trending` · `mining` · `manual` |
-| `producibility_score` | INTEGER NOT NULL | `0` | 1–10. The MCP `create_video` tool rejects a score below 5 at creation; `POST /videos` does not check it, and a video submitted from the dashboard stores `0` (unscored) |
-| `script` | TEXT NOT NULL | `''` | The flat script, **derived** from `script_segments` |
+| `strategy` | TEXT NOT NULL | `manual` | `curriculum`, `trending`, `mining` or `manual` |
+| `producibility_score` | INTEGER NOT NULL | `0` | 1 to 10. The MCP `create_video` tool rejects a score below 5. `POST /videos` does not check it. A video submitted from the dashboard stores `0`, meaning unscored |
+| `script` | TEXT NOT NULL | `''` | The flat script, derived from `script_segments` |
 | `script_segments` | TEXT | | JSON array of `{id, voice, visual}` |
-| `tts_text` | TEXT NOT NULL | `''` | The exact text sent to ElevenLabs, after pronunciation substitution |
-| `voice_id` | TEXT NOT NULL | `''` | This video's voice. Empty means the install default |
-| `notified_status` | TEXT NOT NULL | `''` | The *arrival* a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means nothing has been sent. A marker naming a status the video has since left never matches again, so nothing clears it. See [Notifications](02-pipeline.md#notifications) |
-| `script_profile_id` | TEXT | `''` | Style profile. Empty means the generic style |
-| `visual_style` | TEXT NOT NULL | `auto` | Which vocabularies the video may draw from: `auto`, `motion_graphics`, `stick`, `illustrated` or `cartoon_3d`. The first four are **permission sets**, not looks; `cartoon_3d` is a different renderer (a painted 3D world written as code for the video) and needs a working GPU. Chosen at the topic checkpoint and frozen there — see [Frozen choices](02-pipeline.md#frozen-choices). `auto` defers the choice to the agent |
-| `resolved_visual_style` | TEXT NOT NULL | `''` | Which **canvas** `auto` settled on (`dark` or `light`), written **once** by the agent at scene-config time. It stores a canvas rather than a register name because the canvas is the only thing `auto` must fix for the life of the video — everything else stays free per beat. `''` until it has. Meaningless unless `visual_style` is `auto`. Write-once is what makes a revision round render at the register the video already uses, without anything on the revision path knowing this column exists |
-| `resolved_renderer` | TEXT NOT NULL | `''` | Which **renderer** `auto` settled on: `dom` (the scene components) or `cartoon_3d` (one painted 3D world written as code for the video). Written **once** by the agent before any scene is authored, and never over HTTP; `''` until it has. A different axis from its neighbour, which stores a canvas: the renderer is the one choice a revision round must never flip, because flipping it discards every scene. Every video that predates the style is `dom`, backfilled by its migration |
-| `mascot_id` | TEXT NOT NULL | `''` | The [mascot](#mascots-and-mascot_versions) this video shows. `''` means none, and every video starts there: it is copied from the domain's, then the install's, default mascot when the video is created, only on an install whose renderer GPU test passes and never for Cartoon 3D. Settable only while the video is `TOPIC_PROPOSED`, like `visual_style` |
-| `mascot_version` | INTEGER NOT NULL | `0` | The mascot version the video was authored against, pinned by the **first** `write_scene_config` of a video that has a mascot and kept by every revision. `0` means not pinned yet. The renderer renders this version, never the mascot's current one, so approving a changed mascot cannot alter a video already in flight |
-| `agent_model` | TEXT | `''` | This video's model. Empty means its agent's default, `models[0]`. A non-empty value must be one of that agent's models |
-| `agent_effort` | TEXT NOT NULL | `''` | How hard the agent thinks on this video: `low`, `medium`, `high`, `xhigh` or `max`. Empty means its agent's own `effort`. Settable at any human checkpoint and frozen between them, like `agent_model` — see [Frozen choices](02-pipeline.md#frozen-choices). Unlike the model, any of the five is always *storable*: the levels are a fixed set rather than a per-install list. Whether a level is *usable* depends on the model the video runs under — some models accept fewer — which is resolved when the run happens, not here |
-| `agent_id` | TEXT | `NULL` | The [agent](#agents) this video runs under. Dealt at creation; a human may move it to another live agent at a checkpoint, and nothing else changes it — see [Frozen choices](02-pipeline.md#frozen-choices). Never written back to `NULL`, which means the default agent at dispatch time — rows from before agents existed, or created while none was installed. Deliberately not a declared foreign key; an id that does not resolve makes the poller skip the video rather than reroute it |
-| `agent_no_progress_count` | INTEGER NOT NULL | `0` | Scheduled agent sessions in a row that left the video at the status they found it at. Written only by [`POST /videos/<id>/agent-outcome`](05-http-api.md#post-videosvideo_idagent-outcome), which resets it on any status change. Persisted rather than held by the poller, whose supervisor exits when it runs out of work and would otherwise never reach the cap |
-| `agent_stuck_at` | TEXT | `NULL` | When the poller stopped dispatching this video, after 3 sessions without progress; `NULL` while it is not stuck. `/videos/workable` leaves a stuck video out. Cleared by a `PATCH` that carries `status` or by Retry agent (`POST /videos/<id>/agent-retry`). A stuck video keeps its status: it is not `FAILED` — see [The Poller](13-the-poller.md#success-is-read-from-the-database) |
-| `agent_last_outcome_key` | TEXT | `NULL` | The session key of the last outcome `agent-outcome` counted, so a report replayed by a successor supervisor is not counted twice |
-| `voice_file_path` | TEXT NOT NULL | `''` | Where `generate_voice` wrote `audio.mp3`. Server-written; see the path columns note below |
-| `timeline_path` | TEXT NOT NULL | `''` | Where `generate_voice` wrote `timeline.json`. Server-written |
-| `scene_config_path` | TEXT NOT NULL | `''` | Where `write_scene_config` wrote `scene-config.json`. Server-written |
-| `video_path` | TEXT NOT NULL | `''` | Where the render gateway stored the renderer's uploaded mp4. Server-written |
-| `video_version` | INTEGER NOT NULL | `1` | Bumped on each re-render |
-| `gemini_feedback` | TEXT NOT NULL | `''` | The AI reviewer's full findings. Stored uncapped |
-| `ai_review_count` | INTEGER | `0` | Reviews run so far. Capped by `ai_review_max_loops` |
-| `render_fail_count` | INTEGER | `0` | Render failures so far — crashes, stalls, timeouts, and renders lost to a renderer restart or an expired lease. Capped by `max_render_retries` |
-| `renderer_id` | TEXT NOT NULL | `''` | The [renderer](#renderers-renderer_enrollments-and-render_timings) holding the video's render lease while it is `RENDERING`. `''` when none does, which is also what a row left `RENDERING` by a renderer from before migration `0019` holds: the worker's lease sweep reads that as expired and re-queues it. Cleared when the render's result arrives |
-| `render_lease_until` | TEXT NOT NULL | `''` | When the lease runs out unless the renderer's heartbeat extends it, UTC. See [Leases](11-rendering-and-review.md#leases-restarts-and-lost-renderers) |
-| `render_started_at` | TEXT NOT NULL | `''` | When the current render was claimed; the scheduler's "time spent so far" for a busy renderer |
-| `render_uploaded_at` | TEXT NOT NULL | `''` | When the render's mp4 arrived. A `RENDERING` row with this set is waiting for the worker's AI review, and is never re-queued |
-| `render_claim_id` | TEXT NOT NULL | `''` | The current claim's id: random, new on every claim, handed to the renderer with the claim. The bundle, the upload and the result must name it, and a heartbeat extends the lease only when it names it too, so a renderer whose lease ran out cannot act for — or keep alive — a later claim of the same video, its own included. Cleared with `renderer_id` — see [Leases](11-rendering-and-review.md#leases-restarts-and-lost-renderers) |
-| `youtube_url` | TEXT NOT NULL | `''` | Legacy single-URL publish target. Retired as a *read* path — publications live in their own table |
-| `publish_title` | TEXT NOT NULL | `''` | What the video is posted with, written by the agent with the script; distinct from `title` |
+| `tts_text` | TEXT NOT NULL | `''` | The text sent to ElevenLabs, after pronunciation substitution |
+| `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
+| `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
+| `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
+| `visual_style` | TEXT NOT NULL | `auto` | `auto`, `motion_graphics`, `stick`, `illustrated` or `cartoon_3d`. Set while the video is `TOPIC_PROPOSED` and frozen after. See [Visual style columns](#visual-style-columns) |
+| `resolved_visual_style` | TEXT NOT NULL | `''` | The canvas `auto` settled on: `dark` or `light`. Written once by the agent |
+| `resolved_renderer` | TEXT NOT NULL | `''` | The renderer `auto` settled on: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
+| `mascot_id` | TEXT NOT NULL | `''` | The [mascot](#mascots-and-mascot_versions) the video shows. `''` means none. Settable only while the video is `TOPIC_PROPOSED` |
+| `mascot_version` | INTEGER NOT NULL | `0` | The mascot version the video was authored against. `0` means not pinned yet |
+| `agent_id` | TEXT | `NULL` | The [agent](#agents) the video runs under. `NULL` means the default agent at dispatch time |
+| `agent_model` | TEXT NOT NULL | `''` | The video's model. `''` means its agent's default, `models[0]`. Any other value must be one of that agent's models |
+| `agent_effort` | TEXT NOT NULL | `''` | `low`, `medium`, `high`, `xhigh` or `max`. `''` means its agent's own `effort` |
+| `agent_no_progress_count` | INTEGER NOT NULL | `0` | Scheduled agent sessions in a row that left the video at the status they found it at |
+| `agent_stuck_at` | TEXT | `NULL` | When the poller stopped dispatching the video. `NULL` while it is not stuck |
+| `agent_last_outcome_key` | TEXT | `NULL` | The session key of the last outcome counted, so a report sent twice is counted once |
+| `voice_file_path` | TEXT NOT NULL | `''` | Where `generate_voice` wrote `audio.mp3`. See [Path columns](#path-columns) |
+| `timeline_path` | TEXT NOT NULL | `''` | Where `generate_voice` wrote `timeline.json` |
+| `scene_config_path` | TEXT NOT NULL | `''` | Where `write_scene_config` wrote `scene-config.json` |
+| `video_path` | TEXT NOT NULL | `''` | Where the render gateway stored the uploaded mp4 |
+| `video_version` | INTEGER NOT NULL | `1` | Raised on each re-render |
+| `gemini_feedback` | TEXT NOT NULL | `''` | The AI reviewer's full findings, stored uncapped |
+| `ai_review_count` | INTEGER NOT NULL | `0` | Reviews run so far. Capped by `ai_review_max_loops` |
+| `render_fail_count` | INTEGER NOT NULL | `0` | Render failures so far: failed renders, stalls, timeouts, and renders lost to a renderer restart or an expired lease. Capped by `max_render_retries` |
+| `renderer_id` | TEXT NOT NULL | `''` | The [renderer](#renderers-renderer_enrollments-and-render_timings) holding the render lease, its time-limited hold on a `RENDERING` video. `''` when none does, which the worker's lease sweep reads as an expired lease and re-queues |
+| `render_lease_until` | TEXT NOT NULL | `''` | When the lease runs out unless a heartbeat extends it, UTC |
+| `render_started_at` | TEXT NOT NULL | `''` | When the current render was claimed. The scheduler's "time spent so far" for a busy renderer |
+| `render_uploaded_at` | TEXT NOT NULL | `''` | When the render's mp4 arrived. A `RENDERING` row with this set is waiting for the worker's AI review and is not re-queued |
+| `render_claim_id` | TEXT NOT NULL | `''` | The current claim's id: random, new on every claim. See [Render lease columns](#render-lease-columns) |
+| `publish_title` | TEXT NOT NULL | `''` | The title the video is posted with, written by the agent with the script. Separate from `title` |
 | `publish_description` | TEXT NOT NULL | `''` | The post's description, written by the agent with the script |
-| `scheduled_at` | TEXT NOT NULL | `''` | When a scheduled post goes out, UTC. `''` means not scheduled; the worker moves a `SCHEDULED` video to `PUBLISHING` once this has passed. Migration `0008` — see [Scheduling a post](14-publishing.md#scheduling-a-post) |
-| `scheduled_timezone` | TEXT NOT NULL | `''` | The IANA zone the schedule was picked in, kept only so the time is shown back in that zone |
-| `auto_pilot_hold` | INTEGER NOT NULL | `0` | `1` once a human has cancelled this video's scheduled post, so Auto Pilot does not schedule it again. Never cleared. Migration `0009` — see [Auto Pilot](14-publishing.md#stopping-one-video) |
-| `auto_pilot_blocked` | TEXT NOT NULL | `''` | `<status>@<updated_at>` for the arrival at a checkpoint that Auto Pilot last commented it could not approve; what keeps that comment to one per arrival |
+| `scheduled_at` | TEXT NOT NULL | `''` | When a scheduled post goes out, UTC. `''` means not scheduled. The worker moves a `SCHEDULED` video to `PUBLISHING` once it has passed. See [Scheduling a post](14-publishing.md#scheduling-a-post) |
+| `scheduled_timezone` | TEXT NOT NULL | `''` | The IANA zone the schedule was picked in, kept so the time is shown back in that zone |
+| `auto_pilot_hold` | INTEGER NOT NULL | `0` | `1` once a human has cancelled the video's scheduled post, so Auto Pilot does not schedule it again. Nothing clears it. See [Stopping one video](14-publishing.md#stopping-one-video) |
+| `auto_pilot_blocked` | TEXT NOT NULL | `''` | `<status>@<updated_at>` for the arrival Auto Pilot last commented it could not approve. It keeps that comment to one per arrival |
 | `archived_at` | TEXT | `NULL` | When the video's files were deleted and the row archived. `NULL` means live |
-| `cost_cents_elevenlabs` | INTEGER NOT NULL | `0` | **Unused.** Superseded by [`usage_events`](#usage_events-usage_event_videos-and-model_prices); kept only because shipped migrations are immutable |
-| `cost_cents_gemini` | INTEGER NOT NULL | `0` | **Unused**, as above |
-| `cost_cents_claude` | INTEGER NOT NULL | `0` | **Unused**, as above |
-| `created_at` / `updated_at` | TEXT NOT NULL | | ISO-8601 UTC |
+| `created_at`, `updated_at` | TEXT NOT NULL | | ISO-8601 UTC |
 
-**`updated_at` is load-bearing.** It is the FIFO ordering key for the render gateway's atomic claim.
-Anything that writes to it changes render order.
+Four columns are unused: `youtube_url` (TEXT) and `cost_cents_elevenlabs`, `cost_cents_gemini` and
+`cost_cents_claude` (INTEGER). They remain because a shipped migration cannot be edited.
+Publications live in [`video_publications`](#video_publications-and-video_metrics). Cost lives in
+[`usage_events`](#usage_events-usage_event_videos-and-model_prices) and is computed per video when
+it is shown.
 
-**The four path columns are written only by the code that writes the files, and no reader trusts
-them.** `generate_voice`, `write_scene_config` and the render gateway (for an uploaded render) fill
-them in; `PATCH` and MCP `update_video` refuse them. Every reader — the gateway's claim checks and
-bundle, `validate_job`, archive and
-retention, publishing, the publish dialog's duration — derives the location from the ids instead:
-`<jobs>/<video_id>/audio.mp3`, `timeline.json` and `scene-config.json`, and
-`<output>/<project_id>/<video_id>.mp4` (`tubematic_core/jobfiles.py`). A symlink in any component
-below the jobs or output directory is refused, not only one that leads out of it: `<jobs>/vid_a`
-linked to `<jobs>/vid_b` stays inside the jobs directory, and would hand video A video B's audio.
-The directory itself may be a symlink. One gap is known and left open: the check runs before the
-file is used, so a process that can write under those directories could swap a checked directory
-for a link in between. Closing it means opening every file beneath a directory descriptor
-(`openat2` with `RESOLVE_BENEATH`), which the shared layer does not do; only Tubematic's own
-containers write there. A column is only a marker
-that its step completed: an empty one still reads as "not written yet". The columns used to be
-writable by any caller, so a row could name another video's render for its own archive to delete,
-or any readable file for the renderer to stage into a render. Deriving the path makes a row tampered
-with before that was fixed harmless, with no migration. It also means a row written by an MCP
-server driven from a host shell, which stores host paths, renders as long as the files are in the
-jobs volume. The values are container-absolute (`/jobs/…`, `/output_videos/…`) in a normal install.
-The dashboard plays a render from `/stream/<project_id>/<id>.mp4`, built from the ids too
-(`dashboard/lib/utils.ts::videoStreamUrl`); `video_path` only tells it a render exists.
+### `updated_at`
 
-**Archived is a column, not a status.** Deleting a video — by hand, or by the retention sweep —
-removes its mp4 and job directory, sets `archived_at`, clears `video_path`, and leaves `status`
-alone. An `ARCHIVED` status would overwrite the one field that says what the video actually was
-(published, failed, never approved). The row, its comments, publications and metrics are all kept.
-Every list and count that feeds the board or the agent filters `archived_at IS NULL`, and an
-archived row is frozen: `PATCH` and publish both return `409`, and the MCP server's
-`set_video_status` and `update_video` refuse it with `video_archived` — an agent may already hold the
-id from before the delete, so filtering the lists alone would not stop it. `script_profiles.archived` is an
-integer flag instead because nothing there needs to show *when*. See
-[Rendering and Review](11-rendering-and-review.md#retention).
+`updated_at` orders the render queue: the render gateway claims the oldest `RENDER_QUEUED` row
+first. Any write to the column changes render order.
 
-**Cost is not stored on the video.** Every paid call is its own row in
-[`usage_events`](#usage_events-usage_event_videos-and-model_prices), and a video's cost is computed from
-those rows when it is shown.
+### Visual style columns
+
+The first four `visual_style` values are permission sets: each names which scene vocabularies the
+video may draw from. `cartoon_3d` selects a different renderer (one painted 3D world written as
+code for the video) and needs a working GPU. `auto` leaves the choice to the agent.
+[Frozen choices](02-pipeline.md#frozen-choices) covers when each may change.
+
+Under `auto` the agent records two decisions, each once:
+
+- `resolved_visual_style` holds the canvas (the background the scenes are designed against). The
+  canvas is the one thing `auto` must fix for the life of the video, so a revision round renders on
+  the canvas the video already uses. The column means nothing unless `visual_style` is `auto`.
+- `resolved_renderer` is written before any scene is authored. A revision round that changed the
+  renderer would discard every scene.
+
+### Mascot columns
+
+`mascot_id` is copied from the domain's default mascot, then the install's, when the video is
+created. The copy happens only while a renderer's GPU test passes, and not for a `cartoon_3d`
+video.
+
+The first `write_scene_config` of a video that has a mascot sets `mascot_version`, and every
+revision keeps it. The renderer renders the pinned version, so approving a changed mascot does not
+alter a video already in progress.
+
+### Agent columns
+
+`agent_id` is dealt when the video is created. A human may move the video to another live agent, or
+change `agent_model` and `agent_effort`, at a human checkpoint. Nothing else changes them
+([Frozen choices](02-pipeline.md#frozen-choices)).
+
+- `agent_id` is not a declared foreign key, and nothing writes it back to `NULL`. The poller skips
+  a video whose `agent_id` does not resolve. It does not reroute it.
+- Any of the five `agent_effort` levels can be stored. Whether a level is usable depends on the
+  model, which is resolved when the session runs.
+- [`POST /videos/<id>/agent-outcome`](05-http-api.md#post-videosvideo_idagent-outcome) is the only
+  writer of `agent_no_progress_count` and resets it on any status change. The count is stored
+  because the poller exits when it runs out of work.
+- `agent_stuck_at` is set after 3 sessions without progress, and `/videos/workable` then leaves the
+  video out. A `PATCH` that carries `status`, or `POST /videos/<id>/agent-retry`, clears it. A
+  stuck video keeps its status
+  ([The Poller](13-the-poller.md#success-is-read-from-the-database)).
+
+### Path columns
+
+`generate_voice`, `write_scene_config` and the render gateway write `voice_file_path`,
+`timeline_path`, `scene_config_path` and `video_path` when they write the files. `PATCH` and the
+MCP `update_video` tool refuse them. A column marks that its step completed, and an empty one reads
+as "not written yet".
+
+No reader uses a stored value as a path. `tubematic_core/jobfiles.py` derives every location from
+the ids, so a row that names another video's files cannot reach them:
+
+- `<jobs>/<video_id>/audio.mp3`, `timeline.json` and `scene-config.json`
+- `<output>/<project_id>/<video_id>.mp4`
+
+`jobfiles.py::join_below` refuses a symlink in any component below the jobs or output directory,
+including one that stays inside it: `<jobs>/vid_a` linked to `<jobs>/vid_b` would hand video A the
+audio of video B. The jobs or output directory itself may be a symlink. The check runs before the
+file is used, and `jobfiles.py` does not open files beneath a directory descriptor (`openat2` with
+`RESOLVE_BENEATH`), so the rule relies on only Tubematic's containers writing there.
+
+The stored values are container paths (`/jobs/…`, `/output_videos/…`). An MCP server driven from a
+host shell stores host paths, and the video still renders when its files are in the jobs volume.
+The dashboard plays a render from `/stream/<project_id>/<id>.mp4`
+(`dashboard/lib/utils.ts::videoStreamUrl`) and reads `video_path` only to learn that a render
+exists.
+
+### Render lease columns
+
+The claim sets the five lease columns, and the arrival of the render's result clears them. The
+bundle, the upload and the result must name `render_claim_id`, and a heartbeat extends the lease
+only when it names it. A renderer whose lease ran out therefore cannot act for a later claim of the
+same video, its own included. See
+[Leases, restarts and lost renderers](20-gpu-and-remote-renderers.md#leases-restarts-and-lost-renderers).
+
+### Archived videos
+
+Deleting a video, by hand or by the retention sweep, removes its mp4 and job directory, sets
+`archived_at` and clears `video_path`. No `ARCHIVED` status exists: `status` is left alone, because
+it is the one field that says what the video was (published, failed, rejected). The row, its
+comments, publications and metrics are kept.
+
+Every list and count that feeds the board or the agent filters `archived_at IS NULL`. An archived
+row is frozen: `PATCH` and publish return `409`, and the MCP `set_video_status` and `update_video`
+tools refuse it with `video_archived`, because an agent may hold the id from before the delete.
+[The Worker](12-the-worker.md) covers the retention sweep.
+
+---
 
 ## `projects`
 
-Project domains are the single organizing entity — every video files into one, regardless of how it
-was sourced.
+A domain. Every video files into one, whatever its research mode.
 
 | Column | Type | Default | Meaning |
 |---|---|---|---|
-| `id` | TEXT PK | | Slug, e.g. `proj_networking`. A new id must be letters, digits, `_` and `-`, not starting with `-`, at most 128 characters, because it names the domain's output directory. Checked only when the row is created, so a domain filed earlier under an id with a dot or more than 128 characters stays editable and still renders; such an id is refused at render time only if it would leave the output directory or is longer than a file name can be |
+| `id` | TEXT PK | | A slug such as `proj_networking`. See [Ids that become paths](#ids-that-become-paths) |
 | `name` | TEXT NOT NULL | | |
-| `description` | TEXT NOT NULL | `''` | The domain's scope, multi-line. At most 2000 characters, checked by the API and the MCP server only when it changes, so a longer one stored before the limit is kept. The limit is low because `list_projects` returns every domain's description on every research run |
+| `description` | TEXT NOT NULL | `''` | The domain's scope, multi-line, at most 2000 characters |
 | `is_curriculum_seed` | INTEGER NOT NULL | `0` | `1` means scheduled curriculum research draws topics from it |
-| `status` | TEXT NOT NULL | `active` | `active` or `paused`. Only a curriculum seed can be `paused`; see [Domain pause](02-pipeline.md#domain-pause) |
-| `default_visual_style` | TEXT NOT NULL | `''` | The register this domain's **curriculum** videos start in. `''` means the domain has no preference, which is not the same as `auto`: `auto` is a per-video instruction to the agent, this is the absence of a domain-level one. Videos filed here by trending, mining or manual ignore it — the register reads as a series identity, and curriculum is the one strategy that produces a series |
-| `default_voice_id` | TEXT NOT NULL | `''` | The voice every new video filed into this domain starts with, **whatever its strategy** — unlike `default_visual_style`, it is the domain's narrator, not a series identity. `''` means the install default. It is copied into `videos.voice_id` when a video is created, and skipped if the voice has left the roster, so changing it never reaches back to videos already filed. See [The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice) |
-| `default_script_profile_id` | TEXT NOT NULL | `''` | The [script profile](08-scripting-and-voice.md#script-profiles) this domain's **curriculum** videos start with, for the same series-identity reason as `default_visual_style`; other strategies ignore it. `''` means none. Copied into `videos.script_profile_id` when a curriculum video is created, and skipped if the profile is no longer `READY` or has been deleted — the approving `PATCH` would refuse it. Changing it never reaches back to videos already filed. Migration `0010` |
-| `default_mascot_id` | TEXT NOT NULL | `''` | The mascot new videos in this domain start with, whatever their strategy. `''` inherits the install's `default_mascot_id` setting, `none` means no mascot even when the install has a default. Copied into `videos.mascot_id` at creation; an archived or never-approved mascot reads as none |
-| `topic_cap` | INTEGER NOT NULL | `100` | How many topics the domain may ever hold, 25–750, checked by the API and the MCP server (SQLite can't add a `CHECK` to an existing table). Every video ever filed counts, archived and rejected included. At the cap the domain is **expired** and research files nothing more into it. Expired is derived on read, never stored; `GET /projects` and `list_projects` return it with the count as `expired` and `topic_count`. See [Topic cap](02-pipeline.md#topic-cap). Migration `0013`, which gave a domain already holding 100 or more topics `min(750, count + 100)` so that none expired on upgrade |
+| `status` | TEXT NOT NULL | `active` | `active` or `paused`. Only a curriculum seed can be paused. See [Domain pause](02-pipeline.md#domain-pause) |
+| `default_visual_style` | TEXT NOT NULL | `''` | The visual style the domain's `curriculum` videos start with. `''` means no domain preference |
+| `default_voice_id` | TEXT NOT NULL | `''` | The voice every new video in the domain starts with, whatever its `strategy`. `''` means the install default |
+| `default_script_profile_id` | TEXT NOT NULL | `''` | The [script profile](08-scripting-and-voice.md#script-profiles) the domain's `curriculum` videos start with. `''` means none |
+| `default_mascot_id` | TEXT NOT NULL | `''` | The mascot new videos start with, whatever their `strategy`. `''` inherits the install's `default_mascot_id` setting. `none` means no mascot |
+| `topic_cap` | INTEGER NOT NULL | `100` | How many topics the domain may ever hold, 25 to 750. See [Topic cap](02-pipeline.md#topic-cap) |
 | `created_at` | TEXT NOT NULL | | |
+
+The API and the MCP server check `description` only when it changes, so a longer one already
+stored is kept. The limit is low because `list_projects` returns every domain's description on
+every research run.
+
+The four defaults are copied into the video's own column (`videos.voice_id`,
+`videos.script_profile_id` and so on) when the video is created. Changing one does not reach videos
+already filed.
+
+- `default_visual_style` and `default_script_profile_id` apply to `curriculum` videos only, because
+  curriculum is the one research mode that produces a series. A `default_visual_style` of `''` is
+  different from `auto`: `auto` is a per-video instruction to the agent.
+- `default_voice_id` is skipped if the voice has left the roster. See
+  [The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice).
+- `default_script_profile_id` is skipped if the profile is deleted or not `READY`, because the
+  approving `PATCH` would refuse it.
+- A `default_mascot_id` that names an archived or unapproved mascot reads as none.
+
+The API and the MCP server check `topic_cap`, because SQLite cannot add a `CHECK` to an existing
+table. Every video ever filed counts, archived and rejected included. At the cap the domain is
+expired and research files nothing more into it. Expired is derived on read: `GET /projects` and
+`list_projects` return `expired` and `topic_count`.
 
 ## `comments`
 
-The audit trail. Both the agent and humans write here, and the dashboard renders it as a read-only
-thread. The agent is required to leave a comment at every checkpoint explaining what it did. A human
-comment enters through the dashboard's Request Revision dialog (deleting a video from the dashboard
-also leaves one, written by the API); the agent's `add_comment` tool
-refuses any author but `agent`, so it cannot write one.
+The audit trail of a video. The dashboard renders it as a read-only thread.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -391,374 +274,477 @@ refuses any author but `agent`, so it cannot write one.
 | `content` | TEXT NOT NULL | |
 | `created_at` | TEXT NOT NULL | |
 
-> Comments are visible in the dashboard, and error text gets written here. That is why every
-> outbound API error is scrubbed of credentials before it is persisted.
+The agent leaves a comment at every checkpoint to say what it did. Its `add_comment` tool refuses
+any author but `agent`. A `human` comment comes from the dashboard's Request Revision dialog, or
+from the API when a video is deleted from the dashboard.
+
+Error text is written here and shown on the dashboard, so every outbound API error is scrubbed of
+credentials before it is stored.
 
 ## `agents`
 
-One row per installed coding agent. See [The Agent Layer](07-agent-layer.md#agents) for how agents
+One row per installed coding agent. [The Agent Layer](07-agent-layer.md#agents) covers how agents
 are installed and how videos are assigned to them.
 
 | Column | Type | Default | Meaning |
 |---|---|---|---|
-| `id` | TEXT PK | | The agent's id — `claude`, `codex` or `opencode`, the argument `--install-agent` takes |
-| `name` | TEXT NOT NULL | | Display name, e.g. `Claude Code`, `Codex`, `OpenCode` |
-| `binary` | TEXT NOT NULL | | The CLI's path, resolved at install time. The poller re-resolves it through `PATH` before running it |
+| `id` | TEXT PK | | `claude`, `codex` or `opencode`: the argument `--install-agent` takes |
+| `name` | TEXT NOT NULL | | Display name, such as `Claude Code` |
+| `binary` | TEXT NOT NULL | | The CLI's path, resolved at install time. The poller resolves it again through `PATH` before each run |
 | `run_path` | TEXT NOT NULL | | The agent's workspace. Cron runs the agent from here |
-| `install_scope` | TEXT NOT NULL | `'user'` | `user` or `project` — where its skills and commands were deployed |
+| `install_scope` | TEXT NOT NULL | `'user'` | `user` or `project`: where its skills and commands were deployed |
 | `models` | TEXT NOT NULL | `'[]'` | JSON list of model names, each probed against the CLI at install time. `models[0]` is the agent's default |
-| `effort` | TEXT NOT NULL | `'high'` | This agent's default effort level, used by every run no video overrides. Editable over HTTP, unlike `models`: the five levels are a fixed set rather than a per-install list, so the API can validate a value without an agent binary. Whether a level is *usable* still depends on the model a run uses — some accept fewer — which the installer probes against the default model and the poller falls back on at run time |
-| `is_default` | INTEGER NOT NULL | `0` | At most one live row carries it. The default agent builds script profiles, runs research, and runs videos with no `agent_id`; with none flagged, the oldest live agent is used |
-| `weight` | INTEGER NOT NULL | `1` | Share of new videos, 0–100, dealt exactly per deck (see `agent_deck` below). 0 means no cards |
-| `verified_at` | TEXT NOT NULL | `''` | When the models were probed. Blank when they were not (`--disable-verification`) |
+| `is_default` | INTEGER NOT NULL | `0` | At most one live row carries it. See below |
+| `weight` | INTEGER NOT NULL | `1` | Share of new videos, 0 to 100. `0` means none |
+| `verified_at` | TEXT NOT NULL | `''` | When the models were probed. `''` when they were not (`--disable-verification`) |
 | `archived_at` | TEXT | `NULL` | `NULL` means live |
-| `created_at` / `updated_at` | TEXT NOT NULL | | ISO-8601 UTC |
+| `created_at`, `updated_at` | TEXT NOT NULL | | ISO-8601 UTC |
+| `effort` | TEXT NOT NULL | `'high'` | The agent's default effort level, used by every run no video overrides |
 
-**Only the host-side installer writes rows**, straight into SQLite — see
-[Deployment](07-agent-layer.md#deployment) for why not over HTTP. Over HTTP a human can change only
-`is_default`, `weight`, `effort`, and which installed model sits first in `models`
-([HTTP API](05-http-api.md#agents)). No MCP tool writes this table.
+The default agent builds script profiles, runs research and runs videos with no `agent_id`. If no
+row is flagged, the oldest live agent is used.
 
-**Uninstalled means archived, never deleted** (`python3 onboard.py --uninstall-agent <name>` sets
-`archived_at`), so a video pinned to an agent always resolves and keeps showing its name. An
-uninstalled agent is assigned no new videos, and the poller skips the videos it already has.
+The host-side installer is the only writer of rows, and writes straight into SQLite
+([Deployment](07-agent-layer.md#deployment)). Over HTTP a human can change `is_default`, `weight`,
+`effort` and which installed model sits first in `models` (`pipeline.py::AGENT_PATCHABLE`,
+[HTTP API](05-http-api.md#agents)). `effort` is editable over HTTP because its five levels are a
+fixed set the API can validate without the agent's CLI. No MCP tool writes this table.
 
-**Two copies of the schema.** The real one is in `tubematic_core/migrations/`; the second is
-`onboard/agent_install.py::AGENTS_SCHEMA`, because the installer runs on the host, where it may
-create the table before any container — and before `tubematic_core/migrations` has ever run against
-this database — has started. A test compares the installer's copy column-for-column against a
-**fully migrated** database, not against `0001`'s source text, so a column added by a later
-migration is caught too. That also means the installer's copy has to list post-baseline columns
-**in migration order, at the bottom**: `ALTER TABLE … ADD COLUMN` always appends, and the
-comparison includes each column's position.
+`python3 onboard.py --uninstall-agent <name>` sets `archived_at` and keeps the row, so a video
+pinned to that agent still resolves and shows its name. An archived agent is assigned no new
+videos, and the poller skips the videos it already has.
+
+The table's schema exists twice. The second copy is `onboard/agent_install.py::AGENTS_SCHEMA`,
+because the installer runs on the host and may create the table before any container has started.
+A test compares the installer's copy with a fully migrated database, column positions included.
+`ALTER TABLE … ADD COLUMN` appends, so the installer's copy lists columns added after the baseline
+at the bottom, in migration order.
 
 ### `agent_deck`
 
-A single row (`id = 1`, enforced by a `CHECK`) holding the shuffled deck new videos are dealt their
-agent from — see [Assignment](07-agent-layer.md#assignment).
+One row (`id = 1`, enforced by a `CHECK`) holding the deck: the shuffled list of agent ids that new
+videos are dealt from, in proportion to each agent's `weight`. See
+[Assignment](07-agent-layer.md#assignment).
 
 | Column | Type | Meaning |
 |---|---|---|
-| `signature` | TEXT NOT NULL | JSON `[[agent_id, reduced_weight], …]` the deck was built from. A mismatch with the live agents means "shuffle a new deck" |
+| `signature` | TEXT NOT NULL | JSON `[[agent_id, reduced_weight], …]` the deck was built from. A mismatch with the live agents means a new deck is shuffled |
 | `cards` | TEXT NOT NULL | JSON list of agent ids still to deal |
 
-The row is created on the first deal, and only `_pick_agent_id` in the API and MCP processes writes
-it — the installer never touches it, because a changed signature already rebuilds the deck. Its
-table is defined once, in `0001_baseline.py`, so there is no cross-copy to drift.
+The row is created on the first deal. `_pick_agent_id` in the API and the MCP server is its only
+writer.
+
+---
 
 ## `usage_events`, `usage_event_videos` and `model_prices`
 
-The spend ledger. **One `usage_events` row per paid call**, written as soon as the provider's
-response exists — on the success path and on every failure after it, because a response that
-failed to parse was still billed. Writers call `tubematic_core/usage.py::record_usage`, which never
-raises: bookkeeping must not fail a video, but a failure to record is always logged.
+The spend ledger. Each paid call gets one `usage_events` row, written as soon as the provider's
+response exists, on the success path and on every failure after it, because a response that failed
+to parse was still billed. Writers call `tubematic_core/usage.py::record_usage`, which logs a
+failure to record and does not raise, so bookkeeping cannot fail a video.
 
-| Column | Meaning |
-|---|---|
-| `service` / `model` | `gemini`, `openai`, `anthropic`, `elevenlabs`, … and the model id the call used |
-| `operation` | `voice`, `voice_preview`, `ai_review`, `mining`, `publish_metadata` (only on rows from before the agent wrote the publish metadata), `image`, `character`, `agent_pipeline`, `agent_research`, `agent_profile`, `agent_mascot`, and `agent_unscoped` on rows from before the poller ran one video per session |
-| `units` | Normalised counts: `input`, `input_audio`, `input_image`, `output`, `reasoning`, `output_image`, `cache_read`, `cache_write`, `cache_write_1h` tokens, or ElevenLabs `credits` |
-| `raw_usage` | The provider's own usage object, verbatim — what makes re-pricing possible later |
-| `request_id` | ElevenLabs' `request-id` response header on voice and preview rows, for matching a row to the provider's own history. `NULL` elsewhere |
-| `session_id` | Groups the rows of one agent session (one row per model it used) |
-| `cost_usd` | Dollars at API list price, or **`NULL`** when no rate was known |
-| `cost_basis` | `priced` (units × rates), `reported` (the agent CLI's own figure), `credits` (ElevenLabs — never priced), `unpriced` |
-| `price_snapshot` | The rates and their source applied at the time |
-| `estimated` | Set when a fallback rate or a long-prompt price tier made the figure approximate |
-| `event_key` | Unique when set. An agent session's events arrive over HTTP and are keyed by session and position, so a report resent after a timeout records nothing twice. `NULL` for calls recorded in-process, which never resend |
+| `usage_events` column | Type | Meaning |
+|---|---|---|
+| `id` | INTEGER PK AUTOINCREMENT | |
+| `created_at` | TEXT NOT NULL | |
+| `session_id` | TEXT | Groups the rows of one agent session, one row per model it used |
+| `service` | TEXT NOT NULL | `gemini`, `openai`, `anthropic`, `elevenlabs` and others |
+| `model` | TEXT NOT NULL, `''` | The model id the call used |
+| `operation` | TEXT NOT NULL | `voice`, `voice_preview`, `ai_review`, `mining`, `image`, `character`, `agent_pipeline`, `agent_research`, `agent_profile` or `agent_mascot`. Readers also accept `publish_metadata` and `agent_unscoped`, which no current writer produces |
+| `units` | TEXT NOT NULL, `'{}'` | JSON counts: `input`, `input_audio`, `input_image`, `output`, `reasoning`, `output_image`, `cache_read`, `cache_write` and `cache_write_1h` tokens, or ElevenLabs `credits` |
+| `raw_usage` | TEXT | The provider's own usage object, verbatim |
+| `request_id` | TEXT | ElevenLabs' `request-id` response header on voice and preview rows. `NULL` elsewhere |
+| `cost_usd` | REAL | Dollars at API list price, or `NULL` when no rate was known |
+| `cost_basis` | TEXT NOT NULL | `priced` (units × rates), `reported` (the agent CLI's own figure), `credits` (ElevenLabs) or `unpriced` |
+| `price_snapshot` | TEXT | The rates applied and their source |
+| `estimated` | INTEGER NOT NULL, `0` | `1` when a fallback rate or a long-prompt price tier made the figure approximate |
+| `event_key` | TEXT | Unique when set. See below |
 
-**Units and the price are both kept, on purpose.** Units alone would silently re-price history
-whenever a rate is edited; a stored dollar figure alone could never be corrected. So editing a rate
-changes future calls only — except `unpriced` rows, which are filled in when a rate for their model
-is added, because their units were kept exactly.
+- An agent session's events arrive over HTTP and are keyed by session and position in
+  `event_key`, so a report resent after a timeout records nothing twice. Calls recorded in-process
+  leave it `NULL`.
+- A row keeps both its units and the price applied. Units alone would re-price history whenever a
+  rate is edited, and a dollar figure alone could not be corrected. Editing a rate changes future
+  calls only, except that adding a rate for a model fills in its `unpriced` rows.
+- An unpriced call stores `cost_usd` as `NULL`, because `0` would read as a free call and
+  understate spend. The dashboard shows unpriced calls as a count beside every total. A billed
+  response whose usage could not be read is recorded with no units, which is unpriced.
 
-**Unpriced is `NULL`, never `0`.** Zero is indistinguishable from "this call was free" and would
-understate spend invisibly; the dashboard shows unpriced calls as a count beside every total. That
-includes a billed response whose usage could not be read: it is recorded with no units, and no
-units is unpriced, not free.
+`videos` keeps only `voice_id`, and a roster voice's model can be edited after voicing, so the
+ledger is the one record of which model voiced a video. `usage.py::last_voice_model` reads it from
+the video's latest `voice` row. See `voice_info` under
+[`GET /videos/<id>`](05-http-api.md#get-videosvideo_id).
 
-**ElevenLabs is recorded in plan credits and never priced.** The `character-cost` response header
-is the exact number of credits the call deducted from the plan's pool, after the model's discount
-(a Flash or Turbo call costs half). Installs are assumed to be on a subscription that prepays those
-credits, so a dollar figure would be an allocation, not spend.
+| `usage_event_videos` column | Type | Meaning |
+|---|---|---|
+| `event_id` | INTEGER NOT NULL → `usage_events.id` | `ON DELETE CASCADE`. Primary key with `video_id` |
+| `video_id` | TEXT NOT NULL | The video the call was for |
+| `stage` | TEXT | The video's status when an agent session started. It labels the session in the video modal |
 
-The ledger is also **the only record of which model voiced a video**. `videos` keeps only
-`voice_id`, and the model belongs to the roster voice, which can be edited after voicing.
-`usage.py::last_voice_model` reads the model of a video's latest `voice` row for the video modal.
-See `voice_info` under [HTTP API — `GET /videos/<id>`](05-http-api.md#get-videosvideo_id).
+A call links to no video (research, voice previews) or to one. An agent session linked to several
+videos is split evenly between them when cost is shown. `video_id` has no foreign key to `videos`:
+spend outlives a deleted video, and removing one video must not shift the other videos' shares. A
+`stage` of `VOICING_WITH_SCENES` marks a session that voiced the script and wrote the scenes.
+`VOICING` is voicing only.
 
-`usage_event_videos` links a row to the video(s) it was for — none (research, voice previews) or one
-(most calls, and every agent session the poller now starts). Agent sessions recorded before the
-poller ran one video per session could cover a whole batch. `stage` records the video's status when
-an agent session started, which is what labels each session in the video modal. Migration `0007`
-relabelled every `VOICING` row that existed when it ran as `VOICING_WITH_SCENES`: the poller that
-wrote them carried a voicing session straight on into scene writing, so their cost covers both. A
-`VOICING` row written since is voicing only. **It has no foreign
-key to `videos`, deliberately:** spend outlives a deleted video, and an old shared session is split
-evenly across its batch, so removing one video must not shift the other videos' shares.
+| `model_prices` column | Type | Meaning |
+|---|---|---|
+| `service`, `model`, `unit_kind` | TEXT NOT NULL | The primary key: one row per model and unit kind |
+| `usd_per_unit` | REAL NOT NULL | |
+| `source` | TEXT NOT NULL | `manual`, `openrouter` or `litellm` |
+| `effective_from` | TEXT NOT NULL | When the row was written |
+| `user_override` | INTEGER NOT NULL, `0` | `1` for a manual rate |
+| `tiered` | INTEGER NOT NULL, `0` | `1` when the model has long-prompt price tiers |
 
-`model_prices` holds synced and manual rates, one row per model and unit kind. See
-[Settings — Costs](../user-guide/05-settings.md#costs) for where rates come from and how they sync.
+### How a call is priced
+
+Every dollar figure is an API list price. It does not reflect a subscription, plan credits or a
+discount, and the dashboard says so beside every total. An install cannot know what its accounts
+pay, and list prices cost every call the same way, which is what comparing videos, models and
+stages needs.
+
+| Provider | Recorded as | Priced from |
+|---|---|---|
+| Gemini (review, mining) | Tokens from `usageMetadata` | The price table |
+| OpenAI (images, characters) | Tokens from the response's `usage` | The price table |
+| Codex sessions | Tokens from `codex exec --json` | The price table |
+| Claude Code sessions | `modelUsage` from `claude -p --output-format json` | Claude's own `costUSD` |
+| OpenCode sessions | Per-message tokens and `cost` from OpenCode's session API | OpenCode's own `cost` |
+| ElevenLabs (voice, previews) | Plan credits, from the `character-cost` response header | Not priced. Shown as credits |
+
+The `character-cost` header is the number of credits the call deducted from the plan's pool, after
+the model's discount (a Flash or Turbo call costs half). Installs are assumed to be on a
+subscription that prepays those credits, so a dollar figure would be an allocation of the plan fee.
+
+All of one model's rates come from one source, so a wrong figure can be traced
+(`tubematic_core/prices.py::lookup_rates`, `prices.py::resolve_from_feeds`). The order is:
+
+1. A manual rate typed on **Settings → Costs**. A sync does not touch it.
+2. The synced rate. This is OpenRouter's public model list (`/api/v1/models`) when it lists the
+   model, and LiteLLM's `model_prices_and_context_window.json` only when it does not. OpenRouter
+   comes first because every model there uses one small set of fields.
+3. The built-in snapshot, `tubematic_core/prices_snapshot.json`, shipped with each release, so a
+   new install prices calls before its first sync. It keeps the Gemini image models so that
+   recorded Gemini image calls stay priced.
+4. Otherwise the call is unpriced.
+
+Both feeds are third parties reading the vendors' pricing pages. The vendor's page is the authority
+when they disagree.
+
+`prices.py::price_units` handles a rate the table lacks:
+
+- `reasoning` (thinking) tokens without their own rate bill at the output rate, which is how
+  every provider bills them.
+- `input_audio` or `input_image` without its own rate uses the input rate, and `cache_write_1h`
+  uses the `cache_write` rate. The row is marked `estimated`.
+- Any other missing rate makes the call unpriced.
+- A model with long-prompt price tiers is priced at its base rate and marked `estimated`, because
+  usage arrives as totals.
+
+The worker runs `prices.py::sync_prices` weekly, timed by the `last_price_sync_at` settings row so
+the schedule survives restarts. **Settings → Costs → Sync now** runs it on demand. The sync:
+
+- fetches both feeds whole
+- touches only models in use: the snapshot's list, any model already recorded, and the installed
+  Codex agent's models
+- leaves manual rates alone
+- rejects a move of more than 5× as a broken feed (`MAX_SYNC_MOVE`)
+- logs every change with its old and new value
+- keeps every existing price and records the error if anything fails
+
+No call fetches a price. A render does not depend on GitHub or OpenRouter being up.
+
+---
 
 ## `settings`
 
-A flat key/value store: `key TEXT PRIMARY KEY`, `value TEXT NOT NULL`. Every value is a string;
-typed keys are coerced on read and validated on write. See [Settings](../user-guide/05-settings.md) for the full
-reference.
-
-Not every row is a declared setting. `mining_youtube_urls` and the research-run window are stored
-here too, outside the validated specification. `mining_youtube_urls` has its own check instead: its
-writers accept only YouTube video URLs and store each as `https://www.youtube.com/watch?v=<id>`
-(see [HTTP API — Mining sources](05-http-api.md#mining-sources)), and migration `0014` brought
-lists stored before that check to the same shape.
+A key/value table: `key TEXT PRIMARY KEY`, `value TEXT NOT NULL`. Every value is a string.
+[Settings internals](04-settings.md) covers how values are typed, validated and masked, and lists
+every key, including the [rows that are not declared settings](04-settings.md#undeclared-rows).
 
 ## `video_publications` and `video_metrics`
 
-Full column reference in [Publishing](14-publishing.md#schema). Two things about their shape matter
-here:
+One `video_publications` row per video and account, and a time series of readings per publication.
+The column reference is in [Publishing](14-publishing.md#schema).
 
-- **The metric columns are nullable.** "Not reported by the platform" is not the same as "reported as
-  zero", and collapsing them would make an unpolled video look like a failed one.
-- **`video_metrics` is a time series of cumulative readings, not deltas.** Aggregate by taking each
-  publication's *latest* row; summing rows multiplies a view count by the number of polls.
-
-`raw_json` keeps the whole payload so a column added later can be backfilled from history.
+- The metric columns (`views`, `likes`, `comments`, `shares`) are nullable. "Not reported by the
+  platform" is different from "reported as zero".
+- Each `video_metrics` row is a cumulative reading. Aggregate by taking each publication's latest
+  row. Summing rows multiplies a view count by the number of polls.
+- `raw_json` keeps the whole payload, so a column added later can be filled from history.
 
 ## `script_profiles` and `script_profile_transcripts`
 
-A script profile captures a creator's *style* — tone, hook patterns, structure, vocabulary — learned
-from a corpus of YouTube transcripts, so that scripts can be written in that voice.
+A script profile captures a creator's style (tone, hook patterns, structure, vocabulary), learned
+from YouTube transcripts, so that scripts can be written in that style.
 
-| `script_profiles` | Type | Default |
-|---|---|---|
-| `id` | TEXT PK | |
-| `name` | TEXT NOT NULL | |
-| `status` | TEXT NOT NULL | `PENDING` → `GENERATING` → `READY` \| `FAILED` |
-| `markdown` | TEXT NOT NULL | `''` — the finished style profile, held to the [profile schema](08-scripting-and-voice.md#the-profile-schema) |
-| `corpus_summary` | TEXT NOT NULL | `''` |
-| `source_urls` | TEXT NOT NULL | `'[]'` — JSON array |
-| `error` | TEXT NOT NULL | `''` |
-| `attempt_count` | INTEGER NOT NULL | `0` |
-| `archived` | INTEGER NOT NULL | `0` |
-| `created_at` / `updated_at` | TEXT NOT NULL | |
+| `script_profiles` column | Type | Default | Meaning |
+|---|---|---|---|
+| `id` | TEXT PK | | |
+| `name` | TEXT NOT NULL | | |
+| `status` | TEXT NOT NULL | `PENDING` | `PENDING`, then `GENERATING`, then `READY` or `FAILED` |
+| `markdown` | TEXT NOT NULL | `''` | The finished profile, held to the [profile schema](08-scripting-and-voice.md#the-profile-schema) |
+| `corpus_summary` | TEXT NOT NULL | `''` | |
+| `source_urls` | TEXT NOT NULL | `'[]'` | JSON array |
+| `error` | TEXT NOT NULL | `''` | |
+| `attempt_count` | INTEGER NOT NULL | `0` | |
+| `archived` | INTEGER NOT NULL | `0` | A flag with no timestamp: nothing needs to show when a profile was archived |
+| `created_at`, `updated_at` | TEXT NOT NULL | | |
 
-Transcripts are staging data, not an archive: `complete_script_profile` deletes every transcript row
-for the profile once the markdown is written.
-
-| `script_profile_transcripts` | Type | Notes |
+| `script_profile_transcripts` column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK AUTOINCREMENT | |
 | `profile_id` | TEXT NOT NULL → `script_profiles.id` | `ON DELETE CASCADE` |
 | `source_url` | TEXT NOT NULL | |
-| `youtube_id` | TEXT NOT NULL DEFAULT `''` | |
+| `youtube_id` | TEXT NOT NULL, `''` | |
 | `text` | TEXT NOT NULL | |
 | `created_at` | TEXT NOT NULL | |
 
+Transcripts are staging data. `complete_script_profile` deletes every transcript row for the
+profile once the markdown is written.
+
 ## `mascots` and `mascot_versions`
 
-A mascot is a small on-screen character whose drawing code an agent writes once and a human approves;
-videos then pick it. How one is built and reviewed is on [The agent layer](07-agent-layer.md); the cue
-track a video plays it with is on [Scene authoring](10-scene-authoring.md#mascots).
+A mascot is a small on-screen character. An agent writes its drawing code once, a human approves
+it, and videos then pick it. [The Agent Layer](07-agent-layer.md) covers how one is built and
+reviewed, and [Scene authoring](10-scene-authoring.md#mascots) covers the cue track a video plays
+it with.
 
-| `mascots` | Type | Default |
-|---|---|---|
-| `id` | TEXT PK | A slug of 1-64 lowercase letters, digits, `-` or `_` (it names a directory) |
-| `name`, `description` | TEXT NOT NULL | `''` |
-| `builtin` | INTEGER NOT NULL | `0`. `1` for a mascot that ships in the repo |
-| `based_on` | TEXT NOT NULL | `''`. The mascot this one is a variation of |
-| `status` | TEXT NOT NULL | `PENDING` → `BUILDING` → `IN_REVIEW` → `READY` \| `FAILED` |
-| `approved_version` | INTEGER NOT NULL | `0`. The version a video may use; a mascot is *pickable* once it is above `0` and the row is not archived |
-| `agent_id`, `agent_model`, `agent_effort` | TEXT NOT NULL | `''`. The agent pinned to build it; empty means the default agent |
-| `attempt_count` | INTEGER NOT NULL | `0`. Builder sessions started for the current request; capped at `MAX_MASCOT_ATTEMPTS` |
-| `sheet_renders` | INTEGER NOT NULL | `0`. Sheet renders used in the current attempt; capped at `MAX_SHEET_RENDERS_PER_ATTEMPT` |
-| `error` | TEXT NOT NULL | `''` |
-| `archived` | INTEGER NOT NULL | `0`. Archiving is the only removal, a built-in's too |
-| `created_at` / `updated_at` | TEXT NOT NULL | |
+| `mascots` column | Type | Default | Meaning |
+|---|---|---|---|
+| `id` | TEXT PK | | A slug of 1 to 64 lowercase letters, digits, `-` or `_`, starting with a letter or digit. It names a directory |
+| `name`, `description` | TEXT NOT NULL | `''` | |
+| `builtin` | INTEGER NOT NULL | `0` | `1` for a mascot that ships in the repo |
+| `based_on` | TEXT NOT NULL | `''` | The mascot this one is a variation of |
+| `status` | TEXT NOT NULL | `PENDING` | `PENDING`, `BUILDING`, `IN_REVIEW`, then `READY` or `FAILED` |
+| `approved_version` | INTEGER NOT NULL | `0` | The version a video may use. A mascot is pickable once this is above `0` and the row is not archived |
+| `agent_id`, `agent_model`, `agent_effort` | TEXT NOT NULL | `''` | The agent pinned to build it. `''` means the default agent |
+| `attempt_count` | INTEGER NOT NULL | `0` | Builder sessions started for the current request. Capped at `MAX_MASCOT_ATTEMPTS` |
+| `sheet_renders` | INTEGER NOT NULL | `0` | Sheet renders used in the current attempt. Capped at `MAX_SHEET_RENDERS_PER_ATTEMPT` |
+| `error` | TEXT NOT NULL | `''` | |
+| `archived` | INTEGER NOT NULL | `0` | Archiving is the only removal, for a built-in too |
+| `created_at`, `updated_at` | TEXT NOT NULL | `''` | |
 
-| `mascot_versions` | Type | Notes |
-|---|---|---|
-| `mascot_id`, `version` | PK | Versions are numbered from 1 and never edited once approved |
-| `code` | TEXT NOT NULL | The p5.js drawing code. **`''` for a built-in**, whose code is a repo file |
-| `change_request` | TEXT NOT NULL | What a human asked for in this version; `''` for the first |
-| `created_at`, `approved_at` | TEXT NOT NULL | The draft is the highest version with `approved_at = ''` |
+| `mascot_versions` column | Type | Default | Meaning |
+|---|---|---|---|
+| `mascot_id` | TEXT NOT NULL → `mascots.id` | | Primary key with `version` |
+| `version` | INTEGER NOT NULL | | Numbered from 1. An approved version is not edited |
+| `code` | TEXT NOT NULL | `''` | The p5.js drawing code. `''` for a built-in |
+| `change_request` | TEXT NOT NULL | `''` | What a human asked for in this version. `''` for the first |
+| `created_at`, `approved_at` | TEXT NOT NULL | `''` | The draft is the highest version with `approved_at = ''` |
 
-**A built-in's code is not in the database, on purpose.** Migration `0018` seeds the row for the
-shipped mascot, Tubi, but its drawing code lives in `renderer/remotion/mascot-builtin/<id>/v<N>/`
-(`mascot.js` and three model-sheet images), and `tubematic_core/mascots.py::code_for` reads the file
-for a built-in and `mascot_versions.code` for any other. Each version directory is immutable, so a
-better Tubi ships as `v2` beside `v1` plus a new migration that raises `approved_version`; a database
-migration that copied code would have to be edited whenever the drawing changed, and a shipped
-migration may never be edited. Videos pinned to `v1` keep rendering with `v1`.
+A built-in mascot's code is a repo file: `renderer/remotion/mascot-builtin/<id>/v<N>/` holds
+`mascot.js` and three model-sheet images. `tubematic_core/mascots.py::code_for` reads the file for
+a built-in and `mascot_versions.code` for any other. The code stays out of the database because a
+shipped migration cannot be edited when the drawing changes. Each version directory is immutable.
+A new drawing ships as `v2` beside `v1`, with a new migration that raises `approved_version`, and
+videos pinned to `v1` keep rendering with `v1`.
 
-The rendered model sheets of a non-built-in mascot are files, not rows: `<data root>/data/mascots/<id>/v<N>/<turn|feels|act>.png`,
-beside the database file.
+The rendered model sheets of other mascots are files beside the database:
+`<data root>/data/mascots/<id>/v<N>/<turn|feels|act>.png`.
 
 ## `renderers`, `renderer_enrollments` and `render_timings`
 
-The machines that render, how a new one proves it was invited, and how long each takes. All three
-are read and written by `tubematic-api` (the render gateway and the GPU gates) and the worker, never by
-a renderer. Migration `0019` adds them. How they are used is on
-[Rendering and Review](11-rendering-and-review.md) and
-[HTTP API — The render gateway](05-http-api.md#the-render-gateway).
+The machines that render, the one-time secrets that enroll a new one, and how long each takes.
+`tubematic-api` (the render gateway and the GPU gates) and the worker read and write all three. A
+renderer does not. [The Render Gateway](19-render-gateway.md) and
+[GPU and Remote Renderers](20-gpu-and-remote-renderers.md) cover how they are used.
 
-| `renderers` | Type | Default |
-|---|---|---|
-| `id` | TEXT PK | `builtin` for the built-in renderer, `r_<12 hex>` for an enrolled one |
-| `name`, `host` | TEXT | `name` required; `host` `''` |
-| `builtin` | INTEGER NOT NULL | `0`. `1` for the one row the migration creates (the API re-creates it at start if it is ever missing) |
-| `enabled` | INTEGER NOT NULL | `1`. A disabled renderer still authenticates and is told so, and gets no work |
-| `machine_id` | TEXT NOT NULL | `''`. A random id the renderer keeps in its state file; enrolling the same machine again updates its row instead of adding one |
-| `credential_hash`, `previous_credential_hash` | TEXT NOT NULL | `''`. sha256 of the current credential, and of the one it replaced while a rotation is undelivered. Always `''` for the built-in renderer, whose credential is the `builtin_renderer_token` secret file, so rotating that file needs no row update |
-| `credential_issued_at`, `credential_expires_at` | TEXT NOT NULL | `''`. `''` expiry means never (the built-in renderer) |
-| `version` | TEXT NOT NULL | `''`. The version the renderer last reported; anything but main's means it gets no work |
-| `compute` | TEXT NOT NULL | `'{}'`. JSON `{cpus, memory_bytes, gpus: [{name, uuid, memory_mb}]}`, as reported |
-| `gpu_probe` | TEXT NOT NULL | `''`. The renderer's last GPU test, as JSON (when it ran and why, the configured GPU, the host's GPU list, Chromium's WebGL renderer and vendor strings, `ok`, the reason when not, `nvidia-smi`'s view). `''` until it has tested |
-| `gpu_verified` | INTEGER NOT NULL | `0`. `1` exactly when the last probe's `ok` was true. What makes a renderer GPU-capable |
-| `gpu_probe_requested_at` | TEXT NOT NULL | `''`. The dashboard's last Test request (microseconds, compared as a string with the probe's start) |
-| `last_heartbeat_at` | TEXT NOT NULL | `''`. Online means within the last 120 seconds |
-| `state`, `current_video_id` | TEXT NOT NULL | `idle`, `''`. What the renderer last reported |
-| `last_error` | TEXT NOT NULL | `''`. The renderer's own last problem, as reported, or "credential expired — re-enroll" |
-| `created_at` | TEXT NOT NULL | |
-| `removed_at` | TEXT | `NULL` = active. Set by `DELETE /renderers/<id>` (the dashboard's Remove), which also clears both credential hashes; the row is kept. The built-in renderer is never removed |
+| `renderers` column | Type | Default | Meaning |
+|---|---|---|---|
+| `id` | TEXT PK | | `builtin` for the built-in renderer, `r_<12 hex>` for an enrolled one |
+| `name` | TEXT NOT NULL | | |
+| `builtin` | INTEGER NOT NULL | `0` | `1` for the built-in renderer's row. The API re-creates that row at start if it is missing |
+| `enabled` | INTEGER NOT NULL | `1` | A disabled renderer still authenticates, is told it is disabled, and gets no work |
+| `machine_id` | TEXT NOT NULL | `''` | A random id the renderer keeps in its state file. Enrolling the same machine again updates its row |
+| `host` | TEXT NOT NULL | `''` | |
+| `credential_hash`, `previous_credential_hash` | TEXT NOT NULL | `''` | sha256 of the current credential, and of the one it replaced while a rotation is undelivered |
+| `credential_issued_at`, `credential_expires_at` | TEXT NOT NULL | `''` | An expiry of `''` means the credential does not expire |
+| `version` | TEXT NOT NULL | `''` | The version the renderer last reported. A renderer whose version differs from the API's gets no work |
+| `compute` | TEXT NOT NULL | `'{}'` | JSON `{cpus, memory_bytes, gpus: [{name, uuid, memory_mb}]}`, as reported |
+| `gpu_probe` | TEXT NOT NULL | `''` | The renderer's last GPU test, as JSON. `''` until it has tested |
+| `gpu_verified` | INTEGER NOT NULL | `0` | `1` when the last probe's `ok` was true. This is what makes a renderer GPU-capable |
+| `gpu_probe_requested_at` | TEXT NOT NULL | `''` | The dashboard's last Test request, in microseconds, compared as a string with the probe's start |
+| `last_heartbeat_at` | TEXT NOT NULL | `''` | A renderer is online if this is within the last 120 seconds |
+| `state`, `current_video_id` | TEXT NOT NULL | `'idle'`, `''` | What the renderer last reported |
+| `last_error` | TEXT NOT NULL | `''` | The renderer's last reported problem, or `renderers.py::CREDENTIAL_EXPIRED_ERROR` |
+| `created_at` | TEXT NOT NULL | | |
+| `removed_at` | TEXT | `NULL` | `NULL` means active |
 
-| `renderer_enrollments` | Type | Notes |
-|---|---|---|
-| `secret_hash` | TEXT PK | sha256 of the one-time enrollment secret; the secret itself is never stored |
-| `name` | TEXT NOT NULL | `''`. The name the renderer will get, when the token was issued with one |
-| `created_at`, `expires_at` | TEXT NOT NULL | One hour apart |
-| `used_at`, `renderer_id` | TEXT | `NULL` until redeemed, which happens once |
+The built-in renderer's credential is the `builtin_renderer_token` secret file. Its two hashes stay
+`''` and its credential does not expire, so rotating the file needs no row update.
 
-| `render_timings` | Type | Notes |
+`gpu_probe` records when the test ran and why, the configured GPU, the host's GPU list, Chromium's
+WebGL renderer and vendor strings, `ok`, the reason when it failed, and what `nvidia-smi` saw.
+
+`DELETE /renderers/<id>` (the dashboard's **Remove**) sets `removed_at`, clears both credential
+hashes and keeps the row. The API refuses to remove the built-in renderer.
+
+| `renderer_enrollments` column | Type | Default | Meaning |
+|---|---|---|---|
+| `secret_hash` | TEXT PK | | sha256 of the one-time enrollment secret. The secret is not stored |
+| `name` | TEXT NOT NULL | `''` | The name the renderer gets, when the token was issued with one |
+| `created_at`, `expires_at` | TEXT NOT NULL | | One hour apart |
+| `used_at`, `renderer_id` | TEXT | `NULL` | Set when the token is redeemed, which happens once |
+
+| `render_timings` column | Type | Meaning |
 |---|---|---|
 | `id` | INTEGER PK AUTOINCREMENT | Orders a renderer's timings |
-| `renderer_id`, `kind` | TEXT NOT NULL | `kind` is `dom`, `cartoon_3d` or `mascot` |
-| `on_gpu` | INTEGER NOT NULL | Whether that render ran on the GPU |
-| `frames`, `seconds` | INTEGER, REAL NOT NULL | One row per successful render; the scheduler uses the median seconds per frame of the last five per renderer and kind |
+| `renderer_id` | TEXT NOT NULL | |
+| `kind` | TEXT NOT NULL | `dom`, `cartoon_3d` or `mascot` |
+| `on_gpu` | INTEGER NOT NULL | Whether the render ran on the GPU |
+| `frames`, `seconds` | INTEGER, REAL NOT NULL | One row per successful render |
 | `created_at` | TEXT NOT NULL | |
+
+The scheduler estimates from the median seconds per frame of a renderer's last five timings of a
+kind.
+
+---
+
+## Indexes
+
+Besides the indexes that primary keys imply:
+
+| Index | On | Why |
+|---|---|---|
+| `idx_video_publications_video` | `video_publications(video_id)` | |
+| `idx_video_metrics_publication` | `video_metrics(publication_id, fetched_at)` | |
+| `idx_usage_events_created_at` | `usage_events(created_at)` | |
+| `idx_usage_events_model` | `usage_events(service, model)` | |
+| `idx_usage_events_event_key` | `usage_events(event_key)`, unique | Makes a resent session report record nothing twice |
+| `idx_usage_event_videos_video_id` | `usage_event_videos(video_id)` | |
+| `idx_videos_project_id` | `videos(project_id)` | The [topic cap](02-pipeline.md#topic-cap) counts a domain's videos on every insert |
+| `idx_render_timings_renderer` | `render_timings(renderer_id, kind, id)` | Every claim reads each renderer's last few timings per kind |
 
 ---
 
 ## Migrations
 
-Every table, column and one-time data fixup above is defined by a numbered migration file in
-`tubematic_core/migrations/`, applied by `tubematic_core.db.migrate()`. This is the one schema
-authority for the whole project — `renderer/api/pipeline.py`, `mcp/server.py`, the worker,
-`onboard.py`, `scripts/clear_db.py`, and the VQA seed-database generator all call `migrate()` rather
-than defining or asserting a schema of their own.
+Numbered files in `tubematic_core/migrations/` define every table, column and one-time data change
+above, and `tubematic_core.db.migrate()` applies them. The API, the MCP server, the worker,
+`onboard.py`, `scripts/clear_db.py` and the VQA seed-database generator all call `migrate()` and
+define no schema of their own (`pipeline.py::_init_db` and the MCP server's `_init_db` only call
+it). The [`agents` table](#agents) is the one definition with a second copy.
 
-**Layout and naming.** A file is named `NNNN_<name>.sql` or `NNNN_<name>.py`, where `NNNN` is a
-zero-padded integer. Migrations are discovered on disk, sorted numerically (not lexically — `0002`
-sorts before `0010`), and applied in that order. Each applied migration is recorded in a
-`schema_migrations` table (`version`, `name`, `applied_at`), and `migrate()` applies only the
-versions a given database has not already recorded. A gap in the numbering (a reverted migration) is
-fine; two files claiming the same number is a hard error, since one of them would silently never run.
+```mermaid
+flowchart TD
+    A[migrate] --> B{Anything pending?}
+    B -- no --> Z[Return]
+    B -- yes --> C{Database file existed?}
+    C -- yes --> D[backup_db]
+    C -- no --> E
+    D -- backup failed --> X[Raise, nothing applied]
+    D -- ok --> E[BEGIN IMMEDIATE]
+    E --> F[Apply each pending migration and record it in schema_migrations]
+    F -- all applied --> G[COMMIT]
+    F -- any error --> H[ROLLBACK the whole run]
+```
 
-**`0001_baseline.py` is the accumulated pre-migration schema, frozen.** It is every table, column,
-index and one-time fixup this project had accumulated before it had a migration system — the two
-`_init_db` copies merged into one, kept idempotent exactly as they were, so it can adopt a database
-at *any* prior state as well as create one from nothing. It is Python rather than `.sql` for a
-concrete reason: SQLite has no `ADD COLUMN IF NOT EXISTS`, so the pragma-guarded `ALTER TABLE`
-statements that let an old database converge cannot be expressed in a `.sql` file, which can only
-hold literal SQL. **Every migration after `0001` should be plain SQL** — it never needs to guard
-against a column that might already exist, because `schema_migrations` already knows whether it has
-run.
+- A file is named `NNNN_<name>.sql` or `NNNN_<name>.py`, where `NNNN` is a zero-padded integer.
+  `db.py::discover` sorts files by number and ignores any other file name. A gap in the numbering
+  is allowed. Two files with the same number raise `MigrationError`, because one would not run.
+- `schema_migrations` (`version INTEGER PRIMARY KEY`, `name`, `applied_at`) records each applied
+  migration, in the transaction the migration runs in. A run with nothing pending costs one
+  `SELECT`.
+- The whole run is one `BEGIN IMMEDIATE` transaction. A second process that arrives mid-run blocks
+  on the write lock, then finds nothing pending. A `COMMIT` between migrations would release the
+  lock, so the run cannot be one transaction per migration.
+- The backup is taken only when a migration is pending and the file already existed, so a normal
+  start adds nothing to the backup directory. [Backups](16-infrastructure.md#backups) covers where
+  backups land and how to restore one.
+- Every process migrates because MCP tools are sometimes driven from a host shell with no API
+  process running.
 
-`0006_voice_models.py` is one of two other Python migrations, both for a data reason, not a schema one. It
-moves the retired install-wide `elevenlabs_model_id` settings row onto every voice in the
-`elevenlabs_voices` JSON document, so each voice keeps the model the install was using, and adds
-`projects.default_voice_id`. Rewriting entries inside a JSON value is not something a `.sql` file can
-say cleanly. Its model list is written into the file rather than imported, because a shipped
-migration must behave the same forever. It is **one-way**: 1.1.0's readers accept only
-`{name, voice_id}` roster entries and read a migrated roster as empty, so rolling back means
-restoring the automatic pre-migration backup.
+An older release refuses a database whose schema is newer than its own migrations
+(`upgrade.py::run_upgrade`). Going back past any migration means restoring the backup taken before
+it. See [Upgrading](../user-guide/07-upgrading.md).
 
-`0014_mining_sources.py` is the other. It brings the stored `mining_youtube_urls` list to the shape
-its writers now insist on: each YouTube video URL is rewritten to
-`https://www.youtube.com/watch?v=<id>`, a second spelling of the same video is dropped, anything that
-is not a YouTube video URL is **dropped**, and so is everything past 50 distinct videos. Dropping
-rather than keeping is deliberate: the dashboard re-sends the whole list on every add and remove, and
-the writer refuses a list with any bad entry, so one leftover would make every later save fail. Each
-dropped entry is logged at `WARNING` on the `tubematic.migrations` logger by whichever service
-migrates first — normally `tubematic-api` at start, so `docker compose logs tubematic-api` shows
-it — and the pre-migration backup keeps the list as it was. A value that is not a JSON list is
-replaced by `[]`, its old value logged the same way. Like `0006`, it carries its own copy of the
-URL rule rather than importing `tubematic_core/youtube.py`.
+### Migration reference
 
-`0018_mascots.sql` is plain SQL and additive: the two mascot tables, `projects.default_mascot_id`,
-`videos.mascot_id` and `videos.mascot_version` (all defaulting to "none"), and the Tubi rows. Nothing
-about an existing project or video changes by applying it, and the feature stays off until someone
-picks a mascot. The Tubi insert uses literal values only, because a shipped migration must do the same
-thing forever. It is one-way in the usual sense: rolling back to a release that predates it needs the
-automatic pre-migration backup restored.
+"One-way" marks a migration that overwrites or deletes stored values. The earlier values exist
+only in the pre-migration backup.
 
-`0019_renderers.sql` is plain SQL and additive too: the three renderer tables, the five lease
-columns on `videos` (the claim id among them, all defaulting to `''`) and the built-in renderer's row. A row that was
-`RENDERING` when it was applied keeps `renderer_id = ''`, which the worker's lease sweep reads as an
-expired lease and re-queues, counting a retry, with the comment "Render interrupted by the upgrade".
-From this migration on a renderer has no database, so `upgrade.py` refuses `--no-stop` while it is
-pending: recreated one at a time, an old renderer would keep claiming straight from the database
-beside the gateway, with no lease. Rolling back to a release that predates it needs the automatic
-pre-migration backup restored.
+| File | What it changes | One-way |
+|---|---|---|
+| `0001_baseline.py` | Creates the ten base tables and two indexes, and converges a database that predates migrations. Details below | Yes |
+| `0002_visual_style.sql` | Adds `videos.visual_style`, `videos.resolved_visual_style` and `projects.default_visual_style`. Sets every existing video to `motion_graphics` | No |
+| `0003_agent_effort.sql` | Adds `videos.agent_effort` and `agents.effort` | No |
+| `0004_pause_seeds_only.sql` | Sets every paused domain that is not a curriculum seed back to `active` | Yes |
+| `0005_usage_accounting.sql` | Creates `usage_events`, `usage_event_videos`, `model_prices` and their four indexes | No |
+| `0006_voice_models.py` | Copies the `elevenlabs_model_id` settings row onto every `elevenlabs_voices` entry as `model_id`, deletes that row, and adds `projects.default_voice_id` | Yes |
+| `0007_agent_progress.sql` | Adds `videos.agent_no_progress_count`, `agent_stuck_at` and `agent_last_outcome_key`. Relabels existing `VOICING` stages in `usage_event_videos` as `VOICING_WITH_SCENES` | Yes |
+| `0008_scheduled_publishing.sql` | Adds `videos.scheduled_at` and `videos.scheduled_timezone` | No |
+| `0009_auto_pilot.sql` | Adds `videos.auto_pilot_hold` and `videos.auto_pilot_blocked` | No |
+| `0010_default_script_profile.sql` | Adds `projects.default_script_profile_id` | No |
+| `0011_image_model_2_5.sql` | Changes a stored `image_model` of `gpt-image-2` to `gpt-image-2.5-flare` | Yes |
+| `0012_auto_pilot_in_flight.sql` | Renames the settings row `auto_pilot_max_scheduled` to `auto_pilot_max_in_flight`, keeping its value | Yes |
+| `0013_domain_topic_cap.sql` | Adds `projects.topic_cap` and `idx_videos_project_id`. A domain already holding 100 or more topics gets `min(750, count + 100)` | No |
+| `0014_mining_sources.py` | Brings the stored `mining_youtube_urls` list to the shape its writers accept. Details below | Yes |
+| `0015_gemini_3_pro_image.sql` | Changes a stored `image_model` of `gemini-3-pro-image-preview` to `gemini-3-pro-image` | Yes |
+| `0016_openai_only_images.sql` | Changes any stored `image_model` outside the OpenAI list to `gpt-image-2.5-flare` and deletes the `image_provider` row | Yes |
+| `0017_resolved_renderer.sql` | Adds `videos.resolved_renderer` and sets it to `dom` on every existing video | No |
+| `0018_mascots.sql` | Creates `mascots` and `mascot_versions`, adds `projects.default_mascot_id`, `videos.mascot_id` and `videos.mascot_version`, and inserts the built-in mascot Tubi | No |
+| `0019_renderers.sql` | Creates `renderers`, `renderer_enrollments`, `render_timings` and `idx_render_timings_renderer`, adds the five lease columns to `videos`, and inserts the built-in renderer's row | No |
 
-Baked into `0001` are several one-time fixups worth knowing about, because they explain rows an old
-database might still be missing: the `VIDEO_REVISION_REQUESTED → REVISION_REQUESTED`,
-`SCRIPTING → TOPIC_APPROVED` and `RENDER_READY → VOICE_READY` status rewrites; the
-`videos.animatability_score → producibility_score` rename, which carries the old column's values
-rather than dropping and re-adding; the deletion of the retired install-wide `agent_model` settings
-row (superseded by each agent's own `models[0]`); and the `videos.notified_status` backfill
-(`status || '@' || updated_at` for every existing row), without which the first notification sweep
-after an upgrade would announce every parked video at once.
+`0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
+cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so
+it creates a new database and also adopts one from before migrations existed. On such a database
+it:
 
-**A shipped migration is immutable.** Once a migration has gone out in a release, it must never be
-edited — doing so silently diverges every database that already applied it (which stamped the old
-behaviour into `schema_migrations` and moved on) from every database that has not (which will apply
-the edited version). A schema change is always a *new* migration file. See
-[Development](17-development.md#schema-changes) for the full checklist.
+- adds any base column that is missing
+- renames the statuses `VIDEO_REVISION_REQUESTED` to `REVISION_REQUESTED`, `RENDER_READY` to
+  `VOICE_READY` and `SCRIPTING` to `TOPIC_APPROVED`
+- renames `videos.animatability_score` to `producibility_score`, keeping the values. Reverting the
+  code does not restore the old column name
+- renames the settings row `max_feedback_loops` to `max_render_retries`, and deletes the
+  `agent_model` settings row
+- adds `videos.notified_status` and fills it with `status || '@' || updated_at`, so the first
+  notification sweep does not announce every video already waiting at a checkpoint
 
-**Every process calls `migrate()`, not one owner asserting.** That is deliberate, and it is safe
-because a run holds a real write lock (`BEGIN IMMEDIATE`) for its entire duration: a database with
-nothing pending costs one cheap `SELECT`, and a second process that arrives mid-run simply blocks on
-the lock, then finds nothing left to do once the first commits. The alternative — only Flask
-migrates, everyone else asserts the version and refuses to proceed — would break the VQA workflow,
-where MCP tools are routinely driven from a host shell with no Flask process running at all.
+`0006_voice_models.py` is Python because it edits entries inside a JSON value. A release that
+predates it accepts only `{name, voice_id}` roster entries and reads a migrated roster as empty.
 
-**The whole run is one transaction, not one per migration.** Those two are mutually exclusive in
-SQLite, because a `COMMIT` releases the write lock — and the lock is exactly what makes
-every-process-migrates safe above. Run-wide atomicity is also the stronger guarantee on its own
-terms: a failure partway through a run unwinds *everything* that run applied, including migrations
-earlier in the same run, so a partially-migrated database cannot exist. A migration is stamped in
-`schema_migrations` in the same transaction it runs in, so it is never recorded as applied unless it
-actually committed.
+`0014_mining_sources.py` rewrites each YouTube video URL as
+`https://www.youtube.com/watch?v=<id>`. It drops a second spelling of the same video, anything that
+is not a YouTube video URL, and everything past 50 distinct videos. A value that is not a JSON list
+becomes `[]`. Entries are dropped because the dashboard re-sends the whole list on every save and
+the writer refuses a list with any bad entry. Each dropped entry is logged at `WARNING` on the
+`tubematic.migrations` logger by whichever service migrates first, normally `tubematic-api`
+(`docker compose logs tubematic-api`).
 
-**A backup precedes any pending migration.** `migrate()` calls `backup_db()` before opening its
-transaction, but only when a migration is actually about to run *and* the database file already
-exists — a no-op start (nothing pending) does not grow the backup directory, and a brand-new file has
-nothing worth saving. If the backup itself fails, the migration does not run. See
-[Infrastructure — Backups](16-infrastructure.md#backups) for where these land and how to restore
-one, and [Upgrading](../user-guide/07-upgrading.md) for the versioning policy and the full
-upgrade/rollback story built on top of all this.
+`0016_openai_only_images.sql` exists because the MCP server reads `image_model` raw, so a value
+outside the list would make every `generate_image` call refuse.
 
-**`.sql` migrations are split on statement boundaries, not run with `executescript()`.** SQLite's
-`executescript()` issues its own implicit `COMMIT`, which would silently drop the run-wide
-transaction and the write lock it holds — so `migrate()` uses `sqlite3.complete_statement` (the same
-helper the `sqlite3` CLI uses) to split a file into individual statements and `execute()` each one.
-The same rule binds a `.py` migration's own `up(con)` — nothing stops it calling `con.executescript()`
-itself, and doing so drops the lock exactly the same way; a `.py` migration should build its SQL as a
-string and split it with the same helper `migrate()` uses, rather than executing a block directly.
-The practical consequence for anyone writing a `.sql` migration: **each statement needs its own line
-group**. Two statements written on one line are passed to `execute()` as a single string and it
-raises "you can only execute one statement at a time" — a mistake that fails loudly at authoring
-time, not silently at runtime.
+While `0016` or `0019` is pending, `upgrade.py` refuses `--no-stop`, because containers recreated
+one at a time would leave old code running against the new database. A row that was `RENDERING`
+when `0019` was applied keeps `renderer_id = ''`. The worker's lease sweep re-queues it, counts a
+retry and comments "Render interrupted by the upgrade".
+
+### Rules for a migration
+
+- A shipped migration is immutable. A database that applied it has recorded the old behaviour, and
+  a database that has not would apply the edited file. A schema change is a new file.
+- A migration copies any list or rule it needs (`0006` its model list, `0014` its URL rule) and
+  inserts literal values (`0018`). It does not import from the codebase, which changes.
+- Write `.sql` after `0001`. `ALTER TABLE … ADD COLUMN` needs no existence guard, because
+  `schema_migrations` records whether the file has run.
+- `ADD COLUMN` applies its default to existing rows. Add an `UPDATE` when they need a different
+  value, as `0002` and `0017` do.
+- Put each statement in its own line group, and do not call `executescript()`, in a `.py`
+  migration's `up(con)` either. `executescript()` issues its own `COMMIT`, which ends the run's
+  transaction and releases its write lock. `db.py::_split_statements` splits a file with
+  `sqlite3.complete_statement` and runs each statement with `execute()`, so two statements on one
+  line raise "you can only execute one statement at a time".
 
 ## Adding a column
 
-1. Write a new `NNNN_<name>.sql` migration — never edit an existing one. `ALTER TABLE … ADD COLUMN`
-   needs no existence guard here, unlike in `0001`, because `schema_migrations` already tracks
-   whether it has run.
-2. Plumb it through `create_video` / `update_video` in `mcp/server.py` and `patch_video` in
-   `renderer/api/pipeline.py` if the agent or the dashboard should write it.
+1. Write a new `NNNN_<name>.sql` migration. Prefer an additive change: a rename cannot be undone by
+   reverting the code.
+2. If the agent or the dashboard should write the column, add it to `create_video` and
+   `update_video` in `mcp/server.py` and to `patch_video` in `renderer/api/pipeline.py`.
 3. Add it to the `Video` type in `dashboard/lib/types.ts`.
-4. Prefer additive. A rename is a one-way door — see the `producibility_score` example above.
-5. Update `tubematic_core/tests` (a new `EXPECTED_*_COLUMNS` entry, and a fixture-based test if the
-   change needs to prove it converges an old database) before calling the change done. See
-   [Tests — `tubematic_core`](test-suites/tubematic-core.md).
+4. Update `tubematic_core/tests`: a new `EXPECTED_*_COLUMNS` entry, and a fixture-based test if the
+   change must converge an older database
+   ([Tests: `tubematic_core`](test-suites/tubematic-core.md)).
+
+[Development](17-development.md#schema-changes) has the full checklist.

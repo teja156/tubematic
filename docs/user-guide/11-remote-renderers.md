@@ -27,7 +27,7 @@ remote renderer helps when:
 Main gives each video to the renderer that would finish it first. A video that has waited ten
 minutes goes to whichever renderer asks, and a Cartoon 3D or mascot video goes only to a renderer
 whose GPU test passed. How main estimates this is in
-[Rendering and Review](../developer/11-rendering-and-review.md#which-renderer-gets-which-video).
+[GPU and Remote Renderers](../developer/20-gpu-and-remote-renderers.md#which-renderer-gets-which-video).
 
 The built-in renderer keeps taking work. Disable it on the dashboard if you want main to render
 nothing.
@@ -178,7 +178,7 @@ renderer refuses to connect, as it would refuse an attacker in the middle.
 Plain port forwarding (NAT, a TCP-level forward) is fine, because the renderer still talks TLS to
 the gateway itself. The dashboard's HTTPS proxy from [Remote Access](09-remote-access.md) is on a
 different port and is unaffected. Why the renderer pins the certificate and uses no certificate
-authority is in [HTTP API](../developer/05-http-api.md#tls-and-the-certificate-pin).
+authority is in [The Render Gateway](../developer/19-render-gateway.md#tls-and-the-certificate-pin).
 
 ---
 
@@ -351,7 +351,7 @@ renderers, so remove each one on its own machine.
 Each remote renderer has its own credential, issued when it is added and valid for 30 days. While
 the renderer is online, main replaces the credential automatically from its fifteenth day, and the
 old one keeps working until the new one is first used. The card shows when the current one expires.
-The details are in [HTTP API](../developer/05-http-api.md#credentials).
+The details are in [The Render Gateway](../developer/19-render-gateway.md#credentials).
 
 A renderer that stays offline until its credential runs out, for example one switched off for a
 month, is listed as **credential expired** and cannot reconnect. Remove it on both sides and add it

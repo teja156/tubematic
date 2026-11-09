@@ -1,34 +1,30 @@
 # Publishing internals
 
-What publishing looks like from the dashboard — connecting accounts, publishing and scheduling a
-post, and running Auto Pilot — is on [Publishing](../user-guide/06-publishing.md). This page is how
-it is built: the flow, the design decisions behind it, the postforme client, the schema, the routes,
-the worker's passes and the dashboard's pieces.
+The user guide covers connecting accounts, publishing and scheduling a post
+([Publishing](../user-guide/06-publishing.md)) and running Auto Pilot
+([Auto Pilot](../user-guide/14-auto-pilot.md)). The sections below describe the code behind them: the
+publish flow, the worker's passes, Auto Pilot, analytics capture and the postforme client.
 
-Tubematic does **not** hold OAuth grants for the platforms. It talks to
-[postforme.dev](https://postforme.dev), an aggregator that owns the connections, and addresses
-accounts by postforme's id. There is no OAuth flow in this codebase.
+Tubematic holds no OAuth grants for the platforms. It talks to
+[postforme.dev](https://postforme.dev), an aggregator that owns the connections, and addresses each
+account by postforme's id. The codebase contains no OAuth flow.
 
-Publishing is **off by default** (`publishing_enabled`). With it off, `VIDEO_APPROVED` is terminal
-and the system behaves exactly as it did before the feature existed.
+Publishing is off by default (`publishing_enabled`). While it is off, `VIDEO_APPROVED` is the last
+status a video reaches.
 
 ---
 
-## The agent never publishes, and that is structural
+## The agent cannot publish
 
-No MCP tool can publish. The agent cannot publish. `VIDEO_APPROVED` is **not** in
-`WORKABLE_STATUSES`, and the operator skill is explicitly told never to write `SCHEDULED`,
-`PUBLISHING` or `PUBLISHED`. `set_video_status` refuses `SCHEDULED` outright: a video there needs a
-post that postforme is holding, and no tool can create one.
+No MCP tool can publish. `VIDEO_APPROVED` is absent from `WORKABLE_STATUSES`, because the poller
+would otherwise start a paid agent session on every pass for a video the agent may not act on. The
+operator skill tells the agent to leave `SCHEDULED`, `PUBLISHING`, `PUBLISHED` and
+`PARTIALLY_PUBLISHED` alone. `set_video_status` refuses `SCHEDULED` with `human_only_status`: a
+video there needs a post that postforme is holding, and no tool can create one.
 
-Removing `VIDEO_APPROVED` from the workable set was mandatory rather than tidy-mindedness: with the
-agent's old placeholder action gone, leaving it there would make the poller wake an agent on
-every pass for a video it is not allowed to act on — a paid session burned each time, forever.
-
-A publish therefore starts in one of two places, and neither is the agent. By default it is a
-person, in the Publish dialog. With [Auto Pilot](#auto-pilot) on for a video's project it is the
-[worker](12-the-worker.md). Auto Pilot is opt-in, per project, and changes none of the above: the worker calls
-the publish code directly, and the agent's tools and instructions are the same either way.
+A publish starts in one of two places. By default a person starts it in the Publish dialog. With
+[Auto Pilot](#auto-pilot) on for the video's domain, the [worker](12-the-worker.md) starts it by
+calling the publish code directly. The agent's tools and instructions are the same either way.
 
 ---
 
@@ -65,189 +61,122 @@ sequenceDiagram
     end
 ```
 
-**The upload runs inline in the Flask request**, not on the worker, and that is true of a scheduled
-post too — see [Scheduling a post](#scheduling-a-post). It takes about 50 seconds for a
-150 MB file. The worker used to render as well, one video at a time for around twenty minutes, so a
-human-clicked publish queued behind a render would have looked broken; inline, the person who
-clicked gets the result, or the error, in the same request. An [Auto Pilot](#auto-pilot) post is the
-exception: nobody is waiting on it, so its upload runs on the worker.
+`pipeline.py::start_publish` holds the whole path after request parsing. The publish route and Auto
+Pilot both call it, so one copy of the claim, the upload and the failure handling serves both.
+
+A human publish uploads inside the Flask request, which takes about 50 seconds for a 150 MB file,
+so the person who clicked gets the result or the error in the same response. A scheduled publish
+uploads at the click too. An Auto Pilot post has nobody waiting, so its upload runs on the worker.
+
+### Concepts
+
+- **Claim**: one `UPDATE`, guarded on the status, moves the video from `VIDEO_APPROVED` to
+  `PUBLISHING`. It runs after validation, which has no side effects, and before any call that
+  changes something at postforme. If it ran after the upload, two overlapping requests could both
+  create a post before one lost the race.
+- **Publication rows**: the claim's transaction inserts one `video_publications` row per target
+  account, `PENDING`, with an empty `postforme_post_id`. One `POST /social-posts` covers every
+  target, so the rows of a publish share one post id. The route fills it into the rows it inserted
+  itself, matched by row id, and resets their `created_at`.
+- **In flight**: a row with an empty post id belongs to a publish that is still running. The worker
+  leaves it alone until the deadline, because an upload can outlast many ticks.
+- **Completion**: postforme's result payload has no pending state: a target that has not published
+  yet has no result. The worker counts settled rows and derives the video's status once no row is
+  `PENDING`.
+- **Deadline**: a row still `PENDING` one hour after its `created_at` has timed out
+  (`worker.py::_PUBLISH_TIMEOUT_SECS`). The clock reads `video_publications.created_at` because
+  `videos.updated_at` orders the render queue, and a polling pass that wrote to it would reorder
+  renders. It is a wall clock because a publish that stopped leaves no retries to count.
+- **`external_id`**: every post carries the video id as its `external_id`. When the worker or a
+  retry cannot tell whether a post exists, it asks postforme for the posts with that id and adopts a
+  live one.
+- **Upload cap**: `postforme.UPLOAD_MAX_SECS` stops an upload after 30 minutes in total, so a publish
+  request ends before the deadline and its post id lands on rows that are still in flight.
+  `renderer/api/tests/test_worker.py::test_a_publish_request_always_finishes_before_the_worker_deadline`
+  pins the arithmetic.
+
+### The ambiguity split
+
+A publish can fail in two places, and only the first leaves no doubt about what happened.
+
+```mermaid
+flowchart TD
+    V{"Validation"} -->|fails| R400["400 or 409<br/>status untouched"]
+    V -->|passes| C["Claim: PUBLISHING + PENDING rows"]
+    C --> U{"Upload"}
+    U -->|fails or hits the 30-minute cap| REL["Release to VIDEO_APPROVED<br/>delete the rows, comment, 502"]
+    U -->|done| P{"POST /social-posts"}
+    P -->|201| OK["Fill the post id<br/>PUBLISHING or SCHEDULED"]
+    P -->|timeout, 5xx or non-JSON| AMB["Stay PUBLISHING<br/>502 with reconciling: true"]
+    AMB --> W["Worker looks the post up by external_id"]
+    W -->|live post found| OK
+    W -->|none before the deadline| F["FAILED"]
+```
+
+If the upload fails, nothing was posted. The route releases the claim, clears any schedule and
+deletes the in-flight rows. It deletes them only if it won the release: if the worker already failed
+the video, the rows stay, because they are what offers **Retry publishing**.
+
+A failed `POST /social-posts` can arrive after postforme accepted the post. The route keeps the
+claim, answers `502` with `{"reconciling": true}` and writes a comment that says to wait before
+retrying. Releasing the claim would invite a second, real post.
+
+Every failure writes its reason to the video's comments (`pipeline.py::_publish_note`), so the
+reason outlives the dialog that reported it.
 
 ---
 
 ## Scheduling a post
 
-What a user picks and sees is on [Scheduling a post](../user-guide/06-publishing.md#scheduling-a-post).
-A schedule arrives as a wall-clock date and time plus an IANA timezone; postforme holds the post and
-sends it at that time, and Tubematic only waits for the results.
+What a user picks and sees is in the user guide:
+[Scheduling a post](../user-guide/06-publishing.md#scheduling-a-post). A schedule arrives as a
+wall-clock date and time plus an IANA timezone. postforme holds the post and sends it at that time.
+Tubematic waits for the results.
 
 ```mermaid
 stateDiagram-v2
     VIDEO_APPROVED --> PUBLISHING: publish (claim, upload)
     PUBLISHING --> SCHEDULED: postforme accepted a scheduled post
-    SCHEDULED --> PUBLISHING: worker — the time has come
+    SCHEDULED --> PUBLISHING: worker, once the time has come
     SCHEDULED --> VIDEO_APPROVED: human cancels
     PUBLISHING --> PUBLISHED
+    PUBLISHING --> PARTIALLY_PUBLISHED
     PUBLISHING --> FAILED
+    PARTIALLY_PUBLISHED --> PUBLISHED: human marks it published
 ```
 
-- **The upload happens at the click, not at the scheduled time.** A scheduled publish runs the whole
-  claim → upload → `POST /social-posts` path above, under the same `PUBLISHING` claim and the same
-  ambiguity split; only its last step differs. The video then waits in `SCHEDULED`, with its
-  publication rows `PENDING` and already carrying the post id. postforme keeps media attached to a
-  scheduled post until it goes out (only *unattached* uploads expire after 24 hours), so there is no
-  horizon beyond which the upload would be lost.
-- **The API converts the wall time, never the browser.** `pipeline.py::resolve_schedule` turns
-  `{local, timezone}` into UTC with `zoneinfo`, so the offset is the one in force on the scheduled day,
-  not today's. A wall time the clocks skip for daylight saving is refused rather than shifted by an
-  hour, and a repeated hour takes its first occurrence — or the second, once the first is already too
-  soon, which is what *In 1 hour* produces during the first occurrence. The browser's zone list is CLDR's
-  (`Asia/Calcutta`, not `Asia/Kolkata`); the API accepts either spelling, and ships PyPI's `tzdata` so
-  that stays true on a base image whose OS moved the old names into a separate package.
-- **At least 5 minutes ahead, at most 365 days** (`SCHEDULE_MIN_LEAD_SECS`, `SCHEDULE_MAX_LEAD_DAYS`).
-  The floor leaves a real window to cancel in and keeps the upload well inside the lead. The ceiling
-  is a typo guard; postforme sets no limit.
-- **A post the upload leaves within a minute of its time is sent as publish-now**
-  (`SCHEDULE_POST_NOW_SECS`, 60 seconds), whether the time has already passed or is still a few
-  seconds away. postforme refuses a `scheduled_at` in the past, the route would have to treat that
-  refusal as ambiguous, and a time a few seconds ahead could pass before postforme reads it.
-- **The worker moves a due video to `PUBLISHING` and resets the rows' `created_at`.** The one-hour
-  deadline is measured from that column; left at the time the post was scheduled, every target of a
-  post scheduled more than an hour out would fail on the first pass. The move happens only while
-  publishing is enabled, like every other postforme poll. postforme itself checks for due posts about
-  every two minutes, so a post can go out a couple of minutes after its time.
-- **A post adopted by `external_id` whose time has not come waits in `SCHEDULED`.** That is how an
-  ambiguous `POST /social-posts` for a scheduled publish recovers; settling it at once would fail it at
-  the deadline, before it was ever sent.
-- **Cancel, never reschedule.** postforme's update is a full-replace `PUT` that posts **immediately**
-  when `scheduled_at` is missing from it, and it would have to resend every field. To change the time,
-  cancel and schedule again, which uploads again.
-- **`SCHEDULED` cannot be deleted** (it is outside `DELETABLE_STATUSES`). postforme would still send
-  the post, and nothing local would be left to settle or cancel it.
-
----
-
-## Auto Pilot
-
-What Auto Pilot does, what is configured, how it behaves and how to size it are on
-[Auto Pilot](../user-guide/14-auto-pilot.md), including the warning a user should read
-before turning it on. This section is how it is built.
-
-It is one pass in the worker, `worker.py::_sweep_auto_pilot`, run right after the publishing
-pass on every tick. It returns at once unless `auto_pilot_enabled` is on, the pipeline is not paused
-and a project is selected. The project list and the per-account daily numbers are the
-`auto_pilot_config` settings row ([Settings internals](04-settings.md#undeclared-rows)); the three
-scalar keys are ordinary settings.
-
-**It runs in the worker, and not in the agent, deliberately.** The agent's rule that it never moves a
-video out of a checkpoint stays whole, no MCP tool gains the power to approve or publish, and the
-decision is a few lines of code rather than a paid session that might read its instructions
-differently one day.
-
-**Pausing the pipeline pauses Auto Pilot.** Pause is the switch an operator reaches for to stop
-spend, and approving a script spends, so the pass checks `pipeline_paused` before anything else.
-
-### Approval
-
-The pass looks for videos of the selected projects at `TOPIC_PROPOSED`, `SCRIPT_READY` and
-`VIDEO_READY` and moves each one on exactly as the dashboard's approval does, with a comment saying
-Auto Pilot did it and that no human reviewed it. The update is guarded on the status it read, so a
-human who acted first wins.
-
-- **Two approvals the dashboard would refuse are not made**: an `illustrated` topic on an install
-  with no OpenAI key, and a script its voice's model cannot speak. The video stays at its checkpoint
-  with one comment. `videos.auto_pilot_blocked` records `<status>@<updated_at>` for the arrival that
-  was commented on, so the comment is not repeated on every tick. **The check itself is repeated**,
-  so the video is approved once the cause is fixed — do not turn the mark into a skip, or a fixed
-  cause never unblocks.
-- **An approval never waits behind a render.** The worker does not render; an approval waits at
-  most one tick, about twenty seconds.
-- **No checkpoint notification is sent** for a video Auto Pilot approves: the pass runs before the
-  [notification sweep](02-pipeline.md#notifications), so by then the video has moved on.
-
-### Posting
-
-For a `VIDEO_APPROVED` video in a selected project, the same pass picks a time and starts the post.
-
-- **One post per video, to all of its project's accounts at once**, through
-  `pipeline.py::start_publish`, the same function behind `POST /videos/<id>/publish`. The claim, the
-  upload, the ambiguity split and the settling are the ones this page describes for a human publish,
-  not a second copy. A post in the future becomes a [scheduled post](#scheduling-a-post).
-- **The upload runs on the worker here**, because nobody is waiting on it. It holds the worker's
-  loop for about a minute, so each tick starts at most one post.
-- **Usable accounts are re-checked at posting time**: chosen for the project, still on the Socials
-  allowlist, still connected at postforme, and with a daily number above 0. If none is left, or
-  publishing is disabled, the video waits at `VIDEO_APPROVED`.
-- **A video with nowhere to post costs no postforme request.** The allowlist and the daily numbers
-  are local, so they are checked first, and postforme is asked which accounts are connected only
-  when some video has a target left. Waiting at `VIDEO_APPROVED` can last indefinitely, and the
-  pass runs every twenty seconds.
-- **The title and description** come from `pipeline.py::publish_text`: the ones the agent wrote with
-  the script, or the video's title and topic for a video that has none. Privacy is always public.
-
-**The time** is computed by `autopilot.py::next_slot`, the earliest moment free for every account of
-the post: no post of the account closer than the gap **before or after** it, and fewer posts than its
-daily number on that day in the host's timezone. Starting from now, the time moves to just past the
-gap of any post that is too close, and to the next local midnight when the day is full, until
-neither rule moves it. If that is now, the video is posted immediately. It gives up beyond 365 days,
-the same horizon a human schedule is held to.
-
-What counts as an account's post: every publication that has not failed, whoever started it. A
-published one counts at the time it was seen published, a scheduled one at its scheduled time, and
-one in flight at the time it started.
-
-### The in-progress limit
-
-With `auto_pilot_max_in_flight` set to N, only the **paid gate**, `SCRIPT_READY → VOICING`, is
-budgeted: one video per free slot, every free slot used in the same pass. Topic approvals stop while
-the limit is full, because each one starts a paid scripting session, but they are not counted one by
-one. Approving `VIDEO_READY` and scheduling `VIDEO_APPROVED` never wait, because neither adds a video
-to the count and scheduling is the only thing that drains it. The earlier scheduled-post ceiling
-stopped both at the limit, which left approved videos stranded at `VIDEO_APPROVED` with nothing
-moving. The limit cannot overshoot: a video enters the count only by passing the gate, and the gate is
-budgeted against the count.
-
-**The count** (`pipeline.py::in_flight_count`) is two groups, OR-ed so a video in both counts once. A
-video posting to two accounts also counts once.
-
-- **Every video in an Auto Pilot project that has been voiced and has not published, failed or been
-  rejected.** A partial publish still counts until a human marks it published — see
-  [A partial publish](#a-partial-publish).
-  - **Keyed on the voice, not on a status** (`voice_file_path` set, or a status past the gate). A
-    revision can send a voiced video back to `SCRIPT_READY` or `TOPIC_PROPOSED`. It keeps its slot
-    there, because otherwise it would free one for a brand-new script and then queue behind it.
-  - **A voiced video passes the gate without using a slot.** It already holds one. If it had to
-    win a slot a second time, N revisions waiting at `SCRIPT_READY` would fill the count and none
-    of them could ever be voiced again.
-  - **Only Auto Pilot projects count**, so a human's unrelated work cannot hold Auto Pilot shut.
-- **Every `SCHEDULED` post with a future `scheduled_at`, install-wide**, whoever scheduled it,
-  because the accounts' calendar is shared.
-
-**Some rows never count**, because none of them leaves the count by itself. Counting one would hold
-Auto Pilot shut for good with nothing to say why.
-
-- an archived video
-- a `VIDEO_APPROVED` video on [hold](#stopping-one-video). It cannot be scheduled, and nothing in
-  the dashboard clears the hold.
-- outside Auto Pilot projects, a `SCHEDULED` row whose time has passed, and a `PUBLISHING` row whose
-  `create_post` was ambiguous and is being reconciled
-
-`GET /autopilot` returns the count as `in_flight`; the Auto Pilot tab polls it every 20 seconds.
-
-### Stopping one video
-
-`POST /videos/<id>/schedule/cancel` sets `videos.auto_pilot_hold`, and nothing clears it. Without it
-the cancelled video would return to `VIDEO_APPROVED` and be scheduled again on the worker's next tick,
-so a cancel could never stick. Retry publishing deliberately sets no hold: a video it returns to
-`VIDEO_APPROVED` is posted again by Auto Pilot.
-
-### When a post cannot be started
-
-A failed upload returns the video to `VIDEO_APPROVED`, where the next tick would try again twenty
-seconds later, and comment again. Auto Pilot instead backs off per video
-(`worker.py::_AUTO_PILOT_BACKOFF_SECS`: 15 minutes, an hour, then six hours for each later failure).
-The count is kept in the worker's memory, so a restart tries once more straight away. A video that
-cannot be published at all, such as one with no rendered file, gets one comment saying so. An
-unreachable postforme defers the whole pass without a comment.
+- A scheduled publish runs the same claim, upload and `POST /social-posts` as an immediate one.
+  Once postforme holds the post, the video moves to `SCHEDULED`. Its rows stay `PENDING` and
+  already carry the post id.
+- postforme keeps media attached to a scheduled post until the post goes out. Uploaded media with no
+  post attached is deleted after 24 hours.
+- `pipeline.py::resolve_schedule` converts `{local, timezone}` to UTC with `zoneinfo`, so the offset
+  is the one in force on the scheduled day. The browser sends the wall time and the zone and
+  converts nothing.
+- A wall time that the clocks skip for daylight saving is refused. A repeated hour takes its first
+  occurrence. If that is less than 5 minutes away, it takes the second, which is what **In 1 hour**
+  produces during the first occurrence.
+- The browser lists CLDR zone names (`Asia/Calcutta`). The API image installs PyPI's `tzdata`, so
+  `zoneinfo` accepts that spelling and `Asia/Kolkata` on a base image whose OS ships the old names
+  in a separate package.
+- A schedule must be at least 5 minutes and at most 365 days ahead (`SCHEDULE_MIN_LEAD_SECS`,
+  `SCHEDULE_MAX_LEAD_DAYS`). The floor leaves time to cancel and keeps the upload inside the lead.
+  The ceiling catches typos. postforme sets no limit.
+- If the upload ends within 60 seconds of the scheduled time (`SCHEDULE_POST_NOW_SECS`), the post is
+  sent with no `scheduled_at` and goes out at once. postforme refuses a `scheduled_at` in the past,
+  and the route would have to treat that refusal as ambiguous.
+- When `scheduled_at` has passed, `worker.py::_release_due_schedules` moves the video to
+  `PUBLISHING` and resets its pending rows' `created_at`, so the deadline counts from the due time.
+  postforme checks for due posts about every two minutes, so a post can go out a couple of minutes
+  after its time.
+- A post adopted by `external_id` whose time has not come goes back to `SCHEDULED`
+  (`worker.py::_schedule_pending`). An ambiguous `POST /social-posts` for a scheduled publish
+  recovers this way without timing out before the post is sent.
+- There is no reschedule. postforme's update is a full-replace `PUT` that posts immediately when
+  `scheduled_at` is missing from it. To change the time, cancel and schedule again, which uploads
+  again.
+- `SCHEDULED` is outside `DELETABLE_STATUSES`. postforme would still send the post, and nothing
+  local would be left to settle or cancel it.
 
 ---
 
@@ -257,161 +186,500 @@ Once every publication row has settled, `worker.py::_derive_video_status` sets t
 
 | Rows | Video |
 |---|---|
-| every target published | `PUBLISHED` |
-| some published, some failed | `PARTIALLY_PUBLISHED` |
-| every target failed | `FAILED` |
+| Every target published | `PUBLISHED` |
+| Some published, some failed | `PARTIALLY_PUBLISHED` |
+| Every target failed | `FAILED` |
 
-**A mix is never `FAILED`.** There is no un-publish on any of these platforms, so a video live on two
-of four accounts did go out, and calling it failed would lie about the two that posted. **Nor is it
-`PUBLISHED`**, which is what it used to be: the failed accounts' upload then had no owner, and
-nothing but a row on the Publishing Results tab said a human still had to do something.
+A mix is `PARTIALLY_PUBLISHED` because no platform offers an un-publish: the video is live on the
+accounts that succeeded, and the failed accounts still need an upload that somebody has to own. The
+worker's comment counts both and says what to do.
 
-`PARTIALLY_PUBLISHED` is a human-owned state with one way out. The human downloads the video, posts
-it to the failed accounts by hand, and clicks **Mark as published** in the video's modal, a
-`PATCH /videos/<id>` to `PUBLISHED` guarded by `onlyIfCurrentStatus`. There is no route of its own,
-and the agent is told never to write either status. Two things about the state look like omissions
-and are not:
+The human downloads the video, posts it to the failed accounts by hand and clicks
+**Mark as published** in the video window. That is a `PATCH /videos/<id>` to `PUBLISHED` guarded by
+`onlyIfCurrentStatus`, and it is the only way out of the status.
 
-- **No retention sweep touches it.** `_sweep_published` takes `PUBLISHED` only and
-  `_sweep_unpublished` takes `FAILED` and `TOPIC_REJECTED` only, so the mp4 and job directory are
-  kept for as long as it waits — the file has to survive for the manual upload. Marking it published
-  is what hands it to retention, and retention dates from the first successful post
-  (`MAX(published_at)`), not from the click: a partial publish older than `retention_days` loses its
-  files on the worker's next pass. That is why the confirm dialog says to download first and carries
-  the download link.
-- **It keeps its Auto Pilot in-flight slot** ([the in-progress limit](#the-in-progress-limit)). The
-  video did publish somewhere, and holding the slot is useful back-pressure: Auto Pilot throttles
-  instead of piling up more half-published videos while an account is broken.
+- Neither retention sweep touches the status. `_sweep_published` takes `PUBLISHED` and
+  `_sweep_unpublished` takes `FAILED` and `TOPIC_REJECTED`, so the mp4 and the job directory stay
+  for the manual upload.
+- Marking the video published hands it to retention, which dates from the latest successful post
+  (`MAX(published_at)`). A partial publish older than `retention_days` therefore loses its files on
+  the worker's next retention pass, which is why the confirm dialog says to download first.
+- The video keeps its slot in Auto Pilot's [in-progress limit](#the-in-progress-limit), so Auto
+  Pilot slows down while an account is broken.
+- `notify_partially_published` (off by default) sends a Discord message that names each failed
+  account and its error, links the posts that went out and says what to do next. See
+  [Notifications](12-the-worker.md#notifications).
 
-A partial publish can be announced on Discord (`notify_partially_published`, off by default): it
-names each failed account and its error, links the posts that went out, and says what to do next.
-See [Notifications](02-pipeline.md#notifications).
-
-There is no migration and no backfill: a video that published partially before this status existed
-stays `PUBLISHED`. Going back to 2.0.x restores the pre-upgrade database, which holds no such video.
-A copy of the database that did carry one into an older version would strand it: that version's
-dashboard shows a grey fallback badge and leaves it off the board and the Library, its `PATCH`
-refuses the value, and no sweep matches it.
+No migration adds the status and nothing is backfilled. A database copied to a version that does
+not know the status strands such a video: that version's dashboard leaves it off the board and the
+Library, its `PATCH` refuses the value, and no sweep matches it.
 
 ---
 
-## Design decisions that will look wrong later
+## The worker
 
-Each of these is deliberate. Reversing one reintroduces a specific failure.
+`worker.py::_poll_publishing_videos` runs on every tick while publishing is enabled and a postforme
+key is stored. Where it sits among the other passes is on [The Worker](12-the-worker.md). It first
+moves due `SCHEDULED` videos to `PUBLISHING`, then settles each `PUBLISHING` video
+(`_settle_publication`):
 
-**Completion is a row count, not a status read.** postforme's result payload has no pending state —
-a target that has not published yet simply has no row. The worker counts non-`PENDING`
-`video_publications` rows against the expected number of targets.
+- Rows with a post id: the pass fetches the post's results and writes `PUBLISHED` with the post URL
+  or `FAILED` with the error to each row that has a result. A row with no result stays `PENDING`
+  until the deadline and then fails.
+- Rows with no post id (`_settle_in_progress`): the pass looks for a post by `external_id` and
+  adopts a live one at once. With no post and the deadline passed, it fails the rows and the video.
+- A dead post (every target failed) is adopted only after the deadline, so the rows settle with the
+  platforms' own errors. Before then it may be an earlier attempt's post under the same
+  `external_id`.
+- `_adopt_post` fills the post id into the in-flight rows, inserts a row for any target the post has
+  that no row covers, and resets `created_at`.
+- Failing an expired publish is one transaction whose writes each re-check that the rows still have
+  no post id. A post id that Flask fills in at that moment is never left pending under a `FAILED`
+  video.
+- A postforme outage is logged and the video is left for the next tick. The video may already be
+  live, so an outage does not fail it.
+- A `PUBLISHING` video with no rows at all gets one lookup by `external_id`. If postforme has a
+  post, the worker rebuilds the rows from it. If not, the video fails.
+- Errors written to `video_publications.error` pass through `postforme.scrub` first.
 
-**The backstop is a wall clock, measured from `video_publications.created_at`.** One hour.
-`created_at` is reset when the post id is attached, so the platforms get a full hour to report from
-the post's creation rather than from before the upload. It is a
-wall clock rather than a retry counter because a publish has no crash to count, and it keys off that
-column rather than `videos.updated_at` because `updated_at` is the FIFO ordering key for the
-render gateway's atomic claim — a polling loop writing to it would reorder the render queue.
+Do not replace the one-hour wait for in-flight rows with a shorter grace period. A shorter wait
+would fail videos whose upload is still running and whose post goes live moments later. The cost is
+that a publish that stopped is noticed after up to an hour.
 
-**The publication rows are written at the claim, before the upload, with an empty post id.** An empty
-`postforme_post_id` means "a publish is in flight", and the worker leaves such rows alone until the
-publish deadline. The rows used to be written only after `POST /social-posts` returned, so for the
-whole upload the worker saw a `PUBLISHING` video with no rows, took that for a crashed publish, found
-no post at postforme yet, and failed a video that went live moments later. Do not replace this with a
-short grace period: the upload has no hard upper bound (its timeout applies per operation, not in
-total), so any fixed number is a guess. The cost is that a genuinely crashed publish is noticed after
-up to an hour instead of twenty seconds. Failing slowly is safe; failing fast abandoned live posts.
+---
 
-**The upload is capped at 30 minutes in total, so a publish request always ends before that hour.**
-Without the cap, a very slow upload could outlive the deadline: the worker would fail the video,
-Retry could move it on, and the original request's post would then arrive with nothing correct to
-attach to, or attach to a second attempt's rows. The cap makes that impossible by construction, which
-is simpler and safer than handling each late-response case. A test pins the arithmetic: the cap, plus
-one stalled write and the response read at the per-operation timeout, plus the short calls around
-them, must stay under the deadline. The cap is still about 35 times the measured upload time.
+## HTTP routes
 
-**`PUBLISHING` is set by Flask and otherwise only observed by the worker.** It is the first status
-shaped that way; every other automatic transition is claimed and written by the same process that
-does the work. The one exception is a scheduled post falling due, which the worker moves from
-`SCHEDULED` to `PUBLISHING` itself — there is no request in flight to do it.
+Request bodies, response fields and status codes are in the
+[HTTP API reference](05-http-api.md#publishing-and-analytics). This section covers what the routes
+do inside.
 
-**`videos.youtube_url` is retired as a *read* path only.** The column, its writers, and
-`update_video`'s kwarg all stay. Dropping the column is a one-way `ALTER`, and removing the kwarg
-would be an MCP signature change that breaks in-flight agent sessions.
+The routes that call postforme, and `POST /publishing/accounts`, start with `_publishing_context`.
+It answers `503` when `publishing_enabled` is false or `postforme_api_key` is unset, before any
+outbound call. `GET /videos/<id>/publications`, `publish-prefill`, `GET /analytics` and the two
+`/autopilot` routes read local data only and skip the check.
 
-**AI-disclosure flags are hardcoded true** — `youtube.contains_synthetic_media` and
-`tiktok.is_ai_generated`. That is platform policy, not a preference, and a setting would only be an
-invitation to turn it off.
+### `POST /videos/<id>/publish-prefill`
+
+The route returns `publish_title` and `publish_description`, which the agent writes in the same
+`update_video` call as the script ([MCP server](06-mcp-server.md)). `PATCH /videos/<id>` holds a
+script to the same rule, so neither write path can leave the pair empty or describing an older
+script. `videos.title` is the pipeline's own short display name and is a different field.
+
+A video with nothing stored falls back to its title and topic (`pipeline.py::publish_text`). The
+fallback is not written back, so it cannot pass for the agent's text. The route calls no model, so
+the dialog opens at once. It also returns the video's duration and whether YouTube would treat it
+as a Short (`YOUTUBE_SHORTS_MAX_SECS`, 180 seconds).
+
+### `POST /videos/<id>/publish`
+
+`start_publish` validates in this order: the video exists, is unarchived and is at
+`VIDEO_APPROVED`, every account id is on the allowlist, the rendered mp4 exists, the privacy values
+are supported, and the schedule resolves. It then asks postforme which platform each target is on,
+claims the video and continues as [The ambiguity split](#the-ambiguity-split) describes.
+
+The allowlist is enforced here as well as in the dialog. The route is reachable through the
+dashboard proxy, and the allowlist keeps output off a personal account connected to the same
+postforme project.
+
+### `POST /videos/<id>/publish/retry`
+
+The route accepts a `FAILED` video that has publication rows. Every publish writes its rows at the
+claim and a failed render writes none, so the rows identify a video that failed while publishing.
+
+1. The route asks postforme for a post by `external_id`. The lookup is a read, so it runs before the
+   claim.
+2. If a live post exists, nothing is posted again. The video returns to `PUBLISHING`, its rows are
+   rebuilt from the post with a fresh `created_at`, and the worker settles it. The response is
+   `{"outcome": "reconciling"}`.
+3. If no live post exists (none at all, or one where every target failed), the video returns to
+   `VIDEO_APPROVED`, its schedule is cleared and its rows are deleted. A comment keeps each
+   account's error. The response is `{"outcome": "republish"}`, and the dashboard opens the Publish
+   dialog. The failed attempt's account and privacy choices are not stored, so the route cannot
+   post again with them.
+
+Both moves are an atomic claim on `FAILED`, so a double click acts once. If postforme cannot be
+asked, the route answers `502` and changes nothing, because a failed lookup says nothing about
+whether a post exists.
+
+### `POST /videos/<id>/schedule/cancel`
+
+The route deletes the post at postforme, then returns the video to `VIDEO_APPROVED`, clears its
+schedule and deletes its rows, with a comment. postforme goes first, so a post it still holds always
+has the rows that settle it. The route also sets `videos.auto_pilot_hold`
+([Stopping one video](#stopping-one-video)).
+
+- The release matches `PUBLISHING` as well as `SCHEDULED`. The worker can move a due video to
+  `PUBLISHING` while the cancel is talking to postforme. If postforme deleted the post, nothing
+  will go out, whichever status the worker left.
+- A `400` from postforme means the post is already going out. The route answers `409`.
+- A `404` from postforme releases the video only after a lookup by `external_id` confirms the post
+  is gone. postforme sends its webhook after deleting and can answer `500` at that point, so a
+  second cancel gets `404` for a post the first one deleted. postforme also answers `404` when its
+  own lookup fails. In that case the post is still listed and the route answers `502`.
+- Any other failure, including postforme's `200 {"success": false}`, answers `502`. The post is
+  still scheduled and the cancel can be repeated.
+
+### `GET /autopilot` and `POST /autopilot`
+
+Auto Pilot approves videos with publishing off, and they then stop at `VIDEO_APPROVED`, so these
+routes work without it.
+
+`GET` adds two computed fields to the stored configuration: `in_flight`
+([the in-progress limit](#the-in-progress-limit)) and `waiting`, the number of unarchived videos per
+domain at each of `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` and `VIDEO_APPROVED`. The
+dashboard's confirmation counts from `waiting`.
+
+`POST` validates the whole document and writes it in one transaction, so the switch cannot be saved
+as on over a domain list that was refused. A request without `max_in_flight` keeps the stored
+limit.
+
+Each account in `projects` must be on the Socials allowlist, the same check a human publish gets.
+An account already stored for the same domain is accepted even after it leaves the allowlist.
+Refusing it would refuse every later save of that configuration, including the one that turns Auto
+Pilot off. The worker re-checks the allowlist before each post, so such an account receives nothing.
+
+`auto_pilot_enabled`, `auto_pilot_gap_mins` and `auto_pilot_max_in_flight` are ordinary settings,
+so `POST /settings` accepts them too, without the dashboard's confirmation.
+
+---
+
+## Auto Pilot
+
+What Auto Pilot does, how to size it and the warning to read before turning it on are in the user
+guide: [Auto Pilot](../user-guide/14-auto-pilot.md).
+
+Auto Pilot is one worker pass, `worker.py::_sweep_auto_pilot`, which runs after the publishing pass
+on every tick (about every 20 seconds). It returns at once unless `auto_pilot_enabled` is on,
+`pipeline_paused` is off and at least one domain is selected. Pause stops it because pause is the
+switch for stopping spend, and approving a script spends.
+
+| Stored in | Holds |
+|---|---|
+| `auto_pilot_enabled` | The switch. Default off |
+| `auto_pilot_gap_mins` | Minutes between two posts on one account. Default 240, from 0 to 10080 |
+| `auto_pilot_max_in_flight` | The in-progress limit. Default 0 (no limit), up to 500 |
+| `auto_pilot_config` | The selected domains with their accounts (`projects`) and each account's posts per day (`account_limits`, 0 to 50). See [Settings internals](04-settings.md#undeclared-rows) |
+
+An account with no stored number posts once a day (`AUTO_PILOT_DEFAULT_DAILY`).
+
+The pass runs in the worker so that the agent's rule holds without exception: the agent never moves
+a video out of a human checkpoint, and no MCP tool can approve or publish.
+
+### Approval
+
+The pass reads the selected domains' videos at `TOPIC_PROPOSED`, `SCRIPT_READY` and `VIDEO_READY`,
+oldest first, and moves each one on as the dashboard's approval does. It adds a comment saying Auto
+Pilot approved it and no human reviewed it. The update is guarded on the status it read, so a human
+who acted first wins.
+
+- Auto Pilot does not make an approval the dashboard would refuse
+  (`worker.py::_auto_pilot_block_reason`): an `illustrated` topic with no OpenAI key stored, a topic
+  whose mascot was archived or withdrawn, a Cartoon 3D topic that holds a mascot, and a script its
+  voice's model cannot speak. The video stays where it is with one comment.
+- `videos.auto_pilot_blocked` records `<status>@<updated_at>` for the arrival that was commented on,
+  so the comment is written once per arrival. The check itself runs on every tick, so the video is
+  approved once the cause is fixed. Do not turn the mark into a skip.
+- The worker does not render, so an approval waits at most one tick.
+- Auto Pilot sends no "waiting for you" notification for a video it approves. The pass runs before
+  the [notification sweep](12-the-worker.md#notifications), and by then the video has moved on.
+
+### Posting
+
+For a `VIDEO_APPROVED` video in a selected domain, `_auto_pilot_publish` picks a time and starts
+the post.
+
+- One post goes to all of the domain's usable accounts at once, through `start_publish`. A post in
+  the future becomes a [scheduled post](#scheduling-a-post). Privacy is public on every platform.
+- The title and description come from `pipeline.py::publish_text`.
+- Each tick starts at most one post, because the upload holds the worker's loop for about a minute.
+- An account is usable when it is chosen for the domain, on the Socials allowlist, has a daily
+  number above 0 and is connected at postforme. The first three checks are local and run first.
+  postforme is asked which accounts are connected only when some video has a target left, so a
+  video that waits at `VIDEO_APPROVED` for weeks costs no request per tick.
+- With no usable account, or with publishing disabled, the video waits at `VIDEO_APPROVED`.
+- A video on [hold](#stopping-one-video) is skipped.
+
+`autopilot.py::next_slot` computes the time: the earliest moment that is free for every account of
+the post. A moment is free for an account when no post of that account is closer than the gap,
+before or after, and the account has fewer posts than its daily number on that day in the host's
+timezone. Starting from now, the candidate moves to the end of the gap of any post that is too
+close, and to the next local midnight when the day is full, until neither rule moves it. If the
+result is now, the video is posted immediately. The search stops 365 days ahead, the same horizon
+as a human schedule.
+
+Every publication that has not failed counts as an account's post, whoever started it
+(`worker.py::_account_post_times`). A published one counts at the time it was seen published, a
+scheduled one at its scheduled time, and one in flight at the time it started.
+
+### The in-progress limit
+
+The user guide has the diagram and the sizing advice:
+[The in-progress limit](../user-guide/14-auto-pilot.md#the-in-progress-limit).
+
+With `auto_pilot_max_in_flight` set to N, the pass budgets one transition: `SCRIPT_READY → VOICING`,
+the paid gate. It approves one script per free slot and uses every free slot in the same pass.
+
+- Topic approvals stop while the limit is full, because each one starts a paid scripting session.
+  They are not counted one by one.
+- Approving `VIDEO_READY` and scheduling `VIDEO_APPROVED` run regardless. Neither adds a video to
+  the count, and scheduling is what drains it.
+- A video that already has a voice file passes the gate without using a slot, because it already
+  holds one. If it had to win a slot again, N revisions waiting at `SCRIPT_READY` would fill the
+  count and none could be voiced.
+- The limit cannot overshoot: a video enters the count only by passing the gate, and the gate is
+  budgeted against the count.
+
+`pipeline.py::in_flight_count` counts a video once if it matches either group, however many
+accounts it posts to:
+
+1. In the Auto Pilot domains: every video that has been voiced and is not `PUBLISHED`, `FAILED` or
+   `TOPIC_REJECTED`. "Voiced" means `voice_file_path` is set or the status is one of
+   `AUTO_PILOT_PAST_GATE`. The test reads the voice file because a revision can send a voiced video
+   back to `SCRIPT_READY` or `TOPIC_PROPOSED`, and it must keep its slot there. A
+   `PARTIALLY_PUBLISHED` video counts until a human marks it published.
+2. Install-wide: every `SCHEDULED` video with a future `scheduled_at`, whoever scheduled it, because
+   the accounts' calendar is shared.
+
+Rows that would never leave the count by themselves are left out:
+
+- an archived video
+- in an Auto Pilot domain, a `VIDEO_APPROVED` video on hold, which cannot be scheduled
+- in any other domain, a `SCHEDULED` row whose time has passed and a `PUBLISHING` row that is being
+  reconciled
+
+Videos outside the Auto Pilot domains enter the count only through the second group, so unrelated
+manual work does not stop Auto Pilot.
+
+### Stopping one video
+
+`POST /videos/<id>/schedule/cancel` sets `videos.auto_pilot_hold`, and nothing clears it. Without
+the hold, the cancelled video would return to `VIDEO_APPROVED` and be scheduled again on the
+worker's next tick. Retry publishing sets no hold: a video it returns to `VIDEO_APPROVED` is posted
+again by Auto Pilot.
+
+### When a post cannot be started
+
+A failed upload returns the video to `VIDEO_APPROVED`, where the next tick would try again and
+comment again. Auto Pilot backs off per video (`worker.py::_AUTO_PILOT_BACKOFF_SECS`): 15 minutes,
+then an hour, then six hours after each later failure. The count is kept in the worker's memory, so
+a restart tries once more straight away.
+
+- A video that cannot be published at all, such as one with no rendered file, gets one comment
+  saying so.
+- An unreachable postforme defers the whole pass with no comment.
+- A post left for reconciliation is not backed off. The worker settles it.
+- When no slot is free within 365 days, the worker logs a warning and backs off.
+
+---
+
+## Connecting accounts
+
+The steps a user takes are in the user guide:
+[Connecting accounts](../user-guide/06-publishing.md#connecting-accounts).
+
+The Socials page's **Connect** button calls `POST /publishing/accounts/connect` and opens the
+consent URL it returns in a new tab. postforme owns the connection and the OAuth callback, so the
+consent ends on postforme.dev's own page. postforme ignores `redirect_url`, `redirect_uri` and
+`return_url`, so the flow cannot return to the dashboard by itself. The browser does all the
+redirecting, so Tubematic needs no inbound endpoint and a dashboard reachable only from its own
+machine works.
+
+- The URL's `state` token is single-use and expires. The route mints one per click, does not cache
+  it and does not log the URL.
+- For a platform that is not enabled on the postforme project, postforme answers `404` with a
+  message that says where to enable it, and the route passes the message on. postforme gives an
+  unknown platform the same answer.
+- Tubematic stores account ids only: in the allowlist, in Auto Pilot's configuration and in each
+  publication row. An account connected on postforme.dev directly works the same way.
+
+### Why `feeds` is always requested
+
+postforme grants two permissions at connect time, `posts` and `feeds`, and its default is `posts`
+alone. `feeds` adds the analytics scope on the platform. The choice is made when the consent URL is
+generated. The API fixes the pair as `postforme.CONNECT_PERMISSIONS` and ignores the request body,
+so no caller can mint a posts-only URL.
+
+| Platform | Scope added by `feeds` |
+|---|---|
+| Instagram | `instagram_business_manage_insights`, on top of `instagram_business_basic` and `instagram_business_content_publish` |
+| YouTube | `yt-analytics.readonly`, alongside the readonly and upload scopes |
+| TikTok | None. The requested scopes are the same with and without it |
+
+An account without the grant still posts. On Instagram the feed request still returns `200` with
+the complete list of posts, and each entry carries an empty `metrics` object. The hourly pass
+matches those entries and writes a snapshot for each with every figure null, a manual refresh counts
+them as captured, and the Analytics page shows a dash in every column. A metric that a platform did
+not report looks the same.
+
+A permission changes only by going through the platform's consent screen again. Reconnecting keeps
+the account's id: postforme updates the existing record and issues a new token, so nothing in
+Tubematic needs redoing.
+
+### What the Socials badges mean
+
+`GET /publishing/accounts` returns postforme's list projected through `postforme.public_account`,
+with three fields added:
+
+- `allowed`: the id is on the allowlist.
+- `available`: postforme lists the account. An allowlisted id that postforme does not list comes
+  back as a `disconnected` entry with `available: false`, so the page can show `NOT CONNECTED` and
+  the entry can be unticked.
+- `analytics`: `true`, `false` or `null`, from `pipeline.py::_feeds_available`, a one-entry feed read made for
+  allowlisted accounts only. Only a `4xx` other than `429` reads as `false`, which the page shows
+  as `NO ANALYTICS`. A `429`, a `5xx` or a timeout says nothing about permissions and reads as
+  `null`.
+
+`analytics: true` does not prove metrics will arrive, because a missing grant on Instagram is not a
+rejection. postforme's account record lists no granted permissions, so whether metrics come back is
+the only signal. `_feeds_available` does not infer a missing grant from empty metrics: a new account
+with no posts, or a platform that has not computed insights yet, looks the same, and the page would
+tell someone to reconnect an account that is fine.
+
+`?feeds=0` skips the probe. The Analytics page uses it because it needs only account names, and a
+probe per page load would spend the rate limit.
+
+---
+
+## Analytics
+
+### Capture
+
+`worker.py::_poll_video_metrics` runs hourly, gated on the `last_metrics_poll_at` settings row. The
+row is written before the work, so a pass that dies partway does not run again 20 seconds later.
+`POST /analytics/refresh` runs the same capture on request.
+
+`renderer/api/metrics.py::poll` makes one feed request per account and matches entries to local rows
+by postforme's post id, because platforms rewrite URLs. One request per publication would exceed the
+rate limit past the fifth target and lose those readings, and a time series cannot be backfilled.
+
+- Only `PUBLISHED` rows with a post id are read.
+- The feed is requested 100 entries at a time and stops after 20 pages per account, so a cursor that
+  never ends cannot hold the worker's loop.
+- One unreachable account counts as an error and the other accounts are still read. `poll` does not
+  raise.
+- `postforme.extract_metrics` maps each platform's names onto `views`, `likes`, `comments` and
+  `shares`. TikTok reports `view_count`, `like_count`, `comment_count` and `share_count`. Facebook
+  has no likes or views field: `reactions_total` is stored as likes and `video_views` (or
+  `media_views`) as views. An absent metric is stored as null, and an unknown platform yields all
+  nulls.
+- The whole payload is kept in `raw_json`, so another column can be filled from it later.
+
+### `GET /analytics`
+
+The route reads local snapshots only. Each snapshot is a cumulative reading, so the query joins a
+publication to its latest snapshot with a `LIMIT 1` subquery. Summing snapshots would multiply the
+view count by the number of polls. Only views, likes, comments and shares are summed across
+platforms. Platform-specific metrics stay in `raw_json`.
+
+`by_month` holds the views gained in each of the last 12 months (`ANALYTICS_MONTHS`). A month's
+figure is every post's latest reading before the month ended minus its latest reading before the
+month began, which costs one indexed lookup per post per month boundary. Months are cut in the
+host's timezone.
+
+- Nothing is known about a post before its first snapshot, so the views it already had count in the
+  month of that snapshot. The first month of tracking can look like a spike.
+- Months before any snapshot are left out.
+- A month can be negative, because platforms remove views. The dashboard draws no bar for it and
+  shows the number on hover.
+- A reading with no view count is skipped, so the one before it stands.
+
+### Analytics outlive the files
+
+The [retention sweep](12-the-worker.md#retention) deletes a published video's files and archives
+its row. It leaves `video_publications` and `video_metrics` alone, metrics keep being polled, and
+the video still appears on the Analytics and Archive pages with its numbers.
+
+---
+
+## Design decisions and their reasons
+
+- `PUBLISHING` is set by Flask and observed by the worker. Every other automatic status is claimed
+  and written by the process that does the work. The exception is a scheduled post falling due,
+  which the worker moves itself because no request is in flight.
+- `videos.youtube_url` is retired as a read path. The column, its writers and `update_video`'s
+  argument stay: dropping a column is a one-way `ALTER`, and removing the argument would break agent
+  sessions in flight. `GET /videos/<id>/publications` is the read path, since one column cannot hold
+  four platform URLs.
+- The AI-disclosure flags, `youtube.contains_synthetic_media` and `tiktok.is_ai_generated`, are
+  hardcoded true. The platforms require the disclosure, so no setting turns it off.
+- `postforme.py` does not fail open. Every failure raises `PostformeError`, because a publish that
+  did not happen and reported nothing leaves a video its owner believes went out.
 
 ---
 
 ## Credentials in responses
 
-> **postforme responses embed live OAuth credentials.** `GET /social-accounts` **and the
-> `POST /social-posts` response** both carry the connected channel's `access_token` and a
-> `refresh_token` with no expiry. The create-post one is the dangerous one: it is on the write path,
-> and this pipeline persists write-path errors into the dashboard-visible `comments` table.
+postforme responses embed live OAuth credentials. `GET /social-accounts` and the
+`POST /social-posts` response both carry the connected channel's `access_token` and a
+`refresh_token` with no expiry. The second one is on the write path, and write-path errors are saved
+to the `comments` table, which the dashboard shows.
 
-Three defences, each with a test:
+Three defences, each with a test (`renderer/api/tests/test_postforme.py` for the first two,
+`renderer/api/tests/test_pipeline.py::test_accounts_never_returns_oauth_credentials` for the third):
 
-1. **`postforme.scrub()` runs on every response** — success and error alike — inside the client,
-   before anything is returned. Not at a display boundary, which is one forgotten log line away from
-   failing. It replaces only truthy credential values, leaving empty ones alone rather than
-   inventing the appearance of a secret.
-2. **Nothing from a response body reaches an error column or a comment unscrubbed.** `_error_message`
-   scrubs before it reads a field out, because an error payload can echo the submitted request.
-3. **`GET /publishing/accounts` projects through an allowlist**, never a blocklist — `id`,
-   `platform`, `username`, `profile_photo_url`, `status`. A new credential-bearing field added
-   upstream cannot leak by default.
+1. `postforme.scrub` runs on every response, success and error, inside the client before anything is
+   returned. It replaces non-empty `access_token` and `refresh_token` values with `<redacted>` and
+   leaves empty ones alone.
+2. `_error_message` scrubs an error body before it reads a field out of it, because an error payload
+   can echo the submitted request.
+3. `GET /publishing/accounts` projects each account through an allowlist of fields
+   (`PUBLIC_ACCOUNT_FIELDS`: `id`, `platform`, `username`, `profile_photo_url`, `status`). A
+   credential field that postforme adds later is dropped by default.
 
-`postforme.py` **does not fail open**, unlike `ai_review.py`. Every failure path raises. A review
-that silently does not happen costs nothing; a publish that silently does not happen strands a video
-the human believes went out.
+The API key travels in the `Authorization` header and never in a URL, because httpx puts the request
+URL in its error strings.
 
 ---
 
 ## The client
 
-`renderer/api/postforme.py` is DB-free by design — the API key and base URL are always passed in.
+`renderer/api/postforme.py` takes the API key and base URL as arguments and never reads the
+database, so a rotated key applies on the next call.
 
 | Function | Purpose |
 |---|---|
 | `list_accounts` | `GET /social-accounts` |
+| `create_auth_url` | `POST /social-accounts/auth-url`, with the platform and permissions |
 | `create_upload_url` | `POST /media/create-upload-url` |
-| `upload_media` | `PUT` to the pre-signed URL. **Sends no `Authorization` header** — the URL is pre-signed and points at storage |
-| `create_post` | `POST /social-posts`. Sends `scheduled_at` (UTC, `…Z`) only for a scheduled post; absent means post now |
-| `delete_post` | `DELETE /social-posts/{id}` — cancels a scheduled post. Raises on postforme's `200 {"success": false}` as well as on an error status, and keeps the status: `400` means the post is already going out, `404` that it was not found |
-| `find_post_by_external_id` | `GET /social-posts?external_id=…`, for reconciliation. Reads every page of matches (capped), then checks every match's results and returns a **live** post (any target succeeded, or one has not reported yet) in preference to a dead one (every target failed), then the newest by `created_at`. More than one post can carry a video's id: one that failed everywhere and was published again has two, and the dead one must never hide the live one |
+| `upload_media` | `PUT` to the pre-signed URL. Sends no `Authorization` header, because the URL points at a storage host |
+| `create_post` | `POST /social-posts`. Sends `scheduled_at` (UTC, ending in `Z`) for a scheduled post and omits it to post now |
+| `delete_post` | `DELETE /social-posts/{id}`. Raises on an error status and on `200 {"success": false}`, and keeps the status code |
+| `find_post_by_external_id` | `GET /social-posts?external_id=…`, for reconciliation |
 | `publication_targets` | `[(account_id, platform)]` from a post's `social_accounts`, which are objects on a fetched post and bare ids on a request |
 | `get_post_results` | `GET /social-post-results?post_id=…` |
 | `get_account_feed` | `GET /social-account-feeds/{id}?expand=metrics` |
-| `scrub` / `public_account` | The credential defences above |
-| `compose_caption` / `build_platform_configurations` / `extract_metrics` | Per-platform shaping |
+| `scrub`, `public_account` | The first and third credential defences above |
+| `compose_caption`, `build_platform_configurations`, `extract_metrics` | Per-platform shaping |
 
-Timeouts are 30 seconds normally and **600 for an upload** — roughly a tenfold margin over a
-measured 150 MB file at 3 MB/s. Those apply per network operation, so the upload also has a
-**30-minute total cap** (`UPLOAD_MAX_SECS`), enforced between chunks of a streamed body; see the
-design decisions above for why. The body is streamed with an explicit `Content-Length`, because
-without one httpx sends it chunked, which pre-signed storage URLs commonly reject.
+`find_post_by_external_id` reads every page of matches (up to 500 posts) and fetches each match's
+results. It returns a live post (a target succeeded, or one has yet to report) in preference to a
+dead one, then the newest by `created_at`. More than one post can carry a video's id: a video that
+failed everywhere and was published again has two, and the dead one must not hide the live one.
 
-### Things the live API does that its documentation does not say
+Timeouts are 30 seconds, and 600 for an upload, about ten times the measured time for a 150 MB file
+at 3 MB/s. They apply per network operation, which is why the upload also has the 30-minute total
+cap, enforced between chunks of the streamed body. The body is sent with an explicit
+`Content-Length`. Without one, httpx sends it chunked, which pre-signed storage URLs commonly
+reject.
 
-These were established by probing, not by reading a spec. Do not "correct" them back.
+### postforme API behaviour
 
-- **`create-upload-url` takes no request body.**
-- **Both `create-upload-url` and `POST /social-posts` answer `201`**, though the spec documents
-  `200`. A client checking `== 200` breaks on the happy path.
-- **There is a 5-requests-per-second rate limit** that appears only in a response header. It is
-  enforced client-side. Note that the API container and the worker each keep their own window, so a
-  simultaneous burst can still exceed it.
-- `scheduled_at` is optional; omitting it publishes immediately. A scheduled post sends it, except
-  when the upload leaves it within a minute of its time: that one is sent as publish-now, with no
-  `scheduled_at` (see [Scheduling a post](#scheduling-a-post)). Uploaded media that no post is attached to is
-  deleted after 24 hours.
-- **Unknown keys in `platform_configurations` are silently accepted and stored verbatim.** There is
-  no server-side validation at all — which is why a *typo* in `contains_synthetic_media` would mean
-  the disclosure is never sent, with nothing reporting a problem.
+The client depends on the following behaviour. Some of it differs from postforme's published spec.
 
-That last point is why `renderer/api/tests/fixtures/postforme_platform_fields.json` exists: a fixture
-of every field name each platform's schema accepts, generated from the live spec, with a test
-asserting every field the builder emits is a member. **It is the only safety net there is.**
+- `create-upload-url` takes no request body.
+- `create-upload-url` and `POST /social-posts` answer `201`. The spec documents `200`.
+- The API allows 5 requests per second and states the limit only in a response header. The client
+  enforces it in `_throttle`. The API container and the worker each keep their own window, so a
+  simultaneous burst from both can exceed it.
+- `scheduled_at` is optional. Omitting it publishes immediately.
+- Unknown keys in `platform_configurations` are accepted and stored as sent, with no validation. A
+  typo in `contains_synthetic_media` would therefore mean the disclosure is not sent, and nothing
+  would report it.
+
+`renderer/api/tests/fixtures/postforme_platform_fields.json` lists every field name each platform's
+schema accepts, generated from postforme's spec. A test asserts that every field the builder emits
+is in it. No other check catches a misspelled field.
 
 ---
 
@@ -421,26 +689,35 @@ asserting every field the builder emits is a member. **It is the only safety net
 
 | Platform | Fields emitted | Privacy options |
 |---|---|---|
-| `youtube` | `title`, `description`, `contains_synthetic_media` (always true), `privacy_status` | public · unlisted · private |
-| `tiktok` | `title`, `caption`, `is_ai_generated` (always true), `privacy_status` | public · private |
-| `instagram` | `caption`, `placement: "reels"` | none — a Reel is public or not posted |
-| `facebook` | `caption`, `placement: "reels"` | none |
+| `youtube` | `title`, `description`, `contains_synthetic_media` (true), `privacy_status` | public, unlisted, private |
+| `tiktok` | `title`, `caption`, `is_ai_generated` (true), `privacy_status` | public, private |
+| `instagram` | `caption`, `placement: "reels"` | None. A Reel is public or not posted |
+| `facebook` | `caption`, `placement: "reels"` | None |
 
-An unsupported privacy value **raises** rather than silently downgrading. postforme would store it
-and then ignore it, and the post would come out public with nothing saying why.
+`compose_caption` builds the caption as the title, a blank line and the description. An unsupported
+privacy value raises `ValueError`, which `start_publish` turns into a `400` before the claim.
+postforme would store the value and ignore it, and the post would come out public.
 
-postforme supports more platforms than these four; an account on one of them is listable and
-postable but receives no per-platform content override.
+postforme supports more platforms than these four. An account on one of them can be listed and
+posted to, and receives no per-platform fields.
 
-**YouTube has no Shorts flag** — not in postforme and not in YouTube's own API, so there is nothing
-to send. `publish-prefill` returns the duration and Shorts eligibility for the dialog's warning; see
+YouTube has no Shorts flag, in postforme or in YouTube's own API. `publish-prefill` returns the
+duration and Shorts eligibility for the dialog's warning. See
 [Platforms](../user-guide/06-publishing.md#platforms) for what a user sees.
 
 ---
 
 ## Schema
 
-**`video_publications`** — one row per (video, account) target.
+The `videos` columns that publishing uses (`publish_title`, `publish_description`, `scheduled_at`,
+`scheduled_timezone`, `auto_pilot_hold`, `auto_pilot_blocked`) are in the
+[database reference](03-database.md). `scheduled_at` is UTC, and `scheduled_timezone` is the zone
+the time was picked in, kept so the dashboard can show the time back in that zone. Both are `''`
+when the video is not scheduled. `update_video` and `PATCH /videos/<id>` refuse a script without
+`publish_title` and `publish_description` (see
+[`publish-prefill`](#post-videosidpublish-prefill)).
+
+`video_publications` has one row per (video, account) target.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -448,351 +725,35 @@ to send. `publish-prefill` returns the duration and Shorts eligibility for the d
 | `video_id` | TEXT → `videos.id` | Indexed |
 | `platform` | TEXT | |
 | `social_account_id` | TEXT | |
-| `postforme_post_id` | TEXT | One post id shared by every target of a publish. **Empty while the publish is in flight**, before `POST /social-posts` has returned |
-| `status` | TEXT | `PENDING` → `PUBLISHED` \| `FAILED` |
+| `postforme_post_id` | TEXT | Shared by every target of a publish. Empty while the publish is in flight |
+| `status` | TEXT | `PENDING`, then `PUBLISHED` or `FAILED` |
 | `post_url` | TEXT | |
 | `error` | TEXT | |
-| `published_at` | TEXT | |
-| `created_at` / `updated_at` | TEXT | `created_at` drives the wall-clock backstop. Set at the claim, and reset when the post id is attached |
+| `published_at` | TEXT | Set when the worker saw the target published |
+| `created_at` / `updated_at` | TEXT | `created_at` starts the deadline. Set at the claim, and reset when the post id is attached and when a scheduled post falls due |
 
-**`video_metrics`** — a time series, one snapshot per poll per publication.
+`video_metrics` is a time series with one snapshot per capture per publication.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK | |
 | `publication_id` | TEXT → `video_publications.id` | `ON DELETE CASCADE`, indexed with `fetched_at` |
 | `fetched_at` | TEXT | |
-| `views` · `likes` · `comments` · `shares` | INTEGER | **Nullable** — "not reported" is not "reported as zero" |
-| `raw_json` | TEXT | The whole payload, so a later column can be backfilled |
+| `views`, `likes`, `comments`, `shares` | INTEGER | Nullable. Null means the platform did not report the metric |
+| `raw_json` | TEXT | The whole payload |
 
-**`videos.scheduled_at` and `videos.scheduled_timezone`** (migration `0008`) — when a scheduled post
-goes out, as UTC, and the IANA zone it was picked in, so the dashboard can show it back in that zone.
-Both are `''` when the video is not scheduled; they are cleared when a schedule is cancelled or an
-upload fails.
-
-**New `videos` columns:** `publish_title` and `publish_description` — what the publish dialog opens
-on, distinct from `videos.title`, which is the pipeline's own short display name. The agent writes
-both in the same `update_video` call as the script, and that call refuses a script without them (see
-[MCP server](06-mcp-server.md)). `PATCH /videos/<id>` holds a script to the same rule, so neither write
-path can leave the pair empty or describing an older script. They used to come from a Gemini call made when the dialog first
-opened; that put a paid, slow, fallible call in front of the one irreversible human action, to
-re-read a script the agent had just written.
-
-**`videos.auto_pilot_hold` and `videos.auto_pilot_blocked`** (migration `0009`) — Auto Pilot's two
-per-video marks. `auto_pilot_hold` is `1` once a human has cancelled the video's scheduled post, and
-is never cleared. `auto_pilot_blocked` is `''`, or `<status>@<updated_at>` for the arrival Auto
-Pilot last commented it could not approve. See [Auto Pilot](#auto-pilot).
-
-Three settings rows outside `SETTINGS_SPEC`: `publishing_accounts` (the allowlist of postforme
-account ids), `last_metrics_poll_at` (the worker's hourly stamp) and `auto_pilot_config` (Auto
-Pilot's projects and per-account daily numbers).
-
----
-
-## HTTP routes
-
-Every route below except the two `/autopilot` ones returns `503` if `publishing_enabled` is false or
-`postforme_api_key` is unset — checked before any outbound call.
-
-| Route | Behaviour |
-|---|---|
-| `GET /publishing/accounts` | Live accounts reconciled against the allowlist. Each carries `allowed`, `available`, and a tri-state `analytics` — `false` only where postforme *rejects* a feed read, so `true` does not prove metrics will arrive ([why](#connecting-accounts)). An allowlisted account missing upstream is synthesised as disconnected rather than dropped. `?feeds=0` skips the feed probe (every `analytics` is `null`): the Analytics page only needs names for its account filter, and a probe per page load would spend the 5-requests-per-second limit on a question it does not ask. `502` if postforme is unreachable |
-| `POST /publishing/accounts` | Body `{account_ids: [...]}`. Replaces the allowlist wholesale |
-| `POST /publishing/accounts/connect` | Body `{platform}`, one of `youtube`, `instagram`, `tiktok`, `facebook` (`400` otherwise, before any outbound call). Returns `{platform, url}`: a postforme consent URL that always requests `posts` and `feeds` ([why](#connecting-accounts)). Stores nothing. `502` with postforme's own message on a failure, which for a platform not enabled on the postforme project says where to enable it; `502` too if the answer holds no `https` URL |
-| `GET /videos/<id>/publications` | The publication rows for a video |
-| `POST /videos/<id>/publish-prefill` | A read, despite the verb: returns the stored `publish_title` / `publish_description`, plus duration and Shorts eligibility. Calls no model. **Always `200`** — a video with nothing stored (scripted before the agent wrote these) falls back to its own title and topic, and that fallback is never written back, so it cannot pass for the agent's |
-| `POST /videos/<id>/publish` | The publish. See below |
-| `POST /videos/<id>/publish/retry` | Recovers a video that failed while publishing, without posting twice. See below |
-| `POST /videos/<id>/schedule/cancel` | Cancels a scheduled post. See below |
-| `GET /analytics` | Totals, per-platform aggregates, every publication with its latest reading, and `by_month` — views gained in each of the last 12 months — **served entirely from local snapshots**; it never calls postforme. Optional `platform` and `social_account_id` filters, which apply to all of it. `timezone` names the zone the months were cut in |
-| `POST /analytics/refresh` | Polls metrics for every account now, instead of waiting for the worker's hourly pass |
-| `GET /autopilot` | The [Auto Pilot](#auto-pilot) configuration. See below |
-| `POST /autopilot` | Replaces it. See below |
-
-`analytics` joins each published row to its *latest* snapshot with a `LIMIT 1` subquery rather than
-summing — each snapshot is a cumulative reading, so summing them would multiply the view count by
-the number of polls.
-
-`by_month` follows from the same fact. A month's figure is the difference between every post's
-latest reading before the month ended and its latest reading before it began, which costs one
-indexed lookup per post per month boundary rather than a pass over the hourly history. Months are
-the **host's**, like the Spend tab's days, so a reading at 02:00 UTC on the 1st still closes the
-previous month in New York. Three consequences to know when reading the graph:
-
-- **Nothing is known about a post before its first snapshot**, so the views it already had count in
-  the month of that snapshot. The first month of tracking — and the month an older post was first
-  read — can therefore look like a spike.
-- **Months before any snapshot are left out**, not shown as 0.
-- **A month can be negative.** Platforms do remove views (spam filtering), and the figure stays
-  true; the dashboard draws no bar for it and shows the number on hover. A reading with no view
-  count is skipped, so the one before it stands, rather than showing a drop of every view the post
-  had.
-
-### `POST /videos/<id>/publish`
-
-Body: `account_ids` (required, non-empty), `title`, `description`, `privacy` (a map of platform to
-choice), and optionally `schedule: {local: "YYYY-MM-DDTHH:MM", timezone: "<IANA>"}`.
-
-| Status | Cause |
-|---|---|
-| `201` | `{status, postforme_post_id, scheduled_at, scheduled_timezone, publications}` — `status` is `SCHEDULED` for a scheduled post and `PUBLISHING` otherwise |
-| `400` | Malformed body; an account id not on the allowlist; no rendered mp4 found; an unsupported privacy value; a schedule with an unknown zone, a malformed time, a time the clocks skip, or less than 5 minutes or more than 365 days ahead |
-| `404` | Video not found |
-| `409` | The video is not at `VIDEO_APPROVED`, or the claim was lost to a concurrent request |
-| `502` | postforme rejected or was unreachable |
-
-**The claim happens before any postforme call.** Validation is side-effect-free, so failing it leaves
-the status untouched; claiming *after* the upload would let two overlapping requests both create real
-posts before racing on the status write.
-
-### The ambiguity split
-
-Failure is handled in two phases, because they are not equally knowable.
-
-**Phase 1 — upload.** Unambiguous. Nothing was posted. The claim is released back to
-`VIDEO_APPROVED`, the in-flight rows are deleted, a comment is written, and the response is `502`.
-An upload stopped by the 30-minute cap is handled the same way.
-
-**Phase 2 — creating the post.** Ambiguous. A timeout or a `5xx` can arrive *after* postforme has
-already accepted the post. The claim is deliberately **not** released: the video stays `PUBLISHING`,
-the response is `502` with `{"reconciling": true}`, and the comment tells you not to retry. On its
-next pass the worker looks the post up by the video id it was given as an `external_id` and, if a
-live one exists, fills its id into the rows. If none exists it waits for the publish deadline and
-then fails the video.
-
-On success the route fills the post id into **only the rows it inserted itself**, matched by row id,
-never into any in-flight row of the video. Because of the upload cap it always does so before the
-deadline, while those rows are still in flight.
-
-### `POST /videos/<id>/publish/retry`
-
-Offered from `FAILED` for a video that **failed while publishing**, which means `FAILED` with
-publication rows. Every publish writes its rows at the claim, and a render failure never writes any,
-so the rows are the signal and no extra column is needed. A video that failed with no rows (only
-possible for a publish that was already in flight when a pre-1.0.1 install was upgraded) can only be
-deleted.
-
-1. **Ask postforme first**, by `external_id`. The lookup is read-only, so it runs before the claim.
-2. **A live post exists:** nothing is re-posted. The video goes back to `PUBLISHING`, its rows are
-   rebuilt from the post with a fresh `created_at` (restarting the deadline), and the worker settles
-   it to `PUBLISHED` with each post URL. Response `{"outcome": "reconciling"}`.
-3. **No live post** (none at all, or one where every target failed): the video goes back to
-   `VIDEO_APPROVED` and its rows are deleted, with a comment preserving each account's error. The
-   dashboard then opens the normal Publish dialog. This path is chosen over re-posting with the
-   original parameters because the account and privacy choices are not stored; the title and
-   description come back from the prefill. Response `{"outcome": "republish"}`.
-
-Both moves are an atomic claim on `FAILED`, so a double click cannot act twice. The `republish` path
-also clears any schedule the failed attempt carried.
-
-| Status | Cause |
-|---|---|
-| `200` | `{outcome: "reconciling" \| "republish", status}` |
-| `404` | Video not found |
-| `409` | Archived; not `FAILED`; `FAILED` without publication rows; or the claim was lost to a concurrent retry |
-| `502` | postforme could not be asked. Nothing changes, because "could not check" must never be read as "nothing was posted" |
-
-### `POST /videos/<id>/schedule/cancel`
-
-Deletes the post at postforme, then returns the video to `VIDEO_APPROVED`, clears its schedule and
-deletes its rows, with a comment. **postforme goes first**: a post it still holds must never be left
-without the rows that settle it.
-
-It also sets `videos.auto_pilot_hold`, so [Auto Pilot](#stopping-one-video) does not schedule the
-video again.
-
-The release matches `PUBLISHING` as well as `SCHEDULED`. The worker moves a video to `PUBLISHING`
-when it falls due, which can happen while the cancel is talking to postforme; if postforme still
-deleted the post, nothing will go out, whichever status the worker left.
-
-A `404` from postforme releases the video only after a lookup by `external_id` confirms the post is
-gone. It is what a second cancel gets after a first one that deleted the post but answered badly —
-postforme fires its webhook after deleting, and can answer `500` then — but postforme also answers
-`404` when its own lookup fails.
-
-| Status | Cause |
-|---|---|
-| `200` | `{status: "VIDEO_APPROVED"}` |
-| `404` | Video not found |
-| `409` | Not `SCHEDULED`; postforme has already started sending the post (it answered `400`); or the video changed status meanwhile |
-| `502` | postforme failed or answered `success: false`. The post is still scheduled, and the cancel can be tried again |
-
-### `GET /autopilot` and `POST /autopilot`
-
-Not gated on publishing: Auto Pilot approves checkpoints with publishing off, and its videos then
-stop at `VIDEO_APPROVED`.
-
-`GET` returns:
-
-| Field | Meaning |
-|---|---|
-| `enabled` | `auto_pilot_enabled` |
-| `gap_mins` | `auto_pilot_gap_mins` |
-| `max_in_flight` | `auto_pilot_max_in_flight`. 0 means no limit |
-| `in_flight` | How many videos are in progress, as the [in-progress limit](#the-in-progress-limit) counts them |
-| `projects` | `{project_id: [account_id, …]}`. A project being a key is what puts it on Auto Pilot; its list may be empty |
-| `account_limits` | `{account_id: posts per day}`, only for accounts that have been set |
-| `default_daily_limit` | What an account with no entry gets |
-| `waiting` | `{project_id: {status: count}}` for every project's unarchived videos at `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` and `VIDEO_APPROVED`. It is what the dashboard's confirmation counts from |
-
-`POST` takes `enabled`, `gap_mins`, `projects` and `account_limits`, all four required, plus an
-optional `max_in_flight`, and returns the same document as `GET`. A missing `max_in_flight` keeps
-the stored limit, so a dashboard tab opened before the limit existed, or before it was renamed from
-`max_scheduled` (which is now ignored), cannot reset it. It is validated whole and written whole in one transaction, so the
-switch can never be saved on over a project list that was refused.
-
-| Status | Cause |
-|---|---|
-| `200` | Saved |
-| `400` | `enabled` is not a boolean; `gap_mins` is outside 0 to 10080 (a week); `max_in_flight` is outside 0 to 500; `projects` is not a map of project id to a list of account ids; a project does not exist; an account newly added to a project is not on the Socials allowlist; or a daily number is not a whole number from 0 to 50 |
-
-The allowlist check is the same one a human publish is held to: Auto Pilot must never be a way to
-post to an account the Socials page has switched off. An account already stored for the same
-project is accepted even if it has since left the allowlist. Refusing it would refuse every later
-save of that configuration, turning Auto Pilot off included, and it cannot be posted to either way
-because the worker re-checks the allowlist. The three scalar keys are ordinary settings, so
-`POST /settings` accepts them too, without the dashboard's confirmation.
-
----
-
-## The worker
-
-The publishing passes run on every tick of the worker, which never renders, so a render never
-delays a publish. Where they sit among the worker's other passes is on [The Worker](12-the-worker.md).
-
-**Scheduled posts.** First, every `SCHEDULED` video whose `scheduled_at` has passed moves to
-`PUBLISHING`, with its rows' `created_at` reset so the deadline counts from now — see
-[Scheduling a post](#scheduling-a-post).
-
-**Settling.** For each video at `PUBLISHING` whose rows carry a post id, fetch the post's results
-and settle each publication row. Rows with no post id are a publish still in flight: the worker only
-adopts a live post it finds by `external_id`, and fails the video only once the rows are past the
-one-hour deadline with no post at all. A dead post (every target failed) is adopted only after the
-deadline, so it settles with the platforms' real errors; before then it may be an earlier attempt's
-post under the same `external_id`. Failing an expired publish is one transaction whose writes each
-re-check that the rows still have no post id, so a post filled in at that moment is never left
-pending under a `FAILED` video. A transient postforme outage is logged and deferred to the next tick rather than failing the
-video. Once no row is `PENDING`, derive the video's status — see [A partial publish](#a-partial-publish).
-
-**Metrics.** Hourly, gated on a settings-row timestamp that is written **before** the work runs — a
-pass that dies partway must not retry twenty seconds later.
-
-`renderer/api/metrics.py` walks **one feed request per account**, not per publication, and matches
-entries back to local rows by postforme's own post id rather than by URL, because platforms rewrite
-URLs. That shape is load-bearing: an earlier per-publication version hit the rate limit past the
-fifth target and **silently lost snapshots permanently** — a time series cannot be backfilled. It
-pages at 100 entries, capped at 20 pages per account so a runaway cursor cannot spin inside a loop
-that also has posts to settle.
-
-**Analytics survive deletion.** Published videos are exactly what the
-[retention sweep](11-rendering-and-review.md#retention) deletes, but it removes only files: the
-`video_publications` and `video_metrics` rows are untouched, metrics keep being polled, and an
-archived video still appears on the Analytics page and the Archive page with its numbers. The mp4 is
-not needed to show them, so published videos are deliberately not exempted to "protect" analytics.
-
-**Auto Pilot.** One more pass, `worker.py::_sweep_auto_pilot`, right after the publishing pass. It
-does nothing unless Auto Pilot is on, the pipeline is not paused and a project is selected. See
-[Auto Pilot](#auto-pilot).
-
----
-
-## Dashboard
-
-| Surface | What it does |
-|---|---|
-| **Socials** (`/socials`) | A **Connect** button per platform that opens a consent page granting `posts` and `feeds` ([Connecting accounts](#connecting-accounts)). Lists postforme accounts by platform with a checkbox each. Shows `NOT CONNECTED` for an allowlisted account missing upstream — untickable only, which is how a stale entry is cleared — and `NO ANALYTICS` where postforme **rejects** the feed request. See [Connecting accounts](#connecting-accounts): a missing `feeds` grant is not always a rejection, so the absence of this badge does not prove analytics work |
-| **Analytics** (`/analytics`) | The **Videos** tab: totals, platform and account filters, a **Sort by** menu (newest first, or highest views, likes, comments or shares, with an unreported metric below a real `0`), a per-publication table linking to each live post, and graphs beside it: views per platform, per account and gained per month. Clicking a platform or account bar sets that filter. The table scrolls in its own box and renders 50 rows at a time as you scroll. `—` for an unreported metric, never `0`. The account filter and graph name each account `<username> (<Platform>)` from `GET /publishing/accounts?feeds=0`; the usernames are looked up live rather than stored, like the Socials page's, so when that lookup fails (publishing off, postforme down, the account disconnected) it shows the account id with the platform instead. Spend is on the page's other tab |
-| **Settings → Auto Pilot** | The whole [Auto Pilot](#auto-pilot) configuration, under a warning that is always on screen. See [Dashboard — The settings page](../user-guide/05-settings.md) for what a user sees, and [Dashboard internals](15-dashboard.md#the-settings-page) for how it is built |
-| **`PublishDialog`** | Opens from a `VIDEO_APPROVED` video. Clears its state **synchronously** on open so a previous video's data is never briefly visible — publishing is irreversible. Nothing is pre-ticked: every target is an explicit choice. **When** offers Publish now (the default, on every open) or Schedule: a timezone picker defaulting to the browser's zone, native date and time inputs, and presets (*In 1 hour*, *Tomorrow 9:00*, *Tomorrow 18:00*) computed in the picked zone. It sends the wall time and the zone; the API converts |
-| **Pipeline board** | A **Scheduled** column between Video Approved and Publishing. Its cards, and the Library's, show when each post goes out, in the zone it was picked in. A `PARTIALLY_PUBLISHED` video has no column of its own: it sits in Published, tagged **PARTIAL**, and the Library lists it under its own **Partially published** state |
-| **`VideoModal`** | Gains a **Publishing Results** tab once a video has any publications — one row per target with its platform, status, live URL and, for a failure, the reason. It shows *where the video went*, not how it is performing; view counts live on the Analytics page. A video that failed while publishing gets **Retry publishing** next to Delete: it refreshes in place when a live post was found, and opens `PublishDialog` when nothing was live. A `PARTIALLY_PUBLISHED` video gets **Mark as published…**, which opens a confirm dialog with the account count, the download-first warning and a **Download video** link (confirming waits until the publication rows have loaded, so the count is never a guess); it is offered whether or not publishing is enabled, since it is the only way out of that state. A `SCHEDULED` video shows **Scheduled for** — the time in the zone it was picked in, and in the host's when that differs — wherever the modal opens, and **Cancel schedule** (after a confirm) where publishing controls are offered; its waiting targets read `SCHEDULED` |
-
-> **The dashboard action `"publish"` was renamed `approve-video`.** It never published anything — it
-> is, and always was, the `VIDEO_READY → VIDEO_APPROVED` human approval, behind a button that used to
-> be labelled "Publish to YouTube". Real publishing now lives only behind `PublishDialog`, reachable
-> only from `VIDEO_APPROVED` and only when publishing is enabled.
+Three settings rows sit outside `SETTINGS_SPEC`: `publishing_accounts` (the allowlist of postforme
+account ids), `last_metrics_poll_at` (the hourly stamp) and `auto_pilot_config`.
 
 ---
 
 ## Setup
 
-Onboarding asks **"Enable publishing to social platforms?"** first, and asks for the postforme key
-**only if you say yes**. Neither field is required — a publish is never needed to produce a video.
+Onboarding asks "Enable publishing to social platforms?" and asks for the postforme key only after a
+yes. Neither field is required, because no video needs a publish to be produced. A bad key is
+rejected at the prompt. postforme's `401` has two meanings that are told apart by `error.code`: see
+[Rejection signatures](04-settings.md#rejection-signatures).
 
-That gate needed a change to the prompt mechanism, not just a condition on the field. Conditions used
-to be evaluated once, before a step asked anything, so a field gated on an answer given in the *same*
-step was filtered out before that answer existed — enabling publishing would have silently never
-prompted for a key. Conditions are now evaluated per field as each is reached, and the progress
-denominator recomputes, so answering the gate grows the count rather than leaving a gap.
-
-A bad key is rejected at the prompt. postforme's `401` has two meanings that must be told apart by
-`error.code` — see [Rejection signatures](04-settings.md#rejection-signatures).
-
-### Connecting accounts
-
-The steps a user takes, and what to do about an account with no analytics, are on
-[Connecting accounts](../user-guide/06-publishing.md#connecting-accounts). This is the mechanism.
-
-The Socials page's **Connect** button asks the API to mint a consent URL
-(`POST /publishing/accounts/connect`) and opens it in a new tab. Tubematic only starts the flow:
-postforme owns the connection and the OAuth callback, so the consent ends on postforme.dev's own page.
-postforme accepts no redirect parameter — `redirect_url`, `redirect_uri` and `return_url` are all
-silently ignored — so there is no way to land back in the dashboard automatically. Because the
-browser does all the redirecting, no inbound endpoint is needed, and a dashboard reachable only from
-its own machine works.
-
-Details that look odd and are deliberate:
-
-- **The tab opens before the URL exists.** A popup blocker allows `window.open` only during the
-  click, and the URL cannot be fetched in advance: its `state` token is single-use and expires, so
-  one is minted per click and never cached. The page opens a blank tab inside the click and points
-  it at the URL once the API answers, or closes it on an error. If the browser blocks even that,
-  the page shows the URL as a link instead.
-- **The URL is never logged.** It carries that `state` token.
-- **A platform not enabled on the postforme project answers `404`** with postforme's own message
-  ("Social provider app credentials not found for facebook. Please set up or enable this platform
-  in Project Setup."), which the page shows as it is. postforme gives a bogus platform the same
-  answer, so the two cannot be told apart, but the message says what to do.
-
-Tubematic stores only account **ids** — in the allowlist, Auto Pilot's limits and project map, and
-each publication row — so where an account was connected (this button or postforme.dev directly)
-makes no difference to it.
-
-**The Connect button always asks for the `feeds` permission, and that is why it exists.**
-postforme grants two permissions separately at connect time — `posts` and `feeds` — and **defaults
-to `posts` only**. `feeds` is what buys the analytics scope on the underlying platform. The two are
-chosen when the connect URL is generated, so this is a decision made *before* the account exists, not
-a setting that can be found afterwards. The API fixes the pair as `["posts", "feeds"]`
-(`postforme.CONNECT_PERMISSIONS`) and ignores anything the request body says, so no caller can mint
-a posts-only URL by accident.
-
-What `feeds` actually adds, per platform:
-
-| Platform | Scope added by `feeds` |
-|---|---|
-| Instagram | `instagram_business_manage_insights`, on top of `instagram_business_basic` and `instagram_business_content_publish` |
-| YouTube | `yt-analytics.readonly`, alongside the readonly and upload scopes |
-| TikTok | Nothing — the requested scopes are identical with and without it |
-
-**A missing grant does not announce itself.** On Instagram the feed request still returns `200` with
-the complete list of posts — every entry simply carries an empty `metrics` object. Nothing rejects
-and nothing errors, so the hourly pass matches those entries to the publications exactly as it
-would normally and writes a snapshot for each, in which every figure is null. A manual refresh
-reports those as snapshots captured, because rows genuinely were written; they just hold nothing.
-The Analytics page then shows `—` in every column, indefinitely, which is the same thing it shows
-for a metric a platform genuinely did not report.
-
-This is why the `NO ANALYTICS` badge cannot be relied on to catch it: the badge comes from a probe
-that reads a durable rejection, and there is no rejection to read. postforme's account record
-carries no list of granted permissions either, so nothing can be asked directly — **whether metrics
-come back is the only available signal**. Inferring a missing grant from empty metrics was rejected
-(`pipeline.py::_feeds_available`): a brand-new account with no posts, or a platform that has not
-computed insights yet, looks exactly the same, and the failure would be telling someone to reconnect
-an account that is fine.
-
-**A permission changes only by reconnecting.** It is part of the OAuth grant, so it changes only by
-going through the platform's consent screen again; there is no toggle on a live connection.
-**Reconnecting keeps the account's id**: postforme updates the existing account record and issues it
-a new token, rather than creating a second account. Since Tubematic refers to accounts only by that
-id, nothing needs redoing. This was checked by reconnecting an Instagram account first connected
-directly on postforme.dev.
+The dashboard's side of publishing (the Publish dialog, the Publishing Results tab, Socials,
+Analytics and the Auto Pilot tab) is in
+[Dashboard internals](15-dashboard.md#publishing-surfaces).

@@ -50,18 +50,22 @@ For contributors and anyone building on Tubematic.
 | [4 · Settings internals](developer/04-settings.md) | How settings and credentials are stored, and every key |
 | [5 · HTTP API](developer/05-http-api.md) | Every route |
 | [6 · MCP Server](developer/06-mcp-server.md) | Every tool the agent has |
-| [7 · The Agent Layer](developer/07-agent-layer.md) | Skills, commands and how agents are installed and assigned |
+| [7 · The Agent Layer](developer/07-agent-layer.md) | Skills, commands, the adapters, and how agents are installed and assigned |
 | [8 · Scripting and Voice](developer/08-scripting-and-voice.md) | Script segments, pronunciation markup and script profiles |
 | [9 · The Remotion Project](developer/09-remotion-project.md) | How a video is composed from scenes |
 | [10 · Scene Authoring](developer/10-scene-authoring.md) | How the agent writes scenes, and how to add a component |
-| [11 · Rendering and Review](developer/11-rendering-and-review.md) | The renderer, the render gateway and the AI review |
-| [12 · The Worker](developer/12-the-worker.md) | The background loop and each pass it runs |
+| [11 · Rendering and Review](developer/11-rendering-and-review.md) | How a video is claimed and rendered, the two timeouts, and the text-layout audit |
+| [12 · The Worker](developer/12-the-worker.md) | The background loop and each pass it runs, retention and notifications |
 | [13 · The Poller](developer/13-the-poller.md) | The scheduled job that runs agent sessions |
 | [14 · Publishing internals](developer/14-publishing.md) | The postforme client, routes and Auto Pilot |
 | [15 · Dashboard internals](developer/15-dashboard.md) | The Next.js app |
 | [16 · Infrastructure](developer/16-infrastructure.md) | Compose services, authentication, volumes and operating commands |
-| [17 · Development](developer/17-development.md) | Running the tests, conventions and how to write these docs |
-| [18 · Releases](developer/18-releases.md) | What a release is and how one is built |
+| [17 · Development](developer/17-development.md) | Setting up, running the tests, conventions and how to write these docs |
+| [18 · Releases](developer/18-releases.md) | What a release is, how one is built and checked, the CI workflows, and how `upgrade.py` works |
+| [19 · The Render Gateway](developer/19-render-gateway.md) | The HTTPS listener renderers talk to: routes, credentials and the certificate pin |
+| [20 · GPU and Remote Renderers](developer/20-gpu-and-remote-renderers.md) | The GPU test, GPU-only videos, and how renderers on other machines are given work |
+| [21 · AI Review](developer/21-ai-review.md) | When a review runs, what the reviewer is told, and what a finding does |
+| [22 · Agent CLI Reference](developer/22-agent-cli-reference.md) | How Claude Code, Codex and OpenCode are invoked, configured and read |
 | [Test suites](developer/test-suites/README.md) | What each test file guards |
 
 ## Where to start as a contributor
