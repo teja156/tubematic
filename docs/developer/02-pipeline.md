@@ -184,9 +184,11 @@ keys are listed under [Settings](../user-guide/05-settings.md#notifications).
 every account failed, a publish that never created a post, a refused job path and a GPU-only video
 with no working GPU all mean the same thing to a human — stuck, needs a person — with the same next
 step. The cause goes in the message instead. Every path into `FAILED` writes an agent comment
-composed for a human, so the message carries the newest agent comment written at or after the
-arrival; bounding it by the arrival is what stops an earlier retry's "Render failed: …" being
-reported as the final reason. Whether it failed while publishing is read from the publication rows,
+composed for a human, so the message carries the newest agent comment written no more than two
+minutes before the arrival (`worker.py::FAILURE_REASON_WINDOW_SECS`). The window is there because an
+agent escalating writes its comment and the status as two tool calls, and the comment can land a
+second or more first; the bound is what stops an earlier retry's "Render failed: …" being reported
+as the final reason. Whether it failed while publishing is read from the publication rows,
 the same test Retry publishing uses, and only then does the message offer Retry publishing.
 
 **Announcing is a sweep in the [worker](12-the-worker.md), not a send at each write site.** The

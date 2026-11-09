@@ -599,6 +599,18 @@ def test_a_failed_video_carries_the_reason_written_when_it_failed(env):
     assert "earlier retry" not in desc and "human aside" not in desc
 
 
+def test_a_reason_written_just_before_the_failure_is_used(env):
+    """The operator skill may add_comment and then set_video_status FAILED as two
+    tool calls; across a second boundary the comment predates the arrival. A
+    reason written seconds before is still this failure's reason."""
+    _alerts(env)
+    stamp = _ago(30)
+    _video(env, status="FAILED", updated_at=stamp)
+    _comment(env, "vid-1", "Unfixable: the renderer image lacks a font", _ago(35))
+    worker._sweep_notifications()
+    assert "lacks a font" in env.sent[0][1]["embeds"][0]["description"]
+
+
 def test_a_failed_video_with_no_fresh_reason_does_not_reuse_a_stale_one(env):
     _alerts(env)
     _video(env, status="FAILED", updated_at=_ago(30))

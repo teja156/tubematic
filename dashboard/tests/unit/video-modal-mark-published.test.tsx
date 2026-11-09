@@ -40,13 +40,18 @@ function pub(id: string, status: VideoPublication["status"]): VideoPublication {
 const PUBS = [pub("a", "PUBLISHED"), pub("b", "FAILED")];
 
 function renderModal(video: Video, { patch = { ok: true, status: 200, body: {} as object },
-                                     publishingEnabled = true } = {}) {
+                                     publishingEnabled = true,
+                                     pubs = "ok" as "ok" | "pending" | "error" } = {}) {
   const fetchMock = vi.fn(async (url: unknown, init?: RequestInit) => {
     const u = String(url);
     if (u.endsWith(`/videos/${video.id}`) && init?.method === "PATCH") {
       return { ok: patch.ok, status: patch.status, json: async () => patch.body } as Response;
     }
-    if (u.endsWith("/publications")) return { ok: true, json: async () => PUBS } as Response;
+    if (u.endsWith("/publications")) {
+      if (pubs === "pending") return new Promise<Response>(() => {});
+      if (pubs === "error") return { ok: false, status: 502, json: async () => ({ error: "down" }) } as Response;
+      return { ok: true, json: async () => PUBS } as Response;
+    }
     if (u.endsWith(`/videos/${video.id}`)) return { ok: true, json: async () => video } as Response;
     return { ok: true, json: async () => [] } as Response;
   });
@@ -125,5 +130,22 @@ describe("VideoModal — Mark as published", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Mark as published" }));
     expect((await screen.findByTestId("mark-published-error")).textContent).toMatch(/already taken/);
     expect(screen.getByTestId("mark-published-dialog")).toBeInTheDocument();
+  });
+
+  it("cannot be confirmed while the publishing results are still loading", async () => {
+    // Confirming hands the video to retention; doing it before the human can
+    // see which accounts failed (and with a "0 of 0" count) must not be possible.
+    renderModal(makeVideo("PARTIALLY_PUBLISHED"), { pubs: "pending" });
+    fireEvent.click(await screen.findByText("Mark as published…"));
+    const dialog = await screen.findByTestId("mark-published-dialog");
+    expect(screen.getByRole("button", { name: "Mark as published" })).toBeDisabled();
+    expect(dialog.textContent).not.toContain("0 of 0");
+  });
+
+  it("says so, and cannot be confirmed, when the publishing results fail to load", async () => {
+    renderModal(makeVideo("PARTIALLY_PUBLISHED"), { pubs: "error" });
+    fireEvent.click(await screen.findByText("Mark as published…"));
+    expect((await screen.findByTestId("mark-published-pubs-error")).textContent).toMatch(/could not load/i);
+    expect(screen.getByRole("button", { name: "Mark as published" })).toBeDisabled();
   });
 });

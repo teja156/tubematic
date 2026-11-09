@@ -380,6 +380,9 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // Where this video actually went (TMDEV-83). Replaces videos.youtube_url as
   // the read path — one TEXT column cannot hold four platform URLs.
   const [publications, setPublications] = useState<VideoPublication[]>([]);
+  // Whether `publications` is this video's real list. Mark as published reads
+  // it to say which accounts failed, so it waits for "ok" (TMDEV-191).
+  const [publicationsState, setPublicationsState] = useState<"loading" | "ok" | "error">("loading");
   const [logs, setLogs] = useState<LogRecord[]>([]);
 
   const seedId = seed ? seed.id : null;
@@ -404,9 +407,16 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
 
   function refreshPublications(id: string) {
     fetch(`/api/proxy/videos/${id}/publications`)
-      .then((r) => r.json())
-      .then((rows: VideoPublication[]) => setPublications(Array.isArray(rows) ? rows : []))
-      .catch(() => {});
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((rows: VideoPublication[]) => {
+        if (!Array.isArray(rows)) throw new Error("not a list");
+        setPublications(rows);
+        setPublicationsState("ok");
+      })
+      .catch(() => setPublicationsState("error"));
   }
 
   useEffect(() => {
@@ -431,6 +441,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     setCancelScheduleError("");
     setReviseOpen(openRevise);
     setPublications([]);
+    setPublicationsState("loading");
     // Cleared before refetching, like publications above — otherwise opening a
     // second video briefly shows the first one's records.
     setLogs([]);
@@ -1610,11 +1621,23 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
           <DialogHeader>
             <DialogTitle style={{ fontSize: 15, fontWeight: 600 }}>Mark this video as published?</DialogTitle>
           </DialogHeader>
-          <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--dim)", margin: 0 }}>
-            It went out to {publishedCount} of {publications.length} account(s); Publishing
-            Results has the error for each one that failed. Post it to those accounts by hand,
-            then mark it published.
-          </p>
+          {publicationsState === "ok" ? (
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--dim)", margin: 0 }}>
+              It went out to {publishedCount} of {publications.length} account(s); Publishing
+              Results has the error for each one that failed. Post it to those accounts by hand,
+              then mark it published.
+            </p>
+          ) : publicationsState === "error" ? (
+            <p data-testid="mark-published-pubs-error"
+               style={{ fontSize: 13, lineHeight: 1.6, color: "var(--amber)", margin: 0 }}>
+              Could not load this video&apos;s publishing results, so the accounts that failed
+              cannot be shown. Close the video and open it again to retry.
+            </p>
+          ) : (
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--dim)", margin: 0 }}>
+              Loading the publishing results…
+            </p>
+          )}
           <p data-testid="mark-published-warning"
              style={{ fontSize: 13, lineHeight: 1.6, color: "var(--amber)", margin: 0 }}>
             Download the video first. Once it is marked published, retention deletes the video
@@ -1636,7 +1659,11 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
           )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <ActionBtn variant="ghost" onClick={() => setMarkOpen(false)}>Cancel</ActionBtn>
-            <ActionBtn variant="primary" disabled={marking} onClick={handleMarkPublished}>
+            {/* Not before the results load: confirming hands the video to
+                retention, and the human must first see which accounts failed. */}
+            <ActionBtn variant="primary"
+                       disabled={marking || publicationsState !== "ok" || publications.length === 0}
+                       onClick={handleMarkPublished}>
               {marking ? "Marking…" : "Mark as published"}
             </ActionBtn>
           </div>

@@ -1169,22 +1169,38 @@ def _publications(video_id: str) -> list:
             " FROM video_publications WHERE video_id = ? ORDER BY platform, id", (video_id,))]
 
 
+# How long before a FAILED arrival a comment may have been written and still be
+# that failure's reason. The operator skill escalates with add_comment and
+# set_video_status as two tool calls, in either order, and a comment written
+# first lands a second or more before the status. Two minutes covers that with
+# room; a retry's "Render failed: ..." from an earlier round predates its FAILED
+# by at least a render and an agent session, so it falls outside.
+FAILURE_REASON_WINDOW_SECS = 120
+
+
 def _failure_reason(video: dict) -> str:
     """The agent comment that explains this FAILED arrival, or "".
 
     Every path into FAILED writes a comment composed for a human: the render
     and gateway paths in the same transaction as the status, this worker's
-    publish paths straight after it in the same thread, ahead of this sweep.
-    So the reason is the newest agent comment written at or after the arrival
-    (created_at >= updated_at, both second-granularity UTC). The bound is what
-    keeps an older retry's "Render failed: ..." from being reported as the
-    final reason when a later FAILED write left no comment of its own.
+    publish paths straight after it in the same thread, ahead of this sweep,
+    and an agent escalation as a separate tool call just before or after. So
+    the reason is the newest agent comment written no earlier than
+    FAILURE_REASON_WINDOW_SECS before the arrival. Newest first means a comment
+    written with the status always wins; the bound is what keeps an older
+    retry's "Render failed: ..." from being reported as the final reason when a
+    later FAILED write left no comment of its own.
     """
+    arrived = _parse_stamp(video["updated_at"])
+    if arrived is None:
+        return ""
+    since = time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                          time.gmtime(arrived - FAILURE_REASON_WINDOW_SECS))
     with db.conn(DB_PATH) as con:
         row = con.execute(
             "SELECT content FROM comments WHERE video_id = ? AND author = 'agent'"
             " AND created_at >= ? ORDER BY created_at DESC, id DESC LIMIT 1",
-            (video["id"], video["updated_at"])).fetchone()
+            (video["id"], since)).fetchone()
     return row["content"] if row else ""
 
 
