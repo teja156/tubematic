@@ -427,11 +427,13 @@ def test_a_leftover_worker_container_does_not_hide_an_old_renderer(upgrade, env,
     assert order == []
 
 
-def test_a_restarting_old_renderer_still_refuses_no_stop(upgrade, env):
-    """A crash-looping old renderer is in its restart backoff, not stopped:
-    its restart policy brings the old combined loop back mid-upgrade."""
+@pytest.mark.parametrize("state", ["restarting", "paused"])
+def test_a_restarting_or_paused_old_renderer_still_refuses_no_stop(upgrade, env, state):
+    """Neither is stopped: a crash-looping renderer's restart policy brings the
+    old combined loop back mid-upgrade, and a paused one resumes when Compose
+    stops it."""
     _old_stack(env)
-    env.states["tubematic-renderer"] = ("restarting", "")
+    env.states["tubematic-renderer"] = (state, "")
     code, order, _ = _run(upgrade, env, no_stop=True)
     assert code == 1
     assert order == []

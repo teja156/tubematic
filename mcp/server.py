@@ -4234,7 +4234,7 @@ def _bad_image_refs(scene_config: dict, video_id: str) -> list:
                 continue
             # Anything that doesn't look like an image is out of scope — notably
             # a correctly-scoped /public/<vid>/music.mp3, which is separately
-            # broken (worker.py never stages it) and not this check's business.
+            # broken (render_agent.py never stages it) and not this check's business.
             if not s.lower().endswith(_IMAGE_EXTS):
                 continue
             if s.startswith("/public/") and not s.startswith(prefix):
@@ -6754,7 +6754,7 @@ async def health(request):
 # typecheck validate_job runs and judged by the beat gate; this is only the
 # shape the config must have, so a slip is refused here with a reason instead
 # of failing a render later. Keep in sync: mcp/cartoon.py, the renderer's
-# gate/sceneConfig.ts and worker.py's _scene_config_is_cartoon3d.
+# gate/sceneConfig.ts and render_agent.py's _scene_config_is_cartoon3d.
 
 
 def _cartoon_props(scene) -> dict | None:

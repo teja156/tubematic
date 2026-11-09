@@ -3,7 +3,7 @@ the load and write boundaries, and the 1-minute floor validator.
 
 render_timeout_mins is onboard-only — it is never itself a settings-table
 key. The real key, render_timeout_secs, is what renderer/api/pipeline.py and
-worker.py actually read; the field exists so the wizard can ask in minutes
+render_agent.py actually read; the field exists so the wizard can ask in minutes
 without either of those needing to change units.
 """
 import sqlite3

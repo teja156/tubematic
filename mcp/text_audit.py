@@ -105,7 +105,7 @@ SAFE_ZONE_TOLERANCE_PX = 2.0
 # headroom for a COLD bundle rather than a limit anyone should hit.
 #
 # Deliberately a constant, and deliberately NOT settings.render_timeout_secs:
-# that key is read by renderer/api/worker.py in the tubematic-renderer container
+# that key is read by renderer/api/render_agent.py in the tubematic-renderer container
 # and is not in this code path at all. Raising it would do nothing for the audit
 # while loosening the render's own guard.
 TEXT_AUDIT_TIMEOUT_SECS = 180
@@ -481,7 +481,7 @@ def _stage(video_id: str, remotion_dir: Path, scene_config_path: Path,
            timeline_path: Path, audio_path: Path) -> Path:
     """Copy a video's job files where the audit composition can fetch them.
 
-    Mirrors renderer/api/worker.py's staging step. Not optional: the composition
+    Mirrors renderer/api/render_agent.py's staging step. Not optional: the composition
     fetches /public/<vid>/scene-config.json, and an <Img> whose src does not
     resolve calls cancelRender() after two retries, which would kill the audit
     render outright rather than degrade.
@@ -535,7 +535,7 @@ def _run_driver(remotion_dir: Path, config: dict) -> dict:
     # Chromium and node processes it spawned.
     #
     # Deliberately NO wildcard os.waitpid(-1, ...) reap loop here, even though
-    # worker.py's render timeout has one. That is safe there because worker.py is
+    # render_agent.py's render timeout has one. That is safe there because render_agent.py is
     # a single-threaded poll loop with one subprocess in flight; this module runs
     # inside a multi-threaded MCP server where other calls also shell out
     # (validate_job's tsc, a concurrent audit), and a wildcard reap can claim a

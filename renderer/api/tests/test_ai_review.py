@@ -213,7 +213,7 @@ def test_poll_timeout_fails_open(monkeypatch, video_file):
 
 def test_non_string_must_fix_type_is_coerced_not_raised(monkeypatch, video_file):
     """Gemini returning a must-fix entry missing/with a bad `type` must not
-    turn fail-open into fail-closed one layer up (worker.py's persistence
+    turn fail-open into fail-closed one layer up (render_agent.py's persistence
     of these fields)."""
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     requests = []

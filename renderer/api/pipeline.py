@@ -71,10 +71,10 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
 SETTINGS_SPEC = {
     "pipeline_paused":        ("bool",      "false"),
     # Off by default, and experimental (TMDEV-165). Keep in sync: onboard/
-    # config.py GEMINI_REVIEW_ENABLED, its actions.py fallbacks, worker.py.
+    # config.py GEMINI_REVIEW_ENABLED, its actions.py fallbacks, render_agent.py.
     "gemini_review_enabled":  ("bool",      "false"),
     # max_render_retries caps RENDER retries only — crash, timeout and
-    # worker-restart reconciliation (worker.py::_max_render_retries). It used
+    # worker-restart reconciliation (render_agent.py::_max_render_retries). It used
     # to double as the AI-review loop cap; VQA-7 split those apart. It was
     # called max_feedback_loops until TMDEV-74, which renamed it because the
     # old name read like the AI-review loop it no longer governs — see the
@@ -2257,14 +2257,14 @@ def start_publish(db_path: str, api_key: str, video_id: str, account_ids: list,
 
 # ── GPU rendering (TMDEV-178) ────────────────────────────────────────────────
 # Bare settings rows, not SETTINGS_SPEC keys: nobody edits them through
-# POST /settings. The worker (worker.py::_run_gpu_probe) writes the result —
+# POST /settings. The renderer (render_agent.py::_run_gpu_probe) writes the result —
 # only it can see the GPU, since this container has none — and a dashboard
 # Test request only stamps the request row for the worker's next pass.
 GPU_PROBE_RESULT_KEY = "gpu_probe_result"
 GPU_PROBE_REQUEST_KEY = "gpu_probe_requested_at"
 # `onboard.py --step gpu` sets this (a UTC time, db._now's format) before it
 # looks for a running render and recreates the renderer; until that time the
-# worker claims nothing (worker.py::_claim_next). The check-then-recreate is
+# worker claims nothing (render_agent.py::_claim_next). The check-then-recreate is
 # otherwise racy: a render claimed between the two would be killed. The time
 # is a ceiling, so a crashed onboarding never stops rendering for long.
 RENDER_CLAIM_HOLD_KEY = "render_claim_hold_until"

@@ -376,7 +376,7 @@ def apply_pipeline_settings(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> 
 
     # Asked in minutes (onboard/config.py's render_timeout_mins field); stored
     # in seconds, which is what renderer/api/pipeline.py's SETTINGS_SPEC and
-    # worker.py actually read (TMDEV-57). render_timeout_mins is never itself
+    # render_agent.py actually read (TMDEV-57). render_timeout_mins is never itself
     # a settings-table key.
     timeout_mins = _clamp_min_1_int(v.get("render_timeout_mins", "180"), "180")
     render_timeout_secs = str(int(timeout_mins) * 60)

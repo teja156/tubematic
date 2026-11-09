@@ -52,7 +52,7 @@ from pathlib import Path
 from tubematic_core import jobfiles as tjobs
 
 # The scene-config marker of a Cartoon 3D scene: scenes[i].props.cartoon3d = {beats: [...]}.
-# Keep in sync with renderer/remotion/src/cartoon3d/gate/sceneConfig.ts and worker.py.
+# Keep in sync with renderer/remotion/src/cartoon3d/gate/sceneConfig.ts and render_agent.py.
 CARTOON_PROPS = "cartoon3d"
 # The module the scene-config's `src` names: <video_id>/CartoonShort (a .tsx the agent writes).
 ENTRY_SCENE = "CartoonShort"
@@ -157,13 +157,13 @@ def cartoon_dir(jobs_dir, video_id: str) -> Path:
 
 def source_record(jobs_dir, video_id: str) -> Path:
     """Where submit_render records the fingerprint of the source it queued
-    (keep in sync with worker.py's CARTOON_SOURCE)."""
+    (keep in sync with render_agent.py's CARTOON_SOURCE)."""
     return _below(jobs_dir, video_id, CARTOON_DIR, SOURCE_RECORD)
 
 
 def mix_file(jobs_dir, video_id: str) -> Path:
     """Where the synthesised soundtrack lands; the worker muxes it when it is
-    newer than the voice (keep in sync with worker.py)."""
+    newer than the voice (keep in sync with render_agent.py)."""
     return _below(jobs_dir, video_id, CARTOON_DIR, AUDIO_DIR, MIX_DIR, MIX_WAV)
 
 

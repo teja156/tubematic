@@ -640,9 +640,10 @@ def _worker_split_pending() -> bool:
     from onboard import stack
     try:
         renderer, _ = stack._container_state("tubematic-renderer")
-        # "restarting" too: an old renderer in its crash backoff comes back
-        # under its restart policy while Compose recreates the others.
-        if renderer not in ("running", "restarting"):
+        # "restarting" and "paused" too: an old renderer in its crash backoff
+        # comes back under its restart policy, and a paused one resumes when
+        # Compose stops it, while the others are being recreated.
+        if renderer not in ("running", "restarting", "paused"):
             return False
         command = stack._container_command("tubematic-renderer")
     except FileNotFoundError:
