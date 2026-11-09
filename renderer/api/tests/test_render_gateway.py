@@ -11,8 +11,11 @@ can make the gateway hold (the JSON body limit on every JSON route, the open
 enroll route included; one upload per claim, a global upload cap and a free
 space floor), and for how long (authentication before any body is read, the
 idle, head, JSON-body and drain deadlines, the enrollment-reader and
-per-renderer caps, a stalled upload releasing its slot), and the upload
-temporary directory (cleared at start, swept by age, never followed).
+per-renderer caps, a stalled upload releasing its slot), the process-wide
+connection cap (refused before a thread is made), a renderer's request
+counted until its response is closed (after a streamed bundle and a drain),
+the upload temporary directory (cleared at start, swept by age, never
+followed), and an unusable TLS pair leaving the API up without a gateway.
 
 Driven through Flask's test client against a migrated temporary database; the
 time bounds and one TLS test serve the app over real TLS on 127.0.0.1 and talk
@@ -1259,6 +1262,49 @@ def test_one_renderers_requests_at_once_are_capped(env, monkeypatch):
     assert _beat(env).status_code == 200                           # and the count comes back
 
 
+def _in_flight(env):
+    return dict(env.app.extensions["render_gateway.in_flight"])
+
+
+def test_a_streamed_bundle_holds_its_renderers_count_until_it_is_closed(env, monkeypatch):
+    """Served for real (the app as make_gateway_server wraps it), a request
+    keeps its renderer's count until its response is closed: a bundle streams
+    after the request's teardown, so a count released there let one renderer
+    hold any number of bundles open."""
+    from werkzeug.test import Client
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "MAX_REQUESTS_PER_RENDERER", 1)
+    served = Client(render_gateway._bounded_app(env.app))
+    held = served.get("/v1/jobs/vid-1/bundle", headers=J(env), buffered=False)
+    assert held.status_code == 200
+    assert _in_flight(env) == {"builtin": 1}
+    busy = _beat(env)
+    assert busy.status_code == 503 and busy.get_json() == {"error": "busy"}
+    held.close()
+    assert _in_flight(env) == {}
+    assert _beat(env).status_code == 200
+    assert _in_flight(env) == {}
+
+
+def test_a_failing_app_releases_its_count_at_once(env, monkeypatch):
+    """With no response to close (the app raised), the count goes back
+    straight away."""
+    from werkzeug.test import Client
+    monkeypatch.setattr(env.app, "wsgi_app", _raising_after(env.app.wsgi_app))
+    with pytest.raises(RuntimeError):
+        Client(render_gateway._bounded_app(env.app)).post("/v1/heartbeat", json={}, headers=B)
+    assert _in_flight(env) == {}
+
+
+def _raising_after(wsgi_app):
+    def app(environ, start_response):
+        body = wsgi_app(environ, start_response)
+        if hasattr(body, "close"):
+            body.close()
+        raise RuntimeError("dispatch failed")
+    return app
+
+
 def test_a_json_body_is_bounded_in_time(env, monkeypatch):
     """Checked between reads too, so a body trickled slower than its deadline
     ends with 408 even where no socket deadline applies."""
@@ -1573,6 +1619,141 @@ def test_a_client_that_never_finishes_its_handshake_holds_up_no_one(env, live):
         silent.close()
 
 
+def _until(check, secs=5.0):
+    end = time.monotonic() + secs
+    while not check() and time.monotonic() < end:
+        time.sleep(0.02)
+    return check()
+
+
+def test_connections_past_the_cap_are_closed_before_a_thread_is_made(env, live):
+    """Clients that open connections and never start a TLS handshake hold
+    every slot: the next connections are closed at once and get no thread,
+    and the slots come back when the holders' head deadline ends them."""
+    assert _wait_no_request_threads() == []
+    port = live.start(MAX_CONNECTIONS=3, REQUEST_HEAD_SECS=3)
+    holders = [live.connect(port, handshake=False) for _ in range(3)]
+    try:
+        assert _until(lambda: len(_request_threads()) == 3)
+        for _ in range(10):
+            extra = live.connect(port, handshake=False)
+            data, took = _reply(extra, timeout=5)
+            extra.close()
+            assert data == b"" and took < 1
+            assert len(_request_threads()) <= 3
+        assert _wait_no_request_threads(secs=6) == []        # the holders' head deadline ended them
+        sock = live.connect(port)
+        sock.sendall(_head("/v1/version", {}, method="GET"))
+        data, _ = _reply(sock)
+        sock.close()
+        assert data.startswith(b"HTTP/1.1 200")
+    finally:
+        for h in holders:
+            h.close()
+
+
+def _trickling(sock):
+    stop = threading.Event()
+
+    def trickle():
+        while not stop.wait(0.003):
+            try:
+                sock.sendall(b"x")
+            except OSError:
+                return
+    t = threading.Thread(target=trickle, daemon=True)
+    t.start()
+    return stop, t
+
+
+def _read_head(sock, timeout=5.0) -> bytes:
+    sock.settimeout(timeout)
+    data = b""
+    while b"\r\n\r\n" not in data:
+        chunk = sock.recv(65536)
+        if not chunk:
+            break
+        data += chunk
+    return data
+
+
+def test_an_early_answer_holds_its_renderers_count_until_its_body_is_drained(env, live, monkeypatch):
+    """A 413 goes out before the body is read; werkzeug then drains the
+    body, and the renderer's count is held until that drain ends."""
+    monkeypatch.setattr(render_gateway, "MAX_REQUESTS_PER_RENDERER", 1)
+    port = live.start(GATEWAY_IDLE_TIMEOUT_SECS=5, DRAIN_SECS=1.5)
+    sock = live.connect(port)
+    sock.sendall(_head("/v1/heartbeat", {**B, "Content-Type": "application/json",
+                                         "Content-Length": str(1 << 30)}) + b"x" * 100)
+    stop, t = _trickling(sock)
+    try:
+        assert _read_head(sock).startswith(b"HTTP/1.1 413")
+        assert _in_flight(env) == {"builtin": 1}
+        busy = _beat(env)
+        assert busy.status_code == 503 and busy.get_json() == {"error": "busy"}
+        _reply(sock, timeout=10)
+    finally:
+        stop.set()
+        t.join(2)
+        sock.close()
+    assert _wait_no_request_threads() == []
+    assert _in_flight(env) == {}
+    assert _beat(env).status_code == 200
+
+
+def test_a_drain_that_fails_still_releases_its_count(env, live, monkeypatch):
+    """werkzeug closes the response only when its drain of the body ended
+    without an error; a client gone mid-drain (a read raising) skips that
+    close, and the connection's end releases the count instead."""
+    real_read = render_gateway._BoundedReader.read
+
+    def read(self, n=-1):
+        if self.eof_at is not None:          # the reply has started: this is the drain
+            raise ConnectionResetError("the client went away")
+        return real_read(self, n)
+    monkeypatch.setattr(render_gateway._BoundedReader, "read", read)
+    monkeypatch.setattr(render_gateway, "MAX_REQUESTS_PER_RENDERER", 1)
+    port = live.start(GATEWAY_IDLE_TIMEOUT_SECS=5)
+    sock = live.connect(port)
+    sock.sendall(_head("/v1/heartbeat", {**B, "Content-Type": "application/json",
+                                         "Content-Length": str(1 << 30)}) + b"x" * 100)
+    stop, t = _trickling(sock)
+    try:
+        assert _read_head(sock).startswith(b"HTTP/1.1 413")
+        _reply(sock, timeout=10)
+    finally:
+        stop.set()
+        t.join(2)
+        sock.close()
+    assert _wait_no_request_threads() == []
+    assert _in_flight(env) == {}
+    assert _beat(env).status_code == 200
+
+
+def test_a_request_on_a_real_server_is_released_exactly_once(env, live, monkeypatch):
+    """The real server releases from two places (the response's close and
+    the connection's end): another request of the same renderer, still
+    open, keeps its count."""
+    from werkzeug.test import Client
+    _claimed(env)
+    monkeypatch.setattr(render_gateway, "MAX_REQUESTS_PER_RENDERER", 2)
+    port = live.start(GATEWAY_IDLE_TIMEOUT_SECS=5)
+    held = Client(render_gateway._bounded_app(env.app)).get("/v1/jobs/vid-1/bundle", headers=J(env),
+                                                             buffered=False)
+    assert _in_flight(env) == {"builtin": 1}
+    body = json.dumps({"version": VERSION, "state": "idle"}).encode()
+    sock = live.connect(port)
+    sock.sendall(_head("/v1/heartbeat", {**B, "Content-Type": "application/json",
+                                         "Content-Length": str(len(body))}) + body)
+    data, _ = _reply(sock)
+    sock.close()
+    assert data.startswith(b"HTTP/1.1 200")
+    assert _wait_no_request_threads() == []
+    assert _in_flight(env) == {"builtin": 1}
+    held.close()
+    assert _in_flight(env) == {}
+
+
 def test_a_stalled_upload_on_a_real_server_frees_its_slot(env, live, monkeypatch):
     _claimed(env)
     monkeypatch.setattr(render_gateway, "MAX_CONCURRENT_UPLOADS", 1)
@@ -1640,6 +1821,30 @@ def test_no_tls_pair_means_no_gateway_server(env, tmp_path, caplog):
     assert "render gateway not started" in caplog.text
 
 
+def _damage_tls(tls, other, damage):
+    """Leave `tls` holding two non-empty files that are not a usable pair."""
+    if damage == "mismatched":
+        tauth.ensure_secrets(other)
+        (tls / tauth.TLS_CERT_NAME).write_text((other / tauth.TLS_CERT_NAME).read_text())
+    else:
+        pem = (tls / tauth.TLS_CERT_NAME).read_text()
+        (tls / tauth.TLS_CERT_NAME).write_text(pem[: len(pem) // 2])
+
+
+@pytest.mark.parametrize("damage", ["mismatched", "truncated"])
+def test_an_unusable_tls_pair_means_no_gateway_server(env, tmp_path, caplog, damage):
+    """A key and a certificate restored from different backups, or a
+    truncated one, are logged and the gateway is not started (the API goes
+    on); the pair is left as it is, since a new one would be a new pin."""
+    tls = tmp_path / "tls"
+    tauth.ensure_secrets(tls)
+    _damage_tls(tls, tmp_path / "other", damage)
+    before = {n: (tls / n).read_text() for n in tauth.TLS_NAMES}
+    assert render_gateway.make_gateway_server(env.app, "127.0.0.1", 0, secrets_dir=tls) is None
+    assert "render gateway not started: its TLS key and certificate cannot be used as a pair" in caplog.text
+    assert {n: (tls / n).read_text() for n in tauth.TLS_NAMES} == before
+
+
 # ── server.py starts it ───────────────────────────────────────────────────────
 
 @pytest.fixture
@@ -1682,6 +1887,19 @@ def test_the_api_runs_without_the_gateway_when_its_tls_pair_is_missing(api_serve
     (secrets / tauth.TLS_CERT_NAME).unlink()
     assert server.start_render_gateway() is None
     assert "render gateway not started" in caplog.text
+    ran = []
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(server.app, "run", lambda **kw: ran.append(kw))
+        server.main()
+    assert ran and ran[0]["port"] == 4000        # the dashboard's API still serves
+
+
+@pytest.mark.parametrize("damage", ["mismatched", "truncated"])
+def test_the_api_runs_without_the_gateway_when_its_tls_pair_is_unusable(api_server, tmp_path, caplog, damage):
+    server, _, secrets = api_server
+    _damage_tls(secrets, tmp_path / "other", damage)
+    assert server.start_render_gateway() is None
+    assert "cannot be used as a pair" in caplog.text
     ran = []
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(server.app, "run", lambda **kw: ran.append(kw))
