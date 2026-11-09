@@ -203,7 +203,8 @@ was written for even after you approve a newer one. If a change attempt fails tw
 
 Tubi cannot be edited. Instead, **Ask for a variation** creates a new mascot drawn from it, with a name
 and a description of how it should differ. **Archive** removes a mascot from every picker (Tubi too). A topic that is still waiting for approval
-with an archived mascot cannot be approved until you pick another or none; videos already past that
+with an archived mascot cannot be approved until you pick another or none (nor can a Cartoon 3D topic
+that somehow still holds a mascot); videos already past that
 checkpoint keep rendering with it.
 
 You choose a mascot at three levels, each overriding the one before:

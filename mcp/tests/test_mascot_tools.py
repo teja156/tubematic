@@ -272,6 +272,36 @@ def test_submit_loses_a_race_with_a_status_change(db, monkeypatch):
     assert _col("moss", "status") == "FAILED"
 
 
+def _archive_after_the_check(monkeypatch):
+    """An archive from the dashboard committing after the tool checked the
+    mascot is BUILDING, before its own UPDATE."""
+    real = server._mascot_building
+
+    def racing(con, mascot_id):
+        out = real(con, mascot_id)
+        with server._conn() as other:
+            other.execute("UPDATE mascots SET archived = 1 WHERE id = ?", (mascot_id,))
+        return out
+
+    monkeypatch.setattr(server, "_mascot_building", racing)
+
+
+def test_a_render_loses_a_race_with_an_archive_and_renders_nothing(db, monkeypatch):
+    _mascot()
+    _archive_after_the_check(monkeypatch)
+    out = _render()
+    assert "archived" in out["error"]
+    assert db == [] and _col("moss", "sheet_renders") == 0 and _draft_code("moss") == ""
+
+
+def test_submit_loses_a_race_with_an_archive(db, monkeypatch):
+    _mascot()
+    _all_sheets()
+    _archive_after_the_check(monkeypatch)
+    assert "archived" in server.submit_mascot("moss", "")["error"]
+    assert _col("moss", "status") == "BUILDING"
+
+
 def test_the_three_tools_are_offered(db):
     import asyncio
     from fastmcp import Client

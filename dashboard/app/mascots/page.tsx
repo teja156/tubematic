@@ -195,9 +195,14 @@ export default function MascotsPage() {
     return res;
   });
 
+  // Busy like every other action: an archive and an approve, request or variation
+  // in flight together race at the API (which refuses the loser), so the page
+  // offers only one at a time.
   async function archive(m: Mascot) {
+    if (busy) return;
     if (!confirm(`Archive "${m.name}"? Videos already using it keep it; it can no longer be picked.`)) return;
     setDetailError("");
+    setBusy(true);
     try {
       const r = await apiFetch(`/mascots/${m.id}`, { method: "DELETE" });
       if (!r.ok) {
@@ -208,6 +213,8 @@ export default function MascotsPage() {
     } catch (e) {
       setDetailError(e instanceof Error ? e.message : "Could not archive the mascot.");
       return;
+    } finally {
+      setBusy(false);
     }
     if (selectedId === m.id) { setSelectedId(null); setDetail(null); }
     load();
@@ -396,7 +403,8 @@ function MascotDetail(p: {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <span style={{ ...mono, fontSize: 14, fontWeight: 700, color: "var(--amber)" }}>{m.name}</span>
         {!m.archived && (
-          <button data-testid="mascot-archive" onClick={p.onArchive} style={btn("var(--red)")}>Archive</button>
+          <button data-testid="mascot-archive" onClick={p.onArchive} disabled={busy}
+                  style={btn("var(--red)", !busy)}>Archive</button>
         )}
       </div>
 

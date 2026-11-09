@@ -568,10 +568,16 @@ away.
 | `GET /mascots/pending` | `PENDING` and `BUILDING` mascots, oldest first, each with the draft's `change_request`. Polled by cron |
 | `GET /mascots/<id>` | One mascot plus its `versions` (never their code). **Serves archived rows too** |
 | `GET /mascots/<id>/versions/<v>/sheets/<turn\|feels\|act>` | The sheet image: a built-in's from its shipped files (JPEG), any other's from the data directory (PNG). `404` when missing; a symlink is refused |
-| `POST /mascots` | Body `{description, name, surprise?, agent_id?, agent_model?, agent_effort?, based_on?}`. `name` is required unless `surprise` is true (then it defaults to "Surprise mascot", and the description may be empty); `based_on` must be a pickable mascot; the agent picks are checked as on `POST /videos/manual`. `201` |
+| `POST /mascots` | Body `{description, name, surprise?, agent_id?, agent_model?, agent_effort?, based_on?}`. `name` is required unless `surprise` is true (then it defaults to "Surprise mascot", and the description may be empty); `based_on` must be a pickable mascot (the `INSERT` repeats the check, so one archived meanwhile is `409` and nothing is created); the agent picks are checked as on `POST /videos/manual`. The id is a slug of the name; when another create takes it first, the next suffix is tried (`pipeline.py::MASCOT_SLUG_ATTEMPTS` times, then `409`, try again). `201` |
 | `POST /mascots/<id>/approve` | Only from `IN_REVIEW`, and only when the draft has code and all three sheets exist. Publishes the draft and sets `READY` |
 | `POST /mascots/<id>/request-changes` | Body `{comment}`. From `IN_REVIEW`, `READY` or `FAILED`; a built-in is `400` (ask for a variation instead), a mascot an agent holds is `409`. Adds a draft version and goes to `PENDING` with a fresh attempt budget |
 | `POST /mascots/<id>/record-attempt` | Claims an attempt (`BUILDING`) and resets the sheet-render count, or fails the mascot once the cap is hit, naming the approved version still in use |
+
+The three lifecycle routes above write with an `UPDATE` bound to the status they read **and to
+`archived = 0`**. An Archive (`DELETE`) that commits after a route read the mascot therefore wins: the
+route matches no row and answers `409` ("This mascot was archived while…"), so no draft is published,
+no new draft version is added and no agent session is recorded (`poll.py` runs none on a `409`). The
+Mascots page also disables Archive while another action on the mascot is in flight, and the reverse.
 | `DELETE /mascots/<id>` | Archives; a built-in too. Never a real delete |
 
 The install default (`default_mascot_id` setting) and a project's `default_mascot_id` take `''`
@@ -581,9 +587,13 @@ pickable id, checked only when they change; a changed id is also `400` while the
 while the renderer's GPU is `working` and never on a `cartoon_3d` video. `PATCH /videos/<id>` sets
 `mascot_id` only at `TOPIC_PROPOSED`; a change is refused without a working GPU, for an unpickable
 mascot and on a Cartoon 3D video, switching a video to Cartoon 3D clears it in the same update, and
-the approving `PATCH` is `409` when the video's mascot has since been archived. That check is repeated
-in the approving `UPDATE`'s own `WHERE` (`tubematic_core/mascots.py::holds_pickable_sql`), so an
-archive that commits between the check and the write still refuses the approval with the same `409`.
+the approving `PATCH` is `409` when the video's mascot has since been archived, or when the video is
+Cartoon 3D (by its style or the renderer `auto` settled on) and still holds a mascot. An approving
+`PATCH` that switches the style to `cartoon_3d` clears the mascot and succeeds; one that clears the
+mascot (`mascot_id: ""`) succeeds too. Both checks are repeated in the `UPDATE`'s own `WHERE`, over the
+values the row will have once it lands (`tubematic_core/mascots.py::holds_pickable_sql` and
+`cartoon_mascot_clash_sql`). So an archive or a concurrent style write that commits between the check
+and the write still gets `409`, and no `PATCH` can leave a mascot on a Cartoon 3D video.
 
 | Status | Cause |
 |---|---|

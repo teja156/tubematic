@@ -1788,10 +1788,16 @@ def create_video(
 def _approval_mascot_error(con, video_id: str) -> dict | None:
     """The refusal for approving a topic whose mascot can no longer be used, or
     None. Shared by set_video_status's check and its lost-race re-check."""
-    held = con.execute("SELECT mascot_id, visual_style FROM videos WHERE id = ?",
+    held = con.execute("SELECT mascot_id, visual_style, resolved_renderer FROM videos WHERE id = ?",
                        (video_id,)).fetchone()
-    if (held and held["visual_style"] != "cartoon_3d" and held["mascot_id"]
-            and _mascot_pick_error(con, held["mascot_id"])):
+    if not held or not held["mascot_id"]:
+        return None
+    if "cartoon_3d" in (held["visual_style"], held["resolved_renderer"]):
+        # The renderer refuses the pair; approving buys paid work that ends in FAILED.
+        return {"error": f"This video is Cartoon 3D and holds the mascot {held['mascot_id']!r}. "
+                         f"{tmascots.MASCOT_NOT_ON_CARTOON_3D} A human must clear the mascot on the "
+                         "dashboard before the topic is approved."}
+    if _mascot_pick_error(con, held["mascot_id"]):
         return {"error": f"This video's mascot {held['mascot_id']!r} can no longer be used (it was "
                          "archived or withdrawn). A human must choose another mascot or none on the "
                          "dashboard before the topic is approved."}
@@ -1859,12 +1865,13 @@ def set_video_status(
             return _archived_error(video_id, row["archived_at"])
         current = row["status"]
         # The mascot check above and the UPDATE are two statements, so the
-        # UPDATE repeats it: an archive committing between them must still
-        # stop the approval. Keep in sync: pipeline.py's patch_video.
+        # UPDATE repeats it: an archive, or a style write leaving a mascot on a
+        # Cartoon 3D video, committing between them must still stop the
+        # approval. Keep in sync: pipeline.py's patch_video.
         mascot_sql = ""
         if approving:
-            mascot_sql = (" AND (status != 'TOPIC_PROPOSED' OR COALESCE(visual_style, '') = 'cartoon_3d'"
-                          f" OR {tmascots.holds_pickable_sql()})")
+            mascot_sql = (f" AND (status != 'TOPIC_PROPOSED' OR (NOT {tmascots.cartoon_mascot_clash_sql()}"
+                          f" AND {tmascots.holds_pickable_sql()}))")
         # The only_if guard is enforced in the UPDATE's own WHERE clause (not
         # a separate SELECT-then-compare) so the check-and-set is atomic —
         # closes the TOCTOU window a double-invocation could otherwise race.
@@ -2803,6 +2810,16 @@ def update_video(
         set_params.append(pin_voice)
     set_sql.append("updated_at = ?")
     set_params.append(_now())
+    # The style/mascot checks above read the row earlier, so the UPDATE repeats
+    # them over the values the row will have once it lands (what this call
+    # sets, else what the row holds then): a concurrent write must not leave a
+    # mascot on a Cartoon 3D video. Keep in sync: pipeline.py's patch_video.
+    pair = [k for k in ("visual_style", "resolved_renderer", "mascot_id") if k in fields]
+    if pair:
+        exprs = [("?" if k in fields else f"COALESCE(videos.{k}, '')")
+                 for k in ("visual_style", "resolved_renderer", "mascot_id")]
+        where_sql += " AND NOT " + tmascots.cartoon_mascot_clash_sql(*exprs)
+        where_params += [fields[k] for k in ("visual_style", "resolved_renderer", "mascot_id") if k in fields]
     with _conn() as con:
         cur = con.execute(
             f"UPDATE videos SET {', '.join(set_sql)} WHERE id = ? AND archived_at IS NULL"
@@ -2821,6 +2838,10 @@ def update_video(
             if row and "agent_id IS ?" in where_sql:
                 return {"error": "This video's agent changed while the call was in flight — "
                                  "check get_video and pick the model again"}
+            if row and pair:
+                return {"error": "The video's visual style changed while the call was in flight, and "
+                                 f"the result would put a mascot on a Cartoon 3D video. "
+                                 f"{tmascots.MASCOT_NOT_ON_CARTOON_3D} Check get_video"}
     return {"video_id": video_id, "updated_fields": updated}
 
 
@@ -7083,6 +7104,15 @@ def _mascot_building(con, mascot_id: str):
     return row, draft, None
 
 
+def _mascot_lost_race(con, mascot_id: str, also: str = "") -> dict:
+    """The error for a guarded mascot UPDATE that matched no row: archived (by a
+    human, since the check) or no longer BUILDING."""
+    row = con.execute("SELECT archived FROM mascots WHERE id = ?", (mascot_id,)).fetchone()
+    if row is not None and row["archived"]:
+        return {"error": f"mascot {mascot_id!r} was archived; stop working on it"}
+    return {"error": f"mascot {mascot_id!r} is no longer BUILDING" + (f" {also}" if also else "")}
+
+
 @mcp.tool
 def get_mascot_job(mascot_id: str) -> dict:
     """Read the brief for the mascot you are building.
@@ -7169,13 +7199,14 @@ def render_mascot_sheets(mascot_id: str, code: str, sheet: str):
             if row["sheet_renders"] >= tmascots.MAX_SHEET_RENDERS_PER_ATTEMPT:
                 return {"error": f"this attempt has used all {tmascots.MAX_SHEET_RENDERS_PER_ATTEMPT} sheet "
                                  "renders; submit_mascot with the sheets you have if all three exist, or stop"}
-            # One statement: the cap holds even against another process.
+            # One statement: the cap holds even against another process, and an
+            # archive from the dashboard since the check above wins.
             counted = con.execute(
                 "UPDATE mascots SET sheet_renders = sheet_renders + 1, updated_at = ? WHERE id = ? "
-                "AND status = 'BUILDING' AND sheet_renders < ?",
+                "AND status = 'BUILDING' AND archived = 0 AND sheet_renders < ?",
                 (_now(), mascot_id, tmascots.MAX_SHEET_RENDERS_PER_ATTEMPT)).rowcount
             if not counted:
-                return {"error": f"mascot {mascot_id!r} is no longer BUILDING or has used its renders"}
+                return _mascot_lost_race(con, mascot_id, "or has used its renders")
             if draft["code"] != code:
                 con.execute("UPDATE mascot_versions SET code = ? WHERE mascot_id = ? AND version = ?",
                             (code, mascot_id, version))
@@ -7239,9 +7270,9 @@ def submit_mascot(mascot_id: str, notes: str = "") -> dict:
                                  "call render_mascot_sheets for each, then submit"}
             moved = con.execute(
                 "UPDATE mascots SET status = 'IN_REVIEW', error = '', updated_at = ? "
-                "WHERE id = ? AND status = 'BUILDING'", (_now(), mascot_id)).rowcount
+                "WHERE id = ? AND status = 'BUILDING' AND archived = 0", (_now(), mascot_id)).rowcount
             if not moved:
-                return {"error": f"mascot {mascot_id!r} is no longer BUILDING"}
+                return _mascot_lost_race(con, mascot_id)
     notes = (notes or "").strip()[:2000]
     log.info("mascot %s v%d submitted for review%s", mascot_id, version, f": {notes}" if notes else "")
     return {"mascot_id": mascot_id, "status": "IN_REVIEW", "version": version, "notes": notes}

@@ -224,14 +224,70 @@ def test_approving_a_topic_whose_mascot_was_archived_is_refused(db):
     assert _col("status") == "TOPIC_PROPOSED"
 
 
-def test_approving_passes_with_a_usable_mascot_or_none_or_a_cartoon_video(db):
+def test_approving_passes_with_a_usable_mascot_or_none_or_a_cartoon_video_without_one(db):
     _mascot()
     _video("a", mascot="moss")
     _video("b")
-    _mascot("gone", archived=1)
-    _video("c", style="cartoon_3d", mascot="gone")
+    _video("c", style="cartoon_3d")
     for vid in "abc":
         assert server.set_video_status(vid, "TOPIC_APPROVED")["status"] == "TOPIC_APPROVED"
+
+
+def test_approving_a_cartoon_3d_video_that_holds_a_mascot_is_refused(db):
+    """The renderer refuses the pair, so approving it buys paid work that ends
+    in FAILED. An auto video settled on cartoon_3d counts too."""
+    _mascot()
+    _video("c", style="cartoon_3d", mascot="moss")
+    _video("r", style="auto", mascot="moss")
+    with server._conn() as con:
+        con.execute("UPDATE videos SET resolved_renderer = 'cartoon_3d' WHERE id = 'r'")
+    for vid in "cr":
+        for only_if in (None, "TOPIC_PROPOSED"):
+            out = server.set_video_status(vid, "TOPIC_APPROVED", only_if_current_status=only_if)
+            assert tmascots.MASCOT_NOT_ON_CARTOON_3D in out.get("error", ""), (vid, out)
+        assert _col("status", vid) == "TOPIC_PROPOSED"
+
+
+def test_a_style_write_racing_the_approval_cannot_leave_the_pair_approved(db, monkeypatch):
+    _mascot()
+    _video(mascot="moss")
+    real, fired = server._mascot_pick_error, []
+
+    def racing(con, mascot_id):
+        err = real(con, mascot_id)
+        if not fired:
+            fired.append(1)
+            with server._conn() as other:
+                other.execute("UPDATE videos SET visual_style = 'cartoon_3d' WHERE id = ?", (VID,))
+        return err
+
+    monkeypatch.setattr(server, "_mascot_pick_error", racing)
+    out = server.set_video_status(VID, "TOPIC_APPROVED")
+    assert tmascots.MASCOT_NOT_ON_CARTOON_3D in out.get("error", ""), out
+    assert _col("status") == "TOPIC_PROPOSED"
+
+
+def test_a_mascot_pick_racing_a_switch_to_cartoon_3d_is_refused(db, monkeypatch):
+    """Another call switches the style (clearing the mascot) after this one read
+    an ordinary style: its UPDATE must not put the mascot back."""
+    _gpu()
+    _mascot()
+    _video()
+    real, fired = server._mascot_pick_error, []
+
+    def racing(con, mascot_id):
+        err = real(con, mascot_id)
+        if not fired:
+            fired.append(1)
+            with server._conn() as other:
+                other.execute("UPDATE videos SET visual_style = 'cartoon_3d', mascot_id = '' WHERE id = ?",
+                              (VID,))
+        return err
+
+    monkeypatch.setattr(server, "_mascot_pick_error", racing)
+    out = server.update_video(VID, mascot_id="moss")
+    assert tmascots.MASCOT_NOT_ON_CARTOON_3D in out.get("error", ""), out
+    assert (_col("visual_style"), _col("mascot_id")) == ("cartoon_3d", "")
 
 
 def test_an_archive_landing_after_the_approval_check_still_refuses(db, monkeypatch):

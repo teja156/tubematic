@@ -96,6 +96,18 @@ def holds_pickable_sql(id_expr: str = "videos.mascot_id") -> str:
             " AND m.approved_version > 0 AND COALESCE(m.archived, 0) = 0))")
 
 
+def cartoon_mascot_clash_sql(style: str = "COALESCE(videos.visual_style, '')",
+                             renderer: str = "COALESCE(videos.resolved_renderer, '')",
+                             mascot: str = "COALESCE(videos.mascot_id, '')") -> str:
+    """An SQL condition: the video would be Cartoon 3D (by its style or the
+    renderer `auto` settled on) and hold a mascot, the pair the renderer refuses.
+    Each argument is an expression for the value the row will have once the
+    UPDATE lands: a column, a literal, or "?" (bound in the order style,
+    renderer, mascot). Guarded UPDATEs add `AND NOT (...)`, so a concurrent
+    write cannot leave the pair behind a check made on an earlier read."""
+    return f"(({style} = 'cartoon_3d' OR {renderer} = 'cartoon_3d') AND {mascot} != '')"
+
+
 def resolve_default(con, project_default: str, install_default: str) -> str:
     """The mascot a new video starts with. "none" means no mascot even if the
     install has a default; "" inherits the install default. A result that is

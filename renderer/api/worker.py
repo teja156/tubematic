@@ -1277,10 +1277,10 @@ def _auto_pilot_block_reason(con, video: dict, settings: dict) -> str:
             return ("its visual style is illustrated, which needs an OpenAI API key and "
                     "none is stored. Add the key in Settings, or change the style and "
                     "approve the topic yourself.")
-        if video["visual_style"] != "cartoon_3d":
-            err = pipeline._mascot_approval_error(con, video.get("mascot_id") or "")
-            if err:
-                return err
+        cartoon = "cartoon_3d" in (video["visual_style"], video.get("resolved_renderer"))
+        err = pipeline._approval_pair_error(con, cartoon, video.get("mascot_id") or "")
+        if err:
+            return err
     if video["status"] == "SCRIPT_READY":
         try:
             video["script_segments"] = json.loads(video["script_segments"] or "null")
@@ -1308,7 +1308,8 @@ def _auto_pilot_approve(settings: dict, config: dict, room=None) -> None:
     statuses = list(_AUTO_PILOT_APPROVALS)
     with db.conn(DB_PATH) as con:
         rows = [dict(r) for r in con.execute(
-            "SELECT id, status, updated_at, voice_id, visual_style, mascot_id, script, script_segments,"
+            "SELECT id, status, updated_at, voice_id, visual_style, resolved_renderer, mascot_id,"
+            " script, script_segments,"
             " voice_file_path, auto_pilot_blocked FROM videos"
             " WHERE archived_at IS NULL AND status IN (%s) AND project_id IN (%s)"
             " ORDER BY updated_at ASC"
@@ -1343,13 +1344,14 @@ def _auto_pilot_approve(settings: dict, config: dict, room=None) -> None:
                 continue
             # The same writes a dashboard approval makes (patch_video), under
             # the same guard: a human who acted first wins, an archived video
-            # is never moved, and a topic's mascot archived since the check
-            # above stops it (the next pass says why).
+            # is never moved, and a topic whose mascot was archived, or left on
+            # a Cartoon 3D video, since the check above is not approved (the
+            # next pass says why).
             approved = con.execute(
                 "UPDATE videos SET status = ?, updated_at = ?, agent_no_progress_count = 0,"
                 " agent_stuck_at = NULL WHERE id = ? AND status = ? AND archived_at IS NULL"
-                " AND (status != 'TOPIC_PROPOSED' OR COALESCE(visual_style, '') = 'cartoon_3d'"
-                f" OR {tmascots.holds_pickable_sql()})",
+                f" AND (status != 'TOPIC_PROPOSED' OR (NOT {tmascots.cartoon_mascot_clash_sql()}"
+                f" AND {tmascots.holds_pickable_sql()}))",
                 (new_status, now, video_id, status)).rowcount
             if approved:
                 con.execute(

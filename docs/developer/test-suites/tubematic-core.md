@@ -180,7 +180,7 @@ the per-video agent's cue track and a mascot standing on the captions in a finis
 tests use the engine's real box (the 560x640 canvas with the feet 50 above its bottom) and pin: a
 walk is checked along its path (two positions that are each clear but on opposite sides of the
 caption band are refused), walking on or off the screen is allowed at a valid height, and a hidden
-caption band frees the space. The one second in view must be **one unbroken stretch**: two 15-frame stops between walks add up to 30 frames and are still refused. `holds_pickable_sql`, the condition the approval `UPDATE`s repeat, is pinned to agree with `pickable` (no mascot, approved, archived, never approved, missing). `EMOTIONS` is checked against the engine's `sheet.js` so the two lists
+caption band frees the space. The one second in view must be **one unbroken stretch**: two 15-frame stops between walks add up to 30 frames and are still refused. `holds_pickable_sql`, the condition the approval `UPDATE`s repeat, is pinned to agree with `pickable` (no mascot, approved, archived, never approved, missing), and `cartoon_mascot_clash_sql` to name exactly a Cartoon 3D style or resolved renderer with a non-empty mascot, in column and bound form. `EMOTIONS` is checked against the engine's `sheet.js` so the two lists
 cannot drift. `resolve_default` pins `none` versus inherit, and that an archived or unapproved
 default becomes "no mascot" rather than silently falling back. The path helpers refuse bad ids and
 symlinks below the root. `boxes_at_frames` (where the text-layout audit asks whether the mascot stands over measured text) is pinned for off-screen frames, rest frames, a walk in progress and the cue scale.

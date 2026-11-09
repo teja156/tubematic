@@ -155,6 +155,32 @@ describe("MascotsPage", () => {
       await waitFor(() => expect(posts(spy)).toContainEqual([expect.stringMatching(/\/mascots\/moss\/approve$/), null]));
     });
 
+    it("Archive is disabled while another action on the mascot is in flight, and the reverse", async () => {
+      // An archive racing an approval is refused by the API too; the page does not offer it.
+      const spy = mockFetch({ list: [inReview], detail: inReview });
+      let release: (v: Response) => void = () => {};
+      const pending = new Promise<Response>((r) => { release = r; });
+      const real = spy.getMockImplementation()!;
+      spy.mockImplementation((url: string | URL | Request, init?: RequestInit) =>
+        ["POST", "DELETE"].includes((init?.method ?? "GET").toUpperCase()) ? pending : real(url, init));
+      render(<MascotsPage />);
+      await openRow("moss");
+      fireEvent.click(screen.getByTestId("mascot-approve"));
+      await waitFor(() => expect((screen.getByTestId("mascot-archive") as HTMLButtonElement).disabled).toBe(true));
+      fireEvent.click(screen.getByTestId("mascot-archive"));
+      expect(spy.mock.calls.some(([, i]) => (i as RequestInit | undefined)?.method === "DELETE")).toBe(false);
+      release({ ok: true, status: 200, json: () => Promise.resolve(inReview) } as Response);
+      await waitFor(() => expect((screen.getByTestId("mascot-archive") as HTMLButtonElement).disabled).toBe(false));
+      // and while the archive is in flight, approve waits for it
+      let releaseDelete: (v: Response) => void = () => {};
+      spy.mockImplementation((url: string | URL | Request, init?: RequestInit) =>
+        (init?.method ?? "GET").toUpperCase() === "DELETE"
+          ? new Promise<Response>((r) => { releaseDelete = r; }) : real(url, init));
+      fireEvent.click(screen.getByTestId("mascot-archive"));
+      await waitFor(() => expect((screen.getByTestId("mascot-approve") as HTMLButtonElement).disabled).toBe(true));
+      releaseDelete({ ok: true, status: 200, json: () => Promise.resolve({}) } as Response);
+    });
+
     it("requires a comment to request changes, then sends it", async () => {
       const spy = mockFetch({ list: [inReview], detail: inReview, body: { ...inReview, status: "PENDING" } });
       render(<MascotsPage />);

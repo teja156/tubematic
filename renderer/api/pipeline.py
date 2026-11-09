@@ -1318,6 +1318,50 @@ def _mascot_approval_error(con, mascot_id) -> str:
 MASCOT_NOT_ON_CARTOON_3D = tmascots.MASCOT_NOT_ON_CARTOON_3D
 
 
+def _mascot_row(con, mascot_id):
+    return con.execute("SELECT * FROM mascots WHERE id = ?", (mascot_id,)).fetchone()
+
+
+def _mascot_slug(con, name: str) -> str:
+    """The first free id for a mascot called `name`. Free when read: a create
+    racing this one can still take it first, which create_mascot retries."""
+    base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:48].strip("-") or "mascot"
+    mid, n = base, 1
+    # "pending" would shadow GET /mascots/pending; "none" is the project-default sentinel.
+    while mid in ("pending", "none") or con.execute(
+            "SELECT 1 FROM mascots WHERE id = ?", (mid,)).fetchone():
+        n += 1
+        mid = f"{base}-{n}"
+    return mid
+
+
+# A create retries the slug this many times when another create takes it first.
+MASCOT_SLUG_ATTEMPTS = 5
+
+
+def _mascot_conflict(con, mascot_id: str, what: str):
+    """The 409 for a guarded mascot UPDATE that matched no row: archived since
+    the route read it, or changed some other way."""
+    row = _mascot_row(con, mascot_id)
+    if row is None or row["archived"]:
+        return jsonify({"error": f"This mascot was archived while {what}; nothing was changed."}), 409
+    return jsonify({"error": f"This mascot changed while {what}; reload."}), 409
+
+
+def _cartoon_mascot_error(mascot_id: str) -> str:
+    """The refusal for a Cartoon 3D video that would hold `mascot_id`."""
+    return f"This video is Cartoon 3D and holds the mascot {mascot_id!r}. {MASCOT_NOT_ON_CARTOON_3D}"
+
+
+def _approval_pair_error(con, cartoon: bool, mascot_id) -> str:
+    """Why a topic that is (or would be) Cartoon 3D when `cartoon`, holding
+    `mascot_id`, cannot be approved, or "": the pair the renderer refuses, else
+    _mascot_approval_error. Shared with worker.py's Auto Pilot."""
+    if cartoon and mascot_id:
+        return _cartoon_mascot_error(mascot_id)
+    return _mascot_approval_error(con, mascot_id)
+
+
 def _seed_mascot(con, project_id, visual_style: str) -> str:
     """The mascot a new video starts with: the project's default (or the install's),
     but only while the renderer's GPU is working and never on a Cartoon 3D video.
@@ -2672,8 +2716,8 @@ def create_pipeline_blueprint() -> Blueprint:
             # will have once this PATCH lands, and a switch TO cartoon_3d clears
             # it in the same UPDATE (below) rather than leaving a mascot on a
             # style that cannot draw one. Clearing is always allowed.
-            cur_vid = con.execute("SELECT mascot_id, visual_style FROM videos WHERE id = ?",
-                                  (video_id,)).fetchone()
+            cur_vid = con.execute("SELECT mascot_id, visual_style, resolved_renderer FROM videos "
+                                  "WHERE id = ?", (video_id,)).fetchone()
             stored_mascot = cur_vid["mascot_id"] or ""
             will_be_cartoon = fields.get("visual_style", cur_vid["visual_style"]) == "cartoon_3d"
             if fields.get("mascot_id") and fields["mascot_id"] != stored_mascot:
@@ -2686,12 +2730,23 @@ def create_pipeline_blueprint() -> Blueprint:
                 if will_be_cartoon:
                     return jsonify({"error": MASCOT_NOT_ON_CARTOON_3D}), 400
             # The approving PATCH is the last chance to catch a mascot archived
-            # since it was seeded or picked: the video is about to be authored
-            # against it, and nothing downstream would refuse.
+            # since it was seeded or picked, or one left on a Cartoon 3D video:
+            # the video is about to be authored against it, and the renderer
+            # would refuse the pair only after the paid work. A PATCH that
+            # switches TO cartoon_3d clears the mascot (below), so only a video
+            # already Cartoon 3D that keeps its mascot is refused here.
             mascot_guarded = (fields.get("status") == "TOPIC_APPROVED"
-                              and row["status"] == "TOPIC_PROPOSED" and not will_be_cartoon)
+                              and row["status"] == "TOPIC_PROPOSED")
             if mascot_guarded:
-                err = _mascot_approval_error(con, fields.get("mascot_id", stored_mascot))
+                switching = (fields.get("visual_style") == "cartoon_3d"
+                             and (cur_vid["visual_style"] or "") != "cartoon_3d")
+                held = fields.get("mascot_id", stored_mascot)
+                if will_be_cartoon:
+                    err = _cartoon_mascot_error(stored_mascot) if (
+                        stored_mascot and held and not switching) else ""
+                else:
+                    err = _approval_pair_error(
+                        con, (cur_vid["resolved_renderer"] or "") == "cartoon_3d", held)
                 if err:
                     return jsonify({"error": err}), 409
 
@@ -2754,17 +2809,29 @@ def create_pipeline_blueprint() -> Blueprint:
             frozen_bound = bool(topic_locked or agent_locked or voice_exempt)
             if frozen_bound:
                 where_sql, where_params = " AND status = ?", [row["status"]]
-            # The check above and this UPDATE are two statements, so an archive
-            # committing between them would let the approval through: the
-            # UPDATE repeats it for the mascot the video will hold once it lands
-            # (the one sent, else the stored one). Keep in sync: mcp/server.py's
-            # set_video_status and worker.py's _auto_pilot_approve.
-            if mascot_guarded:
-                if "mascot_id" in fields:
-                    where_sql += " AND " + tmascots.holds_pickable_sql("?")
-                    where_params += [fields["mascot_id"], fields["mascot_id"]]
+            # The checks above and this UPDATE are two statements, so the
+            # UPDATE repeats them over the values the row will have once it
+            # lands (what this PATCH sets, else what the row holds then): a
+            # concurrent write must neither leave a mascot on a Cartoon 3D video
+            # nor let an approval through for a mascot archived meanwhile.
+            # Keep in sync: mcp/server.py's update_video and set_video_status,
+            # and worker.py's _auto_pilot_approve.
+            pair_touched = "visual_style" in fields or "mascot_id" in fields or will_be_cartoon
+            if pair_touched or mascot_guarded:
+                style_sql, style_p = (("?", [fields["visual_style"]]) if "visual_style" in fields
+                                      else ("COALESCE(videos.visual_style, '')", []))
+                if will_be_cartoon:
+                    mascot_sql, mascot_p = "''", []
+                elif "mascot_id" in fields:
+                    mascot_sql, mascot_p = "?", [fields["mascot_id"]]
                 else:
-                    where_sql += " AND " + tmascots.holds_pickable_sql()
+                    mascot_sql, mascot_p = "COALESCE(videos.mascot_id, '')", []
+                where_sql += " AND NOT " + tmascots.cartoon_mascot_clash_sql(
+                    style_sql, "COALESCE(videos.resolved_renderer, '')", mascot_sql)
+                where_params += style_p + mascot_p
+                if mascot_guarded:
+                    where_sql += " AND " + tmascots.holds_pickable_sql(mascot_sql)
+                    where_params += mascot_p * 2
             if "agent_id" in fields or fields.get("agent_model"):
                 stored = con.execute(
                     "SELECT agent_id FROM videos WHERE id = ?", (video_id,)
@@ -2844,11 +2911,17 @@ def create_pipeline_blueprint() -> Blueprint:
                         "current": fresh["status"],
                         "expected": row["status"],
                     }), 409
-                if mascot_guarded:
-                    err = _mascot_approval_error(
-                        con, fields["mascot_id"] if "mascot_id" in fields else (
-                            con.execute("SELECT mascot_id FROM videos WHERE id = ?",
-                                        (video_id,)).fetchone()["mascot_id"] or ""))
+                if pair_touched or mascot_guarded:
+                    now_row = con.execute("SELECT visual_style, resolved_renderer, mascot_id "
+                                          "FROM videos WHERE id = ?", (video_id,)).fetchone()
+                    post_mascot = ("" if will_be_cartoon else
+                                   fields["mascot_id"] if "mascot_id" in fields
+                                   else now_row["mascot_id"] or "")
+                    post_cartoon = "cartoon_3d" in (fields.get("visual_style", now_row["visual_style"]),
+                                                    now_row["resolved_renderer"])
+                    err = (_approval_pair_error(con, post_cartoon, post_mascot) if mascot_guarded
+                           else _cartoon_mascot_error(post_mascot) if post_cartoon and post_mascot
+                           else "")
                     if err:
                         return jsonify({"error": err}), 409
                 return jsonify({
@@ -4855,9 +4928,6 @@ def create_pipeline_blueprint() -> Blueprint:
                                      "ORDER BY version", (row["id"],))]
         return out
 
-    def _mascot_row(con, mascot_id):
-        return con.execute("SELECT * FROM mascots WHERE id = ?", (mascot_id,)).fetchone()
-
     @bp.get("/mascots")
     def list_mascots():
         with _conn() as con:
@@ -4902,16 +4972,6 @@ def create_pipeline_blueprint() -> Blueprint:
         # A draft version's sheets are re-rendered under the same URL.
         resp.headers["Cache-Control"] = "no-cache"
         return resp
-
-    def _mascot_slug(con, name: str) -> str:
-        base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:48].strip("-") or "mascot"
-        mid, n = base, 1
-        # "pending" would shadow GET /mascots/pending; "none" is the project-default sentinel.
-        while mid in ("pending", "none") or con.execute(
-                "SELECT 1 FROM mascots WHERE id = ?", (mid,)).fetchone():
-            n += 1
-            mid = f"{base}-{n}"
-        return mid
 
     @bp.post("/mascots")
     def create_mascot():
@@ -4969,13 +5029,29 @@ def create_pipeline_blueprint() -> Blueprint:
                 err = _mascot_pick_error(con, picks["based_on"])
                 if err:
                     return jsonify({"error": err.replace("mascot_id", "based_on")}), 400
-            mid = _mascot_slug(con, name)
-            con.execute(
-                """INSERT INTO mascots (id, name, description, status, based_on, agent_id,
-                                        agent_model, agent_effort, created_at, updated_at)
-                   VALUES (?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?)""",
-                (mid, name, description, picks["based_on"], picks["agent_id"], agent_model,
-                 agent_effort, now, now))
+            # The INSERT repeats the based_on check, so a variation of a mascot
+            # archived since the check above is never created; and another
+            # create taking the chosen slug first is retried with the next one
+            # rather than a 500.
+            for _ in range(MASCOT_SLUG_ATTEMPTS):
+                mid = _mascot_slug(con, name)
+                try:
+                    cur = con.execute(
+                        f"""INSERT INTO mascots (id, name, description, status, based_on, agent_id,
+                                                 agent_model, agent_effort, created_at, updated_at)
+                            SELECT ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?
+                            WHERE {tmascots.holds_pickable_sql("?")}""",
+                        (mid, name, description, picks["based_on"], picks["agent_id"], agent_model,
+                         agent_effort, now, now, picks["based_on"], picks["based_on"]))
+                except sqlite3.IntegrityError:
+                    continue
+                break
+            else:
+                return jsonify({"error": "Another mascot with this name was being created at the "
+                                         "same moment; try again."}), 409
+            if cur.rowcount == 0:
+                return jsonify({"error": f"The mascot {picks['based_on']!r} this is based on was "
+                                         "archived meanwhile; nothing was created."}), 409
             con.execute(
                 "INSERT INTO mascot_versions (mascot_id, version, change_request, created_at) "
                 "VALUES (?, 1, ?, ?)", (mid, description, now))
@@ -5008,11 +5084,12 @@ def create_pipeline_blueprint() -> Blueprint:
             now = _now()
             # Bound to IN_REVIEW first: a request-changes landing since the read
             # above must win, not have its PENDING overwritten and its version orphaned.
+            # And unarchived: an Archive landing since the read wins.
             cur = con.execute("UPDATE mascots SET approved_version = ?, status = 'READY', "
-                              "error = '', updated_at = ? WHERE id = ? AND status = 'IN_REVIEW'",
-                              (draft, now, mascot_id))
+                              "error = '', updated_at = ? WHERE id = ? AND status = 'IN_REVIEW' "
+                              "AND archived = 0", (draft, now, mascot_id))
             if cur.rowcount == 0:
-                return jsonify({"error": "This mascot changed while approving; reload."}), 409
+                return _mascot_conflict(con, mascot_id, "approving")
             cur = con.execute(
                 "UPDATE mascot_versions SET approved_at = ? WHERE mascot_id = ? AND version = ? "
                 "AND approved_at = ''", (now, mascot_id, draft))
@@ -5042,14 +5119,14 @@ def create_pipeline_blueprint() -> Blueprint:
                 return jsonify({"error": f"An agent is working on this mascot "
                                          f"({row['status']}); wait for it to finish."}), 409
             now = _now()
-            # Bound to the status checked, so two clicks cannot add two versions.
+            # Bound to the status checked, so two clicks cannot add two versions,
+            # and to unarchived, so an Archive landing since the read wins.
             cur = con.execute(
                 "UPDATE mascots SET status = 'PENDING', attempt_count = 0, sheet_renders = 0, "
-                "error = '', updated_at = ? WHERE id = ? AND status = ?",
+                "error = '', updated_at = ? WHERE id = ? AND status = ? AND archived = 0",
                 (now, mascot_id, row["status"]))
             if cur.rowcount == 0:
-                return jsonify({"error": "This mascot changed while the request was in flight; "
-                                         "reload."}), 409
+                return _mascot_conflict(con, mascot_id, "the request was in flight")
             top = con.execute("SELECT MAX(version) AS v FROM mascot_versions WHERE mascot_id = ?",
                               (mascot_id,)).fetchone()["v"] or 0
             con.execute("INSERT INTO mascot_versions (mascot_id, version, change_request, "
@@ -5072,6 +5149,10 @@ def create_pipeline_blueprint() -> Blueprint:
             if row["status"] not in ("PENDING", "BUILDING"):
                 return jsonify({"id": mascot_id, "status": row["status"],
                                 "attempt_count": row["attempt_count"]}), 409
+            # Both writes are bound to what was read and to unarchived: an Archive
+            # landing since the read must stop the session, which is paid work.
+            guard = " WHERE id = ? AND status = ? AND attempt_count = ? AND archived = 0"
+            key = (mascot_id, row["status"], row["attempt_count"])
             if row["attempt_count"] >= tmascots.MAX_MASCOT_ATTEMPTS:
                 error = (f"Mascot generation did not complete after "
                          f"{tmascots.MAX_MASCOT_ATTEMPTS} agent session(s).")
@@ -5080,16 +5161,27 @@ def create_pipeline_blueprint() -> Blueprint:
                               "request changes again.")
                 else:
                     error += " Delete this mascot and create a new one."
-                con.execute("UPDATE mascots SET status = 'FAILED', error = ?, updated_at = ? "
-                            "WHERE id = ?", (error, now, mascot_id))
+                cur = con.execute("UPDATE mascots SET status = 'FAILED', error = ?, updated_at = ?"
+                                  + guard, (error, now) + key)
+                if cur.rowcount == 0:
+                    return _attempt_lost(con, mascot_id)
                 return jsonify({"id": mascot_id, "status": "FAILED",
                                 "attempt_count": row["attempt_count"], "error": error})
-            con.execute("UPDATE mascots SET status = 'BUILDING', "
-                        "attempt_count = attempt_count + 1, sheet_renders = 0, updated_at = ? "
-                        "WHERE id = ?", (now, mascot_id))
+            cur = con.execute("UPDATE mascots SET status = 'BUILDING', "
+                              "attempt_count = attempt_count + 1, sheet_renders = 0, updated_at = ?"
+                              + guard, (now,) + key)
+            if cur.rowcount == 0:
+                return _attempt_lost(con, mascot_id)
             return jsonify({"id": mascot_id, "status": "BUILDING",
                             "attempt_count": row["attempt_count"] + 1,
                             "draft_version": _draft_version(con, mascot_id)})
+
+    def _attempt_lost(con, mascot_id):
+        # The same 409 shape as a refusal above, so poll.py runs no session.
+        now_row = _mascot_row(con, mascot_id)
+        return jsonify({"id": mascot_id, "status": now_row["status"] if now_row else "",
+                        "archived": bool(now_row and now_row["archived"]),
+                        "attempt_count": now_row["attempt_count"] if now_row else 0}), 409
 
     @bp.delete("/mascots/<mascot_id>")
     def delete_mascot(mascot_id: str):

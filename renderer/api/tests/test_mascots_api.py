@@ -344,6 +344,78 @@ def test_record_attempt_is_refused_unless_pending_or_building(client, db_path):
     assert client.post("/mascots/ghost/record-attempt").status_code == 404
 
 
+# ---------- an archive wins every race with a lifecycle step ----------
+
+def _archive_once_read(db_path, monkeypatch, mid):
+    """The dashboard's Archive committing right after the route read the mascot."""
+    _once_after(monkeypatch, "_mascot_row", lambda: _sql(
+        db_path, "UPDATE mascots SET archived = 1 WHERE id = ?", (mid,)))
+
+
+def test_approve_loses_to_an_archive_that_landed_after_its_read(client, db_path, monkeypatch):
+    _mascot(db_path, "moss")
+    _draft(db_path, "moss", 2, status="IN_REVIEW")
+    _sheets(db_path, "moss", 2)
+    _archive_once_read(db_path, monkeypatch, "moss")
+    r = client.post("/mascots/moss/approve")
+    assert r.status_code == 409 and "archived" in r.get_json()["error"]
+    assert _sql(db_path, "SELECT status, approved_version FROM mascots WHERE id='moss'")[0] == ("IN_REVIEW", 1)
+    assert _sql(db_path, "SELECT approved_at FROM mascot_versions WHERE mascot_id='moss' AND version=2")[0][0] == ""
+
+
+def test_request_changes_loses_to_an_archive_and_adds_no_draft(client, db_path, monkeypatch):
+    _mascot(db_path, "moss")
+    _archive_once_read(db_path, monkeypatch, "moss")
+    r = client.post("/mascots/moss/request-changes", json={"comment": "bigger eyes"})
+    assert r.status_code == 409 and "archived" in r.get_json()["error"]
+    assert _sql(db_path, "SELECT status FROM mascots WHERE id='moss'")[0][0] == "READY"
+    assert _sql(db_path, "SELECT MAX(version) FROM mascot_versions WHERE mascot_id='moss'")[0][0] == 1
+
+
+@pytest.mark.parametrize("attempts", [0, tm.MAX_MASCOT_ATTEMPTS])
+def test_record_attempt_loses_to_an_archive_so_no_session_runs(client, db_path, monkeypatch, attempts):
+    _mascot(db_path, "wip", status="PENDING", approved=0)
+    _sql(db_path, "UPDATE mascots SET attempt_count = ? WHERE id = 'wip'", (attempts,))
+    _archive_once_read(db_path, monkeypatch, "wip")
+    r = client.post("/mascots/wip/record-attempt")
+    assert r.status_code == 409 and r.get_json()["status"] != "BUILDING"
+    assert _sql(db_path, "SELECT status, attempt_count FROM mascots WHERE id='wip'")[0] == ("PENDING", attempts)
+
+
+def test_a_variation_of_a_mascot_archived_meanwhile_is_not_created(client, db_path, monkeypatch):
+    _mascot(db_path, "moss")
+    _once_after(monkeypatch, "_mascot_pick_error", lambda: _sql(
+        db_path, "UPDATE mascots SET archived = 1 WHERE id = 'moss'"))
+    r = client.post("/mascots", json={"name": "Moss Two", "description": "x", "based_on": "moss"})
+    assert r.status_code == 409 and "moss" in r.get_json()["error"]
+    assert _sql(db_path, "SELECT COUNT(*) FROM mascots WHERE id = 'moss-two'")[0][0] == 0
+    assert _sql(db_path, "SELECT COUNT(*) FROM mascot_versions WHERE mascot_id = 'moss-two'")[0][0] == 0
+
+
+def test_two_creates_racing_for_one_slug_both_succeed(client, db_path, monkeypatch):
+    """Another create takes the id after this one chose it: retry the next suffix, never a 500."""
+    def taken():
+        _sql(db_path, "INSERT INTO mascots (id, name, status, created_at, updated_at)"
+             " VALUES ('fox', 'Fox', 'PENDING', ?, ?)", (NOW, NOW))
+    _once_after(monkeypatch, "_mascot_slug", taken)
+    r = client.post("/mascots", json={"name": "Fox", "description": "a fox"})
+    assert r.status_code == 201 and r.get_json()["id"] == "fox-2"
+    assert _sql(db_path, "SELECT version, change_request FROM mascot_versions WHERE mascot_id='fox-2'") == [(1, "a fox")]
+
+
+def test_a_slug_that_keeps_being_taken_gives_up_with_a_conflict(client, db_path, monkeypatch):
+    def always_taken(con, name):
+        # taken on the route's own connection: after its first failed INSERT it
+        # holds the write lock, so no other connection could take one now
+        mid = f"fox-{con.execute('SELECT COUNT(*) FROM mascots').fetchone()[0]}"
+        con.execute("INSERT INTO mascots (id, name, status, created_at, updated_at)"
+                    " VALUES (?, 'Fox', 'PENDING', ?, ?)", (mid, NOW, NOW))
+        return mid
+    monkeypatch.setattr(pipeline, "_mascot_slug", always_taken)
+    r = client.post("/mascots", json={"name": "Fox", "description": "a fox"})
+    assert r.status_code == 409 and "try again" in r.get_json()["error"]
+
+
 # ---------- archive ----------
 
 def test_delete_archives_even_a_builtin(client, db_path):
@@ -691,6 +763,78 @@ def test_an_approval_with_no_mascot_is_not_held_by_the_guard(client, db_path, mo
     vid = _proposed(client)
     _archive_after_the_check(db_path, monkeypatch, "tubi")
     assert client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED"}).status_code == 200
+
+
+def _once_after(monkeypatch, name, then):
+    """Run `then()` once, right after the first call to pipeline.<name>: a write
+    from another request committing between this one's checks and its UPDATE."""
+    real, fired = getattr(pipeline, name), []
+
+    def racing(*a, **k):
+        out = real(*a, **k)
+        if not fired:
+            fired.append(1)
+            then()
+        return out
+
+    monkeypatch.setattr(pipeline, name, racing)
+
+
+def test_a_mascot_pick_racing_a_switch_to_cartoon_3d_is_refused(client, db_path, monkeypatch):
+    """Another PATCH switches the style (clearing the mascot) after this one read
+    an ordinary style: its UPDATE must not put the mascot back on a Cartoon 3D video."""
+    _gpu(db_path, "working")
+    vid = _proposed(client)
+    _once_after(monkeypatch, "_mascot_pick_error", lambda: _sql(
+        db_path, "UPDATE videos SET visual_style = 'cartoon_3d', mascot_id = '' WHERE id = ?", (vid,)))
+    r = client.patch(f"/videos/{vid}", json={"mascot_id": "tubi"})
+    assert r.status_code == 409 and r.get_json()["error"].endswith(tm.MASCOT_NOT_ON_CARTOON_3D)
+    assert _sql(db_path, "SELECT visual_style, mascot_id FROM videos WHERE id = ?", (vid,))[0] == ("cartoon_3d", "")
+
+
+def test_approving_a_cartoon_3d_video_that_holds_a_mascot_is_refused(client, db_path):
+    _gpu(db_path, "working")
+    vid = _proposed(client)
+    _sql(db_path, "UPDATE videos SET visual_style = 'cartoon_3d', mascot_id = 'tubi' WHERE id = ?", (vid,))
+    for body in ({"status": "TOPIC_APPROVED"},
+                 {"status": "TOPIC_APPROVED", "visual_style": "cartoon_3d", "mascot_id": "tubi"}):
+        r = client.patch(f"/videos/{vid}", json=body)
+        assert r.status_code == 409 and tm.MASCOT_NOT_ON_CARTOON_3D in r.get_json()["error"], body
+    assert _sql(db_path, "SELECT status, mascot_id FROM videos WHERE id = ?", (vid,))[0] == ("TOPIC_PROPOSED", "tubi")
+    # clearing it in the approving PATCH is the way through
+    r = client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED", "mascot_id": ""})
+    assert r.status_code == 200 and r.get_json()["mascot_id"] == ""
+
+
+def test_approving_an_auto_video_settled_on_cartoon_3d_with_a_mascot_is_refused(client, db_path):
+    _gpu(db_path, "working")
+    vid = _proposed(client)
+    _sql(db_path, "UPDATE videos SET visual_style = 'auto', resolved_renderer = 'cartoon_3d',"
+         " mascot_id = 'tubi' WHERE id = ?", (vid,))
+    r = client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED"})
+    assert r.status_code == 409 and tm.MASCOT_NOT_ON_CARTOON_3D in r.get_json()["error"]
+
+
+def test_an_approval_that_switches_to_cartoon_3d_clears_the_mascot_and_succeeds(client, db_path):
+    _gpu(db_path, "working")
+    vid = _proposed(client)
+    client.patch(f"/videos/{vid}", json={"mascot_id": "tubi"})
+    r = client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED", "visual_style": "cartoon_3d",
+                                             "mascot_id": "tubi"})
+    assert r.status_code == 200
+    assert _sql(db_path, "SELECT status, visual_style, mascot_id FROM videos WHERE id = ?",
+                (vid,))[0] == ("TOPIC_APPROVED", "cartoon_3d", "")
+
+
+def test_an_approval_racing_a_style_write_that_left_the_pair_is_refused(client, db_path, monkeypatch):
+    _gpu(db_path, "working")
+    vid = _proposed(client)
+    client.patch(f"/videos/{vid}", json={"mascot_id": "tubi"})
+    _once_after(monkeypatch, "_mascot_approval_error", lambda: _sql(
+        db_path, "UPDATE videos SET visual_style = 'cartoon_3d' WHERE id = ?", (vid,)))
+    r = client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED"})
+    assert r.status_code == 409 and tm.MASCOT_NOT_ON_CARTOON_3D in r.get_json()["error"]
+    assert _sql(db_path, "SELECT status FROM videos WHERE id = ?", (vid,))[0][0] == "TOPIC_PROPOSED"
 
 
 # ---------- usage ----------

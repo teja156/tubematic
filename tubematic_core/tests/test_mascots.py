@@ -70,6 +70,19 @@ def test_holds_pickable_sql_agrees_with_pickable():
     assert [con.execute(f"SELECT {bound}", (m, m)).fetchone()[0] for m in ("", "ok", "gone")] == [1, 1, 0]
 
 
+def test_cartoon_mascot_clash_sql_names_only_the_pair_the_renderer_refuses():
+    con = _con()
+    con.execute("CREATE TABLE videos (id TEXT, visual_style TEXT, resolved_renderer TEXT, mascot_id TEXT)")
+    con.executemany("INSERT INTO videos VALUES (?, ?, ?, ?)",
+                    [("a", "cartoon_3d", "", "moss"), ("b", "auto", "cartoon_3d", "moss"),
+                     ("c", "cartoon_3d", "", ""), ("d", "auto", "dom", "moss"), ("e", None, None, None)])
+    clash = {r[0] for r in con.execute(f"SELECT id FROM videos WHERE {mascots.cartoon_mascot_clash_sql()}")}
+    assert clash == {"a", "b"}
+    bound = mascots.cartoon_mascot_clash_sql("?", "?", "?")
+    assert con.execute(f"SELECT {bound}", ("cartoon_3d", "", "moss")).fetchone()[0] == 1
+    assert con.execute(f"SELECT {bound}", ("cartoon_3d", "", "")).fetchone()[0] == 0
+
+
 def test_resolve_default_none_empty_and_unpickable():
     con = _con()
     con.execute("INSERT INTO mascots (id, approved_version, archived) VALUES ('ok', 1, 0), ('arch', 1, 1), ('new', 0, 0)")
