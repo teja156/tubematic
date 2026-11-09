@@ -770,8 +770,11 @@ def run_upgrade(*, dry_run: bool, force: bool, no_stop: bool, install_mode: str 
     # A GPU override (onboard/gpu.py) whose runtime or GPU has gone makes the
     # `up` in "Start" fail after everything is already stopped. Checked here,
     # before the lock, so a refusal leaves the running install untouched.
-    from onboard import gpu
-    gpu_problems = gpu.override_problems()
+    # The remote-renderers override (onboard/remote_renderers.py) is carried
+    # the same way — it lives under the data root, and _compose() names it —
+    # and one Compose cannot parse fails that `up` just the same (TMDEV-190).
+    from onboard import gpu, remote_renderers
+    gpu_problems = gpu.override_problems() + remote_renderers.override_problems()
     if gpu_problems:
         for problem in gpu_problems:
             rep.warn(problem)

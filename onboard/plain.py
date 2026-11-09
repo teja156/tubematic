@@ -19,7 +19,7 @@ from onboard.checks import check_installation, check_prerequisites
 from onboard.config import OnboardConfig, fields_for_step, read_agents, resolve_install_mode
 from onboard.executor import Executor, Reporter
 from onboard.state import is_done, load_state, mark_done, save_state
-from onboard.steps import STEP_DEFS, STEP_BY_KEY
+from onboard.steps import DEFAULT_STEPS, STEP_DEFS, STEP_BY_KEY
 
 console = Console()
 
@@ -171,6 +171,11 @@ class PlainReporter(Reporter):
     def warn(self, msg: str) -> None:
         console.print(f"    [yellow]![/yellow]  {msg}")
 
+    def raw(self, msg: str) -> None:
+        # soft_wrap: rich would otherwise break a long token across lines,
+        # and a copied token would carry the line breaks.
+        console.print(msg, soft_wrap=True, markup=False, highlight=False)
+
     def fail(self, msg: str, hint: str = "") -> None:
         console.print(f"    [red]✘[/red]  {msg}" + (f"  [dim]{hint}[/dim]" if hint else ""))
         raise RuntimeError(msg)
@@ -184,24 +189,32 @@ def print_status() -> None:
     """Step-done progress table. Pipeable/doc-referenced, so its output
     contract stays stable across UI rewrites."""
     state = load_state()
-    total = len(STEP_DEFS)
+    total = len(DEFAULT_STEPS)
 
     table = Table(box=None, show_header=False, padding=(0, 1), expand=False)
     table.add_column("glyph", no_wrap=True, width=1)
     table.add_column("step", no_wrap=True, style="dim", width=5)
     table.add_column("label")
 
-    for idx, step in enumerate(STEP_DEFS, start=1):
-        entry = state.get(step.key, {})
-        if entry.get("done"):
-            ts = entry.get("ts", "")
-            glyph = "[green]✔[/green]"
-            note = f"  [dim]done {ts}[/dim]" if ts else ""
-            text = f"{step.label}{note}"
+    def done_note(step):
+        ts = state.get(step.key, {}).get("ts", "")
+        return f"{step.label}  [dim]done {ts}[/dim]" if ts else step.label
+
+    for idx, step in enumerate(DEFAULT_STEPS, start=1):
+        if is_done(state, step.key):
+            table.add_row("[green]✔[/green]", f"{idx}/{total}", done_note(step))
         else:
-            glyph = "[yellow]○[/yellow]"
-            text = step.label
-        table.add_row(glyph, f"{idx}/{total}", text)
+            table.add_row("[yellow]○[/yellow]", f"{idx}/{total}", step.label)
+    # Opt-in steps are not part of the install, so they never count as
+    # missing progress.
+    for step in STEP_DEFS:
+        if not step.opt_in:
+            continue
+        if is_done(state, step.key):
+            table.add_row("[green]✔[/green]", "opt", done_note(step))
+        else:
+            table.add_row("[dim]·[/dim]", "opt",
+                          f"{step.label}  [dim]not used — run with --step {step.key}[/dim]")
 
     console.print()
     console.print("[bold]  Onboard progress[/bold]")
@@ -242,7 +255,8 @@ def print_help() -> None:
         ("--rotate-tokens", "Replace the service tokens, restart the services that "
                             "read them, and have OpenCode reload. Waits for in-flight work "
                             "like upgrade.py; --force proceeds anyway."),
-        ("--force", "Re-run every step regardless of done state"),
+        ("--force", "Re-run every step of a full install regardless of done state "
+                    "(opt-in steps still need --step)"),
         ("--install-mode <dev|release>", "Override the auto-detected install mode. Auto-detect "
                                          "picks release when renderer/Dockerfile is absent (a "
                                          "release tarball ships no source trees) and dev "
@@ -269,7 +283,10 @@ def print_help() -> None:
         console.print(f"  [cyan]{flag:<23}[/cyan] {desc}")
     console.print()
     console.print("[bold]Step keys[/bold] [dim](for --step)[/dim]")
-    console.print("  " + ", ".join(step.key for step in STEP_DEFS))
+    console.print("  " + ", ".join(step.key for step in DEFAULT_STEPS))
+    opt_in = [step.key for step in STEP_DEFS if step.opt_in]
+    if opt_in:
+        console.print("  [dim]opt-in, never part of a full install:[/dim] " + ", ".join(opt_in))
     console.print()
     console.print("[bold]Examples[/bold]")
     for example in [
@@ -280,6 +297,7 @@ def print_help() -> None:
         "python onboard.py --step install_config",
         "python onboard.py --full-questionnaire",
         "python onboard.py --step pipeline_settings --force",
+        "python onboard.py --step renderers",
         "python onboard.py --install-agent <agent>",
         "python onboard.py --list-agents",
         "python onboard.py --uninstall-agent <agent>",
@@ -294,6 +312,8 @@ def _print_step_detail(step, heading: str) -> None:
     console.print(f"     [dim]{step.description}[/dim]")
     if step.builds_or_starts:
         console.print("     [yellow]builds/starts containers[/yellow]")
+    if step.opt_in:
+        console.print(f"     [cyan]opt-in: runs only with --step {step.key}[/cyan]")
     # full=True: this lists what a step *can* ask, so it must not depend
     # on which questionnaire a later run happens to use. Advanced fields
     # are marked instead of hidden, keeping this output honest about
@@ -420,7 +440,9 @@ def run_wizard(*, dry_run: bool = False, force_all: bool = False, step_key: str 
     state["install_mode"] = mode
     if not dry_run:
         save_state(state)
-    steps = [STEP_BY_KEY[step_key]] if step_key else STEP_DEFS
+    # A full install (and --force) never runs an opt-in step: it changes what
+    # a working install exposes, so it runs only when named.
+    steps = [STEP_BY_KEY[step_key]] if step_key else DEFAULT_STEPS
     total = len(steps)
     targeted = step_key is not None
 

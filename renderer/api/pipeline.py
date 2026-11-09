@@ -2337,6 +2337,91 @@ def gpu_status(con) -> dict:
     }
 
 
+# ── Renderers (TMDEV-190) ─────────────────────────────────────────────────────
+# The address renderers on other machines dial to reach this one, as host:port.
+# A bare settings row written by `onboard.py --step renderers` (keep in sync with
+# onboard/remote_renderers.py SETTING_KEY), never a SETTINGS_SPEC key: turning
+# remote renderers on also publishes a port, which only onboarding can do, so the
+# dashboard must not be able to set it. '' (or no row) = remote renderers off.
+RENDER_GATEWAY_ADDRESS_KEY = "render_gateway_address"
+RENDER_GATEWAY_DEFAULT_PORT = 4443
+RENDERER_NAME_MAX_CHARS = 60
+# The exact command the dashboard shows next to a new enrollment token (keep in
+# sync with onboard/remote_renderers.py HOST_COMMAND and
+# scripts/tubematic_remote_renderer.py's `install`).
+REMOTE_RENDERER_COMMAND = "python3 tubematic_remote_renderer.py install --token '{token}'"
+
+
+def render_gateway_address(con) -> str:
+    row = con.execute("SELECT value FROM settings WHERE key = ?",
+                      (RENDER_GATEWAY_ADDRESS_KEY,)).fetchone()
+    return ((row[0] if row else "") or "").strip()
+
+
+def render_gateway_url(address: str) -> str:
+    """https://<address>, with the default port added when the address names
+    none ("host", "[ipv6]")."""
+    has_port = ("]:" in address) if address.startswith("[") else (":" in address)
+    return f"https://{address}" if has_port else f"https://{address}:{RENDER_GATEWAY_DEFAULT_PORT}"
+
+
+def _renderer_name_error(name) -> str | None:
+    if not isinstance(name, str):
+        return "name must be a string"
+    if not 1 <= len(name.strip()) <= RENDERER_NAME_MAX_CHARS:
+        return f"name must be 1-{RENDERER_NAME_MAX_CHARS} characters"
+    return None
+
+
+def _json_object(raw, default):
+    try:
+        value = _json.loads(raw or "null")
+    except (TypeError, ValueError):
+        return default
+    return value if isinstance(value, dict) else default
+
+
+def renderer_list(con) -> list:
+    """GET /renderers' rows: tubematic_core.renderers.renderer_states plus
+    what the dashboard's Renderers panel shows — the reported host and compute,
+    a summary of the last GPU probe, whether a Test is still waiting for its
+    answer, and the current video's title. Never a credential hash."""
+    now = trenderers.now_ts()
+    extra = {r["id"]: r for r in con.execute(
+        "SELECT id, host, compute, gpu_probe, gpu_probe_requested_at, created_at "
+        "FROM renderers WHERE removed_at IS NULL")}
+    out = []
+    for s in trenderers.renderer_states(con, now):
+        r = extra.get(s["id"])
+        if r is None:
+            continue
+        probe = _json_object(r["gpu_probe"], None)
+        gpu = None
+        if probe is not None:
+            ran = probe.get("gpu")
+            gpu = {"ok": probe.get("ok") is True,
+                   "configured": bool(probe.get("configured")),
+                   "error": str(probe.get("error") or ""),
+                   "renderer": str(probe.get("renderer") or ""),
+                   "name": str((ran or {}).get("name") or "") if isinstance(ran, dict) else "",
+                   "at": str(probe.get("at") or "")}
+        requested = r["gpu_probe_requested_at"] or ""
+        pending = bool(requested) and (probe is None or requested > (probe.get("at") or ""))
+        title = ""
+        if s["current_video_id"]:
+            row = con.execute("SELECT COALESCE(NULLIF(title, ''), topic) FROM videos WHERE id = ?",
+                              (s["current_video_id"],)).fetchone()
+            title = (row[0] if row else "") or ""
+        out.append({**s, "host": r["host"], "created_at": r["created_at"],
+                     "compute": _json_object(r["compute"], {}),
+                     "gpu": gpu, "probe_pending": pending,
+                     # The renderer probes between renders, as the built-in GPU
+                     # panel has always said.
+                     "waiting_for_render": pending and s["state"] == "rendering",
+                     "current_video_title": title})
+    return out
+
+
 def create_pipeline_blueprint() -> Blueprint:
     bp = Blueprint("pipeline", __name__)
 
@@ -4632,6 +4717,111 @@ def create_pipeline_blueprint() -> Blueprint:
             con.execute("UPDATE renderers SET gpu_probe_requested_at = ? WHERE id = ?",
                         (now_precise(), trenderers.BUILTIN_ID))
             return jsonify(gpu_status(con)), 202
+
+    # ── Renderers (TMDEV-190) ────────────────────────────────────────────────
+
+    def _active_renderer(con, renderer_id):
+        return con.execute("SELECT id, builtin FROM renderers WHERE id = ? AND removed_at IS NULL",
+                           (renderer_id,)).fetchone()
+
+    def _renderer_out(con, renderer_id):
+        return next((r for r in renderer_list(con) if r["id"] == renderer_id), None)
+
+    @bp.get("/renderers")
+    def list_renderers():
+        """Every renderer not removed, the built-in first, and whether remote
+        renderers are on (onboard.py --step renderers stored an address)."""
+        with _conn() as con:
+            trenderers.ensure_builtin(con)
+            address = render_gateway_address(con)
+            return jsonify({"remote_enabled": bool(address), "gateway_address": address,
+                            "renderers": renderer_list(con)})
+
+    @bp.post("/renderers/enrollments")
+    def create_renderer_enrollment():
+        """A one-time enrollment token for a new renderer, valid for an hour.
+        Shown once: only its secret's hash is stored. 409 while remote
+        renderers are off — the token would name an address nobody can reach."""
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            return jsonify({"error": "body must be a JSON object"}), 400
+        name = body.get("name")
+        if name is None or (isinstance(name, str) and not name.strip()):
+            name = ""
+        else:
+            err = _renderer_name_error(name)
+            if err:
+                return jsonify({"error": err}), 400
+            name = name.strip()
+        from tubematic_core import auth as tauth
+        with _conn() as con:
+            address = render_gateway_address(con)
+            if not address:
+                return jsonify({"error": "remote_renderers_off"}), 409
+            try:
+                pin = tauth.gateway_pin()
+            except tauth.SecretMissing as e:
+                log.error("cannot issue an enrollment token: %s", e)
+                return jsonify({"error": "gateway_certificate_missing"}), 503
+            secret, expires_at = trenderers.create_enrollment(con, name)
+        token = trenderers.encode_enrollment_token(render_gateway_url(address), secret, pin)
+        return jsonify({"token": token, "expires_at": expires_at,
+                        "command": REMOTE_RENDERER_COMMAND.format(token=token)}), 201
+
+    @bp.patch("/renderers/<renderer_id>")
+    def update_renderer(renderer_id):
+        """Body {"enabled"?: bool, "name"?: str (1-60)}. Disabling a renderer
+        stops it taking new work; the built-in one can be disabled, never
+        removed."""
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or not ({"enabled", "name"} & set(body)):
+            return jsonify({"error": "send enabled and/or name"}), 400
+        changes = {}
+        if "enabled" in body:
+            if not isinstance(body["enabled"], bool):
+                return jsonify({"error": "enabled must be true or false"}), 400
+            changes["enabled"] = int(body["enabled"])
+        if "name" in body:
+            err = _renderer_name_error(body["name"])
+            if err:
+                return jsonify({"error": err}), 400
+            changes["name"] = body["name"].strip()
+        with _conn() as con:
+            if _active_renderer(con, renderer_id) is None:
+                return jsonify({"error": "not_found"}), 404
+            con.execute(f"UPDATE renderers SET {', '.join(f'{k} = ?' for k in changes)} "
+                        "WHERE id = ? AND removed_at IS NULL",
+                        (*changes.values(), renderer_id))
+            return jsonify(_renderer_out(con, renderer_id))
+
+    @bp.delete("/renderers/<renderer_id>")
+    def remove_renderer(renderer_id):
+        """Remove a renderer: its credentials stop working at once (the next
+        heartbeat gets 401) and the worker's lease sweep re-queues a render it
+        held. The built-in renderer can only be disabled."""
+        with _conn() as con:
+            row = _active_renderer(con, renderer_id)
+            if row is None:
+                return jsonify({"error": "not_found"}), 404
+            if row["builtin"]:
+                return jsonify({"error": "builtin"}), 409
+            removed_at = _now()
+            con.execute("UPDATE renderers SET removed_at = ?, credential_hash = '', "
+                        "previous_credential_hash = '' WHERE id = ? AND removed_at IS NULL",
+                        (removed_at, renderer_id))
+            return jsonify({"id": renderer_id, "removed_at": removed_at})
+
+    @bp.post("/renderers/<renderer_id>/gpu-test")
+    def request_renderer_gpu_test(renderer_id):
+        """Ask one renderer to probe its GPU again: the gateway's next heartbeat
+        reply tells it to, and it probes between renders. 202: the answer
+        arrives later in GET /renderers."""
+        with _conn() as con:
+            if _active_renderer(con, renderer_id) is None:
+                return jsonify({"error": "not_found"}), 404
+            con.execute("UPDATE renderers SET gpu_probe_requested_at = ? WHERE id = ?",
+                        (now_precise(), renderer_id))
+            return jsonify(_renderer_out(con, renderer_id)), 202
 
     @bp.post("/prices/sync")
     def sync_prices_now():

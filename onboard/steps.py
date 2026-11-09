@@ -1,4 +1,10 @@
-"""The 10 apply-phase steps of a default run, in order.
+"""The apply-phase steps, in order: the 11 of a default run, then the opt-in ones.
+
+An opt-in step (`opt_in=True`) is never part of a full install: `run_wizard`
+runs it only when named with `--step`, because it changes what a working
+install exposes (the `renderers` step publishes the render gateway's port to
+other machines). It still has a key, a description and a done mark like any
+other step, so `--steps`, `--status` and `--step` all know it.
 
 Agents are not a step (TMDEV-90): the project is set up here, and each agent is
 installed afterwards by `onboard.py --install-agent <name>` — see
@@ -37,6 +43,7 @@ class Step:
     description: str
     consumes: list = field(default_factory=list)
     builds_or_starts: bool = False
+    opt_in: bool = False
 
 
 STEP_DEFS = [
@@ -126,7 +133,20 @@ STEP_DEFS = [
         "docker compose build + up tubematic-dashboard.",
         builds_or_starts=True,
     ),
+    Step(
+        "renderers", "Remote renderers (opt-in)",
+        "Lets renderers on other machines reach this one, or stops them. Asks for the address "
+        "they dial (an IP address or DNS name, optionally :port, default 4443), writes "
+        "~/.tubematic-data/compose.renderers.json, the Compose override that publishes the "
+        "render gateway's port on tubematic-api, stores the address, recreates tubematic-api, "
+        "checks that the port answers with the gateway's own certificate, and can print a "
+        "first enrollment token. Never part of a full install: run it with "
+        "--step renderers, and re-run it to change the address or turn remote renderers off.",
+        opt_in=True,
+    ),
 ]
 
+# What a full install runs; opt-in steps run only when named with --step.
+DEFAULT_STEPS = [s for s in STEP_DEFS if not s.opt_in]
 STEP_BY_KEY = {s.key: s for s in STEP_DEFS}
 VALID_KEYS = set(STEP_BY_KEY)

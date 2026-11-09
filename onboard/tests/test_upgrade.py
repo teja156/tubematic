@@ -985,3 +985,41 @@ def test_without_an_override_start_is_the_bare_compose_up(upgrade, env):
     assert code == 0, rep.text()
     assert any(d.startswith("docker compose up -d") for d in order)
     assert not any("compose.gpu.json" in d for d in order)
+
+
+# ── Remote-renderers override (TMDEV-190) ────────────────────────────────────
+
+def test_a_broken_renderers_override_refuses_before_anything_changes(upgrade, env):
+    """Compose cannot parse it, so the `up` in "Start" would fail after the
+    stack is already stopped."""
+    from onboard import remote_renderers
+    remote_renderers.override_path().write_text("{ not json")
+    code, order, rep = _run(upgrade, env)
+    assert code == 1
+    assert order == []
+    assert "python3 onboard.py --step renderers" in rep.text()
+    assert "Nothing was stopped" in rep.text()
+
+
+def test_the_renderers_override_is_carried_into_start(upgrade, env):
+    """It lives under the data root, not the install, so the new install's
+    `up` must name it — or the upgrade silently closes the gateway's port and
+    every remote renderer goes offline."""
+    from onboard import remote_renderers
+    path = remote_renderers.override_path()
+    path.write_text(remote_renderers.render_override(4443))
+    code, order, rep = _run(upgrade, env)
+    assert code == 0, rep.text()
+    up = next(d for d in order if " up -d" in d)
+    assert f"-f {path}" in up
+
+
+def test_both_overrides_are_carried_gpu_first(upgrade, env, monkeypatch, tmp_path):
+    from onboard import remote_renderers
+    gpu_path = _gpu_override(monkeypatch, tmp_path)
+    renderers_path = remote_renderers.override_path()
+    renderers_path.write_text(remote_renderers.render_override(4443))
+    code, order, rep = _run(upgrade, env)
+    assert code == 0, rep.text()
+    up = next(d for d in order if " up -d" in d)
+    assert up.index(f"-f {gpu_path}") < up.index(f"-f {renderers_path}")

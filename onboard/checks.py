@@ -131,9 +131,14 @@ def check_prerequisites(mode: str = "dev") -> list:
     # A warning, never an error: the wizard stops on an error before reaching
     # the `gpu` step, which is exactly what fixes this. upgrade.py refuses on
     # the same problems itself (TMDEV-178).
-    from onboard import gpu
+    from onboard import gpu, remote_renderers
     for problem in gpu.override_problems():
         items.append(CheckItem("GPU override usable", False, severity="warning", hint=problem))
+    # Same reasoning: Compose refuses an override it cannot parse, and the
+    # `renderers` step is what rewrites it (TMDEV-190).
+    for problem in remote_renderers.override_problems():
+        items.append(CheckItem("Remote-renderers override usable", False, severity="warning",
+                               hint=problem))
 
     return items
 

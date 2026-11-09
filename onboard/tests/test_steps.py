@@ -1,7 +1,7 @@
 """Step-order invariants: build/container-start steps must be last, and
 directories/database must precede them (Docker creates missing bind-mount
 targets as root otherwise)."""
-from onboard.steps import STEP_DEFS, VALID_KEYS
+from onboard.steps import DEFAULT_STEPS, STEP_DEFS, VALID_KEYS
 
 
 def _index(key: str) -> int:
@@ -20,8 +20,8 @@ def test_only_renderer_and_dashboard_build_or_start():
     assert build_keys == {"renderer", "dashboard"}
 
 
-def test_build_steps_are_the_last_two():
-    keys = [s.key for s in STEP_DEFS]
+def test_build_steps_are_the_last_two_of_a_full_install():
+    keys = [s.key for s in DEFAULT_STEPS]
     assert keys[-2:] == ["renderer", "dashboard"]
 
 
@@ -37,7 +37,21 @@ def test_step_keys_are_unique():
 
 
 def test_eleven_steps_in_the_default_flow():
-    assert len(STEP_DEFS) == 11
+    assert len(DEFAULT_STEPS) == 11
+
+
+def test_the_renderers_step_is_opt_in_and_the_only_one():
+    """Publishing the render gateway to other machines changes what a working
+    install exposes, so a full install never does it (TMDEV-190)."""
+    assert [s.key for s in STEP_DEFS if s.opt_in] == ["renderers"]
+    assert "renderers" not in {s.key for s in DEFAULT_STEPS}
+    assert "renderers" in VALID_KEYS
+
+
+def test_opt_in_steps_come_after_the_full_install():
+    """--steps numbers them after every step a full install runs."""
+    keys = [s.key for s in STEP_DEFS]
+    assert keys[:len(DEFAULT_STEPS)] == [s.key for s in DEFAULT_STEPS]
 
 
 def test_the_gpu_step_precedes_the_renderer_step():
