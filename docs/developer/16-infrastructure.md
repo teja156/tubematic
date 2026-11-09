@@ -237,7 +237,7 @@ renderers on also publishes a port, which only the host can do.
 
 **The port is published on every interface (`0.0.0.0`), and `ufw` does not restrict it.** Docker
 routes a published port in the `nat` table, ahead of the `INPUT` chain `ufw` writes to. The step's
-firewall note, and [Remote renderers](../user-guide/11-remote-renderers.md#allow-the-port-through-your-firewall--from-your-renderers-only),
+firewall note, and [Remote renderers](../user-guide/11-remote-renderers.md#allow-the-port-through-your-firewall-from-your-renderers-only),
 point at a network firewall or Docker's `DOCKER-USER` chain instead. The `[::]` entry is different:
 Tubematic's Compose network is IPv4-only, so Docker's userland proxy serves that port as a process on
 the host, its packets meet the host's IPv6 `INPUT` chain rather than `DOCKER-USER`, and an IPv4
