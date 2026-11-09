@@ -1,5 +1,5 @@
 """The 0019 migration: the renderers, renderer_enrollments and render_timings
-tables, the four lease columns on videos, and the built-in renderer's row.
+tables, the five lease columns on videos (the claim id among them), and the built-in renderer's row.
 
 Upgrading must leave every existing video unleased ('' everywhere): the
 worker's lease sweep reads an empty lease on a RENDERING row as expired, which
@@ -43,8 +43,8 @@ def test_existing_videos_come_out_unleased(tmp_path):
     db = _db_at_0018(tmp_path)
     tdb.migrate(db)
     con = sqlite3.connect(db)
-    assert con.execute("SELECT renderer_id, render_lease_until, render_started_at, render_uploaded_at "
-                       "FROM videos").fetchall() == [("", "", "", "")]
+    assert con.execute("SELECT renderer_id, render_lease_until, render_started_at, render_uploaded_at, "
+                       "render_claim_id FROM videos").fetchall() == [("", "", "", "", "")]
     con.close()
 
 

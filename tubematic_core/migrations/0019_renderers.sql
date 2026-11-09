@@ -13,7 +13,10 @@
 -- that file needs no row update and no restart.
 --
 -- videos gains the lease: which renderer holds a RENDERING video, until when,
--- when it started, and when its mp4 arrived. A RENDERING row left by a
+-- when it started, and when its mp4 arrived. render_claim_id names one claim:
+-- a fresh random id per claim, so a renderer whose lease ran out (and which
+-- may even have claimed the same video again since) cannot upload or report
+-- for the claim it lost; the bundle, the upload and the result all name it. A RENDERING row left by a
 -- pre-upgrade renderer has renderer_id '' and an empty lease, which the
 -- worker's lease sweep reads as expired, so it is re-queued like a restart.
 --
@@ -69,6 +72,7 @@ ALTER TABLE videos ADD COLUMN renderer_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE videos ADD COLUMN render_lease_until TEXT NOT NULL DEFAULT '';
 ALTER TABLE videos ADD COLUMN render_started_at TEXT NOT NULL DEFAULT '';
 ALTER TABLE videos ADD COLUMN render_uploaded_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE videos ADD COLUMN render_claim_id TEXT NOT NULL DEFAULT '';
 
 -- The built-in renderer. Stamped with the time the migration ran (the same
 -- UTC format every other timestamp uses); the API also re-creates this row at

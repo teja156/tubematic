@@ -103,15 +103,21 @@ against different ones.
 A claim is one `POST /v1/claim`. The gateway, not the renderer, picks the video:
 
 1. It refuses a disabled renderer (`409 disabled`) and one on another version (`409 needs_upgrade`).
+   **A renderer that still holds an unfinished claim** (a `RENDERING` video under its id with nothing
+   uploaded) is answered that claim again — the same reply, the same claim id — and never handed a
+   second video. That is what a renderer whose claim reply was lost on the network needs, and it keeps
+   a renderer to one render at a time whatever it asks for.
 2. It lists the `RENDER_QUEUED` videos in `ORDER BY updated_at, id` and asks the scheduler
    (`tubematic_core/renderers.py::pick_video`, below) which one this renderer should take.
 3. It makes the [pre-render checks](#refused-before-anything-renders) on that video. A video they
    refuse leaves the queue with its comment and is never handed out; the claim moves to the next.
-4. It claims the video with one guarded `UPDATE`: `status = 'RENDERING'`, the renderer's id, a
-   lease, `render_started_at`, `WHERE id = ? AND status = 'RENDER_QUEUED' AND archived_at IS NULL`
-   and the renderer still enabled. The `WHERE` clause *is* the lock — two renderers that picked the
-   same video cannot both get it, and the loser's claim simply tries again.
-5. It answers with the video's id, its kind (`dom`, `cartoon_3d` or `mascot`), whether it needs the
+4. It claims the video with one guarded `UPDATE`: `status = 'RENDERING'`, the renderer's id, a new
+   random claim id (`render_claim_id`), a lease, `render_started_at`, `WHERE id = ? AND status =
+   'RENDER_QUEUED' AND archived_at IS NULL`, the renderer still enabled, and `NOT EXISTS` an unfinished
+   claim of the same renderer. The `WHERE` clause *is* the lock — two renderers that picked the
+   same video cannot both get it, two claims from one renderer cannot both succeed, and the loser
+   simply tries again (and is then answered the claim it holds).
+5. It answers with the video's id, its claim id, its kind (`dom`, `cartoon_3d` or `mascot`), whether it needs the
    GPU, its frame count, the lease length, and the render settings: `render_timeout_secs`,
    `render_stall_timeout_secs` and the watermark. **The renderer reads no settings**; each claim
    carries their values at the moment it was made.
@@ -244,8 +250,23 @@ mp4, for anything you want to reclaim earlier.
 A claimed video is held by a **lease**: `videos.render_lease_until`, set to `LEASE_SECS` (300
 seconds) from the claim. Each heartbeat from the renderer that holds it, while it reports that video
 as the one it is rendering, extends the lease by the same amount. A renderer that went idle never
-keeps a lease alive. The bundle, the upload and the result are all refused (`403`) to anyone but the
-lease holder, so a renderer that lost its lease cannot overwrite the work of the one that took over.
+keeps a lease alive.
+
+**Every claim has its own id.** The claim reply carries `claim_id`, a random id the gateway stores in
+`videos.render_claim_id`, and the renderer names it on the bundle, the upload and the result (the
+`X-Render-Claim` header). Each is refused (`403 not_lease_holder`) unless the caller holds that very
+claim, so a renderer that lost its lease cannot touch the claim that took the video over — even when
+the one that took over is the same renderer, claiming the video again, which a renderer id alone
+could not tell apart. Two moments matter because a lease can run out while a request is in flight:
+
+- **An upload is checked again before it lands.** The body streams into a temporary file; then, in one
+  write transaction, the gateway checks the claim still holds and renames the file into place. If the
+  claim was lost meanwhile the file is discarded and the upload answered `409 claim_lost`, so a slow
+  upload can never replace the mp4 a newer claim already delivered.
+- **A failure result moves the video only while its claim holds.** The retry count, the status change,
+  the comment and the release of the claim are one transaction guarded on `status = 'RENDERING'`, the
+  renderer and the claim id (`render_results.py::_claim_guard`). A result whose claim was lost between
+  the gateway's check and the routing changes nothing at all.
 
 There are three ways a held render ends without a result, and each re-queues the video the same way
 (`render_results.py::requeue_interrupted`): `render_fail_count` goes up by one and the video goes
@@ -327,8 +348,13 @@ process group.
 **The finished mp4 is uploaded, not written into the library.** `PUT /v1/jobs/<video_id>/output`
 streams it from disk; the gateway writes it to a temporary file beside
 `<output>/<project_id>/<video_id>.mp4`, flushes it to disk and renames it into place, so a reader
-never sees half a video. The renderer tries an upload up to three times while its lease holds, then
-reports the result. The job directory, the staged `public/<video_id>/` and (remote) the staged scenes
+never sees half a video. An upload is at most `TUBEMATIC_MAX_OUTPUT_BYTES` (default 8 GiB, set in
+`tubematic-api`'s environment): a larger `Content-Length` is refused with `413 output_too_large` before
+anything is read, and a body sent without one (chunked) is counted as it arrives and abandoned, its
+temporary file deleted, the moment it passes the limit. A renderer's body is untrusted input, and the
+output volume is the one the database lives on. The renderer tries an upload up to three times while
+its lease holds (never again after a `413`, which is reported as the render's error; a `403` or
+`409 claim_lost` throws the render away), then reports the result. The job directory, the staged `public/<video_id>/` and (remote) the staged scenes
 are removed however the job ended.
 
 ### The result
@@ -345,8 +371,9 @@ are removed however the job ended.
 A failure goes through `render_results.py::after_render_failure`, which counts the retry and posts
 the error as the comment ("Render failed: …", capped at 2000 characters). A `success` whose mp4 is
 missing or empty is routed as an `error`. A result is retried three times; one that never arrives is
-left to the lease, whose expiry re-queues the video. A result for a lease the renderer no longer holds
-is dropped and logged.
+left to the lease, whose expiry re-queues the video. A result for a claim the renderer no longer holds
+is dropped and logged — refused (`403`) when the claim was lost before it arrived, a no-op when it
+was lost while the result was being routed (see [Leases](#leases-restarts-and-lost-renderers)).
 
 **A render that cannot run at all is that video's error, not the renderer's exit.** `_run_job` is the
 per-video boundary: whatever escapes the download, the staging or the render (no `npx`, a full disk,
@@ -523,8 +550,13 @@ bounded by the worker's GPU-wait sweep (`worker.py::_sweep_gpu_waits`):
   to `FAILED` at once.
 - **One exists, but none is online and on main's version**: the video waits up to `GPU_WAIT_SECS`
   (30 minutes) from when it was queued, then goes to `FAILED`.
-- **An enabled renderer has not tested its GPU yet** (the first minutes after an install or an
-  upgrade): nothing is judged on no evidence, and the video waits as if a GPU renderer were offline.
+- **An enabled renderer has not tested its GPU yet**: the video waits as if a GPU renderer were
+  offline, rather than failing at once. This is deliberate. Right after an upgrade or a renderer
+  restart the built-in renderer's row has no probe yet (the probe runs at start and arrives with the
+  first heartbeat), so for those minutes no renderer counts as GPU-capable even on a machine whose GPU
+  works; failing every queued GPU video then would throw away work the renderer is about to take. The
+  wait is still capped by `GPU_WAIT_SECS` from when the video was queued, so an install with no
+  working GPU fails it at most 30 minutes later, with the same comment.
 
 `FAILED` bypasses `max_render_retries` and is terminal: a requeue would fail the same way, and sending
 the video to `REVISION_REQUESTED` would hand it to an agent that cannot repair a GPU. So the comment is
@@ -562,8 +594,10 @@ once more, fresh, and a second failure is the render's (a stall is reported as a
 and the GPU re-tested; an error goes to the agent). The segments are joined with ffmpeg's concat
 demuxer without re-encoding, and the soundtrack is muxed on: the synthesised mix
 (`cartoon/audio/mix/mix.wav`, written by the MCP server's `cartoon_soundtrack` and carried in the
-bundle) when it exists and is at least as new as the voice, else `audio.mp3` alone. The work directory
-beside the output is removed either way.
+bundle) when it exists and is at least as new as the voice, else `audio.mp3` alone. Both ffmpeg steps run
+as a segment does: in a process group of their own and registered as the job's live process, so a stop
+from the gateway kills the step at once, and a step past its timeout has its group killed and reaped. The
+work directory beside the output is removed either way.
 
 `render_timeout_secs` caps the whole segmented render, every segment, retry and ffmpeg step included, as it
 caps an ordinary render: each segment gets what is left of the one deadline, and the concat and the mux get

@@ -29,6 +29,8 @@ Everything runs from `docker-compose.yml`. Five services, six volumes, one netwo
 Flask, and in a thread of the same process the render gateway (`TUBEMATIC_GATEWAY_PORT=4443`), the
 second Flask app every renderer calls — see [HTTP API — The render gateway](05-http-api.md#the-render-gateway).
 The healthcheck names only port 4000, so this container's health says nothing about the gateway.
+`TUBEMATIC_MAX_OUTPUT_BYTES` (unset in Compose, so 8 GiB) caps one uploaded render, because a
+renderer's upload lands on the output volume beside the database.
 When the TLS pair is missing the gateway does not start and logs an error saying so; the API still
 serves the dashboard, and renderers cannot reach it until the secrets exist and the API is restarted.
 

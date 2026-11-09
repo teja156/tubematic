@@ -128,6 +128,7 @@ erDiagram
         TEXT    render_lease_until
         TEXT    render_started_at
         TEXT    render_uploaded_at
+        TEXT    render_claim_id
         TEXT    youtube_url
         TEXT    publish_title
         TEXT    publish_description
@@ -300,6 +301,7 @@ The central table. One row per video, from proposed topic to published file.
 | `render_lease_until` | TEXT NOT NULL | `''` | When the lease runs out unless the renderer's heartbeat extends it, UTC. See [Leases](11-rendering-and-review.md#leases-restarts-and-lost-renderers) |
 | `render_started_at` | TEXT NOT NULL | `''` | When the current render was claimed; the scheduler's "time spent so far" for a busy renderer |
 | `render_uploaded_at` | TEXT NOT NULL | `''` | When the render's mp4 arrived. A `RENDERING` row with this set is waiting for the worker's AI review, and is never re-queued |
+| `render_claim_id` | TEXT NOT NULL | `''` | The current claim's id: random, new on every claim, handed to the renderer with the claim. The bundle, the upload and the result must name it, so a renderer whose lease ran out cannot act for a later claim of the same video, its own included. Cleared with `renderer_id` — see [Leases](11-rendering-and-review.md#leases-restarts-and-lost-renderers) |
 | `youtube_url` | TEXT NOT NULL | `''` | Legacy single-URL publish target. Retired as a *read* path — publications live in their own table |
 | `publish_title` | TEXT NOT NULL | `''` | What the video is posted with, written by the agent with the script; distinct from `title` |
 | `publish_description` | TEXT NOT NULL | `''` | The post's description, written by the agent with the script |
@@ -688,8 +690,8 @@ picks a mascot. The Tubi insert uses literal values only, because a shipped migr
 thing forever. It is one-way in the usual sense: rolling back to a release that predates it needs the
 automatic pre-migration backup restored.
 
-`0019_renderers.sql` is plain SQL and additive too: the three renderer tables, the four lease
-columns on `videos` (all defaulting to `''`) and the built-in renderer's row. A row that was
+`0019_renderers.sql` is plain SQL and additive too: the three renderer tables, the five lease
+columns on `videos` (the claim id among them, all defaulting to `''`) and the built-in renderer's row. A row that was
 `RENDERING` when it was applied keeps `renderer_id = ''`, which the worker's lease sweep reads as an
 expired lease and re-queues, counting a retry, with the comment "Render interrupted by the upgrade".
 From this migration on a renderer has no database, so `upgrade.py` refuses `--no-stop` while it is

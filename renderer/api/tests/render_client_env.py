@@ -42,7 +42,8 @@ class Recorder(httpx.BaseTransport):
         if request.headers.get("content-type", "").startswith("application/json"):
             body = json.loads(request.content or b"null")
         self.requests.append({"method": request.method, "path": request.url.path, "json": body,
-                              "auth": request.headers.get("authorization", "")})
+                              "auth": request.headers.get("authorization", ""),
+                              "claim": request.headers.get("x-render-claim", "")})
         if self.hook is not None:
             answer = self.hook(request)
             if answer is not None:
