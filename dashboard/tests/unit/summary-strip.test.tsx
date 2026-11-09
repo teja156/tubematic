@@ -63,6 +63,12 @@ describe("SummaryStrip", () => {
     expect(screen.getByTestId("tile-count-04").textContent).toBe("0");
   });
 
+  it("tile-05 (Published) counts a partial publish too — it is live somewhere (TMDEV-191)", () => {
+    render(<SummaryStrip stats={{ PUBLISHED: 4, PARTIALLY_PUBLISHED: 2 }} />);
+    expect(screen.getByTestId("tile-count-05").textContent).toBe("6");
+    expect(screen.getByTestId("tile-count-04").textContent).toBe("0");
+  });
+
   it("renders all six tiles regardless of stats content", () => {
     render(<SummaryStrip stats={{}} />);
     for (const id of ["01", "02", "03", "04", "05", "06"]) {

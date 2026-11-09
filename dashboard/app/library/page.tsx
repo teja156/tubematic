@@ -14,6 +14,7 @@ const LIBRARY_STATES: Array<{ status: VideoStatus; label: string; accent: string
   { status: "VIDEO_APPROVED", label: "Approved",   accent: "var(--cyan)" },
   { status: "SCHEDULED",      label: "Scheduled",  accent: "var(--cyan)" },
   { status: "PUBLISHING",     label: "Publishing", accent: "var(--blue)" },
+  { status: "PARTIALLY_PUBLISHED", label: "Partially published", accent: "var(--amber)" },
   { status: "PUBLISHED",      label: "Published",  accent: "var(--green)" },
 ];
 

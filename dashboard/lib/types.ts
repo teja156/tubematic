@@ -13,6 +13,7 @@ export type VideoStatus =
   | "SCHEDULED"
   | "PUBLISHING"
   | "PUBLISHED"
+  | "PARTIALLY_PUBLISHED"
   | "FAILED";
 
 export type Strategy = "curriculum" | "trending" | "mining" | "manual";
@@ -309,6 +310,8 @@ export interface Settings {
   notify_topic_proposed: boolean;
   notify_script_ready: boolean;
   notify_video_ready: boolean;
+  notify_partially_published: boolean;
+  notify_failed: boolean;
   /** Where the dashboard is reachable from wherever Discord is read, e.g.
    *  "http://192.168.1.20:3000". Blank means notifications carry no links —
    *  the container cannot know what hostname a human reaches it by. */

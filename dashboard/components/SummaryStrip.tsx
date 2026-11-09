@@ -55,7 +55,8 @@ const CARDS: Array<{
     id: "05",
     label: "Published",
     sub: "Live on the channel",
-    statuses: ["PUBLISHED"],
+    // A partial publish is live too; the board's PARTIAL tag says the rest.
+    statuses: ["PUBLISHED", "PARTIALLY_PUBLISHED"],
     accent: "var(--mint)",
     spark: "▅▆▇▇█",
   },

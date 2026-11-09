@@ -328,9 +328,11 @@ to `PUBLISHED` with its post links. If nothing is live, the video goes back to `
 the Publish dialog opens. The button is offered only for a video that failed while publishing, so a
 render failure shows Delete only.
 
-**A video reached `PUBLISHED` but one destination shows an error.** Working as intended. There is no
-un-publish, so a video live anywhere genuinely is published. `FAILED` is reserved for the case where
-every destination failed.
+**A video shows `PARTIALLY_PUBLISHED`.** It went out on some accounts and failed on others; the
+Publishing Results tab has the error for each. There is no un-publish, so it is never `FAILED`, and
+it waits for you instead of calling itself `PUBLISHED`. Download the video from **Mark as
+published…**, post it to the failed accounts by hand, then confirm. Its files are kept until you do —
+see [Publishing — When a publish partly fails](06-publishing.md#when-a-publish-partly-fails).
 
 **A video is stuck at `PUBLISHING`.** The worker settles it on each tick, so check the worker is
 running — publishing is the `tubematic-worker` container, not the renderer:
@@ -378,7 +380,7 @@ is Business or Creator; insights do not exist on a Personal account.
 ## Notifications
 
 **Nothing arrives at all.** Notifications need two things set, and both default to off: a
-`discord_webhook_url` and at least one of the three triggers, all on Settings → Notifications. They
+`discord_webhook_url` and at least one trigger, all on Settings → Notifications. They
 are also sent by the worker, so the `tubematic-worker` container has to be running.
 
 **A message is late.** Expected, by up to a tick. The sweep runs once each worker tick, about every

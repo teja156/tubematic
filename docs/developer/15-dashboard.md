@@ -217,7 +217,7 @@ file and records the implementation choices behind it.
 |---|---|---|
 | `/` | `dashboard/app/page.tsx` → `dashboard/components/PipelineClient.tsx` | See [The pipeline board](#the-pipeline-board) |
 | `/new-video` | `dashboard/app/new-video/page.tsx` | See [The New Video page](#the-new-video-page) |
-| `/library` | `dashboard/app/library/page.tsx` | Lists `VIDEO_READY`, `VIDEO_APPROVED`, `SCHEDULED`, `PUBLISHING` and `PUBLISHED`. It never shows a video at a voice checkpoint, which is why it does not hand the modal the voice roster |
+| `/library` | `dashboard/app/library/page.tsx` | Lists `VIDEO_READY`, `VIDEO_APPROVED`, `SCHEDULED`, `PUBLISHING`, `PARTIALLY_PUBLISHED` and `PUBLISHED`. It never shows a video at a voice checkpoint, which is why it does not hand the modal the voice roster |
 | `/archive` | `dashboard/app/archive/page.tsx` | Videos with `archived_at` set — by the Delete action or the [retention sweep](11-rendering-and-review.md#retention). A row opens the modal read-only |
 | `/topics` | `dashboard/app/topics/page.tsx` | The add form's description is a textarea on its own row below the name, with a counter that stops input at the API's 2000-character limit and counts code points as the API does. A three-row box beside the one-line name made that row ragged. The domain rows keep the description on one truncated line on purpose: the list is an index, and on Projects the one-line description in the 340px column is what keeps that column from growing and crushing the video pane. A domain's defaults (visual style, voice, script profile) are set on its row rather than in an edit form because the dashboard has none: `POST /projects` is an upsert, so the row selects save through it and a domain created before a default existed can still be set. Because that route is a full replace, every row edit re-sends every field. A deleted default profile shows as "Unavailable profile" because the list omits deleted profiles, so there is no name to show, and the id is a UUID. The profile picker is capped at 220px in the add form too, since profile names have no length limit. Each picker on a row sits in a fixed 150px field: a select is otherwise as wide as its longest option, and three at that width crushed a seed domain's name to about 70px at 1280px. On a narrower screen the row wraps (the pause button moves to a second line) rather than letting the name shrink under the pickers. Illustrated is disabled while no OpenAI key is stored, and a refused change is alerted rather than silently reverted. The Mining toggle is greyed out, with the reason on hover, while `GET /research/strategies` reports `mining_available: false` — read from that route rather than from the masked `/settings` key, so a key supplied only through the API's environment still counts — and a refused toggle shows the API's message and changes nothing. The **Topic cap** field saves on blur or Enter, and an out-of-range entry reverts. "N filed" is `topic_count`, which counts archived and rejected videos, so it can read higher than the video count after it. On an expired seed the ACTIVE badge is hidden, because beside EXPIRED it read as a contradiction; PAUSED still shows, since resuming alone would not re-open the domain. The cap field sizes to its content with "N filed" kept on one line, so a seed row with a three-digit count still fits on one line at 1280px. See [Topic cap](02-pipeline.md#topic-cap) |
 | `/projects` | `dashboard/app/projects/page.tsx` | Two-pane drill-down with its own action dispatcher (see [Actions](#actions)). An expired domain carries a badge |
@@ -262,7 +262,10 @@ works that way is explained in [Where topics come from](02-pipeline.md#where-top
 `dashboard/components/KanbanBoard.tsx` renders 11 main columns in pipeline order plus 3 side columns
 (Rejected, Revision Requested, Failed). `RENDER_QUEUED` is folded into the Rendering column via
 `extraStatuses` — a video waiting for the renderer and a video being rendered are the same thing from
-a human's point of view.
+a human's point of view. `PARTIALLY_PUBLISHED` is folded into Published the same way, because it is
+live; its card carries a **PARTIAL** tag instead of LIVE, which is the only thing on the board saying a
+human still owes it an upload. A status with no column and no `extraStatuses` entry simply vanishes
+from the board, which `tests/unit/kanban-board.test.tsx` guards for this one.
 
 `dashboard/components/ActionPane.tsx` is the more important surface: a "Quick Actions" inbox listing only
 videos sitting at a human checkpoint, grouped under a heading per checkpoint in pipeline order
@@ -402,7 +405,7 @@ answers.
 | `TimeZoneProvider.tsx` | Fetches the host's timezone once and provides it via context. See below |
 | `Toast.tsx` | `useToasts()` plus a stack renderer. Success toasts auto-dismiss after 3s; error toasts persist |
 | `SummaryStrip.tsx` | Six stat tiles: Topics Awaiting, Scripts Ready, Videos Ready, In Pipeline, Published, Failed |
-| `StatusBadge.tsx` | Colored dot and label for any of the 15 statuses |
+| `StatusBadge.tsx` | Colored dot and label for any of the 16 statuses |
 | `SectionLabel.tsx` | Section heading rule with an optional count |
 | `RenderersPanel.tsx` | Settings → Rendering's **Renderers** panel. See [The settings page](#the-settings-page). Its rules (the status chip, the GPU verdict, the banner condition) are pure functions in `dashboard/lib/renderers.ts`, so they are unit-tested without React |
 | `UpdateBanner.tsx` | The "newer release available" strip under the top bar, mounted in `app/layout.tsx`. See [Update check](#update-check) |
@@ -546,7 +549,7 @@ key. Re-submitting an unchanged mask is a server-side no-op; clearing the field 
 an empty string, which removes the key.
 
 **The Notifications tab holds the Discord webhook URL rather than the API Keys tab**, even though it
-is a secret and renders through the same `SecretInput`. It is grouped with the three triggers it
+is a secret and renders through the same `SecretInput`. It is grouped with the triggers it
 configures, so someone looking for notification settings finds all of them in one place. Saving a
 non-empty URL probes it — see [Notifications](../user-guide/05-settings.md#notifications) — so a revoked or
 mistyped webhook is rejected there and then rather than discovered as messages that never arrive.

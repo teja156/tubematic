@@ -82,7 +82,7 @@ no banner shows and nothing else is affected. There is no setting to switch it o
 |---|---|
 | **Pipeline** (`/`) | The board: every video that is not archived, by status, plus the Quick Actions inbox of everything waiting for you. See [The pipeline board](#the-pipeline-board) |
 | **New Video** | Create a video from a topic you give it — the way to ask for a specific video. See [New Video](#new-video) |
-| **Library** | Finished work — videos at Video Ready, Video Approved, Scheduled, Publishing and Published. A status filter, a strategy filter, a sort (newest, oldest, highest or lowest score) and a search over title and topic. A scheduled video's card says when it goes out |
+| **Library** | Finished work — videos at Video Ready, Video Approved, Scheduled, Publishing, Partially published and Published. A status filter, a strategy filter, a sort (newest, oldest, highest or lowest score) and a search over title and topic. A scheduled video's card says when it goes out |
 | **Archive** | Videos whose files were deleted, by you or by the [retention setting](05-settings.md#video-retention). Each keeps its title, project, status, archive date, total views and post links; opening one shows its window read-only |
 | **Topics** | Where topics come from: which research modes are on, the mining URL list, and every project domain with its settings. See [Topics](#topics) |
 | **Projects** | Pick a domain on the left, see and act on its videos on the right. A domain at its topic cap carries an "expired" badge |
@@ -110,7 +110,10 @@ flashes green or red and disappears once you act on it.
 Below it, the **board** has a column per status in pipeline order — Topic Proposed, Topic Approved,
 Script Ready, Voicing, Voice Ready, Rendering, Video Ready, Video Approved, Scheduled, Publishing,
 Published — and three side columns: Rejected, Revision Requested and Failed. A video waiting for the
-renderer is shown under Rendering, since from your side waiting and rendering are the same thing.
+renderer is shown under Rendering, since from your side waiting and rendering are the same thing, and
+a video that published on only some of its accounts is shown under Published, tagged **PARTIAL** —
+see [When a publish partly fails](06-publishing.md#when-a-publish-partly-fails). The published
+counter at the top includes those.
 What each status means is in [The Pipeline](../developer/02-pipeline.md#the-states).
 
 A card shows:

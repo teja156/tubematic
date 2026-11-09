@@ -47,7 +47,9 @@ flowchart TD
     PB -->|"a scheduled post<br/>is held"| SC[SCHEDULED]:::auto
     SC -->|"its time comes"| PB
     SC -.->|"you cancel"| VA
-    PB -->|any destination live| PD[PUBLISHED]:::term
+    PB -->|every destination live| PD[PUBLISHED]:::term
+    PB -->|"some live,<br/>some failed"| PP[PARTIALLY_PUBLISHED]:::human
+    PP -->|"you post the rest by hand,<br/>then Mark as published"| PD
     PB -->|"all failed, or the<br/>one-hour backstop"| F
     F -.->|"Retry publishing:<br/>a live post exists"| PB
     F -.->|"Retry publishing:<br/>nothing is live"| VA
@@ -81,7 +83,8 @@ flowchart TD
 | `VIDEO_APPROVED` | Human | You signed it off. Publishing, if enabled, starts here — by hand, unless the video's project is on [Auto Pilot](14-publishing.md#auto-pilot) |
 | `SCHEDULED` | Worker | Uploaded; the publishing service holds the post until the time you picked. You can cancel it back to `VIDEO_APPROVED` |
 | `PUBLISHING` | Worker | Uploaded to the publishing service; awaiting per-destination results |
-| `PUBLISHED` | — | At least one destination went live |
+| `PUBLISHED` | — | Every destination went live — or, after a partial publish, you marked it published |
+| `PARTIALLY_PUBLISHED` | Human | Live on some destinations, failed on others. You post it to the failed ones by hand, then **Mark as published**. Its files are kept until then — see [Publishing](14-publishing.md#a-partial-publish) |
 | `REVISION_REQUESTED` | Agent | Something needs fixing. The agent diagnoses and re-routes |
 | `FAILED` | — | Terminal, except for a video that failed while publishing: **Retry publishing** checks postforme and moves it to `PUBLISHING` (a live post was found) or back to `VIDEO_APPROVED` (nothing is live) |
 
@@ -152,7 +155,8 @@ The cheapest place to say no. Rejecting here costs nothing but the research that
 ### `VIDEO_APPROVED` — the publish checkpoint
 
 Publishing is irreversible and **never the agent's**. No MCP tool can publish, `VIDEO_APPROVED` is not in
-`WORKABLE_STATUSES`, and the agent is told never to write `SCHEDULED`, `PUBLISHING` or `PUBLISHED`.
+`WORKABLE_STATUSES`, and the agent is told never to write `SCHEDULED`, `PUBLISHING`, `PUBLISHED`
+or `PARTIALLY_PUBLISHED`.
 A post can go out now or at a time you schedule. With publishing disabled, `VIDEO_APPROVED` is simply
 terminal. See [Publishing](14-publishing.md). Only [Auto Pilot](14-publishing.md#auto-pilot) posts
 without a click, and only for the projects selected for it.
@@ -170,14 +174,28 @@ flat-rejected to the terminal `TOPIC_REJECTED`, and its comment is optional.
 ## Notifications
 
 A checkpoint only works if someone knows they have been handed one. Tubematic can announce all
-three to a Discord channel, each independently switchable, configured entirely from the dashboard's
-Settings → Notifications tab. Everything is off until both a webhook URL and at least one trigger
-are set. The keys are listed under [Settings](../user-guide/05-settings.md#notifications).
+three to a Discord channel, plus two alerts for a video that needs a person: a publish that went out
+on some accounts and failed on others (`PARTIALLY_PUBLISHED`), and any video reaching `FAILED`. Each
+of the five is independently switchable, configured entirely from the dashboard's Settings →
+Notifications tab. Everything is off until both a webhook URL and at least one trigger are set. The
+keys are listed under [Settings](../user-guide/05-settings.md#notifications).
+
+**`FAILED` has one toggle, not one per cause.** Render failures past the retry cap, a publish where
+every account failed, a publish that never created a post, a refused job path and a GPU-only video
+with no working GPU all mean the same thing to a human — stuck, needs a person — with the same next
+step. The cause goes in the message instead. Every path into `FAILED` writes an agent comment
+composed for a human, so the message carries the newest agent comment written no more than two
+minutes before the arrival (`worker.py::FAILURE_REASON_WINDOW_SECS`). The window is there because an
+agent escalating writes its comment and the status as two tool calls, and the comment can land a
+second or more first; the bound is what stops an earlier retry's "Render failed: …" being reported
+as the final reason. Whether it failed while publishing is read from the publication rows,
+the same test Retry publishing uses, and only then does the message offer Retry publishing.
 
 **Announcing is a sweep in the [worker](12-the-worker.md), not a send at each write site.** The
-three statuses are written by three different processes — `TOPIC_PROPOSED` by the MCP server's
-`create_video`, `SCRIPT_READY` by either the MCP server or the Flask `PATCH`, `VIDEO_READY` by the
-worker's own review thread — and the worker's poll loop is the only place that sees all three. That choice also buys
+statuses are written by different processes — `TOPIC_PROPOSED` by the MCP server's `create_video`,
+`SCRIPT_READY` by either the MCP server or the Flask `PATCH`, `VIDEO_READY` by the worker's own
+review thread, `PARTIALLY_PUBLISHED` by the worker's publish poll, and `FAILED` by the worker and
+the render gateway — and the worker's poll loop is the only place that sees them all. That choice also buys
 three things a per-call-site send could not:
 
 - **Bundling.** A research run files several topics seconds apart. The sweep holds proposals back
@@ -200,7 +218,7 @@ rather than a status name. A status name alone is not an identity: if the whole 
 between two sweeps — rare with a sweep every twenty seconds, but certain to happen sooner or later,
 for example while the worker is stopped — the second `SCRIPT_READY` would read as already announced and the human would never
 hear that their feedback landed. Every status write already bumps `updated_at`, so pairing the two
-makes each arrival distinct without any of the three writing processes needing to know
+makes each arrival distinct without any of the writing processes needing to know
 notifications exist. The one thing it cannot separate is two status changes inside the same second.
 
 **Switching a trigger on does not replay a backlog.** Videos keep reaching checkpoints while

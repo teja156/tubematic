@@ -182,9 +182,10 @@ def test_all_targets_succeeding_publishes_the_video(db_path):
     assert all(p["published_at"] for p in pubs)
 
 
-def test_a_partial_success_still_counts_as_published(db_path):
-    """There is no un-publish. A video live on one account IS published, and
-    calling it FAILED would lie about the account that did post."""
+def test_a_partial_success_is_partially_published(db_path):
+    """There is no un-publish, so a video live on one account must not be
+    FAILED — but nor is it PUBLISHED, which would leave the failed account's
+    upload with no owner. PARTIALLY_PUBLISHED is a human-owned state."""
     _enable(db_path)
     _publishing_video(db_path, accounts=("spc_a", "spc_b"))
     with mock.patch("postforme.get_post_results",
@@ -193,10 +194,15 @@ def test_a_partial_success_still_counts_as_published(db_path):
                                           error={"message": "account disconnected"})]):
         worker._poll_publishing_videos()
     status, pubs = _rows(db_path)
-    assert status == "PUBLISHED"
+    assert status == "PARTIALLY_PUBLISHED"
     assert pubs[0]["status"] == "PUBLISHED"
     assert pubs[1]["status"] == "FAILED"
     assert "account disconnected" in pubs[1]["error"]
+    con = sqlite3.connect(db_path)
+    comment = con.execute("SELECT content FROM comments WHERE video_id = 'vid-pub'"
+                          " ORDER BY id DESC LIMIT 1").fetchone()[0]
+    con.close()
+    assert "1 of 2" in comment and "Mark as published" in comment
 
 
 def test_every_target_failing_fails_the_video(db_path):
@@ -221,7 +227,7 @@ def test_a_target_that_never_reports_is_settled_by_the_wall_clock_backstop(db_pa
     with mock.patch("postforme.get_post_results", return_value=[_result("spc_a")]):
         worker._poll_publishing_videos()
     status, pubs = _rows(db_path)
-    assert status == "PUBLISHED"
+    assert status == "PARTIALLY_PUBLISHED"
     assert pubs[1]["status"] == "FAILED"
     assert "did not report" in pubs[1]["error"]
 

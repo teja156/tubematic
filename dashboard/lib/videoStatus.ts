@@ -13,6 +13,7 @@ export const DELETABLE_STATUSES: ReadonlySet<VideoStatus> = new Set<VideoStatus>
   "VIDEO_READY",
   "VIDEO_APPROVED",
   "PUBLISHED",
+  "PARTIALLY_PUBLISHED",
   "FAILED",
 ]);
 
@@ -29,6 +30,20 @@ export function canRetryPublish(
   publicationCount: number,
 ): boolean {
   return !video.archived_at && video.status === "FAILED" && publicationCount > 0;
+}
+
+// Whether to offer "Mark as published" (TMDEV-191): the only way out of
+// PARTIALLY_PUBLISHED, once the human has posted to the failed accounts by hand.
+// Not gated on publishing being enabled — the human may have switched it off
+// since, and the video still needs a way out.
+export function canMarkPublished(video: Pick<Video, "status" | "archived_at">): boolean {
+  return !video.archived_at && video.status === "PARTIALLY_PUBLISHED";
+}
+
+/** PARTIALLY_PUBLISHED -> PUBLISHED, guarded so a video that moved meanwhile is
+ *  refused rather than overwritten. Throws with a message fit for the human. */
+export async function markPublished(id: string): Promise<void> {
+  await patchVideo(id, { status: "PUBLISHED", onlyIfCurrentStatus: "PARTIALLY_PUBLISHED" });
 }
 
 // Whether the scheduled agent has given up on this video (TMDEV-129): too many

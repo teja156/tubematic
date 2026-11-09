@@ -50,6 +50,8 @@ const MOCK_SETTINGS: Settings = {
   notify_topic_proposed: false,
   notify_script_ready: false,
   notify_video_ready: false,
+  notify_partially_published: false,
+  notify_failed: false,
   dashboard_base_url: "",
   user_preferences: "",
   auto_pilot_enabled: false,
@@ -159,6 +161,8 @@ const TAB_OF: Record<string, string> = {
   "toggle-notify-topic-proposed": "notifications",
   "toggle-notify-script-ready": "notifications",
   "toggle-notify-video-ready": "notifications",
+  "toggle-notify-partially-published": "notifications",
+  "toggle-notify-failed": "notifications",
   "input-user-preferences": "preferences",
 };
 
@@ -1596,18 +1600,20 @@ describe("SettingsPage — Discord notifications (TMDEV-5)", () => {
   beforeEach(() => { stubFetch(); });
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-  it("renders the webhook field and all three triggers on their own tab", async () => {
+  it("renders the webhook field and every trigger on their own tab", async () => {
     await renderTab("notifications");
     expect(screen.getByTestId("input-discord-webhook-url")).toBeTruthy();
     expect(screen.getByTestId("input-dashboard-base-url")).toBeTruthy();
     expect(screen.getByTestId("toggle-notify-topic-proposed")).toBeTruthy();
     expect(screen.getByTestId("toggle-notify-script-ready")).toBeTruthy();
     expect(screen.getByTestId("toggle-notify-video-ready")).toBeTruthy();
+    expect(screen.getByTestId("toggle-notify-partially-published")).toBeTruthy();
+    expect(screen.getByTestId("toggle-notify-failed")).toBeTruthy();
   });
 
   it("shows every trigger off by default", async () => {
     await renderTab("notifications");
-    for (const key of ["topic-proposed", "script-ready", "video-ready"]) {
+    for (const key of ["topic-proposed", "script-ready", "video-ready", "partially-published", "failed"]) {
       expect(screen.getByTestId(`toggle-notify-${key}`)).toHaveTextContent("OFF");
     }
   });

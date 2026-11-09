@@ -296,6 +296,15 @@ def _video(**over):
     return base
 
 
+def _pub(platform, account, status, *, url="", error="", post_id="sp_1"):
+    return {"platform": platform, "social_account_id": account, "status": status,
+            "post_url": url, "error": error, "postforme_post_id": post_id}
+
+
+PARTIAL = [_pub("youtube", "spc_yt", "PUBLISHED", url="https://youtu.be/abc"),
+           _pub("instagram", "spc_ig", "FAILED", error="account disconnected")]
+
+
 def _assert_within_discord_limits(payload):
     embeds = payload["embeds"]
     assert len(embeds) <= dn.MAX_EMBEDS
@@ -314,6 +323,8 @@ def _assert_within_discord_limits(payload):
     (dn.build_script_ready_payload, _video()),
     (dn.build_video_ready_payload, _video()),
     (dn.build_voicing_stalled_payload, _video(stalled_secs=5460)),
+    (dn.build_partially_published_payload, _video(publications=PARTIAL)),
+    (dn.build_failed_payload, _video(failure_reason="Render failed 2 times.", publications=[])),
 ])
 def test_every_builder_stays_within_the_limits(build, arg):
     _assert_within_discord_limits(build(arg))
@@ -325,6 +336,14 @@ def test_every_builder_stays_within_the_limits(build, arg):
     (dn.build_video_ready_payload,
      _video(title="T" * 900, review_summary="r" * 9000, duration_secs=132)),
     (dn.build_voicing_stalled_payload, _video(title="T" * 900, stalled_secs=10 ** 9)),
+    (dn.build_partially_published_payload,
+     _video(title="T" * 900, publications=[
+         _pub("p" * 300, "a" * 300, "FAILED", error="e" * 5000) for _ in range(60)]
+         + [_pub("youtube", f"spc_{i}", "PUBLISHED", url="https://x/" + "u" * 900)
+            for i in range(60)])),
+    (dn.build_failed_payload,
+     _video(title="T" * 900, failure_reason="r" * 9000,
+            publications=[_pub("p" * 300, "a" * 300, "FAILED", error="e" * 5000)] * 60)),
 ])
 def test_absurd_input_still_stays_within_the_limits(build, arg):
     """A 400 from Discord loses the notification silently, so nothing the
@@ -418,6 +437,8 @@ def test_voicing_stalled_names_the_video_and_how_long():
     (dn.build_script_ready_payload, _video(), "/"),
     (dn.build_video_ready_payload, _video(), "/library"),
     (dn.build_voicing_stalled_payload, _video(stalled_secs=5460), "/"),
+    (dn.build_partially_published_payload, _video(publications=PARTIAL), "/library"),
+    (dn.build_failed_payload, _video(failure_reason="x", publications=[]), "/"),
 ])
 def test_a_configured_base_url_becomes_a_link(build, arg, path):
     desc = build(arg, base_url="http://box:3000")["embeds"][0]["description"]
@@ -434,6 +455,8 @@ def test_a_trailing_slash_on_the_base_url_does_not_double_up():
     (dn.build_script_ready_payload, _video()),
     (dn.build_video_ready_payload, _video()),
     (dn.build_voicing_stalled_payload, _video(stalled_secs=5460)),
+    (dn.build_partially_published_payload, _video(publications=PARTIAL)),
+    (dn.build_failed_payload, _video(failure_reason="Render failed 2 times.", publications=[])),
 ])
 def test_no_base_url_means_no_link_rather_than_a_broken_one(build, arg):
     """The container has no idea what hostname a human reaches it by, so there
@@ -454,3 +477,64 @@ def test_an_unscored_topic_says_so_rather_than_scoring_zero():
         [_video(strategy="manual", producibility_score=0)])["embeds"][0]["fields"][0]
     assert "unscored" in field["value"]
     assert "0/10" not in field["value"]
+
+
+# ── Partially published and failed (TMDEV-191) ───────────────────────────────
+
+def test_partially_published_counts_the_accounts_and_names_each_failure():
+    embed = dn.build_partially_published_payload(_video(publications=PARTIAL))["embeds"][0]
+    assert "1 of 2" in embed["title"] and "DNS in 90 seconds" in embed["title"]
+    assert embed["color"] == dn.COLOR_ALERT
+    failed = [f for f in embed["fields"] if "spc_ig" in f["name"]]
+    assert len(failed) == 1
+    assert "Instagram" in failed[0]["name"] or "instagram" in failed[0]["name"]
+    assert "account disconnected" in failed[0]["value"]
+    # The successes are linked, and the account that worked is never listed as a failure.
+    assert any("https://youtu.be/abc" in f["value"] for f in embed["fields"])
+    assert not any("spc_yt" in f["name"] and "disconnected" in f["value"] for f in embed["fields"])
+
+
+def test_partially_published_says_what_to_do_next():
+    desc = dn.build_partially_published_payload(_video(publications=PARTIAL))["embeds"][0]["description"]
+    assert "download" in desc.lower() and "by hand" in desc and "Mark as published" in desc
+
+
+def test_a_failed_account_with_no_recorded_error_still_says_so():
+    pubs = [_pub("youtube", "spc_yt", "PUBLISHED"), _pub("tiktok", "spc_tt", "FAILED")]
+    embed = dn.build_partially_published_payload(_video(publications=pubs))["embeds"][0]
+    field = next(f for f in embed["fields"] if "spc_tt" in f["name"])
+    assert field["value"].strip()
+
+
+def test_failed_carries_the_recorded_reason():
+    embed = dn.build_failed_payload(_video(
+        failure_reason="Render failed 2 times (limit 1) — giving up. Last error: OOM",
+        publications=[]))["embeds"][0]
+    assert "Last error: OOM" in embed["description"]
+    assert embed["color"] == dn.COLOR_ALERT
+    assert "DNS in 90 seconds" in embed["title"]
+
+
+def test_a_failure_with_no_publication_rows_offers_no_retry():
+    """A render failure never wrote publication rows, and Retry publishing only
+    exists for a video that failed while publishing."""
+    desc = dn.build_failed_payload(_video(failure_reason="x", publications=[]))["embeds"][0]["description"]
+    assert "Retry publishing" not in desc
+
+
+@pytest.mark.parametrize("pubs,cause", [
+    # A post went out and every account refused it.
+    ([_pub("youtube", "spc_yt", "FAILED", error="quota")], "every account"),
+    # No post was ever created at postforme before the deadline.
+    ([_pub("youtube", "spc_yt", "FAILED", post_id="")], "no post was created"),
+])
+def test_a_publish_failure_names_its_cause_and_offers_retry(pubs, cause):
+    embed = dn.build_failed_payload(_video(failure_reason="", publications=pubs))["embeds"][0]
+    text = (embed["title"] + embed["description"]).lower()
+    assert cause in text
+    assert "retry publishing" in text and "checks postforme first" in text
+
+
+def test_a_failure_with_no_recorded_reason_says_where_to_look():
+    desc = dn.build_failed_payload(_video(failure_reason="", publications=[]))["embeds"][0]["description"]
+    assert "comments" in desc

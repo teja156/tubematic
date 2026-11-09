@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -22,7 +22,7 @@ import { shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing 
 import { LogList } from "@/components/LogList";
 import { CostBreakdown } from "@/components/CostBreakdown";
 import { formatDateTime, formatScheduled } from "@/lib/datetime";
-import { canDelete, canRetryPublish, isAgentStuck, retryAgent } from "@/lib/videoStatus";
+import { canDelete, canMarkPublished, canRetryPublish, isAgentStuck, markPublished, retryAgent } from "@/lib/videoStatus";
 import { platformLabel } from "@/lib/platforms";
 import {
   AGENT_EFFORTS, type AgentPicks, agentChanged, agentLabel, agentOptions, agentPicksPayload,
@@ -368,6 +368,9 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const [reviewExpanded, setReviewExpanded] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [markOpen, setMarkOpen] = useState(false);
+  const [marking, setMarking] = useState(false);
+  const [markError, setMarkError] = useState("");
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState("");
   const [cancellingSchedule, setCancellingSchedule] = useState(false);
@@ -377,14 +380,35 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // Where this video actually went (TMDEV-83). Replaces videos.youtube_url as
   // the read path — one TEXT column cannot hold four platform URLs.
   const [publications, setPublications] = useState<VideoPublication[]>([]);
+  // Whether `publications` is this video's real list. Mark as published reads
+  // it to say which accounts failed, so it waits for "ok" (TMDEV-191).
+  const [publicationsState, setPublicationsState] = useState<"loading" | "ok" | "error">("loading");
+  // The video on screen. This modal stays mounted between videos, so a
+  // response — or an action's callback (publish, retry, cancel) that started a
+  // refresh late — can belong to the video shown before; every refresh drops
+  // one that does not match. Without it a late refreshVideo swapped the modal
+  // back to the old video, and its publication rows could unlock the new
+  // video's Mark as published (TMDEV-191).
+  const shownVideoId = useRef<string | null>(null);
+  // And of the requests for that video, only the newest of each kind may land:
+  // the modal's first fetch answering after a retry's refresh would otherwise
+  // restore the pre-retry snapshot. Numbers only grow, so this also covers a
+  // video closed and reopened while its old requests were still out.
+  const videoRequest = useRef(0);
+  const publicationsRequest = useRef(0);
+  const logsRequest = useRef(0);
   const [logs, setLogs] = useState<LogRecord[]>([]);
 
   const seedId = seed ? seed.id : null;
 
   function refreshVideo(id: string) {
+    if (id !== shownVideoId.current) return;
+    const request = ++videoRequest.current;
     fetch(`/api/proxy/videos/${id}`)
       .then((r) => r.json())
-      .then((full: Video) => setVideo(full))
+      .then((full: Video) => {
+        if (request === videoRequest.current && id === shownVideoId.current) setVideo(full);
+      })
       .catch(() => {});
   }
 
@@ -392,21 +416,42 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     // No service filter: one video's trail spans the renderer that rendered it,
     // the MCP tools that voiced and staged it, and the API calls that moved it
     // between statuses.
+    if (id !== shownVideoId.current) return;
+    const request = ++logsRequest.current;
+    const current = () => request === logsRequest.current && id === shownVideoId.current;
     fetch(`/api/proxy/logs?video_id=${encodeURIComponent(id)}&limit=200`)
       .then((r) => r.json())
-      .then((data: Partial<LogsResponse>) =>
-        setLogs(Array.isArray(data.records) ? data.records : []))
-      .catch(() => setLogs([]));
+      .then((data: Partial<LogsResponse>) => {
+        if (current()) setLogs(Array.isArray(data.records) ? data.records : []);
+      })
+      .catch(() => { if (current()) setLogs([]); });
   }
 
   function refreshPublications(id: string) {
+    if (id !== shownVideoId.current) return;
+    const request = ++publicationsRequest.current;
     fetch(`/api/proxy/videos/${id}/publications`)
-      .then((r) => r.json())
-      .then((rows: VideoPublication[]) => setPublications(Array.isArray(rows) ? rows : []))
-      .catch(() => {});
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((rows: VideoPublication[]) => {
+        if (request !== publicationsRequest.current || id !== shownVideoId.current) return;
+        if (!Array.isArray(rows)) throw new Error("not a list");
+        setPublications(rows);
+        setPublicationsState("ok");
+      })
+      .catch(() => {
+        if (request !== publicationsRequest.current || id !== shownVideoId.current) return;
+        // Cleared, not kept: after a retry, a cancel or a publish the old rows
+        // describe a state that no longer exists.
+        setPublications([]);
+        setPublicationsState("error");
+      });
   }
 
   useEffect(() => {
+    shownVideoId.current = seed ? seed.id : null;
     if (!seed) { setVideo(null); return; }
     setVideo(seed);
     setPickedVoice(null);
@@ -428,6 +473,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     setCancelScheduleError("");
     setReviseOpen(openRevise);
     setPublications([]);
+    setPublicationsState("loading");
     // Cleared before refetching, like publications above — otherwise opening a
     // second video briefly shows the first one's records.
     setLogs([]);
@@ -652,6 +698,8 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     && (video.status === "TOPIC_PROPOSED" || video.status === "SCRIPT_READY");
   const deletable = canDelete(video);
   const retryable = publishingEnabled && canRetryPublish(video, publications.length);
+  const markable = canMarkPublished(video);
+  const publishedCount = publications.filter((p) => p.status === "PUBLISHED").length;
   const stuck = isAgentStuck(video);
 
   // Retry agent (TMDEV-129): clears the stuck flag so the scheduled agent
@@ -667,6 +715,23 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
       setRetryAgentError(e instanceof Error ? e.message : "Retry agent failed.");
     } finally {
       setRetryingAgent(false);
+    }
+  };
+
+  // Mark as published (TMDEV-191): the human has posted to the failed accounts
+  // by hand. A plain guarded PATCH; a refusal stays in the dialog.
+  const handleMarkPublished = async () => {
+    if (marking) return;
+    setMarking(true);
+    setMarkError("");
+    try {
+      await markPublished(video.id);
+      setMarkOpen(false);
+      refreshVideo(video.id);
+    } catch (e) {
+      setMarkError(e instanceof Error ? e.message : "Mark as published failed.");
+    } finally {
+      setMarking(false);
     }
   };
 
@@ -1325,6 +1390,11 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                       )}
                     </>
                   )}
+                  {markable && (
+                    <ActionBtn fullWidth variant="primary" onClick={() => { setMarkError(""); setMarkOpen(true); }}>
+                      Mark as published…
+                    </ActionBtn>
+                  )}
                   {deletable && (
                     <ActionBtn fullWidth variant="danger" onClick={() => setDeleteOpen(true)}>
                       Delete Video
@@ -1570,6 +1640,67 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
           }}
         />
       )}
+
+      {/* Mark as published (TMDEV-191). Download first: retention counts from
+          the first successful post, not from this click, so a partial publish
+          older than retention_days loses its mp4 on the worker's next pass. */}
+      <Dialog open={markOpen} onOpenChange={(v) => !v && setMarkOpen(false)}>
+        <DialogContent
+          data-testid="mark-published-dialog"
+          className="border-[#1e1e30] bg-[#0d0d1a] text-[#f0f0ff]"
+          style={{ maxWidth: 460 }}
+        >
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15, fontWeight: 600 }}>Mark this video as published?</DialogTitle>
+          </DialogHeader>
+          {publicationsState === "ok" ? (
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--dim)", margin: 0 }}>
+              It went out to {publishedCount} of {publications.length} account(s); Publishing
+              Results has the error for each one that failed. Post it to those accounts by hand,
+              then mark it published.
+            </p>
+          ) : publicationsState === "error" ? (
+            <p data-testid="mark-published-pubs-error"
+               style={{ fontSize: 13, lineHeight: 1.6, color: "var(--amber)", margin: 0 }}>
+              Could not load this video&apos;s publishing results, so the accounts that failed
+              cannot be shown. Close the video and open it again to retry.
+            </p>
+          ) : (
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--dim)", margin: 0 }}>
+              Loading the publishing results…
+            </p>
+          )}
+          <p data-testid="mark-published-warning"
+             style={{ fontSize: 13, lineHeight: 1.6, color: "var(--amber)", margin: 0 }}>
+            Download the video first. Once it is marked published, retention deletes the video
+            file on its usual schedule, counted from when it first published — for an older
+            publish that can be within a minute.
+          </p>
+          <a
+            data-testid="mark-published-download"
+            href={videoStreamUrl(video)}
+            download={`${video.id}.mp4`}
+            style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--cyan)" }}
+          >
+            ↓ Download video
+          </a>
+          {markError && (
+            <p data-testid="mark-published-error" className="font-mono text-[11px] text-amber-400">
+              {markError}
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <ActionBtn variant="ghost" onClick={() => setMarkOpen(false)}>Cancel</ActionBtn>
+            {/* Not before the results load: confirming hands the video to
+                retention, and the human must first see which accounts failed. */}
+            <ActionBtn variant="primary"
+                       disabled={marking || publicationsState !== "ok" || publications.length === 0}
+                       onClick={handleMarkPublished}>
+              {marking ? "Marking…" : "Mark as published"}
+            </ActionBtn>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* One meaning of "delete" everywhere (TMDEV-84): the files go, the
           record stays, archived. Same operation as the retention sweep. */}

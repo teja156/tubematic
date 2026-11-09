@@ -134,6 +134,33 @@ test.describe("VideoModal", () => {
     await expect(modal.getByText(`Seeded comment [${uid}]`)).toBeVisible({ timeout: 5_000 });
   });
 
+  test("Mark as published moves a partial publish to Published (TMDEV-191)", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Partial publish` });
+    await patchVideo(video.id, { status: "PARTIALLY_PUBLISHED" });
+
+    await page.goto("/");
+    // No column of its own: it sits in Published, tagged PARTIAL.
+    const publishedCol = page.getByTestId("kanban-col-PUBLISHED");
+    const card = publishedCol.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await expect(card.getByTestId(`kanban-card-partial-${video.id}`)).toBeVisible();
+    await card.click();
+
+    const modal = page.getByTestId("video-modal");
+    await expect(modal).toBeVisible();
+    await modal.getByRole("button", { name: "Mark as published…" }).click();
+
+    const dialog = page.getByTestId("mark-published-dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId("mark-published-warning")).toContainText("Download the video first");
+    await expect(dialog.getByTestId("mark-published-download")).toHaveAttribute("download", `${video.id}.mp4`);
+    await dialog.getByRole("button", { name: "Mark as published" }).click();
+    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+
+    await expect.poll(async () => (await getVideo(video.id)).status).toBe("PUBLISHED");
+    await expect(modal.getByRole("button", { name: "Mark as published…" })).not.toBeVisible();
+  });
+
   test("Approve Topic in modal triggers status transition and closes modal", async ({ page }) => {
     const video = await createVideo({ topic: `[${uid}] Approve via modal` });
 

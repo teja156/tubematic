@@ -210,7 +210,8 @@ budgeted against the count.
 video posting to two accounts also counts once.
 
 - **Every video in an Auto Pilot project that has been voiced and has not published, failed or been
-  rejected.**
+  rejected.** A partial publish still counts until a human marks it published — see
+  [A partial publish](#a-partial-publish).
   - **Keyed on the voice, not on a status** (`voice_file_path` set, or a status past the gate). A
     revision can send a voiced video back to `SCRIPT_READY` or `TOPIC_PROPOSED`. It keeps its slot
     there, because otherwise it would free one for a brand-new script and then queue behind it.
@@ -250,14 +251,53 @@ unreachable postforme defers the whole pass without a comment.
 
 ---
 
+## A partial publish
+
+Once every publication row has settled, `worker.py::_derive_video_status` sets the video's status:
+
+| Rows | Video |
+|---|---|
+| every target published | `PUBLISHED` |
+| some published, some failed | `PARTIALLY_PUBLISHED` |
+| every target failed | `FAILED` |
+
+**A mix is never `FAILED`.** There is no un-publish on any of these platforms, so a video live on two
+of four accounts did go out, and calling it failed would lie about the two that posted. **Nor is it
+`PUBLISHED`**, which is what it used to be: the failed accounts' upload then had no owner, and
+nothing but a row on the Publishing Results tab said a human still had to do something.
+
+`PARTIALLY_PUBLISHED` is a human-owned state with one way out. The human downloads the video, posts
+it to the failed accounts by hand, and clicks **Mark as published** in the video's modal, a
+`PATCH /videos/<id>` to `PUBLISHED` guarded by `onlyIfCurrentStatus`. There is no route of its own,
+and the agent is told never to write either status. Two things about the state look like omissions
+and are not:
+
+- **No retention sweep touches it.** `_sweep_published` takes `PUBLISHED` only and
+  `_sweep_unpublished` takes `FAILED` and `TOPIC_REJECTED` only, so the mp4 and job directory are
+  kept for as long as it waits — the file has to survive for the manual upload. Marking it published
+  is what hands it to retention, and retention dates from the first successful post
+  (`MAX(published_at)`), not from the click: a partial publish older than `retention_days` loses its
+  files on the worker's next pass. That is why the confirm dialog says to download first and carries
+  the download link.
+- **It keeps its Auto Pilot in-flight slot** ([the in-progress limit](#the-in-progress-limit)). The
+  video did publish somewhere, and holding the slot is useful back-pressure: Auto Pilot throttles
+  instead of piling up more half-published videos while an account is broken.
+
+A partial publish can be announced on Discord (`notify_partially_published`, off by default): it
+names each failed account and its error, links the posts that went out, and says what to do next.
+See [Notifications](02-pipeline.md#notifications).
+
+There is no migration and no backfill: a video that published partially before this status existed
+stays `PUBLISHED`. Going back to 2.0.x restores the pre-upgrade database, which holds no such video.
+A copy of the database that did carry one into an older version would strand it: that version's
+dashboard shows a grey fallback badge and leaves it off the board and the Library, its `PATCH`
+refuses the value, and no sweep matches it.
+
+---
+
 ## Design decisions that will look wrong later
 
 Each of these is deliberate. Reversing one reintroduces a specific failure.
-
-**A partial publish derives to `PUBLISHED`.** There is no un-publish on any of these platforms, so a
-video live on two of four accounts genuinely *is* published. Reporting `FAILED` would lie about the
-two that went out, and the failures are already recorded on their own rows. `FAILED` is reserved for
-the case where every target failed.
 
 **Completion is a row count, not a status read.** postforme's result payload has no pending state —
 a target that has not published yet simply has no row. The worker counts non-`PENDING`
@@ -632,7 +672,7 @@ deadline, so it settles with the platforms' real errors; before then it may be a
 post under the same `external_id`. Failing an expired publish is one transaction whose writes each
 re-check that the rows still have no post id, so a post filled in at that moment is never left
 pending under a `FAILED` video. A transient postforme outage is logged and deferred to the next tick rather than failing the
-video. Once no row is `PENDING`, derive the video's status by the any-succeeded rule.
+video. Once no row is `PENDING`, derive the video's status — see [A partial publish](#a-partial-publish).
 
 **Metrics.** Hourly, gated on a settings-row timestamp that is written **before** the work runs — a
 pass that dies partway must not retry twenty seconds later.
@@ -664,8 +704,8 @@ does nothing unless Auto Pilot is on, the pipeline is not paused and a project i
 | **Analytics** (`/analytics`) | The **Videos** tab: totals, platform and account filters, a **Sort by** menu (newest first, or highest views, likes, comments or shares, with an unreported metric below a real `0`), a per-publication table linking to each live post, and graphs beside it: views per platform, per account and gained per month. Clicking a platform or account bar sets that filter. The table scrolls in its own box and renders 50 rows at a time as you scroll. `—` for an unreported metric, never `0`. The account filter and graph name each account `<username> (<Platform>)` from `GET /publishing/accounts?feeds=0`; the usernames are looked up live rather than stored, like the Socials page's, so when that lookup fails (publishing off, postforme down, the account disconnected) it shows the account id with the platform instead. Spend is on the page's other tab |
 | **Settings → Auto Pilot** | The whole [Auto Pilot](#auto-pilot) configuration, under a warning that is always on screen. See [Dashboard — The settings page](../user-guide/04-dashboard.md#the-settings-page) for what a user sees, and [Dashboard internals](15-dashboard.md#the-settings-page) for how it is built |
 | **`PublishDialog`** | Opens from a `VIDEO_APPROVED` video. Clears its state **synchronously** on open so a previous video's data is never briefly visible — publishing is irreversible. Nothing is pre-ticked: every target is an explicit choice. **When** offers Publish now (the default, on every open) or Schedule: a timezone picker defaulting to the browser's zone, native date and time inputs, and presets (*In 1 hour*, *Tomorrow 9:00*, *Tomorrow 18:00*) computed in the picked zone. It sends the wall time and the zone; the API converts |
-| **Pipeline board** | A **Scheduled** column between Video Approved and Publishing. Its cards, and the Library's, show when each post goes out, in the zone it was picked in |
-| **`VideoModal`** | Gains a **Publishing Results** tab once a video has any publications — one row per target with its platform, status, live URL and, for a failure, the reason. It shows *where the video went*, not how it is performing; view counts live on the Analytics page. A video that failed while publishing gets **Retry publishing** next to Delete: it refreshes in place when a live post was found, and opens `PublishDialog` when nothing was live. A `SCHEDULED` video shows **Scheduled for** — the time in the zone it was picked in, and in the host's when that differs — wherever the modal opens, and **Cancel schedule** (after a confirm) where publishing controls are offered; its waiting targets read `SCHEDULED` |
+| **Pipeline board** | A **Scheduled** column between Video Approved and Publishing. Its cards, and the Library's, show when each post goes out, in the zone it was picked in. A `PARTIALLY_PUBLISHED` video has no column of its own: it sits in Published, tagged **PARTIAL**, and the Library lists it under its own **Partially published** state |
+| **`VideoModal`** | Gains a **Publishing Results** tab once a video has any publications — one row per target with its platform, status, live URL and, for a failure, the reason. It shows *where the video went*, not how it is performing; view counts live on the Analytics page. A video that failed while publishing gets **Retry publishing** next to Delete: it refreshes in place when a live post was found, and opens `PublishDialog` when nothing was live. A `PARTIALLY_PUBLISHED` video gets **Mark as published…**, which opens a confirm dialog with the account count, the download-first warning and a **Download video** link (confirming waits until the publication rows have loaded, so the count is never a guess); it is offered whether or not publishing is enabled, since it is the only way out of that state. A `SCHEDULED` video shows **Scheduled for** — the time in the zone it was picked in, and in the host's when that differs — wherever the modal opens, and **Cancel schedule** (after a confirm) where publishing controls are offered; its waiting targets read `SCHEDULED` |
 
 > **The dashboard action `"publish"` was renamed `approve-video`.** It never published anything — it
 > is, and always was, the `VIDEO_READY → VIDEO_APPROVED` human approval, behind a button that used to
