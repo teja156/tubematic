@@ -630,7 +630,8 @@ release asset of its own covered by the release's `CHECKSUMS.txt`
   `TUBEMATIC_HOST_GPUS`). Tests pin each against its source.
 - **The token never touches a command line or a file, and does not outlive enrollment.** The
   dashboard's command is a bare `install`; the script reads the token with `getpass` (or one line of
-  stdin with `--token-stdin`; `--token` still works and warns), because a command line is readable
+  stdin with `--token-stdin`; `--token <value>` is refused before anything is sent — declared, so
+  argparse does not read it as an abbreviation of `--token-stdin`), because a command line is readable
   by every user of the machine (`ps`, `/proc/<pid>/cmdline`) and kept in shell history while the
   token stays redeemable for an hour. `docker run` gets a bare `-e TUBEMATIC_ENROLL_TOKEN`, so Docker
   copies the value from the script's own environment — but Docker then stores it in the container's

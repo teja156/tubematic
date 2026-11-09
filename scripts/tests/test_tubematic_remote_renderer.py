@@ -181,7 +181,8 @@ def test_a_wrong_pin_sends_nothing(gateway):
 def test_install_with_a_wrong_pin_sends_nothing_and_starts_nothing(gateway, docker, monkeypatch):
     docker.gpus = ""
     tok = core.encode_enrollment_token(gateway.url, "one-time", "sha256:" + "0" * 64)
-    assert trr.main(["install", "--token", tok, "--yes"]) == 1
+    monkeypatch.setattr(trr.sys, "stdin", io.StringIO(tok + "\n"))
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     gateway.settle()
     assert gateway.connections and gateway.requests == []
     assert not docker.called("pull") and not docker.called("run")
@@ -346,6 +347,7 @@ def docker(monkeypatch, tmp_path):
     fake = _Docker()
     monkeypatch.setattr(trr, "run_cmd", fake)
     monkeypatch.setattr(trr, "interactive", lambda: False)
+    monkeypatch.setattr(trr.sys, "stdin", io.StringIO((TOKEN + "\n") * 5))
     monkeypatch.setattr(trr, "POLL_SECS", 0)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home").mkdir()
@@ -386,7 +388,7 @@ def test_a_cpu_install_runs_exactly_this_container(docker, main_version, monkeyp
     docker.gpus = ""
     monkeypatch.setattr(trr.socket, "gethostname", lambda: "garage-host")
     monkeypatch.setattr(trr.os.path, "exists", lambda p: p == "/etc/localtime" or _real_exists(p))
-    assert trr.main(["install", "--token", TOKEN, "--name", "garage box", "--yes"]) == 0
+    assert trr.main(["install", "--token-stdin", "--name", "garage box", "--yes"]) == 0
     enroll, final = docker.called("run")
     expected = [
         "docker", "run", "-d", "--name", "tubematic-remote-renderer",
@@ -418,7 +420,7 @@ def test_a_cpu_install_runs_exactly_this_container(docker, main_version, monkeyp
 
 def test_the_token_reaches_only_the_enrollment_containers_environment(docker, main_version):
     docker.gpus = ""
-    trr.main(["install", "--token", TOKEN, "--yes"])
+    trr.main(["install", "--token-stdin", "--yes"])
     for call in docker.calls:
         assert not any(TOKEN in a or "the-one-time-secret" in a for a in call["argv"])
     enroll, final = docker.called("run")
@@ -432,7 +434,7 @@ def test_the_running_container_does_not_keep_the_token(docker, main_version):
     `docker inspect` shows it: the enrollment container held the token, the
     one left running must not."""
     docker.gpus = ""
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 0
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 0
     first, last = docker.history
     assert f"TUBEMATIC_ENROLL_TOKEN={TOKEN}" in first["env"]   # the fake really records it
     assert first["restart"] == "no"
@@ -444,7 +446,7 @@ def test_the_running_container_does_not_keep_the_token(docker, main_version):
 
 
 def test_a_gpu_install_hands_over_the_one_gpu(docker, main_version):
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 0
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 0
     argv = _run_call(docker)["argv"]
     uuid = "GPU-11111111-2222-3333-4444-555555555555"
     assert argv[argv.index("--gpus") + 1] == f"device={uuid}"
@@ -458,7 +460,7 @@ def test_a_gpu_install_hands_over_the_one_gpu(docker, main_version):
 def test_a_named_gpu_is_chosen_among_several(docker, main_version):
     docker.gpus = TWO_GPUS
     uuid = "GPU-66666666-7777-8888-9999-000000000000"
-    assert trr.main(["install", "--token", TOKEN, "--gpu", uuid, "--yes"]) == 0
+    assert trr.main(["install", "--token-stdin", "--gpu", uuid, "--yes"]) == 0
     argv = _run_call(docker)["argv"]
     assert argv[argv.index("--gpus") + 1] == f"device={uuid}"
     assert f"TUBEMATIC_GPU_UUID={uuid}" in argv
@@ -466,7 +468,7 @@ def test_a_named_gpu_is_chosen_among_several(docker, main_version):
 
 def test_several_gpus_without_a_terminal_are_refused_naming_gpu(docker, main_version, capsys):
     docker.gpus = TWO_GPUS
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     err = capsys.readouterr().err
     assert "--gpu" in err and "GPU-66666666" in err and "GPU-11111111" in err
     assert not docker.called("run") and not docker.called("pull") and main_version == []
@@ -477,33 +479,33 @@ def test_several_gpus_with_a_terminal_ask(docker, main_version, monkeypatch):
     monkeypatch.setattr(trr, "interactive", lambda: True)
     answers = iter(["9", "2", "y"])
     monkeypatch.setattr("builtins.input", lambda *_: next(answers))
-    assert trr.main(["install", "--token", TOKEN]) == 0
+    assert trr.main(["install", "--token-stdin"]) == 0
     assert "TUBEMATIC_GPU_UUID=GPU-66666666-7777-8888-9999-000000000000" in _run_call(docker)["argv"]
 
 
 def test_an_unknown_gpu_is_refused(docker, main_version, capsys):
-    assert trr.main(["install", "--token", TOKEN, "--gpu", "GPU-nope", "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--gpu", "GPU-nope", "--yes"]) == 1
     assert "No GPU with UUID GPU-nope" in capsys.readouterr().err
     assert not docker.called("run")
 
 
 def test_a_gpu_without_the_nvidia_runtime_is_refused_not_silently_dropped(docker, main_version, capsys):
     docker.runtimes = {"runc": {}}
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     err = capsys.readouterr().err
     assert "nvidia" in err and "--no-gpu" in err
     assert not docker.called("run")
 
 
 def test_no_gpu_renders_on_the_cpu_without_asking_nvidia_smi(docker, main_version):
-    assert trr.main(["install", "--token", TOKEN, "--no-gpu", "--yes"]) == 0
+    assert trr.main(["install", "--token-stdin", "--no-gpu", "--yes"]) == 0
     assert "--gpus" not in _run_call(docker)["argv"]
     assert not [c for c in docker.calls if c["argv"][0] == "nvidia-smi"]
 
 
 def test_an_existing_container_is_refused_before_anything_else(docker, main_version, capsys):
     docker.container = True
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     err = capsys.readouterr().err
     assert "already exists" in err and "upgrade" in err and "remove" in err
     assert main_version == [] and not docker.called("pull") and not docker.called("run")
@@ -511,7 +513,7 @@ def test_an_existing_container_is_refused_before_anything_else(docker, main_vers
 
 def test_docker_not_installed_is_a_clear_error(docker, main_version, capsys, monkeypatch):
     monkeypatch.setattr(trr, "run_cmd", lambda argv, **k: subprocess.CompletedProcess(argv, 127, "", ""))
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     assert "Docker is not installed" in capsys.readouterr().err
 
 
@@ -520,27 +522,28 @@ def test_docker_without_a_daemon_is_a_clear_error(docker, main_version, capsys, 
         return subprocess.CompletedProcess(argv, 1, json.dumps(
             {"ServerErrors": ["Cannot connect to the Docker daemon"]}), "")
     monkeypatch.setattr(trr, "run_cmd", run)
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     assert "Cannot connect to the Docker daemon" in capsys.readouterr().err
 
 
 def test_a_local_image_is_used_without_pulling(docker, main_version):
     docker.gpus = ""
     docker.images = {"tubematic-backend:mine"}
-    assert trr.main(["install", "--token", TOKEN, "--image", "tubematic-backend:mine", "--yes"]) == 0
+    assert trr.main(["install", "--token-stdin", "--image", "tubematic-backend:mine", "--yes"]) == 0
     assert not docker.called("pull")
     assert "tubematic-backend:mine" in _run_call(docker)["argv"]
 
 
 @pytest.mark.parametrize("image", ["--privileged", "a b", " "])
 def test_an_image_that_could_be_read_as_a_flag_is_refused(docker, main_version, image):
-    assert trr.main(["install", "--token", TOKEN, f"--image={image}", "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", f"--image={image}", "--yes"]) == 1
     assert not docker.called("run")
 
 
-def test_a_bad_token_is_refused_without_echoing_it(docker, main_version, capsys):
+def test_a_bad_token_is_refused_without_echoing_it(docker, main_version, capsys, monkeypatch):
     bad = "tmr1.c2VjcmV0LXZhbHVl"
-    assert trr.main(["install", "--token", bad, "--yes"]) == 1
+    monkeypatch.setattr(trr.sys, "stdin", io.StringIO(bad + "\n"))
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     out = capsys.readouterr()
     assert "not valid" in out.err and bad not in out.err + out.out
     assert "Traceback" not in out.err
@@ -548,7 +551,7 @@ def test_a_bad_token_is_refused_without_echoing_it(docker, main_version, capsys)
 
 
 def test_the_state_file_is_0600_and_never_holds_the_token(docker, main_version, capsys):
-    trr.main(["install", "--token", TOKEN, "--yes"])
+    trr.main(["install", "--token-stdin", "--yes"])
     path = trr.state_path()
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     text = path.read_text()
@@ -570,7 +573,7 @@ def test_a_failed_enrollment_leaves_no_token_bearing_container(docker, main_vers
     docker.gpus = ""
     docker.logs = logs
     monkeypatch.setattr(trr, "WAIT_SECS", 0)
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     out = capsys.readouterr().out
     assert needle in out and "Removed the tubematic-remote-renderer container" in out
     assert docker.containers == {}
@@ -584,7 +587,7 @@ def test_a_failed_enrollment_keeps_an_earlier_installs_volume(docker, main_versi
     docker.gpus = ""
     docker.volume = True
     docker.logs = "[renderer] enrollment refused by the gateway: enrollment_invalid\n"
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     assert docker.containers == {} and docker.volume
     assert not [c for c in docker.calls if c["argv"][1:3] == ["volume", "rm"]]
     assert "Kept the tubematic-renderer-state volume" in capsys.readouterr().out
@@ -602,7 +605,7 @@ def test_a_failed_docker_run_removes_whatever_it_created(docker, main_version, m
             return subprocess.CompletedProcess(argv, 125, "Error: could not start", "")
         return result
     monkeypatch.setattr(trr, "run_cmd", run)
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     assert docker.containers == {}
 
 
@@ -612,14 +615,14 @@ def test_ctrl_c_while_enrolling_removes_the_token_bearing_container(docker, main
     def interrupted():
         raise KeyboardInterrupt
     monkeypatch.setattr(trr, "watch_logs", interrupted)
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 130
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 130
     assert docker.containers == {}
 
 
 def test_a_failed_restart_after_enrolling_says_upgrade_restarts_it(docker, main_version, capsys):
     docker.gpus = ""
     docker.fail_run_after = 1
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     assert "`upgrade`" in capsys.readouterr().err
     _no_token_left(docker)
     assert trr.state_path().exists()
@@ -628,7 +631,7 @@ def test_a_failed_restart_after_enrolling_says_upgrade_restarts_it(docker, main_
 def test_no_connection_after_enrolling_is_reported(docker, main_version, capsys, monkeypatch):
     outcomes = iter([("ready", "enrolled"), ("timeout", "")])
     monkeypatch.setattr(trr, "watch_logs", lambda: next(outcomes))
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 1
+    assert trr.main(["install", "--token-stdin", "--yes"]) == 1
     assert "No sign of a connection" in capsys.readouterr().out
     _no_token_left(docker)
 
@@ -671,23 +674,22 @@ def test_no_terminal_and_no_token_points_at_token_stdin(docker, main_version, ca
     assert docker.calls == []
 
 
-def test_token_on_the_command_line_warns_but_works(docker, main_version, capsys):
-    docker.gpus = ""
-    assert trr.main(["install", "--token", TOKEN, "--yes"]) == 0
+@pytest.mark.parametrize("argv", [["--token", TOKEN], [f"--token={TOKEN}"], ["--token"],
+                                  ["--token", TOKEN, "--token-stdin"]])
+def test_a_token_on_the_command_line_is_refused_before_anything_is_sent(docker, main_version,
+                                                                        capsys, argv):
+    assert trr.main(["install", *argv, "--yes"]) == 1
     err = capsys.readouterr().err
-    assert "warning" in err and "process list" in err and "shell history" in err
+    assert "not taken on the command line" in err and "--token-stdin" in err
     assert TOKEN not in err
-
-
-def test_token_and_token_stdin_cannot_both_be_given(capsys):
-    with pytest.raises(SystemExit):
-        trr.main(["install", "--token", TOKEN, "--token-stdin"])
+    assert docker.calls == [] and main_version == []
+    assert not trr.state_path().exists()
 
 
 # ── upgrade, remove, status ──────────────────────────────────────────────────
 
 def _installed(docker, main_version, *extra):
-    assert trr.main(["install", "--token", TOKEN, "--name", "box", "--yes", *extra]) == 0
+    assert trr.main(["install", "--token-stdin", "--name", "box", "--yes", *extra]) == 0
     docker.calls.clear()
     main_version.clear()
 

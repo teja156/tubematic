@@ -271,8 +271,7 @@ disk.
 
 | Option | Effect |
 |---|---|
-| `--token-stdin` | Read the token from one line of standard input instead of asking, for scripted installs: `install --token-stdin < token-file` |
-| `--token TOKEN` | The token on the command line. Works, with a warning: avoid it, for the reasons above |
+| `--token-stdin` | Read the token from one line of standard input instead of asking, for scripted installs: `install --token-stdin < token-file`. There is no option that takes the token itself: `--token <value>` is refused before anything is sent, for the reasons above |
 | `--gpu UUID` | Use this NVIDIA GPU (`nvidia-smi -L` lists the UUIDs). Needed on a machine with several GPUs when there is no terminal to ask in |
 | `--no-gpu` | Render on the CPU even though the machine has a GPU |
 | `--name NAME` | The name main lists it under, when the token was made without one (the dashboard's always has one, and that name wins). Defaults to the machine's host name |

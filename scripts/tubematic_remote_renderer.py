@@ -27,7 +27,7 @@ Where the token goes. `install` asks for it with a hidden prompt (or reads one
 line from stdin with --token-stdin), never from the command line: a command
 line is readable by every user of this machine (ps, /proc/<pid>/cmdline) and
 kept in shell history, and the token can be redeemed by anyone for an hour.
-(--token still works for scripts that need it, with a warning.) It reaches one
+(`--token <value>` is refused, before anything is sent.) It reaches one
 short-lived enrollment container's environment, which Docker keeps in the
 container's configuration (`docker inspect` shows it). So that container lives
 only until the renderer has traded the token for a credential, kept in the
@@ -620,14 +620,15 @@ TOKEN_PROMPT = ("Enrollment token (from main's dashboard, Settings → Rendering
 
 def read_token(args) -> str:
     """The token, from a hidden prompt by default, or one line of stdin with
-    --token-stdin. --token works too, with a warning: a command line is
-    readable by every user of this machine and kept in shell history."""
-    if args.token is not None:
-        print("warning: --token puts the enrollment token in this machine's process list (ps, "
-              "/proc) and in your shell history, where it can be redeemed until it expires. "
-              "Run `install` without it to be asked for the token, or use --token-stdin.",
-              file=sys.stderr)
-        return args.token.strip()
+    --token-stdin. Never from the command line: a command line is readable by
+    every user of this machine and kept in shell history, so `--token` is
+    refused before anything is sent."""
+    if args.token_argv is not None:
+        raise RemoteError("The enrollment token is not taken on the command line: it would be "
+                          "readable by every user of this machine (ps, /proc) and kept in your "
+                          "shell history. Run `install` to be asked for it (the input is hidden), "
+                          "or pipe it in with --token-stdin. The token you typed was not used; "
+                          "remove it from your shell history, or make a new one on main.")
     if args.token_stdin:
         return sys.stdin.readline().strip()
     if not interactive():
@@ -800,12 +801,12 @@ def build_parser() -> argparse.ArgumentParser:
                                    "→ Rendering → Add renderer; the input is hidden), check Docker "
                                    "and the GPU, verify main's certificate against the token, pull "
                                    "main's image, enroll the renderer and start its container.")
-    t = i.add_mutually_exclusive_group()
-    t.add_argument("--token-stdin", action="store_true",
+    i.add_argument("--token-stdin", action="store_true",
                    help="read the enrollment token from one line of stdin (for automation); "
                         "without this, install asks for it with a hidden prompt")
-    t.add_argument("--token", help="the enrollment token on the command line: avoid it — it is "
-                                   "visible in the process list and kept in shell history")
+    # Refused in read_token, with the reason. Declared so that `--token` is not
+    # read as an abbreviation of --token-stdin.
+    i.add_argument("--token", dest="token_argv", nargs="?", const="", help=argparse.SUPPRESS)
     i.add_argument("--image", help="run this image instead of main's published one "
                                    "(a local image is used without pulling)")
     g = i.add_mutually_exclusive_group()
