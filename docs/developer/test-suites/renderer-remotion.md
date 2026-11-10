@@ -11,10 +11,9 @@ npm test                 # vitest run
 npm test -- camera       # one file
 ```
 
-`vitest` is a devDependency of the Remotion project because `validate_job` runs `tsc --noEmit` over
-this tree for every video. A test file whose `vitest` import does not resolve there fails validation
-for every video. CI typechecks this tree and does not run `npm test`, so run the suite yourself after
-you change either module.
+`vitest` is a devDependency of the Remotion project because CI runs `tsc --noEmit` over this tree,
+test files included, and a test file whose `vitest` import does not resolve fails that typecheck. CI
+does not run `npm test`, so run the suite yourself after you change either module.
 
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).

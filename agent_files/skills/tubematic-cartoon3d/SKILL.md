@@ -127,7 +127,7 @@ scene spans the video and the beats tile it.
 
 ## Step 3 — the loop: typecheck, look, fix
 
-1. `validate_job(video_id)` typechecks the whole project; its first error lines name your file and line. A
+1. `validate_job(video_id)` typechecks your video's source and what it imports; its first error lines name your file and line. A
    file that does not compile renders nothing: fix every error before looking at a frame. (Its readiness
    error about the beat gate is expected at this point; ignore it until step 4.)
 2. `cartoon_still(video_id, frames)` on the **middle frame of every shot**, six at a time, and look at every
