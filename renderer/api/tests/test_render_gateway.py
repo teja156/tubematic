@@ -1165,6 +1165,15 @@ def test_each_failure_outcome_routes_as_before(env, outcome, status):
     assert _comments(env) == ["Render failed: Render stalled: no progress for 600s"]
 
 
+def test_a_failed_render_that_timed_out_in_the_browser_is_requeued_once(env):
+    _claimed(env)
+    _result(env, outcome="failed", error="Error: Timeout (30000ms) exceeded rendering the component initially.",
+            on_gpu=False, gpu_ok=None)
+    v = _video(env)
+    assert v["status"] == "RENDER_QUEUED" and v["render_fail_count"] == 0 and v["renderer_id"] == ""
+    assert _comments(env)[-1].startswith("Render timed out inside the browser, so it was re-queued once")
+
+
 def test_a_failure_past_the_retry_cap_fails(env):
     _claimed(env, render_fail_count=1)
     _result(env, outcome="stalled", error="Render stalled")

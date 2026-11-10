@@ -22,6 +22,7 @@ TUBEMATIC_DB this module reads.
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import ai_review
@@ -223,6 +224,50 @@ def fail_without_gpu(video_id: str, cartoon: bool, render_error: str | None = No
     return True
 
 
+# Remotion's own browser timeouts: the page did not answer in time. Taken from
+# real failures: "Timeout (30000ms) exceeded rendering the component initially"
+# (frame 0 never drew) and "Timed out evaluating page function" (a later frame,
+# or the call Remotion makes to name a stuck delayRender). A machine short of
+# memory or CPU produces them for a scene that is fine, and so can a scene that
+# never finishes loading, which is why the first one is retried as it is and a
+# second one goes to the agent.
+_PAGE_TIMEOUT_RE = re.compile(r"Timeout \(\d+ms\) exceeded rendering the component|Timed out evaluating page function")
+# The comment that marks a video's one page-timeout retry; its presence is what
+# makes the next page timeout go to the agent.
+PAGE_TIMEOUT_RETRY_PREFIX = "Render timed out inside the browser, so it was re-queued once as it is:"
+
+
+def is_page_timeout(error_msg: str) -> bool:
+    """Whether a failed render's error is one of Remotion's page timeouts."""
+    return bool(error_msg) and _PAGE_TIMEOUT_RE.search(error_msg) is not None
+
+
+def requeue_page_timeout(video_id: str, error_msg: str, claim=None) -> bool | None:
+    """The first page timeout of a video: back to RENDER_QUEUED unchanged,
+    with no agent session and no render retry counted, and a comment that says
+    so. None when the video has had its one retry already (the caller then
+    takes the usual failure path); otherwise whether the video was moved.
+
+    Not counted against max_render_retries because the cap is 1 by default: a
+    counted retry would send the next failure to FAILED, and a scene that
+    really hangs would never reach the agent. The comment bounds it to once.
+    One transaction, only while the video is still RENDERING under `claim`."""
+    guard, params = _claim_guard(claim)
+    now = db._now()
+    with db.conn(DB_PATH) as con:
+        if con.execute("SELECT 1 FROM comments WHERE video_id = ? AND author = 'agent' AND content LIKE ? LIMIT 1",
+                       (video_id, PAGE_TIMEOUT_RETRY_PREFIX + "%")).fetchone():
+            return None
+        cur = con.execute(f"UPDATE videos SET status = 'RENDER_QUEUED', {_RELEASE}, updated_at = ? "
+                          f"WHERE id = ? AND status = 'RENDERING'{guard}", [now, video_id, *params])
+        if cur.rowcount == 0:
+            return False
+        con.execute("INSERT INTO comments (video_id, author, content, created_at) VALUES (?, 'agent', ?, ?)",
+                    (video_id, _truncate_comment(f"{PAGE_TIMEOUT_RETRY_PREFIX} {error_msg}"), now))
+    log.info(f"[{video_id}] page timeout -> RENDER_QUEUED (its one retry)", extra={"video_id": video_id})
+    return True
+
+
 def after_render_failure(video_id: str, error_msg: str, retry_status: str, on_gpu: bool,
                          needs_gpu: bool, cartoon: bool, gpu_ok, claim=None) -> bool:
     """Route a render that failed or hung.
@@ -232,11 +277,17 @@ def after_render_failure(video_id: str, error_msg: str, retry_status: str, on_gp
     straight to FAILED with the renderers' GPU state, spending no retry and no
     agent session, since neither a requeue nor the agent can bring a GPU back.
     Anything else — a GPU that still works, an unanswered re-test (None), a
-    render on the CPU — is the video's own failure and takes the usual path.
+    render on the CPU — is the video's own failure and takes the usual path,
+    except a failed render's first page timeout (is_page_timeout), which is
+    re-queued once as it is (requeue_page_timeout).
     `claim` pins the routing to the claim the result belongs to (_claim_guard).
     Returns whether the video was moved."""
     if needs_gpu and on_gpu and gpu_ok is False:
         return fail_without_gpu(video_id, cartoon, error_msg or "", claim=claim)
+    if retry_status == "REVISION_REQUESTED" and is_page_timeout(error_msg):
+        moved = requeue_page_timeout(video_id, error_msg, claim=claim)
+        if moved is not None:
+            return moved
     return handle_render_failure(video_id, error_msg, retry_status=retry_status, claim=claim)
 
 
