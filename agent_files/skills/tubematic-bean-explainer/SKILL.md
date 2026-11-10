@@ -125,7 +125,8 @@ that the library lacks: a rocket, a car, a tooth. Keep it to a few per video.
    the red box means the box is too small: raise `w` and `h` (the layout checks use them) or shrink the
    drawing. A drawing that does not read as the thing at a glance, a line thinner than the library's,
    or colours outside the palette: redraw it. Rewrite the file and call `render_bean_props` again; three
-   looks at most. `validate_job` typechecks the file.
+   looks at most. `validate_job` typechecks the file and checks it against the rules above again, so a
+redraw is held to them too.
 
 ## Step 3 — events, timed to the words
 
@@ -164,8 +165,8 @@ narration does not mention.
 
 Leave the caption look to the style: either leave `subtitles` out, or set only `emphasis`, the indexes
 of the key words in the timeline's word list (the word the line turns on: `panic`, `not`, `letter`).
-At most one word in 5, and usually one per sentence or fewer. Copy the rest of `subtitles` from the
-example when you set `emphasis`.
+At most one word in 5, and usually one per sentence or fewer. The style fills in the rest of the
+caption look; any other key you set overrides it, so leave them alone.
 
 If `get_video` has a `mascot`, add its cue track as the mascot skill describes. Keep the mascot small
 and to one side, away from the bean and the props, and bring it on only for a few reactions: two

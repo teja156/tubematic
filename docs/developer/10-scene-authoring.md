@@ -543,13 +543,16 @@ cannot be drawn fails the render, so no frame goes out without the bean.
 - A custom prop has more than 8 per video, an id a library prop has, a `src` that is not this video's
   `prop-<name>` file, a box outside 60 to 700 px a side, a text slot over 40 characters or more than 4
   acts. Its file is missing, has no default export, imports anything but `react`, `remotion` and the
-  library's `props/common`, `bean` and `contract`, or uses an SVG filter, a gradient, a pattern, a
+  library's `props/common`, `bean` and `contract` (in an `import`, an `export ... from` or a
+  `require`), or uses an SVG filter, a gradient, a pattern, a
   dashed stroke, an image, embedded HTML, a fetch, randomness or the clock
   (`bean_explainer.py::FORBIDDEN_SOURCE`).
 - Nothing changes for more than 3 seconds.
 
-`mcp/tests/test_bean_explainer.py` pins `bean_explainer.py` to `contract.ts` and to the pack. When
-the config has no `subtitles`, the pack's `captions` fill it. The text-layout audit samples each shot
+`mcp/tests/test_bean_explainer.py` pins `bean_explainer.py` to `contract.ts` and to the pack. The
+pack's `captions` fill every `subtitles` key the config leaves out. `validate_job` checks the custom
+prop files again as they are on disk (`server.py::_bean_custom_prop_errors`), because the agent
+redraws a prop after the config is written. The text-layout audit samples each shot
 as if it were a scene, from the end of the badge carousel when the shot opens a list section. A Bean Explainer video can have a mascot; the skill keeps it small and to one
 side.
 

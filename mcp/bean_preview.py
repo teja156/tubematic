@@ -21,7 +21,9 @@ from pathlib import Path
 
 _SCRIPT = Path("bean-tools") / "render-props.mjs"
 STDERR_TAIL_LINES = 8
-TIMEOUT_SECS = 420
+# Under server.py's HEAVY_CHECK_WAIT_SECS (300): the preview holds the heavy-check
+# lock, and a validate_job queued behind it must not give up first.
+TIMEOUT_SECS = 240
 
 
 class BeanPreviewError(Exception):

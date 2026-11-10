@@ -4443,6 +4443,17 @@ def validate_job(video_id: str) -> dict:
     except Exception as e:
         errors.append(f"Image reference check failed: {e}")
 
+    # A Bean Explainer video's own props (TMDEV-198). write_scene_config checks
+    # their files, but the skill has the agent redraw a prop after writing the
+    # config, and a redraw does not pass through it again: check the files as
+    # they are now, so a redraw cannot bring in a filter, a stray import or a
+    # deleted file unseen.
+    try:
+        if "scene_config" in dir() and isinstance(scene_config, dict):
+            errors.extend(_bean_custom_prop_errors(video_id, scene_config))
+    except Exception as e:
+        errors.append(f"Custom prop check failed: {e}")
+
     # Cartoon 3D readiness (TMDEV-185). A Cartoon 3D video renders only once
     # its generated source exists and two fresh judges have passed the beat
     # sheet for that exact source (the verdict is keyed by a hash of the
@@ -6176,6 +6187,28 @@ def _timeline_word_starts(video_id: str) -> tuple[int, list[int]]:
         return 30, []
 
 
+def _bean_custom_prop_errors(video_id: str, config) -> list[str]:
+    """validate_job's re-check of a Bean Explainer config's own props against
+    their files as they are now; [] when the config has none."""
+    custom = _bean_custom_list(config)
+    if not custom:
+        return []
+    errs, _, _ = bean_explainer.custom_prop_errors(
+        custom, video_id, tvs.pack(bean_explainer.STYLE_ID)["extra"]["props"],
+        _bean_custom_sources(video_id, config))
+    return [f"Custom prop: {e}" for e in errs]
+
+
+def _bean_custom_list(config) -> list:
+    """A Bean Explainer config's customProps, or [] for any other config."""
+    try:
+        data = config["scenes"][0]["props"][bean_explainer.PROPS_KEY]
+        custom = data.get("customProps") or []
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return []
+    return custom if isinstance(custom, list) else []
+
+
 def _bean_custom_sources(video_id: str, config) -> dict[str, str]:
     """The text of every prop file a Bean Explainer config's customProps names,
     by src, for the validator's source checks. A file that cannot be read is
@@ -6364,8 +6397,11 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
                                         _bean_custom_sources(video_id, config))
         if problems:
             return {"error": "The Bean Explainer video has problems: " + " ".join(problems)}
-        if "subtitles" not in config:
-            config["subtitles"] = dict(tvs.pack(bean_explainer.STYLE_ID)["captions"])
+        # The style's caption look, under whatever the config sets: a config that
+        # sets only `emphasis` keeps the look rather than falling to the defaults.
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(bean_explainer.STYLE_ID)["captions"], **(given or {})}
 
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the

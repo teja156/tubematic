@@ -305,9 +305,10 @@ The tool refuses the write while another session holds the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
 is queued or rendering (`status_mismatch`).
 
-`canvas` is the only default the tool writes into most files. A System Flow or Bean Explainer config
-with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
-style's look. The
+`canvas` is the only default the tool writes into most files. A System Flow config with no
+`subtitles` also gets its style pack's caption settings, because its captions are part of the style's
+look. A Bean Explainer config gets them under whatever `subtitles` keys it sets, so a config that
+sets only `emphasis` keeps the look. The
 components apply the other defaults at render time, so a changed default reaches every video whose
 config omits the key.
 

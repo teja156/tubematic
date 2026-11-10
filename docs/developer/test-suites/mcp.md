@@ -466,6 +466,11 @@ Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean E
   placed by its declared box. A bad `customProps` entry (a library id, another video's file, a box out
   of range, a text slot too long, a bad act name) is refused, and so is a prop file that is missing,
   uses a filter, a gradient or randomness, imports another package or has no default export.
+- `validate_job`'s re-check finds a prop file redrawn with a gradient, or deleted, after the config was
+  written. A value of the wrong type (a list where an id belongs, scene props that are not an object)
+  gets a sentence back and raises nothing. `.filter(Boolean)` is ordinary code while an SVG filter is
+  refused, and every import form is checked (a bare `import`, `export ... from`, `require`). A config
+  that sets only `subtitles.emphasis` keeps the style's caption look.
 - `write_scene_config` reads the prop files a config names. `render_bean_props` refuses another
   style, a video with no config and a config with no `customProps`; it returns the picture (the
   renderer stubbed) and gives way to a heavy check that holds the lock.

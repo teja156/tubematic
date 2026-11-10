@@ -80,7 +80,7 @@ _CUSTOM_FILE = re.compile(r"^prop-[a-z0-9-]{1,40}$")
 # render many times over on the CPU renderer (TMDEV-196's measurements), makes
 # frames differ between renders, or reaches outside the drawing.
 FORBIDDEN_SOURCE = (
-    (re.compile(r"\bfilter\b|<fe[A-Z]"), "an SVG filter (blur, shadow, turbulence): it multiplies the render time"),
+    (re.compile(r"<filter\b|<fe[A-Z]|\bfilter\s*[=:]"), "an SVG filter (blur, shadow, turbulence): it multiplies the render time"),
     (re.compile(r"(?i)(linear|radial)Gradient"), "a gradient: it multiplies the render time; use flat fills"),
     (re.compile(r"<pattern\b"), "an SVG pattern: it multiplies the render time; use flat fills"),
     (re.compile(r"strokeDasharray|stroke-dasharray"), "a dashed stroke: it multiplies the render time"),
@@ -88,7 +88,10 @@ FORBIDDEN_SOURCE = (
     (re.compile(r"<image\b|<img\b|<foreignObject\b|dangerouslySetInnerHTML|\bfetch\(|\bimport\("),
      "an image, embedded HTML or a fetch: a prop is drawn from shapes only"),
 )
-_IMPORT = re.compile(r"""^\s*import\b[^;]*?from\s+["']([^"']+)["']""", re.M)
+# Every way a module names another: `import x from`, a bare `import "x"`,
+# `export ... from` and `require("x")`. A bare import of a missing module is
+# not a type error, and webpack failing on it would break every video's bundle.
+_IMPORT = re.compile(r"""^\s*(?:import|export)\b[^;]*?from\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']|\brequire\s*\(\s*["']([^"']*)["']""", re.M)
 _ALLOWED_IMPORT = re.compile(r"^(react|remotion|\.\./\.\./installed/beanExplainer/(props/common|bean|contract))$")
 # Prop boxes at scale 1, in frame pixels: (width, height), every pixel the
 # drawing can reach (contract.ts says how they are measured). The text limits
@@ -242,7 +245,10 @@ def custom_prop_errors(custom, video_id: str, library: dict, sources: dict | Non
             for pattern, why in FORBIDDEN_SOURCE:
                 if pattern.search(body):
                     errs.append(f"{where} ({cid}): the drawing uses {why}.")
-            bad = [m for m in _IMPORT.findall(body) if not _ALLOWED_IMPORT.match(m)]
+            named = [next(g for g in groups if g) for groups in _IMPORT.findall(body)]
+            bad = [m for m in named if not _ALLOWED_IMPORT.match(m)]
+            if re.search(r"\brequire\s*\(", body) and not named:
+                bad.append("require(...)")
             if bad:
                 errs.append(f"{where} ({cid}): it imports {', '.join(sorted(set(bad)))}; a prop imports only react, "
                             "remotion and ../../installed/beanExplainer/props/common (or bean, contract).")
@@ -274,7 +280,8 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
     scene = scenes[0]
     if scene.get("startFrame") != 0 or scene.get("durationInFrames") != total:
         err(f"The {SCENE_SRC} scene must start at frame 0 and last totalFrames ({total}) frames.")
-    data = (scene.get("props") or {}).get(PROPS_KEY)
+    scene_props = scene.get("props")
+    data = scene_props.get(PROPS_KEY) if isinstance(scene_props, dict) else None
     if not isinstance(data, dict):
         return errors + [f"The scene's props must hold {PROPS_KEY!r}: the sections, shots and cast."]
     if not _int(total) or total <= 0:
@@ -360,7 +367,7 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
             err(f"{where}: header must be text of 1 to {LIMITS['headerChars']} characters.")
         if sec.get("color") not in extra["section_colors"]:
             err(f"{where}: color must be one of {', '.join(extra['section_colors'])}.")
-        if sec.get("badge") not in extra["props"]:
+        if not isinstance(sec.get("badge"), str) or sec["badge"] not in extra["props"]:
             err(f"{where}: badge must be a prop from the library or the video's customProps.")
         if s0 not in starts:
             err(f"{where} starts at frame {s0}, where no shot starts: a section change is a cut, "
@@ -453,14 +460,16 @@ def _check_shot(shot, i, start, end, content, cast_ids, extra, on_word, runs, ch
                 err(f"{at}: the bean's first pose in a shot needs x (where it stands, 0.1 to 0.9).")
             bean_first.setdefault(who, f)
             target = e.get("at")
-            if target is not None and e.get("pose") not in AIM_POSES:
+            if target is not None and not isinstance(target, str):
+                err(f"{at}: at must name a prop or a bean (text).")
+            elif target is not None and e.get("pose") not in AIM_POSES:
                 err(f"{at}: at aims the arm of a {', '.join(AIM_POSES)} pose; the {e.get('pose')!r} pose "
                     "does not reach for anything, so leave at out or change the pose.")
             elif target is not None and target not in props and target not in bean_first:
                 err(f"{at}: at names {target!r}, which is not on stage yet.")
         elif t == "prop":
             prop = e.get("prop")
-            if prop not in extra["props"]:
+            if not isinstance(prop, str) or prop not in extra["props"]:
                 err(f"{at}: prop must be from the library or the video's customProps.")
                 continue
             pid = e.get("id", prop)
@@ -487,7 +496,7 @@ def _check_shot(shot, i, start, end, content, cast_ids, extra, on_word, runs, ch
             props[pid] = {**e, "box": prop_box(prop, e["x"], e["y"], sc, extra.get("boxes"))}
             elements += 1
         elif t == "act":
-            target = props.get(e.get("target"))
+            target = props.get(e.get("target")) if isinstance(e.get("target"), str) else None
             if not target:
                 err(f"{at}: target must name a prop already on stage in this shot.")
                 continue
@@ -518,7 +527,7 @@ def _check_shot(shot, i, start, end, content, cast_ids, extra, on_word, runs, ch
             labels.append((f, label_box(text, e["x"], e["y"]), text))
             elements += 1
         elif t == "mark":
-            if e.get("who") not in bean_first:
+            if not isinstance(e.get("who"), str) or e["who"] not in bean_first:
                 err(f"{at}: who must be a bean already posed in this shot.")
             if e.get("mark") not in extra["marks"]:
                 err(f"{at}: mark must be one of {', '.join(extra['marks'])}.")
@@ -529,11 +538,12 @@ def _check_shot(shot, i, start, end, content, cast_ids, extra, on_word, runs, ch
                 err(f"{at}: two impacts within {TIMING['minImpactGap']} frames blur into one shake.")
             last_impact = f
         elif t == "strike":
-            if e.get("target") not in props:
+            if not isinstance(e.get("target"), str) or e["target"] not in props:
                 err(f"{at}: target must name a prop already on stage in this shot.")
         elif t == "arrow":
             for end_key in ("from", "to"):
-                if e.get(end_key) not in props and e.get(end_key) not in bean_first:
+                v = e.get(end_key)
+                if not isinstance(v, str) or (v not in props and v not in bean_first):
                     err(f"{at}: {end_key} must name a prop or a bean already on stage in this shot.")
     if elements > LIMITS["maxElementsPerShot"]:
         err(f"{where} puts {elements} props and labels on stage; at most "

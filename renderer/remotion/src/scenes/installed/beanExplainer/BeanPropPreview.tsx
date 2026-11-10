@@ -22,8 +22,8 @@ import { DRAWINGS, WHOLE_PROP_ACTS, wholePropMotion } from "./props";
 export type PreviewSpec = BECustomProp & { sample?: string };
 
 const CELL_W = 540;
-const CELL_H = 440;
-const TOP = 220;
+const CELL_H = 380;
+const TOP = 230;
 
 const ACT_MOMENTS = [6, 20, 40, 59];
 
@@ -54,7 +54,7 @@ export const BeanPropPreview: React.FC<{ specs: PreviewSpec[]; drawings: Record<
     <AbsoluteFill style={{ background: FIELDS[field ?? "yellow"] ?? FIELDS.yellow }}>
       <svg width={1080} height={1920}>
         <text x={40} y={90} fontSize={52} fontWeight={700} fill={INK} style={{ fontFamily: ROUND }}>this video&apos;s props</text>
-        <text x={40} y={140} fontSize={34} fill={INK} style={{ fontFamily: HAND }}>red line: the declared box. Ink outside it is too big for its box.</text>
+        <text x={40} y={140} fontSize={30} fill={INK} style={{ fontFamily: HAND }}>red line: the declared box. Ink outside it is too big for its box.</text>
         {specs.map((spec, i) => {
           const Draw = drawings[spec.id];
           const x0 = (i % 2) * CELL_W, y0 = TOP + Math.floor(i / 2) * CELL_H;
@@ -85,11 +85,11 @@ export const BeanPropPreview: React.FC<{ specs: PreviewSpec[]; drawings: Record<
             </g>
           );
         })}
-        <g transform={`translate(110 ${TOP + 4 * CELL_H + 150}) scale(0.4)`}>
+        <g transform="translate(985 112) scale(0.3)">
           <Ref frame={0} actT={-1} text="" round={ROUND} hand={HAND} />
         </g>
-        <text x={110} y={TOP + 4 * CELL_H + 260} textAnchor="middle" fontSize={26} fill={INK} style={{ fontFamily: HAND }}>library phone, 0.4x</text>
-        <text x={600} y={TOP + 4 * CELL_H + 40} textAnchor="middle" fontSize={30} fill={INK} style={{ fontFamily: HAND }}>
+        <text x={985} y={210} textAnchor="middle" fontSize={24} fill={INK} style={{ fontFamily: HAND }}>library phone, 0.3x</text>
+        <text x={540} y={TOP + 4 * CELL_H + 50} textAnchor="middle" fontSize={30} fill={INK} style={{ fontFamily: HAND }}>
           {`a bean on stage is ${Math.round(GEOMETRY.beanHalfWidth * 2 * GEOMETRY.beanScale)} px wide and ${Math.round(GEOMETRY.beanHeight * GEOMETRY.beanScale)} px tall`}
         </text>
       </svg>

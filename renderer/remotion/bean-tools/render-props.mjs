@@ -30,7 +30,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PREVIEW_TIMEOUT_MS = 300_000;
+const PREVIEW_TIMEOUT_MS = 200_000; // under mcp/bean_preview.py TIMEOUT_SECS
 const REMOTION_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const GENERATED = path.join(REMOTION_ROOT, "src", "scenes", "generated");
 const SRC = /^[a-z0-9_]{1,64}\/prop-[a-z0-9-]{1,40}$/;
@@ -73,6 +73,12 @@ const onBrowserLog = (log) => {
 
 const tmpRoot = path.join(REMOTION_ROOT, "bean-tools", ".tmp");
 fs.mkdirSync(tmpRoot, { recursive: true });
+// A preview killed on its timeout never reaches its `finally`, so its folder
+// (an entry and a whole bundle) is left here. Previews run one at a time (the
+// MCP server's heavy-check lock), so any folder found now is such a leftover.
+for (const stale of fs.readdirSync(tmpRoot)) {
+  if (stale.startsWith("preview-")) fs.rmSync(path.join(tmpRoot, stale), { recursive: true, force: true });
+}
 const work = fs.mkdtempSync(path.join(tmpRoot, "preview-"));
 let failure = null;
 try {

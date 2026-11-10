@@ -576,7 +576,9 @@ outlined in red, so ink outside the box shows a box too small for the layout che
   video's prop files, so another video's broken scene cannot fail it.
 - The render holds `_heavy_checks_lock`, the lock `validate_job`'s typecheck holds, so previews and
   typechecks run one at a time; a call that waits longer than `HEAVY_CHECK_WAIT_SECS` returns an
-  error and renders nothing.
+  error and renders nothing. The render's own timeout (`bean_preview.py::TIMEOUT_SECS`, 240 s) is
+  shorter than that wait, so a `validate_job` queued behind a preview gets its turn. A preview killed
+  on its timeout leaves its bundle folder in `bean-tools/.tmp/`, which the next preview removes.
 
 ### `list_scene_files`
 
@@ -617,8 +619,8 @@ It checks:
 - A `bean_explainer` video holds the one installed `BeanExplainer` scene, and its sections and shots
   pass `mcp/bean_explainer.py` (cuts and poses on word starts, the prop library, the video's own
   props and their files, the other catalogues, a layout with no label over a prop or a bean, labels that do not repeat the narration,
-  no still stretch over 3 seconds). No other style may use `BeanExplainer`. Its `subtitles` are
-  filled from the style pack when the config has none. The rules are in
+  no still stretch over 3 seconds). No other style may use `BeanExplainer`. The style pack's caption
+  settings fill every `subtitles` key the config leaves out. The rules are in
   [Bean Explainer](10-scene-authoring.md#bean-explainer).
 - `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
 
@@ -649,7 +651,7 @@ because the array is large.
 ### `validate_job`
 
 `validate_job(video_id)` returns `{passed, errors, warnings}`, and `passed` depends only on
-`errors`. The agent calls it before `submit_render`. It runs eleven checks in order:
+`errors`. The agent calls it before `submit_render`. It runs twelve checks in order:
 
 1. `audio.mp3`, `timeline.json` and `scene-config.json` exist in `<jobs>/<video_id>/`. The location
    is derived from the id and is not read from the stored path columns. A column that is still empty
@@ -670,10 +672,13 @@ because the array is large.
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
    and the [beat gate](#cartoon_beat_gate) has passed for the source on disk. An open gate is one
    error naming the tool that closes it. A symlink anywhere in the source tree fails the check.
-9. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
+9. A Bean Explainer video's own props: each file its `customProps` names exists and still passes
+   the source rules `write_scene_config` applied, since the agent may have redrawn it since
+   (`server.py::_bean_custom_prop_errors`).
+10. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
    `write_scene_config` already checked the cues (see
    [the `mascot` key](10-scene-authoring.md#mascots)).
-10. A typecheck of this video's scenes passes: `npx tsc --noEmit -p` with a temporary config that
+11. A typecheck of this video's scenes passes: `npx tsc --noEmit -p` with a temporary config that
     extends `tsconfig.json` and includes the video's own `generated/<video_id>/` directory and any
     other generated file its config names. `tsc` follows their imports, so the installed components
     and kits they use are checked too. Other videos' scenes are not: the generated tree holds every
@@ -683,7 +688,7 @@ because the array is large.
     `npx` runs `tsc` as a child of its own, and the error asks the agent to call again. The first
     20 lines of a failure are reported. The check is skipped if `npx` is unavailable or the video
     has no generated scenes.
-11. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
+12. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
     It runs when the checks above found no errors, the `text_layout_audit_enabled` setting is on
     and the video is not Cartoon 3D (a painted canvas has no text rects to measure). Its findings
     go to `warnings`. For a mascot video it also

@@ -486,3 +486,67 @@ def test_render_bean_props_waits_its_turn_behind_heavy_checks(make_video, tmp_pa
         assert "call render_bean_props again" in server.render_bean_props(vid)["error"]
     finally:
         server._heavy_checks_lock.release()
+
+
+# ── review round 2 ───────────────────────────────────────────────────────────
+
+def test_validate_job_rechecks_a_prop_redrawn_after_the_config(make_video, tmp_path, monkeypatch):
+    """The skill has the agent redraw a prop after write_scene_config; the
+    redraw must not bring in what that call would have refused."""
+    monkeypatch.setattr(server, "SCENES_DIR", tmp_path / "generated")
+    vid = make_video("vid_be1")
+    folder = tmp_path / "generated" / vid
+    folder.mkdir(parents=True)
+    (folder / "prop-rocket.tsx").write_text(ROCKET)
+    cfg = _with_rocket()
+    assert "error" not in server.write_scene_config(vid, copy.deepcopy(cfg))
+    assert server._bean_custom_prop_errors(vid, cfg) == []
+    (folder / "prop-rocket.tsx").write_text(ROCKET.replace("fill={WHITE}", 'fill="url(#radialGradient9)"', 1))
+    assert any("a gradient" in e for e in server._bean_custom_prop_errors(vid, cfg))
+    (folder / "prop-rocket.tsx").unlink()
+    assert any("write it with write_scene_file first" in e for e in server._bean_custom_prop_errors(vid, cfg))
+    assert "_bean_custom_prop_errors(video_id, scene_config)" in pathlib.Path(server.__file__).read_text()
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda d: d["sections"][0].update(badge=["x"]),
+    lambda d: d["shots"][1]["events"][2].update(target=["phone"]),
+    lambda d: d["shots"][2]["events"][2].update(at=["fake"]),
+    lambda d: d["shots"][1]["events"][1].update(prop={"a": 1}),
+    lambda d: d["shots"][3]["events"][-1].update(target=7),
+])
+def test_a_value_of_the_wrong_type_is_a_sentence_not_a_crash(mutate):
+    problems = _check(_with(mutate))
+    assert problems and all(isinstance(p, str) for p in problems)
+
+
+def test_scene_props_that_are_not_an_object_are_refused():
+    cfg = copy.deepcopy(EXAMPLE)
+    cfg["scenes"][0]["props"] = [1]
+    assert any("must hold 'beanExplainer'" in p for p in _check(cfg))
+
+
+def test_array_filter_is_ordinary_code_but_an_svg_filter_is_not():
+    ok = ROCKET.replace("const lift", "const parts = [1, 0].filter(Boolean);\n  const lift", 1)
+    assert _check_custom(_with_rocket(), {"vid_be1/prop-rocket": ok}) == []
+    for bad in ('<filter id="f" />', 'filter="url(#f)"', "style={{ filter: 'blur(2px)' }}"):
+        body = ROCKET.replace("<g transform", f"{bad}<g transform", 1)
+        assert any("an SVG filter" in p for p in _check_custom(_with_rocket(), {"vid_be1/prop-rocket": body})), bad
+
+
+@pytest.mark.parametrize("line", ['import "./side-effect";', 'export { x } from "lodash";', 'const fs = require("fs");'])
+def test_every_import_form_is_checked(line):
+    body = line + "\n" + ROCKET
+    assert any("it imports" in p for p in _check_custom(_with_rocket(), {"vid_be1/prop-rocket": body}))
+
+
+def test_setting_only_emphasis_keeps_the_styles_caption_look(make_video):
+    vid = make_video("vid_be6")
+    cfg = copy.deepcopy(EXAMPLE)
+    cfg["subtitles"] = {"emphasis": [16]}
+    result = server.write_scene_config(vid, cfg)
+    assert "error" not in result, result
+    written = json.loads(pathlib.Path(result["path"]).read_text())["subtitles"]
+    assert written == {**tvs.pack("bean_explainer")["captions"], "emphasis": [16]}
+    cfg["subtitles"] = "big"
+    assert "error" in server.write_scene_config(vid, cfg)
