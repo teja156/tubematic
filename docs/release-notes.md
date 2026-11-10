@@ -35,6 +35,9 @@ After you upgrade:
   the more videos the install had made. Checking a video's scenes before a render now takes a few
   seconds and a few hundred megabytes, the check runs for one video at a time, and a check that runs
   out of time now stops everything it started.
+- A render that timed out inside the browser, which happens on a machine short of memory, sent the
+  video back to the agent to change scenes that were fine. The first such timeout now re-queues the
+  render as it is. A second one sends the video to the agent as before.
 - The built-in renderer held several hundred megabytes of memory while idle, on installs that never
   make a Cartoon 3D video. It now starts its preview-stills helper only when Cartoon 3D asks for a
   still, and lets the memory go after ten minutes without one.
