@@ -25,7 +25,7 @@ import { AbsoluteFill, Easing, continueRender, delayRender, staticFile, useCurre
 import { ICONS } from "./systemFlow/icons";
 import { LIMITS, TIMING, type SFBoard, type SFEvent, type SystemFlowData, type Tone } from "./systemFlow/contract";
 import { BOX_H, BOX_W, LABEL_GAP, LABEL_LINE, LABEL_PX, SLOT_W, layoutBoard, pointAlong, type BoardLayout } from "./systemFlow/layout";
-import { H, W, boardKeys, cameraAt, svgTransform, toScreen, type Cam } from "./systemFlow/camera";
+import { CHIP_PX, H, W, boardKeys, cameraAt, chipLeft, svgTransform, toScreen, type Cam } from "./systemFlow/camera";
 
 // ── look (tokens from the style card) ─────────────────────────────────────────
 const BG = "#242724";
@@ -268,9 +268,6 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
         const until = Math.min(chip.at + TIMING.chipHold, nextChip(i));
         if (frame < chip.at || frame >= until) return null;
         const mid = toScreen(c, pointAlong(e.points, 0.5).p.x, pointAlong(e.points, 0.5).p.y);
-        // Beside the connector, on the side with more room, so the line and
-        // its packets stay visible.
-        const right = pointAlong(e.points, 0.5).p.x <= (layout.bounds.x0 + layout.bounds.x1) / 2;
         const op = ramp(frame, chip.at, 6) * (1 - ramp(frame, until - 6, 6));
         const color = TONE[chip.tone ?? "structure"];
         return (
@@ -278,14 +275,13 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
             key={`c-${i}`}
             style={{
               position: "absolute",
-              left: right ? mid.x + 28 * c.s : undefined,
-              right: right ? undefined : W - mid.x + 28 * c.s,
+              left: chipLeft(chip.text, mid.x, c.s),
               top: mid.y,
               transform: "translateY(-50%)",
               whiteSpace: "nowrap",
               fontFamily: MONO,
               fontWeight: 500,
-              fontSize: 40 * c.s,
+              fontSize: CHIP_PX * c.s,
               color,
               background: CHIP_BG,
               border: `${3 * c.s}px solid ${color}`,

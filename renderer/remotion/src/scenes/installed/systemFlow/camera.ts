@@ -112,3 +112,26 @@ export function svgTransform(c: Cam): string {
 export function toScreen(c: Cam, x: number, y: number): { x: number; y: number } {
   return { x: BX + (x - c.cx) * c.s, y: BY + (y - c.cy) * c.s };
 }
+
+// Chips: JetBrains Mono at 40 world px advances about 0.6 em a character.
+export const CHIP_PX = 40;
+const CHIP_ADVANCE = 0.6;
+const CHIP_PAD_X = 16;
+const CHIP_BORDER = 3;
+const CHIP_GAP = 28;
+export const SIDE_MARGIN = 60; // the text audit's side safe zone
+
+/** The on-screen left edge of a value chip beside a connector point (sx on
+ *  screen), at camera scale s: on the side with room, kept inside the side
+ *  margins. A chip on a fixed side ran off the frame for a long value near the
+ *  edge, which the text audit then had to catch. */
+export function chipLeft(text: string, sx: number, s: number): number {
+  const w = (text.length * CHIP_PX * CHIP_ADVANCE + 2 * (CHIP_PAD_X + CHIP_BORDER)) * s;
+  const gap = CHIP_GAP * s;
+  const rightOk = sx + gap + w <= W - SIDE_MARGIN;
+  const leftOk = sx - gap - w >= SIDE_MARGIN;
+  const preferRight = sx <= W / 2;
+  if (preferRight ? rightOk : !leftOk && rightOk) return sx + gap;
+  if (leftOk) return sx - gap - w;
+  return Math.min(Math.max(sx - w / 2, SIDE_MARGIN), W - SIDE_MARGIN - w);
+}

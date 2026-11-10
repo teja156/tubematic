@@ -32,6 +32,8 @@ Covers `contract.ts`, `layout.ts` and `camera.ts` ([System Flow](../10-scene-aut
 - A full board of three rows of three, every label on two lines, shows labels of 40 px or more at
   the pull-back.
 - On every frame, every node that has entered sits inside the diagram band, a focus push included.
+- A value chip sits beside its connector on the side with room, and stays inside the side margins
+  whatever its length and wherever the connector is.
 
 Trap: the band check is what keeps a new node out of the captions. The camera starts moving
 `cameraLead` frames before an event so it has made room when the node lands; a shorter lead lets a

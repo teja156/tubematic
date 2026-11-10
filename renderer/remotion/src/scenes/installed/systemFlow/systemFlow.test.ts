@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { computeRows, wrapLabel, type SFBoard } from "./contract";
-import { BAND, boardKeys, cameraAt, fit, toScreen } from "./camera";
+import { BAND, CHIP_PX, SIDE_MARGIN, W, boardKeys, cameraAt, chipLeft, fit, toScreen } from "./camera";
 import { LABEL_PX, layoutBoard, pointAlong, slotBox } from "./layout";
 
 const CASES = JSON.parse(
@@ -98,5 +98,28 @@ describe("camera", () => {
     const b = board(["a", "b"], [["a", "b"]]);
     const keys = boardKeys(b, layoutBoard(b), 200);
     expect(cameraAt(keys, 57)).toEqual(cameraAt(keys, 57));
+  });
+});
+
+describe("value chips", () => {
+  const width = (text: string, s: number) => (text.length * CHIP_PX * 0.6 + 2 * (16 + 3)) * s;
+
+  it("stay inside the side margins wherever the connector is", () => {
+    // Found in the live test: a long chip beside a connector near the left edge left the frame.
+    for (const text of ["200 OK", "example.com A?", "x".repeat(24)]) {
+      for (const s of [0.7, 1, 1.2]) {
+        for (let sx = 80; sx <= 1000; sx += 40) {
+          const left = chipLeft(text, sx, s);
+          expect(left, `${text} at ${sx}, scale ${s}`).toBeGreaterThanOrEqual(SIDE_MARGIN - 0.01);
+          expect(left + width(text, s), `${text} at ${sx}, scale ${s}`).toBeLessThanOrEqual(W - SIDE_MARGIN + 0.01);
+        }
+      }
+    }
+  });
+
+  it("sit beside the connector, not on it, when there is room", () => {
+    expect(chipLeft("200 OK", 300, 1)).toBeGreaterThan(300); // left half: to the right
+    const left = chipLeft("200 OK", 800, 1); // right half: to the left
+    expect(left + width("200 OK", 1)).toBeLessThan(800);
   });
 });
