@@ -91,6 +91,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
 # tubematic_core itself, so importing it first broke the mcp/-only sys.path
 # that vqa/stage_script.py uses.
 import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
+import system_flow  # the System Flow checks (TMDEV-196); a sibling module like cartoon
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
@@ -6041,6 +6042,17 @@ def _scene_config_lock(video_id: str) -> threading.Lock:
         return _scene_config_locks.setdefault(video_id, threading.Lock())
 
 
+def _timeline_word_starts(video_id: str) -> tuple[int, list[int]]:
+    """The narration's fps and every word's start frame, from timeline.json;
+    (30, []) when there is no readable timeline (the word check is skipped)."""
+    try:
+        path = tjobs.job_file(JOBS_DIR, video_id, tjobs.TIMELINE)
+        tl = json.loads(path.read_text(encoding="utf-8"))
+        return int(tl.get("fps") or 30), [int(w["startFrame"]) for w in tl.get("words", [])]
+    except (tjobs.UnsafePath, OSError, ValueError, TypeError, KeyError):
+        return 30, []
+
+
 def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     """write_scene_config's body, under the video's lock."""
     _init_db()
@@ -6088,6 +6100,23 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if canvas is None:
         canvas = settled or DEFAULT_CANVAS
         config["canvas"] = canvas
+
+    # ── System Flow (TMDEV-196) ──────────────────────────────────────────────
+    # A whole-video style: one installed SystemFlow scene whose props hold the
+    # diagram as data, checked here so an overcrowded or mistimed diagram is
+    # refused before it costs a render. Its captions are part of the look, so
+    # the style pack's caption settings fill a config that sent none.
+    sf_err = system_flow.check_scene_use(row["visual_style"], scenes)
+    if sf_err:
+        return {"error": sf_err}
+    if (row["visual_style"] or "") == system_flow.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = system_flow.check(config, int(config.get("fps") or fps),
+                                     word_starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"])
+        if problems:
+            return {"error": "The System Flow diagram has problems: " + " ".join(problems)}
+        if "subtitles" not in config:
+            config["subtitles"] = dict(tvs.pack(system_flow.STYLE_ID)["captions"])
 
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the
