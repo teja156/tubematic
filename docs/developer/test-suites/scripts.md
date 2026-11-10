@@ -622,6 +622,20 @@ Trap: The launch form has no free-text field, so the written list is the set of 
 install from it. A string sort or a listed prerelease is a defect no other check sees before a
 session launches.
 
+### `test_bean_explainer_skill.py`
+
+Covers the `tubematic-bean-explainer` skill ([Bean Explainer](../10-scene-authoring.md#bean-explainer)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The prop catalogue in `reference/contract.md` lists the pack's props and no others, each with its text
+  limit and acts, and every pose, face, mark, accessory, tint, entrance, field and section colour.
+- The limits the skill states are the ones `mcp/bean_explainer.py` enforces, the worked example
+  passes the validator, and the uninstaller removes the skill.
+
+Trap: `reference/contract.md`'s catalogue is generated from the pack. A prop added to the library
+and left out of that file is a prop no agent will use.
+
 ### `test_system_flow_skill.py`
 
 Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md#system-flow)).

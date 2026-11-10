@@ -331,6 +331,7 @@ purpose:
 | `motion_graphics` | a diagrammatic brief, or a photographic one if the beat genuinely needs a person shown |
 | `stick`, `illustrated`, `auto` | a **pose** brief — what the figure is doing and feeling |
 | `cartoon_3d` | a **scene** brief — where this happens, who is there and what they do, what thing is on screen. The video is one 3D world with people walking through it, so every beat's brief names a place and an action, never a diagram |
+| `bean_explainer` | a **bean** brief — the bean's pose and face, and the one prop on stage that the line is about. The video is one cartoon character throughout, so a role is the bean (or the one second bean the cast allows), never a photograph |
 | `system_flow` | a **component** brief — which components are on screen, what travels between them, and the one value worth showing (a port, a latency, `200 OK`). The video is a diagram throughout, so a role ("the user", "an attacker") is a component with an icon, never a figure |
 
 **Under `"system_flow"` the narration is the diagram's script.** Write it as a walk through a
@@ -340,6 +341,16 @@ components; when the subject changes (from the request to the defence, say), sta
 because the diagram cuts to a new board there. Name the values a viewer should see (an address, a
 status code, a port), since each becomes a label on the connector. Never write a beat that needs a
 person, a place or a photograph: this style has none.
+
+**Under `"bean_explainer"` the narration is a cartoon character's script.** One everyman bean reacts
+to what you say, among props drawn from a fixed library (a phone, a browser bar, coins, a pill, a
+lock, an alarm clock...). Write it to be acted out: when the topic is a list, introduce each item
+with its name ("First: urgency.") so it gets its own section; give each sentence one picture a
+person can react to (a fake text arrives, the bill comes, the alarm rings); talk to the viewer
+("you"); and land each line on one key word, which is shown on a red box in the captions. A beat
+brief is a **bean** brief: the pose and face, and the prop on stage (`"bean panics, phone buzzing
+with a bank text"`). Never write a beat that needs a photograph, a named real person or a place:
+this style has none, and a thing the library does not have is shown as text on a sign or a note.
 
 Note what this does *not* depend on: the canvas. Under `"auto"` the canvas is chosen later, after
 voicing, and a figure works on either — black line art on light, white on dark. So a pose brief is
@@ -355,7 +366,8 @@ Everything else in this step is identical in both registers. In particular a **s
 person, creature or place is a photographic brief under every scene register — the stick branch is
 for generic roles only. `system_flow` is the exception: it has no photographs, so a named person or
 place there is a labelled component (`"Alice's laptop"` as a `user` or `phone` node), and the
-narration names it.
+narration names it. `bean_explainer` has none either: a named thing there is a prop with its name
+on it (a `sign`, a `note`, an address in a `browser` bar).
 
 ### The treatment follows the beat's subject, not the writer's habit
 

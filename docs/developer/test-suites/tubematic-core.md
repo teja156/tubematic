@@ -94,6 +94,8 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   as the table in the test says.
 - The refusal messages come from the packs, and the GPU gate passes only `working`.
 - `public_list` explains an unavailable style, and `agent_view` names the authoring skill.
+- System Flow and Bean Explainer each have their renderer, canvas, skill and permissions pinned; Bean
+  Explainer's bean counts as a figure but neither line art nor a generated character.
 - A malformed pack is refused with the field at fault, `auto` cannot be a pack, and every shipped
   pack passes.
 

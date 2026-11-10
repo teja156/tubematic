@@ -438,6 +438,32 @@ canvas the video already uses, since no code on the revision path reads the fiel
 default of `illustrated` or `cartoon_3d` is checked only when it changes: re-sending a stored
 default after the key or the GPU is gone must pass, or every later edit of that domain would fail.
 
+### `test_bean_explainer.py`
+
+Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean Explainer config, the
+`subtitles.emphasis` check, and the text audit's per-shot sampling
+([Bean Explainer](../10-scene-authoring.md#bean-explainer)).
+
+- The limits, timings, geometry, event types and cast ids equal the ones in the renderer's
+  `contract.ts`, read from the TypeScript source. The style pack's catalogues (poses, faces, looks,
+  marks, accessories, tints, entrances, fields, section colours, and every prop with its text limit
+  and acts) equal the renderer's, and every prop has one drawing and no drawing lacks a prop. Both sides answer the
+  shared cases in `fixtures/bean_explainer_contract.json` (label wrapping, prop, label and bean
+  boxes).
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its shot or event and cause: an unknown field, accessory, pose, prop or act, two
+  beans with one tint, a header too long, a badge that is not a prop, a section with no shot at its
+  start, a cut or a pose off the words, a missing first `x`, a text slot over its limit, a scale out
+  of range, an act before its prop lands, a label that repeats the narration, a label over a prop or
+  the bean, a prop over the bean or off the stage, an event during the carousel or too close to a
+  cut, a strike on nothing, too many elements, poses too close together, and a still stretch over
+  3 seconds. Props may overlap each other, which the gags in the example rely on.
+- `write_scene_config` writes a sound config with the style's captions, keeps an `emphasis` it was
+  given, refuses a bad one before writing anything, refuses `BeanExplainer` on another style and
+  other scenes on a Bean Explainer video. `emphasis` beyond the narration's last word, on more than
+  one word in 5, repeated, or not a list of numbers is refused, on any style.
+
 ### `test_system_flow.py`
 
 Covers `mcp/system_flow.py`, the checks `write_scene_config` runs on a System Flow config, and the

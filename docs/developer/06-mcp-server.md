@@ -595,6 +595,13 @@ It checks:
   connected graph, events in a drawable order, no still stretch over 3.5 seconds). No other style may
   use `SystemFlow`. Its `subtitles` are filled from the style pack when the config has none. The
   rules are in [System Flow](10-scene-authoring.md#system-flow).
+- A `bean_explainer` video holds the one installed `BeanExplainer` scene, and its sections and shots
+  pass `mcp/bean_explainer.py` (cuts and poses on word starts, the prop library and the other
+  catalogues, a layout with no label over a prop or a bean, labels that do not repeat the narration,
+  no still stretch over 3 seconds). No other style may use `BeanExplainer`. Its `subtitles` are
+  filled from the style pack when the config has none. The rules are in
+  [Bean Explainer](10-scene-authoring.md#bean-explainer).
+- `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
 
 It records two things in the same transaction as the rename of the staged file into place:
 

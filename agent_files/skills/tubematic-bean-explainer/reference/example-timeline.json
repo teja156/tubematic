@@ -1,0 +1,247 @@
+{
+ "totalFrames": 716,
+ "fps": 30,
+ "audioDurationSeconds": 23.87,
+ "words": [
+  {
+   "word": "Every",
+   "startFrame": 6,
+   "endFrame": 17
+  },
+  {
+   "word": "phishing",
+   "startFrame": 18,
+   "endFrame": 32
+  },
+  {
+   "word": "trick,",
+   "startFrame": 33,
+   "endFrame": 45
+  },
+  {
+   "word": "explained.",
+   "startFrame": 50,
+   "endFrame": 67
+  },
+  {
+   "word": "First:",
+   "startFrame": 78,
+   "endFrame": 90
+  },
+  {
+   "word": "urgency.",
+   "startFrame": 95,
+   "endFrame": 109
+  },
+  {
+   "word": "A",
+   "startFrame": 120,
+   "endFrame": 127
+  },
+  {
+   "word": "fake",
+   "startFrame": 128,
+   "endFrame": 138
+  },
+  {
+   "word": "text",
+   "startFrame": 139,
+   "endFrame": 149
+  },
+  {
+   "word": "says",
+   "startFrame": 150,
+   "endFrame": 160
+  },
+  {
+   "word": "your",
+   "startFrame": 161,
+   "endFrame": 171
+  },
+  {
+   "word": "account",
+   "startFrame": 172,
+   "endFrame": 185
+  },
+  {
+   "word": "is",
+   "startFrame": 186,
+   "endFrame": 194
+  },
+  {
+   "word": "locked,",
+   "startFrame": 195,
+   "endFrame": 208
+  },
+  {
+   "word": "so",
+   "startFrame": 213,
+   "endFrame": 221
+  },
+  {
+   "word": "you",
+   "startFrame": 222,
+   "endFrame": 231
+  },
+  {
+   "word": "panic",
+   "startFrame": 232,
+   "endFrame": 243
+  },
+  {
+   "word": "and",
+   "startFrame": 244,
+   "endFrame": 253
+  },
+  {
+   "word": "click",
+   "startFrame": 254,
+   "endFrame": 265
+  },
+  {
+   "word": "fast.",
+   "startFrame": 266,
+   "endFrame": 277
+  },
+  {
+   "word": "Next:",
+   "startFrame": 288,
+   "endFrame": 299
+  },
+  {
+   "word": "lookalike",
+   "startFrame": 304,
+   "endFrame": 320
+  },
+  {
+   "word": "links.",
+   "startFrame": 321,
+   "endFrame": 333
+  },
+  {
+   "word": "paypa1",
+   "startFrame": 344,
+   "endFrame": 356
+  },
+  {
+   "word": "is",
+   "startFrame": 357,
+   "endFrame": 365
+  },
+  {
+   "word": "not",
+   "startFrame": 366,
+   "endFrame": 375
+  },
+  {
+   "word": "paypal.",
+   "startFrame": 376,
+   "endFrame": 389
+  },
+  {
+   "word": "Read",
+   "startFrame": 400,
+   "endFrame": 410
+  },
+  {
+   "word": "every",
+   "startFrame": 411,
+   "endFrame": 422
+  },
+  {
+   "word": "letter.",
+   "startFrame": 423,
+   "endFrame": 436
+  },
+  {
+   "word": "Last:",
+   "startFrame": 447,
+   "endFrame": 458
+  },
+  {
+   "word": "fake",
+   "startFrame": 463,
+   "endFrame": 473
+  },
+  {
+   "word": "login",
+   "startFrame": 474,
+   "endFrame": 485
+  },
+  {
+   "word": "pages.",
+   "startFrame": 486,
+   "endFrame": 498
+  },
+  {
+   "word": "The",
+   "startFrame": 509,
+   "endFrame": 518
+  },
+  {
+   "word": "page",
+   "startFrame": 519,
+   "endFrame": 529
+  },
+  {
+   "word": "looks",
+   "startFrame": 530,
+   "endFrame": 541
+  },
+  {
+   "word": "real,",
+   "startFrame": 542,
+   "endFrame": 553
+  },
+  {
+   "word": "but",
+   "startFrame": 558,
+   "endFrame": 567
+  },
+  {
+   "word": "the",
+   "startFrame": 568,
+   "endFrame": 577
+  },
+  {
+   "word": "address",
+   "startFrame": 578,
+   "endFrame": 591
+  },
+  {
+   "word": "is",
+   "startFrame": 592,
+   "endFrame": 600
+  },
+  {
+   "word": "wrong.",
+   "startFrame": 601,
+   "endFrame": 613
+  },
+  {
+   "word": "Never",
+   "startFrame": 624,
+   "endFrame": 635
+  },
+  {
+   "word": "type",
+   "startFrame": 636,
+   "endFrame": 646
+  },
+  {
+   "word": "your",
+   "startFrame": 647,
+   "endFrame": 657
+  },
+  {
+   "word": "password",
+   "startFrame": 658,
+   "endFrame": 672
+  },
+  {
+   "word": "there.",
+   "startFrame": 673,
+   "endFrame": 685
+  }
+ ]
+}

@@ -11,8 +11,9 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds System Flow, a visual style that turns a video into a diagram that builds itself while
-the narrator explains a system.
+2.2.0 adds two visual styles: System Flow, which turns a video into a diagram that builds itself
+while the narrator explains a system, and Bean Explainer, a cartoon character that reacts to the
+narration among everyday props.
 
 ### Upgrade notes
 
@@ -22,13 +23,15 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs a new skill for System Flow, and a session started before it does not have it.
+   installs new skills for System Flow and Bean Explainer, and a session started before it does not
+   have them.
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow cannot render on 2.1.x. Finish it, or switch it to another style while
-  it waits at its topic, before you go back.
-- A domain whose default style is System Flow starts its new videos on Auto under 2.1.x.
+- A video set to System Flow or Bean Explainer cannot render on 2.1.x. Finish it, or switch it to
+  another style while it waits at its topic, before you go back.
+- A domain whose default style is System Flow or Bean Explainer starts its new videos on Auto under
+  2.1.x.
 
 ### Added
 
@@ -39,6 +42,16 @@ If you go back to 2.1.x later:
   image generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's
   default; Auto does not choose it. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Bean Explainer visual style (experimental). A bald, big-headed cartoon character with a thick
+  outline stands on one bright colour field and reacts to the narration pose by pose, while props
+  from a fixed library of everyday objects (a phone, a browser bar, coins, a clock, a pill, a lock and
+  about 35 more), short handwritten labels, reaction marks and red crosses build up beside it. In a
+  list video each item gets a header and a coloured badge, and a strip of badges slides between
+  items. It suits habits, health, money, behaviour and "every X explained" lists, and needs no image
+  generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's default;
+  Auto does not choose it. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
 
 ---
 

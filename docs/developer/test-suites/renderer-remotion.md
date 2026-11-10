@@ -2,7 +2,8 @@
 
 The suite covers the pure TypeScript helpers of the Remotion project's
 [Cartoon 3D kit](../09-remotion-project.md#the-cartoon-3d-kit) and of the
-[`SystemFlow`](../09-remotion-project.md#systemflow) scene. Each test file sits beside the code
+[`SystemFlow`](../09-remotion-project.md#systemflow) and
+[`BeanExplainer`](../09-remotion-project.md#beanexplainer) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -18,6 +19,26 @@ does not run `npm test`, so run the suite yourself after you change either modul
 
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).
+
+## Bean Explainer
+
+### `src/scenes/installed/beanExplainer/beanExplainer.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the rig in `bean.tsx` and the prop library
+([Bean Explainer](../10-scene-authoring.md#bean-explainer)).
+
+- Labels wrap and prop, label and bean boxes are computed as in the shared cases
+  `mcp/tests/test_bean_explainer.py` runs.
+- Every prop the contract lists has a drawing and every pose a pose spec; every whole-prop act is
+  back at rest when its play time ends.
+- Inside a shot the stage only grows, and a cut empties it. The badge carousel plays at a list
+  section change and holds that section's content until it ends. A pose swaps in two frames. A
+  bean's marks clear at its next pose.
+- The arm never reaches past its length, nothing squashes after the snap, a settled spring is
+  1 with no remainder, and blinks are brief and rare.
+
+Trap: a remainder matters for render time. A spring that only approaches its rest repaints its
+layer on every frame, which on the CPU renderer cost more than drawing the bean.
 
 ## System Flow
 

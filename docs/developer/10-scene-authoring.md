@@ -48,8 +48,8 @@ skill also call a style a **register**.
 style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
-does not decide any beat's treatment. `cartoon_3d` and `system_flow` replace the scene system with
-one whole-video scene of their own.
+does not decide any beat's treatment. `cartoon_3d`, `system_flow` and `bean_explainer` replace the
+scene system with one whole-video scene of their own.
 
 | `visual_style` | Canvas | Figures | Hand-drawn line art | Generated characters |
 |---|---|---|---|---|
@@ -58,6 +58,7 @@ one whole-video scene of their own.
 | `stick` | `light` | Yes | Yes | No |
 | `illustrated` | The agent chooses | Yes | No | Yes |
 | `system_flow` | `dark` | No | No | No |
+| `bean_explainer` | `light`, painted over by its own colour field | Its own cast | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
@@ -65,7 +66,8 @@ The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `ch
 `characters_allowed` gates the `generate_character` tool. `figures_allowed` and `line_art_allowed` go
 into the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses), so the reviewer judges a video
 against the look it was meant to have. `cartoon_3d` replaces the scene system with one 3D world
-([Cartoon 3D](#cartoon-3d)), and `system_flow` with one diagram scene ([System Flow](#system-flow)).
+([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)), and
+`bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
 chosen. Two styles have a need:
@@ -100,7 +102,7 @@ style.
 | `review` | Optional. The style's own block for the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses) |
 | `captions` | Optional. The `subtitles` settings `write_scene_config` fills in when a config has none |
 | `routing` | What the style suits and avoids, and the signals in a topic or script that point to it |
-| `extra` | Style-specific data, such as System Flow's icon list |
+| `extra` | Style-specific data, such as System Flow's icon list or Bean Explainer's cast and prop catalogue |
 
 `tubematic_core/tests/test_style_packs.py` pins every gate's answer for each style, `auto`, a blank
 value and an unknown one. Adding a style is a new pack file, the style's renderer work and its
@@ -462,6 +464,72 @@ The limits make a full board readable: at the pull-back to a whole board of thre
 labels stay at 40 px or more. `mcp/tests/test_system_flow.py` pins `system_flow.py` to `contract.ts`.
 When the config has no `subtitles`, the pack's `captions` fill it. The text-layout audit samples
 each board as if it were a scene.
+
+## Bean Explainer
+
+A Bean Explainer video is one installed scene, `BeanExplainer`, that spans the whole video: a bald,
+big-headed character (the bean) with a thick outline reacts to the narration on a flat colour field,
+while props, labels and reaction marks build up beside it. The agent writes no code for it. Its props
+carry `beanExplainer: {field, title, list, cast, sections, shots}`, written with the
+`tubematic-bean-explainer` skill, whose `reference/contract.md` documents every field and the prop
+catalogue, and whose `reference/example-config.json` is the worked example.
+
+- A section has a header, a colour and a badge prop. With `list` on, a strip of badges slides to the
+  next section at each section change (the badge carousel).
+- A shot is a cut. Inside a shot every event stays on stage until the next cut (an additive build).
+- The cast is one house bean, the narrator, and at most one other. The agent picks each one's
+  accessory and tint; the drawing is fixed.
+
+| Event | What the scene draws |
+|---|---|
+| `pose` | The bean swaps to a pose and a face in two frames, then holds. `at` aims a reaching arm at a prop |
+| `prop` | A prop from the library pops, drops, slides or rises in, with its text slot filled |
+| `act` | The prop's own animation (a phone buzzes, a clock rings), for two seconds |
+| `label` | A short handwritten note, ink or red |
+| `mark` | A reaction beside the bean's head (sweat, question mark, alarm), until its next pose |
+| `impact` | A short camera shake and zoom pulse |
+| `strike`, `arrow` | A red X over a prop, a red arrow between two things on stage |
+
+The props are a fixed library, drawn once in the bean's line and colours and checked by a person on a
+model sheet (the `BeanPropSheet` composition). The agent picks a prop by id and fills its text slot;
+it never draws one. A subject the library lacks is shown as text on a sign, note or document.
+
+The renderer's side is `src/scenes/installed/BeanExplainer.tsx` with `beanExplainer/`:
+
+- `contract.ts` holds the limits, timings, geometry and catalogues, including `PROPS` (each prop's
+  box, text limit and acts).
+- `bean.tsx` is the rig: a two-bone arm and leg solver over a pose table, faces as lid, brow and mouth
+  swaps.
+- `sprite.tsx` draws each distinct look of the bean once, as a bitmap, and reuses it on every frame
+  that looks the same.
+- `stage.ts` works out what is on stage at a frame, and `props/` holds the library.
+
+The bean is a bitmap because on the CPU renderer the live SVG bean cost about 0.3 CPU-seconds per
+frame whether or not it moved, and the bitmap about 0.07. Everything in the scene settles to a
+resting value (a spring reaches 1 and stays there, an act stops after two seconds), so a held frame does not
+repaint. The scene also follows System Flow's rules: no SVG filter, gradient, pattern or
+`stroke-dasharray`. The measured costs are in `BeanExplainer.tsx`'s header comment.
+
+`mcp/bean_explainer.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `bean_explainer` video has anything but the one `BeanExplainer` scene, from frame 0 for
+  `totalFrames`, or another style uses `BeanExplainer`.
+- A shot or section after the first does not start within 2 frames of a word, a shot lasts under 1.5
+  seconds or a section under 2, or a section does not start where a shot does.
+- A pose is not on a word, or comes less than 8 frames after the same bean's last pose.
+- An event in a list video's section starts during the badge carousel, or within 6 frames of the
+  next cut.
+- A shot holds more than 6 props and labels, a label overlaps a prop, a bean or another label, a prop
+  overlaps a bean, or anything leaves the stage. Props may overlap each other.
+- A label runs past 2 lines of 22 characters or repeats 4 narration words in a row.
+- A field, pose, face, mark, accessory, tint, prop, act or text slot is not in the catalogue, or an
+  act starts before its prop has landed.
+- Nothing changes for more than 3 seconds.
+
+`mcp/tests/test_bean_explainer.py` pins `bean_explainer.py` to `contract.ts` and to the pack. When
+the config has no `subtitles`, the pack's `captions` fill it. The text-layout audit samples each shot
+as if it were a scene. A Bean Explainer video can have a mascot; the skill keeps it small and to one
+side.
 
 ---
 

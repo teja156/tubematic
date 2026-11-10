@@ -40,6 +40,7 @@ Nine skills ship in `agent_files/skills/`.
 | `tubematic-scene-config` | `VOICE_READY`, and the revision path | Turns a voiced script and its timeline into images, scene TSX and `scene-config.json` |
 | `tubematic-cartoon3d` | `VOICE_READY` for a Cartoon 3D video, and its revision path | Writes the shots, camera, sets and cast as TypeScript, passes the beat gate with the `cartoon_*` tools and adds a soundtrack ([Cartoon 3D](10-scene-authoring.md#cartoon-3d)) |
 | `tubematic-system-flow` | `VOICE_READY` for a System Flow video, and its revision path | Writes the video as one diagram scene's data (boards, components, connectors, events timed to the narration), then validates and submits it ([System Flow](10-scene-authoring.md#system-flow)) |
+| `tubematic-bean-explainer` | `VOICE_READY` for a Bean Explainer video, and its revision path | Writes the video as one cartoon-bean scene's data (sections, shots, the bean's poses and props from the fixed library, timed to the narration), then validates and submits it ([Bean Explainer](10-scene-authoring.md#bean-explainer)) |
 | `tubematic-mascot-builder` | A mascot waits to be built or changed (the poller names the skill and the mascot id) | Writes one mascot's p5.js drawing code, renders its three model sheets with `render_mascot_sheets` and submits it for human review with `submit_mascot` |
 | `tubematic-troubleshooting` | A person asks for it by name | Triages a broken install with that person, runs the diagnostics collector and drafts a redacted bug report |
 
