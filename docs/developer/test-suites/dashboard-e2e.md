@@ -276,7 +276,8 @@ dashboard runs.
 
 ## Known gaps
 
-- CI runs this suite only on a release tag and on a manual dispatch, and the job does not block
+- CI runs this suite only on a release tag and on a manual dispatch, so a failure first shows up
+  when a release is tagged, and it stops that release
   ([Releases: `ci.yml`](../18-releases.md#ciyml-pull-requests-and-pushes)). Run it yourself after a
   change to `ActionPane`, `VideoModal`, `TopBar` or the Settings page.
 - No spec drives a topic through scripting, voicing, rendering and review. The suite tests the

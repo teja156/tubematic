@@ -162,32 +162,14 @@ jobs:
   # release time or on demand, not on every PR. Needs no secrets:
   # docker-compose.test.yml passes literal "test" strings for every API key.
   #
-  # continue-on-error: NON-BLOCKING, from an observed run, not a guess.
-  # Run inside a Kasm session against this branch's own code (2026-09-12):
-  # global-setup completed cleanly -- the compose build finished, all three
-  # containers reached healthy, and Playwright started -- which rules out
-  # the prior "may be dying in global-setup" theory outright. 84 tests ran;
-  # 76 passed; 8 failed, confined to 3 of the 9 spec files (settings.spec.ts,
-  # pipeline.spec.ts, modal.spec.ts -- the other six were fully green).
-  #
-  # Every one of those 8 failures traces to this branch having forked (at
-  # ca1d702) before commit b94bacf landed on main. That commit fixes a
-  # SaveBar remount bug on the Settings page plus drift in all three
-  # affected spec files in one change, and its own message reports "Full
-  # suite green: 84 passed". None of the 8 look like infrastructure flakes
-  # -- this reads as a branch simply missing a fix that already exists
-  # upstream, not as something needing separate diagnosis. That reading is
-  # a strong inference from b94bacf's content and message. It has not been
-  # re-verified by actually rebasing this branch past b94bacf and rerunning
-  # the suite.
-  #
-  # Promotion criterion: rebase this branch onto current main, rerun the
-  # suite, and flip this job to blocking if it comes back fully green.
+  # Blocking, like every other job here: release.yml's later jobs need `ci`,
+  # so a red e2e run stops the release before any image is pushed. Never add
+  # continue-on-error -- it reports a failed job as a success to every job
+  # that needs it (test_workflows.py pins its absence in both files).
   e2e:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
     needs: [python-tests, dashboard, remotion, compose-check]
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
 
