@@ -30,6 +30,8 @@ import os
 import math
 import random
 import re
+import shutil
+import signal
 import sqlite3
 import subprocess
 import tempfile
@@ -4257,6 +4259,74 @@ def _bad_image_refs(scene_config: dict, video_id: str) -> list:
     return errors
 
 
+# validate_job's typecheck. It covers the video's own scene directory and the
+# scene files its config names (tsc follows their imports into installed
+# components and kits), never the whole project: the generated tree holds every
+# video ever made, so a whole-project check grows with the install (measured on
+# a 349-video install: 60 s and 1.6 GB per call, against about 2 s and 0.3 GB
+# for one video). A type error in another video's scenes does not affect this
+# video's render, so it does not fail this video's validation either.
+TYPECHECK_TIMEOUT_SECS = 60
+# How long validate_job waits for another call's typecheck and text audit
+# (_heavy_checks_lock) before reporting itself busy.
+HEAVY_CHECK_WAIT_SECS = 300
+_heavy_checks_lock = threading.Lock()
+
+
+def _typecheck_video(video_id: str, scene_files: list[Path]) -> str | None:
+    """Typecheck one video's generated scenes; the error to report, or None.
+
+    The config is a temporary file beside the project's tsconfig.json, which it
+    extends: it must sit in the Remotion directory for tsc to find
+    node_modules/@types there. On a timeout the whole process group is killed:
+    `npx` runs tsc as a child of its own, and killing npx alone left that tsc
+    running (each one ~2 GB on a large install) while the agent called again.
+    No wildcard waitpid, for the reason text_audit._run_driver gives."""
+    remotion_dir = REPO_ROOT / "remotion"
+    npx_bin = shutil.which("npx")
+    if not npx_bin or not remotion_dir.is_dir():
+        return None
+    own_dir = SCENES_DIR / video_id
+    # Only a directory with source in it: tsc fails ("No inputs were found") on
+    # an include that matches nothing, as a directory emptied by
+    # delete_scene_file does.
+    has_source = own_dir.is_dir() and any(p.suffix in (".ts", ".tsx") for p in own_dir.rglob("*"))
+    include = ([f"{own_dir}/**/*"] if has_source else []) + [str(p) for p in scene_files]
+    if not include:
+        return None
+    fd, config_name = tempfile.mkstemp(prefix=f"tsconfig.validate-{video_id}-", suffix=".json",
+                                       dir=str(remotion_dir))
+    try:
+        with os.fdopen(fd, "w") as fh:
+            json.dump({"extends": "./tsconfig.json", "include": include}, fh)
+        proc = subprocess.Popen(
+            [npx_bin, "tsc", "--noEmit", "-p", config_name],
+            cwd=str(remotion_dir),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=TYPECHECK_TIMEOUT_SECS)
+        except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            proc.wait()
+            return (f"TypeScript typecheck ran out of time (>{TYPECHECK_TIMEOUT_SECS}s), most likely because "
+                    f"the machine is busy. Nothing was found wrong with the scenes; call validate_job again.")
+        if proc.returncode != 0:
+            # The first ~20 lines: the full output can be very long
+            output = (stdout + stderr).strip()
+            first_lines = "\n".join(output.splitlines()[:20])
+            return f"TypeScript typecheck failed — fix before rendering:\n{first_lines}"
+        return None
+    finally:
+        try:
+            os.unlink(config_name)
+        except OSError:
+            pass
+
+
 @mcp.tool
 def validate_job(video_id: str) -> dict:
     """Run pre-render validation checks on a video's job files.
@@ -4313,6 +4383,10 @@ def validate_job(video_id: str) -> dict:
     raw_segments      = row["script_segments"]
     script_segments   = json.loads(raw_segments) if raw_segments else None
     errors: list[str] = []
+    # The generated scene files this video's config names, as resolved by the
+    # existence check below: the typecheck covers these and the video's own
+    # directory, never every video's scenes.
+    typecheck_files: list[Path] = []
 
     for written, path, label in [
         (row["voice_file_path"], audio_path, tjobs.AUDIO),
@@ -4463,6 +4537,8 @@ def validate_job(video_id: str) -> dict:
                         else f"did you call write_scene_file('{video_id}', '{src}', tsx_content)?"
                     )
                     errors.append(f"Scene '{src}' (source={source}) not found: {tsx_path} — {hint}")
+                elif source != "installed":
+                    typecheck_files.append(tsx_path)
     except Exception as e:
         errors.append(f"Scene file existence check failed: {e}")
 
@@ -4510,63 +4586,62 @@ def validate_job(video_id: str) -> dict:
     except Exception as e:
         errors.append(f"The mascot cue track could not be checked: {e}")
 
-    # TypeScript typecheck — fail-loud: broken TSX degrades to silent black
-    # during render, which is very hard to diagnose. Catching it here is much better.
-    try:
-        remotion_dir = REPO_ROOT / "remotion"
-        import shutil as _shutil
-        npx_bin = _shutil.which("npx")
-        if npx_bin and remotion_dir.is_dir():
-            tsc_result = subprocess.run(
-                [npx_bin, "tsc", "--noEmit"],
-                cwd=str(remotion_dir),
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if tsc_result.returncode != 0:
-                # Report the first ~20 lines — full output can be very long
-                output = (tsc_result.stdout + tsc_result.stderr).strip()
-                first_lines = "\n".join(output.splitlines()[:20])
-                errors.append(f"TypeScript typecheck failed — fix before rendering:\n{first_lines}")
-    except subprocess.TimeoutExpired:
-        errors.append("TypeScript typecheck timed out (>60s) — check for infinite type loops in generated scenes")
-    except Exception as e:
-        # Non-fatal: if npx/tsc unavailable, skip rather than block the pipeline
-        pass
-
-    # Text-layout audit (VQA-9) — ADVISORY. Measures real getBoundingClientRect()
-    # values in headless Chromium and reports text-vs-text collisions, the one
-    # defect class the AI review was measured to be blind to. Runs last because
-    # it's the most expensive check (~5s) and there's no point rendering frames
-    # of a video whose TSX doesn't even typecheck.
-    #
-    # Its findings land in "warnings" and never touch "passed". Promotion to a
-    # hard gate is a deliberate later step, once it's been seen clean across real
-    # videos — a geometric check that blocks renders on a false positive is worse
-    # than no check.
-    #
-    # Not for a Cartoon 3D video: its one scene is a painted canvas whose only
-    # text is the captions, so there are no text rects to measure, and the
-    # audit's first frame on software GL (this container has no GPU) exceeds
-    # Remotion's 30 s initial-render timeout anyway. Its check is the beat
-    # gate (mcp/cartoon.py, step 8 above).
+    # The typecheck and the text audit are the two heavy checks: each starts a
+    # Node process (tsc, or a webpack bundle plus Chromium), and several agent
+    # sessions validate at once. Run them one validate_job at a time, so four
+    # sessions cost one typecheck's memory, not four (a pile-up of whole-project
+    # typechecks once exhausted a host's memory).
     warnings: list[str] = []
+    if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):
+        errors.append(
+            f"validate_job could not start its typecheck: other validations kept the checker busy for "
+            f"{HEAVY_CHECK_WAIT_SECS}s. Nothing is wrong with this video; call validate_job again."
+        )
+        return {"passed": False, "errors": errors, "warnings": warnings}
     try:
-        if (
-            not errors
-            and _get_setting("text_layout_audit_enabled", "true").lower() == "true"
-            and "scene_config" in dir()
-            and isinstance(scene_config, dict)
-            and not cartoon.is_cartoon(scene_config)
-        ):
-            from text_audit import audit_text_layout
-            warnings = audit_text_layout(
-                video_id, scene_config, scene_config_path,
-                timeline_path, audio_path, REPO_ROOT / "remotion", mascot_cues=mascot_cues,
-            )
-    except Exception as e:
-        warnings = [f"Text-layout audit could not run ({e}) — text layout was not checked"]
+        # TypeScript typecheck — fail-loud: broken TSX degrades to silent black
+        # during render, which is very hard to diagnose. Catching it here is much better.
+        try:
+            tsc_error = _typecheck_video(video_id, typecheck_files)
+            if tsc_error:
+                errors.append(tsc_error)
+        except Exception:
+            # Non-fatal: if npx/tsc is unavailable, skip rather than block the pipeline
+            pass
+
+        # Text-layout audit (VQA-9) — ADVISORY. Measures real getBoundingClientRect()
+        # values in headless Chromium and reports text-vs-text collisions, the one
+        # defect class the AI review was measured to be blind to. Runs last because
+        # it's the most expensive check (~5s) and there's no point rendering frames
+        # of a video whose TSX doesn't even typecheck.
+        #
+        # Its findings land in "warnings" and never touch "passed". Promotion to a
+        # hard gate is a deliberate later step, once it's been seen clean across real
+        # videos — a geometric check that blocks renders on a false positive is worse
+        # than no check.
+        #
+        # Not for a Cartoon 3D video: its one scene is a painted canvas whose only
+        # text is the captions, so there are no text rects to measure, and the
+        # audit's first frame on software GL (this container has no GPU) exceeds
+        # Remotion's 30 s initial-render timeout anyway. Its check is the beat
+        # gate (mcp/cartoon.py, step 8 above).
+        try:
+            if (
+                not errors
+                and _get_setting("text_layout_audit_enabled", "true").lower() == "true"
+                and "scene_config" in dir()
+                and isinstance(scene_config, dict)
+                and not cartoon.is_cartoon(scene_config)
+            ):
+                from text_audit import audit_text_layout
+                warnings = audit_text_layout(
+                    video_id, scene_config, scene_config_path,
+                    timeline_path, audio_path, REPO_ROOT / "remotion", mascot_cues=mascot_cues,
+                )
+        except Exception as e:
+            warnings = [f"Text-layout audit could not run ({e}) — text layout was not checked"]
+    finally:
+        _heavy_checks_lock.release()
 
     return {"passed": len(errors) == 0, "errors": errors, "warnings": warnings}
 

@@ -505,15 +505,17 @@ renders sheets on software GL, so building a mascot does not take the GPU from a
 ```bash
 cd renderer/remotion
 npm ci --ignore-scripts     # keep the flag for a local install
-npx tsc --noEmit            # what validate_job runs
+npx tsc --noEmit            # the whole tree; validate_job checks one video's scenes
 npm test                    # vitest
 npm run dev                 # Remotion Studio
 npm run build               # bundle
 ```
 
-`tsconfig.json` has no `include`, only an exclusion for the Remotion config file. `tsc` therefore
-covers everything under `renderer/remotion/`, including the bind-mounted `src/scenes/generated/` tree.
-That is how `validate_job` catches a broken agent-written scene before a render is queued.
+`tsconfig.json` has no `include`, only an exclusion for the Remotion config file. `npx tsc --noEmit`
+therefore covers everything under `renderer/remotion/`, including the bind-mounted
+`src/scenes/generated/` tree. `validate_job` runs `tsc` with a temporary config that extends this one
+and includes only the video's own scenes, which is how it catches a broken agent-written scene before
+a render is queued (see [`validate_job`](06-mcp-server.md#validate_job)).
 `noUnusedLocals` is on. `allowJs` is off, so the `.mjs` drivers are outside the typechecker.
 
 `--ignore-scripts` keeps a local install to a few hundred megabytes, because it skips the download of

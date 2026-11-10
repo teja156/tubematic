@@ -9,6 +9,40 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ---
 
+## v2.1.1
+
+2.1.1 fixes a fault that could use up a machine's memory and freeze it while agents prepared
+videos.
+
+### Upgrade notes
+
+After you upgrade:
+
+1. Upgrade each remote renderer, as after every upgrade of main. Until you do, it shows
+   **needs upgrade** and gets no work. On each renderer machine, run:
+
+   ```bash
+   python3 tubematic_remote_renderer.py upgrade
+   ```
+
+   [Remote Renderers](https://docs.tubematic.ai/user-guide/remote-renderers#upgrading) has the
+   details.
+
+### Fixed
+
+- The machine running Tubematic could run out of memory and stop responding, so that only a hard
+  reboot brought it back. It happened while agents prepared several videos at once, and more often
+  the more videos the install had made. Checking a video's scenes before a render now takes a few
+  seconds and a few hundred megabytes, the check runs for one video at a time, and a check that runs
+  out of time now stops everything it started.
+- A render that timed out inside the browser, which happens on a machine short of memory, sent the
+  video back to the agent to change scenes that were fine. The first such timeout now re-queues the
+  render as it is, without counting it against **Max render retries**. A second one is handled like
+  any other failed render.
+- The built-in renderer held several hundred megabytes of memory while idle, on installs that never
+  make a Cartoon 3D video. It now starts its preview-stills helper only when Cartoon 3D asks for a
+  still, and lets the memory go after ten minutes without one.
+
 ## v2.1.0
 
 2.1.0 adds rendering on an NVIDIA GPU, renderers on other machines, the Cartoon 3D visual style and

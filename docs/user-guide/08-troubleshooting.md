@@ -68,7 +68,8 @@ Open the video and read its **Comments** tab. The last comment gives the reason.
 
 - A render that fails more times than **Max render retries** allows marks the video Failed. With
   the default of 1, the second failure does it. Restarting the renderer during a render counts as
-  one failure.
+  one failure. The first time a video's render times out inside the browser, which happens on a
+  machine short of memory, it is tried again as it is and does not count.
 - A post that failed on every account marks the video Failed. See [Publishing](#publishing).
 
 A video that failed while rendering cannot be retried. Create it again.

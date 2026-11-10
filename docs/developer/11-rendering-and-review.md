@@ -282,8 +282,8 @@ take another call's child, so it uses the process-group kill alone.
 | `RENDER_QUEUED → RENDERING` | A claim |
 | `RENDER_QUEUED → REVISION_REQUESTED` | Refused at the claim: a job file is missing |
 | `RENDER_QUEUED → FAILED` | Refused at the claim (an unusable id or path, Cartoon 3D with a mascot, no mascot code), or a GPU-only video no renderer can take |
-| `RENDERING → REVISION_REQUESTED` | A failed render (Remotion exited non-zero) within `max_render_retries` |
-| `RENDERING → RENDER_QUEUED` | A stall, a timeout or a renderer error within `max_render_retries`. Also a restarted renderer and an expired lease |
+| `RENDERING → REVISION_REQUESTED` | A failed render (Remotion exited non-zero) within `max_render_retries`, except a video's first page timeout |
+| `RENDERING → RENDER_QUEUED` | A stall, a timeout or a renderer error within `max_render_retries`. Also a restarted renderer, an expired lease, and a video's first page timeout |
 | `RENDERING → FAILED` | `render_fail_count > max_render_retries`, or a GPU-only render whose GPU failed its re-test |
 | `RENDERING → VIDEO_READY` | Uploaded, and the review is off, failed, found nothing, or ran past `ai_review_max_loops` |
 | `RENDERING → REVISION_REQUESTED` | Uploaded, and the review returned a finding within `ai_review_max_loops`. Also an unexpected exception in the review step |
@@ -296,6 +296,19 @@ A hung render and a failed render take different routes. A stall or a timeout re
 `RENDER_QUEUED` for an automatic retry, because nothing about the job is known to be wrong. A render
 in which Remotion exited non-zero goes to `REVISION_REQUESTED`, because an agent can read the error
 and fix a scene.
+
+A page timeout is the exception. When Remotion exits because the page did not answer in time
+("Timeout (30000ms) exceeded rendering the component", "Timed out evaluating page function";
+`render_results.py::is_page_timeout`), the cause is as often a machine short of memory or CPU as a
+scene that never finishes loading. The first time a video fails this way it returns to
+`RENDER_QUEUED` as it is, with a comment that starts "Render timed out inside the browser, so it was
+re-queued once as it is" (`requeue_page_timeout`). That retry adds nothing to `render_fail_count`:
+with the default cap of 1, a counted retry would send the next failure to `FAILED`, and a scene
+that hangs would never reach the agent. The comment is what bounds it, so a second page timeout of
+the same video takes the usual counted route, with a "Render failed" comment that says it timed out
+a second time: `REVISION_REQUESTED`, or `FAILED` when earlier failures (a stall, a lost renderer)
+already used `max_render_retries`. A GPU-only render whose GPU failed its re-test goes to `FAILED`
+before this rule applies.
 
 `max_render_retries` (default 1) caps render retries only. Each failed result and each
 [lost render](20-gpu-and-remote-renderers.md#leases-restarts-and-lost-renderers) adds one to
@@ -337,8 +350,16 @@ composition, and the built-in renderer's container is the one on the main instal
 GPU. The built-in renderer therefore runs `renderer/remotion/cartoon-tools/stills-server.mjs` as a
 child process. A remote renderer has no `/jobs` volume and runs none.
 
-- The project is bundled once and one Chromium stays open, so a still takes a few seconds. A cold
-  software-GL still in the MCP container takes 25 to 30.
+- It starts with nothing bundled and no browser. The first still bundles the project and opens one
+  Chromium, which then stay, so the stills after it take a few seconds each. A cold software-GL
+  still in the MCP container takes 25 to 30.
+- Ten minutes after the last request (`STILLS_IDLE_MS`) it closes the browser and deletes the
+  bundle, and the next still builds them again. Only Cartoon 3D authoring asks it for stills, so on
+  an install that never uses Cartoon 3D it stays a Node process of about 100 MB.
+- If that first bundle or the browser fails, it answers `503` with `startFailed` and exits. The
+  client (`src/cartoon3d/gate/stills.ts`) then renders the stills itself, as it does when no server
+  answers or the server dies in the middle of a request, and `_ensure_stills_server` starts the
+  server again.
 - It starts with the GL options a render gets (`_gl_options`), so a GPU test that passes moves it
   onto the GPU and one that fails moves it back.
 - It serves the `/jobs` volume (mounted read-only) as its public directory, so a video's files are

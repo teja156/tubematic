@@ -603,10 +603,19 @@ its re-queue when a restarted renderer sends its first heartbeat. The worker cal
 - A failure routed with the gateway's renderer and claim id moves the video, counts the retry,
   comments and releases the claim in one transaction. A failure from another renderer, or from an
   earlier claim, changes nothing.
+- A failed render's [page timeout](../11-rendering-and-review.md#status-transitions) is recognised
+  from Remotion's real messages. The first one re-queues the video with no retry counted and a
+  marking comment, and the second goes to `REVISION_REQUESTED` and counts, or to `FAILED` when an
+  earlier failure already used the cap. Other failures, a stall or timeout outcome, a stale claim
+  and a GPU that failed its re-test keep their own routes.
 - `requeue_interrupted` re-queues with a retry counted and fails past the cap. It does not touch an
   uploaded render, and its `UPDATE` is guarded on the holder and on the lease.
 - A blank settings row falls through to the environment, as it does in `pipeline.py`.
   `scene_config_is_cartoon3d` recognises a generated scene whose props carry a `cartoon3d` object.
+
+Trap: the page-timeout retry must not count against `max_render_retries`. With the default cap of
+1, a counted retry would send the second failure to `FAILED`, and a scene that hangs would never
+reach the agent.
 
 Trap: the review cap compares with `>`. With `>=`, a cap of 1 accepts the first review and allows no
 revision round. The review past the cap still runs, so the stored feedback belongs to the render

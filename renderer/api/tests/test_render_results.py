@@ -499,6 +499,112 @@ def test_a_failure_for_a_video_no_longer_rendering_changes_nothing(db_path):
     assert _read_video(db_path)["render_fail_count"] == 0 and _read_comments(db_path) == []
 
 
+# ── A page timeout inside the browser: retried once, then the agent's ─────────
+# The three errors below are real renders' errors, from an install whose host
+# was out of memory: the scenes were fine, and the agent was sent to rework them.
+
+INITIAL = ('Error: Timeout (30000ms) exceeded rendering the component initially. . You can increase the timeout '
+           'using the "timeoutInMilliseconds" / "--timeout" option of the function or command you used to '
+           'trigger this render.\n    at /app/remotion/node_modules/@remotion/renderer/dist/seek-to-frame.js:86:28')
+EVALUATE = ('Tried to get delayRender() handles for timeout, but could not do so because of Error: Timed out '
+            'evaluating page function "() => {\n return Object.keys(window.remotion_delayRenderTimeouts)')
+
+
+@pytest.mark.parametrize("error", [INITIAL, EVALUATE, "frames 0-449: " + EVALUATE])
+def test_remotions_page_timeouts_are_recognised(error):
+    assert render_results.is_page_timeout(error)
+
+
+@pytest.mark.parametrize("error", ["", "Error: WebGL context lost", "SyntaxError: Unexpected token",
+                                   "Render timed out after 10800s", "Error: ENOSPC: no space left on device"])
+def test_other_failures_are_not_page_timeouts(error):
+    assert not render_results.is_page_timeout(error)
+
+
+def _fail(error, claim=("r_a", "c-new")):
+    return render_results.after_render_failure("vid-1", error, "REVISION_REQUESTED", False, False, False, None,
+                                               claim=claim)
+
+
+def test_the_first_page_timeout_is_requeued_unchanged_and_uncounted(db_path):
+    _claimed_video(db_path)
+    assert _fail(INITIAL) is True
+    video = _read_video(db_path)
+    assert (video["status"], video["render_fail_count"]) == ("RENDER_QUEUED", 0)
+    assert (video["renderer_id"], video["render_lease_until"], video["render_claim_id"]) == ("", "", "")
+    [comment] = _read_comments(db_path)
+    assert comment["author"] == "agent"
+    assert comment["content"].startswith(render_results.PAGE_TIMEOUT_RETRY_PREFIX)
+    assert "30000ms" in comment["content"]
+
+
+def test_the_second_page_timeout_goes_to_the_agent_and_counts(db_path):
+    """A scene that really hangs must still reach the agent: with the default
+    cap of 1, a counted first retry would send this one to FAILED."""
+    _claimed_video(db_path)
+    _fail(INITIAL)
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET status = 'RENDERING', renderer_id = 'r_a', render_claim_id = 'c-2' "
+                "WHERE id = 'vid-1'")
+    con.commit()
+    con.close()
+    assert _fail(EVALUATE, claim=("r_a", "c-2")) is True
+    video = _read_video(db_path)
+    assert (video["status"], video["render_fail_count"]) == ("REVISION_REQUESTED", 1)
+    assert _read_comments(db_path)[-1]["content"].startswith(
+        f"Render failed: {render_results.PAGE_TIMEOUT_AGAIN} Tried to get delayRender()")
+
+
+def test_the_retry_cap_still_applies_to_the_second_page_timeout(db_path):
+    """The uncounted retry does not lift the cap: a video that already used
+    its retry on something else (a stall, a renderer restart) goes to FAILED
+    on its second page timeout, as any failure past the cap does."""
+    _claimed_video(db_path, render_fail_count=1)
+    _fail(INITIAL)
+    assert _read_video(db_path)["status"] == "RENDER_QUEUED"
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET status = 'RENDERING', renderer_id = 'r_a', render_claim_id = 'c-2' "
+                "WHERE id = 'vid-1'")
+    con.commit()
+    con.close()
+    assert _fail(EVALUATE, claim=("r_a", "c-2")) is True
+    video = _read_video(db_path)
+    assert (video["status"], video["render_fail_count"]) == ("FAILED", 2)
+
+
+def test_a_stale_page_timeout_result_changes_nothing(db_path):
+    _claimed_video(db_path)
+    assert _fail(INITIAL, claim=("r_a", "c-old")) is False
+    video = _read_video(db_path)
+    assert (video["status"], video["render_claim_id"]) == ("RENDERING", "c-new")
+    assert _read_comments(db_path) == []
+
+
+def test_any_other_failure_still_goes_to_the_agent(db_path):
+    _claimed_video(db_path)
+    assert _fail("SyntaxError: Unexpected token") is True
+    video = _read_video(db_path)
+    assert (video["status"], video["render_fail_count"]) == ("REVISION_REQUESTED", 1)
+
+
+def test_a_gpu_that_failed_its_retest_still_fails_the_video_on_a_page_timeout(db_path):
+    _claimed_video(db_path)
+    assert render_results.after_render_failure("vid-1", INITIAL, "REVISION_REQUESTED", True, True, True, False,
+                                               claim=("r_a", "c-new")) is True
+    assert _read_video(db_path)["status"] == "FAILED"
+
+
+def test_a_stall_or_timeout_outcome_keeps_its_own_path(db_path):
+    """Requeued stalls and timeouts are already environmental and counted;
+    the page-timeout rule applies to a failed render only."""
+    _claimed_video(db_path)
+    assert render_results.after_render_failure("vid-1", INITIAL, "RENDER_QUEUED", False, False, False, None,
+                                               claim=("r_a", "c-new")) is True
+    video = _read_video(db_path)
+    assert (video["status"], video["render_fail_count"]) == ("RENDER_QUEUED", 1)
+    assert _read_comments(db_path)[0]["content"].startswith("Render failed:")
+
+
 # ── requeue_interrupted ───────────────────────────────────────────────────────
 
 def test_an_interrupted_render_is_requeued_with_a_retry_counted(db_path):

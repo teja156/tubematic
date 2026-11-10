@@ -80,7 +80,7 @@ npm run test:e2e         # Playwright, builds the Docker test stack first
 
 cd renderer/remotion
 npm test                 # vitest
-npx tsc --noEmit         # the typecheck validate_job runs
+npx tsc --noEmit         # the whole tree (validate_job checks one video's scenes)
 ```
 
 The Playwright suite's global setup runs

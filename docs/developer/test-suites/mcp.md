@@ -473,6 +473,23 @@ Covers `validate_job`'s checks on a segmented script.
   sentences passes and a long unexplained gap fails.
 - A legacy video with no segments gets none of these checks and keeps the older ones.
 
+### `test_validate_job_typecheck.py`
+
+Covers `validate_job`'s typecheck ([`validate_job`](../06-mcp-server.md#validate_job)), with a fake
+`npx` that records the config it was given and can hang with a child of its own.
+
+- The temporary config extends `tsconfig.json`, sits beside it, and includes only this video's
+  directory and the scene files its config names. It is removed after a pass, a failure and a
+  timeout. A video with no generated scenes runs no typecheck, and neither does one whose directory
+  was emptied (`tsc` fails on an include that matches nothing).
+- On a timeout the child the fake started is dead afterwards, and the error asks for another call.
+- Two videos validated at once never overlap their typecheck, and a call that cannot get the checker
+  in time returns an error without running one.
+
+Trap: `npx` runs `tsc` as a child of its own, so killing `npx` alone leaves `tsc` running. Agents
+call `validate_job` again after a timeout, and those leftover processes once filled a host's memory.
+The timeout test fails if the kill reaches `npx` only.
+
 ### `test_text_audit.py`
 
 Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
