@@ -639,15 +639,27 @@ because the array is large.
 9. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
    `write_scene_config` already checked the cues (see
    [the `mascot` key](10-scene-authoring.md#mascots)).
-10. `npx tsc --noEmit` passes over the whole Remotion project, with a 60-second timeout. The first
-    20 lines of a failure are reported. The check is skipped if `npx` is unavailable. It covers
-    every video's scenes, so a type error in one of them blocks every render.
+10. A typecheck of this video's scenes passes: `npx tsc --noEmit -p` with a temporary config that
+    extends `tsconfig.json` and includes the video's own `generated/<video_id>/` directory and any
+    other generated file its config names. `tsc` follows their imports, so the installed components
+    and kits they use are checked too. Other videos' scenes are not: the generated tree holds every
+    video the install has made, and a whole-project check grows with it (60 seconds and 1.6 GB per
+    call on a 349-video install, against about 3 seconds and 0.3 GB for one video). The timeout is
+    60 seconds (`TYPECHECK_TIMEOUT_SECS`). On a timeout the whole process group is killed, because
+    `npx` runs `tsc` as a child of its own, and the error asks the agent to call again. The first
+    20 lines of a failure are reported. The check is skipped if `npx` is unavailable or the video
+    has no generated scenes.
 11. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
     It runs when the checks above found no errors, the `text_layout_audit_enabled` setting is on
     and the video is not Cartoon 3D (a painted canvas has no text rects to measure). Its findings
     go to `warnings`. For a mascot video it also
     reports measured text that may sit under the mascot's box at a sampled frame (the box is the
     engine's whole canvas, emote headroom included).
+
+Checks 10 and 11 each start a Node process (`tsc`, or a webpack bundle and a browser), and several
+agent sessions can validate at once. The MCP server runs them for one `validate_job` call at a time
+(`_heavy_checks_lock`). A call that waits longer than 300 seconds (`HEAVY_CHECK_WAIT_SECS`) for the
+others returns an error that says nothing is wrong with the video and asks for another call.
 
 ### `submit_render`
 

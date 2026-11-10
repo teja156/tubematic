@@ -371,7 +371,7 @@ which is the only per-video data in the config. `write_scene_config` refuses a c
 
 The code is checked before it renders:
 
-- The typecheck that `validate_job` runs over the Remotion project covers the video's modules. The
+- The typecheck that `validate_job` runs covers the video's modules and what they import. The
   agent is given the file and line of an error.
 - The beat gate (`src/cartoon3d/gate/beatGateCli.ts`) takes one frame from the middle of every beat
   and pairs it with the sentence the narrator speaks during it. Two judges say whether the picture
@@ -504,8 +504,8 @@ The rules, for a generated scene and an installed component alike:
    decides what to use.
 4. If it is the right answer for a class of beat, add it to the scene-config skill's tables. The
    agent does not use a component the skill does not name.
-5. Run `npx tsc --noEmit`. `validate_job` runs it for every video, so a type error in an installed
-   component blocks every render.
+5. Run `npx tsc --noEmit`. `validate_job` typechecks what each video's scenes import, so a type
+   error in an installed component fails the validation of every video that uses it.
 6. Rebuild the image. Installed components are baked into it.
 
 No tool promotes a generated scene. Copy it from `~/.tubematic-data/scenes/generated/<video_id>/`,
