@@ -156,7 +156,8 @@ exact. A video holds at most 8 of its own.
    two shipped ones at the same scale. Look at it: if it does not read at once as the thing it is meant
    to be, simplify it and preview again. Then use its name as an item's `doodle`, like a shipped one.
 
-A doodle you define but do not draw is refused, and its name may not reuse a shipped name.
+A doodle you define but do not draw is refused, and its name may not reuse a shipped name. The worked
+example draws a `piggy_bank` this way.
 
 ## Step 4 — timing
 
