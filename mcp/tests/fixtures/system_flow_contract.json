@@ -1,0 +1,25 @@
+{
+  "_about": "Cases both sides of the System Flow contract must answer the same way: mcp/system_flow.py (pytest) and renderer/remotion/src/scenes/installed/systemFlow/contract.ts (vitest).",
+  "wrap_label": [
+    {"label": "Browser", "lines": ["Browser"]},
+    {"label": "Load Balancer", "lines": ["Load Balancer"]},
+    {"label": "DNS Resolver Cache", "lines": ["DNS Resolver", "Cache"]},
+    {"label": "  Web   Server 1 ", "lines": ["Web Server 1"]},
+    {"label": "Authentication Service", "lines": ["Authentication", "Service"]},
+    {"label": "Message Queue Consumer Pool", "lines": ["Message Queue", "Consumer Pool"]},
+    {"label": "API Gateway Rate Limiter", "lines": ["API Gateway", "Rate Limiter"]},
+    {"label": "Supercalifragilistic", "lines": ["Supercalifragilistic"]}
+  ],
+  "rows": [
+    {"nodes": ["a"], "edges": [], "rows": {"a": 0}},
+    {"nodes": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"]], "rows": {"a": 0, "b": 1, "c": 2}},
+    {"nodes": ["browser", "dns", "lb", "web1", "web2"],
+     "edges": [["browser", "dns"], ["browser", "lb"], ["lb", "web1"], ["lb", "web2"]],
+     "rows": {"browser": 0, "dns": 1, "lb": 1, "web1": 2, "web2": 2}},
+    {"nodes": ["attacker", "user", "firewall", "server"],
+     "edges": [["attacker", "firewall"], ["user", "firewall"], ["firewall", "server"]],
+     "rows": {"attacker": 0, "user": 0, "firewall": 1, "server": 2}},
+    {"nodes": ["a", "b", "c", "d"], "edges": [["a", "b"], ["b", "c"], ["a", "c"], ["d", "c"]],
+     "rows": {"a": 0, "b": 1, "c": 2, "d": 0}}
+  ]
+}
