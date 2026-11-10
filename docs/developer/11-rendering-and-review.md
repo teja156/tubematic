@@ -358,7 +358,8 @@ child process. A remote renderer has no `/jobs` volume and runs none.
   an install that never uses Cartoon 3D it stays a Node process of about 100 MB.
 - If that first bundle or the browser fails, it answers `503` with `startFailed` and exits. The
   client (`src/cartoon3d/gate/stills.ts`) then renders the stills itself, as it does when no server
-  answers, and `_ensure_stills_server` starts the server again.
+  answers or the server dies in the middle of a request, and `_ensure_stills_server` starts the
+  server again.
 - It starts with the GL options a render gets (`_gl_options`), so a GPU test that passes moves it
   onto the GPU and one that fails moves it back.
 - It serves the `/jobs` volume (mounted read-only) as its public directory, so a video's files are

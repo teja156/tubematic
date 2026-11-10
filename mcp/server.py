@@ -4287,7 +4287,11 @@ def _typecheck_video(video_id: str, scene_files: list[Path]) -> str | None:
     if not npx_bin or not remotion_dir.is_dir():
         return None
     own_dir = SCENES_DIR / video_id
-    include = ([f"{own_dir}/**/*"] if own_dir.is_dir() else []) + [str(p) for p in scene_files]
+    # Only a directory with source in it: tsc fails ("No inputs were found") on
+    # an include that matches nothing, as a directory emptied by
+    # delete_scene_file does.
+    has_source = own_dir.is_dir() and any(p.suffix in (".ts", ".tsx") for p in own_dir.rglob("*"))
+    include = ([f"{own_dir}/**/*"] if has_source else []) + [str(p) for p in scene_files]
     if not include:
         return None
     fd, config_name = tempfile.mkstemp(prefix=f"tsconfig.validate-{video_id}-", suffix=".json",
