@@ -37,7 +37,8 @@ After you upgrade:
   out of time now stops everything it started.
 - A render that timed out inside the browser, which happens on a machine short of memory, sent the
   video back to the agent to change scenes that were fine. The first such timeout now re-queues the
-  render as it is. A second one sends the video to the agent as before.
+  render as it is, without counting it against **Max render retries**. A second one is handled like
+  any other failed render.
 - The built-in renderer held several hundred megabytes of memory while idle, on installs that never
   make a Cartoon 3D video. It now starts its preview-stills helper only when Cartoon 3D asks for a
   still, and lets the memory go after ten minutes without one.

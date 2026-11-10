@@ -605,8 +605,9 @@ its re-queue when a restarted renderer sends its first heartbeat. The worker cal
   earlier claim, changes nothing.
 - A failed render's [page timeout](../11-rendering-and-review.md#status-transitions) is recognised
   from Remotion's real messages. The first one re-queues the video with no retry counted and a
-  marking comment, and the second goes to `REVISION_REQUESTED` and counts. Other failures, a stall
-  or timeout outcome, a stale claim and a GPU that failed its re-test keep their own routes.
+  marking comment, and the second goes to `REVISION_REQUESTED` and counts, or to `FAILED` when an
+  earlier failure already used the cap. Other failures, a stall or timeout outcome, a stale claim
+  and a GPU that failed its re-test keep their own routes.
 - `requeue_interrupted` re-queues with a retry counted and fails past the cap. It does not touch an
   uploaded render, and its `UPDATE` is guarded on the holder and on the lease.
 - A blank settings row falls through to the environment, as it does in `pipeline.py`.

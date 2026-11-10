@@ -551,7 +551,25 @@ def test_the_second_page_timeout_goes_to_the_agent_and_counts(db_path):
     assert _fail(EVALUATE, claim=("r_a", "c-2")) is True
     video = _read_video(db_path)
     assert (video["status"], video["render_fail_count"]) == ("REVISION_REQUESTED", 1)
-    assert _read_comments(db_path)[-1]["content"].startswith("Render failed: Tried to get delayRender()")
+    assert _read_comments(db_path)[-1]["content"].startswith(
+        f"Render failed: {render_results.PAGE_TIMEOUT_AGAIN} Tried to get delayRender()")
+
+
+def test_the_retry_cap_still_applies_to_the_second_page_timeout(db_path):
+    """The uncounted retry does not lift the cap: a video that already used
+    its retry on something else (a stall, a renderer restart) goes to FAILED
+    on its second page timeout, as any failure past the cap does."""
+    _claimed_video(db_path, render_fail_count=1)
+    _fail(INITIAL)
+    assert _read_video(db_path)["status"] == "RENDER_QUEUED"
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET status = 'RENDERING', renderer_id = 'r_a', render_claim_id = 'c-2' "
+                "WHERE id = 'vid-1'")
+    con.commit()
+    con.close()
+    assert _fail(EVALUATE, claim=("r_a", "c-2")) is True
+    video = _read_video(db_path)
+    assert (video["status"], video["render_fail_count"]) == ("FAILED", 2)
 
 
 def test_a_stale_page_timeout_result_changes_nothing(db_path):

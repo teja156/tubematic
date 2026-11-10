@@ -23,7 +23,8 @@
 // `logs` (what `npx remotion still` never shows).
 //
 // It starts empty: the first still bundles the project and opens the browser, and STILLS_IDLE_MS after the last
-// request it closes the browser and deletes the bundle again. The renderer runs this server on every install, but
+// request it closes the browser and deletes the bundle again. If that first bundle or the browser fails, it answers
+// 503 with startFailed and exits, so the client renders the stills itself and the renderer starts the server again. The renderer runs this server on every install, but
 // only Cartoon 3D authoring asks it for anything, and a bundle of every generated scene plus an idle Chromium held
 // several hundred megabytes on installs that never use it.
 import http from "node:http";
@@ -59,6 +60,7 @@ let bundledStamp = null;
 let browser = null;
 let busy = Promise.resolve();
 let idleTimer = null;
+let startFailed = null;
 
 /** a stamp of the generated source tree: every file's path, size and mtime, in a fixed order */
 export const treeStamp = (dir) => {
@@ -159,7 +161,7 @@ const body = (req) => new Promise((resolve, reject) => {
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
-      return json(res, 200, { ok: true, bundled: !!serveUrl, browser: !!browser, public: PUBLIC, gl: GL, chromeMode: CHROME_MODE });
+      return json(res, 200, { ok: !startFailed, bundled: !!serveUrl, browser: !!browser, public: PUBLIC, gl: GL, chromeMode: CHROME_MODE });
     }
     if (req.method === "POST" && req.url === "/rebundle") { touch(); await (busy = busy.then(rebundle)); return json(res, 200, { ok: true }); }
     if (req.method === "POST" && (req.url === "/still" || req.url === "/stills")) {
@@ -169,7 +171,15 @@ const server = http.createServer(async (req, res) => {
       const comp = b.composition ?? "Composition";
       const props = b.props ?? {};
       const work = async () => {
-        await freshen();
+        try {
+          await freshen();
+          await ensureBrowser();
+        } catch (e) {
+          // With no bundle or no browser to fall back on, this server cannot draw anything: say so, and exit so the
+          // renderer starts it again. The client renders the stills itself meanwhile, as when no server answers.
+          if (!serveUrl || !browser) throw Object.assign(e instanceof Error ? e : new Error(String(e)), { startFailed: true });
+          throw e;
+        }
         if (req.url === "/still") {
           fs.mkdirSync(path.dirname(b.out), { recursive: true });
           const logs = await one(comp, props, b.frame ?? 0, b.out, scale);
@@ -191,6 +201,14 @@ const server = http.createServer(async (req, res) => {
       touch();
       try {
         return json(res, 200, await p);
+      } catch (e) {
+        if (!e?.startFailed) throw e;
+        startFailed = String(e?.message ?? e);
+        console.log(`[stills] could not start (${startFailed}); exiting so the renderer starts it again`);
+        json(res, 503, { ok: false, startFailed: true, error: startFailed });
+        if (serveUrl) fs.rmSync(serveUrl, { recursive: true, force: true });
+        setTimeout(() => process.exit(1), 100);
+        return;
       } finally {
         touch();
       }

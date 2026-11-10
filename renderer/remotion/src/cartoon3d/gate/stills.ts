@@ -48,6 +48,8 @@ const viaServer = (jobs: StillJob[], scale: number): boolean => {
   for (const j of jobs) {
     fs.mkdirSync(path.dirname(j.out), { recursive: true });
     const r = curl("/still", JSON.stringify({ composition: j.composition, props: j.props, frame: j.frame, out: j.out, scale }));
+    // a server that could not bundle or open its browser cannot draw: render every still here instead
+    if (/"startFailed":true/.test(r.stdout)) return false;
     if (r.status !== 0 || !/"ok":true/.test(r.stdout) || !fs.existsSync(j.out)) throw new Error(`stills server failed for ${j.out}: ${(r.stdout || r.stderr).slice(0, 300)}`);
   }
   return true;
