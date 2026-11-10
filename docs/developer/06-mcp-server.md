@@ -294,9 +294,9 @@ It refuses:
   its resolved renderer, and holds a mascot. Both checks are repeated in the `UPDATE`'s `WHERE`.
 
 A move to `TOPIC_PROPOSED` (a topic revision) gives a style `auto` picked back to `auto`, in the
-same `UPDATE`: `visual_style` returns to `auto`, and the three `style_*` columns and the two
-`resolved_*` columns are cleared, so the revised topic is routed again after its next approval. A
-style a person chose is kept, with its recorded canvas.
+same `UPDATE`: `visual_style` returns to `auto` and the three `style_*` columns are cleared, so the
+revised topic is routed again after its next approval. On every `auto` video the two `resolved_*`
+columns are cleared too. A style a person chose is kept, with its recorded canvas.
 
 ### `update_video`
 
@@ -358,7 +358,9 @@ Fields the agent writes once, at scene-config time. A second, different value is
 - `resolved_renderer` is the renderer an `auto` video uses (`dom` or `cartoon_3d`). `auto` reaches
   Cartoon 3D by picking the `cartoon_3d` style with `choose_visual_style`, so a video still at
   `auto` when its scenes are written records `dom`. `cartoon_3d` is kept for a video that recorded
-  it before `auto` picked styles. It is refused when `visual_style` already names the renderer.
+  it before `auto` picked styles, and refused on a video `auto` routed to mixed scenes
+  (`style_pick` is `scenes`); `write_scene_config` refuses a Cartoon 3D scene there for the same
+  reason. It is refused when `visual_style` already names the renderer.
   `cartoon_3d` needs the same working GPU and a video with no mascot.
 
 A `title` over 70 characters is rejected. The tool takes none of the four job-path columns:

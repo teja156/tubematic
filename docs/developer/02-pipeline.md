@@ -36,6 +36,7 @@ flowchart TD
     TP -->|reject| TR
     TA -->|agent writes script| SR
     SR -->|"approve: voicing is paid for"| VO
+    SR -->|"switch to Auto's runner-up style"| TA
     VO -->|agent calls generate_voice| VR
     VR -->|agent authors scenes,<br/>validates, submits| RQ
     RQ -->|renderer claims| RN
@@ -291,7 +292,8 @@ its checks:
   `SCRIPT_READY`: a person takes Auto's runner-up, and the video goes back to `TOPIC_APPROVED` for a
   new script.
 - A move back to `TOPIC_PROPOSED` returns a style Auto picked to `auto`, so the revised topic is
-  routed again. A style a person chose is kept.
+  routed again, and clears the renderer and canvas recorded for an `auto` video's old scenes. A
+  style a person chose is kept.
 
 Two fields that follow from `visual_style` are write-once. The agent writes them through
 `update_video`, HTTP cannot write them, and a second, different value is refused:

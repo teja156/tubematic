@@ -795,7 +795,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   };
 
   // Switch to Auto's runner-up (TMDEV-203). Auto picked the style before the
-  // script; at Script Ready, before the voice is paid for, the runner-up can be
+  // script; at Script Ready, before the script is approved, the runner-up can be
   // taken instead. The video goes back to its agent to rewrite the script.
   const runnerUp = video.style_runner_up ?? "";
   const switchable = !archived && video.status === "SCRIPT_READY"

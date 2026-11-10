@@ -3048,9 +3048,10 @@ def create_pipeline_blueprint() -> Blueprint:
         Auto picks a style before the script and names a runner-up. At
         SCRIPT_READY a person may take the runner-up instead: the video goes
         back to TOPIC_APPROVED with that style, and its agent rewrites the
-        script for it. Nothing paid has happened yet at SCRIPT_READY, so the
-        only cost is the script. The old pick becomes the new runner-up, so a
-        second switch goes back.
+        script for it. The new script is voiced again when it is approved, so
+        on a video that reached SCRIPT_READY through a revision, voicing is
+        paid twice. The old pick becomes the new runner-up, so a second switch
+        goes back.
         """
         with _conn() as con:
             # One write transaction from the first read to the write: an
@@ -3070,8 +3071,8 @@ def create_pipeline_blueprint() -> Blueprint:
                 return jsonify({"error": "Only a style Auto picked, with a runner-up, can be "
                                          "switched"}), 409
             if row["status"] != "SCRIPT_READY":
-                return jsonify({"error": "The style can be switched only at Script Ready, before "
-                                         f"the voice is paid for (this video is {row['status']})"}), 409
+                return jsonify({"error": "The style can be switched only at Script Ready, while "
+                                         f"the script waits for approval (this video is {row['status']})"}), 409
             settings = _read_all_settings(con)
             candidates = {c["id"]: c for c in tvs.routing_candidates(
                 bool(_secret(settings, "openai_api_key", "OPENAI_API_KEY")),

@@ -475,16 +475,18 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   style write that commits in between also gets `409`.
 - A `visual_style` different from the stored one clears the record of a style Auto picked
   (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
-  scenes. The same value again keeps them. A `status` of
-  `TOPIC_PROPOSED` without a `visual_style` returns a style Auto picked to `auto` and clears the
-  record. Both are SQL fragments in `tubematic_core/visual_styles.py` that `update_video` and
+  scenes. The same value again keeps them. A `status` of `TOPIC_PROPOSED` without a `visual_style`
+  returns a style Auto picked to `auto` and clears the record, and on every `auto` video it clears
+  the recorded renderer and canvas. Both are SQL fragments in `tubematic_core/visual_styles.py` that `update_video` and
   `set_video_status` also use.
 
 ### `POST /videos/<video_id>/switch-style`
 
 Takes the runner-up of the style Auto picked ([How Auto picks a
 style](10-scene-authoring.md#how-auto-picks-a-style)). No body. The video must be at
-`SCRIPT_READY`, before the paid voicing, and hold a `style_pick` and a `style_runner_up`.
+`SCRIPT_READY` and hold a `style_pick` and a `style_runner_up`. The new script is voiced when it is
+approved, so on a video that reached `SCRIPT_READY` through a revision after it was voiced, voicing
+is paid again.
 
 The route runs as one write transaction (`BEGIN IMMEDIATE`) from its first read to its write, so an
 approval, a second switch, a removed key or a GPU probe result waits for it. It clears

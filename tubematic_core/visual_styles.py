@@ -385,12 +385,16 @@ STYLE_REASON_MAX_CHARS = 300
 # A video going back to TOPIC_PROPOSED (a topic revision) gives an Auto pick
 # back to Auto: the topic it was decided on is about to change, and the next
 # approval routes it again. A style a person chose (style_pick '') is kept.
-# The scene choices made under the pick go with it.
+# The scene choices made under the pick go with it, and so do those of any
+# video on "auto": it is routed again at its next approval, so a renderer
+# recorded for its old scenes (a "cartoon_3d" from before Auto picked styles)
+# would otherwise refuse a mascot at that approval and outlive the new pick.
+_BACK_TO_AUTO = ("(COALESCE(style_pick, '') != '' "
+                 "OR COALESCE(NULLIF(visual_style, ''), 'auto') = 'auto')")
 AUTO_PICK_RESET_SET = (
     "visual_style = CASE WHEN COALESCE(style_pick, '') != '' THEN 'auto' ELSE visual_style END, "
-    "resolved_renderer = CASE WHEN COALESCE(style_pick, '') != '' THEN '' ELSE resolved_renderer END, "
-    "resolved_visual_style = CASE WHEN COALESCE(style_pick, '') != '' THEN '' "
-    "ELSE resolved_visual_style END, "
+    f"resolved_renderer = CASE WHEN {_BACK_TO_AUTO} THEN '' ELSE resolved_renderer END, "
+    f"resolved_visual_style = CASE WHEN {_BACK_TO_AUTO} THEN '' ELSE resolved_visual_style END, "
     "style_pick = '', style_runner_up = '', style_reason = ''"
 )
 

@@ -355,3 +355,41 @@ def test_a_person_changing_the_style_clears_the_old_scene_choices(db):
     assert _resolved() == ("cartoon_3d", "dark")
     assert "error" not in server.update_video("vid_1", visual_style="system_flow")
     assert _resolved() == ("", "")
+
+
+def test_a_topic_revision_clears_the_scene_choices_of_any_auto_video(db):
+    """A video made Cartoon 3D before Auto picked styles has no pick, but is
+    routed again at its next approval: its old renderer must go, or approving
+    it with a mascot is refused as 'a mascot on Cartoon 3D'."""
+    _video(status="REVISION_REQUESTED")
+    _set_resolved("cartoon_3d", "dark")
+    server.set_video_status("vid_1", "TOPIC_PROPOSED")
+    assert _resolved() == ("", "")
+
+
+def test_a_routed_mixed_scenes_video_cannot_become_cartoon_3d(db):
+    """A skill from before Auto picked styles could still record the 3D
+    renderer at VOICE_READY; on a video Auto routed to mixed scenes it is
+    refused, so the style decision made before the script stands."""
+    _gpu(ok=True)
+    _video()
+    server.choose_visual_style("vid_1", "scenes", "No style fits.")
+    with server._conn() as con:
+        con.execute("UPDATE videos SET status = 'VOICE_READY' WHERE id = 'vid_1'")
+    err = server.update_video("vid_1", resolved_renderer="cartoon_3d")
+    assert "Auto picked mixed scenes" in err["error"]
+    assert "error" not in server.update_video("vid_1", resolved_renderer="dom")
+
+
+def test_a_cartoon_scene_is_refused_on_a_routed_mixed_scenes_video(db):
+    _gpu(ok=True)
+    _video()
+    server.choose_visual_style("vid_1", "scenes", "No style fits.")
+    row = {"visual_style": "auto", "resolved_renderer": "", "mascot_id": "", "style_pick": "scenes"}
+    scenes = [{"type": "installed", "src": "CartoonShort", "props": {"cartoon3d": {}}}]
+    if server._cartoon_props(scenes[0]) is None:
+        pytest.skip("this scene shape is not recognised as Cartoon 3D")
+    err, resolve = server._check_cartoon_renderer(row, scenes)
+    assert "Auto picked mixed scenes" in err and resolve == ""
+    legacy = dict(row, style_pick="")
+    assert server._check_cartoon_renderer(legacy, scenes) == ("", "cartoon_3d")

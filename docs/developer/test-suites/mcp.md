@@ -453,8 +453,11 @@ Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes 
   can make, another writer is locked out.
 - `style_routing` lists every candidate and the video's domain.
 - A pick clears the renderer and canvas recorded for earlier scenes, including a `cartoon_3d`
-  renderer on a video with a mascot, and so does a return to the topic from an Auto pick or a person
-  changing the style. A style a person chose keeps its canvas through a return to the topic.
+  renderer on a video with a mascot, and so does a return to the topic of an `auto` video or an Auto
+  pick, or a person changing the style. A style a person chose keeps its canvas through a return to
+  the topic.
+- A video Auto routed to mixed scenes cannot record the `cartoon_3d` renderer or take a Cartoon 3D
+  scene, while a video from before Auto picked styles still can.
 - A move back to `TOPIC_PROPOSED`, guarded or not, returns an Auto pick to `auto`. A person's style
   survives it, and other moves keep the pick. A changed `visual_style` clears the pick and the same
   value keeps it.

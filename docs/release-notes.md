@@ -47,7 +47,7 @@ If you go back to 2.1.x later:
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
-  agent writes a new script for it, and nothing has been paid for yet. See
+  agent writes a new script for it, which is voiced when you approve it. See
   [What Auto does](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does).
 
 ### Changed

@@ -2699,10 +2699,14 @@ def update_video(
     if "resolved_renderer" in fields:
         with _conn() as con:
             row = con.execute(
-                "SELECT visual_style, resolved_renderer, mascot_id FROM videos WHERE id = ?",
+                "SELECT visual_style, resolved_renderer, mascot_id, style_pick FROM videos WHERE id = ?",
                 (video_id,)).fetchone()
         if not row:
             return {"error": f"Video not found: {video_id}"}
+        if fields["resolved_renderer"] == "cartoon_3d" and (row["style_pick"] or "") != "":
+            return {"error": "Auto picked mixed scenes for this video before its script, so it renders "
+                             "with the scene components ('dom'). A 3D world is the cartoon_3d style, "
+                             "which Auto picks with choose_visual_style before the script."}
         if fields["resolved_renderer"] == "cartoon_3d" and (row["mascot_id"] or "") != "":
             return {"error": tmascots.MASCOT_NOT_ON_CARTOON_3D}
         if (row["visual_style"] or DEFAULT_VISUAL_STYLE) != "auto":
@@ -6288,8 +6292,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     _init_db()
     with _conn() as con:
         row = con.execute(
-            "SELECT id, visual_style, resolved_visual_style, resolved_renderer, mascot_id FROM videos WHERE id = ?",
-            (video_id,)).fetchone()
+            "SELECT id, visual_style, resolved_visual_style, resolved_renderer, mascot_id, style_pick "
+            "FROM videos WHERE id = ?", (video_id,)).fetchone()
     # The path-traversal guard is the shape check at the top (_video_id_error).
     if not row:
         return {"error": f"Video not found: {video_id}"}
@@ -6958,6 +6962,14 @@ class _RendererContradiction(Exception):
         self.resolved = resolved
 
 
+def _row_get(row, key: str) -> str:
+    """A column of a sqlite3.Row or dict, or "" when the caller did not select it."""
+    try:
+        return row[key] or ""
+    except (IndexError, KeyError):
+        return ""
+
+
 def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
     """The scene kind must agree with the video's renderer: a Cartoon 3D scene
     only on a cartoon_3d video or an auto video that resolved to cartoon_3d,
@@ -6985,6 +6997,9 @@ def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
         if style == "auto" and resolved and resolved != "cartoon_3d":
             return (f"this video's 'auto' resolved to the {resolved!r} renderer, which is written once; a "
                     f"Cartoon 3D scene cannot follow (a revision renders with the renderer the video already uses)"), ""
+        if unresolved_auto and _row_get(row, "style_pick"):
+            return ("Auto picked mixed scenes for this video before its script, so it is authored with "
+                    "the scene components; a Cartoon 3D scene needs the cartoon_3d style"), ""
         if unresolved_auto:
             gpu_err = _cartoon3d_gpu_error("cartoon_3d")
             if gpu_err:
