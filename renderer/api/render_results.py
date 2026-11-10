@@ -233,8 +233,10 @@ def fail_without_gpu(video_id: str, cartoon: bool, render_error: str | None = No
 # second one goes to the agent.
 _PAGE_TIMEOUT_RE = re.compile(r"Timeout \(\d+ms\) exceeded rendering the component|Timed out evaluating page function")
 # The comment that marks a video's one page-timeout retry; its presence is what
-# makes the next page timeout go to the agent.
+# makes the next page timeout take the usual failure path.
 PAGE_TIMEOUT_RETRY_PREFIX = "Render timed out inside the browser, so it was re-queued once as it is:"
+# How that next page timeout's error is introduced in its "Render failed: …" comment.
+PAGE_TIMEOUT_AGAIN = "it timed out inside the browser a second time, so a scene may never finish loading:"
 
 
 def is_page_timeout(error_msg: str) -> bool:
@@ -288,6 +290,9 @@ def after_render_failure(video_id: str, error_msg: str, retry_status: str, on_gp
         moved = requeue_page_timeout(video_id, error_msg, claim=claim)
         if moved is not None:
             return moved
+        # Its one retry is spent: the usual path, which sends it to the agent,
+        # or to FAILED when earlier failures already used max_render_retries.
+        error_msg = f"{PAGE_TIMEOUT_AGAIN} {error_msg}"
     return handle_render_failure(video_id, error_msg, retry_status=retry_status, claim=claim)
 
 

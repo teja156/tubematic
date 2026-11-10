@@ -305,8 +305,10 @@ scene that never finishes loading. The first time a video fails this way it retu
 re-queued once as it is" (`requeue_page_timeout`). That retry adds nothing to `render_fail_count`:
 with the default cap of 1, a counted retry would send the next failure to `FAILED`, and a scene
 that hangs would never reach the agent. The comment is what bounds it, so a second page timeout of
-the same video takes the usual route to `REVISION_REQUESTED`. A GPU-only render whose GPU failed its
-re-test goes to `FAILED` before this rule applies.
+the same video takes the usual counted route, with a "Render failed" comment that says it timed out
+a second time: `REVISION_REQUESTED`, or `FAILED` when earlier failures (a stall, a lost renderer)
+already used `max_render_retries`. A GPU-only render whose GPU failed its re-test goes to `FAILED`
+before this rule applies.
 
 `max_render_retries` (default 1) caps render retries only. Each failed result and each
 [lost render](20-gpu-and-remote-renderers.md#leases-restarts-and-lost-renderers) adds one to
@@ -354,6 +356,9 @@ child process. A remote renderer has no `/jobs` volume and runs none.
 - Ten minutes after the last request (`STILLS_IDLE_MS`) it closes the browser and deletes the
   bundle, and the next still builds them again. Only Cartoon 3D authoring asks it for stills, so on
   an install that never uses Cartoon 3D it stays a Node process of about 100 MB.
+- If that first bundle or the browser fails, it answers `503` with `startFailed` and exits. The
+  client (`src/cartoon3d/gate/stills.ts`) then renders the stills itself, as it does when no server
+  answers, and `_ensure_stills_server` starts the server again.
 - It starts with the GL options a render gets (`_gl_options`), so a GPU test that passes moves it
   onto the GPU and one that fails moves it back.
 - It serves the `/jobs` volume (mounted read-only) as its public directory, so a video's files are
