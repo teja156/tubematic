@@ -11,8 +11,9 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds System Flow, a visual style that turns a video into a diagram that builds itself while
-the narrator explains a system.
+2.2.0 adds two visual styles. System Flow turns a video into a diagram that builds itself while the
+narrator explains a system. Whiteboard works an idea out on one big board, written and drawn as the
+narrator speaks.
 
 ### Upgrade notes
 
@@ -22,13 +23,15 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs a new skill for System Flow, and a session started before it does not have it.
+   installs new skills for System Flow and Whiteboard, and a session started before it does not have
+   them.
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow cannot render on 2.1.x. Finish it, or switch it to another style while
-  it waits at its topic, before you go back.
-- A domain whose default style is System Flow starts its new videos on Auto under 2.1.x.
+- A video set to System Flow or Whiteboard cannot render on 2.1.x. Finish it, or switch it to
+  another style while it waits at its topic, before you go back.
+- A domain whose default style is System Flow or Whiteboard starts its new videos on Auto under
+  2.1.x.
 
 ### Added
 
@@ -38,6 +41,14 @@ If you go back to 2.1.x later:
   them. It suits networking, protocols, system design, data pipelines and security flows. It needs no
   image generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's
   default; Auto does not choose it. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Whiteboard visual style. The video is one big white board: the camera rests on one part of it
+  at a time, a floating marker writes and draws each step a moment after the narrator says it, in
+  three inks, and the camera glides on to the next part as the narration moves on. The video ends by
+  pulling back to the whole board with each part numbered. It suits step-by-step reasoning,
+  formulas and money arithmetic built up line by line, and a chain of causes that ends in one
+  picture. It needs no image generation and no GPU. Choose it for a topic, on the **New Video**
+  page, or as a domain's default; Auto does not choose it. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 
 ---

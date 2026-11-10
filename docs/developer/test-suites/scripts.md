@@ -634,6 +634,20 @@ Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md
 Trap: a skill that teaches a value the validator refuses teaches the agent to be refused on every
 video. Change a limit in `system_flow.py` and the skill text together.
 
+### `test_whiteboard_skill.py`
+
+Covers the `tubematic-whiteboard` skill ([Whiteboard](../10-scene-authoring.md#whiteboard)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The doodle list, the layouts and their slots, and the limits the skill states are the ones
+  `mcp/whiteboard.py` enforces.
+- The worked example passes the validator against its own timeline, and the uninstaller removes the
+  skill.
+
+Trap: a skill that teaches a value the validator refuses teaches the agent to be refused on every
+video. Change a limit in `whiteboard.py` and the skill text together.
+
 ### `test_tubematic_remote_renderer.py`
 
 Covers `scripts/tubematic_remote_renderer.py`, the stdlib-only script that installs, upgrades,

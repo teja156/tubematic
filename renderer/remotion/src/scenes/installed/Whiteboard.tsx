@@ -10,10 +10,10 @@
  * narration's words), which the MCP server validates against the rules in
  * ./whiteboard/contract.ts before the video can render.
  *
- * Cheap on the CPU, following System Flow's measurements: no SVG filters, no
- * blend modes, no gradients, no stroke-dasharray (a stroke draws on as a prefix
- * of its polyline), the camera is an SVG transform attribute, and all geometry
- * is built once per video. Text is HTML in screen coordinates at camera-scaled
+ * Cheap on the CPU: the ink is drawn on one canvas (see paintInk for why), and
+ * following System Flow's measurements there are no SVG filters, no blend
+ * modes, no gradients and no stroke-dasharray (a stroke draws on as a prefix
+ * of its polyline). All geometry is built once per video. Text is HTML in screen coordinates at camera-scaled
  * sizes, so the text-layout audit can measure it, revealed with clip-path.
  *
  * The font is bundled in public/fonts and loaded before the first frame, so a
@@ -22,7 +22,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AbsoluteFill, Easing, continueRender, delayRender, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import {
-  BOARD_COLOR, HIGHLIGHTER, INKS, SIZES, SPEED, TIMING, itemNatural, type WBItem, type WhiteboardData,
+  BOARD, BOARD_COLOR, HIGHLIGHTER, INKS, SIZES, SPEED, TIMING, itemNatural, type WBItem, type WhiteboardData,
 } from "./whiteboard/contract";
 import { DOODLES } from "./whiteboard/doodles";
 import { arrowEnds, placeRegion, regionOrigin, type Placement, type TextLine } from "./whiteboard/layout";
@@ -48,11 +48,9 @@ function loadFont(): Promise<void> {
 
 const strokeEase = Easing.bezier(0.42, 0, 0.58, 1);
 
-/** A colour laid over the board at `alpha`, as one opaque colour. Strokes are
- *  never translucent: a translucent stroke cost more than the rest of the
- *  scene together in software GL (measured: six faint 16 px strokes took a
- *  150-frame render from 26 to 58 CPU seconds). The board is flat, so the
- *  pre-mixed colour looks the same. */
+/** A colour laid over the board at `alpha`, as one opaque colour. The board
+ *  is flat, so a pre-mixed colour looks the same as a translucent one and the
+ *  page never blends ink. */
 function onBoard(hex: string, alpha: number): string {
   const c = (h: string, i: number) => parseInt(h.slice(1 + 2 * i, 3 + 2 * i), 16);
   const out = [0, 1, 2].map((i) => Math.round(c(hex, i) * alpha + c(BOARD_COLOR, i) * (1 - alpha)));
@@ -60,7 +58,7 @@ function onBoard(hex: string, alpha: number): string {
 }
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-const GHOST = onBoard(INKS.black, 0.035);
+const GHOST = onBoard(INKS.black, 0.025);
 
 // ── prepared geometry ─────────────────────────────────────────────────────────
 type Drawn = {
@@ -309,7 +307,7 @@ function ghostStrokes(regionCount: number): Ink[] {
   for (let i = 0; i < regionCount; i++) {
     const [x, y] = regionOrigin(i);
     out.push(inkStroke([[x + 140, y - 120], [x + 420, y - 170], [x + 760, y - 110]], `g${i}a`, 5));
-    out.push(inkStroke([[x - 110, y + 300], [x - 70, y + 520], [x - 120, y + 760]], `g${i}b`, 5));
+    out.push(inkStroke([[x + 300, y + BOARD.regionH + 110], [x + 620, y + BOARD.regionH + 140]], `g${i}b`, 4));
   }
   return out;
 }
@@ -338,9 +336,10 @@ function strokeInk(ctx: CanvasRenderingContext2D, ink: Ink, upTo: number) {
  *  The ink is a canvas, not SVG paths, because of what it costs in software
  *  GL. A hand-drawn stroke is a many-segment polyline, and Chrome drew each
  *  one as an SVG path far slower than a simple shape: six faint ghost strokes
- *  alone took a 150-frame render from 26 to 51 CPU seconds, and the whole
- *  scene cost 1.7x System Flow. Drawn here, the scene costs the same as System
- *  Flow (measured: 44 against 43 CPU seconds for the same 150 frames). */
+ *  alone took a 150-frame render from 26 to 51 CPU seconds (straight lines of
+ *  the same length cost almost nothing), and the whole scene cost 1.7x System
+ *  Flow. Drawn here, it costs 1.1x (48 against 43 CPU seconds for the same 150
+ *  frames, CPU time of every process, swangle, concurrency 2). */
 function paintInk(ctx: CanvasRenderingContext2D, cam: Cam, ghostInks: Ink[], visible: Drawn[], frame: number) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, H);
@@ -348,7 +347,7 @@ function paintInk(ctx: CanvasRenderingContext2D, cam: Cam, ghostInks: Ink[], vis
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.strokeStyle = GHOST;
-  ctx.lineWidth = 16;
+  ctx.lineWidth = 12;
   for (const g of ghostInks) strokeInk(ctx, g, Infinity);
   for (const under of [true, false]) {
     for (const d of visible) {

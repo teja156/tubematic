@@ -21,6 +21,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Illustrated** | Generated cartoon or rendered characters that stay the same from scene to scene | An OpenAI key |
 | **System Flow** | A dark canvas with one diagram per subject. Components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors while the narration explains each step. No people and no images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
+| **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
 
 Motion Graphics, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
 Explainer video still draws a process as a diagram, and still shows a generated image for a real
@@ -42,11 +43,15 @@ background would flash, and a viewer reads that as a broken render.
   protocol, a data pipeline, where an attack is stopped. The script is written as a walk through
   the system, one component and one step at a time.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
+- Choose **Whiteboard** for an idea worked out step by step: a formula built up, money arithmetic
+  such as interest or a percentage, a chain of causes that ends in one picture, two ideas side by
+  side. The script is written like a teacher at a board, one step per sentence, ending on one
+  sentence that sums the idea up.
 
 ### What Auto does
 
-Auto does not pick one of the named styles, and it never makes a System Flow video: choose System
-Flow yourself. The agent makes two choices for the whole video, then decides how to draw each part of
+Auto does not pick one of the named styles, and it never makes a System Flow or Whiteboard video:
+choose those yourself. The agent makes two choices for the whole video, then decides how to draw each part of
 the script.
 
 1. Whether the video is Cartoon 3D. The agent chooses it when a place, and people moving through
@@ -66,7 +71,9 @@ Auto with a light canvas, or Auto with Cartoon 3D. Until the agent has chosen, i
 an Auto video is none of them.
 
 A System Flow video has a fixed look, so its pick is the whole decision: the agent lays out the
-diagrams and times them to the narration, but it does not change the canvas or add images.
+diagrams and times them to the narration, but it does not change the canvas or add images. A
+Whiteboard video is the same: the agent picks what to write and draw for each step from a fixed set
+of layouts and drawings, and times it to the narration.
 
 ### Where you choose
 

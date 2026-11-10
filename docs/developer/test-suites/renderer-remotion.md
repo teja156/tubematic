@@ -2,7 +2,8 @@
 
 The suite covers the pure TypeScript helpers of the Remotion project's
 [Cartoon 3D kit](../09-remotion-project.md#the-cartoon-3d-kit) and of the
-[`SystemFlow`](../09-remotion-project.md#systemflow) scene. Each test file sits beside the code
+[`SystemFlow`](../09-remotion-project.md#systemflow) and
+[`Whiteboard`](../09-remotion-project.md#whiteboard) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -37,6 +38,26 @@ Covers `contract.ts`, `layout.ts` and `camera.ts` ([System Flow](../10-scene-aut
 Trap: the band check is what keeps a new node out of the captions. The camera starts moving
 `cameraLead` frames before an event so it has made room when the node lands; a shorter lead lets a
 node appear over the captions for most of a second.
+
+## Whiteboard
+
+### `src/scenes/installed/whiteboard/whiteboard.test.ts`
+
+Covers `contract.ts`, `layout.ts`, `schedule.ts`, `camera.ts` and `doodles.ts`
+([Whiteboard](../10-scene-authoring.md#whiteboard)).
+
+- Text wraps and measures, items get their drawing times, content is placed and judged to fit,
+  regions and arrows are placed, and the marker is scheduled as in the shared cases
+  `mcp/tests/test_whiteboard.py` runs (`mcp/tests/fixtures/whiteboard_contract.json`).
+- The doodle library is the pack's `extra.doodles`, no more and no less, and every doodle stroke stays inside its
+  100 x 100 box.
+- Every slot lies inside its region, and no two slots of a layout overlap.
+- A resting region's centre sits in the writing band with the next region out of frame, and the
+  recap's whole-board view fits the frame above the captions.
+
+Trap: the validator in `mcp/whiteboard.py` repeats this arithmetic step for step. Change a size, a
+slot or a timing here and the shared fixture fails until the Python side matches, which is the point:
+a validator that disagrees with the renderer passes writing that overflows its slot.
 
 ## Cartoon 3D
 

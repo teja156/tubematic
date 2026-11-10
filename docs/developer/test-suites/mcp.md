@@ -466,6 +466,30 @@ Trap: the rows are the validator's promise to the renderer. `layout.ts` pins dag
 each edge's `minlen`; a change to `compute_rows` on one side only lets a frame show more nodes in a
 row than the check counted.
 
+### `test_whiteboard.py`
+
+Covers `mcp/whiteboard.py`, the checks `write_scene_config` runs on a Whiteboard config, and the
+text audit's per-region sampling ([Whiteboard](../10-scene-authoring.md#whiteboard)).
+
+- The board sizes, limits, timings, slots, inks, marks and glyph widths equal the renderer's, read
+  from the TypeScript source, and both sides answer the shared cases in
+  `fixtures/whiteboard_contract.json`. The pack's doodle list equals the doodles `doodles.ts` draws.
+  Rounding follows JavaScript's `Math.round`.
+- The skill's worked example passes.
+- Each refusal names its region, item and cause: a region count outside 2 to 6, an unknown layout,
+  slot or doodle, a used slot, text that does not fit or uses a character the font lacks, an item
+  off a word, out of order or before the camera arrives, a mark or arrow on a missing or later item,
+  an arrow across another item, a second highlight, a marker that cannot keep up, an item drawn as
+  the camera leaves, a still stretch over 3.5 seconds at the narration's frame rate, and a recap
+  outside 2 to 8 seconds.
+- `write_scene_config` writes a sound config with the style's captions on the light canvas, refuses
+  a bad one before writing anything, refuses `Whiteboard` on another style, other scenes on a
+  Whiteboard video and a dark canvas, and skips the word check when there is no timeline.
+- The text audit samples each region and the recap.
+
+Trap: the validator's placement and timing must equal the renderer's to the frame. The tests that
+read `contract.ts` and the shared fixture are what catch a change made on one side only.
+
 ### `test_watermark.py`
 
 Covers the watermark, as guards on the source text of `CompositionBuilder` and `Watermark.tsx`

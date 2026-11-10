@@ -209,9 +209,10 @@ renders. Reference the result the same way as a freshly-authored scene (`source`
 vocabularies you may draw from, and which canvas the video is painted on. It does *not* decide any
 beat's treatment — that still follows the beat's subject, exactly as it always has.
 
-Two styles are different in kind: they do not restrict the scene system, they **replace** it.
+Three styles are different in kind: they do not restrict the scene system, they **replace** it.
 `cartoon_3d` is one painted 3D world written as code for that video against the renderer's kit;
-`system_flow` is one diagram scene whose boards, nodes and packets are written as data. Neither is
+`system_flow` is one diagram scene whose boards, nodes and packets are written as data;
+`whiteboard` is one board scene whose regions of writing and doodles are written as data. None is
 this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
 when it is not `tubematic-scene-config`, stop here and invoke that skill.
 
@@ -224,10 +225,11 @@ Read `visual_style` from `get_video`:
 | `illustrated` | **You choose** | Characters are **generated illustrated assets** (`generate_character`) rather than line art. You pick the drawing style *and* the canvas from the topic. |
 | `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
 | `system_flow` | Dark | Nothing here: the whole video is the one `SystemFlow` diagram scene, written as data by the tubematic-system-flow skill. |
+| `whiteboard` | Light | Nothing here: the whole video is the one `Whiteboard` board scene, written as data by the tubematic-whiteboard skill. |
 | `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery, **or the Cartoon 3D world**. |
 
-The three named scene styles are restrictions; `cartoon_3d` and `system_flow` are systems of their
-own. `auto` is the absence of a restriction: **you pick the register, the renderer included.**
+The three named scene styles are restrictions; `cartoon_3d`, `system_flow` and `whiteboard` are
+systems of their own. `auto` is the absence of a restriction: **you pick the register, the renderer included.**
 
 ### A permission is not an instruction
 

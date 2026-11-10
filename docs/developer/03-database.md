@@ -88,7 +88,7 @@ One row per video, from proposed topic to published file.
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
 | `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
-| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow` or `cartoon_3d`. Set while the video is `TOPIC_PROPOSED` and frozen after. See [Visual style columns](#visual-style-columns) |
+| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `cartoon_3d` or `whiteboard`. Set while the video is `TOPIC_PROPOSED` and frozen after. See [Visual style columns](#visual-style-columns) |
 | `resolved_visual_style` | TEXT NOT NULL | `''` | The canvas `auto` settled on: `dark` or `light`. Written once by the agent |
 | `resolved_renderer` | TEXT NOT NULL | `''` | The renderer `auto` settled on: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
 | `mascot_id` | TEXT NOT NULL | `''` | The [mascot](#mascots-and-mascot_versions) the video shows. `''` means none. Settable only while the video is `TOPIC_PROPOSED` |
@@ -136,7 +136,7 @@ first. Any write to the column changes render order.
 
 `motion_graphics`, `stick` and `illustrated` are permission sets: each names which scene
 vocabularies the video may draw from. `system_flow` makes the whole video one diagram scene written
-as data. `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
+as data, and `whiteboard` one board scene written as data. `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
 video) and needs a working GPU. `auto` leaves the choice to the agent. The values are checked in
 code against the style packs, and the column has no CHECK constraint, so a new style needs no
 migration.

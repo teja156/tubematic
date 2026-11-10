@@ -4,7 +4,8 @@
  * creeps in a little while it rests, and at the recap pulls back to show every
  * region at once. It never cuts.
  *
- * The camera is applied as an SVG transform attribute on the board group: a
+ * The camera is the ink canvas's transform, an SVG transform attribute on the
+ * recap numbers, and screen positions for the text, never a CSS transform: a
  * CSS-transformed layer is re-composited every frame in software GL and cost
  * about 1.3x in System Flow's measurements.
  */

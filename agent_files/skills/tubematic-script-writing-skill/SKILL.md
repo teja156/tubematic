@@ -332,6 +332,7 @@ purpose:
 | `stick`, `illustrated`, `auto` | a **pose** brief — what the figure is doing and feeling |
 | `cartoon_3d` | a **scene** brief — where this happens, who is there and what they do, what thing is on screen. The video is one 3D world with people walking through it, so every beat's brief names a place and an action, never a diagram |
 | `system_flow` | a **component** brief — which components are on screen, what travels between them, and the one value worth showing (a port, a latency, `200 OK`). The video is a diagram throughout, so a role ("the user", "an attacker") is a component with an icon, never a figure |
+| `whiteboard` | a **board** brief — what gets written or drawn for this step: the keyword, the number or formula, the simple object (a coin, a padlock, a car) and how it connects to the last step. The video is one whiteboard throughout, so a role is a simple doodle or a written word, never a figure |
 
 **Under `"system_flow"` the narration is the diagram's script.** Write it as a walk through a
 system: name each component the moment it matters, one step per sentence, in the order things
@@ -340,6 +341,14 @@ components; when the subject changes (from the request to the defence, say), sta
 because the diagram cuts to a new board there. Name the values a viewer should see (an address, a
 status code, a port), since each becomes a label on the connector. Never write a beat that needs a
 person, a place or a photograph: this style has none.
+
+**Under `"whiteboard"` the narration is a teacher at a board.** Work the idea out one step per
+sentence, in two to six steps, each building on the last: the setup, the first step, the next, the
+result. Say the numbers and the formula out loud as they are built ("one hundred times one point one
+is one hundred and ten"), since the marker writes them as you say them. Start each new step with a
+new sentence, because the camera moves to a fresh part of the board there. End on one closing
+sentence that names the whole idea in a few words: the video pulls back to show the whole board on
+it. Never write a beat that needs a person, a place or a photograph: this style has none.
 
 Note what this does *not* depend on: the canvas. Under `"auto"` the canvas is chosen later, after
 voicing, and a figure works on either — black line art on light, white on dark. So a pose brief is
@@ -355,7 +364,8 @@ Everything else in this step is identical in both registers. In particular a **s
 person, creature or place is a photographic brief under every scene register — the stick branch is
 for generic roles only. `system_flow` is the exception: it has no photographs, so a named person or
 place there is a labelled component (`"Alice's laptop"` as a `user` or `phone` node), and the
-narration names it.
+narration names it. `whiteboard` is the same: a named person or place there is written on the board
+or drawn as a simple doodle with a label.
 
 ### The treatment follows the beat's subject, not the writer's habit
 

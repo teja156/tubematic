@@ -217,7 +217,8 @@ and `stick` are restrictions — on the canvas, and on whether figures may appea
 by the **tubematic-cartoon3d** skill against the renderer's kit, with no other scene components,
 offered only while a renderer's GPU is working. `system_flow` replaces the scene system too: the
 whole video is one diagram, written as data by the **tubematic-system-flow** skill, with no figures
-or images. `auto` is the absence of a restriction: the agent picks the register, the renderer
+or images. `whiteboard` replaces it the same way: the whole video is one big board of handwriting and
+doodles, written as data by the **tubematic-whiteboard** skill, with no figures or images. `auto` is the absence of a restriction: the agent picks the register, the renderer
 included — it records `resolved_renderer` first, then the canvas — and may choose the world only
 while `cartoon_3d_available` is true.
 

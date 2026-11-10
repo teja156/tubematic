@@ -48,8 +48,8 @@ skill also call a style a **register**.
 style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
-does not decide any beat's treatment. `cartoon_3d` and `system_flow` replace the scene system with
-one whole-video scene of their own.
+does not decide any beat's treatment. `cartoon_3d`, `system_flow` and `whiteboard` replace the
+scene system with one whole-video scene of their own.
 
 | `visual_style` | Canvas | Figures | Hand-drawn line art | Generated characters |
 |---|---|---|---|---|
@@ -58,6 +58,7 @@ one whole-video scene of their own.
 | `stick` | `light` | Yes | Yes | No |
 | `illustrated` | The agent chooses | Yes | No | Yes |
 | `system_flow` | `dark` | No | No | No |
+| `whiteboard` | `light` | No | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
@@ -65,7 +66,8 @@ The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `ch
 `characters_allowed` gates the `generate_character` tool. `figures_allowed` and `line_art_allowed` go
 into the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses), so the reviewer judges a video
 against the look it was meant to have. `cartoon_3d` replaces the scene system with one 3D world
-([Cartoon 3D](#cartoon-3d)), and `system_flow` with one diagram scene ([System Flow](#system-flow)).
+([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)), and
+`whiteboard` with one board scene ([Whiteboard](#whiteboard)).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
 chosen. Two styles have a need:
@@ -100,7 +102,7 @@ style.
 | `review` | Optional. The style's own block for the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses) |
 | `captions` | Optional. The `subtitles` settings `write_scene_config` fills in when a config has none |
 | `routing` | What the style suits and avoids, and the signals in a topic or script that point to it |
-| `extra` | Style-specific data, such as System Flow's icon list |
+| `extra` | Style-specific data, such as System Flow's icon list or Whiteboard's doodle list |
 
 `tubematic_core/tests/test_style_packs.py` pins every gate's answer for each style, `auto`, a blank
 value and an unknown one. Adding a style is a new pack file, the style's renderer work and its
@@ -462,6 +464,80 @@ The limits make a full board readable: at the pull-back to a whole board of thre
 labels stay at 40 px or more. `mcp/tests/test_system_flow.py` pins `system_flow.py` to `contract.ts`.
 When the config has no `subtitles`, the pack's `captions` fill it. The text-layout audit samples
 each board as if it were a scene.
+
+---
+
+## Whiteboard
+
+A Whiteboard video is one installed scene, `Whiteboard`, that spans the whole video. The agent writes
+no code and no coordinates for it. Its props carry `whiteboard: {regions, recapFrame}`. A region is
+one screen of a large board; the camera rests on one region at a time, glides to the next when the
+narration moves on, and from `recapFrame` pulls back to the whole board with a circled number on
+each region. The agent writes the data with the `tubematic-whiteboard` skill, whose
+`reference/contract.md` documents every field and whose `reference/example-config.json` is the
+worked example.
+
+Each region picks a layout, and each layout has named slots:
+
+| Layout | Slots |
+|---|---|
+| `stack` | four rows, `1` to `4` |
+| `pair` | `top`, `left`, `right`, `bottom` |
+| `compare` | two titles and three cells per column |
+| `focus` | `top`, a large `center`, `bottom` |
+
+An item is placed in a slot (`text`, `formula`, `doodle`) or points at earlier items (`arrow`,
+`highlight`, `underline`, `circle`, `box`, `cross`). Every item has an `at`, the start frame of the
+word it shows. A doodle is a name from the style pack's `extra.doodles`; the drawings are
+hand-built point lists in `whiteboard/doodles.ts`, because drawings an agent authors read as weak
+clip art and no check can judge a drawing before it is rendered.
+
+One floating marker draws the items in the order listed, starting each 12 frames after its word. An
+item gets its natural drawing time (about 16 characters a second for body text, a second for a
+doodle), cut short so it finishes before the next item starts, but never below a floor that keeps
+writing legible. The handwriting is the bundled Kalam font revealed left to right, with the marker
+riding the edge of the reveal.
+
+The renderer's side is `src/scenes/installed/Whiteboard.tsx` with `whiteboard/`:
+
+- `contract.ts` holds the sizes, limits, timings, slot rectangles and inks, plus `wrapText` and the
+  per-item drawing times. `glyphs.ts` holds Kalam's advance widths, read from the font.
+- `layout.ts` places regions in a two-column grid in snake order and places each item's content in
+  its slot.
+- `schedule.ts` gives each item its start and duration.
+- `camera.ts` keeps the resting region in the writing band (14% to 68% of the height, above the
+  captions) and fits the whole board above the captions at the recap.
+- `ink.ts` resamples each stroke once with a seeded wobble, so a line looks hand-drawn and is the
+  same on every frame.
+
+All ink is drawn on one canvas per frame with the camera as the canvas transform. Drawn as SVG
+paths, the hand-drawn polylines made the scene cost about 1.7 times a System Flow render in software
+GL, and a straight line of the same length cost almost nothing, so the cost is the path geometry.
+On a canvas the scene costs 1.1 times System Flow. Text stays HTML, in screen coordinates at the
+camera's scale, so the text-layout audit can measure it.
+
+`mcp/whiteboard.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `whiteboard` video has anything but the one `Whiteboard` scene, from frame 0 for `totalFrames`,
+  or another style uses `Whiteboard`.
+- There are fewer than 2 or more than 6 regions, a region after the first or the recap does not
+  start within 2 frames of a word, a region is shorter than the camera's glide plus 2 seconds, or
+  the recap lasts under 2 or over 8 seconds.
+- An item's `at` is not on a word, comes before the previous item's, or comes before the camera has
+  reached its region.
+- A slot does not exist in the layout or is used twice; text, a formula or a label does not fit its
+  slot; text uses a character the bundled font lacks; or a doodle is not in the pack's list.
+- An arrow or mark points at an item that is missing or comes later, an arrow would cross another
+  item, or a region has a second highlight.
+- The next item comes before the marker could draw this one at its floor, or the last item of a
+  region could not finish 15 frames before the camera leaves.
+- Nothing starts for more than 3.5 seconds, measured at the narration's frame rate.
+
+`mcp/whiteboard.py` mirrors `contract.ts`, `layout.ts` and `schedule.ts` step for step, so the two
+sides agree on every line break and frame. `mcp/tests/test_whiteboard.py` and `whiteboard.test.ts`
+run the same cases from `mcp/tests/fixtures/whiteboard_contract.json`. When the config has no
+`subtitles`, the pack's `captions` fill it. The text-layout audit samples each region and the recap
+as if each were a scene.
 
 ---
 

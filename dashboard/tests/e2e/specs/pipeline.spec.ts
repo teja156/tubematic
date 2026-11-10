@@ -487,12 +487,13 @@ test.describe("Pipeline board", () => {
       expect((await getVideo(video.id)).visual_style).toBe("stick");
     });
 
-    test("the picker offers the styles the API serves, System Flow included, and approving with it persists", async ({ page }) => {
+    test("the picker offers the styles the API serves, System Flow and Whiteboard included, and approving with it persists", async ({ page }) => {
       // The list comes from GET /visual-styles (the style packs), not from a
       // copy in the dashboard: a new pack must appear here with no dashboard edit.
       const res = await fetch(`${BASE}/visual-styles`, { headers: { ...API_AUTH } });
       const served = (await res.json()).styles.map((s: { id: string }) => s.id);
       expect(served).toContain("system_flow");
+      expect(served).toContain("whiteboard");
 
       const video = await createVideo({ topic: `[${uid}] System Flow pick` });
       await page.goto("/");
@@ -500,6 +501,7 @@ test.describe("Pipeline board", () => {
       await expect(actionCard).toBeVisible({ timeout: 10_000 });
       const styleSelect = actionCard.getByTestId(`style-select-${video.id}`);
       await expect(styleSelect.locator('option[value="system_flow"]')).toHaveText("System Flow", { timeout: 10_000 });
+      await expect(styleSelect.locator('option[value="whiteboard"]')).toHaveText("Whiteboard");
       expect(await styleSelect.locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value)))
         .toEqual(served);
 

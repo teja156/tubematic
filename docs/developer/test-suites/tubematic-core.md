@@ -94,6 +94,9 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   as the table in the test says.
 - The refusal messages come from the packs, and the GPU gate passes only `working`.
 - `public_list` explains an unavailable style, and `agent_view` names the authoring skill.
+- Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
+  routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
+  apart from.
 - A malformed pack is refused with the field at fault, `auto` cannot be a pack, and every shipped
   pack passes.
 
