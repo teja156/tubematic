@@ -73,7 +73,9 @@ an Auto video is none of them.
 A System Flow video has a fixed look, so its pick is the whole decision: the agent lays out the
 diagrams and times them to the narration, but it does not change the canvas or add images. A Bean
 Explainer video works the same way: the agent picks the background colour, the character's
-accessory and the props, and times every pose to the narration.
+accessory and the props, and times every pose to the narration. When the library has nothing for an
+object the video needs, the agent draws that prop itself in the same style and checks the drawing
+before the video renders.
 
 ### Where you choose
 

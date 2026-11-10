@@ -87,3 +87,21 @@ def test_the_reference_files_ship_and_the_example_passes_the_validator():
 
 def test_the_uninstaller_knows_the_skill():
     assert '"tubematic-bean-explainer"' in (REPO / "uninstall.py").read_text()
+
+
+def test_the_skill_teaches_props_of_your_own_within_the_validators_limits():
+    text = " ".join(_text().split())
+    for phrase in (f"at most {be.CUSTOM['maxProps']} per video", f"{be.CUSTOM['minSide']} to {be.CUSTOM['maxSide']} px",
+                   f"at most {be.CUSTOM['maxText']} characters", f"at most {be.CUSTOM['maxActs']} acts",
+                   "render_bean_props", "write_scene_file", "example-prop-rocket.tsx", "beanExplainer/props/common"):
+        assert phrase in text, phrase
+    for act in ("shake", "swing", "wobble", "spin", "beat", "buzz"):
+        assert f"`{act}`" in text
+
+
+def test_the_example_prop_passes_the_validators_source_checks():
+    body = (SKILL / "reference" / "example-prop-rocket.tsx").read_text()
+    spec = json.loads(re.search(r"^//\s+(\{.*\})$", body, re.M).group(1))
+    spec["src"] = "vid_x/prop-rocket"
+    errs, _, _ = be.custom_prop_errors([spec], "vid_x", EXTRA["props"], {"vid_x/prop-rocket": body})
+    assert errs == []

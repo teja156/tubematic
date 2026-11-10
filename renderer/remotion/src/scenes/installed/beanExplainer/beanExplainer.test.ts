@@ -7,6 +7,7 @@ import { POSES as POSE_TABLE, blendedPose, blinkAt, headPlace, ik, squashAt } fr
 import { POSES, PROPS, TIMING, beanBox, labelBox, propBox, wrapLabel, type BeanExplainerData, type PropId } from "./contract";
 import { DRAWINGS, WHOLE_PROP_ACTS, wholePropMotion } from "./props";
 import { settled, stageAt, sectionContentStart } from "./stage";
+import { LIBRARY_KIT, makeKit } from "./kit";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
 const CASES = JSON.parse(fs.readFileSync(path.join(ROOT, "mcp/tests/fixtures/bean_explainer_contract.json"), "utf8"));
@@ -108,4 +109,23 @@ it("keeps every library prop's text slot within the validator's limits", () => {
     expect(p.text, id).toBeGreaterThanOrEqual(0);
     expect(p.w * p.h, id).toBeGreaterThan(0);
   }
+});
+
+describe("the prop kit", () => {
+  const Rocket = () => null;
+  const custom = [{ id: "rocket", src: "vid_x/prop-rocket", w: 220, h: 530, acts: ["launch"] }];
+  const kit = makeKit(custom, { rocket: Rocket });
+
+  it("serves a video's own prop like a library one", () => {
+    expect(kit.draw("rocket")).toBe(Rocket);
+    expect(kit.size("rocket")).toEqual({ w: 220, h: 530 });
+    expect(kit.acts("rocket")).toEqual(["launch"]);
+    expect(propBox("rocket", 0.5, 0.5, 1, custom)).toEqual([430, 695, 650, 1225]);
+  });
+
+  it("keeps the library ahead of a custom prop of the same name", () => {
+    expect(makeKit([{ id: "phone", src: "vid_x/prop-phone", w: 1, h: 1 }], { phone: Rocket }).draw("phone")).toBe(DRAWINGS.phone);
+    expect(LIBRARY_KIT.draw("rocket")).toBeUndefined();
+    expect(LIBRARY_KIT.size("rocket")).toEqual({ w: 0, h: 0 });
+  });
 });

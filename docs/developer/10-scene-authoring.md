@@ -483,16 +483,22 @@ catalogue, and whose `reference/example-config.json` is the worked example.
 | Event | What the scene draws |
 |---|---|
 | `pose` | The bean swaps to a pose and a face in two frames, then holds. `at` aims a reaching arm at a prop |
-| `prop` | A prop from the library pops, drops, slides or rises in, with its text slot filled |
+| `prop` | A prop from the library, or one the agent drew, pops, drops, slides or rises in, with its text slot filled |
 | `act` | The prop's own animation (a phone buzzes, a clock rings), for two seconds |
 | `label` | A short handwritten note, ink or red |
 | `mark` | A reaction beside the bean's head (sweat, question mark, alarm), until its next pose |
 | `impact` | A short camera shake and zoom pulse |
 | `strike`, `arrow` | A red X over a prop, a red arrow between two things on stage |
 
-The props are a fixed library, drawn once in the bean's line and colours and checked by a person on a
-model sheet (the `BeanPropSheet` composition). The agent picks a prop by id and fills its text slot;
-it never draws one. A subject the library lacks is shown as text on a sign, note or document.
+Most props come from a library of 42, drawn once in the bean's line and colours and checked by a
+person on a model sheet (the `BeanPropSheet` composition). The agent picks a prop by id and fills its
+text slot. For an object the viewer must recognise and the library lacks, the agent draws its own:
+a TSX component it writes with `write_scene_file` as `generated/<video_id>/prop-<name>.tsx`,
+modelled on the library props it reads with `read_scene_file`, and lists in the config's
+`customProps` with its box, text limit and acts. The scene imports these files and treats them like
+library props. The agent looks at them with [`render_bean_props`](06-mcp-server.md#render_bean_props)
+before it submits, and `validate_job` typechecks them. A custom prop is held to the library's line and
+palette by the skill and the preview; the checks below hold it to the library's render-cost rules.
 
 The renderer's side is `src/scenes/installed/BeanExplainer.tsx` with `beanExplainer/`:
 
@@ -503,6 +509,10 @@ The renderer's side is `src/scenes/installed/BeanExplainer.tsx` with `beanExplai
 - `sprite.tsx` draws each distinct look of the bean once, as a bitmap, and reuses it on every frame
   that looks the same.
 - `stage.ts` works out what is on stage at a frame, and `props/` holds the library.
+- `kit.ts` answers "draw this prop" and "how big is it" for library and custom props alike, and
+  `fonts.tsx` loads the style's fonts apart from the scene, so the sheet and the preview do not bundle
+  every agent-written prop the scene imports.
+- `BeanPropPreview.tsx` is the picture `render_bean_props` returns.
 
 The bean is a bitmap because on the CPU renderer the live SVG bean cost about 0.3 CPU-seconds per
 frame whether or not it moved, and the bitmap about 0.07. Everything in the scene settles to a
@@ -528,8 +538,14 @@ cannot be drawn fails the render, so no frame goes out without the bean.
   its 8 frames. Props may overlap each other. Each prop's box in `contract.ts` is every pixel its
   drawing reaches, outline and act included, measured with `BeanPropSheet`'s measure mode.
 - A label runs past 2 lines of 22 characters or repeats 4 narration words in a row.
-- A field, pose, face, mark, accessory, tint, prop, act or text slot is not in the catalogue, or an
-  act starts before its prop has landed.
+- A field, pose, face, mark, accessory, tint, prop, act or text slot is not in the catalogue or the
+  video's `customProps`, or an act starts before its prop has landed.
+- A custom prop has more than 8 per video, an id a library prop has, a `src` that is not this video's
+  `prop-<name>` file, a box outside 60 to 700 px a side, a text slot over 40 characters or more than 4
+  acts. Its file is missing, has no default export, imports anything but `react`, `remotion` and the
+  library's `props/common`, `bean` and `contract`, or uses an SVG filter, a gradient, a pattern, a
+  dashed stroke, an image, embedded HTML, a fetch, randomness or the clock
+  (`bean_explainer.py::FORBIDDEN_SOURCE`).
 - Nothing changes for more than 3 seconds.
 
 `mcp/tests/test_bean_explainer.py` pins `bean_explainer.py` to `contract.ts` and to the pack. When

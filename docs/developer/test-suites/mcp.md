@@ -364,6 +364,9 @@ Covers `read_scene_file`.
 - What `write_scene_file` wrote is what the read returns, so a scene can be copied from one video
   to another.
 - The read is not blocked by a scene-work claim and takes none.
+- A path inside an installed scene's folder (`beanExplainer/props/lifeProps`, with or without
+  `.ts`/`.tsx`) reads as a reference. A path that climbs out, starts at the root, runs past three
+  parts or looks like a video's composed name is refused.
 
 ### `test_write_scene_config.py`
 
@@ -459,6 +462,13 @@ Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean E
   the bean, a prop over the bean or off the stage, an event during the carousel or too close to a
   cut, a strike on nothing, too many elements, poses too close together, and a still stretch over
   3 seconds. Props may overlap each other, which the gags in the example rely on.
+- A prop the agent drew (the skill's `example-prop-rocket.tsx`) passes, serves as a badge, and is
+  placed by its declared box. A bad `customProps` entry (a library id, another video's file, a box out
+  of range, a text slot too long, a bad act name) is refused, and so is a prop file that is missing,
+  uses a filter, a gradient or randomness, imports another package or has no default export.
+- `write_scene_config` reads the prop files a config names. `render_bean_props` refuses another
+  style, a video with no config and a config with no `customProps`; it returns the picture (the
+  renderer stubbed) and gives way to a heavy check that holds the lock.
 - `write_scene_config` writes a sound config with the style's captions, keeps an `emphasis` it was
   given, refuses a bad one before writing anything, refuses `BeanExplainer` on another style and
   other scenes on a Bean Explainer video. `emphasis` beyond the narration's last word, on more than

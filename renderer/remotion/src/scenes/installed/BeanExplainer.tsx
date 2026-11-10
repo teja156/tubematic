@@ -27,62 +27,28 @@
  * is loaded here for the captions, which the pack points at it.
  */
 import React, { useEffect, useState } from "react";
-import { AbsoluteFill, continueRender, delayRender, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { HAND, ROUND, useBeanFonts } from "./beanExplainer/fonts";
+import { AbsoluteFill, cancelRender, continueRender, delayRender, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { BeanMarks, INK, LINE, RED, blendedPose, headPlace, squashAt, toBody, type BeanProps, type V } from "./beanExplainer/bean";
 import { BeanSprite } from "./beanExplainer/sprite";
 import {
-  FIELDS, GEOMETRY, H, LIMITS, PROPS, SECTION_COLORS, TIMING, W, wrapLabel,
-  type BeanExplainerData, type BESection,
+  FIELDS, GEOMETRY, H, LIMITS, SECTION_COLORS, TIMING, W, wrapLabel,
+  type BeanExplainerData, type BECustomProp, type BESection,
 } from "./beanExplainer/contract";
-import { DRAWINGS, WHOLE_PROP_ACTS, wholePropMotion } from "./beanExplainer/props";
+import { WHOLE_PROP_ACTS, wholePropMotion } from "./beanExplainer/props";
+import { LIBRARY_KIT, makeKit, type Drawing, type PropKit } from "./beanExplainer/kit";
 import { BADGE_SLOT, STRIP, anchorOf, clamp01, ease, kickAt, sectionContentStart, settled, stageAt, type PropState, type StageState } from "./beanExplainer/stage";
 
-export const ROUND = "Fredoka, 'Arial Rounded MT Bold', system-ui, sans-serif";
-export const HAND = "'Patrick Hand', 'Comic Sans MS', cursive";
 const FLOOR = "#E8E8E8";
 const FLOOR_LOW = "#DEDEDE";
 const HEADER_CX = 445; // centred left of the badge
 const HEADER_W = 740;
 
-// ── fonts ─────────────────────────────────────────────────────────────────────
-const FONTS: [family: string, file: string, weight: string][] = [
-  ["Fredoka", "fonts/fredoka-latin-600-normal.woff2", "600"],
-  ["Fredoka", "fonts/fredoka-latin-700-normal.woff2", "700"],
-  ["Patrick Hand", "fonts/patrick-hand-latin-400-normal.woff2", "400"],
-  ["Instrument Sans", "fonts/instrument-sans-latin-700-normal.woff2", "700"],
-];
-let fontsLoaded: Promise<void> | null = null;
-export function loadBeanFonts(): Promise<void> {
-  if (!fontsLoaded) {
-    fontsLoaded = Promise.all(
-      FONTS.map(([family, file, weight]) =>
-        new FontFace(family, `url(${staticFile(file)}) format("woff2")`, { weight }).load().then((face) => {
-          document.fonts.add(face);
-        }),
-      ),
-    ).then(() => undefined);
-  }
-  return fontsLoaded;
-}
-
-export function useBeanFonts(label: string) {
-  const [handle] = useState(() => delayRender(`${label}: loading bundled fonts`));
-  useEffect(() => {
-    loadBeanFonts()
-      .then(() => continueRender(handle))
-      .catch((err) => {
-        // A bundled font that will not load means a broken image; render with
-        // the fallbacks rather than hang, and say so in the render log.
-        console.error(`${label}: font load failed`, err);
-        continueRender(handle);
-      });
-  }, [handle, label]);
-}
-
 // ── a prop on stage ───────────────────────────────────────────────────────────
-export const PropView: React.FC<{ p: PropState; frame: number; fps: number }> = ({ p, frame, fps }) => {
-  const Draw = DRAWINGS[p.prop];
-  const box = PROPS[p.prop];
+export const PropView: React.FC<{ p: PropState; frame: number; fps: number; kit: PropKit }> = ({ p, frame, fps, kit }) => {
+  const Draw = kit.draw(p.prop);
+  const box = kit.size(p.prop);
+  if (!Draw) return null;
   const t = frame - p.since;
   let dx = 0, dy = 0, s = 1, op = 1;
   if (p.enter === "drop") {
@@ -128,10 +94,10 @@ function partialQuad(a: V, c: V, b: V, t: number, steps = 16): string {
   return pts.join(" ");
 }
 
-const Strike: React.FC<{ state: StageState; target: string; since: number; frame: number }> = ({ state, target, since, frame }) => {
+const Strike: React.FC<{ state: StageState; target: string; since: number; frame: number; kit: PropKit }> = ({ state, target, since, frame, kit }) => {
   const p = state.props.find((q) => q.key === target);
   if (!p) return null;
-  const box = PROPS[p.prop];
+  const box = kit.size(p.prop);
   const hw = (box.w * p.scale) / 2 * 0.8, hh = (box.h * p.scale) / 2 * 0.8;
   const t = clamp01((frame - since) / TIMING.drawOn);
   const a = clamp01(t * 2), b = clamp01(t * 2 - 1);
@@ -181,9 +147,10 @@ const Arrow: React.FC<{ state: StageState; from: string; to: string; since: numb
 };
 
 // ── header, badge and carousel ────────────────────────────────────────────────
-export const Badge: React.FC<{ x: number; y: number; r: number; section: BESection; frame: number }> = ({ x, y, r, section, frame }) => {
-  const Draw = DRAWINGS[section.badge];
-  const box = PROPS[section.badge];
+export const Badge: React.FC<{ x: number; y: number; r: number; section: BESection; frame: number; kit: PropKit }> = ({ x, y, r, section, frame, kit }) => {
+  const Draw = kit.draw(section.badge);
+  const box = kit.size(section.badge);
+  if (!Draw) return null;
   const k = (r * 1.25) / Math.max(box.w, box.h);
   return (
     <g transform={`translate(${x} ${y})`}>
@@ -231,7 +198,7 @@ const Header: React.FC<{ section: BESection; frame: number; at: number }> = ({ s
   );
 };
 
-const Carousel: React.FC<{ data: BeanExplainerData; c: NonNullable<StageState["carousel"]>; frame: number; fps: number }> = ({ data, c, frame, fps }) => {
+const Carousel: React.FC<{ data: BeanExplainerData; c: NonNullable<StageState["carousel"]>; frame: number; fps: number; kit: PropKit }> = ({ data, c, frame, fps, kit }) => {
   const slide = spring({ frame: Math.max(0, c.t - 6), fps, config: { stiffness: 120, damping: 15, mass: 1 } });
   const pos = c.from + (c.to - c.from) * slide;
   const fade = clamp01(c.t / 4) * clamp01((TIMING.carousel - c.t) / 4);
@@ -244,7 +211,7 @@ const Carousel: React.FC<{ data: BeanExplainerData; c: NonNullable<StageState["c
         const r = STRIP.big * (1 - 0.4 * dist);
         return (
           <g key={i}>
-            <Badge x={x} y={STRIP.y} r={r} section={s} frame={frame} />
+            <Badge x={x} y={STRIP.y} r={r} section={s} frame={frame} kit={kit} />
             <text x={x} y={STRIP.y + r + 80} textAnchor="middle" fontSize={56} fontWeight={700} fill={INK} opacity={1 - 0.55 * dist}
               letterSpacing={1} style={{ fontFamily: ROUND }}>{s.header}</text>
           </g>
@@ -254,12 +221,39 @@ const Carousel: React.FC<{ data: BeanExplainerData; c: NonNullable<StageState["c
   );
 };
 
+// ── the video's own props ────────────────────────────────────────────────────
+/**
+ * The props the agent drew for this video, imported from generated/ and held
+ * until they load: the frame waits, and a prop that will not load fails the
+ * render (a frame without a prop the narration names would ship silently).
+ */
+function useCustomProps(list: BECustomProp[]): PropKit | null {
+  const [drawings, setDrawings] = useState<Record<string, Drawing> | null>(list.length ? null : {});
+  const [handle] = useState(() => (list.length ? delayRender("BeanExplainer: loading the video's own props") : null));
+  useEffect(() => {
+    if (handle === null) return;
+    Promise.all(
+      list.map((c) => import(`../generated/${c.src}.tsx`).then((m: { default: Drawing }) => [c.id, m.default] as const)),
+    )
+      .then((pairs) => {
+        setDrawings(Object.fromEntries(pairs));
+        continueRender(handle);
+      })
+      .catch((err) => cancelRender(err));
+    // The props are static for the whole render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handle]);
+  return drawings === null ? null : list.length ? makeKit(list, drawings) : LIBRARY_KIT;
+}
+
 // ── the scene ─────────────────────────────────────────────────────────────────
 export default function BeanExplainer({ beanExplainer, durationInFrames }: { beanExplainer?: BeanExplainerData; durationInFrames: number }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   useBeanFonts("BeanExplainer");
   const data = beanExplainer ?? { cast: [], sections: [], shots: [] };
+  const loaded = useCustomProps(data.customProps ?? []);
+  const kit = loaded ?? LIBRARY_KIT;
   const field = FIELDS[data.field ?? "yellow"] ?? FIELDS.yellow;
   const state = stageAt(data, durationInFrames, frame);
   const section = state && state.section >= 0 ? data.sections[state.section] : null;
@@ -287,11 +281,11 @@ export default function BeanExplainer({ beanExplainer, durationInFrames }: { bea
         <rect x={0} y={GEOMETRY.floorY} width={W} height={H - GEOMETRY.floorY} fill={FLOOR} />
         <rect x={0} y={GEOMETRY.floorY + 90} width={W} height={H - GEOMETRY.floorY} fill={FLOOR_LOW} />
         <line x1={0} x2={W} y1={GEOMETRY.floorY} y2={GEOMETRY.floorY} stroke={INK} strokeWidth={LINE} />
-        {section && !state?.carousel && frame >= contentAt && <Badge x={BADGE_SLOT.x} y={BADGE_SLOT.y} r={BADGE_SLOT.r} section={section} frame={frame} />}
-        {state?.carousel && <Carousel data={data} c={state.carousel} frame={frame} fps={fps} />}
+        {section && !state?.carousel && frame >= contentAt && <Badge x={BADGE_SLOT.x} y={BADGE_SLOT.y} r={BADGE_SLOT.r} section={section} frame={frame} kit={kit} />}
+        {state?.carousel && <Carousel data={data} c={state.carousel} frame={frame} fps={fps} kit={kit} />}
         {showStage && (
           <g transform={camT}>
-            {state.props.map((p) => <PropView key={p.key} p={p} frame={frame} fps={fps} />)}
+            {state.props.map((p) => <PropView key={p.key} p={p} frame={frame} fps={fps} kit={kit} />)}
           </g>
         )}
       </svg>
@@ -313,7 +307,7 @@ export default function BeanExplainer({ beanExplainer, durationInFrames }: { bea
                 </g>
               );
             })}
-            {state.strikes.map((s, i) => <Strike key={i} state={state} target={s.target} since={s.since} frame={frame} />)}
+            {state.strikes.map((s, i) => <Strike key={i} state={state} target={s.target} since={s.since} frame={frame} kit={kit} />)}
             {state.arrows.map((a, i) => <Arrow key={i} state={state} from={a.from} to={a.to} since={a.since} frame={frame} />)}
           </g>
         </svg>

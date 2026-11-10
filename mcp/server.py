@@ -96,6 +96,7 @@ import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module 
 import system_flow  # the System Flow checks (TMDEV-196); a sibling module like cartoon
 import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
+import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
 JOBS_DIR     = Path(os.getenv("TUBEMATIC_JOBS_DIR", str(DATA_ROOT / "jobs")))
@@ -5174,6 +5175,8 @@ def mark_research_done() -> dict:
 # ── Group 5: Scene file management ─────────────────────────────────────────
 
 _VALID_SCENE_NAME = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9\-]*$')
+# A file inside an installed scene's folder, read as a reference (read_scene_file).
+_INSTALLED_NESTED = re.compile(r'^[a-zA-Z][a-zA-Z0-9\-]*(/[a-zA-Z][a-zA-Z0-9\-]*){1,2}(\.tsx?)?$')
 
 
 def _check_scene_name(scene_name: str) -> str | None:
@@ -6173,6 +6176,102 @@ def _timeline_word_starts(video_id: str) -> tuple[int, list[int]]:
         return 30, []
 
 
+def _bean_custom_sources(video_id: str, config) -> dict[str, str]:
+    """The text of every prop file a Bean Explainer config's customProps names,
+    by src, for the validator's source checks. A file that cannot be read is
+    left out, which the validator reports as missing."""
+    try:
+        data = config["scenes"][0]["props"][bean_explainer.PROPS_KEY]
+        custom = data.get("customProps") or []
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return {}
+    out: dict[str, str] = {}
+    for c in custom if isinstance(custom, list) else []:
+        src = c.get("src") if isinstance(c, dict) else None
+        if not isinstance(src, str) or src.count("/") != 1 or src.split("/")[0] != video_id:
+            continue
+        name = src.split("/")[1]
+        if _check_scene_name(name):
+            continue
+        try:
+            out[src] = _source_path(video_id, None, name, ".tsx").read_text(encoding="utf-8")
+        except (tjobs.UnsafePath, OSError, ValueError):
+            continue
+    return out
+
+
+@mcp.tool
+def render_bean_props(video_id: str):
+    """Look at the props you drew for a Bean Explainer video before you submit it.
+
+    Renders the props listed in the video's scene-config `customProps` (so
+    write_scene_config first) on the video's colour field: each at rest and,
+    when it has acts, part-way through its first act, with its declared box
+    outlined in red. Ink outside the red line means the drawing is bigger than
+    its w and h, and the layout checks will miss what it covers: enlarge the
+    box or shrink the drawing. A library prop sits in the corner for line
+    weight and size. Rewrite a prop with write_scene_file and call this again;
+    it reads the files as they are now. It renders on the CPU and waits its
+    turn behind other heavy checks, so it can take a minute or two.
+
+    Returns {video_id, props} followed by the picture, or {"error": ...} (a
+    render failure carries the renderer's error output, often a type error in
+    a prop file: fix it and call again).
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    if (row["visual_style"] or "") != bean_explainer.STYLE_ID:
+        return {"error": "render_bean_props is for Bean Explainer videos; this video's visual_style is "
+                         f"{row['visual_style'] or 'auto'!r}."}
+    try:
+        config = json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+        data = config["scenes"][0]["props"][bean_explainer.PROPS_KEY]
+    except (tjobs.UnsafePath, OSError, ValueError, KeyError, IndexError, TypeError):
+        return {"error": "This video has no Bean Explainer scene-config yet: write it with write_scene_config "
+                         "(customProps listing your props) first."}
+    custom = data.get("customProps") or []
+    if not custom:
+        return {"error": "The scene-config lists no customProps, so there is nothing of yours to preview."}
+    samples: dict[str, str] = {}
+    for shot in data.get("shots") or []:
+        for e in shot.get("events") or []:
+            if e.get("type") == "prop" and isinstance(e.get("text"), str):
+                samples.setdefault(e.get("prop"), e["text"])
+    spec = {"field": data.get("field", "yellow"),
+            "props": [{**c, "sample": samples.get(c.get("id"), "")} for c in custom]}
+    if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):
+        return {"error": f"Other checks kept the renderer busy for {HEAVY_CHECK_WAIT_SECS}s. Nothing is wrong "
+                         "with this video; call render_bean_props again."}
+    try:
+        with tempfile.TemporaryDirectory(prefix="tubematic-bean-props-") as tmp:
+            out_png = Path(tmp) / "props.png"
+            try:
+                bean_preview.render_preview(_MASCOT_REMOTION, spec, out_png)
+            except bean_preview.BeanPreviewError as e:
+                return {"error": str(e)}
+            from PIL import Image as PILImage
+            from fastmcp.utilities.types import Image as MCPImage
+            with PILImage.open(out_png) as src:
+                src.load()
+                img = src.convert("RGB")
+    finally:
+        _heavy_checks_lock.release()
+    longest = max(img.size)
+    if longest > _READ_IMAGE_MAX_EDGE:
+        ratio = _READ_IMAGE_MAX_EDGE / longest
+        img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))), PILImage.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    meta = {"video_id": video_id, "props": [c.get("id") for c in custom]}
+    return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
+
+
 def _timeline_words(video_id: str) -> list[str]:
     """The narration's words in order, from timeline.json; [] when there is no
     readable timeline (the checks that need them are skipped)."""
@@ -6261,7 +6360,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if (row["visual_style"] or "") == bean_explainer.STYLE_ID:
         fps, word_starts = _timeline_word_starts(video_id)
         problems = bean_explainer.check(config, fps, word_starts, _timeline_words(video_id),
-                                        tvs.pack(bean_explainer.STYLE_ID)["extra"])
+                                        tvs.pack(bean_explainer.STYLE_ID)["extra"], video_id,
+                                        _bean_custom_sources(video_id, config))
         if problems:
             return {"error": "The Bean Explainer video has problems: " + " ".join(problems)}
         if "subtitles" not in config:
@@ -6531,7 +6631,10 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
                 were namespaced per video.
     source:     "generated" (default, agent-authored) or "installed" (the
                 curated committed library — flat names, scoped to no video, so
-                it takes no video_id).
+                it takes no video_id). An installed scene's own folder can be
+                read too, as a reference: "beanExplainer/props/lifeProps" is
+                the Bean Explainer's money and body props, and
+                "beanExplainer/props/common" the helpers a prop of yours imports.
 
                 **A scene-config entry's `src` and `source` are a pair — pass
                 both.** An installed entry's `src` is a bare name, so handing
@@ -6566,6 +6669,27 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
             return {"error": err}
         video_id, split = target
         scene_name = "/".join(filter(None, (split[0], split[1] + split[2])))
+    elif source == "installed" and "/" in scene_name:
+        # A file inside an installed scene's own folder: a library prop of the
+        # Bean Explainer (`beanExplainer/props/lifeProps`), System Flow's
+        # icons. A read-only reference for the agent, so the path is checked to
+        # stay inside the installed library.
+        if not _INSTALLED_NESTED.match(scene_name):
+            return {"error": f"scene_name '{scene_name}' is not an installed file path; use letters, digits "
+                             "and '-' in up to three '/'-separated parts, optionally ending .ts or .tsx"}
+        base = scene_name[:-4] if scene_name.endswith(".tsx") else scene_name[:-3] if scene_name.endswith(".ts") else scene_name
+        root = INSTALLED_DIR.resolve()
+        found = [p for p in (INSTALLED_DIR / f"{base}.tsx", INSTALLED_DIR / f"{base}.ts")
+                 if p.is_file() and p.resolve().is_relative_to(root)]
+        if not found:
+            return {"error": f"installed file not found: {scene_name}"}
+        path = found[0]
+        try:
+            tsx_content = path.read_text(encoding="utf-8")
+        except Exception as e:
+            return {"error": f"installed file {scene_name} could not be read: {e}"}
+        return {"scene_name": base, "video_id": "", "source": "installed", "src": base, "path": str(path),
+                "size_bytes": len(tsx_content.encode("utf-8")), "tsx_content": tsx_content}
     elif "/" in scene_name:
         # The composed form. _check_scene_src is validate_job's existing
         # validator for exactly this shape — reused rather than reimplemented,

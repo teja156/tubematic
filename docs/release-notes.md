@@ -44,8 +44,8 @@ If you go back to 2.1.x later:
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - The Bean Explainer visual style (experimental). A bald, big-headed cartoon character with a thick
   outline stands on one bright colour field and reacts to the narration pose by pose, while props
-  from a fixed library of everyday objects (a phone, a browser bar, coins, a clock, a pill, a lock and
-  about 35 more), short handwritten labels, reaction marks and red crosses build up beside it. In a
+  from a library of everyday objects (a phone, a browser bar, coins, a clock, a pill, a lock and about
+  35 more, and any the agent draws for the video in the same style), short handwritten labels, reaction marks and red crosses build up beside it. In a
   list video each item gets a header and a coloured badge, and a strip of badges slides between
   items. It suits habits, health, money, behaviour and "every X explained" lists, and needs no image
   generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's default;

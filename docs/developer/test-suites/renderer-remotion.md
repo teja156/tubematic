@@ -36,6 +36,8 @@ Covers `contract.ts`, `stage.ts`, the rig in `bean.tsx` and the prop library
   bean's marks clear at its next pose.
 - The arm never reaches past its length, nothing squashes after the snap, a settled spring is
   1 with no remainder, and blinks are brief and rare.
+- The prop kit serves a video's own prop (drawing, box, acts) like a library prop, and a library prop
+  always wins over a custom prop of the same id.
 
 Trap: a remainder matters for render time. A spring that only approaches its rest repaints its
 layer on every frame, which on the CPU renderer cost more than drawing the bean.

@@ -1,6 +1,6 @@
 ---
 name: tubematic-bean-explainer
-description: Author a Bean Explainer narrated Short as data — split the narration into list sections and shots, cast the house bean, pose it on the narrator's words, build each shot from the fixed prop library with labels, marks and red strikes — then write it with write_scene_config, validate and submit it
+description: Author a Bean Explainer narrated Short as data — split the narration into list sections and shots, cast the house bean, pose it on the narrator's words, build each shot from the prop library (drawing a prop of your own, modelled on the library, when it lacks one) with labels, marks and red strikes — then write it with write_scene_config, preview your props, validate and submit it
 ---
 
 # Tubematic Bean Explainer authoring skill
@@ -29,7 +29,9 @@ least every 1.5 to 3 seconds.
 everything about this video is its `props.beanExplainer`: the cast, the sections, and the shots with
 their events timed to the narration. The bean, every prop, the layout of the header and the captions
 are drawn by the renderer. There are no images in this style: never call `generate_image` or
-`generate_character`. Props come only from the library in `reference/contract.md`.
+`generate_character`. Props come from the library in `reference/contract.md`; when it has nothing
+for a thing the viewer must recognise, you draw that one prop yourself, modelled on the library
+(**Step 2b**).
 
 The full field reference and the prop catalogue are in `reference/contract.md`; the worked example is
 `reference/example-config.json` (narration in `reference/example-timeline.json`). Read all three
@@ -59,8 +61,14 @@ event is wrong. Fix every problem it lists, then write again.
   (a cursor on a phone, a magnifier on an address bar).
 - **Labels** are at most 2 lines of 22 characters, and never repeat 4 or more narration words in a
   row: the captions already say them.
-- **Props, poses, faces, marks, accessories, tints and acts** come from the catalogue; a prop's text
-  stays within its slot's limit; an act starts once its prop has landed (10 frames after it appears).
+- **Props, poses, faces, marks, accessories, tints and acts** come from the catalogue or your
+  `customProps`; a prop's text stays within its slot's limit; an act starts once its prop has landed
+  (10 frames after it appears).
+- **Your own props:** at most 8 per video, each a `prop-<name>` file of this video that exists before
+  the config is written, with a box of 60 to 700 px a side, a text slot of at most 40 characters and at
+  most 4 acts. The file default-exports the drawing, imports only `react`, `remotion` and
+  `../../installed/beanExplainer/props/common` (or `bean`, `contract`), and uses no filter, gradient,
+  pattern, dashed stroke, image, fetch, randomness or clock.
 - **Never still:** something new (an event or a cut) at least every 3 seconds.
 
 ## Step 0 — read
@@ -91,6 +99,33 @@ scammer, the boss, a friend), one other (`{"id": "other"}`). Give each an `acces
 they are (the narrator usually `none`; the other `glasses`, `cap`, `tie`, `headset`, `hardhat` or
 `beanie`) and give the other a `tint` different from the narrator's (`cream` is the default). With two
 beans on stage both are drawn smaller; keep them apart (x 0.2 and 0.8).
+
+## Step 2b — a prop the library does not have
+
+Use a library prop whenever one fits; use a text-carrying prop (`sign`, `note`, `document`, `speech`)
+when the thing is really a word or a name. Draw your own only for an object the viewer must recognise
+that the library lacks: a rocket, a car, a tooth. Keep it to a few per video.
+
+1. Read the closest library props and the helpers they use: `read_scene_file` with
+   `source="installed"` and `scene_name` `beanExplainer/props/thingProps` (tech, time and feeling),
+   `beanExplainer/props/lifeProps` (money, health and the body), `beanExplainer/props/textProps` (the
+   text-carrying ones) and `beanExplainer/props/common` (the palette, the `ink` line, `FitText`,
+   `actRamp`). `reference/example-prop-rocket.tsx` is a finished one.
+2. Draw it the same way: one component, centred on (0, 0) inside a `w` x `h` box at scale 1 (in
+   pixels, outline included); the bean's line (`{...ink}`); flat fills from the palette; big simple
+   shapes that read at phone size (a library prop is 150 to 600 px wide). It receives `frame`, `actT`
+   (frames since its act started, -1 before), `text`, `round` and `hand`. If it has a text slot, draw
+   `text` with `FitText`. An act named `shake`, `swing`, `wobble`, `spin`, `beat` or `buzz` moves the
+   whole prop for you; any other act name you declare is yours to draw from `actT`, and must end in a
+   resting state within 60 frames.
+3. Write it with `write_scene_file(video_id, "prop-<name>", tsx)` and list it in `customProps`:
+   `{"id": "rocket", "src": "<the src write_scene_file returned>", "w": 220, "h": 530, "acts":
+   ["launch"]}` (add `"text": 20` for a text slot). Its `id` is then used like a library prop's.
+4. After `write_scene_config`, call `render_bean_props(video_id)` and look at the picture. Ink outside
+   the red box means the box is too small: raise `w` and `h` (the layout checks use them) or shrink the
+   drawing. A drawing that does not read as the thing at a glance, a line thinner than the library's,
+   or colours outside the palette: redraw it. Rewrite the file and call `render_bean_props` again; three
+   looks at most. `validate_job` typechecks the file.
 
 ## Step 3 — events, timed to the words
 
@@ -139,14 +174,15 @@ characters reacting at once is busy.
 ## Step 5 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` and `fps` from the timeline, `"canvas":
-   "light"` (or leave it out) and the one scene. Fix every problem it reports.
+   "light"` (or leave it out) and the one scene. Fix every problem it reports. If the video has props
+   of your own, look at them now with `render_bean_props` (Step 2b).
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures the
    header, the labels and the prop texts in a browser; an overlap is a measurement, so move or shorten
    the text.
 3. `submit_render(video_id)`.
 
-In the handback, say how many sections and shots you made, which props you used, and any subject you
-showed with a text prop because the library has no drawing for it.
+In the handback, say how many sections and shots you made, which props you used, which props you
+drew yourself and why the library could not show them, and any subject you showed with a text prop.
 
 ## Revising
 

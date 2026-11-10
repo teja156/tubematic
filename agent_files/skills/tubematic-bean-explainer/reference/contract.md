@@ -14,6 +14,7 @@ checks every rule here and names what is wrong. The worked example is `example-c
 | `cast` | One or two beans: `{"id": "narrator", "accessory": ..., "tint": ...}`, then optionally `{"id": "other", ...}` |
 | `sections` | `[{"start", "header", "color", "badge"}]`, in order |
 | `shots` | `[{"start", "events": [...]}]`, in order, the first at frame 0 |
+| `customProps` | Optional. Props you drew for this video: `[{"id", "src", "w", "h", "text", "acts"}]`. See [Props of your own](#props-of-your-own) |
 
 Accessories: `none`, `glasses`, `cap`, `tie`, `headset`, `hardhat`, `beanie`. Tints: `cream`, `peach`, `grey`, `mint`, `lilac`. Section colours: `red`, `blue`, `green`, `orange`, `teal`, `purple`. A
 section's `badge` is any prop id below; it is drawn inside the badge circle.
@@ -50,6 +51,22 @@ The frame is 1080 x 1920. Fractions are of that frame.
 
 A bean stands on the floor line (y 0.68) and is about 0.27 of the frame wide and 0.39 high (0.22 and
 0.33 when two beans share the stage). A label is about 24 px per character and 60 px per line.
+
+## Props of your own
+
+| Field | Holds |
+|---|---|
+| `id` | What prop events, acts and badges call it: lowercase letters, digits or `_`, not a library prop's id |
+| `src` | The `src` `write_scene_file` returned for this video's `prop-<name>` file |
+| `w`, `h` | Its box at scale 1, in pixels, outline and act included: 60 to 700 |
+| `text` | Optional. The most characters its text slot takes, 0 to 40 (0, no slot, is the default) |
+| `acts` | Optional. Up to 4 lowercase act names. `shake`, `swing`, `wobble`, `spin`, `beat` and `buzz` move the whole prop; any other is drawn by the prop from `actT` |
+
+At most 8 per video. The file default-exports one component taking `PropDrawProps` from
+`../../installed/beanExplainer/props/common`, imports nothing else but `react`, `remotion` and that
+folder's `bean` and `contract`, and uses no filter, gradient, pattern, dashed stroke, image, embedded
+HTML, fetch, randomness or clock. `example-prop-rocket.tsx` is a worked example; `render_bean_props`
+shows yours.
 
 ## The prop library
 

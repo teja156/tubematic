@@ -10,7 +10,7 @@
  */
 import React from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
-import { HAND, ROUND, useBeanFonts } from "../BeanExplainer";
+import { HAND, ROUND, useBeanFonts } from "./fonts";
 import { Bean, INK } from "./bean";
 import { ACCESSORIES, FACES, FIELDS, MARKS, POSES, PROPS, TINTS, type Accessory, type Face, type MarkType, type Pose, type PropId, type Tint } from "./contract";
 import { DRAWINGS, WHOLE_PROP_ACTS, wholePropMotion } from "./props";

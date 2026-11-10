@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 48 tools
+## The 49 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -141,6 +141,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`read_scene_file`](#read_scene_file) | Read one scene's source |
 | [`delete_scene_file`](#delete_scene_file) | Delete one generated scene or module |
 | [`list_scene_files`](#list_scene_files) | List generated and installed scenes |
+| [`render_bean_props`](#render_bean_props) | Render a Bean Explainer video's own props as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
 | [`get_timeline`](#get_timeline) | Read `timeline.json` |
@@ -540,7 +541,10 @@ renderer bundles the generated tree while it renders.
 
 `read_scene_file(scene_name, video_id="", source="generated")` returns a scene's source.
 `scene_name` is the bare stem, or the composed `"<video_id>/<scene_name>"` that `list_scene_files`
-returns. `source="installed"` reads the installed library.
+returns. `source="installed"` reads the installed library. An installed name may also be a path
+inside an installed scene's folder, up to three parts (`beanExplainer/props/lifeProps`), which is
+how a Bean Explainer agent reads the library props it models its own on. The path must match
+`_INSTALLED_NESTED` and resolve inside the installed library.
 
 A Cartoon 3D module is named bare with its `video_id` (`sets/street.ts`) or composed as
 `list_scene_files` lists it (`<video_id>/sets/street.ts`). `delete_scene_file` uses the same parser
@@ -558,6 +562,21 @@ A Cartoon 3D module is named bare with its `video_id` (`sets/street.ts`) or comp
 only for a legacy flat scene. It is refused with `status_mismatch` while the video is queued or
 rendering. This tool does not look the video up, so a given `video_id` has its shape checked before
 any path is built, and the target must stay inside `generated/`.
+
+### `render_bean_props`
+
+`render_bean_props(video_id)` renders the props a Bean Explainer video's agent drew for it (the
+config's `customProps`, so `write_scene_config` comes first) and returns the picture after a JSON
+block. Each prop is drawn at rest and over four moments of its first act, with its declared box
+outlined in red, so ink outside the box shows a box too small for the layout checks
+([Bean Explainer](10-scene-authoring.md#bean-explainer)).
+
+- `mcp/bean_preview.py::render_preview` runs `renderer/remotion/bean-tools/render-props.mjs` on
+  software GL in this container. The script writes a bundle entry per call that imports only this
+  video's prop files, so another video's broken scene cannot fail it.
+- The render holds `_heavy_checks_lock`, the lock `validate_job`'s typecheck holds, so previews and
+  typechecks run one at a time; a call that waits longer than `HEAVY_CHECK_WAIT_SECS` returns an
+  error and renders nothing.
 
 ### `list_scene_files`
 
@@ -596,8 +615,8 @@ It checks:
   use `SystemFlow`. Its `subtitles` are filled from the style pack when the config has none. The
   rules are in [System Flow](10-scene-authoring.md#system-flow).
 - A `bean_explainer` video holds the one installed `BeanExplainer` scene, and its sections and shots
-  pass `mcp/bean_explainer.py` (cuts and poses on word starts, the prop library and the other
-  catalogues, a layout with no label over a prop or a bean, labels that do not repeat the narration,
+  pass `mcp/bean_explainer.py` (cuts and poses on word starts, the prop library, the video's own
+  props and their files, the other catalogues, a layout with no label over a prop or a bean, labels that do not repeat the narration,
   no still stretch over 3 seconds). No other style may use `BeanExplainer`. Its `subtitles` are
   filled from the style pack when the config has none. The rules are in
   [Bean Explainer](10-scene-authoring.md#bean-explainer).

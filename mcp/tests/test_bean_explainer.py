@@ -71,6 +71,11 @@ def test_the_limits_timings_and_geometry_match_the_renderer():
     assert (float(m.group(1)), float(m.group(2))) == be.PROP_SCALE
 
 
+def test_the_custom_prop_limits_match_the_renderer():
+    m = re.search(r"export const CUSTOM = \{ (.*?) \} as const;", CONTRACT_TS.read_text())
+    assert {k: int(v) for k, v in re.findall(r"(\w+): (\d+)", m.group(1))} == be.CUSTOM
+
+
 def test_the_event_types_and_cast_match_the_renderer():
     assert tuple(_ts_array("EVENT_TYPES")) == be.EVENT_TYPES
     assert tuple(_ts_array("CAST_IDS")) == be.CAST_IDS
@@ -357,3 +362,127 @@ def test_the_text_audit_samples_each_shot():
     assert len(passes) == len(windows)
     for p, (start, end) in zip(passes, windows):
         assert start <= p["first"] and p["first"] + p["step"] * (p["count"] - 1) < end
+
+
+# ── props the agent draws ────────────────────────────────────────────────────
+
+ROCKET = (REF / "example-prop-rocket.tsx").read_text()
+ROCKET_SPEC = {"id": "rocket", "src": "vid_be1/prop-rocket", "w": 220, "h": 530, "acts": ["launch"]}
+
+
+def _with_rocket(spec=None, at=(0.75, 0.42), text=None):
+    def add(d):
+        d["customProps"] = [dict(spec or ROCKET_SPEC)]
+        ev = {"type": "prop", "frame": 600, "id": "rocket", "prop": "rocket", "x": at[0], "y": at[1], "scale": 0.6}
+        if text is not None:
+            ev["text"] = text
+        d["shots"][3]["events"] += [ev, {"type": "act", "frame": 620, "target": "rocket", "act": "launch"}]
+        d["shots"][3]["events"].sort(key=lambda e: e["frame"])
+    return _with(add)
+
+
+def _check_custom(cfg, sources=None):
+    return be.check(cfg, 30, WORD_STARTS, WORDS, EXTRA, "vid_be1",
+                    {"vid_be1/prop-rocket": ROCKET} if sources is None else sources)
+
+
+def test_the_example_custom_prop_passes_and_acts_like_a_library_prop():
+    assert _check_custom(_with_rocket()) == []
+
+
+def test_a_custom_prop_can_be_a_section_badge():
+    cfg = _with_rocket()
+    _data(cfg)["sections"][2]["badge"] = "rocket"
+    assert _check_custom(cfg) == []
+
+
+@pytest.mark.parametrize("change, fragment", [
+    ({"id": "phone"}, "not a library prop"),
+    ({"src": "vid_other/prop-rocket"}, "this video's prop-<name> file"),
+    ({"src": "vid_be1/rocket"}, "this video's prop-<name> file"),
+    ({"w": 900}, "whole pixels from 60 to 700"),
+    ({"text": 80}, "0 to 40"),
+    ({"acts": ["Launch!"]}, "lowercase names"),
+])
+def test_a_bad_custom_prop_entry_is_refused(change, fragment):
+    problems = _check_custom(_with_rocket({**ROCKET_SPEC, **change}))
+    assert any(fragment in p for p in problems), problems
+
+
+@pytest.mark.parametrize("body, fragment", [
+    (None, "write it with write_scene_file first"),
+    (ROCKET.replace("<g transform", '<g filter="url(#f)" transform', 1), "an SVG filter"),
+    (ROCKET.replace("fill={WHITE}", 'fill="url(#linearGradient1)"', 1), "a gradient"),
+    (ROCKET.replace("const lift", "const jitter = Math.random();\n  const lift", 1), "randomness"),
+    ('import x from "lodash";\n' + ROCKET, "it imports lodash"),
+    (ROCKET.replace("export default function", "export function"), "default-export"),
+])
+def test_a_custom_prop_file_that_breaks_the_rules_is_refused(body, fragment):
+    sources = {} if body is None else {"vid_be1/prop-rocket": body}
+    problems = _check_custom(_with_rocket(), sources)
+    assert any(fragment in p for p in problems), problems
+
+
+def test_a_custom_prop_is_placed_by_its_declared_box():
+    # its 530-px box at scale 0.6 reaches the narrator standing at x 0.22
+    problems = _check_custom(_with_rocket(at=(0.36, 0.45)))
+    assert any("rocket prop overlaps the narrator bean" in p for p in problems), problems
+
+
+def test_a_custom_prop_without_a_text_slot_takes_no_text():
+    problems = _check_custom(_with_rocket(text="hi"))
+    assert any("has no text slot" in p for p in problems), problems
+
+
+def test_write_scene_config_reads_the_prop_files_it_names(make_video, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "SCENES_DIR", tmp_path / "generated")
+    vid = make_video("vid_be1")
+    cfg = _with_rocket()
+    assert "write it with write_scene_file first" in server.write_scene_config(vid, copy.deepcopy(cfg))["error"]
+    (tmp_path / "generated" / vid).mkdir(parents=True)
+    (tmp_path / "generated" / vid / "prop-rocket.tsx").write_text(ROCKET)
+    assert "error" not in server.write_scene_config(vid, copy.deepcopy(cfg))
+
+
+# ── render_bean_props ────────────────────────────────────────────────────────
+
+def test_render_bean_props_refuses_what_it_cannot_preview(make_video):
+    assert "for Bean Explainer videos" in server.render_bean_props(make_video("vid_rp1", style="stick"))["error"]
+    vid = make_video("vid_rp2")
+    assert "no Bean Explainer scene-config yet" in server.render_bean_props(vid)["error"]
+    assert "error" not in server.write_scene_config(vid, copy.deepcopy(EXAMPLE))
+    assert "lists no customProps" in server.render_bean_props(vid)["error"]
+
+
+def test_render_bean_props_returns_the_picture(make_video, tmp_path, monkeypatch):
+    from PIL import Image as PILImage
+    monkeypatch.setattr(server, "SCENES_DIR", tmp_path / "generated")
+    vid = make_video("vid_be1")
+    (tmp_path / "generated" / vid).mkdir(parents=True)
+    (tmp_path / "generated" / vid / "prop-rocket.tsx").write_text(ROCKET)
+    assert "error" not in server.write_scene_config(vid, _with_rocket())
+    seen = {}
+
+    def fake_render(remotion_dir, spec, out_png, timeout=0):
+        seen["spec"] = spec
+        PILImage.new("RGB", (1080, 1920), (168, 226, 196)).save(out_png)
+
+    monkeypatch.setattr(server.bean_preview, "render_preview", fake_render)
+    result = server.render_bean_props(vid)
+    assert isinstance(result, list) and json.loads(result[0])["props"] == ["rocket"]
+    assert seen["spec"]["props"][0]["src"] == "vid_be1/prop-rocket"
+    assert seen["spec"]["field"] == "yellow"
+
+
+def test_render_bean_props_waits_its_turn_behind_heavy_checks(make_video, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "SCENES_DIR", tmp_path / "generated")
+    vid = make_video("vid_be1")
+    (tmp_path / "generated" / vid).mkdir(parents=True)
+    (tmp_path / "generated" / vid / "prop-rocket.tsx").write_text(ROCKET)
+    assert "error" not in server.write_scene_config(vid, _with_rocket())
+    monkeypatch.setattr(server, "HEAVY_CHECK_WAIT_SECS", 0.05)
+    assert server._heavy_checks_lock.acquire(timeout=1)
+    try:
+        assert "call render_bean_props again" in server.render_bean_props(vid)["error"]
+    finally:
+        server._heavy_checks_lock.release()

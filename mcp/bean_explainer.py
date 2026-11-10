@@ -72,6 +72,24 @@ CAST_IDS = ("narrator", "other")
 AIM_POSES = ("point", "present", "lean")
 LABEL_TONES = ("ink", "red")
 PROP_SCALE = (0.5, 1.4)
+# A prop the agent draws for one video (contract.ts's CUSTOM).
+CUSTOM = {"maxProps": 8, "minSide": 60, "maxSide": 700, "maxText": 40, "maxActs": 4}
+_CUSTOM_ACT = re.compile(r"^[a-z]{2,16}$")
+_CUSTOM_FILE = re.compile(r"^prop-[a-z0-9-]{1,40}$")
+# What a custom prop's source may not contain, and why: each one either cost a
+# render many times over on the CPU renderer (TMDEV-196's measurements), makes
+# frames differ between renders, or reaches outside the drawing.
+FORBIDDEN_SOURCE = (
+    (re.compile(r"\bfilter\b|<fe[A-Z]"), "an SVG filter (blur, shadow, turbulence): it multiplies the render time"),
+    (re.compile(r"(?i)(linear|radial)Gradient"), "a gradient: it multiplies the render time; use flat fills"),
+    (re.compile(r"<pattern\b"), "an SVG pattern: it multiplies the render time; use flat fills"),
+    (re.compile(r"strokeDasharray|stroke-dasharray"), "a dashed stroke: it multiplies the render time"),
+    (re.compile(r"Math\.random|Date\.now|new Date\b"), "randomness or the clock: every render must draw the same frames"),
+    (re.compile(r"<image\b|<img\b|<foreignObject\b|dangerouslySetInnerHTML|\bfetch\(|\bimport\("),
+     "an image, embedded HTML or a fetch: a prop is drawn from shapes only"),
+)
+_IMPORT = re.compile(r"""^\s*import\b[^;]*?from\s+["']([^"']+)["']""", re.M)
+_ALLOWED_IMPORT = re.compile(r"^(react|remotion|\.\./\.\./installed/beanExplainer/(props/common|bean|contract))$")
 # Prop boxes at scale 1, in frame pixels: (width, height), every pixel the
 # drawing can reach (contract.ts says how they are measured). The text limits
 # and acts come from the pack; the boxes are geometry only this module needs.
@@ -113,8 +131,8 @@ def wrap_label(text: str) -> list[str]:
     return lines
 
 
-def prop_box(prop: str, x: float, y: float, scale: float = 1) -> tuple[float, float, float, float]:
-    w, h = PROP_BOXES[prop]
+def prop_box(prop: str, x: float, y: float, scale: float = 1, boxes: dict | None = None) -> tuple[float, float, float, float]:
+    w, h = (boxes or PROP_BOXES)[prop]
     cx, cy, hw, hh = x * W, y * H, w * scale / 2, h * scale / 2
     return (cx - hw, cy - hh, cx + hw, cy + hh)
 
@@ -174,10 +192,74 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
     return ""
 
 
-def check(config: dict, fps: int, word_starts: list[int], words: list[str], extra: dict) -> list[str]:
+def custom_prop_errors(custom, video_id: str, library: dict, sources: dict | None) -> tuple[list[str], dict, dict]:
+    """Problems with config's customProps, and the prop catalogue and boxes
+    with them added to the library's. `sources` maps each src to its file's
+    text, or is None to skip the source checks (no files to read)."""
+    errs: list[str] = []
+    catalog, boxes = dict(library), dict(PROP_BOXES)
+    if custom is None:
+        return errs, catalog, boxes
+    if not isinstance(custom, list) or len(custom) > CUSTOM["maxProps"]:
+        return [f"customProps must be a list of at most {CUSTOM['maxProps']} props."], catalog, boxes
+    for i, c in enumerate(custom):
+        where = f"customProps {i + 1}"
+        if not isinstance(c, dict):
+            errs.append(f"{where} must be an object.")
+            continue
+        cid = c.get("id")
+        if not isinstance(cid, str) or not _ID.match(cid) or cid in catalog:
+            errs.append(f"{where}: id {cid!r} must be lowercase letters, digits or _, and not a library prop or "
+                        "another custom prop's id.")
+            continue
+        src = c.get("src")
+        stem = src.split("/", 1)[1] if isinstance(src, str) and "/" in src else ""
+        if (not isinstance(src, str) or not _CUSTOM_FILE.match(stem)
+                or (video_id and src.split("/", 1)[0] != video_id)):
+            errs.append(f"{where} ({cid}): src must be the src write_scene_file returned for this video's "
+                        "prop-<name> file (\"<video_id>/prop-<name>\").")
+            continue
+        w, h = c.get("w"), c.get("h")
+        if not (_int(w) and _int(h) and CUSTOM["minSide"] <= w <= CUSTOM["maxSide"]
+                and CUSTOM["minSide"] <= h <= CUSTOM["maxSide"]):
+            errs.append(f"{where} ({cid}): w and h are its box at scale 1, whole pixels from {CUSTOM['minSide']} "
+                        f"to {CUSTOM['maxSide']}.")
+            continue
+        text = c.get("text", 0)
+        if not _int(text) or not 0 <= text <= CUSTOM["maxText"]:
+            errs.append(f"{where} ({cid}): text is the most characters its text slot takes, 0 to {CUSTOM['maxText']}.")
+            continue
+        acts = c.get("acts", [])
+        if (not isinstance(acts, list) or len(acts) > CUSTOM["maxActs"]
+                or not all(isinstance(a, str) and _CUSTOM_ACT.match(a) for a in acts)):
+            errs.append(f"{where} ({cid}): acts is a list of at most {CUSTOM['maxActs']} lowercase names.")
+            continue
+        if sources is not None:
+            body = sources.get(src)
+            if body is None:
+                errs.append(f"{where} ({cid}): there is no {src}.tsx; write it with write_scene_file first.")
+                continue
+            for pattern, why in FORBIDDEN_SOURCE:
+                if pattern.search(body):
+                    errs.append(f"{where} ({cid}): the drawing uses {why}.")
+            bad = [m for m in _IMPORT.findall(body) if not _ALLOWED_IMPORT.match(m)]
+            if bad:
+                errs.append(f"{where} ({cid}): it imports {', '.join(sorted(set(bad)))}; a prop imports only react, "
+                            "remotion and ../../installed/beanExplainer/props/common (or bean, contract).")
+            if not re.search(r"export\s+default\b", body):
+                errs.append(f"{where} ({cid}): the file must default-export the drawing component.")
+        catalog[cid] = {"text": text, "acts": acts}
+        boxes[cid] = (w, h)
+    return errs, catalog, boxes
+
+
+def check(config: dict, fps: int, word_starts: list[int], words: list[str], extra: dict,
+          video_id: str = "", sources: dict | None = None) -> list[str]:
     """Every problem with a Bean Explainer config, one sentence each (at most
     MAX_ERRORS), or [] when it may be written. `extra` is the style pack's
-    catalogue block; `words` is the narration's text, word by word."""
+    catalogue block; `words` is the narration's text, word by word. A config's
+    customProps join the library for this video; `sources` maps their src to
+    the file's text (None skips the source checks)."""
     errors: list[str] = []
 
     def err(msg: str) -> None:
@@ -197,6 +279,10 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
         return errors + [f"The scene's props must hold {PROPS_KEY!r}: the sections, shots and cast."]
     if not _int(total) or total <= 0:
         return errors + ["totalFrames must be a positive whole number."]
+    custom_errs, catalog, boxes = custom_prop_errors(data.get("customProps"), video_id, extra["props"], sources)
+    for e in custom_errs:
+        err(e)
+    extra = {**extra, "props": catalog, "boxes": boxes}
 
     still = round(LIMITS["maxStillSeconds"] * fps)
     snaps = sorted(set(word_starts))
@@ -275,7 +361,7 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
         if sec.get("color") not in extra["section_colors"]:
             err(f"{where}: color must be one of {', '.join(extra['section_colors'])}.")
         if sec.get("badge") not in extra["props"]:
-            err(f"{where}: badge must be a prop from the library.")
+            err(f"{where}: badge must be a prop from the library or the video's customProps.")
         if s0 not in starts:
             err(f"{where} starts at frame {s0}, where no shot starts: a section change is a cut, "
                 "so start a shot there too.")
@@ -375,7 +461,7 @@ def _check_shot(shot, i, start, end, content, cast_ids, extra, on_word, runs, ch
         elif t == "prop":
             prop = e.get("prop")
             if prop not in extra["props"]:
-                err(f"{at}: prop must be from the library (see the pack's props).")
+                err(f"{at}: prop must be from the library or the video's customProps.")
                 continue
             pid = e.get("id", prop)
             if not isinstance(pid, str) or not _ID.match(pid) or pid in props:
@@ -398,7 +484,7 @@ def _check_shot(shot, i, start, end, content, cast_ids, extra, on_word, runs, ch
                     err(f"{at}: the {prop} prop has no text slot.")
                 elif not isinstance(text, str) or len(text) > limit:
                     err(f"{at}: the {prop}'s text must be at most {limit} characters.")
-            props[pid] = {**e, "box": prop_box(prop, e["x"], e["y"], sc)}
+            props[pid] = {**e, "box": prop_box(prop, e["x"], e["y"], sc, extra.get("boxes"))}
             elements += 1
         elif t == "act":
             target = props.get(e.get("target"))

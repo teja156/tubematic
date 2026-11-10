@@ -632,6 +632,9 @@ Covers the `tubematic-bean-explainer` skill ([Bean Explainer](../10-scene-author
   limit and acts, and every pose, face, mark, accessory, tint, entrance, field and section colour.
 - The limits the skill states are the ones `mcp/bean_explainer.py` enforces, the worked example
   passes the validator, and the uninstaller removes the skill.
+- The skill teaches props of the agent's own within the validator's limits (count, box, text slot,
+  acts, the whole-prop acts, the preview tool), and its worked custom prop, `example-prop-rocket.tsx`,
+  passes the validator's source checks.
 
 Trap: `reference/contract.md`'s catalogue is generated from the pack. A prop added to the library
 and left out of that file is a prop no agent will use.

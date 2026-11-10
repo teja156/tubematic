@@ -172,6 +172,16 @@ export const PROPS = {
 
 export const PROP_SCALE = { min: 0.5, max: 1.4 } as const;
 
+/*
+ * A prop the agent draws for one video, when the library has nothing for the
+ * subject: a TSX file it writes beside the video's other generated files
+ * (generated/<video_id>/prop-<name>.tsx), modelled on a library prop and
+ * using the same helpers (./props/common). `w` and `h` are its box at scale 1,
+ * which the agent declares and the preview outlines; `text` and `acts` say
+ * what the drawing does with a text slot and an act, as in PROPS.
+ */
+export const CUSTOM = { maxProps: 8, minSide: 60, maxSide: 700, maxText: 40, maxActs: 4 } as const;
+
 export type PropId = keyof typeof PROPS;
 export type Pose = (typeof POSES)[number];
 export type Face = (typeof FACES)[number];
@@ -185,10 +195,10 @@ export type FieldId = keyof typeof FIELDS;
 export type SectionColor = keyof typeof SECTION_COLORS;
 
 export type BECast = { id: CastId; accessory?: Accessory; tint?: Tint };
-export type BESection = { start: number; header: string; color: SectionColor; badge: PropId };
+export type BESection = { start: number; header: string; color: SectionColor; badge: string };
 export type BEEvent =
   | { type: "pose"; frame: number; who: CastId; pose: Pose; face: Face; look?: Look; x?: number; at?: string }
-  | { type: "prop"; frame: number; id?: string; prop: PropId; x: number; y: number; scale?: number; enter?: Entrance; text?: string }
+  | { type: "prop"; frame: number; id?: string; prop: string; x: number; y: number; scale?: number; enter?: Entrance; text?: string }
   | { type: "act"; frame: number; target: string; act: string }
   | { type: "label"; frame: number; text: string; x: number; y: number; tone?: (typeof LABEL_TONES)[number] }
   | { type: "mark"; frame: number; who: CastId; mark: MarkType }
@@ -196,7 +206,9 @@ export type BEEvent =
   | { type: "strike"; frame: number; target: string }
   | { type: "arrow"; frame: number; from: string; to: string };
 export type BEShot = { start: number; events: BEEvent[] };
+export type BECustomProp = { id: string; src: string; w: number; h: number; text?: number; acts?: string[] };
 export type BeanExplainerData = {
+  customProps?: BECustomProp[];
   field?: FieldId;
   title?: string;
   list?: boolean;
@@ -222,9 +234,16 @@ export const propInstanceId = (e: { id?: string; prop: string }) => e.id ?? e.pr
 /** The bean's scale in a shot: smaller when both beans are on stage. */
 export const beanScale = (beansOnStage: number) => (beansOnStage > 1 ? GEOMETRY.beanScaleTwo : GEOMETRY.beanScale);
 
+/** A prop's box at scale 1: the library's, or the size a custom prop declares. */
+export function propSize(prop: string, custom: BECustomProp[] = []): { w: number; h: number } {
+  if (prop in PROPS) return PROPS[prop as PropId];
+  const c = custom.find((q) => q.id === prop);
+  return c ? { w: c.w, h: c.h } : { w: 0, h: 0 };
+}
+
 /** [left, top, right, bottom] of a prop placed at (x, y) as fractions of the frame. */
-export function propBox(prop: PropId, x: number, y: number, scale = 1): [number, number, number, number] {
-  const p = PROPS[prop];
+export function propBox(prop: string, x: number, y: number, scale = 1, custom: BECustomProp[] = []): [number, number, number, number] {
+  const p = propSize(prop, custom);
   const cx = x * W, cy = y * H, hw = (p.w * scale) / 2, hh = (p.h * scale) / 2;
   return [cx - hw, cy - hh, cx + hw, cy + hh];
 }

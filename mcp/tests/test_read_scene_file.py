@@ -283,3 +283,22 @@ def test_cross_video_copy_path_works(job_db, scene_dirs):
 
     assert mine["src"] == "vid_mine/orbit-diagram"
     assert server.read_scene_file(mine["src"])["tsx_content"] == TSX
+
+
+# ── a file inside an installed scene's folder (TMDEV-198) ────────────────
+
+def test_a_file_inside_an_installed_folder_reads_as_a_reference(job_db, scene_dirs):
+    """The Bean Explainer's agent copies a library prop when it draws its own."""
+    _, installed = scene_dirs
+    (installed / "beanExplainer" / "props").mkdir(parents=True)
+    (installed / "beanExplainer" / "props" / "lifeProps.tsx").write_text("PROPS", encoding="utf-8")
+    (installed / "beanExplainer" / "contract.ts").write_text("CONTRACT", encoding="utf-8")
+
+    assert server.read_scene_file("beanExplainer/props/lifeProps", source="installed")["tsx_content"] == "PROPS"
+    assert server.read_scene_file("beanExplainer/contract.ts", source="installed")["tsx_content"] == "CONTRACT"
+    assert "not found" in server.read_scene_file("beanExplainer/props/nope", source="installed")["error"]
+
+
+@pytest.mark.parametrize("name", ["beanExplainer/../../secret", "/etc/passwd", "a/b/c/d", "bean_x/props"])
+def test_an_installed_path_cannot_leave_the_library(job_db, scene_dirs, name):
+    assert "error" in server.read_scene_file(name, source="installed")

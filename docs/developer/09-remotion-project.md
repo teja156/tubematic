@@ -439,7 +439,14 @@ field, floor, header, badge and carousel; its helpers, the bean rig and the prop
 before the first frame; the style's captions use Instrument Sans, which this scene loads. The
 `BeanPropSheet` composition renders the cast and the prop library as a model sheet, one page per
 frame, for a person to check a drawing: `npx remotion still src/index.ts BeanPropSheet out.png
---frame=<page>`. No video uses it. The contract and the reason the bean is drawn as a cached bitmap
+--frame=<page>`. With `--props='{"measure":"<prop>"}'` it draws one prop at every moment of its act
+on white, the picture each prop's box in `contract.ts` is measured from. No video uses it.
+
+A Bean Explainer video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`. The
+scene imports them under a `delayRender` handle, and one that fails to load fails the render.
+`bean-tools/render-props.mjs` renders them for the `render_bean_props` tool on the
+`BeanPropPreview` composition, from a bundle entry it writes per call into `bean-tools/.tmp/`
+(ignored by git) that imports only that video's prop files. The contract and the reason the bean is drawn as a cached bitmap
 are in [Bean Explainer](10-scene-authoring.md#bean-explainer).
 
 ### Figure and panel components

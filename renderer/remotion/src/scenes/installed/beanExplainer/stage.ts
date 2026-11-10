@@ -10,7 +10,7 @@
 import {
   BADGE, GEOMETRY, H, TIMING, W, beanScale, propInstanceId,
   type BECast, type BEEvent, type BESection, type BEShot, type BeanExplainerData, type CastId, type Face, type Look,
-  type MarkType, type Pose, type PropId,
+  type MarkType, type Pose,
 } from "./contract";
 
 export type Window = { start: number; end: number };
@@ -29,7 +29,7 @@ export type BeanState = {
   seed: number;
 };
 
-export type PropState = { key: string; prop: PropId; x: number; y: number; scale: number; since: number; enter: string; text: string; act: string; actAt: number };
+export type PropState = { key: string; prop: string; x: number; y: number; scale: number; since: number; enter: string; text: string; act: string; actAt: number };
 export type LabelState = { key: string; text: string; x: number; y: number; red: boolean; since: number };
 export type StrikeState = { target: string; since: number };
 export type ArrowState = { from: string; to: string; since: number };
