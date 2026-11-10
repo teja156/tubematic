@@ -119,6 +119,20 @@ def test_no_scenes_of_its_own_means_no_typecheck(project):
     assert project() == []
 
 
+def test_an_emptied_scene_directory_is_not_an_input(project):
+    """delete_scene_file leaves the directory behind; an include that matches
+    nothing makes tsc fail with "No inputs were found", which would block a
+    video whose scenes are all installed ones."""
+    (project.scenes / VID).mkdir()
+    (project.scenes / VID / "notes.txt").write_text("not source")
+    assert server._typecheck_video(VID, []) is None
+    assert project() == []
+    installed = project.remotion / "src" / "scenes" / "generated" / "legacy.tsx"
+    installed.write_text("export default () => null;\n")
+    server._typecheck_video(VID, [installed])
+    assert project()[0]["config"]["include"] == [str(installed)]
+
+
 def test_the_temporary_config_is_removed(project, monkeypatch):
     hero = _scene(project, VID, "hero")
     server._typecheck_video(VID, [hero])

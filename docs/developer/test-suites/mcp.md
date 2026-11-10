@@ -480,7 +480,8 @@ Covers `validate_job`'s typecheck ([`validate_job`](../06-mcp-server.md#validate
 
 - The temporary config extends `tsconfig.json`, sits beside it, and includes only this video's
   directory and the scene files its config names. It is removed after a pass, a failure and a
-  timeout. A video with no generated scenes runs no typecheck.
+  timeout. A video with no generated scenes runs no typecheck, and neither does one whose directory
+  was emptied (`tsc` fails on an include that matches nothing).
 - On a timeout the child the fake started is dead afterwards, and the error asks for another call.
 - Two videos validated at once never overlap their typecheck, and a call that cannot get the checker
   in time returns an error without running one.
