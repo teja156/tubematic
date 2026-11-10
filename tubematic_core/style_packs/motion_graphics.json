@@ -1,0 +1,32 @@
+{
+  "id": "motion_graphics",
+  "label": "Motion Graphics",
+  "order": 10,
+  "experimental": false,
+  "renderer": "dom",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-scene-config",
+  "allows": {
+    "figures": false,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "routing": {
+    "best_for": [
+      "real, specific subjects the viewer came to see: products, screenshots, named people and places as images",
+      "image-led topics where full-bleed imagery carries the beats"
+    ],
+    "avoid_for": [
+      "topics whose beats are generic roles acted out by people"
+    ],
+    "signals": [
+      "the script names specific real things that are best shown as pictures",
+      "most beats want a full-frame image or a vector diagram, none wants a character"
+    ],
+    "images_per_video": "varies"
+  }
+}

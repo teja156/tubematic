@@ -1,0 +1,57 @@
+{
+  "id": "system_flow",
+  "label": "System Flow",
+  "order": 35,
+  "experimental": false,
+  "renderer": "dom",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-system-flow",
+  "allows": {
+    "figures": false,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "review": "VISUAL STYLE — this video is a System Flow diagram, and the following are intended, not defects: a near-black green-grey canvas with no texture; line icons in thin cyan boxes; dotted connectors with small arrowheads that draw themselves from one node to the next; small points of light travelling along connectors (packets), sometimes back along the same line; every element except the active one dimmed to about a third of its brightness while a step is explained; a single soft glow on the active node or packet; the whole diagram moving and rescaling as one (the camera fitting what is visible, pushing in on a step, pulling back); hard cuts to a new diagram when the subject changes; a small pill tag and a short headline near the top; outlined white captions in the lower part of the frame. There are no people, characters or photographs in this style, and their absence is correct. Do report: a label or chip that overlaps another label, a node or text cut off at the frame edge, text too small to read on a phone, a diagram so crowded the active step cannot be found, a packet or highlight on a component the narration is not talking about at that moment, a stretch of more than about three seconds where nothing on screen changes, and a connector that runs through a label.",
+  "captions": {
+    "background": "outline",
+    "position": 0.76,
+    "color": "#ffffff",
+    "fontFamily": "Barlow, system-ui, sans-serif",
+    "fontSize": 64,
+    "maxWords": 3
+  },
+  "routing": {
+    "best_for": [
+      "networking and protocols",
+      "system design",
+      "security flows and attacks",
+      "data pipelines",
+      "how a request is handled",
+      "supply chains as flows"
+    ],
+    "avoid_for": [
+      "emotional or narrative stories",
+      "topics with no structure to diagram"
+    ],
+    "signals": [
+      "the script names components that talk to each other",
+      "the subject is a path a request, packet or signal travels",
+      "the script walks through the steps of a pipeline",
+      "latency, throughput or a bottleneck is the point",
+      "the topic is an architecture or a protocol"
+    ],
+    "images_per_video": "0"
+  },
+  "extra": {
+    "icons": [
+      "api", "app", "attacker", "browser", "bug", "cache", "cdn", "chart", "clock", "cloud",
+      "container", "cpu", "database", "disk", "dns", "email", "file", "firewall", "function",
+      "globe", "key", "load_balancer", "lock", "memory", "phone", "queue", "router", "server",
+      "shield", "user"
+    ]
+  }
+}

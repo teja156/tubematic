@@ -1,0 +1,32 @@
+{
+  "id": "stick",
+  "label": "Stick Explainer",
+  "order": 20,
+  "experimental": false,
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-scene-config",
+  "allows": {
+    "figures": true,
+    "line_art": true,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "routing": {
+    "best_for": [
+      "mechanisms: how a thing works, processes, architecture, data flow",
+      "walkthroughs with generic roles (the user, an attacker)"
+    ],
+    "avoid_for": [
+      "stories that need recurring, recognisable characters"
+    ],
+    "signals": [
+      "the beats are animation-led diagrams and line art",
+      "people in the script are roles, not named individuals"
+    ],
+    "images_per_video": "few, in panels"
+  }
+}

@@ -51,64 +51,46 @@ def client(db_path):
         yield c
 
 
-def _mcp_block():
-    """The hand-copied visual-register block from mcp/server.py, executed in
-    isolation so the two copies can be compared as behaviour, not as text."""
+def _mcp_style_import():
+    """The names mcp/server.py imports from tubematic_core.visual_styles. The
+    MCP server cannot be imported next to the API in one test process, so its
+    side is read as source: what matters is that it imports, not copies."""
     import pathlib as _pathlib
+    import re as _re
 
-    mcp_path = _pathlib.Path(__file__).resolve().parents[3] / "mcp" / "server.py"
-    src = mcp_path.read_text()
-    start = src.index("VISUAL_STYLES = (")
-    end = src.index("# Canonical set of every valid videos.status value", start)
-    ns: dict = {}
-    exec(compile(src[start:end], str(mcp_path), "exec"), ns)
-    return ns
+    src = (_pathlib.Path(__file__).resolve().parents[3] / "mcp" / "server.py").read_text()
+    m = _re.search(r"from tubematic_core\.visual_styles import \((.*?)\)", src, _re.S)
+    assert m, "mcp/server.py must import its style rules from tubematic_core.visual_styles"
+    return {n.strip() for n in m.group(1).replace("# noqa: E402", "").split(",") if n.strip()}
 
 
-# ── the cross-copy agreement (the two hand-duplicated copies) ────────────────
+# ── one source for the style rules (style packs, TMDEV-196) ──────────────────
 
-def test_the_visual_style_constants_match_the_mcp_copy():
-    """Separate processes, separate trees, no shared sys.path — so these are
-    hand-copied and can drift silently. A mismatch means the dashboard and the
-    agent disagree about what a video is."""
-    ns = _mcp_block()
-    assert ns["VISUAL_STYLES"] == pipeline.VISUAL_STYLES
-    assert ns["RESOLVED_VISUAL_STYLES"] == pipeline.RESOLVED_VISUAL_STYLES
-    assert ns["CANVAS_BY_STYLE"] == pipeline.CANVAS_BY_STYLE
-    assert ns["VALID_CANVASES"] == pipeline.VALID_CANVASES
-    assert ns["DEFAULT_CANVAS"] == pipeline.DEFAULT_CANVAS
-    assert ns["DEFAULT_VISUAL_STYLE"] == pipeline.DEFAULT_VISUAL_STYLE
-    # The dashboard and the agent hit different write paths; a refusal that
-    # reads differently on each looks like two different problems.
-    assert ns["ILLUSTRATED_NEEDS_OPENAI_KEY"] == pipeline.ILLUSTRATED_NEEDS_OPENAI_KEY
-    # The Cartoon 3D gate (TMDEV-179) is the third hand-duplicated piece: the
-    # two refusals and the derivation of the GPU state from the worker's probe.
-    assert ns["CARTOON3D_NEEDS_GPU"] == pipeline.CARTOON3D_NEEDS_GPU
-    assert ns["CARTOON3D_GPU_UNKNOWN"] == pipeline.CARTOON3D_GPU_UNKNOWN
-    assert ns["RENDERERS"] == pipeline.RENDERERS
-    assert "cartoon_3d" in pipeline.VISUAL_STYLES and pipeline.CANVAS_BY_STYLE["cartoon_3d"] == "dark"
-    # The resolved column holds a CANVAS, not a register name. If these ever
-    # drift back to ("motion_graphics", "stick") the value stops describing
-    # what it stores, and auto-on-dark-with-figures becomes unrepresentable.
+STYLE_NAMES = ("VISUAL_STYLES", "DEFAULT_VISUAL_STYLE", "RESOLVED_VISUAL_STYLES", "CANVAS_BY_STYLE",
+               "VALID_CANVASES", "DEFAULT_CANVAS", "RENDERERS", "ILLUSTRATED_NEEDS_OPENAI_KEY",
+               "CARTOON3D_NEEDS_GPU", "CARTOON3D_GPU_UNKNOWN", "effective_canvas", "figures_allowed",
+               "line_art_allowed", "characters_allowed", "gpu_probe_status", "cartoon_3d_gpu_error")
+
+
+def test_the_api_uses_the_shared_style_rules():
+    """The API and the MCP server used to carry hand-copied blocks pinned by an
+    agreement test. Both now import one module; a local redefinition would
+    bring the drift back, so each name must be the shared object itself."""
+    from tubematic_core import visual_styles as tvs
+    for name in STYLE_NAMES:
+        assert getattr(pipeline, name) is getattr(tvs, name), name
+
+
+def test_the_mcp_server_imports_the_same_style_rules():
+    assert set(STYLE_NAMES) <= _mcp_style_import()
+
+
+def test_the_resolved_column_holds_a_canvas():
+    """The resolved column holds a CANVAS, not a register name. If this ever
+    drifts back to ("motion_graphics", "stick") the value stops describing what
+    it stores, and auto-on-dark-with-figures becomes unrepresentable."""
     assert pipeline.RESOLVED_VISUAL_STYLES == ("dark", "light")
-
-
-def test_effective_canvas_matches_the_mcp_copy():
-    """The constants agreeing is not enough — the helpers are duplicated too,
-    and a constants-only test gives false confidence (the lesson the title
-    truncator's cross-copy test already learned)."""
-    ns = _mcp_block()
-    cases = [
-        ("auto", ""), ("auto", "light"), ("auto", "dark"),
-        ("stick", ""), ("stick", "dark"),
-        ("motion_graphics", "light"), ("", ""), ("  auto  ", " light "),
-    ]
-    for chosen, resolved in cases:
-        assert ns["effective_canvas"](chosen, resolved) == \
-            pipeline.effective_canvas(chosen, resolved), (chosen, resolved)
-    for style in ("stick", "illustrated", "motion_graphics", "auto", "", "nonsense"):
-        assert ns["figures_allowed"](style) == pipeline.figures_allowed(style), style
-        assert ns["line_art_allowed"](style) == pipeline.line_art_allowed(style), style
+    assert "cartoon_3d" in pipeline.VISUAL_STYLES and pipeline.CANVAS_BY_STYLE["cartoon_3d"] == "dark"
 
 
 def test_line_art_is_narrower_than_figures():
@@ -404,20 +386,16 @@ def test_a_dark_canvas_gets_its_own_contract():
     assert "should be moving" in block
 
 
-def test_the_gpu_gate_matches_the_mcp_copy():
-    """gpu_probe_status and cartoon_3d_gpu_error are duplicated like the
-    canvas helpers, and for the same reason: the MCP server cannot import the
-    API. The agent and the dashboard must refuse Cartoon 3D on the same probe."""
-    ns = _mcp_block()
+def test_the_gpu_gate():
+    """The agent and the dashboard must refuse a GPU-only style on the same
+    probe; both read tubematic_core.visual_styles, so this pins its answers."""
     probes = [None, "", "not json", '{"configured": false}', '{"configured": true, "ok": false}',
               '{"configured": true, "ok": true}', '[]']
-    for raw in probes:
-        assert ns["gpu_probe_status"](raw) == pipeline.gpu_probe_status(raw), raw
     assert [pipeline.gpu_probe_status(r) for r in probes] == [
         "unknown", "unknown", "unknown", "not_configured", "not_usable", "working", "unknown"]
-    for style in ("auto", "stick", "illustrated", "cartoon_3d", ""):
+    for style in ("auto", "stick", "illustrated", "system_flow", ""):
         for status in ("unknown", "not_configured", "not_usable", "working"):
-            assert ns["cartoon_3d_gpu_error"](style, status) == pipeline.cartoon_3d_gpu_error(style, status)
+            assert pipeline.cartoon_3d_gpu_error(style, status) == "", (style, status)
     assert pipeline.cartoon_3d_gpu_error("cartoon_3d", "working") == ""
     assert pipeline.cartoon_3d_gpu_error("cartoon_3d", "unknown") == pipeline.CARTOON3D_GPU_UNKNOWN
     assert pipeline.cartoon_3d_gpu_error("cartoon_3d", "not_usable") == pipeline.CARTOON3D_NEEDS_GPU
