@@ -20,6 +20,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionPane } from "@/components/ActionPane";
 import type { Agent, Video, VideoStatus, GpuStatus } from "@/lib/types";
+import { PACK_STYLES } from "./packStyles";
 
 // Fixed to America/New_York so the date-rendering test below has a
 // deterministic, non-UTC expected value.
@@ -652,15 +653,15 @@ describe("ActionPane — visual style picker", () => {
   }
 
   it("offers exactly the styles the API accepts, and defaults to Auto", () => {
-    // These values are hand-duplicated from mcp/server.py's VISUAL_STYLES.
-    // Offering one the API rejects produces a 400 on approval, which surfaces
-    // to the human as a failed click with no explanation.
+    // The list comes from the style packs the API reads (GET /visual-styles),
+    // never a copy here. Offering one the API rejects produces a 400 on
+    // approval, which surfaces to the human as a failed click with no
+    // explanation.
     const video = makeVideo("TOPIC_PROPOSED");
     render(<ActionPane videos={[video]} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
     const select = screen.getByTestId(`style-select-${video.id}`) as HTMLSelectElement;
-    expect([...select.options].map((o) => o.value)).toEqual([
-      "auto", "motion_graphics", "stick", "illustrated", "cartoon_3d",
-    ]);
+    expect([...select.options].map((o) => o.value)).toEqual(PACK_STYLES.map((s) => s.id));
+    expect([...select.options].map((o) => o.value)).toContain("system_flow");
     expect(select.value).toBe("auto");
   });
 

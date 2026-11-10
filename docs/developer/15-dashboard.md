@@ -378,13 +378,19 @@ ledger.
 
 ### Visual-style picker
 
+The style list comes from [`GET /visual-styles`](05-http-api.md#get-visual-styles), fetched once by
+`components/VisualStylesProvider.tsx` at the app root and read with `useVisualStyles()`. The list
+changes only with the installed version. Until it loads, a picker offers only the value it holds.
 The rules are in `lib/visualStyles.ts`.
 
-- Illustrated is disabled, labelled "needs an OpenAI key", while no OpenAI key is stored. The page
-  reads `GET /settings`, whose masked `openai_api_key` is `""` when no key is set, so the key never
-  reaches the browser.
-- Cartoon 3D is disabled while no renderer's GPU is working, labelled "needs a working GPU", or "GPU
-  not tested yet" when `GET /render/gpu` says `unknown`.
+- A style whose pack needs an OpenAI key (Illustrated) is disabled, labelled "needs an OpenAI key",
+  while no key is stored. The page reads `GET /settings`, whose masked `openai_api_key` is `""` when
+  no key is set, so the key never reaches the browser.
+- A style whose pack needs a GPU (Cartoon 3D) is disabled while no renderer's GPU is working,
+  labelled "needs a working GPU", or "GPU not tested yet" when `GET /render/gpu` says `unknown`.
+- Each page loads the settings and the GPU status itself, so a key added in Settings counts on the
+  next page without a reload.
+- A style marked experimental in its pack is labelled "(experimental)".
 - Settings or GPU status that have not loaded count as available. The API refuses the style either
   way.
 - A video that already holds a disabled style still shows it selected, so the person can see why its
@@ -544,6 +550,7 @@ Components that a section above covers are left out of this table.
 | `VoicePreviewButton.tsx` | Generates or replays a cached voice sample. One button toggles play and pause and follows the audio's own events. A change of voice or model resets it. Given a `modelId`, it previews that model |
 | `MiningSources.tsx` | Adds and removes YouTube URLs for mining. It mirrors the API's URL rule and adds a URL in the canonical `watch?v=` form. See [Mining sources](05-http-api.md#mining-sources) |
 | `TimeZoneProvider.tsx` | Fetches the host's timezone once and provides it through context. See [Time](#time) |
+| `VisualStylesProvider.tsx` | Fetches the visual-style list once and provides it through context. See [Visual-style picker](#visual-style-picker) |
 | `Toast.tsx` | `useToasts()` and a stack renderer. Success toasts dismiss after 3 s. Error toasts stay |
 | `SummaryStrip.tsx` | Six stat tiles: Topics Awaiting, Scripts Ready, Videos Ready, In Pipeline, Published, Failed |
 | `StatusBadge.tsx`, `SectionLabel.tsx` | The coloured dot and label for each of the 16 statuses, and the section heading rule |
@@ -843,7 +850,7 @@ suite can test them without React.
 |---|---|
 | `agents.ts` | Which agent a video runs under, what the agent, model and effort pickers show, and what an approval sends for them |
 | `voices.ts` | Voice labels and conflicts, the shown voice, and what Approve Topic sends for the voice |
-| `visualStyles.ts` | Style labels, when Illustrated and Cartoon 3D are disabled, and how a frozen style reads on a card |
+| `visualStyles.ts` | Picker options and labels built from the fetched style list, when a style is disabled, and how a frozen style reads on a card |
 | `mascots.ts` | The GPU gate for mascot pickers, their options and the mascot an approval sends |
 | `videoStatus.ts` | Which statuses can be deleted, when Retry publishing, Mark as published and Retry agent are offered, and `patchVideo` |
 | `autoPilot.ts` | The disclaimer, the bounds, when a save needs confirmation and how many videos it would approve |
@@ -868,7 +875,6 @@ refuses.
 | The status list | `lib/types.ts` (`VideoStatus`), `renderer/api/pipeline.py` and `mcp/server.py` (`VALID_VIDEO_STATUSES`) | `mcp/tests/test_pipeline_status.py::test_every_copy_of_the_status_list_agrees` |
 | `DELETABLE_STATUSES` | `lib/videoStatus.ts`, `renderer/api/pipeline.py` | `renderer/api/tests/test_retention.py::test_the_dashboard_copy_of_the_deletable_set_matches` |
 | `AGENT_EFFORTS` | `lib/agents.ts`, `renderer/api/pipeline.py`, `mcp/server.py`, `scripts/agent_adapters.py` | `renderer/api/tests/test_pipeline.py::test_the_effort_levels_and_default_match_the_other_two_copies` |
-| Visual styles | `lib/visualStyles.ts` (`VISUAL_STYLE_OPTIONS`), `VISUAL_STYLES` in `renderer/api/pipeline.py` and `mcp/server.py` | The two Python copies by `renderer/api/tests/test_visual_style.py`. The dashboard copy by its comment only |
 | Auto Pilot bounds | `lib/autoPilot.ts` (`MAX_AUTO_PILOT_GAP_MINS`, `MAX_AUTO_PILOT_DAILY`, `MAX_AUTO_PILOT_IN_FLIGHT`), `renderer/api/pipeline.py` | Comment only. The API enforces them |
 | Title length | `TITLE_MAX` in `app/new-video/page.tsx`, `VIDEO_TITLE_MAX_LEN` in `renderer/api/pipeline.py` | Comment only. The API enforces it |
 | Manual domain id | `MANUAL_PROJECT_ID` in `app/new-video/page.tsx` and `renderer/api/pipeline.py` | Comment only |

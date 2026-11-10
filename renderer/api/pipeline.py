@@ -443,48 +443,31 @@ AGENT_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 DEFAULT_AGENT_EFFORT = "high"
 
 
-# ── Visual register (TMDEV-101) ──────────────────────────────────────────────
-# A video's visual_style is a PERMISSION SET, not a look. It says which
-# vocabularies the agent may draw from, and which canvas the video is painted
-# on. The per-beat treatment is still derived from each beat's subject.
-#
-#   motion_graphics — dark canvas. Vector animation and full-bleed generated
-#                     imagery. No figures.
-#   stick           — light canvas. HAND-DRAWN StickFigure line art, line-art
-#                     diagrams, imagery contained in panels.
-#   illustrated     — characters are GENERATED illustrated assets
-#                     (generate_character) rather than line art, held
-#                     consistent across scenes. It does NOT fix a drawing
-#                     style: the agent picks one from the topic — playful
-#                     stick-ish figures, or serious rendered illustration —
-#                     and holds it video-wide. It does not fix the canvas
-#                     either; the agent resolves that too.
-#   auto            — no restriction at all. The agent picks the canvas and
-#                     may use any vocabulary.
-#
-# Only motion_graphics and stick fix a canvas. illustrated and auto leave it to
-# the agent, which is why CANVAS_BY_STYLE is a partial map and membership in it
-# — not equality with "auto" — is the test for "has this been settled yet".
-#
-# The two named options are restrictions; auto is the absence of one. That is
-# why auto can produce a video neither named option could: white-line-art
-# figures for the role beats of an otherwise image-led, dark-canvas video.
-# Keep in sync: the other copy of this block, and dashboard/lib/types.ts.
-VISUAL_STYLES = ("auto", "motion_graphics", "stick", "illustrated", "cartoon_3d")
-DEFAULT_VISUAL_STYLE = "auto"
-
-# "illustrated" draws its characters with OpenAI, the only provider with a
-# transparent-background option, so without a key it cannot be produced at
-# all. The key used to be consulted only by generate_character, after voicing,
-# on a video whose style was already frozen — so the refusal now happens where
-# the style is chosen. A key stored but later revoked is still caught only at
-# use: probing the provider on every write would be worse than the problem.
-# Keep in sync: the other copy of this block (pinned by an agreement test).
-ILLUSTRATED_NEEDS_OPENAI_KEY = (
-    "OpenAI API key not set. The illustrated visual style needs it — Gemini has no "
-    "transparency option, so there is no fallback. Add an OpenAI key on the dashboard "
-    "Settings page, or choose another visual style."
+# ── Visual styles (TMDEV-101; style packs since TMDEV-196) ──────────────────
+# The style list and every per-style rule (canvas, what a style may contain,
+# what it needs, the refusal messages) live in one data file per style under
+# tubematic_core/style_packs/, read by tubematic_core.visual_styles. The names
+# below are the ones this module has always used; the MCP server and the API
+# import the same objects, so there is no second copy to keep in step.
+from tubematic_core.visual_styles import (  # noqa: E402
+    CANVAS_BY_STYLE,
+    CARTOON3D_GPU_UNKNOWN,
+    CARTOON3D_NEEDS_GPU,
+    DEFAULT_CANVAS,
+    DEFAULT_VISUAL_STYLE,
+    ILLUSTRATED_NEEDS_OPENAI_KEY,
+    RENDERERS,
+    RESOLVED_VISUAL_STYLES,
+    VALID_CANVASES,
+    VISUAL_STYLES,
+    cartoon_3d_gpu_error,
+    characters_allowed,
+    effective_canvas,
+    figures_allowed,
+    gpu_probe_status,
+    line_art_allowed,
 )
+from tubematic_core import visual_styles as tvs  # noqa: E402
 
 # Mining is the one strategy that needs a key: it sends YouTube URLs to Gemini.
 # With no Gemini key it is off — derived at every read, never stored — so a
@@ -495,151 +478,6 @@ MINING_NEEDS_GEMINI_KEY = (
     "cannot be turned on without one. Add a Gemini key on the dashboard Settings page "
     "(API Keys), or leave mining off."
 )
-
-# The canvas is the one property that cannot vary between the scenes of one
-# video — alternating light and dark frames flashes, and a viewer reads that as
-# a broken render rather than a style. It is therefore a single top-level key
-# in scene-config.json, and the renderer paints it under every scene.
-#
-# The figure vocabulary is deliberately NOT tied to it. A stick figure is line
-# art; it is black on light and white on dark, same geometry either way. Those
-# two things were coupled in the first cut of this feature, and the coupling
-# was what forced an entire image-led video onto a white canvas because one
-# beat happened to be about "an attacker".
-# Keep in sync: the other copy of this block and
-# renderer/remotion/src/CompositionBuilder.tsx.
-VALID_CANVASES = ("dark", "light")
-# cartoon_3d fills the frame, so its canvas is never visible, but the field must
-# hold a legal value: dark, the default, so an uncovered pixel cannot flash white.
-CANVAS_BY_STYLE = {"motion_graphics": "dark", "stick": "light", "cartoon_3d": "dark"}
-DEFAULT_CANVAS = "dark"
-
-# What videos.resolved_visual_style holds: the canvas "auto" settled on, and
-# nothing else. It is named for the column rather than the concept; what it
-# stores is a canvas, because the canvas is the only thing "auto" must fix for
-# the life of the video. Everything else stays free per beat.
-RESOLVED_VISUAL_STYLES = VALID_CANVASES
-
-# Cartoon 3D renders on the GPU only. POLICY, not impossibility: software WebGL
-# (swangle) renders the style, at about 1.1 s a frame, so a 90-second Short takes
-# ~50 minutes and a long one over two hours. With the GPU onboarding step, the
-# dashboard panel and its Test button the refusal names something a person can
-# do. Gate on the "working" status, never on "configured": a configured GPU
-# whose renders fall back to the CPU is the case the gate must catch. The status
-# is tubematic_core.renderers.gpu_status's aggregate over every renderer (each
-# one's probe arrives through the render gateway), the same rule the gateway
-# uses to decide which renderer may take a GPU render.
-# Keep in sync: the other copy of this block (pinned by an agreement test).
-CARTOON3D_NEEDS_GPU = (
-    "Cartoon 3D renders on the GPU only (on the CPU a 90-second Short takes about 50 minutes). "
-    "No renderer has a working GPU: configure one with `python onboard.py --step gpu` or add a GPU "
-    "renderer, test it under Settings → Rendering → Renderers on the dashboard, or choose another visual style."
-)
-CARTOON3D_GPU_UNKNOWN = (
-    "Cartoon 3D renders on the GPU only, and no renderer has tested its GPU yet (each does so "
-    "when it starts, and on Test GPU under Settings → Rendering → Renderers). Test it first, then choose "
-    "the style."
-)
-# What videos.resolved_renderer holds: which renderer "auto" settled on, written
-# once by the agent before any scene is authored. The DOM styles need no such
-# record (per-beat freedom is the design); the renderer is the one thing a
-# revision round must not flip, since flipping it discards every scene.
-RENDERERS = ("dom", "cartoon_3d")
-
-
-def gpu_probe_status(raw_probe) -> str:
-    """One renderer's GPU state from its stored probe (the JSON in
-    renderers.gpu_probe, as the renderer reported it through the render
-    gateway): "unknown" (never probed), "not_configured" (no GPU override),
-    "working" (configured and the last probe passed) or "not_usable"
-    (configured, but renders fall back to the CPU). The gates read the
-    install-wide aggregate, tubematic_core.renderers.gpu_status, which uses
-    these same values.
-    Keep in sync: the other copy (pinned by an agreement test)."""
-    import json as _json_
-    try:
-        probe = _json_.loads(raw_probe or "null")
-    except ValueError:
-        probe = None
-    if not isinstance(probe, dict):
-        return "unknown"
-    if not probe.get("configured"):
-        return "not_configured"
-    return "working" if probe.get("ok") else "not_usable"
-
-
-def cartoon_3d_gpu_error(visual_style: str, gpu_status: str) -> str:
-    """Why `visual_style` may not be chosen on a renderer whose GPU is in
-    `gpu_status`, or "". Only "cartoon_3d" is gated and only "working" passes;
-    "unknown" gets its own message, since its fix is a test, not an install.
-    Keep in sync: the other copy (pinned by an agreement test)."""
-    if (visual_style or "").strip() != "cartoon_3d":
-        return ""
-    if gpu_status == "working":
-        return ""
-    return CARTOON3D_GPU_UNKNOWN if gpu_status == "unknown" else CARTOON3D_NEEDS_GPU
-
-
-def effective_canvas(visual_style: str, resolved_visual_style: str) -> str:
-    """The canvas a video is painted on, or "" if "auto" has not settled yet.
-
-    A forced choice wins outright and the recorded resolution is ignored, so a
-    video switched off "auto" cannot be held to an older automatic decision.
-    Under "auto" the answer is whatever the agent recorded — and "" until it
-    has recorded anything, which callers must handle rather than guessing: that
-    is exactly the window in which a scene config may legitimately arrive
-    carrying the agent's choice.
-    Keep in sync: the other copy (pinned by an agreement test).
-    """
-    chosen = (visual_style or "").strip()
-    if chosen in CANVAS_BY_STYLE:
-        return CANVAS_BY_STYLE[chosen]
-    return (resolved_visual_style or "").strip()
-
-
-def figures_allowed(visual_style: str) -> bool:
-    """Whether this video may contain character figures at all, of either kind.
-
-    False only under a forced motion_graphics: that option's whole purpose is
-    to exclude them. "auto" permits everything, and both stick options are
-    built on them.
-    Keep in sync: the other copy (pinned by an agreement test).
-    """
-    return (visual_style or "").strip() != "motion_graphics"
-
-
-def line_art_allowed(visual_style: str) -> bool:
-    """Whether this video's figures may be simple hand-drawn line art.
-
-    Narrower than figures_allowed, and the difference is the whole point:
-    "illustrated" HAS figures but they are generated character artwork, and
-    hand-authored line art is exactly what that tier excludes. Telling the AI
-    review that line art is intended on an illustrated video would license the
-    one mistake the register forbids.
-
-    True under "stick" (line art is the register) and "auto" (unrestricted, so
-    a beat may legitimately reach for it). False under "illustrated" and under
-    "motion_graphics", which has no figures at all.
-    Keep in sync: the other copy (pinned by an agreement test).
-    """
-    return (visual_style or "").strip() in ("stick", "auto")
-
-
-def characters_allowed(visual_style: str) -> bool:
-    """Whether GENERATED character art (generate_character) is permitted.
-
-    A narrower question than figures_allowed. Plain "stick" means hand-drawn
-    StickFigure line art — that is what distinguishes it from "illustrated",
-    and letting it reach for generated art would erase the difference the human
-    chose between them. "auto" permits everything, by definition.
-
-    The two must not be mixed inside one video: a line-art figure standing next
-    to a rendered, shaded one reads as an asset that failed to load rather than
-    as a style. That is prose in the skill; this is the tool-level guard.
-    Keep in sync: the other copy (pinned by an agreement test).
-    """
-    return (visual_style or "").strip() in ("auto", "illustrated")
-
 
 # ── Agents (TMDEV-90) ────────────────────────────────────────────────────────
 # Rows are written only by the host-side installer (`python onboard.py
@@ -1394,21 +1232,21 @@ def _seed_mascot(con, project_id, visual_style: str) -> str:
 
 
 def _cartoon3d_gpu_error(con, style: str) -> str:
-    """Why `style` may not be chosen on this install, or "": only cartoon_3d
-    is gated, on whether any renderer can render on a GPU (gpu_status). Keep
-    in sync: mcp/server.py's _cartoon3d_gpu_error reads the same aggregate."""
-    if style != "cartoon_3d":
+    """Why `style` may not be chosen on this install, or "": only a style whose
+    pack needs a GPU is gated, on whether any renderer can render on a GPU
+    (gpu_status). mcp/server.py's _cartoon3d_gpu_error reads the same aggregate."""
+    if not tvs.needs_gpu(style):
         return ""
     return cartoon_3d_gpu_error(style, trenderers.gpu_status(con)["status"])
 
 
 def _illustrated_needs_key(con, style: str) -> bool:
-    """True when `style` is "illustrated" and no OpenAI key is stored.
+    """True when `style`'s pack needs an OpenAI key and none is stored.
 
     Reads the key the same way mcp/server.py's _openai_key does — settings row,
     then environment — so the two write paths agree on what "stored" means.
     """
-    if style != "illustrated":
+    if not tvs.needs_openai_key(style):
         return False
     return not _secret(_read_all_settings(con), "openai_api_key", "OPENAI_API_KEY")
 
@@ -2888,7 +2726,7 @@ def create_pipeline_blueprint() -> Blueprint:
                                  f"Must be one of: {sorted(VISUAL_STYLES)}"
                     }), 400
                 if _illustrated_needs_key(con, fields["visual_style"]):
-                    return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+                    return jsonify({"error": tvs.openai_key_error(fields["visual_style"])}), 400
                 gpu_err = _cartoon3d_gpu_error(con, fields["visual_style"])
                 if gpu_err:
                     return jsonify({"error": gpu_err}), 400
@@ -3325,7 +3163,7 @@ def create_pipeline_blueprint() -> Blueprint:
             # default was set, the approval PATCH (which carries visual_style)
             # refuses it at the topic checkpoint, before any spend.
             if _illustrated_needs_key(con, visual_style):
-                return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+                return jsonify({"error": tvs.openai_key_error(visual_style)}), 400
             gpu_err = _cartoon3d_gpu_error(con, visual_style)
             if gpu_err:
                 return jsonify({"error": gpu_err}), 400
@@ -3471,7 +3309,7 @@ def create_pipeline_blueprint() -> Blueprint:
                 if err:
                     return jsonify({"error": err}), 400
             if _illustrated_needs_key(con, visual_style):
-                return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+                return jsonify({"error": tvs.openai_key_error(visual_style)}), 400
             gpu_err = _cartoon3d_gpu_error(con, visual_style)
             if gpu_err:
                 return jsonify({"error": gpu_err}), 400
@@ -3616,7 +3454,7 @@ def create_pipeline_blueprint() -> Blueprint:
                     return jsonify({"error": err}), 400
             unchanged = prev is not None and (prev["default_visual_style"] or "") == default_style
             if not unchanged and _illustrated_needs_key(con, default_style):
-                return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+                return jsonify({"error": tvs.openai_key_error(default_style)}), 400
             gpu_err = "" if unchanged else _cartoon3d_gpu_error(con, default_style)
             if gpu_err:
                 return jsonify({"error": gpu_err}), 400
@@ -4783,6 +4621,15 @@ def create_pipeline_blueprint() -> Blueprint:
         aggregate (see gpu_status)."""
         with _conn() as con:
             return jsonify(gpu_status(con))
+
+    @bp.get("/visual-styles")
+    def list_visual_styles():
+        """Every visual style, "auto" first, from the style packs, with whether
+        this install can produce it now and why not. The dashboard builds its
+        pickers from this; the write routes stay the authority on refusals."""
+        with _conn() as con:
+            key_set = bool(_secret(_read_all_settings(con), "openai_api_key", "OPENAI_API_KEY"))
+            return jsonify({"styles": tvs.public_list(key_set, trenderers.gpu_status(con)["status"])})
 
     @bp.post("/render/gpu/test")
     def request_gpu_test():

@@ -1,7 +1,8 @@
 # `renderer/remotion` (vitest)
 
 The suite covers the pure TypeScript helpers of the Remotion project's
-[Cartoon 3D kit](../09-remotion-project.md#the-cartoon-3d-kit). Each test file sits beside the code
+[Cartoon 3D kit](../09-remotion-project.md#the-cartoon-3d-kit) and of the
+[`SystemFlow`](../09-remotion-project.md#systemflow) scene. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -17,6 +18,25 @@ does not run `npm test`, so run the suite yourself after you change either modul
 
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).
+
+## System Flow
+
+### `src/scenes/installed/systemFlow/systemFlow.test.ts`
+
+Covers `contract.ts`, `layout.ts` and `camera.ts` ([System Flow](../10-scene-authoring.md#system-flow)).
+
+- Labels wrap and rows are assigned as in the shared cases `mcp/tests/test_system_flow.py` runs.
+- dagre puts each node on its computed row and keeps the listed order within a row; an edge starts
+  below its source's label and ends above its target's box.
+- A full board of three rows of three, every label on two lines, shows labels of 40 px or more at
+  the pull-back.
+- On every frame, every node that has entered sits inside the diagram band, a focus push included.
+- A value chip sits beside its connector on the side with room, and stays inside the side margins
+  whatever its length and wherever the connector is.
+
+Trap: the band check is what keeps a new node out of the captions. The camera starts moving
+`cameraLead` frames before an event so it has made room when the node lands; a shorter lead lets a
+node appear over the captions for most of a second.
 
 ## Cartoon 3D
 

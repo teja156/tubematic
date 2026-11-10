@@ -9,6 +9,39 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ---
 
+## v2.2.0
+
+2.2.0 adds System Flow, a visual style that turns a video into a diagram that builds itself while
+the narrator explains a system.
+
+### Upgrade notes
+
+[Upgrading](https://docs.tubematic.ai/user-guide/upgrading) has the procedure. The points below
+apply to this version.
+
+After you upgrade:
+
+1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
+   installs a new skill for System Flow, and a session started before it does not have it.
+
+If you go back to 2.1.x later:
+
+- A video set to System Flow cannot render on 2.1.x. Finish it, or switch it to another style while
+  it waits at its topic, before you go back.
+- A domain whose default style is System Flow starts its new videos on Auto under 2.1.x.
+
+### Added
+
+- The System Flow visual style. Each subject of the video is a diagram: components appear as line
+  icons in boxes, dotted connectors draw between them, and points of light travel the connectors as
+  the narration describes each step, with values such as an address or a status code shown beside
+  them. It suits networking, protocols, system design, data pipelines and security flows. It needs no
+  image generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's
+  default; Auto does not choose it. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+
+---
+
 ## v2.1.1
 
 2.1.1 fixes a fault that could use up a machine's memory and freeze it while agents prepared
@@ -42,6 +75,8 @@ After you upgrade:
 - The built-in renderer held several hundred megabytes of memory while idle, on installs that never
   make a Cartoon 3D video. It now starts its preview-stills helper only when Cartoon 3D asks for a
   still, and lets the memory go after ten minutes without one.
+
+---
 
 ## v2.1.0
 

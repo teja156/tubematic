@@ -29,7 +29,7 @@ Two conventions hold across the layer:
 
 ## The skills
 
-Eight skills ship in `agent_files/skills/`.
+Nine skills ship in `agent_files/skills/`.
 
 | Skill | Runs when | What it does |
 |---|---|---|
@@ -39,6 +39,7 @@ Eight skills ship in `agent_files/skills/`.
 | `tubematic-create-script-writing-skill` | A script profile is queued at `PENDING` | Extracts a creator's style from transcripts into profile markdown |
 | `tubematic-scene-config` | `VOICE_READY`, and the revision path | Turns a voiced script and its timeline into images, scene TSX and `scene-config.json` |
 | `tubematic-cartoon3d` | `VOICE_READY` for a Cartoon 3D video, and its revision path | Writes the shots, camera, sets and cast as TypeScript, passes the beat gate with the `cartoon_*` tools and adds a soundtrack ([Cartoon 3D](10-scene-authoring.md#cartoon-3d)) |
+| `tubematic-system-flow` | `VOICE_READY` for a System Flow video, and its revision path | Writes the video as one diagram scene's data (boards, components, connectors, events timed to the narration), then validates and submits it ([System Flow](10-scene-authoring.md#system-flow)) |
 | `tubematic-mascot-builder` | A mascot waits to be built or changed (the poller names the skill and the mascot id) | Writes one mascot's p5.js drawing code, renders its three model sheets with `render_mascot_sheets` and submits it for human review with `submit_mascot` |
 | `tubematic-troubleshooting` | A person asks for it by name | Triages a broken install with that person, runs the diagnostics collector and drafts a redacted bug report |
 
@@ -60,7 +61,7 @@ The skill then routes each video by status:
 |---|---|
 | `TOPIC_APPROVED` | Invoke the scripting skill, write `script_segments`, upsert lexicon entries, comment, advance to `SCRIPT_READY` |
 | `VOICING` | Call `generate_voice`, which saves the paths and advances to `VOICE_READY`. The skill says the `SCRIPT_READY` approval authorizes the spend, because an agent that asks again leaves the video in `VOICING` |
-| `VOICE_READY` | Invoke the scene-config skill, check the image floor, `validate_job`, `submit_render`. Queue the render and stop without polling |
+| `VOICE_READY` | Invoke the skill `get_video` names in `style.authoring_skill` (the scene-config skill for `auto` and the scene styles), check the image floor where the style has images, `validate_job`, `submit_render`. Queue the render and stop without polling |
 | `REVISION_REQUESTED` | Diagnose from the comment thread and route back, or escalate to `FAILED` |
 | `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` | Stop. A human decides, or the worker for a domain on [Auto Pilot](14-publishing.md#auto-pilot). A video found past a checkpoint is authorized whoever moved it |
 | `VIDEO_APPROVED`, `PARTIALLY_PUBLISHED` | Take no action. No MCP tool publishes, and the skill forbids writing `SCHEDULED`, `PUBLISHING`, `PUBLISHED` or `PARTIALLY_PUBLISHED` |

@@ -25,12 +25,13 @@ your own judgment.
   - `TOPIC_PROPOSED` → show the topic and producibility score, **and ask which visual style to
     use** — `auto` (unrestricted: you pick the canvas and use whichever vocabularies the beats
     actually require), `motion_graphics` (dark canvas, no figures at all), `stick` (white canvas,
-    hand-drawn line figures) or `illustrated` (generated character artwork, you choose the canvas
-    and whether the art is playful or serious). There is no dashboard here, so this chat is the
-    only place that choice can be made, and it is frozen the moment the topic is approved.
-    Offer `illustrated` only if `get_pipeline_status()` reports `illustrated_available: true` —
-    its characters need an OpenAI key, and without one `update_video` refuses it. If it is
-    unavailable, say so and why rather than leaving it out silently.
+    hand-drawn line figures), `illustrated` (generated character artwork, you choose the canvas
+    and whether the art is playful or serious), `system_flow` (the whole video is one diagram per
+    subject, written as data) or `cartoon_3d` (a 3D world; it needs a working GPU). There is no
+    dashboard here, so this chat is the only place that choice can be made, and it is frozen the
+    moment the topic is approved. `get_pipeline_status()` returns every style as `visual_styles`,
+    each with `available` and `unavailable_reason`: offer an unavailable one only by saying it is
+    unavailable and why, rather than leaving it out silently.
 
     If the user picks anything other than `auto`, call
     `update_video(video_id, visual_style="<choice>")` **before** approving — the server refuses it

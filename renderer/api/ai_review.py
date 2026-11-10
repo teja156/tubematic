@@ -301,7 +301,7 @@ misplaced, overlapping or cut off.
 
 
 def _register_block(canvas: str, figures: bool = False, line_art: bool = False,
-                    cartoon_3d: bool = False) -> str:
+                    cartoon_3d: bool = False, style_block: str = "") -> str:
     """The style contract for what this video was deliberately produced as.
 
     Empty for an unknown canvas rather than guessing: a wrong contract here is
@@ -311,7 +311,16 @@ def _register_block(canvas: str, figures: bool = False, line_art: bool = False,
     `figures` and `line_art` are separate because they are separate
     permissions: an illustrated video has figures but no line art. See the
     blocks above for why collapsing them is not safe in either direction.
+
+    `style_block` is the review text a style pack carries (TMDEV-196). A style
+    that replaces the scene system with its own look (System Flow) says what
+    that look is, so the reviewer does not loop a video on its own design; it
+    takes the place of the canvas and figure blocks, which describe the scene
+    system's styles.
     """
+    if style_block.strip():
+        return ("INTENDED VISUAL STYLE — read this before judging any visual.\n"
+                + style_block.rstrip("\n") + "\n" + _STILL_JUDGE + "\n")
     if cartoon_3d:
         return ("INTENDED VISUAL STYLE — read this before judging any visual.\n"
                 + _CARTOON3D_BLOCK + _STILL_JUDGE + "\n")
@@ -514,7 +523,8 @@ def run_ai_review(video_path: str, scene_config: dict, *,
                    script_text: str = "", tts_text: str = "",
                    model: str = "", fps=0, api_key: str = "",
                    canvas: str = "", figures: bool = False,
-                   line_art: bool = False, cartoon_3d: bool = False) -> dict:
+                   line_art: bool = False, cartoon_3d: bool = False,
+                   style_block: str = "") -> dict:
     """Run a Gemini quality review on a rendered video.
 
     Args:
@@ -649,7 +659,7 @@ def run_ai_review(video_path: str, scene_config: dict, *,
         top=SAFE_ZONE_TOP,
         bottom=SAFE_ZONE_BOTTOM,
         sampled_fps=sampling_fps or 1,
-        register_block=_register_block(canvas, figures, line_art, cartoon_3d),
+        register_block=_register_block(canvas, figures, line_art, cartoon_3d, style_block),
         scene_config_json=json.dumps(scene_config, indent=2),
         reference_text_block=_reference_text_block(script_text, tts_text),
     )

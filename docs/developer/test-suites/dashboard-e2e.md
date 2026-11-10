@@ -109,6 +109,8 @@ Covers [the pipeline board](../15-dashboard.md#the-pipeline-board) and
 - The visual style travels in the same request as the topic approval, and the API answers `409` to
   a later change. Illustrated with no OpenAI key is a disabled option that the API refuses with
   `400`.
+- The style picker offers exactly the list `GET /visual-styles` serves, System Flow included, and a
+  System Flow pick is stored with the approval.
 - A status pill that hides a group keeps it hidden across a poll.
 - At 1280px the `TOPIC_PROPOSED` row's buttons stay on screen and the title keeps its width.
 

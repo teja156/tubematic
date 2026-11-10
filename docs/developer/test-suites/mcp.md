@@ -430,11 +430,41 @@ renderer checks ([Visual styles](../10-scene-authoring.md#visual-styles),
   refuses a scene kind that disagrees with the video's renderer.
 - The first config resolves an unresolved `auto` video's renderer as a compare-and-set, and a
   failed write or commit leaves the file and the row agreeing.
+- The server's style names are the objects in `tubematic_core.visual_styles`, `get_video` returns the
+  video's `style` with the skill that authors it, and `get_pipeline_status` lists every style.
 
 Trap: write-once on `resolved_visual_style` is the only thing that keeps a revision round on the
 canvas the video already uses, since no code on the revision path reads the field. A domain
 default of `illustrated` or `cartoon_3d` is checked only when it changes: re-sending a stored
 default after the key or the GPU is gone must pass, or every later edit of that domain would fail.
+
+### `test_system_flow.py`
+
+Covers `mcp/system_flow.py`, the checks `write_scene_config` runs on a System Flow config, and the
+text audit's per-board sampling ([System Flow](../10-scene-authoring.md#system-flow)).
+
+- The limits, timings, tones and event types equal the ones in the renderer's `contract.ts`, read
+  from the TypeScript source, and both sides answer the shared cases in
+  `fixtures/system_flow_contract.json` (label wrapping, row assignment). The pack's icon list equals
+  the icons `icons.ts` draws.
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its board and cause: a fourth node in a row, a fourth row, a cycle, an unknown
+  icon, a label too long, an edge before its source lands, a packet before its edge has drawn, an
+  event outside its board, a board not on a word, a disconnected node, and a still stretch over
+  3.5 seconds.
+- `write_scene_config` writes a sound config with the style's captions, refuses a bad one before
+  writing anything, refuses `SystemFlow` on another style, other scenes on a System Flow video, and a
+  `SystemFlow` entry of any type but `generated`.
+- An event that cannot be drawn and read before its board fades out is refused, a node's label
+  typing included (the last board has no fade-out and ends on its final frame). Two chips or two
+  focuses too close together, and a second fault on one node, are refused. The
+  stillness rule counts seconds at the timeline's frame rate, whatever `fps` the config claims.
+- The text audit samples each board.
+
+Trap: the rows are the validator's promise to the renderer. `layout.ts` pins dagre to them through
+each edge's `minlen`; a change to `compute_rows` on one side only lets a frame show more nodes in a
+row than the check counted.
 
 ### `test_watermark.py`
 

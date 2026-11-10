@@ -231,6 +231,7 @@ would be dangerous. Everything else that two processes share stays a copy.
 | `youtube.py` | Which YouTube URLs mining accepts | A stored URL list that the mining tool refuses to send to Gemini |
 | `ids.py`, `jobfiles.py` | The rules for ids that become paths, and where a video's files live | A path traversal in one of the programs that build those paths |
 | `renderers.py` | Which renderer may take which video, whether the install's GPU works, credentials and enrollment tokens | The dashboard offering a style that no renderer is handed |
+| `visual_styles.py`, `style_packs/` | The visual styles and each style's rules, as one data file per style | The agent and the dashboard disagreeing about what a style allows, or offering a style the other refuses ([Style packs](10-scene-authoring.md#style-packs)) |
 | `mascots.py` | The mascot statuses, the attempt cap and the cue checks | The API, the MCP server, the worker, the renderer and the poller applying different rules |
 
 `renderer/api/pipeline.py::_init_db` and `mcp/server.py::_init_db` define no schema. Both call

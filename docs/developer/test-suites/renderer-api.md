@@ -253,8 +253,12 @@ Covers the visual style over HTTP and the style contract of the AI review prompt
   rules out three false positives (flat art as low quality, a held pose as broken animation, a white
   frame as a blank frame) and still asks for a review of legibility, safe zones and sync.
   [The prompt's guard clauses](../21-ai-review.md#the-prompts-guard-clauses) explains each clause.
-- The style constants, `effective_canvas` and the GPU gate are compared with `mcp/server.py` by
-  executing its copy.
+- The API and the MCP server use the same style rules: each of `pipeline.py`'s style names is the
+  object `tubematic_core.visual_styles` holds, and `mcp/server.py` imports the same names from it.
+  The GPU gate passes only `working` and gives `unknown` its own message.
+- `GET /visual-styles` lists `auto` and every [style pack](../10-scene-authoring.md#style-packs),
+  says why a style is unavailable on the install, and `system_flow` can be chosen with nothing
+  configured.
 
 Trap: a default inherited from the domain is kept and not rewritten when no OpenAI key is stored.
 The approving `PATCH` refuses it, before any spend. An unknown canvas must produce no contract,
@@ -590,6 +594,8 @@ Covers `render_results.py`. The render gateway calls its failure rules when a re
 its re-queue when a restarted renderer sends its first heartbeat. The worker calls the review step
 (`finish_render`) on its review thread and the re-queue from its lease sweep.
 
+- The review step passes a style pack's review text (System Flow's) as `style_block`, and `""` for a
+  style without one.
 - The review step: the [routing](../21-ai-review.md#routing) of each outcome and the
   [fail-open](../21-ai-review.md#fail-open) path. Every outcome writes `videos.gemini_feedback`
   whole and a comment cut with a note, which is what makes a failing reviewer visible. Each review's
@@ -657,6 +663,8 @@ reach the assertions, so the method, path, headers and query string are checked.
   is checked by its wording.
 - `usage` is returned on every path where Gemini answered `200`, including a reply that failed to
   parse, and on no path where it did not.
+- A style pack's own review text replaces the canvas and figure blocks, and with no style text the
+  contract is the same as before for every combination.
 
 Trap: any finding sends the video back for a revision, so a clause removed from the prompt produces
 a finding on every video it covered, and a round can cost a paid re-voice. An illustrated video gets

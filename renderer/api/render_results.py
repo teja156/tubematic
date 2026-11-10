@@ -447,6 +447,10 @@ def finish_render(video_id: str) -> None:
             # against its own look: ink, blur and grading are the style.
             is_cartoon_3d = raw_style == "cartoon_3d" or (
                 (row["resolved_renderer"] if row else "") or "") == "cartoon_3d"
+            # A style whose pack describes its own look (System Flow) is judged
+            # against that description instead of the canvas blocks.
+            style_pack = pipeline.tvs.pack(raw_style)
+            style_block = (style_pack or {}).get("review", "")
 
         over_cap = new_count > max_review_loops
 
@@ -474,7 +478,8 @@ def finish_render(video_id: str) -> None:
                                                 canvas=canvas,
                                                 figures=has_figures,
                                                 line_art=has_line_art,
-                                                cartoon_3d=is_cartoon_3d)
+                                                cartoon_3d=is_cartoon_3d,
+                                                style_block=style_block)
         # Every paid review is recorded — a second loop costs a second row, and
         # a reply that failed to parse was still billed (TMDEV-107).
         review_usage = result_review.get("usage")

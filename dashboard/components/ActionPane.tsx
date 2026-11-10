@@ -13,6 +13,7 @@ import {
   pickedAgent, resolvedModel, topicApprovalPayload,
 } from "@/lib/agents";
 import { styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { MascotPicker } from "@/components/MascotPicker";
 import { approvalMascot, showMascotPicker } from "@/lib/mascots";
 
@@ -68,6 +69,7 @@ function ActionMeta({ video, scriptProfiles = [], agents = [] }: {
   scriptProfiles?: ScriptProfile[];
   agents?: Agent[];
 }) {
+  const visualStyles = useVisualStyles();
   const agent = effectiveAgent(video, agents);
   const accent = STATUS_ACCENT[video.status] ?? "var(--amber)";
   const label = STATUS_LABEL[video.status] ?? video.status;
@@ -105,7 +107,7 @@ function ActionMeta({ video, scriptProfiles = [], agents = [] }: {
             </>
           )}
           {" · "}
-          {videoStyleLabel(video)}
+          {videoStyleLabel(video, visualStyles)}
         </span>
       )}
     </div>
@@ -143,6 +145,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
   onAction: ActionPaneProps["onAction"];
   onOpenModal: ActionPaneProps["onOpenModal"];
 }) {
+  const visualStyles = useVisualStyles();
   // null = untouched: the shown voice is recomputed every render, so it follows
   // /settings when that answers after this row mounted (see lib/voices.ts).
   const [pickedVoice, setPickedVoice] = useState<string | null>(null);
@@ -405,7 +408,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
               maxWidth: 150,
             }}
           >
-            {styleOptions(illustratedAvailable, gpu).map((o) => (
+            {styleOptions(visualStyles, illustratedAvailable, gpu, selectedStyle).map((o) => (
               <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
             ))}
           </select>

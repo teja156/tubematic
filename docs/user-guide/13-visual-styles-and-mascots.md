@@ -19,9 +19,10 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Motion Graphics** | A dark canvas. Generated images with slow camera moves, and animated diagrams. No drawn figures | Nothing |
 | **Stick Explainer** | A white canvas. Black hand-drawn line art, with stick figures for roles such as "the user" or "an attacker" | Nothing |
 | **Illustrated** | Generated cartoon or rendered characters that stay the same from scene to scene | An OpenAI key |
+| **System Flow** | A dark canvas with one diagram per subject. Components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors while the narration explains each step. No people and no images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 
-A named style sets the canvas and how people are drawn. It does not limit what a scene can show. A Stick
+Motion Graphics, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
 Explainer video still draws a process as a diagram, and still shows a generated image for a real
 place or person, inside a panel on the white canvas.
 
@@ -37,12 +38,16 @@ background would flash, and a viewer reads that as a broken render.
   an attacker tries, what a scientist measures.
 - Choose **Illustrated** when the video follows the same characters through several scenes. Each new
   pose is one more OpenAI image call, so this style costs more per video than the two above.
+- Choose **System Flow** for how a system works: a request crossing a network, the steps of a
+  protocol, a data pipeline, where an attack is stopped. The script is written as a walk through
+  the system, one component and one step at a time.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
 
 ### What Auto does
 
-Auto does not pick one of the named styles. The agent makes two choices for the whole video, then
-decides how to draw each part of the script.
+Auto does not pick one of the named styles, and it never makes a System Flow video: choose System
+Flow yourself. The agent makes two choices for the whole video, then decides how to draw each part of
+the script.
 
 1. Whether the video is Cartoon 3D. The agent chooses it when a place, and people moving through
    it, carry the video. It can choose it only while a GPU is working and the video has no mascot.
@@ -59,6 +64,9 @@ The video's window shows what the agent settled under **Visual style**: Auto wit
 Auto with a light canvas, or Auto with Cartoon 3D. Until the agent has chosen, it reads
 "Auto (not yet chosen)". It does not name Motion Graphics, Stick Explainer or Illustrated, because
 an Auto video is none of them.
+
+A System Flow video has a fixed look, so its pick is the whole decision: the agent lays out the
+diagrams and times them to the narration, but it does not change the canvas or add images.
 
 ### Where you choose
 

@@ -404,6 +404,9 @@ The thresholds are in `mcp/text_audit.py`: an opacity floor of 0.9, a minimum ov
 smaller box's area, five samples per scene, a 45-frame allowance at a scene's start before anything
 counts as settled, the 150/170/60/60 safe zone, and a 180-second timeout.
 
+A System Flow video's one scene changes its diagram at every board, so the audit samples each board
+as if it were a scene, with the same allowance at each board's start.
+
 A Cartoon 3D video skips the audit. Its one scene is a painted canvas with no text rectangles, and
 the composition draws its captions. Its checks are the typecheck and the beat gate in
 `mcp/cartoon.py`.

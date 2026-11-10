@@ -47,8 +47,9 @@ skill also call a style a **register**.
 [Visual Styles and Mascots](../user-guide/13-visual-styles-and-mascots.md#the-styles) shows what each
 style looks like.
 
-A style is a set of permissions: which canvas, and which kinds of figure. It does not decide any
-beat's treatment.
+For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
+does not decide any beat's treatment. `cartoon_3d` and `system_flow` replace the scene system with
+one whole-video scene of their own.
 
 | `visual_style` | Canvas | Figures | Hand-drawn line art | Generated characters |
 |---|---|---|---|---|
@@ -56,18 +57,18 @@ beat's treatment.
 | `motion_graphics` | `dark` | No | No | No |
 | `stick` | `light` | Yes | Yes | No |
 | `illustrated` | The agent chooses | Yes | No | Yes |
+| `system_flow` | `dark` | No | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
-Each exists in `mcp/server.py` and in `renderer/api/pipeline.py`, and an agreement test pins the two
-copies. `dashboard/lib/types.ts` holds a third copy of the style list.
 
 `characters_allowed` gates the `generate_character` tool. `figures_allowed` and `line_art_allowed` go
 into the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses), so the reviewer judges a video
 against the look it was meant to have. `cartoon_3d` replaces the scene system with one 3D world
-([Cartoon 3D](#cartoon-3d)).
+([Cartoon 3D](#cartoon-3d)), and `system_flow` with one diagram scene ([System Flow](#system-flow)).
 
-The API and `update_video` refuse two styles where they are chosen:
+The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
+chosen. Two styles have a need:
 
 - `illustrated` needs a stored OpenAI key, because an OpenAI image model draws its characters
   (`ILLUSTRATED_NEEDS_OPENAI_KEY`).
@@ -76,7 +77,34 @@ The API and `update_video` refuse two styles where they are chosen:
   minutes for a 90-second Short, so the rule is a policy.
 
 `get_video` reports both conditions to the agent as `illustrated_available` and
-`cartoon_3d_available`.
+`cartoon_3d_available`, and gives the video's own style as `style`: its label, canvas, permissions
+and `authoring_skill`.
+
+### Style packs
+
+Each style except `auto` is a style pack: one JSON file in `tubematic_core/style_packs/`, named for
+the style's id. `tubematic_core/visual_styles.py` loads them at import and refuses a malformed pack,
+so a bad file stops the process at start-up. The MCP server and the API import the same objects
+from it (`VISUAL_STYLES`, `CANVAS_BY_STYLE`, the gates), and the dashboard reads the list from
+[`GET /visual-styles`](05-http-api.md#get-visual-styles). `auto` is code: it is the absence of a
+style.
+
+| Field | Holds |
+|---|---|
+| `id`, `label`, `order`, `experimental` | The style's name in the code and on the dashboard, its place in the pickers, and whether the dashboard marks it experimental |
+| `renderer` | `dom` for the scene system, `cartoon_3d` for the 3D world |
+| `canvas` | The canvas the style fixes, or `null` when the agent chooses it |
+| `allows` | `figures`, `line_art` and `generated_characters`: the three permission columns above |
+| `needs`, `messages` | Whether the style needs an OpenAI key or a working GPU, and the refusal text for each |
+| `authoring_skill` | The skill that authors a video in this style; `get_video` returns it as `style.authoring_skill` |
+| `review` | Optional. The style's own block for the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses) |
+| `captions` | Optional. The `subtitles` settings `write_scene_config` fills in when a config has none |
+| `routing` | What the style suits and avoids, and the signals in a topic or script that point to it |
+| `extra` | Style-specific data, such as System Flow's icon list |
+
+`tubematic_core/tests/test_style_packs.py` pins every gate's answer for each style, `auto`, a blank
+value and an unknown one. Adding a style is a new pack file, the style's renderer work and its
+authoring skill.
 
 ### The canvas
 
@@ -385,6 +413,55 @@ A judge is a separate subagent whose whole prompt is the gate's prompt, so the a
 its own work. The tools are on [The MCP Server](06-mcp-server.md#cartoon-3d-authoring). The render
 runs [in segments](11-rendering-and-review.md#segmented-cartoon-3d-renders). The text-layout audit
 does not run for a Cartoon 3D video.
+
+## System Flow
+
+A System Flow video is one installed scene, `SystemFlow`, that spans the whole video. The agent
+writes no code for it. Its props carry `systemFlow: {boards}`: one diagram per subject, each with
+nodes, edges and events timed to the narration's word frames. The agent writes them with the
+`tubematic-system-flow` skill, whose `reference/contract.md` documents every field and whose
+`reference/example-config.json` is the worked example.
+
+| Event | What the scene draws |
+|---|---|
+| `node` | A line icon in a box fades and scales in, and its label types on |
+| `edge` | A dotted connector draws from the source to the target |
+| `packet` | A point of light travels the connector, or back along it with `reverse` |
+| `focus` | Every other element dims to 0.35 and the node gets a glow |
+| `chip` | A value (an address, a status code) appears beside the connector |
+| `fault` | The node turns red and shakes once |
+
+The renderer's side is `src/scenes/installed/SystemFlow.tsx` with `systemFlow/`:
+
+- `contract.ts` holds the limits and timings.
+- `layout.ts` runs dagre once per board. Each edge's `minlen` pins every node to the row the
+  validator counts, and order constraints keep the listed left-to-right order within a row.
+- `camera.ts` fits what is visible into the diagram band (27% to 69% of the height), between the
+  headline and the captions.
+
+The scene paints no CSS gradient, no SVG filter and no `stroke-dasharray`, and it places its camera
+as an SVG transform attribute: in software GL each of those multiplied the render cost, which is
+measured in `SystemFlow.tsx`'s header comment.
+
+`mcp/system_flow.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `system_flow` video has anything but the one `SystemFlow` scene, from frame 0 for
+  `totalFrames`, or another style uses `SystemFlow`.
+- A board after the first does not start within 2 frames of a word, or lasts under 2 seconds.
+- A board has more than 9 nodes, more than 3 in a row, or more than 3 rows; or its graph has a
+  cycle or a node that is not connected.
+- A label does not fit 2 lines of 14 characters, or an icon is not in the pack's list.
+- An event falls outside its board, comes in an order the scene cannot draw (an edge before its
+  source has landed, a packet before its edge has drawn), or starts too late to be drawn and read
+  (a node's label included) before the board fades out at its cut.
+- A chip or a focus comes so soon after the previous one that it replaces it before it is seen, or
+  a node faults twice.
+- Nothing changes for more than 3.5 seconds, measured at the narration's frame rate.
+
+The limits make a full board readable: at the pull-back to a whole board of three rows of three,
+labels stay at 40 px or more. `mcp/tests/test_system_flow.py` pins `system_flow.py` to `contract.ts`.
+When the config has no `subtitles`, the pack's `captions` fill it. The text-layout audit samples
+each board as if it were a scene.
 
 ---
 

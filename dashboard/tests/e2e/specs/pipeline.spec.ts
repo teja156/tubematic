@@ -487,6 +487,28 @@ test.describe("Pipeline board", () => {
       expect((await getVideo(video.id)).visual_style).toBe("stick");
     });
 
+    test("the picker offers the styles the API serves, System Flow included, and approving with it persists", async ({ page }) => {
+      // The list comes from GET /visual-styles (the style packs), not from a
+      // copy in the dashboard: a new pack must appear here with no dashboard edit.
+      const res = await fetch(`${BASE}/visual-styles`, { headers: { ...API_AUTH } });
+      const served = (await res.json()).styles.map((s: { id: string }) => s.id);
+      expect(served).toContain("system_flow");
+
+      const video = await createVideo({ topic: `[${uid}] System Flow pick` });
+      await page.goto("/");
+      const actionCard = page.getByTestId(`action-card-${video.id}`);
+      await expect(actionCard).toBeVisible({ timeout: 10_000 });
+      const styleSelect = actionCard.getByTestId(`style-select-${video.id}`);
+      await expect(styleSelect.locator('option[value="system_flow"]')).toHaveText("System Flow", { timeout: 10_000 });
+      expect(await styleSelect.locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value)))
+        .toEqual(served);
+
+      await styleSelect.selectOption("system_flow");
+      await actionCard.getByRole("button", { name: "Approve" }).click();
+      await expect(actionCard).not.toBeVisible({ timeout: 5_000 });
+      expect((await getVideo(video.id)).visual_style).toBe("system_flow");
+    });
+
     test("Illustrated is disabled and refused with no OpenAI key, and offered once one is stored", async ({ page }) => {
       // The test stack supplies no OpenAI key, so this starts in the no-key
       // state an install without one is in. Cleared explicitly anyway, and

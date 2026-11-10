@@ -1,13 +1,16 @@
 /**
- * Tests for the Illustrated-style availability helpers in lib/visualStyles.
+ * Tests for the visual-style helpers in lib/visualStyles.
  *
- * The Illustrated style's characters can only be drawn by OpenAI (the one
- * provider with transparent output), so with no key stored the API refuses it.
- * The dashboard reads that from GET /settings, which masks every secret to ""
- * when unset — so set-versus-unset is readable without seeing the key.
+ * The list comes from the style packs (GET /visual-styles); PACK_STYLES is
+ * built from the real pack files. A style that needs an OpenAI key (Illustrated
+ * draws its characters with OpenAI, the one provider with transparent output)
+ * or a working GPU (Cartoon 3D) is disabled, with the reason, when the install
+ * cannot make it. GET /settings masks every secret to "" when unset, so
+ * set-versus-unset is readable without seeing the key.
  */
 import { describe, expect, it } from "vitest";
-import { cartoon3dAvailable, illustratedAvailable, styleOptions, videoStyleLabel, VISUAL_STYLE_OPTIONS } from "@/lib/visualStyles";
+import { cartoon3dAvailable, illustratedAvailable, styleLabel, styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { PACK_STYLES } from "./packStyles";
 
 describe("illustratedAvailable", () => {
   it("is false when the masked key is empty or missing", () => {
@@ -26,15 +29,31 @@ describe("illustratedAvailable", () => {
 });
 
 describe("styleOptions", () => {
-  it("disables only Illustrated, and says why, when it is unavailable", () => {
-    const opts = styleOptions(false);
-    expect(opts.map((o) => o.value)).toEqual(VISUAL_STYLE_OPTIONS.map((o) => o.value));
+  it("offers every style, Auto first, in pack order", () => {
+    const values = styleOptions(PACK_STYLES, true).map((o) => o.value);
+    expect(values[0]).toBe("auto");
+    expect(values).toEqual(PACK_STYLES.map((s) => s.id));
+    expect(values).toEqual(expect.arrayContaining(["motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow"]));
+  });
+
+  it("disables only the styles that need an OpenAI key, and says why, without one", () => {
+    const opts = styleOptions(PACK_STYLES, false);
     expect(opts.filter((o) => o.disabled).map((o) => o.value)).toEqual(["illustrated"]);
     expect(opts.find((o) => o.value === "illustrated")!.label).toMatch(/needs an OpenAI key/);
   });
 
-  it("changes nothing when it is available", () => {
-    expect(styleOptions(true)).toEqual(VISUAL_STYLE_OPTIONS.map((o) => ({ ...o, disabled: false })));
+  it("changes nothing when everything is available", () => {
+    expect(styleOptions(PACK_STYLES, true, { status: "working" }).every((o) => !o.disabled)).toBe(true);
+  });
+
+  it("marks an experimental style in its label", () => {
+    expect(styleOptions(PACK_STYLES, true).find((o) => o.value === "cartoon_3d")!.label).toBe("Cartoon 3D (experimental)");
+    expect(styleOptions(PACK_STYLES, true).find((o) => o.value === "system_flow")!.label).toBe("System Flow");
+  });
+
+  it("offers only the value it holds until the list has loaded", () => {
+    expect(styleOptions(null, true, null, "stick")).toEqual([{ value: "stick", label: "stick", disabled: false }]);
+    expect(styleOptions(null, true, null, "")).toEqual([]);
   });
 });
 
@@ -53,31 +72,45 @@ describe("cartoon3dAvailable", () => {
 });
 
 describe("styleOptions with the GPU status", () => {
-  it("disables Cartoon 3D and says why without a working GPU", () => {
-    const opts = styleOptions(true, { status: "not_usable" });
+  it("disables the GPU-only styles and says why without a working GPU", () => {
+    const opts = styleOptions(PACK_STYLES, true, { status: "not_usable" });
     expect(opts.filter((o) => o.disabled).map((o) => o.value)).toEqual(["cartoon_3d"]);
     expect(opts.find((o) => o.value === "cartoon_3d")!.label).toMatch(/needs a working GPU/);
   });
 
   it("tells an untested GPU apart from a missing one", () => {
-    expect(styleOptions(true, { status: "unknown" }).find((o) => o.value === "cartoon_3d")!.label).toMatch(/not tested yet/);
+    expect(styleOptions(PACK_STYLES, true, { status: "unknown" }).find((o) => o.value === "cartoon_3d")!.label).toMatch(/not tested yet/);
   });
 
-  it("leaves Cartoon 3D enabled while the GPU is working or the status is unloaded", () => {
-    expect(styleOptions(true, { status: "working" }).every((o) => !o.disabled)).toBe(true);
-    expect(styleOptions(true, null).every((o) => !o.disabled)).toBe(true);
+  it("leaves GPU styles enabled while the GPU is working or the status is unloaded", () => {
+    expect(styleOptions(PACK_STYLES, true, { status: "working" }).every((o) => !o.disabled)).toBe(true);
+    expect(styleOptions(PACK_STYLES, true, null).every((o) => !o.disabled)).toBe(true);
   });
 
   it("disables both when neither an OpenAI key nor a GPU is there", () => {
-    expect(styleOptions(false, { status: "not_configured" }).filter((o) => o.disabled).map((o) => o.value))
+    expect(styleOptions(PACK_STYLES, false, { status: "not_configured" }).filter((o) => o.disabled).map((o) => o.value))
       .toEqual(["illustrated", "cartoon_3d"]);
+  });
+});
+
+describe("styleLabel", () => {
+  it("names a style by its pack label", () => {
+    expect(styleLabel("stick", PACK_STYLES)).toBe("Stick Explainer");
+    expect(styleLabel("system_flow", PACK_STYLES)).toBe("System Flow");
+    expect(styleLabel("", PACK_STYLES)).toBe("Auto");
+  });
+
+  it("shows a value it does not know as itself", () => {
+    expect(styleLabel("from_a_newer_backend", PACK_STYLES)).toBe("from_a_newer_backend");
+    expect(styleLabel("stick", null)).toBe("stick");
   });
 });
 
 describe("videoStyleLabel with a resolved renderer", () => {
   it("names the world auto settled on before any canvas", () => {
-    expect(videoStyleLabel({ visual_style: "auto", resolved_visual_style: "", resolved_renderer: "cartoon_3d" })).toBe("Auto — Cartoon 3D (experimental)");
-    expect(videoStyleLabel({ visual_style: "auto", resolved_visual_style: "dark", resolved_renderer: "dom" })).toBe("Auto — dark canvas");
-    expect(videoStyleLabel({ visual_style: "cartoon_3d", resolved_visual_style: "", resolved_renderer: "" })).toBe("Cartoon 3D (experimental)");
+    expect(videoStyleLabel({ visual_style: "auto", resolved_visual_style: "", resolved_renderer: "cartoon_3d" }, PACK_STYLES)).toBe("Auto — Cartoon 3D (experimental)");
+    expect(videoStyleLabel({ visual_style: "auto", resolved_visual_style: "dark", resolved_renderer: "dom" }, PACK_STYLES)).toBe("Auto — dark canvas");
+    expect(videoStyleLabel({ visual_style: "cartoon_3d", resolved_visual_style: "", resolved_renderer: "" }, PACK_STYLES)).toBe("Cartoon 3D (experimental)");
+    expect(videoStyleLabel({ visual_style: "system_flow", resolved_visual_style: "", resolved_renderer: "" }, PACK_STYLES)).toBe("System Flow");
   });
 });

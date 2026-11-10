@@ -316,7 +316,7 @@ visually rich topic ends up as abstract vector art.
 
 ### First read the video's visual register
 
-`get_video`'s `visual_style` is `"motion_graphics"`, `"stick"` or `"auto"`. It is chosen by a human
+`get_video`'s `visual_style` is `"auto"` or one of the styles in the table below. It is chosen by a human
 at the topic checkpoint and frozen there, which is precisely so that it is knowable *here* —
 changing it after the script exists invalidates every brief below and means a rewrite, not a
 re-render.
@@ -331,6 +331,15 @@ purpose:
 | `motion_graphics` | a diagrammatic brief, or a photographic one if the beat genuinely needs a person shown |
 | `stick`, `illustrated`, `auto` | a **pose** brief — what the figure is doing and feeling |
 | `cartoon_3d` | a **scene** brief — where this happens, who is there and what they do, what thing is on screen. The video is one 3D world with people walking through it, so every beat's brief names a place and an action, never a diagram |
+| `system_flow` | a **component** brief — which components are on screen, what travels between them, and the one value worth showing (a port, a latency, `200 OK`). The video is a diagram throughout, so a role ("the user", "an attacker") is a component with an icon, never a figure |
+
+**Under `"system_flow"` the narration is the diagram's script.** Write it as a walk through a
+system: name each component the moment it matters, one step per sentence, in the order things
+travel, and say the reply's path back when there is one. Keep each subject to about nine
+components; when the subject changes (from the request to the defence, say), start a new sentence,
+because the diagram cuts to a new board there. Name the values a viewer should see (an address, a
+status code, a port), since each becomes a label on the connector. Never write a beat that needs a
+person, a place or a photograph: this style has none.
 
 Note what this does *not* depend on: the canvas. Under `"auto"` the canvas is chosen later, after
 voicing, and a figure works on either — black line art on light, white on dark. So a pose brief is
@@ -343,8 +352,10 @@ A pose brief names the action and the emotion, not the photography:
 will be built as one.
 
 Everything else in this step is identical in both registers. In particular a **specific, named**
-person, creature or place is a photographic brief under every register — the stick branch is for
-generic roles only.
+person, creature or place is a photographic brief under every scene register — the stick branch is
+for generic roles only. `system_flow` is the exception: it has no photographs, so a named person or
+place there is a labelled component (`"Alice's laptop"` as a `user` or `phone` node), and the
+narration names it.
 
 ### The treatment follows the beat's subject, not the writer's habit
 

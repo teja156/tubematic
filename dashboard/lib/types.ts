@@ -18,11 +18,23 @@ export type VideoStatus =
 
 export type Strategy = "curriculum" | "trending" | "mining" | "manual";
 export type ProjectStatus = "active" | "paused";
-/** Which visual register a video is produced in. "auto" means the agent picks
- *  one, video-wide, at scene-config time and records it in
- *  resolved_visual_style. Keep in sync: mcp/server.py and
- *  renderer/api/pipeline.py's VISUAL_STYLES. */
-export type VisualStyle = "auto" | "motion_graphics" | "stick" | "illustrated" | "cartoon_3d";
+/** Which visual style a video is produced in: "auto" (the agent picks) or the
+ *  id of a style pack. The list is data (tubematic_core/style_packs/), served
+ *  by GET /visual-styles, so this is a plain string. */
+export type VisualStyle = string;
+
+/** One row of GET /visual-styles. `available` and `unavailable_reason` are the
+ *  API's answer when the list was fetched; pickers recompute availability from
+ *  `needs` against the settings and GPU status each page loads fresh. */
+export interface VisualStyleInfo {
+  id: string;
+  label: string;
+  experimental: boolean;
+  canvas: "dark" | "light" | null;
+  needs: { openai_key: boolean; gpu: boolean };
+  available?: boolean;
+  unavailable_reason?: string;
+}
 /** Which renderer `auto` settled on (videos.resolved_renderer): "" until the agent chose. */
 export type ResolvedRenderer = "" | "dom" | "cartoon_3d";
 export type CommentAuthor = "human" | "agent";

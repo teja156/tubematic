@@ -1,0 +1,237 @@
+{
+ "totalFrames": 536,
+ "fps": 30,
+ "audioDurationSeconds": 17.867,
+ "words": [
+  {
+   "word": "Your",
+   "startFrame": 6,
+   "endFrame": 15
+  },
+  {
+   "word": "browser",
+   "startFrame": 16,
+   "endFrame": 29
+  },
+  {
+   "word": "asks",
+   "startFrame": 30,
+   "endFrame": 39
+  },
+  {
+   "word": "DNS",
+   "startFrame": 40,
+   "endFrame": 48
+  },
+  {
+   "word": "for",
+   "startFrame": 49,
+   "endFrame": 57
+  },
+  {
+   "word": "the",
+   "startFrame": 58,
+   "endFrame": 66
+  },
+  {
+   "word": "address",
+   "startFrame": 67,
+   "endFrame": 80
+  },
+  {
+   "word": "of",
+   "startFrame": 81,
+   "endFrame": 88
+  },
+  {
+   "word": "the",
+   "startFrame": 89,
+   "endFrame": 97
+  },
+  {
+   "word": "site.",
+   "startFrame": 98,
+   "endFrame": 109
+  },
+  {
+   "word": "A",
+   "startFrame": 110,
+   "endFrame": 116
+  },
+  {
+   "word": "load",
+   "startFrame": 117,
+   "endFrame": 126
+  },
+  {
+   "word": "balancer",
+   "startFrame": 127,
+   "endFrame": 141
+  },
+  {
+   "word": "then",
+   "startFrame": 142,
+   "endFrame": 151
+  },
+  {
+   "word": "picks",
+   "startFrame": 152,
+   "endFrame": 163
+  },
+  {
+   "word": "one",
+   "startFrame": 164,
+   "endFrame": 172
+  },
+  {
+   "word": "of",
+   "startFrame": 173,
+   "endFrame": 180
+  },
+  {
+   "word": "two",
+   "startFrame": 181,
+   "endFrame": 189
+  },
+  {
+   "word": "web",
+   "startFrame": 190,
+   "endFrame": 198
+  },
+  {
+   "word": "servers",
+   "startFrame": 199,
+   "endFrame": 212
+  },
+  {
+   "word": "to",
+   "startFrame": 213,
+   "endFrame": 220
+  },
+  {
+   "word": "answer,",
+   "startFrame": 221,
+   "endFrame": 234
+  },
+  {
+   "word": "and",
+   "startFrame": 235,
+   "endFrame": 243
+  },
+  {
+   "word": "the",
+   "startFrame": 244,
+   "endFrame": 252
+  },
+  {
+   "word": "page",
+   "startFrame": 253,
+   "endFrame": 262
+  },
+  {
+   "word": "comes",
+   "startFrame": 263,
+   "endFrame": 274
+  },
+  {
+   "word": "back",
+   "startFrame": 275,
+   "endFrame": 284
+  },
+  {
+   "word": "to",
+   "startFrame": 285,
+   "endFrame": 292
+  },
+  {
+   "word": "your",
+   "startFrame": 293,
+   "endFrame": 302
+  },
+  {
+   "word": "browser.",
+   "startFrame": 303,
+   "endFrame": 317
+  },
+  {
+   "word": "Attackers",
+   "startFrame": 326,
+   "endFrame": 341
+  },
+  {
+   "word": "try",
+   "startFrame": 342,
+   "endFrame": 350
+  },
+  {
+   "word": "the",
+   "startFrame": 351,
+   "endFrame": 359
+  },
+  {
+   "word": "same",
+   "startFrame": 360,
+   "endFrame": 369
+  },
+  {
+   "word": "path.",
+   "startFrame": 370,
+   "endFrame": 381
+  },
+  {
+   "word": "The",
+   "startFrame": 382,
+   "endFrame": 390
+  },
+  {
+   "word": "firewall",
+   "startFrame": 391,
+   "endFrame": 405
+  },
+  {
+   "word": "blocks",
+   "startFrame": 406,
+   "endFrame": 418
+  },
+  {
+   "word": "them,",
+   "startFrame": 419,
+   "endFrame": 430
+  },
+  {
+   "word": "and",
+   "startFrame": 431,
+   "endFrame": 439
+  },
+  {
+   "word": "only",
+   "startFrame": 440,
+   "endFrame": 449
+  },
+  {
+   "word": "clean",
+   "startFrame": 450,
+   "endFrame": 461
+  },
+  {
+   "word": "traffic",
+   "startFrame": 462,
+   "endFrame": 475
+  },
+  {
+   "word": "reaches",
+   "startFrame": 476,
+   "endFrame": 489
+  },
+  {
+   "word": "the",
+   "startFrame": 490,
+   "endFrame": 498
+  },
+  {
+   "word": "server.",
+   "startFrame": 499,
+   "endFrame": 512
+  }
+ ]
+}

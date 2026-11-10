@@ -264,6 +264,37 @@ def test_the_review_is_told_the_videos_register(db_path, tmp_path, monkeypatch):
     assert run.call_args.kwargs["cartoon_3d"] is True
 
 
+def test_a_system_flow_video_is_reviewed_against_its_own_look(db_path, tmp_path, monkeypatch):
+    """Style packs (TMDEV-196): the pack's review text reaches the reviewer."""
+    from tubematic_core import visual_styles as tvs
+    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    _seed_video(db_path)
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET visual_style = 'system_flow' WHERE id = 'vid-1'")
+    con.commit()
+    con.close()
+    _scene_config(tmp_path)
+    with _review() as run:
+        render_results.finish_render("vid-1")
+    assert run.call_args.kwargs["style_block"] == tvs.pack("system_flow")["review"]
+    assert run.call_args.kwargs["figures"] is False
+
+
+def test_a_style_without_review_text_passes_none(db_path, tmp_path, monkeypatch):
+    monkeypatch.setenv("GEMINI_REVIEW_ENABLED", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    _seed_video(db_path)
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET visual_style = 'stick' WHERE id = 'vid-1'")
+    con.commit()
+    con.close()
+    _scene_config(tmp_path)
+    with _review() as run:
+        render_results.finish_render("vid-1")
+    assert run.call_args.kwargs["style_block"] == ""
+
+
 # ── Feedback storage vs comment truncation ────────────────────────────────────
 
 def _long_review(n_chars: int = 12000) -> str:

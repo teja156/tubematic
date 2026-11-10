@@ -48,6 +48,8 @@ from pathlib import Path
 from tubematic_core import jobfiles as tjobs
 from tubematic_core import mascots as tmascots
 
+import system_flow  # board windows for the whole-video System Flow scene (TMDEV-196)
+
 # ── Tunables ────────────────────────────────────────────────────────────────
 
 # Frames to skip at a scene's start before its content is considered settled.
@@ -182,6 +184,22 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
 
     for index, scene in enumerate(scenes):
         if int(scene.get("durationInFrames", 0)) <= 0:
+            continue
+        # A System Flow scene spans the whole video and changes its diagram at
+        # every board, so it is sampled per board, as if each were a scene;
+        # five samples across the whole video would skip most boards.
+        boards = system_flow.board_windows(scene_config) if system_flow.is_system_flow_scene(scene) else []
+        if boards:
+            for b_start, b_end in boards:
+                first = b_start + ENTRANCE_ALLOWANCE_FRAMES
+                last = b_end - 1 - system_flow.TIMING["boardFade"]
+                if first > last:
+                    first = last = b_start + max(0, (b_end - b_start) // 2)
+                span = last - first
+                count = min(SAMPLES_PER_SCENE, span + 1)
+                step = max(1, span // max(1, count - 1))
+                passes.append({"scene": index, "first": first, "step": step,
+                               "count": min(count, span // step + 1)})
             continue
         window_start, window_end, degenerate = settled_window(scenes, index)
         span = window_end - window_start

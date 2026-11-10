@@ -622,6 +622,18 @@ Trap: The launch form has no free-text field, so the written list is the set of 
 install from it. A string sort or a listed prerelease is a defect no other check sees before a
 session launches.
 
+### `test_system_flow_skill.py`
+
+Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md#system-flow)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes by `style.authoring_skill`.
+- The icon list and the limits the skill states are the ones `mcp/system_flow.py` enforces.
+- The reference files ship, and the uninstaller removes the skill.
+
+Trap: a skill that teaches a value the validator refuses teaches the agent to be refused on every
+video. Change a limit in `system_flow.py` and the skill text together.
+
 ### `test_tubematic_remote_renderer.py`
 
 Covers `scripts/tubematic_remote_renderer.py`, the stdlib-only script that installs, upgrades,

@@ -692,3 +692,28 @@ def test_resolved_renderer_needs_the_gpu_too_and_only_auto_resolves(db):
     _video("vid_r4")
     assert "error" not in server.update_video("vid_r4", resolved_renderer="dom")
     assert server.get_video("vid_r4")["resolved_renderer"] == "dom"
+
+
+def test_the_mcp_server_uses_the_shared_style_rules():
+    """Style packs (TMDEV-196): the MCP server imports the style list and its
+    gates from tubematic_core.visual_styles instead of carrying a copy, so the
+    agent and the dashboard cannot disagree about what a style allows."""
+    from tubematic_core import visual_styles as tvs
+    for name in ("VISUAL_STYLES", "CANVAS_BY_STYLE", "RENDERERS", "effective_canvas", "figures_allowed",
+                 "line_art_allowed", "characters_allowed", "cartoon_3d_gpu_error", "gpu_probe_status",
+                 "ILLUSTRATED_NEEDS_OPENAI_KEY", "CARTOON3D_NEEDS_GPU", "CARTOON3D_GPU_UNKNOWN"):
+        assert getattr(server, name) is getattr(tvs, name), name
+
+
+def test_get_video_names_the_skill_that_authors_the_style(db):
+    vid = _video()
+    assert server.get_video(vid)["style"]["authoring_skill"] == "tubematic-scene-config"
+    assert server.update_video(vid, visual_style="system_flow").get("error") is None
+    style = server.get_video(vid)["style"]
+    assert style["authoring_skill"] == "tubematic-system-flow"
+    assert style["canvas"] == "dark" and style["allows"]["figures"] is False
+
+
+def test_the_pipeline_status_lists_every_style(db):
+    rows = server.get_pipeline_status()["visual_styles"]
+    assert [r["id"] for r in rows] == list(server.VISUAL_STYLES)

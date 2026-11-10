@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import type { GpuStatus, Mascot, Project, ProjectStatus, ScriptProfile, Voice } from "@/lib/types";
 import { mascotGate, mascotGateNote, mascotOptions } from "@/lib/mascots";
 import { voiceLabel } from "@/lib/voices";
-import { illustratedAvailable, styleLabel, styleOptions } from "@/lib/visualStyles";
+import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
 import { codePoints } from "@/lib/utils";
 import { SectionLabel } from "@/components/SectionLabel";
 import { MiningSources } from "@/components/MiningSources";
+import { useVisualStyles } from "@/components/VisualStylesProvider";
 
 const ALL_MODES: Array<{ key: string; label: string; accent: string; desc: string }> = [
   { key: "curriculum", label: "Curriculum",  accent: "var(--indigo)", desc: "Enumerate sub-topics from seed domains" },
@@ -236,6 +237,7 @@ function DomainRow({
   profiles: ScriptProfile[];
   mascots: Mascot[];
 }) {
+  const visualStyles = useVisualStyles();
   const isPaused = project.status === "paused";
   const isExpired = project.expired === true;
   const accent = project.is_curriculum_seed ? "var(--indigo)" : "var(--dim)";
@@ -305,7 +307,7 @@ function DomainRow({
           }}
         >
           <option value="">No style</option>
-          {styleOptions(canIllustrate, gpu).map((o) => (
+          {styleOptions(visualStyles, canIllustrate, gpu, project.default_visual_style ?? "").map((o) => (
             <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
           ))}
         </select>
@@ -450,6 +452,7 @@ function DomainRow({
 function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots }: {
   onAdded: () => void; canIllustrate: boolean; gpu: GpuStatus | null; voices: Voice[]; profiles: ScriptProfile[]; mascots: Mascot[];
 }) {
+  const visualStyles = useVisualStyles();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isSeed, setIsSeed] = useState(true);
@@ -605,7 +608,7 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots 
             style={{ fontFamily: "var(--mono)", fontSize: 11, padding: "6px 8px", background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--border-2)" }}
           >
             <option value="">No preference</option>
-            {styleOptions(canIllustrate, gpu).map((o) => (
+            {styleOptions(visualStyles, canIllustrate, gpu, defaultStyle).map((o) => (
               <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
             ))}
           </select>
