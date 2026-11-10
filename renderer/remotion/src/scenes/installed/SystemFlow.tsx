@@ -233,7 +233,7 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
         const t0 = enter[n.id];
         if (t0 === undefined || frame < t0) return null;
         // Type on at about 15 characters a second, starting as the box lands.
-        let budget = Math.floor(Math.max(0, frame - t0 - 6) / 2);
+        let budget = Math.floor(Math.max(0, frame - t0 - TIMING.labelTypeDelay) / TIMING.labelTypeFrames);
         return (
           <div
             key={`l-${n.id}`}

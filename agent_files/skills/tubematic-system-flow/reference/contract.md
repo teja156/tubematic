@@ -43,8 +43,10 @@ it); at most 3 rows and 3 nodes per row. Within a row, the listed order is the l
 
 `tone` is one of `structure` (default), `relation`, `ok`, `fault`.
 
-Every board but the last fades out over its final 6 frames. Each event must leave room before that
-fade: `node` 31 frames, `edge` 30, `chip` 30, `packet` 20, `focus` and `fault` 15.
+Every board but the last fades out over its final 6 frames; the last board ends on its final frame.
+Each event must leave room before that: `node` 31 frames, or 6 + 2 per label character + 15 when that
+is longer (the label types on), `edge` 30, `chip` 30, `packet` 20, `focus` and `fault` 15. Chips are
+at least 30 frames apart and focuses at least 15, because each replaces the one before.
 
 Between the board's start, its events and its end, no gap may exceed 3.5 seconds.
 

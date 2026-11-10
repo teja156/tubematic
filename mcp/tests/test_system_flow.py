@@ -263,7 +263,7 @@ def test_a_system_flow_scene_of_another_type_is_refused():
 
 
 @pytest.mark.parametrize("event, fragment", [
-    ({"type": "node", "node": "web2", "at": 310}, "node event at 310 needs 31 frames"),
+    ({"type": "node", "node": "web2", "at": 310}, "node event at 310 needs 45 frames"),
     ({"type": "edge", "edge": "lb>web2", "at": 300}, "edge event at 300 needs 30 frames"),
     ({"type": "chip", "edge": "lb>web2", "at": 300, "text": "200 OK"}, "chip event at 300 needs 30 frames"),
 ])
@@ -293,7 +293,36 @@ def test_the_stillness_rule_uses_the_narrations_fps_not_the_configs(make_video):
 
 
 def test_the_last_board_has_no_fade_out():
-    """Nothing follows the last board, so an event may run to the final frame."""
+    """Nothing follows the last board, so an event may run to its final frame (535)."""
     def late(b):
-        b[1]["events"].append({"type": "focus", "node": "server", "at": 536 - 15})
+        b[1]["events"].append({"type": "focus", "node": "server", "at": 535 - 15})
     assert _check(_with(late)) == []
+
+
+def test_a_node_needs_time_for_its_label_to_type_on():
+    """A 28-character label types for 62 frames; the node must enter early
+    enough for the whole name to appear before the board fades."""
+    def long_label(b):
+        b[0]["nodes"][4]["label"] = "Primary Region Web Server"  # web2, 24 characters on 2 lines
+        for e in b[0]["events"]:
+            if e.get("node") == "web2" and e["type"] == "node":
+                e["at"] = 275
+    errs = _check(_with(long_label))
+    assert any("node event at 275" in e for e in errs), errs
+
+
+@pytest.mark.parametrize("kind, extra", [
+    ("chip", {"edge": "lb>web2", "text": "x"}),
+    ("focus", {"node": "web2"}),
+])
+def test_a_chip_or_focus_replaced_before_it_can_be_seen_is_refused(kind, extra):
+    def crowd(b):
+        b[0]["events"] += [{"type": kind, "at": 230, **extra}, {"type": kind, "at": 235, **extra}]
+    errs = _check(_with(crowd))
+    assert any(f"{kind} events at 230 and 235" in e for e in errs), errs
+
+
+def test_a_packet_on_the_last_board_must_arrive_by_the_final_frame():
+    errs = _check(_with(lambda b: b[1]["events"].append(
+        {"type": "packet", "edge": "firewall>server", "at": 516, "tone": "ok"})))
+    assert any("packet event at 516" in e for e in errs), errs

@@ -2260,8 +2260,8 @@ def update_video(
     Write it once, when you choose the canvas while authoring the scene config,
     and never again: a revision round must render on the canvas the video
     already uses. Writable only when the style does not already fix a canvas —
-    that is "auto" and "illustrated"; "motion_graphics", "stick" and
-    "cartoon_3d" fix theirs.
+    that is "auto" and "illustrated"; "motion_graphics", "stick",
+    "system_flow" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer you settled on — "dom"
     (the scene components) or "cartoon_3d" (one Cartoon 3D world, written as

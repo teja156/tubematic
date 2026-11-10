@@ -456,8 +456,9 @@ text audit's per-board sampling ([System Flow](../10-scene-authoring.md#system-f
 - `write_scene_config` writes a sound config with the style's captions, refuses a bad one before
   writing anything, refuses `SystemFlow` on another style, other scenes on a System Flow video, and a
   `SystemFlow` entry of any type but `generated`.
-- An event that cannot be drawn and read before its board fades out is refused (the last board has
-  no fade-out), and the
+- An event that cannot be drawn and read before its board fades out is refused, a node's label
+  typing included (the last board has no fade-out and ends on its final frame). Two chips or two
+  focuses too close together are refused. The
   stillness rule counts seconds at the timeline's frame rate, whatever `fps` the config claims.
 - The text audit samples each board.
 

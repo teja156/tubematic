@@ -40,6 +40,10 @@ export const TIMING = {
   edgeAfterSource: 8,
   // The target must have entered by this many frames after its edge starts.
   targetWithin: 30,
+  // A node's label types on this many frames after the node event, then one
+  // character every labelTypeFrames frames (about 15 a second).
+  labelTypeDelay: 6,
+  labelTypeFrames: 2,
 } as const;
 
 export const TONES = ["structure", "relation", "ok", "fault"] as const;

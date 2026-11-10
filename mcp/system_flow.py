@@ -46,6 +46,8 @@ TIMING = {
     "cameraLead": 26,
     "edgeAfterSource": 8,
     "targetWithin": 30,
+    "labelTypeDelay": 6,
+    "labelTypeFrames": 2,
 }
 TONES = ("structure", "relation", "ok", "fault")
 EVENT_TYPES = ("node", "edge", "packet", "focus", "chip", "fault")
@@ -196,8 +198,11 @@ def check(config: dict, fps: int, word_starts: list[int], icons: list[str]) -> l
             err(f"{where} starts at frame {start}, which is not on a word; cut on a word boundary "
                 f"(the nearest word starts at {nearest}).")
         # Every board but the last fades out over its final frames.
-        fade = TIMING["boardFade"] if i + 1 < len(boards) else 0
-        _check_board(board, where, start, end, end - fade, still, icons, err)
+        # The last frame an event can still be seen at full strength: a board
+        # that is not the last fades out over its final frames, and the last
+        # board's final frame is end - 1.
+        visible_until = end - TIMING["boardFade"] if i + 1 < len(boards) else end - 1
+        _check_board(board, where, start, end, visible_until, still, icons, err)
         if len(errs) >= MAX_ERRORS:
             break
     return errs
@@ -206,14 +211,18 @@ def check(config: dict, fps: int, word_starts: list[int], icons: list[str]) -> l
 # How long each event needs, from its frame, to have drawn and been on screen
 # long enough to read before the board starts fading out: an entrance or a
 # chip that finishes only at the cut is never seen whole.
+READ_FRAMES = 15
 _SEEN_FOR = {
-    "node": TIMING["nodeIn"] + 15,
-    "edge": TIMING["edgeDraw"] + 15,
+    "node": TIMING["nodeIn"] + READ_FRAMES,
+    "edge": TIMING["edgeDraw"] + READ_FRAMES,
     "packet": TIMING["packetTravel"],
     "chip": 30,
-    "focus": 15,
-    "fault": 15,
+    "focus": READ_FRAMES,
+    "fault": READ_FRAMES,
 }
+# A chip shows until the next chip, and a focus lasts until the next focus,
+# so the next one must not come before the previous can be seen.
+_MIN_GAP = {"chip": 30, "focus": READ_FRAMES}
 
 
 def _check_board(board: dict, where: str, start: int, end: int, visible_until: int, still: int,
@@ -236,6 +245,7 @@ def _check_board(board: dict, where: str, start: int, end: int, visible_until: i
     if len(nodes) > LIMITS["maxNodesPerBoard"]:
         err(f"{where} has {len(nodes)} nodes; at most {LIMITS['maxNodesPerBoard']}. Split it into two boards.")
     ids: list[str] = []
+    labels: dict[str, int] = {}
     for n in nodes:
         nid = n.get("id") if isinstance(n, dict) else None
         if not isinstance(nid, str) or not _ID.match(nid):
@@ -246,6 +256,8 @@ def _check_board(board: dict, where: str, start: int, end: int, visible_until: i
             continue
         ids.append(nid)
         label = n.get("label")
+        if isinstance(label, str):
+            labels[nid] = len("".join(wrap_label(label)))
         if not isinstance(label, str) or not label.strip():
             err(f"{where}: node {nid!r} needs a label.")
         else:
@@ -300,6 +312,10 @@ def _check_board(board: dict, where: str, start: int, end: int, visible_until: i
         change_points.append(at)
         typed.append(ev)
         need = _SEEN_FOR[ev["type"]]
+        if ev["type"] == "node" and ev.get("node") in labels:
+            # The label types on after the box lands, one character at a time.
+            need = max(need, TIMING["labelTypeDelay"] + TIMING["labelTypeFrames"] * labels[ev["node"]]
+                       + READ_FRAMES)
         if at + need > visible_until:
             err(f"{where}: {ev['type']} event at {at} needs {need} frames to draw and be read, but the "
                 f"board fades out from {visible_until}; start it by {visible_until - need}.")
@@ -358,6 +374,14 @@ def _check_board(board: dict, where: str, start: int, end: int, visible_until: i
                 err(f"{where}: {kind} at {at} names {nid!r}, which is not a node of this board.")
             elif nid in node_at and at < node_at[nid]:
                 err(f"{where}: {kind} on {nid!r} at {at} comes before it enters (at {node_at[nid]}).")
+
+    for kind, gap in _MIN_GAP.items():
+        ats = sorted(ev["at"] for ev in typed if ev["type"] == kind)
+        for a, b in zip(ats, ats[1:]):
+            if b - a < gap:
+                err(f"{where}: {kind} events at {a} and {b} are {b - a} frames apart; the second replaces "
+                    f"the first before it can be seen, so keep them at least {gap} frames apart.")
+                break
 
     change_points.append(end)
     change_points.sort()

@@ -48,8 +48,12 @@ node or event is wrong. Fix every problem it lists, then write again.
   30 frames of the edge starting; a packet or chip waits until its edge has finished drawing (15
   frames); a packet travels 20 frames; focus and fault come after their node has entered.
 - **Seen before the cut:** a board that is not the last fades out over its final 6 frames, and every
-  event must have finished before that, with time to be read: a node 31 frames, an edge 30, a chip
-  30, a packet 20, a focus or fault 15. The tool tells you the latest frame that works.
+  event must have finished before that (on the last board, by its final frame), with time to be
+  read: a node 31 frames, or longer while its label types on (6 frames, then 2 per character, then
+  15), an edge 30, a chip 30, a packet 20, a focus or fault 15. The tool tells you the latest frame
+  that works.
+- **One at a time:** a chip shows until the next chip and a focus lasts until the next focus, so
+  keep chips at least 30 frames apart and focuses at least 15.
 - **Never still:** something new (an event or a cut) at least every 3.5 seconds.
 
 ## Step 0 — read
