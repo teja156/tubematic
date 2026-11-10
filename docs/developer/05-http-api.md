@@ -333,7 +333,7 @@ Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility
 - `id` is not letters, digits, `_` and `-`, starts with `-`, or is longer than 128 characters. The
   id names the video's job directory.
 - `project_id` names no domain, `title` is not a string, or `voice_id` is not on the roster.
-- `visual_style` is not `auto`, `motion_graphics`, `stick`, `illustrated` or `cartoon_3d`.
+- `visual_style` is not `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
 - `visual_style` is `illustrated` and no OpenAI key is stored (the settings row or
   `OPENAI_API_KEY`).
 - `visual_style` is `cartoon_3d` and the install-wide GPU `status` is not `working` (see

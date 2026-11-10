@@ -451,9 +451,10 @@ measured in `SystemFlow.tsx`'s header comment.
 - A board has more than 9 nodes, more than 3 in a row, or more than 3 rows; or its graph has a
   cycle or a node that is not connected.
 - A label does not fit 2 lines of 14 characters, or an icon is not in the pack's list.
-- An event falls outside its board, or comes in an order the scene cannot draw: an edge before its
-  source has landed, a packet before its edge has drawn.
-- Nothing changes for more than 3.5 seconds.
+- An event falls outside its board, comes in an order the scene cannot draw (an edge before its
+  source has landed, a packet before its edge has drawn), or starts too late to finish drawing
+  before the board cuts.
+- Nothing changes for more than 3.5 seconds, measured at the narration's frame rate.
 
 The limits make a full board readable: at the pull-back to a whole board of three rows of three,
 labels stay at 40 px or more. `mcp/tests/test_system_flow.py` pins `system_flow.py` to `contract.ts`.

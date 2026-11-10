@@ -248,3 +248,42 @@ def test_the_text_audit_samples_each_board():
     for p, (start, end) in zip(passes, sf.board_windows(EXAMPLE)):
         assert p["count"] == text_audit.SAMPLES_PER_SCENE
         assert start <= p["first"] and p["first"] + p["step"] * (p["count"] - 1) < end
+
+
+def test_a_system_flow_scene_of_another_type_is_refused():
+    """The renderer loads SystemFlow only as a generated-type entry; any other
+    type would render nothing and still pass the diagram checks."""
+    scenes = copy.deepcopy(EXAMPLE["scenes"])
+    scenes[0]["type"] = "TextReveal"
+    assert "exactly one scene" in sf.check_scene_use("system_flow", scenes)
+    scenes[0]["type"] = "generated"
+    scenes[0]["source"] = "generated"
+    assert "exactly one scene" in sf.check_scene_use("system_flow", scenes)
+    assert "visual_style is system_flow" in sf.check_scene_use("stick", scenes)
+
+
+@pytest.mark.parametrize("event, fragment", [
+    ({"type": "node", "node": "web2", "at": 320}, "node event at 320 needs 16 frames"),
+    ({"type": "edge", "edge": "lb>web2", "at": 315}, "edge event at 315 needs 15 frames"),
+])
+def test_an_entrance_that_cannot_finish_before_the_cut_is_refused(event, fragment):
+    def late(b):
+        b[0]["events"] = [e for e in b[0]["events"] if e.get("node") != event.get("node")
+                          and e.get("edge") != event.get("edge")] + [event]
+    errs = _check(_with(late))
+    assert any(fragment in e for e in errs), errs
+
+
+def test_the_stillness_rule_uses_the_narrations_fps_not_the_configs(make_video):
+    """A config claiming 300 fps would make 3.5 s ten times longer."""
+    vid = make_video("vid_sf6")
+    cfg = copy.deepcopy(EXAMPLE)
+    cfg["fps"] = 300
+    boards = cfg["scenes"][0]["props"]["systemFlow"]["boards"]
+    boards[1]["events"] = [e for e in boards[1]["events"] if e["at"] <= 420 or e["type"] in ("node", "edge")]
+    for e in boards[1]["events"]:
+        if e.get("edge") == "firewall>server" and e["type"] == "edge":
+            e["at"] = 425
+        if e.get("node") == "server":
+            e["at"] = 430
+    assert "nothing changes on screen" in server.write_scene_config(vid, cfg)["error"]

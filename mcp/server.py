@@ -2244,9 +2244,12 @@ def update_video(
     visual_style: which vocabularies this video may draw from — "auto"
     (everything, canvas your choice), "motion_graphics" (dark canvas, animation
     and full-bleed imagery, no figures), "stick" (light canvas, hand-drawn line
-    art, panel-framed imagery) or "illustrated" (characters are generated
+    art, panel-framed imagery), "illustrated" (characters are generated
     illustrated assets; you pick both the drawing style and the canvas from the
-    topic). These are permissions, not looks. Like script_profile_id, a human
+    topic), "system_flow" (the whole video is one diagram scene written as
+    data) or "cartoon_3d" (one 3D world; needs a working GPU).
+    get_pipeline_status's visual_styles lists every style and whether this
+    install can make it. The scene styles are permissions, not looks. Like script_profile_id, a human
     picks it at the topic checkpoint and it is frozen afterwards; set it here
     only from a slash command that creates a video, before flipping it to
     TOPIC_APPROVED. "illustrated" is refused while no OpenAI key is stored
@@ -2830,7 +2833,9 @@ def upsert_project(
         generates no curriculum sub-topics, and create_video refuses to file
         into it. Clearing is_curriculum_seed on a paused domain reactivates it.
     default_visual_style: which visual register this domain's *curriculum*
-        videos start in — "auto", "motion_graphics", "stick" or "illustrated".
+        videos start in — "auto" or any style in get_pipeline_status's
+        visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
+        "cartoon_3d").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -6111,8 +6116,10 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         return {"error": sf_err}
     if (row["visual_style"] or "") == system_flow.STYLE_ID:
         fps, word_starts = _timeline_word_starts(video_id)
-        problems = system_flow.check(config, int(config.get("fps") or fps),
-                                     word_starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"])
+        # The narration's fps, never the config's: the stillness rule is in seconds,
+        # and a config claiming another rate would stretch it.
+        problems = system_flow.check(config, fps, word_starts,
+                                     tvs.pack(system_flow.STYLE_ID)["extra"]["icons"])
         if problems:
             return {"error": "The System Flow diagram has problems: " + " ".join(problems)}
         if "subtitles" not in config:

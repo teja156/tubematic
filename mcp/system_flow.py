@@ -59,8 +59,9 @@ MAX_ERRORS = 12
 
 
 def is_system_flow_scene(scene) -> bool:
-    return (isinstance(scene, dict) and scene.get("src") == SCENE_SRC
-            and scene.get("source") == "installed")
+    """Any scene naming SystemFlow, whatever its type: the use rule must catch
+    a mistyped one too."""
+    return isinstance(scene, dict) and scene.get("src") == SCENE_SRC
 
 
 def wrap_label(label: str) -> list[str]:
@@ -147,7 +148,8 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
                     "video's visual_style is system_flow (chosen at the topic). Build this video's "
                     "scenes from the other components.")
         return ""
-    if len(scenes) != 1 or not uses:
+    if (len(scenes) != 1 or not uses or uses[0].get("type") != "generated"
+            or uses[0].get("source") != "installed"):
         return ("A System Flow video is exactly one scene: {\"type\": \"generated\", \"source\": "
                 "\"installed\", \"src\": \"SystemFlow\", \"startFrame\": 0, \"durationInFrames\": "
                 "<totalFrames>, \"props\": {\"systemFlow\": {...}}}. Put every diagram in its boards.")
@@ -281,6 +283,10 @@ def _check_board(board: dict, where: str, start: int, end: int, still: int, icon
             continue
         change_points.append(at)
         typed.append(ev)
+        done = {"node": TIMING["nodeIn"], "edge": TIMING["edgeDraw"]}.get(ev["type"], 0)
+        if at + done > end:
+            err(f"{where}: {ev['type']} event at {at} needs {done} frames to draw but the board cuts at "
+                f"{end}; start it by {end - done}.")
         if ev["type"] == "node":
             if ev.get("node") not in ids:
                 err(f"{where}: node event at {at} names {ev.get('node')!r}, which is not a node of this board.")

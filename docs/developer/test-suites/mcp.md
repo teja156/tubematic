@@ -454,7 +454,10 @@ text audit's per-board sampling ([System Flow](../10-scene-authoring.md#system-f
   event outside its board, a board not on a word, a disconnected node, and a still stretch over
   3.5 seconds.
 - `write_scene_config` writes a sound config with the style's captions, refuses a bad one before
-  writing anything, refuses `SystemFlow` on another style and other scenes on a System Flow video.
+  writing anything, refuses `SystemFlow` on another style, other scenes on a System Flow video, and a
+  `SystemFlow` entry of any type but `generated`.
+- A node or edge that cannot finish its entrance before the board cuts is refused, and the
+  stillness rule counts seconds at the timeline's frame rate, whatever `fps` the config claims.
 - The text audit samples each board.
 
 Trap: the rows are the validator's promise to the renderer. `layout.ts` pins dagre to them through
