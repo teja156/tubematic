@@ -285,12 +285,12 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
               whiteSpace: "nowrap",
               fontFamily: MONO,
               fontWeight: 500,
-              fontSize: 44 * c.s,
+              fontSize: 40 * c.s,
               color,
               background: CHIP_BG,
               border: `${3 * c.s}px solid ${color}`,
               borderRadius: 10 * c.s,
-              padding: `${6 * c.s}px ${18 * c.s}px`,
+              padding: `${4 * c.s}px ${16 * c.s}px`,
               opacity: op,
             }}
           >

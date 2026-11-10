@@ -28,9 +28,9 @@ CONTRACT_TS = REPO / "renderer/remotion/src/scenes/installed/systemFlow/contract
 ICONS_TS = REPO / "renderer/remotion/src/scenes/installed/systemFlow/icons.ts"
 CASES = json.loads((pathlib.Path(__file__).parent / "fixtures/system_flow_contract.json").read_text())
 EXAMPLE = json.loads((REPO / "agent_files/skills/tubematic-system-flow/reference/example-config.json").read_text())
-# The example's narration: every word's start frame (from its timeline).
-WORD_STARTS = [6, 16, 30, 40, 49, 58, 67, 82, 89, 99, 114, 126, 135, 143, 152, 161, 176, 185, 194, 204, 216,
-               330, 346, 355, 364, 374, 386, 395, 410, 423, 435, 444, 454, 466, 480, 494, 503]
+EXAMPLE_TIMELINE = json.loads((REPO / "agent_files/skills/tubematic-system-flow/reference/example-timeline.json").read_text())
+# The example's narration: every word's start frame.
+WORD_STARTS = [w["startFrame"] for w in EXAMPLE_TIMELINE["words"]]
 ICONS = tvs.pack("system_flow")["extra"]["icons"]
 
 
@@ -111,13 +111,13 @@ def test_a_system_flow_video_is_one_scene():
                 b[0]["events"].append({"type": "node", "node": "cache", "at": 212})), "at most 3 side by side"),
     (lambda b: (b[1]["nodes"].append({"id": "db", "label": "Database", "icon": "database"}),
                 b[1]["edges"].append({"from": "server", "to": "db"}),
-                b[1]["events"].append({"type": "node", "node": "db", "at": 560})), "rows deep"),
+                b[1]["events"].append({"type": "node", "node": "db", "at": 520})), "rows deep"),
     (lambda b: b[1]["edges"].append({"from": "server", "to": "attacker"}), "cycle"),
     (lambda b: b[0]["nodes"][0].update(icon="rocket"), "is not one of"),
     (lambda b: b[0]["nodes"][1].update(label="Recursive DNS Resolver Pool Cache"), "does not fit"),
     (lambda b: b[0]["nodes"][1].update(id="DNS"), "lowercase"),
     (lambda b: b[0]["events"].__setitem__(1, {"type": "edge", "edge": "browser>dns", "at": 14}), "before 'browser' has landed"),
-    (lambda b: b[0]["events"].__setitem__(3, {"type": "packet", "edge": "browser>dns", "at": 45}), "before the edge has finished"),
+    (lambda b: b[0]["events"].__setitem__(3, {"type": "packet", "edge": "browser>dns", "at": 35}), "before the edge has finished"),
     (lambda b: b[0]["events"].append({"type": "focus", "node": "web2", "at": 100}), "before it enters"),
     (lambda b: b[0]["events"].append({"type": "chip", "edge": "lb>web2", "at": 260, "text": "x" * 30}), "chip at 260 text"),
     (lambda b: b[0]["events"].append({"type": "packet", "edge": "lb>web2", "at": 260, "tone": "loud"}), "tone"),
@@ -146,8 +146,12 @@ def test_a_node_that_never_enters_is_refused():
 def test_a_long_still_stretch_is_refused():
     """Nothing new for more than 3.5 s reads as a frozen frame."""
     def thin(b):
-        b[1]["events"] = [e for e in b[1]["events"] if e["at"] < 440 or e["type"] in ("node", "edge")]
-        b[1]["events"] = [e if e.get("node") != "server" else {**e, "at": 470} for e in b[1]["events"]]
+        b[1]["events"] = [e for e in b[1]["events"] if e["at"] <= 420 or e["type"] in ("node", "edge")]
+        for e in b[1]["events"]:
+            if e.get("edge") == "firewall>server" and e["type"] == "edge":
+                e["at"] = 425
+            if e.get("node") == "server":
+                e["at"] = 430  # then nothing from 430 to the end at 536: 106 frames
     errs = _check(_with(thin))
     assert any("nothing changes on screen" in e for e in errs), errs
 
@@ -161,7 +165,7 @@ def test_errors_are_capped_so_the_message_stays_readable():
 
 
 def test_board_windows():
-    assert sf.board_windows(EXAMPLE) == [(0, 330), (330, 600)]
+    assert sf.board_windows(EXAMPLE) == [(0, 326), (326, 536)]
     assert sf.board_windows({"scenes": []}) == []
 
 
@@ -186,8 +190,7 @@ def make_video(tmp_path, monkeypatch):
         if with_timeline:
             d = tmp_path / "jobs" / video_id
             d.mkdir(parents=True, exist_ok=True)
-            words = [{"word": "w", "startFrame": s, "endFrame": s + 5} for s in WORD_STARTS]
-            (d / "timeline.json").write_text(json.dumps({"totalFrames": 600, "fps": 30, "words": words}))
+            (d / "timeline.json").write_text(json.dumps(EXAMPLE_TIMELINE))
         return video_id
 
     return make
@@ -196,7 +199,7 @@ def make_video(tmp_path, monkeypatch):
 def test_a_sound_system_flow_config_is_written_with_the_styles_captions(make_video):
     vid = make_video("vid_sf1")
     cfg = copy.deepcopy(EXAMPLE)
-    del cfg["subtitles"]
+    assert "subtitles" not in cfg  # the skill tells the agent to leave it out
     result = server.write_scene_config(vid, cfg)
     assert "error" not in result, result
     written = json.loads(pathlib.Path(result["path"]).read_text())
@@ -241,7 +244,7 @@ def test_the_text_audit_samples_each_board():
     passes, _ = text_audit.plan_passes(EXAMPLE)
     assert len(passes) == 2
     assert passes[0]["first"] == text_audit.ENTRANCE_ALLOWANCE_FRAMES
-    assert passes[1]["first"] == 330 + text_audit.ENTRANCE_ALLOWANCE_FRAMES
+    assert passes[1]["first"] == 326 + text_audit.ENTRANCE_ALLOWANCE_FRAMES
     for p, (start, end) in zip(passes, sf.board_windows(EXAMPLE)):
         assert p["count"] == text_audit.SAMPLES_PER_SCENE
         assert start <= p["first"] and p["first"] + p["step"] * (p["count"] - 1) < end

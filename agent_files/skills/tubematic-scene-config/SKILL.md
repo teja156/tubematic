@@ -204,14 +204,16 @@ renders. Reference the result the same way as a freshly-authored scene (`source`
 
 ## Visual Registers
 
-`visual_style` on the video is, for four of its five values, a **permission set**, not a look. It
-says which vocabularies you may draw from, and which canvas the video is painted on. It does *not*
-decide any beat's treatment — that still follows the beat's subject, exactly as it always has.
+`visual_style` on the video is `auto` or the id of a style. For the three scene styles
+(`motion_graphics`, `stick`, `illustrated`) it is a **permission set**, not a look. It says which
+vocabularies you may draw from, and which canvas the video is painted on. It does *not* decide any
+beat's treatment — that still follows the beat's subject, exactly as it always has.
 
-The fifth value is different in kind. `cartoon_3d` does not restrict the scene system, it
-**replaces** it: the whole video is one painted 3D world written as code for that video against the renderer's kit, with no scene components
-at all. It is not this skill's work. A video at `cartoon_3d` is authored by the **tubematic-cartoon3d**
-skill; stop here and invoke it.
+Two styles are different in kind: they do not restrict the scene system, they **replace** it.
+`cartoon_3d` is one painted 3D world written as code for that video against the renderer's kit;
+`system_flow` is one diagram scene whose boards, nodes and packets are written as data. Neither is
+this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
+when it is not `tubematic-scene-config`, stop here and invoke that skill.
 
 Read `visual_style` from `get_video`:
 
@@ -221,10 +223,11 @@ Read `visual_style` from `get_video`:
 | `stick` | Light | **Hand-drawn** `StickFigure` line art, line-art diagrams, generated imagery **in panels**. |
 | `illustrated` | **You choose** | Characters are **generated illustrated assets** (`generate_character`) rather than line art. You pick the drawing style *and* the canvas from the topic. |
 | `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
+| `system_flow` | Dark | Nothing here: the whole video is the one `SystemFlow` diagram scene, written as data by the tubematic-system-flow skill. |
 | `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery, **or the Cartoon 3D world**. |
 
-The three named DOM options are restrictions; `cartoon_3d` is another renderer. `auto` is the
-absence of a restriction: **you pick the register, the renderer included.**
+The three named scene styles are restrictions; `cartoon_3d` and `system_flow` are systems of their
+own. `auto` is the absence of a restriction: **you pick the register, the renderer included.**
 
 ### A permission is not an instruction
 
