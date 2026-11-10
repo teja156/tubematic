@@ -56,6 +56,30 @@ _NEEDS = ("openai_key", "gpu")
 _NEED_MESSAGES = {"openai_key": ("openai_key",), "gpu": ("gpu", "gpu_unknown")}
 _ROUTING = ("best_for", "avoid_for", "signals")
 
+# Auto's other outcome besides a pack: keep the mixed scene system, where the
+# agent draws each beat from any vocabulary and settles the canvas at scene
+# time. It is what Auto meant before it could pick packs, the fallback when no
+# pack clearly fits, and the path a video scripted before TMDEV-203 finishes
+# on. Not a pack, so its routing block lives here.
+SCENES = "scenes"
+SCENES_LABEL = "Mixed scenes"
+SCENES_ROUTING = {
+    "best_for": [
+        "topics no style describes better: the beats need different things (a real product as a "
+        "picture, a role acted out, a diagram) and no one treatment carries the whole video",
+    ],
+    "avoid_for": [
+        "a topic that clearly matches one style's best_for: that style is the better video",
+    ],
+    "signals": [
+        "no single style's best_for matches the topic",
+        "the beats split between pictures of real things and drawn explanations",
+    ],
+    "moods": [],
+    "images": 6,
+    "images_per_video": "a few, only where a beat needs a picture",
+}
+
 
 class PackError(ValueError):
     """A style pack that does not match the schema below."""
@@ -75,6 +99,8 @@ def _check_pack(path: pathlib.Path, data) -> dict:
         fail(f"id {data.get('id')!r} must equal the file name {path.stem!r}")
     if data["id"] == AUTO:
         fail('"auto" is not a style and has no pack')
+    if data["id"] == SCENES:
+        fail(f'"{SCENES}" is Auto\'s mixed scene system and cannot be a pack')
     for key in ("label", "authoring_skill"):
         if not isinstance(data.get(key), str) or not data[key].strip():
             fail(f"{key} must be a non-empty string")
@@ -112,6 +138,18 @@ def _check_pack(path: pathlib.Path, data) -> dict:
         val = routing.get(key)
         if not isinstance(val, list) or not all(isinstance(s, str) and s.strip() for s in val):
             fail(f"routing.{key} must be a list of non-empty strings")
+    # Optional, so a pack written before TMDEV-203 still loads. Auto reads
+    # images as a cost tie-break and moods as a tie-break only.
+    if "moods" in routing and not (isinstance(routing["moods"], list)
+                                   and all(isinstance(m, str) and m.strip() for m in routing["moods"])):
+        fail("routing.moods, when present, must be a list of non-empty strings")
+    images = routing.get("images", 0)
+    if not isinstance(images, int) or isinstance(images, bool) or images < 0:
+        fail("routing.images, when present, must be a whole number of generated images, 0 or more")
+    if "images_per_video" in routing and not isinstance(routing["images_per_video"], str):
+        fail("routing.images_per_video, when present, must be a string")
+    if "script" in data and not (isinstance(data["script"], str) and data["script"].strip()):
+        fail("script, when present, must be a non-empty string")
     return data
 
 
@@ -253,6 +291,14 @@ CARTOON3D_NEEDS_GPU = PACKS["cartoon_3d"]["messages"]["gpu"]
 CARTOON3D_GPU_UNKNOWN = PACKS["cartoon_3d"]["messages"]["gpu_unknown"]
 
 
+def _unavailable_reason(p: dict, openai_key_set: bool, gpu_status: str) -> str:
+    if p["needs"]["openai_key"] and not openai_key_set:
+        return "needs an OpenAI key"
+    if p["needs"]["gpu"] and gpu_status != "working":
+        return "GPU not tested yet" if gpu_status == "unknown" else "needs a working GPU"
+    return ""
+
+
 def public_list(openai_key_set: bool, gpu_status: str) -> list[dict]:
     """Every style, "auto" first, as the dashboard shows them: id, label,
     experimental, the canvas a style fixes (None when it does not), what it
@@ -261,11 +307,7 @@ def public_list(openai_key_set: bool, gpu_status: str) -> list[dict]:
     out = [{"id": AUTO, "label": "Auto", "experimental": False, "canvas": None,
             "needs": {k: False for k in _NEEDS}, "available": True, "unavailable_reason": ""}]
     for sid, p in PACKS.items():
-        reason = ""
-        if p["needs"]["openai_key"] and not openai_key_set:
-            reason = "needs an OpenAI key"
-        elif p["needs"]["gpu"] and gpu_status != "working":
-            reason = "GPU not tested yet" if gpu_status == "unknown" else "needs a working GPU"
+        reason = _unavailable_reason(p, openai_key_set, gpu_status)
         out.append({"id": sid, "label": p["label"], "experimental": p["experimental"],
                     "canvas": p["canvas"], "needs": dict(p["needs"]),
                     "available": not reason, "unavailable_reason": reason})
@@ -283,6 +325,52 @@ def agent_view(visual_style: str) -> dict:
         return {"id": chosen, "label": "Auto" if chosen == AUTO else chosen,
                 "renderer": None, "canvas": None,
                 "authoring_skill": "tubematic-scene-config",
-                "allows": {k: True for k in _ALLOWS}}
+                "allows": {k: True for k in _ALLOWS}, "script": ""}
     return {"id": p["id"], "label": p["label"], "renderer": p["renderer"], "canvas": p["canvas"],
-            "authoring_skill": p["authoring_skill"], "allows": dict(p["allows"])}
+            "authoring_skill": p["authoring_skill"], "allows": dict(p["allows"]),
+            "script": p.get("script", "")}
+
+
+# ── Auto's routing (TMDEV-203) ───────────────────────────────────────────────
+
+ROUTE_CHOICES = tuple(PACKS) + (SCENES,)
+
+MASCOT_EXCLUDES_3D = "the video has a mascot, which has no place in a 3D world"
+
+
+def route_label(choice: str) -> str:
+    """The label of a routing outcome: a pack's label, or "Mixed scenes"."""
+    if choice == SCENES:
+        return SCENES_LABEL
+    p = pack(choice)
+    return p["label"] if p else choice
+
+
+def routing_candidates(openai_key_set: bool, gpu_status: str, has_mascot: bool) -> list[dict]:
+    """Every outcome Auto may route a video to, for get_video's style_routing:
+    each pack in pack order, then mixed scenes. Each entry carries the pack's
+    routing block verbatim, its generated-image count and whether this install
+    and this video can have it now, with the reason when not.
+
+    The list is read from the packs, never written out anywhere, so a new pack
+    with a routing block is a candidate the moment it ships. A video with a
+    mascot cannot take a 3D-world style: the mascot is a flat overlay."""
+    out = []
+    for sid, p in PACKS.items():
+        reason = _unavailable_reason(p, openai_key_set, gpu_status)
+        if not reason and has_mascot and p["renderer"] == "cartoon_3d":
+            reason = MASCOT_EXCLUDES_3D
+        routing = {k: (list(v) if isinstance(v, list) else v) for k, v in p["routing"].items()}
+        routing.setdefault("moods", [])
+        routing.setdefault("images", 0)
+        out.append({"id": sid, "label": p["label"], "experimental": p["experimental"],
+                    "authoring_skill": p["authoring_skill"], "routing": routing,
+                    "images": routing["images"], "available": not reason,
+                    "unavailable_reason": reason})
+    out.append({"id": SCENES, "label": SCENES_LABEL, "experimental": False,
+                "authoring_skill": "tubematic-scene-config",
+                "routing": {k: (list(v) if isinstance(v, list) else v)
+                            for k, v in SCENES_ROUTING.items()},
+                "images": SCENES_ROUTING["images"], "available": True,
+                "unavailable_reason": ""})
+    return out
