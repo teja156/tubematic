@@ -294,13 +294,17 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - `mascot`, if present, belongs to a video that has a mascot and passes the cue rules.
 - A Cartoon 3D scene is the only scene, its beats cover the video, and the scene kind agrees with the
   video's renderer ([Scene Authoring](10-scene-authoring.md#cartoon-3d)).
+- A System Flow video has the one `SystemFlow` scene and its diagram passes the System Flow checks;
+  no other video uses `SystemFlow` ([Scene Authoring](10-scene-authoring.md#system-flow)).
 
 The tool refuses the write while another session holds the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
 is queued or rendering (`status_mismatch`).
 
-`canvas` is the only default the tool writes into the file. The components apply the other defaults at
-render time, so a changed default reaches every video whose config omits the key.
+`canvas` is the only default the tool writes into most files. A System Flow config with no `subtitles`
+also gets its style pack's caption settings, because its captions are part of the style's look. The
+components apply the other defaults at render time, so a changed default reaches every video whose
+config omits the key.
 
 [`validate_job`](06-mcp-server.md#validate_job) checks frame-count agreement with the timeline,
 scene-file existence, image paths and types.
@@ -343,7 +347,8 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 ## Installed components
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
-`KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`. The other
+`KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
+`SystemFlow` is referenced the same way, by System Flow videos only. The other
 files are wrappers and helpers that a scene imports. The directory's `README.md` is the catalogue the
 agent reads.
 
@@ -409,6 +414,15 @@ per stage), `highlightStage` (default `0`) and `theme`. It fades in linearly ove
 which would put a dark slab on a light canvas. The light theme draws black line art on a transparent
 background. The component exposes two whole palettes and no single colour prop, because a diagram is
 legible only if its background, both node states and both edge states agree.
+
+### `SystemFlow`
+
+`SystemFlow` draws a whole System Flow video from `props.systemFlow`, with its own canvas, headline
+and camera; its helpers are in `systemFlow/`. It loads its fonts (Barlow, Space Grotesk, JetBrains
+Mono) from `public/fonts/` before the first frame, so a renderer with no internet access draws the
+same picture; the default caption font is unaffected. Its contract, layout, camera and the reasons
+it avoids gradients, filters and dashed strokes are in
+[System Flow](10-scene-authoring.md#system-flow).
 
 ### Figure and panel components
 
@@ -547,3 +561,8 @@ The mascot engine descends from
 license is kept at `public/mascot/kit/LICENSE-ClaudeAnimationBase`). It ships p5.js (LGPL-2.1) and
 p5.brush (MIT), with their licenses beside them in `public/mascot/lib/`. The shipped mascot, Tubi, is
 original. None of the source's own characters are included.
+
+`SystemFlow`'s icons (`systemFlow/icons.ts`) are path data from [Lucide](https://lucide.dev) (ISC
+License; the license is in the file's header). Its fonts in `public/fonts/` are Barlow, Space Grotesk
+and JetBrains Mono, each under the SIL Open Font License 1.1, with the license beside them. Its layout
+uses [@dagrejs/dagre](https://github.com/dagrejs/dagre) (MIT License).

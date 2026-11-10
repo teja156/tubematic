@@ -59,6 +59,7 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `GET` | [`/settings`](#get-settings) | Read every setting, masked |
 | `POST` | [`/settings`](#post-settings) | Write a subset of settings |
 | `POST` | [`/voices/<voice_id>/preview`](#post-voicesvoice_idpreview) | Generate or replay a sample |
+| `GET` | [`/visual-styles`](#get-visual-styles) | Every visual style, and whether this install can make it |
 
 ### Research routes
 
@@ -439,8 +440,8 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 - `agent_effort` must be `low`, `medium`, `high`, `xhigh`, `max` or `""` (the agent's own
   `effort`). The levels are the same for every agent.
 - `script_profile_id` must be a `READY` profile that is not archived, or `""` for none.
-- `visual_style` must be one of the five values. `illustrated` needs a stored OpenAI key and
-  `cartoon_3d` needs a working GPU.
+- `visual_style` must be `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
+  `illustrated` needs a stored OpenAI key and `cartoon_3d` needs a working GPU.
 - `mascot_id` must be a string. A changed value must be a pickable mascot, needs a GPU `status` of
   `working`, and is refused on a video that will be `cartoon_3d`. `""` clears the mascot.
 
@@ -604,7 +605,7 @@ back, or they are reset. An omitted `status` is written as `active`, so clearing
 | `description` | A string of at most 2000 code points. Absent or `null` stores `''` |
 | `is_curriculum_seed` | Read as a boolean, default `false` |
 | `status` | `active` or `paused`. `paused` needs `is_curriculum_seed` |
-| `default_visual_style` | One of the five styles, or `''` for none |
+| `default_visual_style` | `auto`, a style pack id, or `''` for none |
 | `default_voice_id` | A roster voice, or `''` for the install default |
 | `default_script_profile_id` | A `READY` profile that is not archived, or `''` or `null` for none. Any other non-string, such as `false` or `0`, is refused |
 | `default_mascot_id` | `''` (inherit the install default), `none` (no mascot), or a pickable mascot id |
@@ -674,6 +675,14 @@ hit makes no outbound call.
 A generated preview is recorded in the usage ledger with no video, with credits from ElevenLabs'
 `character-cost` header. It appears in the Analytics page's Spend tab. See
 [Voice previews](08-scripting-and-voice.md#voice-previews).
+
+### `GET /visual-styles`
+
+Returns `{"styles": [...]}`: `auto` first, then every [style pack](10-scene-authoring.md#style-packs)
+in its pack order. Each entry has `id`, `label`, `experimental`, `canvas` (the canvas the style fixes,
+or `null`), `needs` (`openai_key`, `gpu`), and `available` with `unavailable_reason` for this install
+now: `needs an OpenAI key`, `needs a working GPU` or `GPU not tested yet`. The dashboard builds its
+style pickers from it. The write routes still refuse an unavailable style themselves.
 
 ## Research
 

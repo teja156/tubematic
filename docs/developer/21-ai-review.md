@@ -94,6 +94,10 @@ The style flags come from `pipeline.py::effective_canvas`, `figures_allowed` and
   art is what that style excludes.
 - `cartoon_3d` (the chosen style, or `videos.resolved_renderer`) replaces the other three.
 
+A [style pack](10-scene-authoring.md#style-packs) may carry its own `review` text, which
+`render_results.py` passes as `style_block`. When it is present it replaces the canvas and figure
+blocks, which describe the scene system's styles. System Flow carries one.
+
 ## The prompt's guard clauses
 
 The prompt is `ai_review.py::_REVIEW_PROMPT`, with the style contract (`_register_block`) and the
@@ -111,6 +115,7 @@ paid re-voice. Each clause below prevents one. Keep them.
 | Discrete motion | Figures hold a pose and change state in a single frame, roughly 2 to 5 times per 10 seconds | A held pose reads as broken animation on every video with figures |
 | Line art | Simple line-art stick figures are the intended style | Flat, unshaded figures are reported as placeholder art |
 | Cartoon 3D | Ink outlines, depth-of-field blur, colour grading, film grain, the vignette, flat cut-out characters and a continuously moving camera are the style. Report only a frozen, black or white frame | Each of those reads as a rendering fault |
+| System Flow (from its pack) | Dimmed parts, dotted connectors with travelling lights, a glow on the active box, a moving camera and no people or images are the style. It still lists what to report | The dimming and missing imagery read as defects against the dark-canvas contract |
 | Two scripts | Where the written and spoken forms differ, audio matching the spoken form is correct. An IPA transcription between slashes is spoken as the sounds it spells | Every working respelling or IPA term is reported as a mispronunciation |
 | Decorative suggestions | A suggestion must critique something in the video. Adding a glow, an icon or a flourish does not count, and an empty list is acceptable | The model pads `suggestions`, and any suggestion costs a revision round |
 

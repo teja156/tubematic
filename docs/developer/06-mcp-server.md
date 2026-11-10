@@ -230,6 +230,9 @@ videos.
 | `illustrated_available` | `true` when an OpenAI key is stored. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
+| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows}`. Under `auto`, `renderer` and `canvas` are `null` and `authoring_skill` is `tubematic-scene-config` |
+
+At `VOICE_READY` the operator skill invokes the skill named in `style.authoring_skill`.
 
 `mascot.version` is the pinned version, or the mascot's current approved version until the first
 scene-config is written.
@@ -587,6 +590,11 @@ It checks:
   `totalFrames`. Its beat sheet (the list of beats, each a frame range) tiles the video in order
   from frame 0 to the last frame with no gap or overlap, because a frame outside every beat is a
   frame no gate judges.
+- A `system_flow` video holds the one installed `SystemFlow` scene, and its diagram passes
+  `mcp/system_flow.py` (boards on word starts, node and row limits, label lengths, icons, an acyclic
+  connected graph, events in a drawable order, no still stretch over 3.5 seconds). No other style may
+  use `SystemFlow`. Its `subtitles` are filled from the style pack when the config has none. The
+  rules are in [System Flow](10-scene-authoring.md#system-flow).
 
 It records two things in the same transaction as the rename of the staged file into place:
 
@@ -806,6 +814,7 @@ voice to −14 LUFS at the video's length (`cartoon-tools/audio/mix.py`, numpy a
 | `agents` | The live agents, each `{id, name, models, effort, is_default, weight}` |
 | `user_preferences` | The operator's standing preferences (`""` when none) |
 | `illustrated_available`, `cartoon_3d_available`, `mascots_available` | The flags `get_video` returns |
+| `visual_styles` | Every visual style, as [`GET /visual-styles`](05-http-api.md#get-visual-styles) returns them |
 | `spend` | This calendar month's (UTC) spend from the usage ledger |
 | `scene_claims` | Every live scene-work claim |
 

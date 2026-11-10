@@ -621,14 +621,26 @@ the install default. `voiceMissing` detects a voice with no roster entry, so the
 
 Covers `lib/visualStyles.ts` ([Visual-style picker](../15-dashboard.md#visual-style-picker)).
 
+- The options are the fetched style list in pack order, `auto` first. A style whose pack needs an
+  OpenAI key or a GPU is disabled with the reason, and an experimental one is labelled.
 - `illustratedAvailable` reads the masked `openai_api_key`, where `""` means unset, so the key
   never reaches the browser.
 - `cartoon3dAvailable` is true only while the GPU probe says working, and `styleOptions` tells an
   untested GPU apart from a missing one.
+- Before the list loads, a picker offers only the value it holds, and a label shows the raw id.
 - `videoStyleLabel` names the world an Auto video settled on.
+
+`packStyles.ts` builds the style list from the real pack files in `tubematic_core/style_packs/`, and
+`vitest.setup.ts` makes `useVisualStyles()` return it in every test, so no test holds its own copy
+of the list.
 
 Trap: settings and GPU status that have not loaded count as available, so the API gives the refusal
 and a page that loads neither does not grey an option out wrongly.
+
+### `visual-styles-provider.test.tsx`
+
+Covers `components/VisualStylesProvider.tsx`: it fetches `GET /visual-styles` once and shares the
+list, and stays `null` when the API fails, so pickers fall back to the value they hold.
 
 ### `mascots-lib.test.ts`
 
