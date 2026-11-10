@@ -385,10 +385,22 @@ STYLE_REASON_MAX_CHARS = 300
 # A video going back to TOPIC_PROPOSED (a topic revision) gives an Auto pick
 # back to Auto: the topic it was decided on is about to change, and the next
 # approval routes it again. A style a person chose (style_pick '') is kept.
+# The scene choices made under the pick go with it.
 AUTO_PICK_RESET_SET = (
     "visual_style = CASE WHEN COALESCE(style_pick, '') != '' THEN 'auto' ELSE visual_style END, "
+    "resolved_renderer = CASE WHEN COALESCE(style_pick, '') != '' THEN '' ELSE resolved_renderer END, "
+    "resolved_visual_style = CASE WHEN COALESCE(style_pick, '') != '' THEN '' "
+    "ELSE resolved_visual_style END, "
     "style_pick = '', style_runner_up = '', style_reason = ''"
 )
+
+# A new style decision (Auto's pick, or a switch to the runner-up) is always
+# followed by a new script, a new voice and new scenes, so the renderer and the
+# canvas recorded for the previous scenes no longer apply. Left in place, a
+# renderer recorded as "cartoon_3d" by an earlier Auto would still send the new
+# style's scenes to the Cartoon 3D renderer, and an old canvas would be forced
+# on a style that leaves the canvas to the agent.
+NEW_STYLE_CLEARS_SET = "resolved_renderer = '', resolved_visual_style = ''"
 
 
 def style_change_clears_pick_set(value_expr: str = "?") -> str:

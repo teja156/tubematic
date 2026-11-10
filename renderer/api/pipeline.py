@@ -3087,9 +3087,10 @@ def create_pipeline_blueprint() -> Blueprint:
             cur = con.execute(
                 "UPDATE videos SET visual_style = ?, style_pick = ?, style_runner_up = ?, "
                 "style_reason = ?, status = 'TOPIC_APPROVED', agent_no_progress_count = 0, "
-                "agent_stuck_at = NULL, updated_at = ? WHERE id = ? AND archived_at IS NULL "
+                "agent_stuck_at = NULL, " + tvs.NEW_STYLE_CLEARS_SET + ", updated_at = ? "
+                "WHERE id = ? AND archived_at IS NULL "
                 "AND status = 'SCRIPT_READY' AND style_pick = ? AND style_runner_up = ? AND NOT "
-                + tmascots.cartoon_mascot_clash_sql(style="?"),
+                + tmascots.cartoon_mascot_clash_sql(style="?", renderer="''"),
                 (new_style, target, pick, reason, now, video_id, pick, target, new_style))
             if cur.rowcount == 0:
                 return jsonify({"error": "The video changed while the request was in flight — "

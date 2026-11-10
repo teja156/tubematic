@@ -294,8 +294,9 @@ It refuses:
   its resolved renderer, and holds a mascot. Both checks are repeated in the `UPDATE`'s `WHERE`.
 
 A move to `TOPIC_PROPOSED` (a topic revision) gives a style `auto` picked back to `auto`, in the
-same `UPDATE`: `visual_style` returns to `auto` and the three `style_*` columns are cleared, so the
-revised topic is routed again after its next approval. A style a person chose is kept.
+same `UPDATE`: `visual_style` returns to `auto`, and the three `style_*` columns and the two
+`resolved_*` columns are cleared, so the revised topic is routed again after its next approval. A
+style a person chose is kept, with its recorded canvas.
 
 ### `update_video`
 
@@ -373,7 +374,8 @@ only write of the style after the topic checkpoint.
 
 - `style` is a candidate id from `style_routing.candidates`. A style pack's id is written into
   `visual_style`, so the script, the gates, the AI review prompt and the authoring skill all read the
-  picked style. `scenes` leaves `visual_style` at `auto`.
+  picked style. `scenes` leaves `visual_style` at `auto`. The same `UPDATE` clears
+  `resolved_renderer` and `resolved_visual_style`, which belong to scenes the new script replaces.
 - `reason` is one sentence of at most 300 characters (`STYLE_REASON_MAX_CHARS`). The dashboard
   shows it beside the choice.
 - `runner_up` is another candidate, or `""`. The dashboard offers it as a switch at `SCRIPT_READY`

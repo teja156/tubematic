@@ -295,3 +295,51 @@ def test_a_changed_style_clears_the_pick_and_the_same_one_keeps_it(db):
     assert "error" not in server.update_video("vid_1", visual_style="stick")
     assert _row() == {"status": "TOPIC_PROPOSED", "visual_style": "stick", "style_pick": "",
                       "style_runner_up": "", "style_reason": ""}
+
+
+# ── a new decision starts the scene choices over ─────────────────────────────
+
+def _resolved(vid="vid_1"):
+    with server._conn() as con:
+        return tuple(con.execute("SELECT resolved_renderer, resolved_visual_style FROM videos "
+                                 "WHERE id = ?", (vid,)).fetchone())
+
+
+def _set_resolved(renderer, canvas, vid="vid_1"):
+    with server._conn() as con:
+        con.execute("UPDATE videos SET resolved_renderer = ?, resolved_visual_style = ? WHERE id = ?",
+                    (renderer, canvas, vid))
+
+
+def test_a_pick_clears_the_renderer_and_canvas_an_earlier_auto_recorded(db):
+    """A video made Cartoon 3D by the old Auto, sent back to its topic and
+    approved again, must not keep resolved_renderer 'cartoon_3d' under a new
+    style: the worker reads it as a Cartoon 3D render."""
+    _video()
+    _set_resolved("cartoon_3d", "dark")
+    assert "error" not in server.choose_visual_style("vid_1", "system_flow", "A path.")
+    assert _resolved() == ("", "")
+
+
+def test_a_stale_3d_renderer_does_not_block_a_pick_for_a_video_with_a_mascot(db):
+    _video(mascot=_mascot())
+    _set_resolved("cartoon_3d", "")
+    assert "error" not in server.choose_visual_style("vid_1", "scenes", "No style fits.")
+    assert _resolved() == ("", "")
+
+
+def test_a_topic_revision_clears_the_scene_choices_made_under_an_auto_pick(db):
+    _video()
+    server.choose_visual_style("vid_1", "scenes", "No style fits.")
+    _set_resolved("dom", "light")
+    with server._conn() as con:
+        con.execute("UPDATE videos SET status = 'REVISION_REQUESTED' WHERE id = 'vid_1'")
+    server.set_video_status("vid_1", "TOPIC_PROPOSED")
+    assert _resolved() == ("", "")
+
+
+def test_a_topic_revision_keeps_the_scene_choices_of_a_style_a_person_chose(db):
+    _video(status="REVISION_REQUESTED", style="illustrated")
+    _set_resolved("", "dark")
+    server.set_video_status("vid_1", "TOPIC_PROPOSED")
+    assert _resolved() == ("", "dark")

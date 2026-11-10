@@ -149,7 +149,11 @@ Under `auto` the agent first picks a style, at `TOPIC_APPROVED` (`choose_visual_
 picks becomes `visual_style`, and `style_pick`, `style_runner_up` and `style_reason` record that
 Auto made the choice ([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)). The
 three are cleared when a person changes `visual_style` and when the video goes back to
-`TOPIC_PROPOSED`, where a style Auto picked returns to `auto`.
+`TOPIC_PROPOSED`, where a style Auto picked returns to `auto`. Every new style decision (Auto's
+pick, a switch to the runner-up, a return to the topic from an Auto pick) also clears
+`resolved_renderer` and `resolved_visual_style`: a new script and new scenes follow it, and a
+renderer recorded as `cartoon_3d` for the old scenes would send the new ones to the Cartoon 3D
+renderer.
 
 A video that stays on `auto` (the mixed scene system) records two more decisions, each once:
 

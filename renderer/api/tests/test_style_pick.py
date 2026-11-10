@@ -210,3 +210,19 @@ def test_both_processes_use_the_shared_reset_sql():
     for src in (mcp_src, api_src):
         assert "tvs.AUTO_PICK_RESET_SET" in src
         assert "tvs.style_change_clears_pick_set()" in src
+
+
+def test_a_switch_clears_the_renderer_and_canvas_of_the_old_scenes(client, db_path):
+    """The switch is followed by a new script, voice and scenes, so the canvas
+    recorded for the old ones must not be forced on the new style."""
+    _video(db_path, style="auto", pick="scenes", runner_up="illustrated")
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET resolved_renderer = 'dom', resolved_visual_style = 'light'")
+    con.execute("INSERT INTO settings (key, value) VALUES ('openai_api_key', 'sk-test')")
+    con.commit()
+    con.close()
+    assert client.post("/videos/vid_1/switch-style").status_code == 200
+    con = sqlite3.connect(db_path)
+    got = con.execute("SELECT visual_style, resolved_renderer, resolved_visual_style FROM videos").fetchone()
+    con.close()
+    assert got == ("illustrated", "", "")

@@ -2843,10 +2843,11 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
                                  "and why it was unavailable."}
         cur = con.execute(
             "UPDATE videos SET visual_style = ?, style_pick = ?, style_runner_up = ?, "
-            "style_reason = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL "
+            "style_reason = ?, " + tvs.NEW_STYLE_CLEARS_SET + ", updated_at = ? WHERE id = ? "
+            "AND archived_at IS NULL "
             "AND status = 'TOPIC_APPROVED' AND COALESCE(NULLIF(visual_style, ''), 'auto') = 'auto' "
             "AND COALESCE(style_pick, '') = '' AND NOT "
-            + tmascots.cartoon_mascot_clash_sql(style="?"),
+            + tmascots.cartoon_mascot_clash_sql(style="?", renderer="''"),
             (new_style, style, runner_up, reason, _now(), video_id, new_style))
         if cur.rowcount == 0:
             return {"error": "The video changed while the call was in flight (its status, style or "
