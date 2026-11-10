@@ -1,362 +1,301 @@
 # Settings
 
-Every runtime knob lives in the `settings` table as a string, and is coerced and validated on the
-way in and out. There are **44 declared keys**, defined by `SETTINGS_SPEC` in
-`renderer/api/pipeline.py`.
+Every setting on the dashboard's **Settings** page, tab by tab: what it does, its default, and when
+to change it.
 
-Three properties are worth stating once, because they explain a lot of the design:
-
-- **No setting requires a restart.** The Flask API, the MCP server and the worker all read
-  the database per use, with no in-process cache. A write applies to the next read. The renderer
-  reads no settings: the render settings it needs arrive with each video it is handed, so a change
-  applies from the next render. Restarting is
-  only ever a remedy for a wedged container.
-- **The database is the source of truth after onboarding.** `onboard.py` seeds these rows; after
-  that, the dashboard and the API own them. Re-running an onboarding step re-seeds.
-- **The write is atomic.** `POST /settings` coerces every value before writing any of them. One bad
-  value rejects the whole request and changes nothing.
-
-Read and write them at [`GET` / `POST /settings`](../developer/05-http-api.md#settings), on the dashboard's
-Settings page, or from a script with `vqa/edit_settings.py`. How they are stored, masked and
-verified, the bookkeeping rows that share their table, and how to add one are on
-[Settings internals](../developer/04-settings.md).
+A change applies to the next piece of work. You do not restart anything.
 
 ---
 
-## Reference
+## How the page works
 
-### Pipeline control
+The switch at the top, **Pipeline state**, pauses and resumes the pipeline. It applies when you
+click it. See [Pausing everything](03-using-tubematic.md#pausing-everything).
 
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `pipeline_paused` | bool | `false` | When true the cron poller starts no new pipeline or research session; sessions already running finish, and script profiles are still built. Human approvals still work |
+Below it are fifteen tabs. On most tabs your edits wait until you press that tab's **SAVE**:
 
-### AI review
+- A tab with unsaved edits shows an amber dot.
+- **SAVE** saves that tab only.
+- If one value is not allowed, nothing on the tab is saved, and a message names the problem.
 
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `gemini_review_enabled` | bool | `false` | Experimental. When false — the default — a successful render goes straight to `VIDEO_READY`. Also skipped while no `gemini_api_key` is stored |
-| `ai_review_model` | str | `gemini-2.5-flash` | One of `gemini-2.5-flash`, `gemini-3.5-flash`, `gemini-3.6-flash` |
-| `ai_review_fps` | int | `10` | Frame sampling rate sent to Gemini. 1–24. Drives token cost — see [Rendering and Review](../developer/11-rendering-and-review.md#cost) |
-| `ai_review_max_loops` | int | `1` | Revision rounds the reviewer may force. 1–2 |
+Three tabs work differently. **Agents** and **Costs** apply each change as you make it. **Auto
+Pilot** has its own **SAVE** and asks you to confirm.
 
-### Rendering
+---
 
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `render_timeout_secs` | int | `10800` | The absolute ceiling on one Remotion render, a crash detector of last resort rather than a budget: three hours covers a three-minute Short on the CPU with headroom. A slow CPU rendering an over-length video may need it raised. Minimum 60 |
-| `render_stall_timeout_secs` | int | `600` | How long the render's progress counter may stand still before the render is judged hung and retried. Remotion reports every frame it renders and encodes; a healthy render advances every few seconds, a wedged browser never does, so this catches a hang in minutes whatever the video's length. Minimum 60; neither setting needs a restart |
-| `max_render_retries` | int | `1` | Render **crash and timeout** retries only. A render lost to a renderer restart, or to a renderer that stopped reporting, counts as a failure too |
-| `text_layout_audit_enabled` | bool | `true` | Kill switch for the advisory text-overlap and safe-zone audit inside `validate_job` |
-| `default_mascot_id` | str | `''` | Experimental. The mascot a new video starts with, unless its domain says otherwise. `''` means none, which is what every install starts with. Set it on Settings → Rendering, where the choices are the approved mascots and are greyed out while no renderer's GPU is working; a new default is refused then too, from any client. A mascot that has since been archived (or was never approved) reads back as `''` and is refused on write. A domain's own default overrides it, and a video's pick at the topic checkpoint overrides both. See [Mascots](04-dashboard.md#mascots) |
-| `watermark_enabled` | bool | `true` | Burns the "Made with tubematic.ai" mark into every render. Sent to the renderer with each video it is handed, so it affects later renders only. **A setting rather than a `scene-config.json` key on purpose** — see [Watermark](../developer/09-remotion-project.md#watermark) |
+## AI Review
 
-Which GPU renders, if any, is **not** a setting: a container's GPU is fixed when it is created, so it
-is chosen on the host with `python3 onboard.py --step gpu`. The Rendering tab shows the result, for
-every renderer, on its Renderers panel. See [GPU rendering](10-gpu-rendering.md).
+AI review sends each rendered video to Gemini, which looks for defects. If it finds any, the video
+goes back to the agent for a revision before you see it. It is experimental and needs a Gemini key.
 
-Neither is whether **renderers on other machines** may connect, nor the address they use: turning
-them on publishes a port, which only `python3 onboard.py --step renderers` on the host can do. See
-[Remote renderers](11-remote-renderers.md).
-
-### Scheduling
-
-The cron poller's supervisor — see [The Poller](../developer/13-the-poller.md). Both are read on every
-pass, so a change applies to the next session started.
-
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `max_concurrent_agent_sessions` | int | `3` | Pipeline sessions run at once, one video each. 1–10. Research and script profiles run beside them, outside this limit. Each session is a paid agent run, so set 1 on a tight budget |
-| `agent_session_timeout_secs` | int | `5400` | Wall clock for one agent session, its model/effort retries included, before its process group is killed. Minimum 60. The dashboard shows it in minutes |
-
-The default of 3 applies to an upgraded install too: every key's default is merged in on read, so
-nothing has to be written for it to take effect.
-
-### Logs
-
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `log_retention_days` | int | `14` | Days of structured JSONL logs to keep. 1–365 |
-
-**This is the one key that does not apply on the next read.** Each service prunes its own files when
-it starts and again at each daily rollover, so a change takes effect at the next pass — within a day,
-without a restart, but not immediately. Everything else on this page applies to the very next read.
-
-### Video retention
-
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `retention_days` | int | `7` | Days after a video is **published** before its mp4 and job directory are deleted and the row archived. 0–365; **0 disables the sweep** |
-| `unpublished_retention_days` | int | `0` | Days after a `FAILED` or `TOPIC_REJECTED` video last changed before the same happens to it. 0–365; **0, the default, disables it** |
-
-Each key covers its own statuses and has its own clock. `retention_days` sweeps only `PUBLISHED`
-videos, dated from the latest successful publication's `published_at`, not from when the video was
-created. `unpublished_retention_days` sweeps only `FAILED` and `TOPIC_REJECTED` videos, dated from
-`updated_at`, which is when they last moved. No other status is ever swept. The worker applies
-both hourly, so a change lands within the hour.
-
-Unlike `log_retention_days`, both keys allow 0. For `retention_days`, the default would otherwise
-fire on the first pass after an upgrade against every video published more than a week ago, so this
-one key has to carry the opt-out. `unpublished_retention_days` defaults to off because a failed video
-is paid-for output someone may still want to inspect. **Settings → Retention** shows how many failed
-and rejected videos there are and how much disk they hold, so you can tell whether turning it on is
-worth it. See [Rendering and Review](../developer/11-rendering-and-review.md#retention).
-
-`max_render_retries` and `ai_review_max_loops` are deliberately **separate caps**. They used to be
-one key, which meant allowing a single review round silently halved the render-retry budget a
-long video needs.
-
-### Research
-
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `max_curriculum_per_run` | int | `2` | Topics one curriculum research run may propose |
-| `max_trending_per_run` | int | `2` | Same, for trending |
-| `max_mining_per_run` | int | `2` | Same, for mining — enforced by the mining tool itself, which asks Gemini for no more than this and makes no more Gemini calls than this in one run ([MCP server](../developer/06-mcp-server.md#gemini--mine_youtube_topics)). 0 turns mining off |
-| `research_pending_cap` | int | `15` | Stop researching once this many videos sit at `TOPIC_PROPOSED` |
-| `max_research_runs_per_day` | int | `8` | Rolling 24-hour cap on research agent invocations |
-| `trending_sources` | list | `["GitHub Trending", "Hacker News"]` | Any list of strings. The API validates the shape, not the contents |
-
-These caps are **reported by the API and enforced by `scripts/poll.py`**, not by the API itself.
-
-### Voice
-
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `elevenlabs_voices` | voice list | `[]` | Up to 10 entries of `{name, voice_id, model_id}`, names and ids unique and non-empty, `model_id` one of the supported ElevenLabs models — see [Scripting and Voice](../developer/08-scripting-and-voice.md#the-model-follows-the-voice) |
-| `elevenlabs_voice_id` | str | `""` | The install default voice. Must be `""` or a member of the roster |
-| `pronunciation_lexicon` | lexicon | `[]` | Up to 500 `{term, respell}` entries. `respell` must contain no whitespace and should be one plain word spelling the sound, never hyphen-separated — see [Scripting and voice](../developer/08-scripting-and-voice.md#respell-mode-the-default). `term` must be unique |
-
-The defaults above are what the API reads when nothing is stored. Onboarding stores a starting
-roster on a new install: Teja (`eleven_v4`) as the default voice and Adam (`eleven_v3`). Remove
-either like any other voice; re-running onboarding does not put them back.
-
-**Removing the default voice from the roster leaves the install with no default**, rather than
-refusing the save: the default reads as `""` until you pick another. Why it works that way is on
-[Settings internals](../developer/04-settings.md#the-default-voice-invariant-is-enforced-on-read).
-
-A video that names a `voice_id` no longer on the roster **errors before spending money** rather than
-silently falling back to the install default.
-
-**There is no install-wide model.** Each voice carries its own `model_id`, because the model decides
-which pronunciation and pause markup a script may carry, and a human choosing a voice is choosing
-that too. An older install's single `elevenlabs_model_id` setting was moved onto every voice by
-migration `0006` and deleted; posting it now is an unknown-key error. There is no pronunciation
-setting either: which markup a script may use follows from its voice's model
-([Settings internals](../developer/04-settings.md#derived-pronunciation_mode)).
-
-### Images
-
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `image_model` | str | `gpt-image-2.5-flare` | Scene images. One of `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst` |
-| `character_model` | str | `gpt-image-2.5-flare` | The Illustrated style's characters. From the same list |
-
-**OpenAI is the only image provider.** Scene images and the Illustrated style's characters both
-come from OpenAI, so `openai_api_key` is required. Gemini drew scene images too until 2.0.0;
-migration `0016` deleted the `image_provider` setting and moved any `image_model` that is not an
-OpenAI model to `gpt-image-2.5-flare`. That migration is load-bearing: the MCP server reads
-`image_model` raw, so an off-catalog value left behind would make every `generate_image` refuse.
-
-**There are two model settings over one list on purpose.** Scene images and character cut-outs are
-different jobs, and a character is worthless without a transparent background. So **every model in
-the list must support a transparent background**, because `character_model` is checked against it.
-That is why `gpt-image-2` is gone: OpenAI withdrew its transparent-background support in October
-2026, which made every character request fail. Migration `0011` moved an install whose
-`image_model` was `gpt-image-2` to `gpt-image-2.5-flare`. Adding a model that cannot draw a
-transparent background means giving `character_model` its own list first. `character_model` is a
-setting rather than a fixed value so that the next withdrawal can be worked around from the
-dashboard, not by a release. `scripts/probe_openai_images.py` checks a model for everything both
-image tools rely on (it makes real, billed calls).
-
-**OpenAI grants model access per project, not per account.** A key from a project that has not been
-granted the chosen model gets a `403`, which both image tools turn into an error naming the model
-and the project. The model list (`GET /v1/models`) can show a model the project still cannot call,
-and OpenAI validates a request body before it checks access, so there is no free way to check
-access ahead of time. The first real call is where it shows up.
-
-**What an illustrated video costs.** A character's first asset is a generation; every later pose is
-an edit of it, and an edit sends the reference image as input. An edit costs about three times the
-tokens of a generation (1834 against 608 for a portrait, measured), so a character sheet's cost is
-mostly its later poses.
-
-### Agent
-
-There is **no agent setting**. Which agents are installed, which one is the default, and each one's
-models live in the `agents` table, written by `python onboard.py --install-agent <name>` — see
-[The Agent Layer](../developer/07-agent-layer.md#agents). An agent's default model is the first of its own
-models.
-
-The former install-wide `agent_model` key is gone: `POST /settings` rejects it as an unknown key,
-and the baseline migration deletes any leftover row from an old install, once, on upgrade
-([Database](../developer/03-database.md#migrations)).
-
-The reasoning that kept that key free-text still holds, in a new place. Model names change faster
-than this repo does, so there is still no hardcoded catalog. Instead, each model is probed against
-the installed CLI when the agent is installed, and a model that stops working later is caught by the
-poller from the agent's output — see [the agent layer](../developer/07-agent-layer.md#models).
-
-A video's own model, `videos.agent_model`, is chosen at the topic checkpoint and must be one of its
-agent's models.
-
-**The agent's effort level is not a settings key either**, for the same reason: it lives on the
-agent row (`agents.effort`, default `high`) and is overridable per video
-(`videos.agent_effort`). See [the agent layer](../developer/07-agent-layer.md#effort).
-
-### User preferences
-
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `user_preferences` | str | `""` | Free text: the operator's standing preferences for every video. At most 6000 characters (`MAX_USER_PREFERENCES_CHARS`); surrounding whitespace is trimmed, line breaks are kept, and a NUL character is rejected. Not masked |
-
-Edited on the dashboard's **Preferences** tab. The agent receives it on every run, and how depends on
-how the run started:
-
-- **Scheduled runs:** `scripts/poll.py` fences it into every prompt it builds (pipeline, research and
-  script profile) as a `USER PREFERENCES` block.
-- **Interactive sessions:** `get_pipeline_status()` returns it as `user_preferences`, and the skills
-  and `/tubematic-submit-new-job` read it there.
-
-See [the agent layer](../developer/07-agent-layer.md#user-preferences) for the block and its wording. Empty means
-no block at all, so an install that never opens the tab sends exactly the prompts it did before.
-
-**Why the cap.** `poll.py` passes the whole prompt to the agent CLI as one command-line argument, and
-Linux limits a single argument to 128 KiB (`MAX_ARG_STRLEN`). Text past that would make every agent
-run fail with `E2BIG`. 6000 is far below that limit because the text is paid for in tokens on every
-tick. A NUL character is rejected for the same reason: `exec` refuses an argument that contains
-one, so a stored NUL would fail every scheduled run until someone cleared the setting.
-
-The tab's counter stops input at the cap and counts the way the API does, so an emoji is one
-character, not two ([why that needed care](../developer/04-settings.md#user_preferences-counts-code-points)).
-
-### Publishing
-
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `publishing_enabled` | bool | `false` | Off by default, so an install with no publishing account behaves exactly as it did before the feature existed — `VIDEO_APPROVED` reads as terminal |
-
-Named `publishing_enabled` rather than anything auto-sounding: with this key alone, every step of
-publishing stays human-driven. See [Publishing](06-publishing.md).
-
-### Auto Pilot
-
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `auto_pilot_enabled` | bool | `false` | Lets the worker approve every human checkpoint and post the video, for the projects selected on Settings → Auto Pilot. On with no project selected, it does nothing |
-| `auto_pilot_gap_mins` | int | `240` | The shortest time between two posts on one account, in minutes. 0 to 10080 (a week). The dashboard takes minutes or hours |
-| `auto_pilot_max_in_flight` | int | `0` | How many videos may be in progress before Auto Pilot stops voicing new scripts and approving topics: voiced and unpublished videos in Auto Pilot projects, plus every post waiting to go out, including posts scheduled by hand. Finished videos are still approved and scheduled. Size it in days of posting. 0 to 500; 0 means no limit. Was `auto_pilot_max_scheduled` before v1.2.3. See [Publishing → the in-progress limit](06-publishing.md#the-in-progress-limit) |
-
-All three are edited on **Settings → Auto Pilot**, which saves them through `POST /autopilot` together
-with the project list, behind a confirmation. `POST /settings` accepts them as well, with no
-confirmation. Read [Auto Pilot](06-publishing.md#auto-pilot) before turning it on: it spends money
-and posts publicly with no human review.
-
-### Notifications
-
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `discord_webhook_url` | secret | `""` | The channel webhook messages are posted to. `secret`-typed because the URL *is* the credential — anyone holding it can post to that channel |
-| `notify_topic_proposed` | bool | `false` | Announce newly proposed topics, bundled one message per research run |
-| `notify_script_ready` | bool | `false` | Announce a script waiting at its human checkpoint |
-| `notify_video_ready` | bool | `false` | Announce a finished render waiting for sign-off |
-| `notify_partially_published` | bool | `false` | Alert when a publish went out on some accounts and failed on others. Names each failed account and its error, and links the posts that went out |
-| `notify_failed` | bool | `false` | Alert when a video reaches `FAILED`, for any cause — rendering, publishing, or a refused job. The message says which, with the reason recorded on the video, and offers Retry publishing when it failed while publishing |
-| `dashboard_base_url` | str | `""` | Where the dashboard is reachable from wherever Discord is read, e.g. `http://192.168.1.20:3000`. Blank means messages carry no links |
-
-Notifications are off in **two independent ways** — no webhook URL, and no trigger enabled — so an
-install that never opens this tab behaves exactly as it did before the feature existed.
-
-The one exception to the triggers is the **stuck-in-voicing alert**. It is sent whenever a webhook URL
-is set, whatever the triggers say. The triggers choose which routine checkpoints are announced, and
-a video that nothing is voicing is a stuck pipeline, not a checkpoint. See
-[Troubleshooting](08-troubleshooting.md#voice).
-
-`dashboard_base_url` has no default and none can be guessed: the container has no idea what
-hostname a human reaches it by. A blank value omits links rather than emitting a broken one.
-
-`POST /settings` checks a webhook URL twice: its shape, with a pure regex, and then its liveness,
-with an unauthenticated `GET` on the URL that returns the webhook object and sends no message.
-Only a definitive rejection (`401 Invalid Webhook Token`, `404 Unknown Webhook`) refuses the save —
-a timeout, a DNS failure or a `5xx` stores the URL anyway, on the same tri-state rule the
-[onboarding key checks](../developer/04-settings.md#rejection-signatures) follow. Refusing a save because Discord is having a
-bad afternoon would make Settings un-saveable for a reason that has nothing to do with what was
-typed.
-
-See [Notifications](../developer/02-pipeline.md#notifications) for what triggers a message and when it arrives.
-
-### Costs
-
-There are no cost keys in `SETTINGS_SPEC`. What a call cost is computed from the usage the
-provider reported and a table of model prices — see
-[Database — `usage_events`](../developer/03-database.md#usage_events-usage_event_videos-and-model_prices) for
-the ledger itself. This section is where those prices come from.
-
-**Every figure is an API list price.** It does not reflect a subscription, plan credits or a
-discount, and the dashboard says so beside every total. That is deliberate: an install cannot know
-what its accounts actually pay, but it can price every call consistently, which is what comparing
-videos, models and stages needs.
-
-**How each provider is costed:**
-
-| Provider | Recorded as | Priced from |
+| Setting | Default | What it does |
 |---|---|---|
-| Gemini (review, mining; scene images before 2.0.0) | Tokens from `usageMetadata` | The price table. The Gemini image models stay in the shipped price table so past image calls stay priced |
-| OpenAI (images, characters) | Tokens from the response's `usage` | The price table |
-| Codex sessions | Tokens from `codex exec --json` | The price table |
-| Claude Code sessions | `modelUsage` from `claude -p --output-format json` | **Claude's own `costUSD`** (its list-price figure) |
-| OpenCode sessions | Per-message tokens and `cost` from OpenCode's session API | **OpenCode's own `cost`** |
-| ElevenLabs (voice, previews) | Plan credits, from the `character-cost` response header | **Never priced** — shown as credits |
+| **Gemini review** | Off | Turns the review on |
+| **Review model** | `gemini-2.5-flash` | The Gemini model that watches the video. The 3.x models cost about 1.4 times as much per video |
+| **Sampling rate** | 10 | How many frames a second Gemini looks at, from 1 to 24. The cost of a review rises in step with it |
+| **Max review rounds** | 1 | How many times the review may send a video back, 1 or 2. After that the video comes to you with its findings |
 
-**ElevenLabs is shown in credits, not dollars.** Installs are assumed to be on a subscription,
-where every call draws from a prepaid monthly credit pool; a dollar figure would be an allocation of
-the plan fee, not spend. The header is exact — it is the number of credits the pool actually lost,
-with the model's discount already applied.
+If the review itself fails, for example because Gemini is unreachable, the video comes to you as if
+it had passed. Check the video's comments to see whether a review ran.
 
-**Where a rate comes from, per model and never per field:**
+Turn it on if you want a first pass on visual defects before you watch. Leave it off if you watch
+every video anyway, or if its findings send good videos back.
 
-1. A **manual** rate typed on the dashboard's Settings → Costs tab. Never touched by a sync.
-2. The **synced** rate: OpenRouter's public model list (`/api/v1/models`) when it lists the model,
-   LiteLLM's `model_prices_and_context_window.json` only when it does not. Today that makes the
-   OpenAI image models the only LiteLLM ones. OpenRouter is preferred because every model uses one small
-   set of fields, where LiteLLM's field names vary per model and have been dropped from an entry
-   within months.
-3. The **built-in snapshot**, `tubematic_core/prices_snapshot.json`, shipped with each release — so
-   a fresh install prices correctly offline, before its first sync.
-4. Otherwise the call is **unpriced**: its units are stored, its cost is `NULL` (never `0`), and it
-   is counted beside every total. Adding a manual rate fills in that model's unpriced calls.
+## Research
 
-One model's rates always come from one source: mixing fields from two feeds would make a wrong
-figure impossible to trace. Neither feed is authoritative — both are third parties reading the
-vendors' pricing pages; the vendor's page is the authority when they disagree.
+These limit how many topics research proposes. [Using Tubematic](03-using-tubematic.md#limiting-how-many-topics-arrive)
+explains how they work together.
 
-A rate the table lacks is handled by fixed rules: thinking tokens bill at the output rate (exact —
-every provider bills them as output); audio or image input without its own rate falls back to the
-input rate and is marked *estimated*; anything else missing makes the call unpriced. A model with
-long-prompt price tiers is priced at its base rate and marked *estimated*, because usage arrives as
-totals and the tier that applied is unknowable.
+| Setting | Default | What it does |
+|---|---|---|
+| **Curriculum topics per run** | 2 | The most topics one research run proposes for each curriculum seed |
+| **Trending topics per run** | 2 | The most topics one run proposes from the trending sites |
+| **Mining topics per run** | 2 | The most topics one run proposes from your mining sources. 0 turns mining off |
+| **Research pending cap** | 15 | Research does not run while this many topics are waiting for your decision |
+| **Max research runs per day** | 8 | The most research runs in any 24 hours. 0 stops research |
+| **Trending Sources** | GitHub Trending, Hacker News | The sites trending research reads. Lobsters and Dev.to are also offered |
 
-**The sync** runs weekly in the worker (on the same settings-row throttle as the metrics
-poll, so it survives restarts) and on demand from Settings → Sync now.
-Both feeds are fetched whole. It only touches models in use (the snapshot's list, anything already
-recorded, and the installed Codex agent's models), never overwrites a manual rate, rejects a move of
-more than 5× as upstream breakage, logs every change with its old and new value, and is
-all-or-nothing: any failure keeps every existing price and records the error. **Prices are never
-fetched at call time** — a render must not depend on GitHub or OpenRouter being up.
+Lower the per-run numbers if topics arrive faster than you review them. Raise the pending cap if
+research stops before you have enough to choose from.
 
-### Credentials
+## Voice
 
-| Key | Type | Default | Consumer |
-|---|---|---|---|
-| `elevenlabs_api_key` | secret | `""` | Voice generation, voice previews |
-| `gemini_api_key` | secret | `""` | Optional. Topic mining and AI review. Unset means mining is off — left out of the active strategies, and refused if switched on — and review is skipped |
-| `openai_api_key` | secret | `""` | Required. Scene images and the Illustrated style's character cut-outs. Unset means `generate_image` fails and `illustrated` is refused wherever a style is chosen |
-| `youtube_transcript_api_key` | secret | `""` | Script-profile transcript fetching |
-| `postforme_api_key` | secret | `""` | Publishing and analytics |
+The list of ElevenLabs voices videos can use. A new install starts with two, Teja and Adam.
 
-**Keys are stored in the database, not in a file.** A key changed on Settings → API Keys applies
-to the next call, with no restart. The dashboard and the API show only a mask — eight bullets and the
-last four characters — and saving the page without retyping a key leaves it unchanged. The flip side
-is that the database file, `~/.tubematic-data/data/tubematic.db`, holds every key in plain text:
-treat it, and any backup of it, as a secret. Onboarding checks each key with its provider as you type
-it and refuses one the provider rejects; a provider it cannot reach does not block you. See
-[How credentials are stored](../developer/04-settings.md#how-credentials-are-stored).
+![Settings, Voice tab: two voices, each with a name, a voice ID, a model, a default marker and a preview button](../images/settings-voice.png)
+
+For each voice you set:
+
+- a name, which is what the pickers show,
+- the voice's ElevenLabs ID, from your ElevenLabs voice library,
+- the ElevenLabs model it speaks with.
+
+Mark one voice as **default**. Videos use it unless their domain or you choose another. The **▶**
+button plays a sample, which spends a few ElevenLabs credits the first time you play it for a voice
+and model.
+
+You can have up to 10 voices.
+
+The model matters because the agent writes the script for it. Different models accept different
+pronunciation and pause markup. If you change a voice's model, scripts already written for that
+voice may be refused at approval. Request a revision on those, and the agent rewrites them.
+
+## Images
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Image model** | `gpt-image-2.5-flare` | The OpenAI model that draws scene images |
+| **Character model** | `gpt-image-2.5-flare` | The OpenAI model that draws characters in the Illustrated style |
+
+Both offer `gpt-image-2.5-flare` and `gpt-image-2.5-sunburst`. Your OpenAI key's project must have
+access to the model you choose. If it does not, the first image fails with an error that names the
+project and the model.
+
+In the Illustrated style, a character's first image is a new image and each further pose is an edit
+of it. An edit costs about three times as much as a new image, so a character with many poses costs
+mostly its poses.
+
+## Rendering
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Render stall timeout** | 10 minutes | If a render makes no progress for this long, Tubematic stops it and tries again |
+| **Render timeout** | 180 minutes | The longest one render may take, whatever its progress |
+| **Max render retries** | 1 | How many times a render that crashed or timed out is tried again before the video is marked Failed |
+| **Watermark** | On | Puts the "Made with tubematic.ai" mark in the top right corner of every video rendered from now on |
+| **Default mascot (experimental)** | No mascot | The mascot new videos start with. See [Mascots](13-visual-styles-and-mascots.md#mascots) |
+
+Raise the render timeout on a slow CPU if long videos fail with a timeout. Leave the stall timeout
+alone unless renders are stopped while they are still working.
+
+### Renderers
+
+Below those settings, the **Renderers** panel has a card for each machine that renders for this
+install. The renderer on this machine is first and is marked **BUILT-IN**. Actions on a card apply
+at once.
+
+![Settings, Rendering tab: the render settings, then the Renderers panel with the built-in renderer online and rendering on the CPU](../images/settings-rendering.png)
+
+| Status | Meaning |
+|---|---|
+| online | Connected and idle |
+| busy | Rendering. The card names the video |
+| offline | Not heard from. The card says when it was last seen |
+| disabled | You disabled it. It takes no new work |
+| needs upgrade | It runs a different version from this install, and takes no work until you upgrade it |
+| credential expired | Its credential ran out, so it cannot connect. Remove it and add it again |
+
+Each card also shows the machine's CPUs and memory, its GPU and whether the GPU test passed, and its
+last error.
+
+| Button | What it does |
+|---|---|
+| **Disable** / **Enable** | Stops or resumes work on that renderer |
+| **Rename** | Changes the name shown here |
+| **Test GPU** | Runs the GPU test again. Shown when the renderer has a GPU |
+| **Remove** | Removes a renderer on another machine |
+| **Add renderer** | Creates the one-time token that adds another machine |
+
+You choose the built-in renderer's GPU with `python3 onboard.py --step gpu`. See
+[GPU Rendering](10-gpu-rendering.md). To add machines, see
+[Remote Renderers](11-remote-renderers.md).
+
+## Logs
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Keep logs for** | 14 days | How long log records are kept, from 1 to 365 days |
+
+This is the one setting that does not apply at once. Old logs are removed once a day and when a
+container starts.
+
+## Retention
+
+Tubematic can delete videos' files to free disk. The video's record, its post links and its view
+counts stay, on the **Archive** page. A deleted file cannot be recovered.
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Delete published videos after** | 7 days | Deletes a video's files this many days after it was published. 0 keeps them |
+| **Delete failed and rejected videos after** | 0, which keeps them | Deletes a failed or rejected video's files this many days after it last changed |
+
+The tab also shows how many failed and rejected videos there are and how much disk they use.
+
+Set the first to 0 if you want to keep every mp4. Turn the second on when failed videos fill the
+disk. A failed video cannot be retried once it is archived.
+
+## API Keys
+
+One field each for ElevenLabs, Gemini, OpenAI, youtube-transcript.io and postforme.dev.
+
+A stored key shows as dots and its last four characters. Type over it to replace it, or clear the
+field to remove it, then press **SAVE**. The new key is used from the next call.
+
+This page stores a key without checking it with its provider. To have a key checked as you enter it,
+run `python3 onboard.py --step install_config`.
+
+Keys are stored in the database file in plain text. See
+[Where things are](02-installing.md#where-things-are).
+
+## Publishing
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Publishing** | Off | Lets you post approved videos from the dashboard. Needs the postforme.dev key |
+
+See [Publishing](06-publishing.md).
+
+## Notifications
+
+Tubematic can send a message to a Discord channel when a video needs you.
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Webhook URL** | Not set | The Discord webhook messages go to. Create one under the channel's Integrations → Webhooks |
+| **Dashboard URL** | Not set | The address you open the dashboard at, such as `http://192.168.1.20:3000`. Messages link to it. Left blank, messages have no links |
+| **Topics are proposed** | Off | One message for each research run that proposed topics |
+| **A script is ready** | Off | A message when a script waits for your approval |
+| **A video is ready** | Off | A message when a video waits for your approval |
+| **A publish partly fails** | Off | An alert when a post reached some accounts and failed on others. It names each failed account and its error |
+| **A video fails** | Off | An alert when a video becomes Failed, with the reason |
+
+Nothing is sent until you set the webhook URL and turn on at least one of the switches. Saving checks
+that the webhook exists, without posting to it.
+
+Treat the webhook URL as a password. Anyone who has it can post to that channel.
+
+Two details:
+
+- A video sent back to you after a revision is announced again.
+- If a webhook is set, Tubematic also sends an alert when a video sits in Voicing without being
+  voiced, whatever the switches say. See
+  [Troubleshooting](08-troubleshooting.md#a-video-is-stuck-in-voicing).
+
+## Scheduling
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Concurrent sessions** | 3 | How many videos the agent works on at once, from 1 to 10 |
+| **Session timeout** | 90 minutes | How long one agent session may run before Tubematic stops it |
+
+Each session is a paid run of your agent's model. Set **Concurrent sessions** to 1 to spend more
+slowly. Raise **Session timeout** if long scene-writing sessions are stopped before they finish.
+
+The tab also shows how many research runs the last 24 hours used, when the next one becomes
+available, and when research last ran.
+
+The poll interval is not on this page. Change it with `python3 onboard.py --step cron`.
+
+## Agents
+
+One card for each installed agent. Changes here apply as you make them.
+
+| Setting | What it does |
+|---|---|
+| **Default agent** | The agent that runs research and builds script profiles. It also takes new videos when every weight is 0 |
+| **weight** | The agent's share of new videos. With weights 3 and 1, three of every four new videos go to the first agent. 0 gives it none |
+| **default model** | The model the agent uses unless a video names another |
+| **effort** | How hard the agent thinks on each run: `low`, `medium`, `high`, `xhigh` or `max`. Higher levels cost more and take longer. The default is `high` |
+
+You cannot add or remove a model here. See [Agents](12-agents.md#update-an-agent).
+
+## Preferences
+
+A text box of up to 6000 characters for standing instructions to the agent, such as:
+
+```
+Topics: favour Linux internals; skip crypto.
+Scripts: calm tone, no jokes, UK spelling.
+Visuals: prefer diagrams over stock-style photos.
+```
+
+The agent receives the text on every run and applies the parts that fit what it is doing. A
+preference cannot make the agent skip one of your approvals.
+
+Every run pays for this text in tokens, so keep it short.
+
+## Costs
+
+The dashboard records what each call to a paid service cost. This tab holds the prices it uses.
+
+- Gemini, OpenAI and Codex calls are priced from the table on this tab.
+- Claude Code and OpenCode report their own cost for each session.
+- ElevenLabs is recorded in credits, and is not converted to dollars.
+
+Every dollar figure is the provider's API list price. It does not reflect a subscription, plan
+credits or a discount, so use it to compare videos and models, and read your bill from the provider.
+
+Prices update once a week from public price lists. A price you enter yourself is kept through every
+update.
+
+| Button | What it does |
+|---|---|
+| **Sync now** | Updates the prices now |
+| **Override** | Sets a price for a model yourself |
+| **Reset** | Removes your price and goes back to the synced one |
+| **Add price** | Sets a price for a model that has calls and no price. Those calls are then counted in every total |
+
+A call with no price is counted separately beside each total until you add a price.
+
+## Auto Pilot
+
+See [Auto Pilot](14-auto-pilot.md).
+
+---
+
+## Set on the command line
+
+Some things cannot be changed on the dashboard. Run these from the install directory.
+
+| To change | Run |
+|---|---|
+| The poll interval | `python3 onboard.py --step cron` |
+| The GPU the built-in renderer uses | `python3 onboard.py --step gpu` |
+| Whether other machines may render, and the address they use | `python3 onboard.py --step renderers` |
+| The dashboard password | `python3 onboard.py --set-password` |
+| An agent's models, scope or workspace | `python3 onboard.py --install-agent <agent>` |
+
+The timezone comes from the machine Tubematic runs on.
+
+How settings are stored, and the name of each one for the API, are in
+[Settings internals](../developer/04-settings.md).

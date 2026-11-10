@@ -1,193 +1,518 @@
 # `tubematic_core/tests`
 
-Covers `tubematic_core/` — the one Python package shared by every Tubematic process: schema
-migrations (`db.py`), service tokens and the render gateway's TLS pair (`auth.py`), structured JSONL logging (`logging.py`), the canonical version string
-(`version.py`), the spend ledger with its model prices (`usage.py`, `prices.py`), what each
-ElevenLabs model can speak (`voice_models.py`), which on-screen mascot a video may use and whether its cue track is placeable (`mascots.py`), which renderer may render what and who may call the render gateway (`renderers.py`), which YouTube URLs mining accepts (`youtube.py`), what disk Tubematic uses and which of its Docker images are old (`disk_usage.py`),
-and the rules for ids that become paths and where a video's files live (`ids.py`, `jobfiles.py`).
-See [Database — Migrations](../03-database.md#migrations) and
-[Architecture — Duplication](../01-architecture.md#duplication-is-intentional) for what each module
-is and why it exists at all.
+Covers `tubematic_core/`, the Python package every Tubematic process shares: the migration runner
+and each migration, backups, service tokens, logging, the version string, and the rule modules the
+API, the MCP server and the worker all import.
+[Duplication is intentional](../01-architecture.md#duplication-is-intentional) says why the package
+exists. The suite needs `pytest` and `cryptography`, and one file runs `node` when it is on `PATH`.
 
 ```bash
 python -m pytest tubematic_core/tests
 ```
 
-> **Deliberately no `__init__.py` here**, for the same reason `mcp/tests` and `vqa/tests` have none:
-> `renderer/api/tests`, `onboard/tests` and `scripts/tests` each have one and therefore all claim the
-> top-level package name `tests`, which is why they cannot be collected together in one pytest
-> invocation. Staying `__init__.py`-free keeps this suite out of that collision.
+Run each suite in its own pytest invocation. [`README.md`](README.md) lists the suites that fail to
+collect together.
 
-Host-side tests here import `tubematic_core` directly from the repo root — nothing puts that
-directory on `sys.path` automatically outside a container, where it arrives via `PYTHONPATH=/app/lib`
-instead. Each test file inserts the repo root itself, at the top, before the import.
+The tests import `tubematic_core` from the repository root. Most files insert that directory on
+`sys.path` themselves, and `python -m pytest` run from the root adds it for the rest. Inside a
+container the package arrives through `PYTHONPATH=/app/lib`.
 
----
+## The migration runner and backups
 
-| File | Guards |
-|---|---|
-| `test_db.py` | Migration discovery and ordering, the `schema_migrations` tracking table, `connect()`'s WAL setup, and the whole `migrate()` run — atomicity, the write lock, and `assert_schema_current` |
-| `test_baseline.py` | The `0001_baseline.py` migration: a fresh database gets every table and column, and two hand-written pre-migration databases converge without losing rows |
-| `test_agent_effort.py` | The `0003` agent-effort migration — the two columns, and above all that it has **no backfill**, which is the mirror image of `0002`'s. A pre-`0003` video has no per-video pick to preserve, so writing anything but `''` would pin it to a level nobody chose and freeze it there at its next status change; an `UPDATE` added here "for symmetry with `0002`" is exactly what these tests catch. Also pins that an agent row created before the column existed ends up at `high`, which is what makes "an install that never touches the setting runs at high" true on the upgrade path rather than only on a fresh install |
-| `test_visual_style.py` | The `0002` visual-style migration — the three columns, and above all its **backfill**: `ADD COLUMN ... DEFAULT 'auto'` applies its default to existing rows too, so without the trailing `UPDATE` every video already in flight would silently become `auto` and be re-styled by the next agent run that touched it. Dropping that one line leaves a migration that still adds the right columns and still passes any schema-only check |
-| `test_pause_seeds_only.py` | The `0004` migration, which activates every paused **non-seed** domain. Pause now exists only on curriculum seeds and no screen offers a control for any other domain's status, so a non-seed paused by an older install would stay paused forever with nothing able to change it. It pins the other direction too: a paused **seed** is left alone, because a blanket `UPDATE` would unpause a domain the human paused on purpose. The database is built by migrating only as far as `0003` from a copied migrations directory, so the rows exist before `0004` runs |
-| `test_usage_accounting.py` | The `0005` usage ledger and `usage.py`/`prices.py`'s pricing. The rule it exists for: **an unknown model is unpriced (`NULL`), never `$0`** — zero is indistinguishable from "this call was free" and would understate spend invisibly — and it is logged once per process, not once per call. Pins the rate ladder (manual beats synced beats the built-in snapshot, one source per model), the fallback rules (thinking bills at the output rate exactly; audio or image input without its own rate falls back to input and is marked estimated; any other missing rate makes the whole call unpriced rather than a silently partial sum), and that **editing a price never re-prices history** — only unpriced rows are filled in when a rate is added, which is why their units are kept. ElevenLabs rows are credits and never priced; reported costs (Claude, OpenCode) are stored as given. `record_usage` must return `None` and log when it cannot write — it never raises, because bookkeeping must not fail a video. The read side pins the video modal's arithmetic: a shared agent session is split evenly across its batch, and a video's total adds its **share**, never the whole session, which would count one session once per video. Also the Gemini and OpenAI usage-object normalisers (modalities, cached tokens split out, thinking tokens, image output) A billed call whose usage could not be read is recorded with no units, and **no units is unpriced, not $0** — pricing it as free would understate spend with nothing left to repair it from. An `event_key` makes a write idempotent: a second write under the same key returns the first row and adds nothing. The spend summary's `until` is an **exclusive** bound, applied to the video count as well as the dollars, so two adjacent ranges never count an event on their shared edge twice. `last_voice_model` returns the model of a video's **latest** voicing call. That call can be another video's, a voice preview (even one linked to the video) or another provider's call, and none of those counts. A video never voiced gives `None`, so the API can tell "voiced with" from "the current setting". |
-| `test_prices_sync.py` | The unattended price sync. Source precedence is **per model**: when OpenRouter lists a model its rates are used even where LiteLLM disagrees, and LiteLLM is used only for a model OpenRouter lacks — a mix of fields from both would make a wrong figure untraceable. Zero rates are dropped rather than stored (a `$0` rate prices a paid call as free), `:batch` variants are ignored, and long-prompt tiers mark a model `tiered`. The safety rules each have a test: a manual row is never overwritten, a >5× move is rejected as upstream breakage, and **a failure keeps every existing price** — including a failure part-way through, which is why the sync runs inside a savepoint; without it, half the models could end up on new rates. A sync that newly prices a model fills in that model's unpriced calls |
-| `test_voice_models.py` | `voice_models.py`, the one place the MCP server and the API learn what an ElevenLabs model can speak. `markup_conflict` decides whether a human may switch a scripted video to another voice, and both directions fail on a paid voicing: too strict blocks an approval for no reason, too loose voices markup the new model reads aloud or drops. So the negative controls carry as much weight as the refusals — a script with no markup fits every model, and a legacy flat script counts only `<ipa>`, because the flat voicing path strips pause markup itself. A `<phoneme>` tag conflicts with **any** model that cannot honour it, with no exemption for "the current model ignores it too": when a voice's model is edited in Settings, the edited model is both current and target, so an exemption keyed on it would wave the edit through and the only thing left standing before spend would be `generate_voice`'s own check. `phoneme_model_error` is the matching write-time check, which is what keeps approval with a video's own voice passing. `resolve_voice` pins two-level resolution (the video's voice, then the install default) and that a voice which has left the roster resolves to **nothing**, never a fallback, since spending against a voice nobody chose is worse than an error. `eleven_v4` must sit in every model set `eleven_v3` is in and in none it is not, because a probe showed it takes the same markup (IPA and bracketed pauses, no SSML). The pre-loaded `DEFAULT_VOICES` are pinned in order, with Teja as `DEFAULT_VOICE_ID`, and every entry must be on an offered model: one bad entry makes every roster reader drop the whole list, which would leave a new install with no voices |
-| `test_youtube.py` | `youtube.py`, the one rule for what a mining URL may be. Every such URL becomes Gemini's `file_uri` on a paid call, so the refusals are the point: `file://`, loopback and link-local addresses, a look-alike host (`youtube.com.evil.com`), userinfo (`youtube.com@evil.com`), a port, a 10- or 12-character id, an embedded newline, tab or NUL, a non-ASCII character, an `/embed/` or channel URL, and a value that is not a string. Each is beside an accepted form — `watch?v=` (with `v` after other parameters too), `youtu.be` with a `?si=` tail, `shorts`, `live`, `m.` and an upper-case host — so a rule that refused everything fails too. Every accepted form comes back as `https://www.youtube.com/watch?v=<id>`. The list check refuses the whole list naming every bad entry (each quote clipped), deduplicates by video, and caps at 50 distinct videos, not 50 entries |
-| `test_disk_usage.py` | `disk_usage.py`: the host half of the disk-usage figure and the one rule for "old image" that `upgrade.py` deletes by, with Docker faked from recorded JSON. An image a `tubematic` container uses, an image outside Tubematic's repositories and an untagged image Compose did not build here are never old, and with no Tubematic containers or unreadable Docker no image is old (removing either guard fails these tests). Also covered: short and full image ids join, unknown sizes stay `None`, the walk counts hardlinks once and skips symlinks, the snapshot write is atomic, and the command poll.py starts runs one measurement at a time |
-| `test_voice_models_migration.py` | The `0006` migration, which moves the model from one install-wide setting onto every roster voice. The rule it exists for: **an upgrade changes nothing a user can hear** — every voice comes out on the model the install was using, and a blank or retired stored model (`eleven_english_v1`) falls back to `eleven_multilingual_v2` rather than being carried onto voices nothing could voice with. It must never destroy a roster: the readers treat a malformed roster as empty, so a bad stamp would silently drop every voice, which is why a corrupt row is left exactly as it was. A voice that already carries a valid model keeps it, and a fresh database with no settings rows migrates cleanly |
-| `test_agent_progress_migration.py` | The `0007` migration. Every existing video starts with a clean no-progress record, and every agent session recorded under the `VOICING` stage before the upgrade is relabelled `VOICING_WITH_SCENES`: the old poller carried a voicing session on into scene writing, and without the relabel the dashboard would present that spend as voicing alone. Other stages are untouched, and a `VOICING` row written after the upgrade keeps its stage |
-| `test_scheduled_publishing_migration.py` | The `0008` migration. Every existing video comes out with `scheduled_at` and `scheduled_timezone` set to `''`, meaning "not scheduled" — the worker's due-time pass selects on `scheduled_at`, so any other value there would be read as a schedule |
-| `test_auto_pilot_migration.py` | The `0009` migration. Every existing video comes out neither held nor blocked. A held video is one Auto Pilot refuses to post, so a stray non-zero default would silently exempt the whole existing library |
-| `test_default_script_profile_migration.py` | The `0010` migration. A fresh database gets `projects.default_script_profile_id`, and every existing domain comes out with no default. A non-blank one would start writing a domain's curriculum videos in a style nobody picked for it |
-| `test_image_model_migration.py` | The `0011` migration. A stored `image_model` of `gpt-image-2` moves to `gpt-image-2.5-flare`, and nothing else is rewritten: not another model, and not another key that happens to hold the same text. Without it the settings reader falls back to the Gemini default while the provider stays `openai`, and every later settings save is refused. These tests stop at `0011`, since `0016` later rewrites every non-OpenAI model and would mask what `0011` does |
-| `test_gemini_3_pro_image_migration.py` | The `0015` migration. A stored `image_model` of `gemini-3-pro-image-preview`, which Google shut down, moves to its replacement `gemini-3-pro-image`, and nothing else is rewritten. Without it the settings reader would quietly fall back to the default flash model, a different and cheaper model the user never chose. These tests stop at `0015` for the same reason |
-| `test_openai_only_images_migration.py` | The `0016` migration. Any stored `image_model` outside the OpenAI catalog — each Gemini model, and a hand-edited value — moves to `gpt-image-2.5-flare`, both OpenAI models are kept, and the `image_provider` row is deleted. A database that never stored either key gets nothing written, and other keys holding the same strings are untouched. Running it twice is a no-op. `NOT IN` the catalog rather than the Gemini names is the point: the MCP server reads `image_model` raw, so any off-catalog value would make every `generate_image` refuse |
-| `test_auto_pilot_in_flight_migration.py` | The `0012` migration, which renames `auto_pilot_max_scheduled` to `auto_pilot_max_in_flight`. The stored number carries over **verbatim**, 0 included, so an install that never set a limit still has none, and the old row is gone. An install that never stored one gets no row. Verbatim because the new count includes everything the old one did, so the same number can only stop Auto Pilot sooner, never charge more |
-| `test_topic_cap_migration.py` | The `0013` migration, which adds `projects.topic_cap` (default 100) and the `idx_videos_project_id` index. A domain at its cap is expired and takes no research topics, so the migration must never expire a domain that was filing before the upgrade: one already holding 100 or more gets its count plus 100, never above 750, and every video counts, archived and rejected included, because those are exactly what the dedup history is for. Each domain is counted on its own, and a second run is a no-op |
-| `test_mining_sources_migration.py` | The `0014` migration, which brings a stored `mining_youtube_urls` list to the shape its writers now insist on. A YouTube video URL is rewritten to `https://www.youtube.com/watch?v=<id>`, a second spelling of the same video is kept once, and anything that is not a YouTube video URL is **dropped and logged** at `WARNING`, every dropped entry named, as is everything past 50 videos. Dropping rather than keeping is the point: the dashboard re-sends the whole list on every change and the writer refuses any list with a bad entry, so one leftover would make every later save fail. A value that is not a JSON list is cleared and logged, an empty list and a missing row are left alone, and a list with nothing to drop logs nothing |
-| `test_auth.py` | `auth.py`, the service tokens and the admin password. The secrets directory is **0700 and its files 0644**: Compose mounts each file on its own, which bypasses the directory's permissions inside a container, and the dashboard runs as uid 1001, so a 0600 file would be unreadable there. `ensure_secrets` never replaces a secret (it refills an empty one). **Rotation keeps the inode**, because a bind mount pins the inode it was started with and an atomic rename would leave every running container on the old value. A missing or empty file raises rather than reading as an empty token, so every caller fails closed. A malformed stored hash never verifies and never raises, and the password hash is one bare `settings` row outside `SETTINGS_SPEC`. The render gateway's TLS pair is pinned the way a renderer will use it: the certificate is a self-signed P-256 CA (`ca=True` and `key_cert_sign`, which is what lets OpenSSL take a self-signed certificate as its own trust anchor) for `tubematic-render-gateway`, valid 30 years, with **no host name** (renderers reach the gateway by any address); its key matches it; and a stdlib client built exactly like a renderer's (trust this one certificate, no host-name check, verification required) completes a real handshake against a localhost server using the pair, while the same client trusting another install's certificate refuses it. A pair missing either half is made again as a pair, a complete one is never replaced — not even two files that do not load together, since a new certificate would change the pin silently (the gateway refuses to start instead and says how to recover) — and a repair stopped between its two renames leaves the missing half still missing, so the next ensure makes the pair again rather than leaving a new half beside an old one that nothing would ever repair (renaming the missing half first was checked to fail it); and **the pair is never rotated**: `rotate_secrets` refuses both names and rotating every token (the built-in renderer's among them) leaves it alone, because a new certificate is a new pin and would cut off every enrolled renderer. `gateway_pin` is the sha256 of the certificate's DER and fails closed without one |
-| `test_renderers.py` | `renderers.py`, the rules the render gateway, the worker, the API and the MCP server share about the machines that render. **The scheduler is pure and tested case by case**, because each wrong answer is silent: a lone renderer takes the oldest video (ties on id); a disabled, removed, unknown or version-mismatched caller gets nothing; a GPU-only video (Cartoon 3D by style, by resolved renderer or by its scene-config, or any mascot) is skipped by a renderer without a verified GPU **even past starvation**, and the caller takes the next video instead; a slow caller skips a video a much faster renderer would finish sooner, takes it within the 1.25 tolerance (and not just outside it), and takes it anyway once it has waited past the starvation limit (and not at exactly the limit); a busy renderer counts only its estimated time left, never below zero; offline, disabled, removed and outdated renderers never hold a video back; only GPU-capable renderers compete for a GPU video; timings are per kind. The estimate is the **median of the last five** seconds-per-frame (ordered by id, so one stalled render cannot make a machine look slow for long), with the GPU prior or a CPU prior scaled by core count when there are none, and a video with no frame count is weighed as a typical Short so a head start is not compared with a zero-length job. `gpu_status` returns exactly the four values the existing GPU gates understand, with `unknown` outranking `not_usable` (a renderer not yet probed may still have a working GPU, so the message must be "test it", not "you need one") and disabled or removed renderers ignored; `gpu_unavailable_reason` names every renderer and its state (disabled, never connected, offline since, needs upgrade, and its GPU). Enrollment secrets are stored hashed, work **once**, expire, and a refused attempt never consumes a real one; re-enrolling the same machine replaces its row instead of adding a ghost, while a removed renderer is never revived. Authentication: the built-in token is compared with the secret file's value and never expires; a remote credential authenticates until its expiry, then raises and records `credential expired — re-enroll`; a removed renderer never authenticates. Rotation starts on day 15 and keeps the old credential working until the new one is first used; a rotation the renderer never received is re-issued **without dropping the credential it still holds** |
-| `test_renderers_migration.py` | The `0019` migration. Existing videos come out unleased (`''` in all five lease columns, the claim id among them), which is what lets the worker's lease sweep re-queue a render a pre-upgrade renderer was in the middle of. The built-in renderer's row is seeded enabled and **unprobed**, so the GPU gates read `unknown` until the renderer's first probe rather than a stale `working`, and a second run changes nothing |
-| `test_backup.py` | `backup_db()` — the online-backup API, atomic filename reservation between concurrent callers, and failure handling |
-| `test_ids_and_jobfiles.py` | `ids.py` and `jobfiles.py`, which every process uses to turn an id into a path. Each refusal sits beside a working control, because both failures are silent until they hit: a check too strict breaks a real id shape (`vid_<hex12>`, a UUID, `proj_<hex8>`, `manual`, a kebab slug), and one too loose is a path traversal (`../x`, an absolute path, a separator, a NUL, a non-string, 129 characters, a trailing newline — `re.match` with `$` accepts that last one, which is why the check is a `fullmatch`). The looser `is_component` is pinned separately: a legacy id with a dot or a space must stay usable at every filesystem use, for videos as well as projects, which is the whole reason there are two checks. It still refuses `.`, `..`, a separator, a NUL or other control character and a name over 255 bytes (counted in UTF-8, so 128 two-byte characters are refused), and the path helpers refuse the same video ids, while a legacy `a.b`, `Spaced Name` or 129-character id derives its job files, images and output, as a video id and as a project id. The 128-character cap is pinned as a creation rule only: it once leaked into `is_component` and moved every longer legacy video to `FAILED`. `job_file`, `images_dir` and `output_file` derive the fixed layout and refuse a symlink in any component below the root — including one that stays inside it, `vid_a` → `vid_b` or `proj_a` → `proj_b`, which containment alone passes and which would hand one video another's files (removing the per-component walk fails those two tests). `scene_file` (the namespaced form, and the legacy flat form for an empty `video_id`) and `image_file` refuse the same links and a name that is not one component. A symlinked root is allowed, since dev setups link the data directory, and a path that does not exist yet still derives, since writers ask for files they are about to create. `ignore_symlinks` keeps a link inside `images/` out of a `copytree`, which otherwise follows it. A name that gets a suffix must leave room for it: `output_file` and `scene_file` (both forms) refuse a 252-byte stem, whose `.mp4`/`.tsx` name would be 256 bytes, and create nothing, while a 251-byte stem's file is actually created — the controls write the file for real, because the bound being guarded is the filesystem's (`ENAMETOOLONG`), and a 252-byte id is still a valid job directory. Before, `is_component` passed the stem and the write failed part-way through a render or a tool |
-| `test_logging.py` | The shared JSONL logging module — redaction, retention, cross-service reads, and the Werkzeug noise filter |
-| `test_version.py` | `version()` — the single source every release script and running service reads — and the version rule: SemVer with an optional prerelease, never `+build` metadata, plus the development-branch marker `develop`, which `is_valid()` accepts and `is_release()` refuses. The real `VERSION` file is checked against `is_valid()`, so the suite passes on the development branch and on a release line alike. It also pins `GITHUB_REPO` to a bare lowercase `owner/name`: it is pasted into github.com URLs and `gh --repo`, and its owner is the default image namespace, which Docker refuses in upper case |
+### `test_db.py`
 
----
+Covers `db.py`: migration discovery, the `schema_migrations` table, `connect()` and `migrate()`
+([Migrations](../03-database.md#migrations)).
 
-## What these encode
+- Discovery sorts by numeric prefix, accepts `.py` and `.sql`, allows gaps and treats a duplicate
+  number as a hard error.
+- `migrate()` applies what is pending and stamps it, does nothing on a second run, and takes a
+  backup only when something is pending on an existing database. A failed backup stops the
+  migration unless `allow_no_backup` is set.
+- Four threads that call `migrate()` on one new database apply each migration once. That is what
+  lets every process call `migrate()` at start with no coordination.
+- Four threads that call `connect()` on a new file all succeed (`_ensure_wal`). The test repeats the
+  race on 30 fresh files, because a single race catches a broken WAL switch in about one run out of
+  six.
+- `assert_schema_current` raises on a database that is behind.
 
-**The WAL-switch race is a regression pin, not a functional test.** `connect()`'s `_ensure_wal`
-docstring records a measured failure rate — 4 threads racing `PRAGMA journal_mode=WAL` on a
-brand-new file failed 17 times out of 100 with no retry. A single race in a test would therefore only
-catch a reintroduced bug at roughly that same 17% rate, worse than a coin flip.
-`test_concurrent_connect_against_a_new_file_does_not_race` runs the race 30 independent times against
-30 separate fresh files instead, which drops the odds of a 17%-rate regression slipping through by
-luck to under half a percent, while still finishing in well under a second — each race is only four
-`connect()` calls against an empty file.
+Trap: A migration is stamped inside the transaction it runs in, and the whole run is one
+transaction, because a commit per migration would release the write lock between them. A stamp
+written outside the transaction would leave a database that claims a version it never reached, and
+no later `migrate()` would try again.
 
-**A migration is stamped in the same transaction it runs in, and only if it commits.**
-`test_a_failing_migration_is_not_stamped` and `test_a_failing_migration_rolls_back_the_whole_run`
-both exist because the alternative — recording success before or outside the transaction — is the
-one outcome worse than not migrating at all: a database that claims to be at a version it never
-actually reached, with every later `migrate()` call trusting that lie and never trying again. The
-rollback test specifically checks that a *later* migration's failure also undoes an *earlier* one
-applied in the same run, which is the direct cost of one-transaction-per-run rather than
-one-per-migration — a cost `db.py` accepts because per-migration commits would release the write
-lock between migrations and reopen the exact race two concurrent `migrate()` calls exist to avoid.
+### `test_backup.py`
 
-**`test_concurrent_migrate_applies_once` is the safety argument for "every process calls
-`migrate()`" made concrete.** Four threads call `migrate()` against the same brand-new database at
-once; the assertion is that exactly one of them actually applies anything and the database ends at
-the right version, not that all four somehow cooperate. That is what makes it safe for Flask, MCP,
-the worker, the renderer, onboarding, `clear_db.py` and the VQA seed generator to each call `migrate()`
-themselves with no coordination between them.
+Covers `db.py::backup_db` ([Backups](../16-infrastructure.md#backups)).
 
-**A backup filename is reserved atomically, and the concurrency tests force the race rather than
-hoping for it.** Two containers starting together genuinely do back up within the same one-second
-stamp — that was observed on an ordinary restart, not theorised — so `backup_db` cannot prove a
-name free and open it as a second step. The gap between those two moments is the whole defect:
-both callers can observe the same name as absent, and if either then fails, its cleanup unlinks the
-*other* caller's completed snapshot while that caller proceeds into the migration believing it has a
-rollback point. `test_two_concurrent_backups_in_the_same_stamp_land_on_different_files` and
-`test_a_failed_concurrent_backup_does_not_delete_a_winners_backup` are the two halves of that — the
-second is the one that matters, because it is the one where data is lost rather than merely
-duplicated. Both drive the race through a two-party barrier that blocks every "not yet taken" answer
-until both threads have seen it, so the interleaving is reproduced on every run instead of on
-scheduler luck; a bare thread race would pass most of the time against the broken code and read as
-a flake when it did not. The reservation uses `os.O_CREAT | os.O_EXCL`, which is what lets the
-failure-cleanup `unlink` be safe at all: the file was created by *this* call, not merely seen to be
-absent by it. `test_backup_reservation_gives_up_after_too_many_collisions` bounds the retry loop so
-a directory that can never yield a free name fails loudly rather than spinning.
+- The backup directory is the sibling of the database's parent, and `TUBEMATIC_BACKUPS_DIR`
+  overrides it.
+- A backup taken while another connection holds an uncommitted write passes
+  `PRAGMA integrity_check` and contains none of the uncommitted row. `backup_db` uses SQLite's online
+  backup API for this: a plain file copy taken during a write is torn, and it looks fine until
+  someone restores it.
+- Two backups in the same one-second stamp land on different files, and the retry loop gives up
+  after too many collisions.
+- A failed backup raises `MigrationError`, removes its partial file and leaves an earlier good
+  backup alone.
 
-**`backup_db()` is tested against a writer that is mid-transaction, not just an idle file.**
-`test_backup_is_consistent_while_a_writer_holds_the_database` opens a second connection, starts a
-write, leaves it uncommitted, and takes a backup while it is still open — then checks the backup
-passes `PRAGMA integrity_check` and contains none of the uncommitted row. A plain file copy
-(`shutil.copy`) taken at that exact moment would be torn: readable enough to look fine, and only
-provably broken the day someone tries to restore it. This is the reason `backup_db()` uses SQLite's
-own online backup API instead.
+Trap: A backup name is reserved with `os.O_CREAT | os.O_EXCL`. Two containers that start together
+back up in the same second, and a check followed by a separate open lets both see the name as
+free. When one of them then fails, its cleanup deletes the other's finished backup. The two
+concurrency tests force that interleaving with a two-party barrier, because a bare thread race
+passes most of the time against the broken code.
 
-**The two fixture databases are hand-written, not generated from the current schema.** A fixture
-built by asking today's code to create a database would converge trivially against today's
-migrations and prove nothing about a real upgrade. `pre_agents.sql` and `pre_publishing.sql` are
-typed out as they would have looked before this project had a migration system — `pre_publishing.sql`
-is the older of the two: no `agents`/`agent_deck` tables, no `voice_id`, no `tts_text`, no
-`notified_status`, and the pre-rename `animatability_score` column. Both carry rows sitting at
-statuses this project has since retired or renamed (`SCRIPTING`, `VIDEO_REVISION_REQUESTED`,
-`RENDER_READY`), which is what proves `0001_baseline.py`'s one-time status rewrites actually reach a
-real old row rather than only a freshly-created one. `test_the_animatability_rename_carries_its_values`
-and `test_a_user_set_setting_is_not_overwritten` are the same idea applied to a rename and to a
-user-supplied value: migrating must never silently discard data that existed before the migration
-system did.
+## Migrations
 
-**`test_logging.py`'s redaction tests exist on two independent axes because one alone misses real
-leaks.** A *pattern* axis catches a labelled or provider-shaped secret (`Authorization: Bearer …`,
-an `AIza…` literal, a URL query parameter) even when the value itself was never seen before; a
-*value* axis catches a secret that was read from the settings table and is now appearing somewhere
-with no recognisable shape at all, such as a webhook token embedded in a URL *path* rather than a
-labelled field or query string — the shape neither pattern rule was written for.
-`test_a_discord_webhook_token_is_redacted_from_the_path` is the regression pin for exactly that case,
-because httpx logs the full request URL in its own log lines, and a webhook's credential lives in the
-path, not a header. A short or empty stored secret is deliberately exempted
-(`test_a_short_secret_is_ignored_rather_than_redacting_the_whole_line`) so an unset key does not turn
-into a rule that redacts everything.
-`test_elevenlabs_keys_basic_auth_and_cookies_are_redacted` pins three shapes the pattern axis
-once missed: an ElevenLabs `sk_` key (the OpenAI rule wants a hyphen), the credential after
-`Authorization: Basic` (the value group used to stop at the space and redact only the word "Basic"),
-and `Cookie:`/`Set-Cookie:` headers. The cookie rule needs a header shape, not just the word, so
-ordinary text about cookies is left alone.
+One file per migration, in migration order. `0005` is covered by
+[`test_usage_accounting.py`](#test_usage_accountingpy). The
+[migration reference](../03-database.md#migration-reference) lists what each migration changes.
+Each file migrates a database up to the migration before its own, inserts rows, and then migrates
+the rest, so the rows exist before the migration under test runs.
 
-**The value axis is only live once the secret provider has actually been called, and that turned out
-to be the fragile part.** The formatter caches a resolved secret set for a minute so a rotated key
-starts being redacted without a restart, and it marks "never fetched" with a sentinel rather than
-with `0.0`. That distinction is the whole point:
-`test_secrets_are_redacted_on_a_freshly_booted_machine` exists because `time.monotonic()` counts from
-system boot, so on a machine that has just started it is a small number — and comparing it against a
-`0.0` marker made "is the cache stale?" answer *no* for the first sixty seconds of uptime. The
-provider was never called, and nothing was redacted, during exactly the window when startup failures
-(a database that is not up yet, a key that fails validation) are being logged. Any machine with real
-uptime hides it completely. The test pins an explicit small clock instead of hoping to run somewhere
-freshly booted.
+### `test_baseline.py`
 
-**Logging setup must never be able to take a process down.** `setup_json_logging` runs at import
-time in every service, so `test_setup_on_a_missing_uncreatable_directory_returns_none_and_does_not_raise`
-and its sibling for an existing-but-unwritable directory both pin the same outcome: degrade to
-stdout-only, never raise. Host-side pytest has no `/logs` and cannot create one, which is exactly the
-condition being guarded against, not just a test-environment inconvenience.
+Covers `0001_baseline.py`.
 
-**`version()` never raises**, including when `TUBEMATIC_VERSION` is exported but blank — the common
-shape of "a shell script sets a variable and forgets to fill it in" — which
-`test_blank_env_override_is_ignored` pins against silently reporting `0.0.0` in a release. The
-lookup rule is "the `VERSION` file beside the package directory," verified directly in
-`test_version_file_sits_beside_the_package`, because that is the same relationship the Dockerfile's
-`COPY VERSION /app/lib/VERSION` has to preserve for the in-container lookup to agree with the host.
+- A new database gets every table and every `videos` column.
+- Two databases written by hand in an older layout, `fixtures/db/pre_agents.sql` and
+  `fixtures/db/pre_publishing.sql`, converge to the current schema and keep their rows, renamed
+  columns and user-set settings included.
+- `notified_status` is backfilled to `status@updated_at`. Left blank, the first notification sweep
+  after an upgrade would announce every waiting video at once.
 
-**`test_mascots_migration.py` guards that adding mascots changes nothing for an existing install.**
-Existing projects and videos must come out of the migration with no mascot, the only new row is the
-shipped Tubi (ready, version 1, with an empty `code` because builtin code lives in a versioned repo
-file, never in a shipped migration), and a second run must not overwrite anything.
+Trap: The two fixtures are typed out by hand. A fixture generated by today's code would converge
+against today's migrations by construction and prove nothing about a real upgrade.
 
-**`test_builtin_tubi.py` guards the files that seeded row points at.** Every install's default mascot
-is read from `renderer/remotion/mascot-builtin/tubi/v1/`, so the test migrates a real database and
-checks that `code_for` returns that directory's `mascot.js` for the approved version, that the three
-model sheets are there as JPEGs (the form the API serves a builtin's sheets in), and that the code
-registers `window.MASCOT`. It also checks that every view's face record carries `bx`: the engine's
-`blush()` reads it, and a face without it turns every blush into NaN with no error. Version 1 is
-immutable; a changed drawing ships as a new version directory with a migration.
+### `test_visual_style.py`
 
-**`test_mascots.py` guards the rules every process shares.** `cue_errors` is the only thing between
-the per-video agent's cue track and a mascot standing on the captions in a finished video, so the
-tests use the engine's real box (the 560x640 canvas with the feet 50 above its bottom) and pin: a
-walk is checked along its path (two positions that are each clear but on opposite sides of the
-caption band are refused), walking on or off the screen is allowed at a valid height, and a hidden
-caption band frees the space. The one second in view must be **one unbroken stretch**: two 15-frame stops between walks add up to 30 frames and are still refused. `holds_pickable_sql`, the condition the approval `UPDATE`s repeat, is pinned to agree with `pickable` (no mascot, approved, archived, never approved, missing), and `cartoon_mascot_clash_sql` to name exactly a Cartoon 3D style or resolved renderer with a non-empty mascot, in column and bound form. `EMOTIONS` is checked against the engine's `sheet.js` so the two lists
-cannot drift. `resolve_default` pins `none` versus inherit, and that an archived or unapproved
-default becomes "no mascot" rather than silently falling back. The path helpers refuse bad ids and
-symlinks below the root. `boxes_at_frames` (where the text-layout audit asks whether the mascot stands over measured text) is pinned for off-screen frames, rest frames, a walk in progress and the cue scale.
+Covers `0002`, the three visual-style columns.
 
-The caption band is modelled with a line count derived from `maxWords` and `fontSize` (a deliberately wide estimate of a caption word against the 960 px text width), so large, many-word captions that wrap to three or four lines still keep the mascot off them; the default captions keep the two-line band. One bad walk is reported once per cue and kind of violation, not once per frame, so a single mistake cannot flood the agent with the same message.
+- A new video defaults to `auto`.
+- Every video that existed before the migration is set to `motion_graphics`.
 
-**`test_mascot_driver_agreement.py` runs the real driver.** `mascots.py` is a Python port of the engine's walk model so a track can be validated without a browser, and text pins on its constants cannot catch a change in the logic. The test runs `renderer/remotion/mascot-tools/driver-agreement.mjs`, which loads the engine's `driver.js` in a bare Node vm context, on fixed tracks (walk-on and off, a mid-walk retarget, a scale change, off then on from the other side) and compares where the feet stand at many frames with `boxes_at_frames`, within a pixel. It skips with a stated reason when `node` is not on PATH.
+Trap: `ADD COLUMN ... DEFAULT 'auto'` applies the default to existing rows too. Without the trailing
+`UPDATE`, every video in flight becomes `auto` and the next agent session restyles it. A migration
+without that line still adds the right columns and passes a schema-only check.
+
+### `test_agent_effort.py`
+
+Covers `0003`, the two agent-effort columns.
+
+- An agent row that existed before the column ends at `high`, so an install that never changes the
+  setting runs at `high` after an upgrade too.
+- Existing videos are not backfilled.
+
+Trap: This migration has no backfill for videos. A video that existed before it has no per-video
+choice to keep, so anything other than `''` would pin it to a level nobody chose. An `UPDATE` added
+to mirror `0002` is what these tests catch.
+
+### `test_pause_seeds_only.py`
+
+Covers `0004`, which sets every paused domain that is not a curriculum seed to active.
+
+- A paused non-seed domain becomes active.
+- A paused seed stays paused.
+
+Trap: Only curriculum seeds have a pause control ([Domain pause](../02-pipeline.md#domain-pause)), so
+a paused non-seed domain would stay paused with nothing able to change it. An `UPDATE` without the
+seed condition would resume a domain a person paused.
+
+### `test_voice_models_migration.py`
+
+Covers `0006`, which moves the ElevenLabs model from one install-wide setting onto every voice in
+the roster and adds `projects.default_voice_id`.
+
+- Every voice gets the model the install was using, and a voice that already has a valid model
+  keeps it.
+- A blank, missing or retired stored model falls back to `eleven_multilingual_v2`.
+
+Trap: A corrupt roster is left as it was. Readers treat a malformed roster as empty, so a bad
+rewrite would drop every voice.
+
+### `test_agent_progress_migration.py`
+
+Covers `0007`, the per-video progress record.
+
+- Every existing video starts with a clean record.
+- Usage recorded under the `VOICING` stage before the migration is relabelled `VOICING_WITH_SCENES`.
+  A `VOICING` row written after the migration keeps its stage.
+
+Trap: Sessions recorded as `VOICING` before this migration also wrote the scenes. Without the
+relabel the dashboard would show that spend as voicing alone.
+
+### `test_scheduled_publishing_migration.py`
+
+Covers `0008`, the two scheduling columns.
+
+- Every existing video ends with `scheduled_at` and `scheduled_timezone` set to `''`.
+
+Trap: The worker's due-time pass selects on `scheduled_at`, so any other value there reads as a
+schedule.
+
+### `test_auto_pilot_migration.py`
+
+Covers `0009`, the Auto Pilot hold and block columns.
+
+- Every existing video ends neither held nor blocked.
+
+Trap: Auto Pilot refuses to post a held video, so a non-zero default would exempt the whole
+existing library.
+
+### `test_default_script_profile_migration.py`
+
+Covers `0010`, which adds `projects.default_script_profile_id`.
+
+- Every existing domain ends with no default.
+
+Trap: A non-blank default would write a domain's curriculum videos in a style nobody picked.
+
+### `test_image_model_migration.py`
+
+Covers `0011`, which moves a stored `image_model` of `gpt-image-2` to `gpt-image-2.5-flare`.
+
+- Another model, and another settings key that holds the same text, are left alone.
+
+Trap: Without the rewrite, the settings reader falls back to the Gemini default while the provider
+stays `openai`, and every later settings save is refused. These tests stop at `0011`, because `0016`
+rewrites every model outside the OpenAI catalog and would hide what `0011` does.
+
+### `test_auto_pilot_in_flight_migration.py`
+
+Covers `0012`, which renames the setting `auto_pilot_max_scheduled` to `auto_pilot_max_in_flight`.
+
+- The stored number carries over unchanged, 0 included.
+- An install that never stored the setting gets no row.
+
+Trap: The value is copied as it is because the new count includes everything the old count did.
+The same number can only stop Auto Pilot sooner and can never spend more.
+
+### `test_topic_cap_migration.py`
+
+Covers `0013`, which adds `projects.topic_cap` (default 100) and the `idx_videos_project_id` index.
+
+- A domain that already holds 100 or more videos gets its count plus 100, capped at 750.
+- Every video counts, archived and rejected ones included.
+
+Trap: A domain at its cap takes no research topics ([Topic cap](../02-pipeline.md#topic-cap)). The
+migration must give headroom to a domain that was filing topics before the upgrade, or the upgrade
+closes it.
+
+### `test_mining_sources_migration.py`
+
+Covers `0014`, which brings a stored `mining_youtube_urls` list to the form its writers accept.
+
+- A YouTube video URL is rewritten to `https://www.youtube.com/watch?v=<id>`, and two spellings of
+  one video are kept once.
+- An entry that is not a YouTube video URL is dropped and logged at `WARNING` by name. So is
+  everything past 50 videos, and a value that is not a JSON list is cleared.
+
+Trap: The dashboard sends the whole list on every change, and the writer refuses a list with a bad
+entry. One leftover entry would make every later save fail, which is why bad entries are dropped.
+
+### `test_gemini_3_pro_image_migration.py`
+
+Covers `0015`, which moves a stored `image_model` of `gemini-3-pro-image-preview` to
+`gemini-3-pro-image`.
+
+- Another model and another settings key are left alone. These tests stop at `0015`, for the reason
+  given under `test_image_model_migration.py`.
+
+Trap: Without the rewrite, the settings reader falls back to the default model, a cheaper model the
+user did not choose.
+
+### `test_openai_only_images_migration.py`
+
+Covers `0016`, which leaves OpenAI as the one image provider.
+
+- A stored `image_model` outside the OpenAI catalog moves to `gpt-image-2.5-flare`, both OpenAI
+  models are kept, and the `image_provider` row is deleted.
+- A database that never stored either key gets nothing written.
+
+Trap: The migration matches with `NOT IN` the OpenAI catalog and names no Gemini model. The MCP
+server reads `image_model` raw, so any value outside the catalog, a hand-edited one included, would
+make every `generate_image` call refuse.
+
+### `test_resolved_renderer_migration.py`
+
+Covers `0017`, which adds `videos.resolved_renderer`, the renderer `auto` settled on for a video.
+
+- Every video that existed before the migration is set to `dom`.
+- A video created after the migration starts at `''`, which means `auto` has not settled yet.
+
+Trap: `ADD COLUMN` gives every existing row `''`. Without the backfill, a video in flight reads as
+unresolved, and a revision could decide that a video whose scenes are already written is Cartoon 3D
+and discard them.
+
+### `test_mascots_migration.py`
+
+Covers `0018`: the `mascots` and `mascot_versions` tables, the three mascot columns and the seeded
+Tubi row ([`mascots` and `mascot_versions`](../03-database.md#mascots-and-mascot_versions)).
+
+- Existing domains and videos end with no mascot.
+- The one new mascot is Tubi: ready, approved at version 1, with an empty `code` in its version row.
+
+Trap: Tubi's drawing code lives in a versioned file in the repository and never in the database or
+in a migration. `test_builtin_tubi.py` covers that file.
+
+### `test_renderers_migration.py`
+
+Covers `0019`: the render lease columns and the `renderers`, `renderer_enrollments` and
+`render_timings` tables.
+
+- Existing videos end unleased, with `''` in all five lease columns.
+- The built-in renderer's row is seeded enabled and unprobed.
+
+Trap: An empty lease is what lets the worker's lease sweep queue again a render that was in progress
+during the upgrade. An unprobed built-in row makes the GPU gates read `unknown` until the
+renderer's first probe.
+
+## Shared rules
+
+### `test_usage_accounting.py`
+
+Covers the `0005` usage ledger and the pricing in `usage.py` and `prices.py`
+([How a call is priced](../03-database.md#how-a-call-is-priced)).
+
+- The rate order (manual, then synced, then the built-in snapshot, one source per model) and the
+  rules for a missing rate.
+- Editing a price does not change recorded events. Adding a price fills in the events that were
+  unpriced, which is why their units are kept.
+- ElevenLabs rows are credits and are never priced. Costs an agent CLI reports are stored as given.
+- An `event_key` makes a write idempotent. `video_costs` splits a shared agent session evenly across
+  its videos. The spend summary's `until` bound is exclusive, so two adjacent ranges count no event
+  twice.
+- `last_voice_model` returns the model of a video's latest voicing call. A voice preview, another
+  video's call and another provider's call do not count.
+
+Trap: An unknown model is unpriced (`NULL`) and never `$0`, and so is a billed call whose usage could
+not be read. A zero reads as a free call and understates spend with nothing left to repair it from.
+`record_usage` returns `None` and logs when it cannot write. It never raises, because bookkeeping
+must not fail a video.
+
+### `test_prices_sync.py`
+
+Covers the price sync in `prices.py`.
+
+- The source is chosen per model: OpenRouter's rates when it lists the model, LiteLLM's for a model
+  OpenRouter lacks. Mixing fields from both for one model would make a wrong figure untraceable.
+- Zero rates are dropped, because a stored `$0` rate prices a paid call as free.
+- A manual row is never overwritten, and a move of more than five times is rejected.
+- A sync that newly prices a model fills in that model's unpriced events.
+
+Trap: A failed sync keeps every existing price, including a failure part-way through, because the
+sync runs inside a savepoint. Without it, half the models could end on new rates.
+
+### `test_voice_models.py`
+
+Covers `voice_models.py`, where the MCP server and the API learn what each ElevenLabs model can
+speak ([The model follows the voice](../08-scripting-and-voice.md#the-model-follows-the-voice)).
+
+- `markup_conflict` decides whether a scripted video may move to a voice on another model. A script
+  with no markup fits every model, and a legacy flat script counts only `<ipa>`.
+- `phoneme_model_error` is the matching check when a script is written.
+- `resolve_voice` uses the video's voice, then the install default.
+- `eleven_v4` sits in every model set `eleven_v3` is in and in no other.
+- `DEFAULT_VOICES` keep their order, `DEFAULT_VOICE_ID` is the first, and every entry is on an
+  offered model. One bad entry makes every roster reader drop the whole list, which leaves a new
+  install with no voices.
+
+Trap: A `<phoneme>` tag conflicts with any model that cannot honour it, with no exemption for the
+video's current model. When a voice's model is edited in Settings, the edited model is both the
+current one and the target, and an exemption would pass the edit through to a paid voicing. A video
+voice that has left the roster resolves to nothing, because a fallback would spend on a voice nobody
+chose.
+
+### `test_youtube.py`
+
+Covers `youtube.py`, the rule for what a mining URL may be.
+
+- Accepted forms (`watch?v=`, `youtu.be`, `shorts`, `live`, the `m.` host) come back as
+  `https://www.youtube.com/watch?v=<id>`.
+- Each refusal sits beside an accepted form: `file://`, loopback addresses, a look-alike host,
+  userinfo, a port, an id of the wrong length, control characters and an `/embed/` or channel URL.
+- The list check refuses the whole list and names every bad entry, and caps the list at 50 distinct
+  videos.
+
+Trap: Every accepted URL becomes Gemini's `file_uri` on a paid call, so a check that accepts too
+much sends an arbitrary address to the provider. The accepted forms are tested too, so a rule that
+refuses everything also fails.
+
+### `test_ids_and_jobfiles.py`
+
+Covers `ids.py` and `jobfiles.py`, which every process uses to turn an id into a path
+([Ids that become paths](../03-database.md#ids-that-become-paths)).
+
+- The strict id check accepts the real id shapes and refuses anything that could leave its
+  directory. Each refusal sits beside a working control.
+- `is_component` is the looser check for use on disk. It accepts a legacy id with a dot or a space,
+  and still refuses `.`, `..`, a separator and a name over 255 bytes in UTF-8.
+- `job_file`, `images_dir`, `output_file`, `scene_file` and `image_file` derive the fixed layout and
+  refuse a symlink in any component below the root. A symlinked root is allowed, and a path that
+  does not exist yet still derives.
+- `ignore_symlinks` keeps a link inside `images/` out of a `copytree`.
+- A name that gets a suffix leaves room for it. `output_file` and `scene_file` refuse a 252-byte stem
+  and create nothing, and a 251-byte stem's file is written for real, since the bound is the
+  filesystem's (`ENAMETOOLONG`).
+- `source_fingerprint` changes on any edit or move in a tree and refuses a symlink in it.
+
+Trap: The 128-character cap is a rule for new ids only. Applied in `is_component`, it would move
+every longer legacy video to `FAILED`. The symlink check walks each component, because containment
+alone passes a job directory linked to another video's directory inside the root, which hands one
+video another's files. The id check is a `fullmatch`, because `re.match` with `$` accepts a trailing
+newline.
+
+### `test_mascots.py`
+
+Covers `mascots.py`, the mascot rules every process shares
+([Mascots](../10-scene-authoring.md#mascots)).
+
+- `cue_errors` validates a cue track against the engine's real box, the safe zone and the caption
+  band. A walk is checked along its path, so two clear positions on opposite sides of the band are
+  refused. The second in view must be one unbroken stretch. One bad walk is reported once per kind
+  of violation.
+- `caption_band` derives a line count from `maxWords` and `fontSize`, so large captions that wrap to
+  three or four lines still keep the mascot off them. A hidden caption band frees the space.
+- `holds_pickable_sql` agrees with `pickable`, and `cartoon_mascot_clash_sql` names a Cartoon 3D
+  style or resolved renderer with a non-empty mascot.
+- `resolve_default` turns an archived or unapproved default into no mascot. `mascot_gpu_error` asks
+  for a GPU test when the status is `unknown`. `code_for` reads a built-in's code from its versioned
+  file.
+- Copies are compared with their originals: `EMOTIONS` with the engine's `sheet.js`, the safe zone
+  with `mcp/text_audit.py`, `FPS` with `Root.tsx` and `mcp/server.py`, the box and walk constants with
+  the engine's `frame.html` and `driver.js`, and the caption defaults with `Subtitles.tsx`.
+
+Trap: `cue_errors` is the one check between an agent's cue track and a mascot that stands on the
+captions in a finished video. It is a Python port of the engine's walk model, so the constants above
+must stay equal to the engine's.
+
+### `test_mascot_driver_agreement.py`
+
+Covers the walk model in `mascots.py` against the engine's `driver.js`.
+
+- The test runs `renderer/remotion/mascot-tools/driver-agreement.mjs`, which loads `driver.js` in a
+  Node `vm` context, on five fixed tracks.
+- At each sampled frame it compares where the feet stand with `boxes_at_frames`, within one pixel.
+
+Trap: The constant checks in `test_mascots.py` compare text. A change to the logic on either side
+passes them, and this file is the one that runs both.
+
+Needs: `node` on `PATH`. Without it the test skips and says why.
+
+### `test_builtin_tubi.py`
+
+Covers the files of the built-in mascot in `renderer/remotion/mascot-builtin/tubi/v1/`.
+
+- The directory holds `mascot.js` and the three model sheets as JPEGs, the form the API serves a
+  built-in's sheets in. On a migrated database, `code_for` returns that `mascot.js`.
+- The code registers `window.MASCOT`, and every view's face record carries `bx`.
+
+Trap: The engine's `blush()` reads `bx`, and a face without it turns every blush into `NaN` with no
+error. Version 1 is immutable: a changed drawing ships as a new version directory with a migration.
+
+### `test_renderers.py`
+
+Covers `renderers.py`, the rules the render gateway, the worker, the API and the MCP server share
+about the machines that render.
+
+- The scheduler ([Which renderer gets which video](../20-gpu-and-remote-renderers.md#which-renderer-gets-which-video))
+  is a pure function, tested case by case: who may claim, the tolerance for a slower caller, the
+  starvation limit, and that offline, disabled, removed and outdated renderers never hold a video
+  back.
+- A GPU-only video is skipped by a renderer without a verified GPU even past starvation, and that
+  renderer takes the next video.
+- The estimate is the median of the last five timings for a kind of video, so one stalled render
+  does not make a machine look slow for long.
+- `gpu_status` returns the four values the GPU gates read, and `gpu_unavailable_reason` names every
+  renderer and its state.
+- Enrollment secrets are stored hashed, work once and expire, and a removed renderer is never
+  revived ([Enrollment](../19-render-gateway.md#enrollment)). The built-in token never expires, and
+  rotation keeps the old credential working until the new one is first used
+  ([Credentials](../19-render-gateway.md#credentials)).
+
+Trap: In `gpu_status`, `unknown` outranks `not_usable`. A renderer that has not been probed may have
+a working GPU, so the message asks for a test. A rotation the renderer never received is issued
+again without dropping the credential the renderer still holds, since dropping it would leave that
+renderer with no credential that authenticates.
+
+### `test_disk_usage.py`
+
+Covers `disk_usage.py`: the host half of the disk-usage figure and the one rule for "old image" that
+`upgrade.py` deletes by ([Old images](../16-infrastructure.md#old-images)). Docker is faked from
+recorded JSON.
+
+- A previous release's images are old and the running ones are not. A fork's release images count
+  as Tubematic's.
+- An image that a `tubematic` container uses, running or stopped, is never old. Neither is an image
+  outside Tubematic's repositories, nor an untagged image Compose did not build for this project.
+- Short and full image ids join, and a size Docker did not report stays `None` and never becomes 0.
+- `tree_bytes` counts a hardlinked file once and never follows a symlink.
+- The snapshot write is atomic, and the command the poller starts runs one measurement at a time.
+
+Trap: With no Tubematic containers, or with Docker missing or unreadable, no image is old. `old_images`
+decides what `upgrade.py` deletes, so each refusal is tested beside a control that is named old.
+
+## Infrastructure
+
+### `test_auth.py`
+
+Covers `auth.py`: the service tokens, the admin password and the render gateway's TLS pair
+([The secrets directory](../16-infrastructure.md#the-secrets-directory)).
+
+- The secrets directory is mode 0700 and its files 0644. `ensure_secrets` never replaces a secret
+  and refills an empty one.
+- A missing or empty secret file raises, so every caller fails closed.
+- A malformed stored password hash never verifies and never raises.
+- The certificate is a self-signed P-256 CA with no host name
+  ([The TLS pair](../16-infrastructure.md#the-tls-pair)). A stdlib client built the way a renderer's
+  is completes a real handshake against it, and a client that trusts another install's certificate
+  refuses it.
+- A pair missing either half is made again as a pair, also after a repair that was interrupted
+  between its two renames.
+- `gateway_pin` is the sha256 of the certificate's DER and fails closed without a certificate.
+
+Trap: Rotation rewrites a secret file in place and keeps its inode. A bind mount pins the inode it
+started with, so an atomic rename would leave every running container on the old value. A complete
+TLS pair is never replaced, including one that does not load, and `rotate_secrets` refuses both of
+its names: a new certificate is a new pin, and every enrolled renderer would be cut off.
+
+Needs: `cryptography`.
+
+### `test_logging.py`
+
+Covers the JSONL logging module, `logging.py` ([Logging](../16-infrastructure.md#logging)).
+
+- Redaction has two axes. The pattern axis catches a labelled or provider-shaped secret, including
+  an ElevenLabs `sk_` key, the credential after `Authorization: Basic`, a `Cookie:` or `Set-Cookie:`
+  header and a
+  Discord webhook token in a URL path. The value axis catches a stored secret that appears with no
+  recognisable shape. A short or empty stored secret is ignored, so an unset key does not redact
+  every line.
+- The formatter redacts before it writes, and a rotated key is picked up from the secret provider.
+- Files past the retention cutoff are pruned at startup and at rollover, for the writing service
+  only.
+- Reads return the newest records across services, skip malformed lines, and open only files that
+  match the naming scheme.
+- Werkzeug access lines stay out of the file, and a real Werkzeug warning lands.
+- `setup_json_logging` returns `None` on a directory it cannot create or write and never raises. It
+  runs at import time in every service, so a raise there would stop the process.
+
+Trap: The secret cache marks "never fetched" with a sentinel and does not use `0.0`.
+`time.monotonic()` counts from boot, so on a machine that has just started, a `0.0` marker makes the
+cache look fresh for its first minute, and nothing is redacted while startup failures are logged.
+`test_secrets_are_redacted_on_a_freshly_booted_machine` sets a small clock to reproduce it.
+
+### `test_version.py`
+
+Covers `version.py` ([Version numbers in the code](../18-releases.md#version-numbers-in-the-code)).
+
+- `version()` reads the `VERSION` file beside the package directory, the relationship the
+  Dockerfile's `COPY VERSION /app/lib/VERSION` keeps inside a container. A blank `TUBEMATIC_VERSION`
+  is ignored.
+- The version rule is SemVer with an optional prerelease and no `+build` metadata. The development
+  marker `develop` passes `is_valid()` and fails `is_release()`.
+- `GITHUB_REPO` is a bare lowercase `owner/name`, because its owner is the default image namespace,
+  which Docker refuses in upper case.
+
+Trap: The real `VERSION` file is checked with `is_valid()`, so the suite passes on the development
+branch and on a release line. A check with `is_release()` would fail on every development checkout.

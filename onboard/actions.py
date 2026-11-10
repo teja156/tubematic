@@ -848,7 +848,7 @@ def apply_cron(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
 
     r2 = ex.crontab_write("\n".join(new_lines) + "\n")
     if r2.returncode != 0:
-        rep.warn("crontab write failed — add entries manually (see docs/user-guide/02-installing.md → Manual cron setup)")
+        rep.warn("crontab write failed — add entries manually (see docs/user-guide/15-command-reference.md → Manual cron setup)")
         return
     rep.ok("Cron entry written")
     rep.info(f"Poll (advances pipeline + runs research when due): every {poll_mins} min → {cron_log}")

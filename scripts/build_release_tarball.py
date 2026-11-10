@@ -124,6 +124,9 @@ _DIR_TREES = {
     "agent_files": {"__pycache__", ".pytest_cache"},
     "docs/user-guide": {"__pycache__", ".pytest_cache"},
     "docs/developer": {"__pycache__", ".pytest_cache"},
+    # The screenshots and diagrams those pages show. A page that ships
+    # without its pictures reads as broken to someone holding only the tarball.
+    "docs/images": {"__pycache__", ".pytest_cache"},
 }
 
 # Basenames that must never appear anywhere in the staged tree. Checked as a

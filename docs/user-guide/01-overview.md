@@ -1,102 +1,112 @@
 # Overview
 
-Tubematic is an automated pipeline that turns a topic into a finished YouTube Short. It researches
-topics, writes a script, voices it, generates imagery, animates it in code, renders an mp4, has an
-AI watch the result for defects, and holds the video at three points where a human has to say yes —
-unless its project is on Auto Pilot, which approves those three itself and posts the video.
+Tubematic turns a topic into a finished vertical video. An AI agent writes the script, voices it,
+generates images and writes the animation as code. A renderer turns that code into an mp4. You
+approve the work at three points, on a web dashboard.
 
-It is not a video editor and not a template filler. Every scene is a **React component the AI agent
-writes for that specific video**, compiled and rendered by [Remotion](https://remotion.dev). The
-system's output is real code, which is why an AI can meaningfully improve on a revision round and
-why you can read exactly what produced any frame.
+It runs on your own Linux machine, in Docker.
 
 ---
 
-## What it produces
+## What it makes
 
-A 1080×1920 mp4 at 30fps — vertical, YouTube Shorts format — typically 90 to 180 seconds long, with
-a synthesised voiceover, word-timed captions, generated imagery, and animated diagrams.
+A 1080×1920 mp4 at 30 frames a second, in YouTube Shorts format, usually 90 to 180 seconds long. It
+has a synthesised voiceover, word-timed captions, generated images and animated diagrams.
 
----
+![Three frames from one Short: a title card, a numbered diagram with one step lit, and a closing figure. Each has a caption line and the Tubematic mark in the top corner](../images/sample-frames.jpg)
 
-## How it works, in one picture
+The agent writes each scene as a React component for that one video, and
+[Remotion](https://remotion.dev) renders it. Because the output is code, the agent can change one
+scene when you ask for a revision, and you can read what produced any frame.
+
+## How a video moves
 
 ```mermaid
 flowchart LR
-    subgraph SRC["Sourcing"]
-        R["Research<br/>curriculum · trending ·<br/>mining · manual"]
-    end
-    subgraph AI["AI agent, via MCP"]
-        S["Script"]
-        V["Voice<br/>ElevenLabs"]
-        SC["Images + scene code"]
-    end
-    subgraph AUTO["Renderer and worker"]
-        RE["Render<br/>Remotion + Chromium"]
-        RV["Review (optional)<br/>Gemini watches it"]
-    end
-    P["Publish"]
+    T["Topic"] --> A1(("you<br/>approve")):::you
+    A1 --> S["Script"] --> A2(("you<br/>approve")):::you
+    A2 --> V["Voice, images,<br/>scenes"] --> R["Render"] --> A3(("you<br/>approve")):::you
+    A3 --> D["Finished video"] -.-> P["Publish<br/>(optional)"]
 
-    R --> S --> V --> SC --> RE --> RV --> P
-
-    H1(("you<br/>approve")):::h
-    H2(("you<br/>approve")):::h
-    H3(("you<br/>approve")):::h
-    R -.-> H1 -.-> S
-    S -.-> H2 -.-> V
-    RV -.-> H3 -.-> P
-
-    classDef h fill:#7c3f00,stroke:#ffb347,color:#fff
+    classDef you fill:#7c3f00,stroke:#ffb347,color:#fff
 ```
 
-Three checkpoints, chosen where they cost the least and matter the most: before research becomes
-work, before **voicing spends money**, and before a finished video goes out.
+1. A topic arrives. You type it in, or Tubematic's research proposes it.
+2. You approve the topic, and the agent writes the script.
+3. You approve the script. This is the approval that starts spending: the agent voices the script
+   with ElevenLabs, generates images with OpenAI, and writes the scenes.
+4. The renderer renders the video. If you turned AI review on, Gemini watches the result and can
+   send it back to the agent, once by default.
+5. You watch the video and approve it.
+6. If you set up publishing, you post it from the dashboard. Otherwise you take the mp4 and post it
+   yourself.
 
----
+At each approval you can ask for a revision instead. You write what to change, and the agent reworks
+the topic, the script or the video and brings it back.
 
-## The parts
+[Auto Pilot](14-auto-pilot.md) can make all three approvals for you and post the result. It is off
+by default.
 
-| Piece | What it is | Where |
+## Statuses
+
+Every video has a status. The dashboard shows it as a column on the **Pipeline** page.
+
+| Status | What is happening | Who acts next |
 |---|---|---|
-| **Pipeline API** | Flask. The state machine, settings, and every read/write the dashboard makes. Also serves the render gateway the renderer works through | `renderer/api/`, port 4000 (the gateway: HTTPS 4443, inside Docker only unless [remote renderers](11-remote-renderers.md) are on) |
-| **MCP server** | The AI agent's entire interface — 48 tools and nothing else | `mcp/`, its own container, port 4100 |
-| **Renderer** | Asks the API for the next video, runs Remotion, uploads the result, tests the GPU. Its own container, with no access to the database; other machines can render too, as [remote renderers](11-remote-renderers.md). See [Rendering and Review](../developer/11-rendering-and-review.md) | `renderer/api/render_agent.py` |
-| **Worker** | Runs the AI review of each finished render, sends due scheduled posts and settles posts in flight, runs Auto Pilot, and does the periodic sweeps (analytics, prices, retention, notifications). Its own container, so none of it waits behind a render. See [The Worker](../developer/12-the-worker.md) | `renderer/api/worker.py` |
-| **Remotion project** | The React video codebase — a curated component library plus per-video generated scenes | `renderer/remotion/` |
-| **Dashboard** | Next.js. Where a human creates videos, approves, configures, and watches — the way you run Tubematic | `dashboard/`, port 3000 |
-| **Agent skills** | Markdown that teaches the agent the workflow. The real "business logic" of the AI half | `agent_files/skills/` |
-| **Installer** | A questionary wizard that sets up all of the above, plus `--install-agent` to install the agent that runs the skills | `onboard.py`, `onboard/` |
-| **Poller** | The cron entry point that wakes the agent each piece of work is assigned to | `scripts/poll.py` |
+| Topic Proposed | A topic is waiting for your decision | You |
+| Topic Approved | The topic is waiting for the agent to write its script | The agent |
+| Script Ready | The script is written and waiting for your decision | You |
+| Voicing | The agent is voicing the script | The agent |
+| Voice Ready | The voice is done. The agent generates images and writes the scenes | The agent |
+| Rendering | The video is waiting for a renderer, or rendering | The renderer |
+| Video Ready | The video is rendered and waiting for your decision | You |
+| Video Approved | The video is finished | You, if you publish |
+| Scheduled | A post is waiting for its time | Tubematic |
+| Publishing | A post is going out | Tubematic |
+| Partially Published | Some accounts have the post and some failed | You |
+| Published | Every account has the post | Nobody |
+| Revision Requested | The video is back with the agent for changes | The agent |
+| Rejected | You rejected the topic | Nobody |
+| Failed | The video could not be rendered or published | You |
 
-Everything installs on **one machine**. There is no host/agent split.
+The developer docs and the logs write statuses as constants, such as `SCRIPT_READY`. A video waiting
+for a renderer has the status `RENDER_QUEUED`, which the dashboard shows under Rendering. A
+Partially Published video is shown under Published, with a **PARTIAL** tag.
 
----
+## What it costs and how long it takes
 
-## The design decisions that shape everything else
+Tubematic is free. The services it calls charge you:
 
-Five choices explain most of the codebase. If you understand these, the rest follows.
+| Service | Charged for | When |
+|---|---|---|
+| ElevenLabs | The voiceover, by script length, from your plan's credits | After you approve a script |
+| OpenAI | Each scene image, and each character pose in the Illustrated style | While the agent writes scenes |
+| Your agent's provider | Each agent session: a script, a set of scenes, a revision, a research run | Whenever the agent works |
+| Gemini, if you add a key | Finding topics in YouTube videos, and AI review | During research, and after each render |
 
-**The database is the entire coordination layer.** One SQLite file holds the state machine, the
-settings, the credentials, and the work queue. Processes poll it and take work with guarded
-`UPDATE … WHERE status = ?` statements. There is no broker and no scheduler. This is why WAL mode is
-non-negotiable and why `updated_at` is load-bearing rather than decorative.
+The dashboard records what each call cost. A video's window shows its own total, and
+**Analytics → Spend** shows the whole install. See [Settings](05-settings.md#costs).
 
-**The agent touches nothing directly.** It has no database handle and no filesystem access to job
-directories. Every action is an MCP tool call, which is where validation, cost accounting, path
-resolution and concurrency control live. Adding a capability to the agent means adding a tool, and
-that boundary is what makes the agent's behaviour reviewable.
+Most of the waiting is in two places. Writing the scenes is the longest agent session. Rendering
+comes second: on one test machine, 5 seconds of an ordinary scene took about 2 minutes to render on
+a 6-core CPU and 35 seconds on an NVIDIA GTX 1650. See [GPU Rendering](10-gpu-rendering.md).
 
-**Scenes are generated code, not configuration.** The agent writes TSX. `validate_job` typechecks
-the whole project before any render is queued, so a broken scene fails in seconds instead of after a
-twenty-minute render.
+## What runs on your machine
 
-**Human checkpoints are placed by cost, not by ceremony.** The only non-refundable spend in the
-pipeline is text-to-speech, so the checkpoint sits immediately before it.
+| Part | What it does |
+|---|---|
+| The dashboard | The web page where you create, approve and publish videos. Port 3000 |
+| The agent | Claude Code, Codex or OpenCode, with Tubematic's skills installed. It writes scripts and scenes |
+| The poller | A scheduled job that starts the agent when there is work. It runs from your crontab |
+| The renderer | Renders videos. One runs on this machine, and [other machines can render too](11-remote-renderers.md) |
+| The worker | Runs the AI review, sends scheduled posts, and runs Auto Pilot |
+| The API and the tool server | What the other parts talk to. You do not use them directly |
 
-**Failures degrade rather than stop — with one deliberate exception.** A render timeout requeues; a
-crash routes to the agent; an AI review that errors *fails open* and lets the video through. That
-last one is a considered tradeoff — a broken reviewer must not wedge the pipeline — and it is
-compensated by writing feedback on every outcome so a silently failing reviewer stays visible.
+Everything Tubematic stores is under `~/.tubematic-data/`: the database, which also holds your API
+keys, each video's working files, and the rendered videos. That directory is outside the install
+directory, so deleting the install does not delete your videos.
+
+How the parts fit together is in [Architecture](../developer/01-architecture.md).
 
 ---
 
@@ -104,32 +114,18 @@ compensated by writing feedback on every outcome so a silently failing reviewer 
 
 | Term | Meaning |
 |---|---|
-| **Project domain** | A subject area. Every video files into exactly one. Pausing a domain stops all sourcing into it, and so does reaching its topic cap |
-| **Producibility score** | 1–10, how well a topic suits a short explainer video. Below 5 is refused at creation |
-| **Strategy** | How a topic was sourced: `curriculum`, `trending`, `mining` or `manual` |
-| **Segment** | One beat of a script — `{id, voice, visual}`. `voice` is spoken; `visual` briefs the scene author |
-| **`timeline.json`** | Voicing output: total frames, plus word-level and segment-level frame spans |
-| **`scene-config.json`** | The render manifest: which component renders which frame range with which props |
-| **Generated scene** | A TSX component the agent wrote for one specific video |
-| **Installed scene** | A curated, committed, reusable component in `scenes/installed/` |
-| **Script profile** | A creator's *style*, learned from YouTube transcripts and stored as markdown |
-| **Scene-work claim** | The MCP server's lock preventing two agent sessions authoring the same video at once |
-| **Skill** | A markdown document teaching the agent one workflow |
-| **MCP** | Model Context Protocol — the standard by which an AI agent calls tools |
-
----
-
-## What this documentation covers
-
-The documentation is split by audience — see [the README](../README.md) for the full map. In short:
-
-- **Run it** — the [Quickstart](../quickstart.md), then the rest of this user guide:
-  [Installing](02-installing.md), [Using Tubematic](03-using-tubematic.md),
-  [The Dashboard](04-dashboard.md), [Settings](05-settings.md), [Publishing](06-publishing.md),
-  [Upgrading](07-upgrading.md) and [Troubleshooting](08-troubleshooting.md).
-- **Understand it** — this page, then [Architecture](../developer/01-architecture.md) and
-  [The Pipeline](../developer/02-pipeline.md).
-- **Build on it** — [Scene Authoring](../developer/10-scene-authoring.md) and
-  [The Agent Layer](../developer/07-agent-layer.md) are the two real extension surfaces.
-- **Look things up** — [HTTP API](../developer/05-http-api.md), [MCP Server](../developer/06-mcp-server.md),
-  [Database](../developer/03-database.md), [Settings internals](../developer/04-settings.md).
+| Agent | The AI coding tool that writes scripts and scenes. See [Agents](12-agents.md) |
+| Approval | One of the three points where a video waits for you: the topic, the script and the finished video |
+| Auto Pilot | A mode that makes the approvals and posts videos for the domains you select |
+| Domain | A subject area that videos are filed under, such as "Python Internals". The dashboard's **Projects** page lists your domains |
+| Mascot | An optional character that reacts on screen. See [Visual Styles and Mascots](13-visual-styles-and-mascots.md) |
+| Poll interval | How often the poller checks for work while idle. 30 minutes by default |
+| postforme | The service Tubematic publishes through. It holds the connections to your social accounts |
+| Research | The agent looking for topics on a schedule |
+| Research mode | A way research finds topics: curriculum, trending or mining. See [Using Tubematic](03-using-tubematic.md#where-topics-come-from) |
+| Revision | A request for changes, with a comment saying what to change |
+| Score | How well a topic suits a short explainer video, from 1 to 10. Research files only topics that score 5 or more |
+| Script profile | A writing style learned from YouTube videos you choose |
+| Session | One run of the agent on one video and one stage |
+| Visual style | How a video looks. See [Visual Styles and Mascots](13-visual-styles-and-mascots.md) |
+| Voice | An ElevenLabs voice, with the model it speaks with |

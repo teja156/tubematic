@@ -1,106 +1,77 @@
-# Tubematic — Documentation
+# Tubematic Documentation
 
-Tubematic turns a topic into a finished YouTube Short: it researches topics, writes a script, voices
-it, generates imagery, animates it in code, renders an mp4, has an AI watch the result for defects,
-and stops at three points where a human has to say yes.
+Tubematic turns a topic into a finished YouTube Short. An AI agent writes the script, voices it,
+generates images and writes the animation as code. You approve the topic, the script and the
+finished video on a web dashboard, on your own Linux machine.
 
-Every scene is a React component an AI agent writes for that specific video, compiled and rendered by
-[Remotion](https://remotion.dev). The output is real code, which is why you can read exactly what
-produced any frame.
+[![Watch the Tubematic walkthrough](images/walkthrough.png)](https://youtu.be/-y9zBSg8WEc)
 
-[![Watch the Tubematic walkthrough](https://raw.githubusercontent.com/teja156/tubematic/develop/logos/social/tubematic-walkthrough-1280x720.png)](https://youtu.be/-y9zBSg8WEc)
+## Start here
 
-The documentation is split by who is reading. Pick the entry point that matches what you want to do.
-
-| You want to… | Start at |
+| You want to | Read |
 |---|---|
-| Get it running and make a first video | **[Quickstart](quickstart.md)** |
-| Install, run, operate and upgrade it | **[User guide](#user-guide)** |
-| Understand how it works, change it, or build on it | **[Developer docs](#developer-docs)** |
-| See what changed in a release | **[Release notes](release-notes.md)** |
-
----
+| Install it and make a first video | [Quickstart](quickstart.md) |
+| Understand what it does before you install | [Overview](user-guide/01-overview.md) |
+| Change how it works, or contribute | [Developer docs](#developer-docs) |
+| See what changed in a release | [Release notes](release-notes.md) |
+| Fix a problem | [Troubleshooting](user-guide/08-troubleshooting.md) |
 
 ## User guide
 
-For anyone running Tubematic. No knowledge of the code is assumed.
+For anyone running Tubematic.
 
-| | |
+| Page | Covers |
 |---|---|
-| **[1 · Overview](user-guide/01-overview.md)** | What it is, what it produces, the design decisions that shape everything else, and a glossary. **Read this first** |
-| **[2 · Installing](user-guide/02-installing.md)** | Prerequisites, what the dashboard exposes on the network, the install wizard, installing an agent, your first video, verifying and uninstalling |
-| **[3 · Using Tubematic](user-guide/03-using-tubematic.md)** | The day-to-day: the ways to make videos, scheduling, the control knobs, the checkpoints you approve, pausing and monitoring |
-| **[4 · The Dashboard](user-guide/04-dashboard.md)** | Signing in, every page and what it is for, and the actions you take there |
-| **[5 · Settings](user-guide/05-settings.md)** | Every setting: what it does, its default, and when to change it |
-| **[6 · Publishing](user-guide/06-publishing.md)** | Connecting social accounts, publishing and scheduling posts, and Auto Pilot |
-| **[7 · Upgrading](user-guide/07-upgrading.md)** | Moving to a new version, versioning, backups, and rollback |
-| **[8 · Troubleshooting](user-guide/08-troubleshooting.md)** | Symptoms and where the cause usually is |
-| **[9 · Remote Access](user-guide/09-remote-access.md)** | Using the dashboard from another machine: Twingate, or HTTPS with Caddy or nginx |
-| **[10 · GPU Rendering](user-guide/10-gpu-rendering.md)** | Rendering on an NVIDIA GPU: the driver, the NVIDIA Container Toolkit, picking the GPU, and checking it is really used |
-| **[11 · Remote Renderers](user-guide/11-remote-renderers.md)** | Letting other machines render for your install: turning it on, the firewall, adding, upgrading and removing a renderer, credentials and troubleshooting |
+| [1 · Overview](user-guide/01-overview.md) | What it makes, how a video moves, what it costs, and a glossary |
+| [2 · Installing](user-guide/02-installing.md) | Prerequisites, the install, checking it, and uninstalling |
+| [3 · Using Tubematic](user-guide/03-using-tubematic.md) | The daily routine, where topics come from, and limiting research |
+| [4 · The Dashboard](user-guide/04-dashboard.md) | Each page, and the decisions you make there |
+| [5 · Settings](user-guide/05-settings.md) | Each setting, its default, and when to change it |
+| [6 · Publishing](user-guide/06-publishing.md) | Connecting accounts, posting and scheduling |
+| [7 · Upgrading](user-guide/07-upgrading.md) | Moving to a new version, backups, and going back |
+| [8 · Troubleshooting](user-guide/08-troubleshooting.md) | Symptoms and fixes, and reporting a bug |
+| [9 · Remote Access](user-guide/09-remote-access.md) | Using the dashboard from another machine |
+| [10 · GPU Rendering](user-guide/10-gpu-rendering.md) | Rendering on an NVIDIA GPU |
+| [11 · Remote Renderers](user-guide/11-remote-renderers.md) | Letting other machines render |
+| [12 · Agents](user-guide/12-agents.md) | Installing, updating and choosing agents |
+| [13 · Visual Styles and Mascots](user-guide/13-visual-styles-and-mascots.md) | How videos look |
+| [14 · Auto Pilot](user-guide/14-auto-pilot.md) | Approving and posting without you |
+| [15 · Command Reference](user-guide/15-command-reference.md) | Every command you run on the machine |
 
 ## Developer docs
 
-For contributors and anyone integrating with or extending Tubematic.
+For contributors and anyone building on Tubematic.
 
-| | |
+| Page | Covers |
 |---|---|
-| **[1 · Architecture](developer/01-architecture.md)** | Containers, processes, how they talk, where files live, the repository map, and the failure model |
-| **[2 · The Pipeline](developer/02-pipeline.md)** | The state machine in full — every status, every transition, the human checkpoints, and the revision loop |
-| **[3 · Database](developer/03-database.md)** | Every table and column, the migration model, and how to add one |
-| **[4 · Settings internals](developer/04-settings.md)** | How settings and credentials are stored, masked and verified, and how to add a setting |
-| **[5 · HTTP API](developer/05-http-api.md)** | Every Flask route — parameters, responses, status codes, and known quirks — and the render gateway renderers call |
-| **[6 · MCP Server](developer/06-mcp-server.md)** | Every agent tool, `validate_job`'s checks, and the scene-work claim |
-| **[7 · The Agent Layer](developer/07-agent-layer.md)** | Skills, slash commands, installing an agent and how videos are assigned to one |
-| **[8 · Scripting and Voice](developer/08-scripting-and-voice.md)** | Script segments, length budget, pronunciation and pause markup, `timeline.json`, script profiles |
-| **[9 · The Remotion Project](developer/09-remotion-project.md)** | The frame model, compositions, dynamic scene dispatch, `scene-config.json`, the installed component library |
-| **[10 · Scene Authoring](developer/10-scene-authoring.md)** | How a scene gets written — the two visual registers, the PHOTO / HYBRID / DIAGRAM / STICK taxonomy, cadence, the revision path, adding a component |
-| **[11 · Rendering and Review](developer/11-rendering-and-review.md)** | The renderer and the render gateway: claims and scheduling, leases, the job bundle, remote renderers, the GPU test and GPU-only videos, the Cartoon 3D stills server, timeouts and retries, Gemini video review, the text-layout audit |
-| **[12 · The Worker](developer/12-the-worker.md)** | The always-on loop that settles posts, runs Auto Pilot, the AI review thread and the timed sweeps — every pass, its order and how often it runs |
-| **[13 · The Poller](developer/13-the-poller.md)** | `poll.py`, the cron-started supervisor that runs agent sessions — the loop, the four lanes, one stage per session, timeouts and orphans |
-| **[14 · Publishing internals](developer/14-publishing.md)** | The postforme client, schema, routes, the worker's publishing passes, and the design decisions behind them |
-| **[15 · Dashboard internals](developer/15-dashboard.md)** | The Next.js app — stack, the request guard, the proxy and stream routes, components, the action model |
-| **[16 · Infrastructure](developer/16-infrastructure.md)** | Compose services, authentication, volumes, images, cron, and day-to-day operating commands |
-| **[17 · Development](developer/17-development.md)** | Where verification belongs, release tooling, the CI workflow shape, conventions, and contributing |
-| **[18 · Releases](developer/18-releases.md)** | What a release consists of, release branches, image tags, and how migrations ship |
-| **[Test suites](developer/test-suites/README.md)** | Every test suite — what each file guards, how to run it, and the traps each one encodes |
+| [1 · Architecture](developer/01-architecture.md) | The containers and processes, how they talk, and where files live |
+| [2 · The Pipeline](developer/02-pipeline.md) | Every status and transition |
+| [3 · Database](developer/03-database.md) | Tables, columns and migrations |
+| [4 · Settings internals](developer/04-settings.md) | How settings and credentials are stored, and every key |
+| [5 · HTTP API](developer/05-http-api.md) | Every route |
+| [6 · MCP Server](developer/06-mcp-server.md) | Every tool the agent has |
+| [7 · The Agent Layer](developer/07-agent-layer.md) | Skills, commands, the adapters, and how agents are installed and assigned |
+| [8 · Scripting and Voice](developer/08-scripting-and-voice.md) | Script segments, pronunciation markup and script profiles |
+| [9 · The Remotion Project](developer/09-remotion-project.md) | How a video is composed from scenes |
+| [10 · Scene Authoring](developer/10-scene-authoring.md) | How the agent writes scenes, and how to add a component |
+| [11 · Rendering and Review](developer/11-rendering-and-review.md) | How a video is claimed and rendered, the two timeouts, and the text-layout audit |
+| [12 · The Worker](developer/12-the-worker.md) | The background loop and each pass it runs, retention and notifications |
+| [13 · The Poller](developer/13-the-poller.md) | The scheduled job that runs agent sessions |
+| [14 · Publishing internals](developer/14-publishing.md) | The postforme client, routes and Auto Pilot |
+| [15 · Dashboard internals](developer/15-dashboard.md) | The Next.js app |
+| [16 · Infrastructure](developer/16-infrastructure.md) | Compose services, authentication, volumes and operating commands |
+| [17 · Development](developer/17-development.md) | Setting up, running the tests, conventions and how to write these docs |
+| [18 · Releases](developer/18-releases.md) | What a release is, how one is built and checked, the CI workflows, and how `upgrade.py` works |
+| [19 · The Render Gateway](developer/19-render-gateway.md) | The HTTPS listener renderers talk to: routes, credentials and the certificate pin |
+| [20 · GPU and Remote Renderers](developer/20-gpu-and-remote-renderers.md) | The GPU test, GPU-only videos, and how renderers on other machines are given work |
+| [21 · AI Review](developer/21-ai-review.md) | When a review runs, what the reviewer is told, and what a finding does |
+| [22 · Agent CLI Reference](developer/22-agent-cli-reference.md) | How Claude Code, Codex and OpenCode are invoked, configured and read |
+| [Test suites](developer/test-suites/README.md) | What each test file guards |
 
----
+## Where to start as a contributor
 
-## Reading routes
-
-**Just want to run it.** [Quickstart](quickstart.md) → [Using Tubematic](user-guide/03-using-tubematic.md)
-→ [The Dashboard](user-guide/04-dashboard.md), and [Remote Access](user-guide/09-remote-access.md) to
-use it from another machine. To render faster, [GPU Rendering](user-guide/10-gpu-rendering.md) and
-[Remote Renderers](user-guide/11-remote-renderers.md).
-
-**Want to change how videos look.** [Overview](user-guide/01-overview.md) →
-[The Remotion Project](developer/09-remotion-project.md) → [Scene Authoring](developer/10-scene-authoring.md).
-This is the main extension surface.
-
-**Want to change how the AI behaves.** [The Pipeline](developer/02-pipeline.md) →
-[The Agent Layer](developer/07-agent-layer.md) → [MCP Server](developer/06-mcp-server.md). Most behaviour
-lives in markdown skills, not code.
-
-**Integrating something external.** [Architecture](developer/01-architecture.md) →
-[HTTP API](developer/05-http-api.md) → [Database](developer/03-database.md).
-
-**Something is broken.** [Troubleshooting](user-guide/08-troubleshooting.md).
-
----
-
-## Conventions in these docs
-
-- Code is cited by **symbol** — `pipeline.py::patch_video` — never by line number, so a citation
-  cannot rot when a file is edited above it.
-- Diagrams are inline ```mermaid fences, rendered natively by GitHub. There is no build step.
-- No test counts, suite totals, or dated claims. Run the suite.
-- Each explanation lives on one page; others link to it. A user-guide page covers what you do and
-  see, and links to the developer page that explains how it works.
-- Where a design decision looks wrong or over-engineered, the reason is stated. Those notes are the
-  most valuable part of this documentation and the easiest to accidentally undo.
-
-**These documents are public and must never carry stale information.** Any change that adds or alters
-a tool, route, settings key, status, schema column, component or skill rule is not finished until the
-relevant page reflects it — and until the neighbouring claims it invalidated have been re-checked.
-See [Development — Keeping the docs true](developer/17-development.md#keeping-the-docs-true).
+| You want to | Read, in order |
+|---|---|
+| Change how videos look | [The Remotion Project](developer/09-remotion-project.md), then [Scene Authoring](developer/10-scene-authoring.md) |
+| Change how the agent behaves | [The Pipeline](developer/02-pipeline.md), [The Agent Layer](developer/07-agent-layer.md), then [MCP Server](developer/06-mcp-server.md) |
+| Integrate another system | [Architecture](developer/01-architecture.md), [HTTP API](developer/05-http-api.md), then [Database](developer/03-database.md) |

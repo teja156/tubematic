@@ -3,7 +3,7 @@
 
 The VQA environment deliberately runs no dashboard container and no
 onboard.py wizard (see vqa/README.md), so this is the only way to change a
-setting here short of hand-writing SQL against mounted/data/tubematic.db or
+setting here short of hand-writing SQL against ~/.tubematic-data/data/tubematic.db or
 rebuilding the image with an edited vqa/make_seed_db.py.
 
 Writes go over HTTP to the pipeline API's POST /settings rather than

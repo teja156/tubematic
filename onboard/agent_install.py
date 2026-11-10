@@ -307,7 +307,7 @@ def effort_field(adapter) -> Field:
         "AGENT_EFFORT", "Effort level", kind="select", choices=list(adapter.EFFORTS),
         default=adapter.DEFAULT_EFFORT, advanced=True,
         help="How hard this agent thinks on each run, when nothing overrides it. Individual "
-             "videos can pick their own at the topic checkpoint, and this is editable "
+             "videos can pick their own at any approval, and this is editable "
              "afterwards on the Settings dashboard. Higher levels cost more per run and take "
              "longer; 'high' is the default because a pipeline run writes scripts and scene "
              "code that a human then has to review.")

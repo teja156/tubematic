@@ -1,16 +1,17 @@
 # The Pipeline
 
-Every video is one row in the `videos` table, and its `status` column is the whole state machine.
-There is no queue, no scheduler and no orchestrator process — each component polls for the statuses
-it owns and writes the next one back.
+Every video is one row in the `videos` table, and its `status` column is the state machine. No
+process schedules the others. Each one polls for the statuses it owns and writes the next status
+back.
 
-Three parties move a video, and the split between them is the most important thing to understand:
-
-| Party | What it may do |
+| Party | What it does |
 |---|---|
-| **Human** | Approve or reject at the three checkpoints. Nothing else is required of you |
-| **AI agent** | Everything between checkpoints — research, scripting, voicing, scene authoring, submitting a render |
-| **Renderer and worker** | Rendering (the renderer, through the API's render gateway); the AI review, publishing, Auto Pilot and the timed sweeps (the worker). Autonomously. Never asks and never waits |
+| Human | Approves, rejects or asks for a revision at the three human checkpoints, then starts publishing |
+| AI agent | The work between checkpoints: research, scripting, voicing, scene authoring, submitting a render |
+| Renderer and worker | The renderer renders, through the API's render gateway. The worker runs the AI review, publishing, Auto Pilot and the timed sweeps. Neither waits for a person |
+
+The [glossary](../user-guide/01-overview.md#glossary) defines domain, research mode, visual style
+and the other product terms. postforme is the publishing service that holds and sends the posts.
 
 ---
 
@@ -26,7 +27,7 @@ flowchart TD
     RQ[RENDER_QUEUED]:::auto
     RN[RENDERING]:::auto
     VRD[VIDEO_READY]:::human
-    VA[VIDEO_APPROVED]:::term
+    VA[VIDEO_APPROVED]:::human
     RR[REVISION_REQUESTED]:::agent
     TR[TOPIC_REJECTED]:::term
     F[FAILED]:::term
@@ -34,12 +35,14 @@ flowchart TD
     TP -->|approve| TA
     TP -->|reject| TR
     TA -->|agent writes script| SR
-    SR -->|approve — money is spent here| VO
+    SR -->|"approve: voicing is paid for"| VO
     VO -->|agent calls generate_voice| VR
     VR -->|agent authors scenes,<br/>validates, submits| RQ
     RQ -->|renderer claims| RN
+    RQ -->|job files missing| RR
+    RQ -->|"cannot be rendered"| F
     RN -->|render ok + review clean| VRD
-    RN -->|render crash / review findings| RR
+    RN -->|failed render / review findings| RR
     RN -->|timeout, or renderer lost| RQ
     RN -->|retry cap exceeded| F
     VRD -->|approve| VA
@@ -50,15 +53,16 @@ flowchart TD
     PB -->|every destination live| PD[PUBLISHED]:::term
     PB -->|"some live,<br/>some failed"| PP[PARTIALLY_PUBLISHED]:::human
     PP -->|"you post the rest by hand,<br/>then Mark as published"| PD
-    PB -->|"all failed, or the<br/>one-hour backstop"| F
+    PB -->|"all failed, or the<br/>one-hour deadline"| F
     F -.->|"Retry publishing:<br/>a live post exists"| PB
     F -.->|"Retry publishing:<br/>nothing is live"| VA
     TP -.->|request revision| RR
     SR -.->|request revision| RR
     VRD -.->|request revision| RR
-    RR -->|agent re-routes| TP
-    RR --> SR
-    RR --> VR
+    RR -->|the topic| TP
+    RR -->|the wording| SR
+    RR -->|a pronunciation| VO
+    RR -->|the visuals| VR
     RR -->|unfixable| F
 
     classDef human fill:#7c3f00,stroke:#ffb347,color:#fff
@@ -67,276 +71,241 @@ flowchart TD
     classDef term  fill:#2a2a2a,stroke:#888,color:#fff
 ```
 
-<sub>**Amber** — a human must act · **Blue** — the AI agent acts · **Purple** — automatic, owned by the worker or the renderer · **Grey** — terminal</sub>
+<sub>Amber: a human acts. Blue: the AI agent acts. Purple: automatic, owned by the worker or the renderer. Grey: terminal.</sub>
 
 | Status | Owner | Meaning |
 |---|---|---|
-| `TOPIC_PROPOSED` | Human | A topic has been researched and scored. Awaiting your decision |
-| `TOPIC_APPROVED` | Agent | Approved. The agent will write a script |
-| `TOPIC_REJECTED` | — | Terminal. You said no |
-| `SCRIPT_READY` | Human | A script exists. **Approving spends money** |
-| `VOICING` | Agent | Approved for voicing. The agent will call ElevenLabs |
+| `TOPIC_PROPOSED` | Human | A researched, scored topic waits for a decision |
+| `TOPIC_APPROVED` | Agent | The agent writes a script |
+| `TOPIC_REJECTED` | none | Terminal. A human rejected the topic |
+| `SCRIPT_READY` | Human | A script exists. Approving it authorizes the paid voicing |
+| `VOICING` | Agent | The agent calls ElevenLabs |
 | `VOICE_READY` | Agent | Audio and `timeline.json` exist. The agent authors scenes |
-| `RENDER_QUEUED` | Renderer | Waiting for the renderer. Not agent-actionable |
-| `RENDERING` | Renderer, then the worker | Being rendered, then — once the mp4 is uploaded — waiting for the AI review |
-| `VIDEO_READY` | Human | A finished mp4 exists, and the reviewer found nothing. Awaiting sign-off |
-| `VIDEO_APPROVED` | Human | You signed it off. Publishing, if enabled, starts here — by hand, unless the video's project is on [Auto Pilot](14-publishing.md#auto-pilot) |
-| `SCHEDULED` | Worker | Uploaded; the publishing service holds the post until the time you picked. You can cancel it back to `VIDEO_APPROVED` |
-| `PUBLISHING` | Worker | Uploaded to the publishing service; awaiting per-destination results |
-| `PUBLISHED` | — | Every destination went live — or, after a partial publish, you marked it published |
-| `PARTIALLY_PUBLISHED` | Human | Live on some destinations, failed on others. You post it to the failed ones by hand, then **Mark as published**. Its files are kept until then — see [Publishing](14-publishing.md#a-partial-publish) |
-| `REVISION_REQUESTED` | Agent | Something needs fixing. The agent diagnoses and re-routes |
-| `FAILED` | — | Terminal, except for a video that failed while publishing: **Retry publishing** checks postforme and moves it to `PUBLISHING` (a live post was found) or back to `VIDEO_APPROVED` (nothing is live) |
+| `RENDER_QUEUED` | Renderer | Waiting for a renderer |
+| `RENDERING` | Renderer, then the worker | Being rendered. Once the mp4 is uploaded, waiting for the AI review |
+| `VIDEO_READY` | Human | A finished mp4 exists and the AI review, when it is on, found nothing |
+| `VIDEO_APPROVED` | Human | Signed off. A human publishes from here, unless the domain is on Auto Pilot. Terminal while publishing is disabled |
+| `SCHEDULED` | Worker | Uploaded. postforme holds the post until the chosen time. A human can cancel it back to `VIDEO_APPROVED` |
+| `PUBLISHING` | Worker | Uploaded to postforme, waiting for each destination's result |
+| `PUBLISHED` | none | Terminal. Every destination went live, or a human marked a partial publish as published |
+| `PARTIALLY_PUBLISHED` | Human | Live on some destinations, failed on others. A human posts to the failed ones by hand, then presses **Mark as published**. The files are kept until then ([Publishing](14-publishing.md#a-partial-publish)) |
+| `REVISION_REQUESTED` | Agent | Something needs fixing. The agent diagnoses it and routes the video back |
+| `FAILED` | none | Terminal, except after a failed publish: **Retry publishing** asks postforme and moves the video to `PUBLISHING` (a live post exists) or `VIDEO_APPROVED` (nothing is live) |
 
-There is no `SCRIPTING` status. Writing a script is effectively instant, so `TOPIC_APPROVED` is the
-workable status the agent picks up directly.
+There is no `SCRIPTING` status. The agent picks a video up at `TOPIC_APPROVED` and writes the
+script in one session.
 
-## The three status sets
+### Render-stage exits
 
-```python
-ACTIONABLE_STATUSES = {"TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY"}
+A queued video can leave `RENDER_QUEUED` without a render
+([Refused before anything renders](11-rendering-and-review.md#refused-before-anything-renders)):
 
-WORKABLE_STATUSES = ["TOPIC_APPROVED", "VOICING", "VOICE_READY",
-                     "REVISION_REQUESTED"]
-# VIDEO_APPROVED is deliberately absent — publishing is never agent work.
-```
+- The render gateway moves it to `REVISION_REQUESTED` when a job file is missing at the claim.
+- The gateway moves it to `FAILED` when an id cannot be used as a file path, when a Cartoon 3D
+  video holds a mascot, or when a mascot's code cannot be staged.
+- The worker's GPU-wait sweep moves a GPU-only video to `FAILED` when no renderer can take it.
 
-`ACTIONABLE_STATUSES` is what the dashboard's inbox shows. `WORKABLE_STATUSES` is what the cron
-poller looks for before starting an agent session. A status in neither set is either owned by the worker or the renderer, or
-terminal. A workable video that three agent sessions in a row failed to move is flagged **stuck**
-(`agent_stuck_at`): it keeps its status but is left out until a human changes the status or presses
-Retry agent — see [The Poller](13-the-poller.md#success-is-read-from-the-database).
+From `RENDERING`, a failed render goes to `REVISION_REQUESTED` and a timeout, a stall or a lost
+renderer back to `RENDER_QUEUED`. Each counts toward `max_render_retries`, and the video goes to
+`FAILED` past it. A GPU-only video whose GPU stops working during a render goes to `FAILED` at
+once. A video also reaches `VIDEO_READY` when the review is switched off, errors, or has passed
+its loop cap ([Status transitions](11-rendering-and-review.md#status-transitions)).
 
-Both are duplicated across `renderer/api/pipeline.py`, `mcp/server.py` and
-`dashboard/lib/types.ts`, and carry `# Keep in sync` comments. The duplication is deliberate —
-separate processes with no shared package — but it means a change needs three edits.
+### What the API enforces
+
+`PATCH /videos/<id>` and the MCP tool `set_video_status` do not check a write against the diagram.
+Both accept any valid status on a video that is not archived, with one exception:
+`set_video_status` refuses `TOPIC_REJECTED` and `SCHEDULED` with `human_only_status`
+(`mcp/server.py::HUMAN_ONLY_STATUSES`). The agent's skills and the dashboard's buttons are what
+keep to the diagram.
+
+## The status sets
+
+| Set | Members | Used for | Copies |
+|---|---|---|---|
+| `VALID_VIDEO_STATUSES` | Every status in the table above | Validating a status write | `renderer/api/pipeline.py`, `mcp/server.py`, the `VideoStatus` type in `dashboard/lib/types.ts` |
+| `ACTIONABLE_STATUSES` | `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` | The human checkpoints: `GET /videos/actionable`, the dashboard's Quick Actions list, and where the agent fields may change | `renderer/api/pipeline.py`, and `HUMAN_CHECKPOINT_STATUSES` in `mcp/server.py` |
+| `WORKABLE_STATUSES` | `TOPIC_APPROVED`, `VOICING`, `VOICE_READY`, `REVISION_REQUESTED` | `GET /videos/workable`, the list the poller starts agent sessions from | `renderer/api/pipeline.py`, `mcp/server.py`, the keys of `scripts/poll.py::STAGES`, the operator skill's status table |
+| `DELETABLE_STATUSES` | Every status except `VOICING`, `VOICE_READY`, `REVISION_REQUESTED`, `RENDER_QUEUED`, `RENDERING`, `SCHEDULED`, `PUBLISHING` | Which videos a human may delete | `renderer/api/pipeline.py`, `dashboard/lib/videoStatus.ts` |
+
+The copies carry `# Keep in sync` comments, and a change needs an edit in each.
+
+`VIDEO_APPROVED` is absent from `WORKABLE_STATUSES` because no MCP tool can publish. A session
+started for such a video could do nothing, and the poller would start one on every pass.
+
+A workable video that three agent sessions in a row failed to move is flagged stuck
+(`agent_stuck_at`). It keeps its status, and `GET /videos/workable` leaves it out until a human
+changes the status or presses **Retry agent**
+([The Poller](13-the-poller.md#success-is-read-from-the-database)).
 
 ---
 
 ## Human checkpoints
 
-Three, and the agent is instructed never to cross one alone even though the MCP tools would let it.
+The three human checkpoints are the statuses in `ACTIONABLE_STATUSES`. The agent's instructions
+tell it to stop at each one. The MCP tools do not enforce that.
 
-A project can be put on **Auto Pilot**, which approves all three and then posts the video, with no
-human involved. It is off by default and is done by the worker, never by the agent, so
-everything below about what the agent may do holds either way. Read
-[Auto Pilot](14-publishing.md#auto-pilot) before turning it on. The rest of this section describes
-a project that is not on it.
+A domain on [Auto Pilot](14-publishing.md#auto-pilot) has all three approved and the video posted
+by the worker. Auto Pilot is off by default and does not change the agent's rules. The rest of
+this section describes a domain that is not on it.
 
-### `SCRIPT_READY` — the money checkpoint
+### `TOPIC_PROPOSED`: the scope checkpoint
 
-ElevenLabs charges per character and does not refund. This is the last point at which a bad script
-costs nothing. The agent must stop here and post a comment saying what it wrote and why.
+A rejection here costs only the research already done. The approval is also where the topic
+choices are made: the voice, the script profile, the visual style and the mascot
+([Frozen choices](#frozen-choices)).
 
-If your voice roster has two or more voices, approving asks which one to use. The choice travels
-with the approval. Each voice has its own ElevenLabs model, and the script was written for the model
-of the video's voice, so a voice that cannot speak the script is offered but disabled. Pick another,
-or request a revision to have the script rewritten for it — see
-[The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice). A switch
-between `eleven_v3`/`eleven_v4` and any other model almost always lands here, so the place to make it is one step
-earlier: approving a topic offers the same voice picker, and the script is then written for the
-voice picked there.
+### `SCRIPT_READY`: the money checkpoint
 
-The checkpoint is the *status*, not the voicing tool. Approving moves the video to `VOICING`, and
-that move authorizes both the spend and sending the script to ElevenLabs. `VOICING` is ordinary
-agent work, so the poller's next pass starts a voicing session without asking again. If a video sits in `VOICING`
-for three poll intervals anyway, the worker flags it. See
-[Troubleshooting](../user-guide/08-troubleshooting.md#voice).
+ElevenLabs charges per character and does not refund, so this is the last status at which a bad
+script costs nothing. The agent stops here and posts a comment that says what it wrote and why.
 
-### `VIDEO_READY` — the quality checkpoint
+With two or more voices in the roster, the approval carries the voice choice. A voice whose
+ElevenLabs model cannot speak the script is listed and disabled, and using it takes a revision. A
+switch between `eleven_v3` or `eleven_v4` and any other model usually hits this, so pick the voice
+at the topic approval
+([The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice)).
 
-A rendered video exists and the AI reviewer found nothing. It is still not approved until a human
-watches it. The reviewer is a filter for obvious defects, not a substitute for judgement.
+The approval is the status change. Moving the video to `VOICING` authorizes both the spend and
+sending the script to ElevenLabs, so the poller's next pass starts a voicing session and the agent
+calls `generate_voice` without asking again. If a video stays in `VOICING` for three poll
+intervals, the worker flags it ([Troubleshooting](../user-guide/08-troubleshooting.md#voice)).
 
-### `TOPIC_PROPOSED` — the scope checkpoint
+### `VIDEO_READY`: the quality checkpoint
 
-The cheapest place to say no. Rejecting here costs nothing but the research that already happened.
+A rendered video exists and the AI review, when it is on, found nothing. The review filters
+obvious defects. A person still has to watch the video before it is approved.
 
-### `VIDEO_APPROVED` — the publish checkpoint
+### After the checkpoints: `VIDEO_APPROVED`
 
-Publishing is irreversible and **never the agent's**. No MCP tool can publish, `VIDEO_APPROVED` is not in
-`WORKABLE_STATUSES`, and the agent is told never to write `SCHEDULED`, `PUBLISHING`, `PUBLISHED`
-or `PARTIALLY_PUBLISHED`.
-A post can go out now or at a time you schedule. With publishing disabled, `VIDEO_APPROVED` is simply
-terminal. See [Publishing](14-publishing.md). Only [Auto Pilot](14-publishing.md#auto-pilot) posts
-without a click, and only for the projects selected for it.
+Publishing cannot be undone, and the agent cannot do it: no MCP tool publishes, and the operator
+skill tells the agent not to write `SCHEDULED`, `PUBLISHING`, `PUBLISHED` or
+`PARTIALLY_PUBLISHED` ([The agent cannot publish](14-publishing.md#the-agent-cannot-publish)). A
+human posts now or schedules a time. Only Auto Pilot posts without a click, and only for the
+domains selected for it. With publishing disabled, `VIDEO_APPROVED` is terminal.
 
 ### Approve, reject, revise
 
-`TOPIC_PROPOSED`, `SCRIPT_READY` and `VIDEO_READY` offer **Request Revision**, which requires a
-comment and routes to `REVISION_REQUESTED`. It is also the only way a human adds a comment to a
-video, so every human comment is a revision request the agent will act on. `VIDEO_APPROVED` has
-none: once a video is approved, the remaining decision is whether to publish it. That is distinct from a flat reject: only `TOPIC_PROPOSED` can be
-flat-rejected to the terminal `TOPIC_REJECTED`, and its comment is optional.
+- Each checkpoint offers **Request Revision**. It requires a comment and moves the video to
+  `REVISION_REQUESTED`. It is the dashboard's only control for commenting on a video that stays in
+  the pipeline, so the agent treats every human comment as a revision request.
+- Only `TOPIC_PROPOSED` can be rejected outright, to the terminal `TOPIC_REJECTED`. The comment
+  is optional.
+- `VIDEO_APPROVED` has no revision. The remaining decision is whether to publish.
 
 ---
 
 ## Notifications
 
-A checkpoint only works if someone knows they have been handed one. Tubematic can announce all
-three to a Discord channel, plus two alerts for a video that needs a person: a publish that went out
-on some accounts and failed on others (`PARTIALLY_PUBLISHED`), and any video reaching `FAILED`. Each
-of the five is independently switchable, configured entirely from the dashboard's Settings →
-Notifications tab. Everything is off until both a webhook URL and at least one trigger are set. The
-keys are listed under [Settings](../user-guide/05-settings.md#notifications).
-
-**`FAILED` has one toggle, not one per cause.** Render failures past the retry cap, a publish where
-every account failed, a publish that never created a post, a refused job path and a GPU-only video
-with no working GPU all mean the same thing to a human — stuck, needs a person — with the same next
-step. The cause goes in the message instead. Every path into `FAILED` writes an agent comment
-composed for a human, so the message carries the newest agent comment written no more than two
-minutes before the arrival (`worker.py::FAILURE_REASON_WINDOW_SECS`). The window is there because an
-agent escalating writes its comment and the status as two tool calls, and the comment can land a
-second or more first; the bound is what stops an earlier retry's "Render failed: …" being reported
-as the final reason. Whether it failed while publishing is read from the publication rows,
-the same test Retry publishing uses, and only then does the message offer Retry publishing.
-
-**Announcing is a sweep in the [worker](12-the-worker.md), not a send at each write site.** The
-statuses are written by different processes — `TOPIC_PROPOSED` by the MCP server's `create_video`,
-`SCRIPT_READY` by either the MCP server or the Flask `PATCH`, `VIDEO_READY` by the worker's own
-review thread, `PARTIALLY_PUBLISHED` by the worker's publish poll, and `FAILED` by the worker and
-the render gateway — and the worker's poll loop is the only place that sees them all. That choice also buys
-three things a per-call-site send could not:
-
-- **Bundling.** A research run files several topics seconds apart. The sweep holds proposals back
-  until the newest has been still for a settle window, then sends one message for the run. Six pings
-  for one run is what makes a channel get muted.
-- **No latency anywhere it matters.** A slow or unreachable Discord cannot delay an MCP call or a
-  dashboard save.
-- **Free retries.** The marker that records what has been announced only advances on a successful
-  send, so a failure is retried on the next tick rather than lost.
-
-The cost is latency: the sweep runs once a tick, so a message arrives within about twenty seconds.
-A render never delays it; the worker does not render.
-
-**A second arrival announces again.** A video going
-`SCRIPT_READY → REVISION_REQUESTED → SCRIPT_READY` is announced both times — the whole point of the
-revision loop is that the human sees the result of their feedback.
-
-What makes that work is that `videos.notified_status` records an *arrival*, `<status>@<updated_at>`,
-rather than a status name. A status name alone is not an identity: if the whole round happens
-between two sweeps — rare with a sweep every twenty seconds, but certain to happen sooner or later,
-for example while the worker is stopped — the second `SCRIPT_READY` would read as already announced and the human would never
-hear that their feedback landed. Every status write already bumps `updated_at`, so pairing the two
-makes each arrival distinct without any of the writing processes needing to know
-notifications exist. The one thing it cannot separate is two status changes inside the same second.
-
-**Switching a trigger on does not replay a backlog.** Videos keep reaching checkpoints while
-notifications are off, so the sweep stamps those arrivals as seen without sending. Enabling a
-trigger starts announcing from that moment — the same reasoning as the one-time migration backfill,
-and for the same reason: a feature whose first act is to fire twenty messages gets switched straight
-back off.
+The worker can announce each arrival at a human checkpoint, at `PARTIALLY_PUBLISHED` and at
+`FAILED` to a Discord channel, once per arrival. See
+[The Worker](12-the-worker.md#notifications).
 
 ---
 
 ## The revision loop
 
-`REVISION_REQUESTED` is not a state a video sits in. It is a *diagnosis* state: the agent reads the
-comment thread and the video's own fields, decides what actually needs redoing, and routes the video
-back to the earliest checkpoint that can fix it.
+At `REVISION_REQUESTED` the agent reads the comment thread and the video's fields, decides what
+has to be redone, and routes the video back to the earliest status that can fix it.
 
 ```mermaid
 flowchart LR
     RR[REVISION_REQUESTED] --> Q{What is wrong?}
     Q -->|the topic itself| TP[TOPIC_PROPOSED]
     Q -->|the wording| SR[SCRIPT_READY]
-    Q -->|a mispronunciation| RV[re-voice → VOICE_READY]
-    Q -->|the visuals| SC[fix scenes → VOICE_READY]
+    Q -->|a mispronunciation| RV[VOICING, re-voice, VOICE_READY]
+    Q -->|the visuals| SC[fix scenes, VOICE_READY]
     Q -->|unfixable| F[FAILED]
 ```
 
-Two things about this loop are easy to get wrong and are worth stating explicitly.
+Routing back does not skip a checkpoint: a topic revision goes to `TOPIC_PROPOSED` and a script
+revision to `SCRIPT_READY`. A pronunciation fix needs no new approval, because the script approval
+covers the re-voice.
 
-**A pronunciation fix and a visual fix both land back at `VOICE_READY`, but they are not the same.**
-Re-voicing produces a new `timeline.json` with a different total frame count, which invalidates
-every frame span in the existing scene config. A visual fix does not. The agent distinguishes them
-by comparing `scene-config.totalFrames` against `timeline.total_frames`: equal means the audio is
-unchanged and only the named scenes need rewriting; unequal means the audio was re-voiced and the
-whole config must be re-derived.
+A pronunciation fix and a visual fix both pass through `VOICE_READY`. A re-voice writes a new
+`timeline.json` with a different total frame count, which invalidates every frame span in the
+scene config. A visual fix leaves the audio alone. The agent compares the scene config's
+`totalFrames` with the timeline's `total_frames`:
 
-That comparison is the entry test on purpose. The intuitive test — "was a revision requested?" or
-"is `scene_config_path` populated?" — is wrong, because a pronunciation revision returns through
-`VOICE_READY` with that field still populated and would route every re-voice down the incremental
-path.
+- Equal: the audio is unchanged, and the agent rewrites only the scenes named in the feedback.
+- Unequal: the audio was re-voiced, and the agent derives the whole config again.
 
-**Routing back never skips a checkpoint.** A topic revision goes to `TOPIC_PROPOSED`, not further
-forward.
+`scene_config_path` cannot serve as that test, because a pronunciation revision returns through
+`VOICE_READY` with the field still set.
 
 ---
 
 ## Frozen choices
 
-The per-video choices freeze in two groups, and both freezes are enforced server-side in
-`PATCH /videos/<id>` (returning `409`) and the MCP server's `update_video` — not merely hidden in
-the UI.
+The per-video choices freeze in two groups. `PATCH /videos/<id>` (with a `409`) and the MCP
+server's `update_video` both enforce the freeze, so it does not depend on the dashboard hiding a
+control.
 
 | Group | Fields | Settable while the video is at |
 |---|---|---|
-| Topic | `script_profile_id`, `visual_style` | `TOPIC_PROPOSED` only |
-| Agent | `agent_id`, `agent_model`, `agent_effort` | any human checkpoint — `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` |
+| Topic | `script_profile_id`, `visual_style`, `mascot_id` | `TOPIC_PROPOSED` only |
+| Agent | `agent_id`, `agent_model`, `agent_effort` | Any human checkpoint: `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` |
 
-**Why two groups.** The topic group shapes what the script *is*: changing either after the script
-exists leaves a script that no longer matches what the row claims. The agent group only decides
-*who does the next piece of work*, so a human may change it at every point they review the video.
-Between checkpoints an agent or the renderer holds the video, and switching under it
-would move it between agents, models or effort levels mid-task — so it is frozen there.
+The topic group shapes what the script is, so a later change would leave a script that does not
+match the row. The agent group decides who does the next piece of work. A human may change it at
+every checkpoint, and it is frozen while an agent or the renderer holds the video.
 
-The guard reads the *current* status, which is what makes the approving request work: it carries the
-choices and the status change together, and at the moment it is evaluated the video is still at the
-checkpoint. The same holds for a revision request. That makes ordering load-bearing for anything
-else setting these fields — the write must happen **before** the flip, not after.
+The guard reads the current status, so an approval or a revision request can carry the choices
+and the status change together. Any other caller must write these fields before it changes the
+status. The `UPDATE` is bound to the status the freeze was checked against, so a status change
+that lands in between fails the write with `409`.
 
-**The agent is dealt at creation and changed only by a human.** A video gets `videos.agent_id` from
-the weighted deal when it is created, and nothing but a human at a checkpoint moves it — the poller
-never reroutes a video on its own. `agent_id` must name a live agent (an uninstalled one cannot be
-handed new work); naming the video's current agent again is a no-op. **Changing the agent clears
-`agent_model`** back to `""`, because a model belongs to one agent's list — unless the same request
-sets a model, which is then checked against the *new* agent. `agent_effort` carries across. See
-[The Agent Layer](07-agent-layer.md#assignment).
+### The agent group
 
-`agent_model` is validated against the video's agent: a non-empty value must be one of its installed
-models and the agent must not be archived, or the write is refused with `400`. The freeze check runs
-first, so a late edit still reads as frozen rather than as a model problem. `""` always passes and
-means the agent's own default model. A model written on its own is bound to the agent it was checked
-against: if another request moves the video to a different agent in between, it is refused with
-`409` rather than pinning a model the new agent does not have.
+- A video gets `agent_id` from the weighted deal when it is created
+  ([Assignment](07-agent-layer.md#assignment)). After that only a human at a checkpoint changes
+  it. The poller does not move a video to another agent.
+- `agent_id` must name a live agent, or the write is refused with `400`. Naming the video's
+  current agent again changes nothing.
+- Changing the agent clears `agent_model` to `""`, because a model belongs to one agent's list. A
+  model sent in the same request is kept and checked against the new agent. `agent_effort` carries
+  across.
+- A non-empty `agent_model` must be an installed model of the video's agent, and that agent must
+  not be archived, or the write is refused with `400`. `""` always passes and means the agent's
+  default model. The freeze check runs first, so a late edit is reported as frozen.
+- A model written without an agent is bound to the agent it was checked against. If another
+  request moves the video to a different agent in between, the write is refused with `409`.
+- `agent_effort` must be `""` or one of the five levels. They are the same for every agent, so the
+  check needs no installed agent. `""` means the agent's own level
+  ([Effort](07-agent-layer.md#effort)).
 
-**`agent_effort` is frozen for the same reason as `agent_model` but validated more simply.** Its
-five levels are fixed by the CLI rather than probed per install, so membership in them is the whole
-check — no agent need be installed, and every level is valid for every agent. `""` means the
-agent's own level. See [The Agent Layer](07-agent-layer.md#effort).
+### The topic group
 
-**`visual_style` is frozen for a different reason from the agent group**, and it is the strongest
-freeze of all. The scripting skill reads the register *before* it writes a single `visual` brief,
-because a brief for a posed figure and a brief for a photograph are different requests. Changing
-the register after the script exists therefore invalidates every brief the video carries: the fix
-is a rewrite, not a re-render.
+`visual_style` is frozen because the scripting skill reads it before it writes any `visual` brief.
+A brief for a posed figure differs from a brief for a photograph, so a later change would call for
+a new script.
 
-`resolved_visual_style` is deliberately **not** part of that freeze. It records which concrete
-register `auto` settled on, and the agent writes it at scene-config time — long past
-`TOPIC_PROPOSED`, so a status freeze would make it unwritable in practice. It is **write-once**
-instead: a second, different value is refused. That, and nothing else, is what makes a revision
-round render at the register the video already uses; no code on the revision path knows the field
-exists. Re-rolling it mid-video would mix two registers' assets into one render, which reads as
-broken rather than merely different.
+Two fields that follow from `visual_style` are write-once. The agent writes them through
+`update_video`, HTTP cannot write them, and a second, different value is refused:
 
-`title` is deliberately **not** frozen. It is cosmetic and stays writable at any status.
+- `resolved_visual_style` records which canvas (`dark` or `light`) `auto` settled on. The agent
+  writes it at scene-config time, after `TOPIC_PROPOSED`, so a status freeze would make it
+  unwritable. Write-once is what makes a revision round render on the canvas the video already
+  uses. No code on the revision path reads the field.
+- `resolved_renderer` records which renderer (`dom` or `cartoon_3d`) `auto` settled on. The agent
+  writes it before it authors any scene, because a revision that changed the renderer would
+  discard every scene.
+
+`title` is not frozen. It is a display name and stays writable at any status.
 
 ---
 
 ## Concurrency
 
-Three separate mechanisms, at three layers.
+Three mechanisms guard a video against two writers:
 
-**The render claim** is a single guarded `UPDATE`. See
-[Rendering and Review](11-rendering-and-review.md#the-claim).
-
-**`onlyIfCurrentStatus`** is an optimistic-concurrency guard on the HTTP API, used by every
-status-changing write the dashboard makes. Two people looking at a five-second-stale board cannot
-both approve the same video; the second gets a `409`.
-
-**The scene-work claim** is an owner-keyed, TTL-refreshed lock in the MCP server covering the whole
-scene-authoring window. See [MCP Server](06-mcp-server.md#the-scene-work-claim).
+- The render claim: the render gateway hands a queued video to one renderer with a single guarded
+  `UPDATE` ([Rendering and Review](11-rendering-and-review.md#the-claim)).
+- `onlyIfCurrentStatus`, a precondition the dashboard sends with every status change. The check
+  is part of the `UPDATE`, so when two people approve the same video from a stale board, the
+  second request gets a `409`.
+- The scene-work claim: a lock in the MCP server, keyed to its owner and refreshed on use, that
+  covers the whole scene-authoring window ([MCP Server](06-mcp-server.md#the-scene-work-claim)).
 
 ---
 
@@ -352,119 +321,111 @@ flowchart LR
 
 | Stage | Files written | Columns set |
 |---|---|---|
-| Research | — | `topic`, `title`, `strategy`, `producibility_score`, `project_id` |
-| Scripting | — | `script_segments`, `script` |
+| Research | none | `topic`, `title`, `strategy`, `producibility_score`, `project_id` |
+| Scripting | none | `script_segments`, `script` |
 | Voicing | `<jobs>/<id>/audio.mp3`, `timeline.json` | `tts_text`, `voice_file_path`, `timeline_path` |
 | Scene authoring | `<jobs>/<id>/images/*`, `scenes/generated/<id>/*.tsx`, `scene-config.json` | `scene_config_path` |
 | Rendering | `<output>/<project>/<id>.mp4` | `video_path`, `video_version` |
-| Review | — | `gemini_feedback`, `ai_review_count` |
+| Review | none | `gemini_feedback`, `ai_review_count` |
 
-Job files live under `~/.tubematic-data/jobs/<video_id>/`; generated scenes under
-`~/.tubematic-data/scenes/generated/<video_id>/`; renders under
+Job files live under `~/.tubematic-data/jobs/<video_id>/`, generated scenes under
+`~/.tubematic-data/scenes/generated/<video_id>/`, and renders under
 `~/.tubematic-data/output_videos/<project_id>/`.
 
 ---
 
 ## Where topics come from
 
-Four sourcing modes, all filing into project domains — the single organizing entity.
+Four research modes file topics into domains. The mode is stored in `videos.strategy`.
 
 | Mode | Trigger | `videos.strategy` |
 |---|---|---|
-| Curriculum | Scheduled, from projects flagged `is_curriculum_seed` | `curriculum` |
-| Trending | Scheduled, from GitHub Trending, Hacker News and friends | `trending` |
-| Mining | Scheduled, Gemini watching configured YouTube URLs. Off while no Gemini key is stored | `mining` |
-| Manual | You, via `/tubematic-submit-new-job` or the dashboard's **New Video** page | `manual` |
+| Curriculum | Scheduled, from domains flagged `is_curriculum_seed` | `curriculum` |
+| Trending | Scheduled, from the configured sources such as GitHub Trending and Hacker News | `trending` |
+| Mining | Scheduled. Gemini watches the configured YouTube URLs. Off while no Gemini key is stored | `mining` |
+| Manual | A person, through `/tubematic-submit-new-job` or the dashboard's **New Video** page | `manual` |
 
-Five controls govern how much they produce:
+Five controls limit how much they produce:
 
-1. **Mode toggle** — `active_strategies`. Mining is dropped from it at every read while no Gemini key
-   is stored, and refused if switched on; the stored row is untouched, so a key added later brings it
-   back
-2. **Domain pause** — `projects.status`, on curriculum seeds only. See [Domain pause](#domain-pause)
-3. **Topic cap** — `projects.topic_cap`, on every domain. See [Topic cap](#topic-cap)
-4. **Pending cap** — `research_pending_cap`, the backlog ceiling
-5. **Daily run cap** — `max_research_runs_per_day`, rolling 24 hours
+1. The mode toggle, `active_strategies`. While no Gemini key is stored, every read leaves mining
+   out and switching it on is refused. The stored row keeps it, so a key added later brings it
+   back.
+2. The domain pause, `projects.status`, on curriculum seeds only ([Domain pause](#domain-pause)).
+3. The topic cap, `projects.topic_cap`, on every domain ([Topic cap](#topic-cap)).
+4. The pending cap, `research_pending_cap`: how many topics may wait at `TOPIC_PROPOSED`.
+5. The daily run cap, `max_research_runs_per_day`, over a rolling 24 hours.
 
-The caps are reported by the API and enforced by `scripts/poll.py`. See
-[The Poller](13-the-poller.md).
+The API reports the last two and `scripts/poll.py` enforces them
+([The Poller](13-the-poller.md#research-caps)).
 
 ### Domain pause
 
-Pausing a domain stops topic generation from it. **Only a curriculum seed can be paused.** The
-API, the MCP tools and the dashboard all refuse to pause any other domain, and the dashboard offers
-the control on seeds alone. The reason is what a domain means to each mode. For curriculum, the
-seed is the *source*: sub-topics are enumerated from it, so pausing it stops generation at the
-root. For trending and mining, the domain is only where a topic researched elsewhere gets *filed*.
-Pausing it could not stop the subject being researched, only which row the topic landed in. The
-agent could file the topic into a neighbouring domain, or create a new one, and the pause would be
-defeated while appearing to hold.
+Pausing a domain stops topic generation from it. Only a curriculum seed can be paused: the API and
+the MCP tools refuse to pause any other domain, and the dashboard shows the control on seeds
+alone. A seed is the source that curriculum sub-topics are enumerated from, so a pause stops
+generation at the root. For trending and mining a domain is only where a topic found elsewhere is
+filed, and a pause there could not stop the agent filing the topic into a neighbouring domain.
 
 A paused seed has two effects:
 
 - Scheduled curriculum research does not enumerate it.
-- `create_video` (MCP) and `POST /videos` **refuse** to file a new video into it, whatever mode
-  found the topic. Mining files through `create_video`, and refuses a closed domain before its
-  first Gemini call. A trending or mining topic can match a seed domain too. This is enforced in code,
-  not left to the research prompt: the check reads the domain's `status`, and the refusal tells
-  the agent to skip the candidate rather than refile it. The `INSERT` re-checks the pause itself,
-  so a pause that commits while a video is being created still holds. An earlier read would not
-  see it, because it runs outside any transaction.
+- `create_video` (MCP) and `POST /videos` refuse to file a new video into it, whatever mode found
+  the topic, because a trending or mining topic can match a seed domain too. Mining files through
+  `create_video`, and refuses a closed domain before its first Gemini call.
 
-**`strategy="manual"` is exempt.** A topic you submit yourself outranks a pause. The exemption is
-only as honest as the `strategy` label, which the agent supplies, so the refusal message
-deliberately never mentions it.
+The refusal tells the agent to skip the candidate and file it nowhere else. The `INSERT` repeats
+the check in its own `WHERE` clause, so a pause that commits while a video is being created still
+holds.
 
-Videos already in the domain are untouched: they keep voicing, rendering and reviewing. Resuming
-restores normal filing with no other step. Clearing `is_curriculum_seed` on a paused domain makes
-it active again, so no domain is ever left paused with no control able to change it.
+A video with `strategy="manual"` is exempt, because a topic a person submits outranks a pause. The
+agent supplies the `strategy` value, so the refusal message does not mention the exemption.
 
-There is no way to say "stop making videos about databases" for a subject that was never seeded.
-The options are to reject those proposals at `TOPIC_PROPOSED`, or to turn trending or mining off.
+Videos already in the domain keep voicing, rendering and reviewing. Resuming restores filing with
+no other step. Clearing `is_curriculum_seed` on a paused domain makes it active again, so no
+domain stays paused without a control that can resume it.
+
+A subject that was never seeded cannot be paused. To stop videos about it, reject the proposals at
+`TOPIC_PROPOSED`, or turn trending or mining off.
 
 ### Topic cap
 
-Research must not propose a topic a domain has already had. The agent checks each candidate
-against the domain's whole history with the MCP tool `list_project_topics`, which lists every
-video ever filed there. That includes **archived** videos (deleted by you or by the retention
-sweep) and **rejected** topics. `list_videos` can't be used for this: it never lists an archived
-video, so a topic that was made and later deleted would come back, and under Auto Pilot it would
-be approved and paid for with nobody looking. Mining already counts archived rows as covered for
-the same reason.
+The agent checks each research candidate against the MCP tool `list_project_topics`, which lists
+every video ever filed in the domain, including archived videos (deleted by a person or by the
+retention sweep) and rejected topics. `list_videos` leaves archived videos out, so a topic that
+was made and later deleted would be proposed again, and Auto Pilot would approve and pay for it.
 
-That history has to stay a size an agent can read in one call. So every domain has a
-**`topic_cap`**: how many topics it may ever hold.
+That history has to fit in one tool call, so every domain has a `topic_cap`: the number of topics
+it may ever hold.
+
 - The cap is a whole number from 25 to 750, and 100 by default.
-- Every video ever filed counts, archived, rejected and failed ones included. The count is
-  `topic_count` in `GET /projects` and `list_projects`. It is not the board's video count, which
-  leaves archived videos out.
-- A domain whose count has reached its cap is **expired**. An expired domain is refused exactly
-  like a paused one: it is not enumerated, and `create_video` and `POST /videos` refuse to file
-  into it. The `INSERT` re-counts the domain itself, so two
-  sessions filing at once can't overshoot.
-- The `manual` exemption holds here too. The dashboard's New Video page always files into the
-  fixed `manual` domain, which can therefore go past its cap and show as expired. That is harmless,
-  because research never files there.
+- Every video ever filed counts, including archived, rejected and failed ones. The count is
+  `topic_count` in `GET /projects` and `list_projects`. The board's video count leaves archived
+  videos out, so the two differ.
+- A domain whose count has reached its cap is expired, and is closed the same way as a paused
+  one. The `INSERT` counts the domain again, so two sessions filing at once cannot pass the cap.
+- `strategy="manual"` is exempt here too. The dashboard's New Video page files into the fixed
+  `manual` domain, which can therefore pass its cap and show as expired. Research does not file
+  there, so nothing is blocked.
+- Expired is derived on every read (`topic_count >= topic_cap`) and is not stored. Raising the cap
+  on the Topics page re-opens the domain with no other step. Lowering it below the count expires
+  the domain at once.
 
-Expired is **derived** on every read (`topic_count >= topic_cap`), never stored. Raising the cap on
-the Topics page re-opens the domain with no other step. Lowering it below the count expires the
-domain at once.
+At 750 topics, with briefs clipped to 160 characters, `list_project_topics` is still one readable
+call. Split a domain that needs more into narrower domains.
 
-The bounds keep the list bounded, not the domain's output: at 750 topics with briefs clipped to 160
-characters, `list_project_topics` is still a single readable call. A domain that genuinely needs
-more topics than that is better split into narrower domains, which also gives research a sharper
-subject to enumerate.
+### Manual submissions
 
-A manual submission skips `TOPIC_PROPOSED` entirely and lands at `TOPIC_APPROVED` — asking you to
-approve a topic you just typed would be pointless. The dashboard's New Video page makes this a
-checkbox, **Automatically approve topic**, on by default. Unchecking it lands the video at
-`TOPIC_PROPOSED` for a second look on the Pipeline page.
+A manual submission lands at `TOPIC_APPROVED`, because the person who typed the topic has already
+chosen it. On the dashboard's New Video page this is the **Automatically approve topic** checkbox,
+on by default. With it cleared the video lands at `TOPIC_PROPOSED`.
 
-The two manual routes file differently. `/tubematic-submit-new-job` has an agent at hand, so it
-scores the topic and matches it to a subject domain, as research does. The New Video page has no
-agent at submit time, so every video it creates goes into one fixed domain, **Manual Videos** (id
-`manual`), and is left **unscored**: `producibility_score` 0, shown as "—". Nothing else files a
-video below 5, so 0 can only mean "unscored". The domain is created the first time the form is
-used. It is not a curriculum seed, so it can't be paused and research never enumerates it, and its
-description tells the research agent never to file a researched topic there. See
-[`POST /videos/manual`](05-http-api.md#post-videosmanual).
+The two manual routes file differently:
+
+- `/tubematic-submit-new-job` runs inside an agent session, so the agent scores the topic and
+  matches it to a domain, as research does.
+- The New Video page has no agent at submit time. Every video it creates goes into one fixed
+  domain, **Manual Videos** (id `manual`), with `producibility_score` 0, which the dashboard shows
+  as unscored. `create_video` refuses a score below 5, so 0 does not occur on a researched topic.
+  The domain is created the first time the form is used. It is not a curriculum seed, so it cannot
+  be paused and research does not enumerate it, and its description tells the research agent not
+  to file a researched topic there ([`POST /videos/manual`](05-http-api.md#post-videosmanual)).

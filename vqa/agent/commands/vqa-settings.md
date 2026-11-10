@@ -45,6 +45,6 @@ If the command exits with an error, relay it as-is — the API's own message alr
 specific problem (unknown key, invalid value, mismatched provider/model pair).
 
 `--restart renderer` exists for a genuinely wedged render worker and nothing else. Do not offer it
-as part of a settings change. `--restart api` additionally restarts the MCP server this session is
+as part of a settings change. `--restart mcp` restarts the MCP server this session is
 connected to and needs `--yes`; only run it if the user explicitly asks, and tell them their
 Tubematic tools will drop until the connection re-establishes.

@@ -1,23 +1,18 @@
-# Tubematic — Uninstall
+# Tubematic: Uninstall
 
-`uninstall.py` removes Tubematic in nine steps — containers, Docker volumes, the database, job files,
-generated scenes, each agent's skills and MCP registration, the cron entry, files an older version
-left behind, and finally the `~/.tubematic-data/` data root. Every step asks first, and every step
-that deletes your data defaults to **no**; only the last one can delete your rendered videos, and it
-says how many are at stake. Run it from the install directory:
+`uninstall.py` removes Tubematic in nine steps and asks before each one. The steps that delete your
+database, your videos' working files and your rendered videos default to no. Run it from the install
+directory:
 
 ```bash
-python3 uninstall.py            # --yes confirms every step without asking
+python3 uninstall.py            # --yes answers yes to every step
 ```
 
-To remove a single agent and keep the project, use `python3 onboard.py --uninstall-agent <agent>`
-instead.
-
-- **What each step removes, and what is left behind:**
-  [Installing — Uninstalling](docs/user-guide/02-installing.md#uninstalling).
-- **A full wipe, images and install directory included:**
-  [Removing everything](docs/user-guide/02-installing.md#removing-everything).
-- **Freeing space or clearing data without uninstalling:**
-  [Cleaning up without uninstalling](docs/user-guide/02-installing.md#cleaning-up-without-uninstalling).
-- **Going back to an older version instead:**
-  [Upgrading — Rollback policy](docs/user-guide/07-upgrading.md#rollback-policy).
+- What each step removes, and what the uninstaller leaves behind:
+  [Command Reference](docs/user-guide/15-command-reference.md#uninstallpy).
+- Removing the images and the install directory afterwards:
+  [Uninstalling](docs/user-guide/02-installing.md#uninstalling).
+- Removing one agent and keeping Tubematic:
+  [Agents](docs/user-guide/12-agents.md#uninstall-an-agent).
+- Going back to an older version:
+  [Rollback policy](docs/user-guide/07-upgrading.md#rollback-policy).

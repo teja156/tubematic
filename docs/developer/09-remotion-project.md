@@ -1,22 +1,20 @@
 # The Remotion Project
 
-`renderer/remotion/` is a [Remotion](https://remotion.dev) project — React that renders to video.
-Remotion runs your components in a headless Chromium, screenshots each frame, and hands the frames to
-ffmpeg.
+`renderer/remotion/` is a [Remotion](https://remotion.dev) project: React components that render to
+video. Remotion runs the components in a headless Chromium, screenshots each frame and hands the
+frames to ffmpeg.
 
-This page covers how *this* project is wired. For how to write a scene, see
-[Scene Authoring](10-scene-authoring.md). For Remotion itself, its own documentation is better than
-anything that could be restated here.
+This page covers how the project is wired. [Scene Authoring](10-scene-authoring.md) covers how the
+agent writes scenes, and [Rendering and Review](11-rendering-and-review.md) covers how a renderer
+runs the project.
 
 ---
 
 ## The frame model
 
-The single concept everything else depends on:
-
-> **A component is a pure function of the current frame.** There is no timeline, no tweening engine,
-> and no animation state. You call `useCurrentFrame()`, compute what the picture looks like at that
-> number, and return it.
+A component is a pure function of the current frame. Remotion has no timeline, no tweening engine and
+no animation state. A component calls `useCurrentFrame()`, computes the picture for that frame number
+and returns it.
 
 ```tsx
 const frame = useCurrentFrame();
@@ -26,33 +24,35 @@ const opacity = interpolate(frame, [0, 30], [0, 1], {
 });
 ```
 
-At 30fps, frame 30 is one second in. Two consequences follow directly, and both bite newcomers:
+Every composition runs at 30 fps, so frame 30 is one second in. Two rules follow:
 
-- **`setTimeout`, `requestAnimationFrame` and CSS transitions do not work.** Rendering does not
-  happen in real time; frames are produced as fast or as slowly as the machine manages. Anything
-  keyed to wall-clock time produces a different result every render.
-- **Frame numbers inside a `<Sequence>` are relative to that sequence.** Every scene is wrapped in
-  one, so a scene's own `useCurrentFrame()` returns 0 on its first visible frame regardless of where
-  it sits in the video.
+- `setTimeout`, `requestAnimationFrame` and CSS transitions do not work. A render produces frames as
+  fast as the machine manages, so anything keyed to wall-clock time differs from render to render.
+- Frame numbers inside a `<Sequence>` are relative to that sequence. `CompositionBuilder` wraps every
+  scene in one, so a scene's `useCurrentFrame()` returns 0 on the scene's first frame.
 
 ---
 
 ## Compositions
 
-`renderer/remotion/src/Root.tsx` registers three, all 1080×1920 at 30fps.
+`renderer/remotion/src/Root.tsx` registers four compositions.
 
-| Id | Component | Duration |
+| Id | Component | Size and duration |
 |---|---|---|
-| `Composition` | `CompositionBuilder` | Read from `timeline.json` |
+| `Composition` | `CompositionBuilder` | 1080×1920, duration read from `timeline.json` |
 | `TextLayoutAudit` | `CompositionBuilder` plus `TextLayoutProbe` | The same |
-| `Placeholder` | A static placeholder | 90 frames |
+| `MascotSheet` | `MascotSheet` | One frame, sized per sheet |
+| `Placeholder` | A static placeholder | 1080×1920, 90 frames |
 
-`Composition` is the only one ever rendered to video — the renderer always invokes
-`npx remotion render Composition`. `TextLayoutAudit` is driven only through Remotion's Node API by
-the text-layout audit; it is the same video with an invisible measuring probe mounted on top.
+A renderer turns `Composition` into a video with `npx remotion render Composition`.
+`TextLayoutAudit` is the same video with an invisible measuring probe on top. The
+[text-layout audit](11-rendering-and-review.md#the-text-layout-audit) drives it through Remotion's
+Node API. `MascotSheet` is listed so that Remotion Studio can show it, and its renders use a separate
+entry point ([The mascot layer](#the-mascot-layer)). The GPU test's `GpuProbe` composition is
+registered only by its own entry point, `src/gpu-probe/index.ts`.
 
-Duration comes from `calculateMetadata`, which fetches the timeline named in the props and returns
-its `totalFrames`, falling back to 900 frames if that fetch or parse fails.
+The first two take their duration from `calculateMetadata` (`Root.tsx::durationFromTimeline`), which
+fetches the timeline named in the props and returns its `totalFrames`, or 900 frames if that fails.
 
 ---
 
@@ -60,26 +60,27 @@ its `totalFrames`, falling back to 900 frames if that fetch or parse fails.
 
 ```mermaid
 flowchart TD
-    P["--props<br/>sceneConfigPath, timelinePath, audioPath, watermark"] --> CB[CompositionBuilder]
+    P["--props<br/>sceneConfigPath, timelinePath, audioPath,<br/>watermark, mascotPath"] --> CB[CompositionBuilder]
     CB --> AUD["&lt;Audio&gt; voiceover<br/>mounted once, unsequenced"]
     CB --> MUS["optional music + sfx<br/>each in its own Sequence"]
     CB --> LOOP{"for each entry in<br/>scene-config.scenes"}
-    LOOP -->|type: TextReveal| TR["TextRevealScene<br/>captions from timeline.words"]
     LOOP -->|type: generated| SEQ["&lt;Sequence from=startFrame<br/>durationInFrames=…&gt;"]
     SEQ --> GS[GeneratedScene]
     GS --> IMP{"source"}
     IMP -->|installed| I["import('./scenes/installed/{src}.tsx')"]
     IMP -->|generated| G["import('./scenes/generated/{src}.tsx')"]
+    CB --> OVR["overlays, outside any Sequence:<br/>mascot, captions, watermark"]
 ```
 
-`CompositionBuilder` fetches the scene config and the timeline, mounts the audio, and walks the
-scene list. Each `generated` entry is wrapped in a `<Sequence>` at its `startFrame` for its
-`durationInFrames`, and rendered by `GeneratedScene`.
+`CompositionBuilder` fetches the scene config and the timeline, mounts the audio and walks the scene
+list. It wraps each `generated` entry in a `<Sequence>` at the entry's `startFrame` for its
+`durationInFrames`, and `GeneratedScene` renders it. The layers, bottom to top, are the canvas colour
+(`#0f0f0f` for `dark`, `#ffffff` for `light`), the scenes, the mascot, the captions and the
+watermark.
 
 ### Dynamic import, and why there are two branches
 
-`GeneratedScene` resolves the component with a template-literal dynamic `import()` — webpack, not
-`require.context`:
+`GeneratedScene` resolves the component with a template-literal dynamic `import()`:
 
 ```tsx
 source === "installed"
@@ -87,19 +88,17 @@ source === "installed"
   : import(`./scenes/generated/${src}.tsx`);
 ```
 
-Webpack must resolve each dynamic import to a fixed directory prefix at build time so it knows what
-to bundle. A single `import(\`./scenes/${dir}/${src}.tsx\`)` with a variable directory would give it
-nothing to work with. Each branch bundles every `.tsx` under its own tree, **recursively** — which is
-what makes the namespaced `"{video_id}/{scene_name}"` form resolve through the same call with no
-extra configuration.
+Webpack resolves each dynamic import to a fixed directory prefix at build time, so one `import()`
+with a variable directory would bundle neither tree. Each branch bundles every `.tsx` under its own
+tree, recursively, which is why the namespaced `"{video_id}/{scene_name}"` form resolves through the
+same call.
 
-The component is taken as `mod.default ?? Object.values(mod)[0]`, so a single named export works
-too, though a default export is the documented shape.
+The component is `mod.default ?? Object.values(mod)[0]`. A default export is the documented shape,
+and a single named export also works.
 
-> **An import failure does not fail the render.** `GeneratedScene` logs to the console, calls
-> `continueRender`, and that scene renders as a flat dark rectangle for its whole duration. A video
-> that comes back with a silent black gap is very often a scene that failed to import. This is also
-> why `validate_job`'s typecheck matters: it is the layer that actually catches the mistake.
+An import failure does not fail the render. `GeneratedScene` logs the error, calls `continueRender`
+and draws nothing, so the bare canvas shows for the scene's whole duration. The typecheck in
+`validate_job` is what catches such a scene.
 
 ### Props a scene receives
 
@@ -107,13 +106,17 @@ too, though a default export is the documented shape.
 <Component durationInFrames={…} words={…} {...props} />
 ```
 
-Always `durationInFrames` and `words` (the timeline's word spans), then the scene-config entry's
-`props` object spread **last** — so a `props` key named `durationInFrames` or `words` overrides the
+A scene receives `durationInFrames` and `words` (the timeline's word spans), then the config entry's
+`props` object. `props` is spread last, so a key named `durationInFrames` or `words` overrides the
 builder's value.
 
-`TextReveal` entries do not go through this path at all. `CompositionBuilder` instantiates
-`TextRevealScene` directly and does not wrap it in the crossfade helper, so `transitionToNext` has
-no effect on a `TextReveal` entry.
+### Crossfades
+
+`CompositionBuilder::SceneWithFades` fades each generated scene in at its start and out at its end.
+The fade-out length is the scene's own `transitionToNext.durationInFrames`: 8 frames when the key is
+absent, and 0 for a hard cut. The fade-in length is the previous scene's value, because the two fades
+share one overlap window. The first scene has no fade-in and the last has no fade-out. Start frames
+do not move, so audio sync is unaffected.
 
 ---
 
@@ -121,111 +124,94 @@ no effect on a `TextReveal` entry.
 
 | Track | Mounting |
 |---|---|
-| Voiceover | `<Audio>` at the top level, unconditionally, outside any sequence |
-| Music | Optional, inside a `<Sequence>` at its `startFrame`, with a callback volume that holds flat then ramps to zero over `fadeOutFrames` |
-| SFX | One `<Sequence>` per entry |
+| Voiceover | One `<Audio>` at the top level, outside any sequence, always mounted |
+| Music | Optional. Inside a `<Sequence>` at its `startFrame`. The volume holds flat, then ramps to zero over `fadeOutFrames` |
+| SFX | One `<Sequence>` per entry, at its `startFrame`. `volume` defaults to 0.6 |
 
-The music volume callback receives a frame **relative to its own sequence**, not to the video.
+The music volume callback receives a frame relative to the music's own sequence.
+`CompositionBuilder` applies no defaults to the `music` object, and an entry without `volume` or
+`fadeOutFrames` produces `NaN`. Supply both.
 
-> Note that the music object's Zod defaults are never applied at runtime (see below), so a hand
-> authored `music` entry missing `volume` or `fadeOutFrames` produces `NaN` rather than a default.
-> Supply both.
+A renderer stages `audio.mp3`, `timeline.json`, `scene-config.json`, `images/` and the mascot's code
+for a job (`render_agent.py::_stage`). It stages no music or SFX file, and no MCP tool creates one.
 
 ## Captions
 
-Every video burns in subtitles of its own narration, and this is **on by default** — the
-`subtitles` key in `scene-config.json` only configures them, and an absent key means enabled.
-`Subtitles.tsx` draws them from `timeline.words[]`, which `CompositionBuilder` already threads to
-every scene and which nothing else consumes.
+By default a video has captions of its own narration burned in. The code and the config key call them
+`subtitles`. An absent `subtitles` key means enabled with the defaults, which is how a config written
+without the key gets captions. The opt-out is an explicit `{"enabled": false}`.
 
-It is deliberately **not a scene**, for the same reason `canvas` is not a per-scene property: it
-belongs to the whole video. As a scene entry it would be crossfaded away at every boundary by the
-same wrapper that dissolves scenes into each other, it would have to be ordered last to sit on top
-of anything, and it would count against the four-scene floor. It is rendered as a sibling after the
-scene list instead, outside any `Sequence` — which also keeps `useCurrentFrame()` absolute, so the
-word timings need no rebasing.
+`scenes/installed/Subtitles.tsx` draws the captions from `timeline.words[]`, whose timings are
+already in frames. The file is in the installed directory, but it is not a scene and a config entry
+cannot reference it.
 
-Words are grouped into runs of at most `maxWords` (1–7, default 4). **The ceiling of 7 is the
-point of the control:** these are read at speaking speed on a phone, and past seven words the
-viewer is reading a paragraph instead of following the voice. A floor of 1 is allowed because one
-word at a time is a deliberate style, not a mistake. The break points are chosen in
-a fixed order — sentence punctuation first, then a gap of roughly a quarter-second in the
-narration, then the word cap, with a clause break allowed once a run has at least two words. **The
-cap is a ceiling, not the thing that decides where to break:** capping first cuts mid-clause and
-leaves a run starting with "and". A run holds until the next one begins rather than expiring with
-its last word, so captions never blink out between phrases — but only up to about four-tenths of a
-second past its own last word. That cap never binds on an ordinary between-clause gap, where the
-next run starts first; it exists for a deliberate pause, where holding the previous words across a
-second or more of silence would leave a caption on screen with nothing being said. The word currently being spoken is
-drawn at full strength and the rest of its run is dimmed; nothing moves or resizes, because at
-speaking speed a caption that reflows is a caption that cannot be read.
+`CompositionBuilder` renders the captions after the scene list, outside any `Sequence`. As a scene
+entry they would be crossfaded away at every scene boundary and would count against the skill's
+four-scene minimum. Outside a `Sequence`, `useCurrentFrame()` stays absolute, so the word timings need
+no rebasing.
 
-Each webfont on the menu is loaded as **one style, one weight and two subsets**. Called bare, the
-loader fetches every style, weight and subset a family publishes — for one of them that is over a
-hundred files to draw a single line of captions — and newer Remotion refuses to load a font at all
-without them, which for a component that renders on every video would turn an upgrade into a
-pipeline-wide render failure. The weight is declared per family rather than shared, because the
-families do not offer the same range and asking one for a weight it does not publish raises an
-error; the caption is drawn at whichever weight its family was actually loaded at.
+### Grouping words
 
-The default font is the container-local `system-ui, sans-serif`, **not** a webfont, and that is a
-deliberate constraint rather than an oversight. Subtitles are on by default, so their default font
-sits on the critical path of every render in the project; a Google font is fetched over the network
-by the render browser, and a renderer without egress would stall on it. Naming one of the available
-webfonts is an opt-in.
+`Subtitles.tsx::chunkWords` groups the words into runs of at most `maxWords` (1 to 7, default 4). The
+ceiling is 7 because captions are read at speaking speed on a phone. A run ends at sentence
+punctuation, at a gap of 8 frames or more before the next word (`SILENCE_FRAMES`), at clause
+punctuation once the run holds two words, or at the word cap.
 
-The older `TextRevealScene.tsx` also drives text from `timeline.words[]` — five words a line, last
-three lines, each word fading in over three frames. It predates the subtitle layer and nothing
-authors it any more; the `TextReveal` scene type is explicitly not used.
+`Subtitles.tsx::visibleChunkIndex` picks the run on screen. A run holds until the next run begins, so
+captions do not blink out between phrases. The hold ends 12 frames after the run's last word
+(`MAX_HOLD_FRAMES`), so no caption stays up through a long pause.
+
+The word being spoken is drawn at full opacity and the rest of its run is dimmed. After a 4-frame
+entry, nothing in the line moves or resizes.
+
+### Fonts
+
+The default font is the container-local `system-ui, sans-serif`. The captions are on the path of every
+render, the render browser fetches a Google font over the network, and a renderer without outbound
+access would stall on that fetch.
+
+`fontFamily` accepts `Inter`, `Oswald`, `Roboto` or `Montserrat` as webfonts, and passes any other
+string through as a CSS family. Each webfont is loaded as one style, one weight and two subsets
+(`latin`, `latin-ext`). A loader called with no arguments fetches every file the family publishes,
+and newer Remotion versions refuse to load a font without weights and subsets. The weight is declared
+per family (800, and 700 for Oswald), because asking a family for a weight it does not publish
+throws.
+
+### The older `TextRevealScene`
+
+`scenes/TextRevealScene.tsx` also draws text from `timeline.words[]`: five words a line, the last
+three lines. `CompositionBuilder` still renders a scene entry of `"type": "TextReveal"` with it, with
+no crossfade. Such an entry takes `startFrame`, `durationInFrames` and optional `fontSize`,
+`lineHeight`, `color` and `backgroundColor`. The scene skill forbids the type.
 
 ## Watermark
 
-Every video carries a small "Made with tubematic.ai" mark in its top-right corner. Like the captions
-it is a **whole-video overlay, not a scene**: `CompositionBuilder` draws `Watermark.tsx` last, above
-every scene and outside any `Sequence`, so it is not crossfaded at a scene boundary and does not
-count as a scene.
+By default every video carries a small "Made with tubematic.ai" mark in its top-right corner.
+`CompositionBuilder` draws `Watermark.tsx` last, above every scene and outside any `Sequence`, so the
+mark is not crossfaded and does not count as a scene.
 
-It is the same on every video — 130 px wide, tucked into the top-right corner, see-through at a
-fixed opacity — and that sameness is the feature. It sits **outside** the safe zone on purpose: the
-safe zone is where scenes put their content, and the mark is meant to stay out of their way. Four decisions keep it that way:
+The mark is the same on every video: 130 px wide, 32 px from the top and right edges, at opacity 0.6.
+It sits outside the safe zone, because the safe zone is where scenes put their content. Four rules
+keep it fixed:
 
-- **Nothing about it comes from `scene-config.json`.** The component takes no props, and
-  `CompositionBuilder` does not read a watermark key from the config. The agent writes that file,
-  so anything expressed there the agent could move, dim or delete. A config that carries a
-  `watermark` key changes nothing.
-- **The only switch is the `watermark_enabled` [setting](../user-guide/05-settings.md).** The render gateway
-  reads it when a renderer claims the video and sends it with the claim, and the renderer passes it
-  to the composition as the `watermark` render prop. No MCP
-  tool writes settings, so only a person can turn the mark off. The prop is drawn unless it is
-  exactly `false`, so a caller that sends nothing — Studio preview, the text-layout audit — shows
-  the same frame a render does.
-- **No scene can paint over it.** Being drawn last is not enough: scenes are not isolated stacking
-  contexts, so a positioned scene element with a positive `z-index` would otherwise paint above the
-  mark. It carries the largest `z-index` a browser honours, which a scene can match but not exceed,
-  and on a tie the later element wins.
-- **The artwork carries its own translucent plate.** That is why there is no colour derivation from
-  the canvas, unlike the captions: the plate puts something dark behind the mark's white text on
-  every frame. A plate-less variant with only a drop shadow was tried in real renders, and its text
-  all but vanished on a white canvas and on pale backgrounds.
+- Nothing about the mark comes from `scene-config.json`. The component takes no props and
+  `CompositionBuilder` reads no watermark key, because the agent writes that file.
+- The only switch is the `watermark_enabled` [setting](04-settings.md). The render gateway sends it
+  with the claim, and the renderer passes it to the composition as the `watermark` render prop. No MCP
+  tool writes settings, so only a person can turn the mark off. The mark is drawn unless the prop is
+  `false`, so Studio preview and the text-layout audit, which send nothing, show it.
+- No scene can paint over it. A positioned scene element with a positive `z-index` would paint above
+  a later sibling, so the mark carries the largest `z-index` a browser honours (2147483647). On a tie
+  the later element wins.
+- The artwork carries its own translucent plate, which keeps the white text readable on any frame.
+  The mark needs no colour derived from the canvas.
 
-The image is `public/watermark.png`, baked into the renderer image and loaded with `staticFile()`.
-It is never fetched over the network, for the reason the caption font is not a webfont: it is on the
-path of every render, and a renderer without egress would stall on it. It sits beside, not inside,
-the per-video `public/<video_id>/` directories the renderer and the audit stage into, so neither
-touches it. The source artwork, with the other variants, is in `logos/` at the repository root.
+The image is `public/watermark.png`, baked into the renderer image and loaded with `staticFile()`, so
+no render fetches it over the network. It sits beside the per-video `public/<video_id>/` directories,
+so staging does not touch it. The source artwork is in `logos/` at the repository root.
 
-Scenes are **not** told about the mark and should not be laid out around it. It is a see-through
-overlay; scene content passing beneath it is expected, and the [review prompt](11-rendering-and-review.md#what-it-is-given)
-says so.
-
-### Why this changed what scenes look like
-
-Burning in the narration removed the reason most scenes carried text. The authoring guidance now
-treats on-screen text as the exception — see
-[Scene authoring](10-scene-authoring.md#on-screen-text-is-the-exception). This is a reversal of the
-previous house style, in which a headline or a lower third over an image was the default, and the
-guidance says so explicitly so that the older pattern is recognised as superseded rather than as
-still-valid precedent.
+Scenes are not told about the mark and are not laid out around it. Scene content passing beneath it
+is expected, and the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses) says so.
 
 ## Safe zones
 
@@ -233,34 +219,31 @@ still-valid precedent.
 top 150px · bottom 170px · left 60px · right 60px
 ```
 
-on the 1080×1920 canvas, leaving 960×1600 usable. These clear YouTube's own overlays.
+These margins apply to the 1080×1920 frame and leave 960×1600 usable. They clear YouTube's own
+overlays.
 
-The numbers are declared independently in **three** places — `TextRevealScene.tsx`,
-`mcp/text_audit.py`, and `renderer/api/ai_review.py` — so the measuring layer, the reviewing layer
-and the rendering layer agree. Change all three together.
+Four files declare the numbers, because the files run in different processes:
+`scenes/TextRevealScene.tsx` (`SAFE`), `mcp/text_audit.py` (`SAFE_ZONE`),
+`renderer/api/ai_review.py` (`SAFE_ZONE_TOP`, `SAFE_ZONE_BOTTOM`) and `tubematic_core/mascots.py`
+(`SAFE_ZONE`). The scene skill states them in prose. Change them all together.
 
 ---
 
 ## `scene-config.json`
 
-The shape is documented here and nowhere else; there is no schema file to validate against.
-
-> **Writing the file is barely validated.** `write_scene_config` checks only that `totalFrames` is
-> a positive integer, that `scenes` is a non-empty list, that `canvas` — if present — agrees with
-> the video's visual register, and that `subtitles` — if present — uses known keys and in-range
-> values; then it writes the JSON verbatim, and `CompositionBuilder` reads the file directly.
-> **No defaults are written into the file** — the renderer applies them at render time, so supply
-> every field you rely on and expect an omitted one to follow the component, not the config.
+`scene-config.json` says which scene plays when. The agent writes it through the `write_scene_config`
+MCP tool and `CompositionBuilder` reads the file directly. No schema file exists. The shape is the
+`SceneConfigFile` interface in `CompositionBuilder.tsx`.
 
 ```jsonc
 {
-  "totalFrames": 2700,        // must equal timeline.totalFrames
+  "totalFrames": 2700,        // copy from timeline.totalFrames
   "fps": 30,
-  "canvas": "dark",           // "dark" | "light"; omitted means "dark"
-  "subtitles": {              // optional; OMITTED MEANS ENABLED
+  "canvas": "dark",           // "dark" | "light"
+  "subtitles": {              // optional; an absent key means enabled
     "maxWords": 4, "fontSize": 62, "background": "pill", "position": 0.78
   },
-  "mascot": [                 // optional; only on a video that has a mascot
+  "mascot": [                 // only on a video that has a mascot
     { "frame": 0, "on": true, "x": 0.5, "y": 0.62, "emotion": "happy" }
   ],
   "music": {                  // optional
@@ -270,12 +253,6 @@ The shape is documented here and nowhere else; there is no schema file to valida
     { "src": "…", "startFrame": 120, "volume": 0.6 }
   ],
   "scenes": [
-    {
-      "type": "TextReveal",
-      "startFrame": 0, "durationInFrames": 2700,
-      "fontSize": 64, "lineHeight": 1.4,
-      "color": "#ffffff", "backgroundColor": "#0f0f0f"
-    },
     {
       "type": "generated",
       "src": "vid_abc123/dns-lookup",   // stem only, no extension
@@ -290,215 +267,283 @@ The shape is documented here and nowhere else; there is no schema file to valida
 
 | Field | Notes |
 |---|---|
-| `totalFrames` | Positive integer. Enforced against the timeline by `write_scene_config` and `validate_job` |
-| `canvas` | `"dark"` or `"light"` — the ground painted under every scene, from the video's [visual register](10-scene-authoring.md#visual-registers). **A whole-video property, deliberately not a per-scene one:** scenes that disagree about the canvas flash, and a viewer reads that as a broken render rather than a style. `write_scene_config` rejects a value contradicting the register and fills in an absent one, so an omitted key is safe but never meaningful |
-| `subtitles` | Burned-in captions of the narration — see [Captions](#captions). **Absent means enabled**, which is the only reason the default reaches a config written before the key existed; opting out is an explicit `{"enabled": false}`. Keys: `enabled`, `maxWords` (1–7), `fontFamily`, `fontSize` (28–120), `color` (`null` follows the canvas), `background` (`"pill"`/`"shadow"`/`"outline"`/`"none"`; `"outline"` is bold text with a thick dark stroke and no plate, the usual look of narrated cartoon Shorts), `position`, `uppercase`. `write_scene_config` rejects an unknown key rather than dropping it, and does **not** write the defaults into the file — materialising them would freeze them at whatever they were the day the config was authored |
-| `mascot` | The mascot's **cue track**: a bare list of cue objects, not an object. Present exactly when the video has a mascot (`write_scene_config` refuses it on a video without one, and `validate_job` and `submit_render` refuse a mascot video without it). It holds data only; the drawing code is never in the config. See [the mascot layer](#the-mascot-layer) and [Scene authoring — Mascots](10-scene-authoring.md#mascots) |
-| `scenes[].src` | Filename stem. `"name"` or `"video_id/name"`, nothing deeper. Matches `^[a-zA-Z0-9][a-zA-Z0-9-]*$` per part |
-| `scenes[].source` | `"generated"` (default) or `"installed"` |
-| `scenes[].props` | Forwarded verbatim to the component |
-| `scenes[].transitionToNext` | Crossfade length, 0–30 frames. Ignored on `TextReveal` entries |
+| `totalFrames` | A positive integer. `validate_job` requires it to be within 5 frames of the timeline's `totalFrames` |
+| `fps` | 30. The compositions are registered at 30 fps and do not read this key |
+| `canvas` | `"dark"` or `"light"`. See [`canvas`](#canvas) |
+| `subtitles` | Caption settings. See [`subtitles`](#subtitles) |
+| `mascot` | The mascot's cue track. See [`mascot`](#mascot) |
+| `music`, `sfx` | See [Audio](#audio) |
+| `scenes[].type` | `"generated"` for every scene, installed ones included |
+| `scenes[].src` | Filename stem: `"name"` or `"video_id/name"`, nothing deeper. Each part matches `^[a-zA-Z0-9][a-zA-Z0-9-]*$` |
+| `scenes[].source` | `"generated"` (the default) or `"installed"` |
+| `scenes[].props` | Forwarded to the component. See [Props a scene receives](#props-a-scene-receives) |
+| `scenes[].transitionToNext` | `{"durationInFrames": N}`. See [Crossfades](#crossfades) |
 
-Image paths inside `props` must be of the form `/public/<video_id>/images/…` and must exist —
-`validate_job` checks both.
+An image path inside `props` must have the form `/public/<video_id>/images/…` and the file must
+exist. `validate_job` checks both (`server.py::_bad_image_refs`). A path that does not resolve fails
+the whole render, because Remotion's `<Img>` retries twice and then cancels it.
+
+### What `write_scene_config` checks
+
+`write_scene_config` writes the JSON as given, after these checks:
+
+- `totalFrames` is a positive integer. The tool does not compare it with the timeline.
+- `scenes` is a non-empty list.
+- `canvas`, if present, is valid and agrees with the video's canvas.
+- `subtitles`, if present, uses known keys and in-range values.
+- `mascot`, if present, belongs to a video that has a mascot and passes the cue rules.
+- A Cartoon 3D scene is the only scene, its beats cover the video, and the scene kind agrees with the
+  video's renderer ([Scene Authoring](10-scene-authoring.md#cartoon-3d)).
+
+The tool refuses the write while another session holds the
+[scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
+is queued or rendering (`status_mismatch`).
+
+`canvas` is the only default the tool writes into the file. The components apply the other defaults at
+render time, so a changed default reaches every video whose config omits the key.
+
+[`validate_job`](06-mcp-server.md#validate_job) checks frame-count agreement with the timeline,
+scene-file existence, image paths and types.
+
+### `canvas`
+
+`canvas` is the ground painted under every scene. It is one value for the whole video, because scenes
+that disagree about it flash between light and dark
+([Scene Authoring](10-scene-authoring.md#the-canvas)).
+
+`write_scene_config` rejects a value that contradicts the video's canvas. It fills in an absent key
+from the video's visual style or the canvas the agent recorded, and otherwise with `"dark"`.
+`CompositionBuilder` also treats an absent key as `"dark"`.
+
+### `subtitles`
+
+| Key | Default | Accepted |
+|---|---|---|
+| `enabled` | `true` | `true` or `false` |
+| `maxWords` | `4` | A whole number, 1 to 7 |
+| `fontFamily` | `system-ui, sans-serif` | A non-empty string. See [Fonts](#fonts) |
+| `fontSize` | `62` | 28 to 120 |
+| `color` | `null` | A CSS colour. `null` follows the canvas: white on dark, near-black on light |
+| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate) or `"none"` |
+| `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
+| `uppercase` | `false` | `true` or `false` |
+
+`server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time. The
+ranges are `SUBTITLE_NUMERIC_RANGES` in `mcp/server.py`. The defaults live only in `Subtitles.tsx`.
+
+### `mascot`
+
+`mascot` is the mascot's cue track: a bare list of cue objects. It holds data only, and the drawing
+code is not in the config. `write_scene_config` refuses the key on a video without a mascot.
+`validate_job` and `submit_render` refuse a mascot video whose config has no cues. The cue fields and
+rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 ---
 
 ## Installed components
 
-`renderer/remotion/src/scenes/installed/` is the curated, committed library. Some entries are
-standalone scenes a `scene-config` entry can reference directly; the rest are wrappers and helper
-modules that a scene you author imports. Which is which is stated on each below.
+`renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
+`KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`. The other
+files are wrappers and helpers that a scene imports. The directory's `README.md` is the catalogue the
+agent reads.
 
-### `ImageFX` — a wrapper, not a scene
+### `ImageFX`
 
-Never referenced by a scene-config `src`. Other scenes import it. It applies a Ken Burns move to a
-full-bleed image and optionally exposes an anchor to its children.
+`ImageFX` is a wrapper that a scene imports. It applies a Ken Burns move to a full-bleed image and can
+expose an anchor to its children.
 
 | Prop | Default | Notes |
 |---|---|---|
-| `src` | — | The raw `public_path` from `generate_image`. **Do not wrap it in `staticFile()`** — Remotion's static base is already `/public` and double-prefixing throws |
-| `durationInFrames` | — | |
-| `scaleFrom` / `scaleTo` | `1.15` / `1.0` | |
-| `panFrom` / `panTo` | `[0,0]` | |
-| `anchor` | `[0.5,0.5]` | |
-| `vignette` | `0` | |
+| `src` | required | The `public_path` from `generate_image`, unchanged |
+| `durationInFrames` | required | The pan and zoom ramps span this length |
+| `scaleFrom` / `scaleTo` | `1.15` / `1.0` | Zoom at the first and last frame |
+| `panFrom` / `panTo` | `[0,0]` | Pan as `[x, y]` fractions of the frame |
+| `anchor` | `[0.5,0.5]` | The zoom's transform origin |
+| `focus` | `[0.5,0.5]` | The point of the source image that survives the cover-crop |
+| `vignette` | `0` | Darkened-edge strength, 0 to 1 |
 | `backgroundColor` | `"#000000"` | |
-| `children` | — | A node, **or a function** receiving `{project, scale}` |
+| `children` | none | A node, or a function that receives `{project, scale}` |
 
-**`project(u, v)`** maps a normalised point in *image* space to on-screen pixels, returning
-`{x, y, visible}`. It is how an overlay stays attached to a feature of the picture as the camera
-moves. `visible` is an exact frame-bounds test with no margin — add your own fade if you want an
-annotation to retreat before it clips.
+Do not wrap `src` in `staticFile()`. Remotion's static base is `/public`, the path already starts with
+it, and `staticFile()` throws on a prefixed path.
 
-Two clamps, both deliberate:
+`project(u, v)` maps a normalised point in image space to on-screen pixels and returns
+`{x, y, visible}`, so an overlay drawn through it stays attached to a feature of the picture as the
+camera moves. `u` and `v` are the units of the grid that `read_image` draws. `visible` is a
+frame-bounds test with no margin.
 
-- **`project()` inverts the *clamped* pan, never the raw ramp.** The clamp engages routinely in real
-  scenes — a requested pan of 0.05 can land at 0.04 — and projecting through the raw ramp drifts by
-  exactly the amount the clamp removed, which is the class of bug the feature exists to fix.
-- **Scale is clamped to a minimum of 1.** Below 1 the image stops filling the frame and letterboxes.
-  Clamping makes that frame structurally impossible to produce rather than something to validate
-  against.
+Design choices in the component:
 
-**There is deliberately no `imageAspect` prop.** The projection assumes the image's aspect ratio
-matches the frame's, leaving a residual under 1% of frame width. An `imageAspect` prop would be a
-single silently invertible number (`h/w` versus `w/h`) supplied with no test and no validation —
-strictly more risk than the error it removes.
-
-**`focus` is not `anchor`, and the two are easy to confuse.** `anchor` sets the zoom's transform
-origin; the pan clamp collapses to zero at scale 1, so it cannot move what a cover-crop keeps.
-`focus` maps to `object-position` and is the only thing that can. It barely matters full-bleed —
-a 0.571 image in a 0.5625 frame loses about 8px a side — but inside a `PanelImage` a tall portrait
-in a squarer panel loses nearly half its height, centred, which is how a subject's head gets
-trimmed off without anything reporting a fault.
-
-There is also **no blur filter**, on purpose. A full-bleed blur across 300+ frames is expensive on the
-software GL renderer every install without a GPU uses ([The GL renderer](11-rendering-and-review.md#the-gl-renderer)),
-and a slow render does not fail cleanly: it can hit the render timeout and bounce the job back to the
-queue.
-
-### `Subtitles`
-
-Not a scene and not referenceable from `scene-config.json` — `CompositionBuilder` renders it
-directly, above everything, from the top-level `subtitles` key. See [Captions](#captions) for the
-chunking, the emphasis and the font constraint.
+- The component limits a pan to the overhang the current zoom produces, so a requested pan of 0.05
+  can land at 0.04. `project()` inverts the clamped pan, because the requested value would drift by
+  the difference.
+- Scale is clamped to a minimum of 1. Below 1 the image stops filling the frame.
+- `ImageFX` has no `imageAspect` prop. The projection assumes the image's aspect ratio matches the
+  frame's, which leaves an error under 1% of frame width. An aspect prop would be one number that is
+  easy to invert (`h/w` or `w/h`) and that nothing validates.
+- `anchor` cannot change what a cover-crop keeps, because the pan clamp is zero at scale 1. `focus`
+  maps to `object-position` and can. Full-bleed, the crop is about 8 px a side. Inside a `PanelImage`,
+  a tall portrait in a squarer panel loses nearly half its height from the centre.
+- `ImageFX` has no blur filter. A full-bleed blur across 300 or more frames is slow on the
+  [software GL renderer](20-gpu-and-remote-renderers.md#the-gl-renderer), and a slow render can run
+  into the render timeout.
 
 ### `KenBurnsImage`
 
-A thin scene wrapper over `ImageFX` that adds an optional lower-third caption inside the safe zone.
-The default shape for a straightforward image beat. Same pan, scale, anchor and vignette props, plus
-`caption`.
+`KenBurnsImage` is a scene: a thin wrapper over `ImageFX` for an image beat that needs no authored
+scene. It takes `src`, `scaleFrom`, `scaleTo`, `panFrom`, `panTo`, `anchor`, `vignette` (default
+`0.35`), `backgroundColor` and `caption`. It does not pass `focus`.
 
-**Omit `caption` in new work.** The narration is burned in as subtitles, so a caption naming the
-subject the voice just named duplicates it. The prop is kept because it predates the subtitle layer
-and older videos use it; a beat that genuinely needs a string on screen — a number, a pinned label —
-is the exception described in [Scene authoring](10-scene-authoring.md#on-screen-text-is-the-exception).
+`caption` draws a lower-third line inside the safe zone. Omit it in new work: the narration is already
+captioned, so a line naming the subject repeats it. The cases where a scene does carry text are on
+[Scene Authoring](10-scene-authoring.md#on-screen-text-is-the-exception).
 
 ### `StepFlowDiagram`
 
-An SVG node-and-edge diagram for any linear process with nameable stages — protocol hops, pipeline
-steps, state machines. Props: `steps` (label and icon), `connections`, `activeStages`,
-`highlightStage`, `theme`. It animates in linearly over the first 15 frames.
+`StepFlowDiagram` is a scene: an SVG node-and-edge diagram for a linear process with nameable stages,
+such as protocol hops, pipeline steps or a state machine. It takes `steps` (a list of
+`{label, icon}`), `connections` (`[from, to]` index pairs), `activeStages` (one list of node indexes
+per stage), `highlightStage` (default `0`) and `theme`. It fades in linearly over its first 15 frames.
 
-`theme` is `"dark"` (default, the original palette) or `"light"`, which draws black line art for the
-[stick register](10-scene-authoring.md#visual-registers). It exists because the dark theme paints an
-opaque near-black background: without a light variant, a diagram beat in a white-canvas video would
-punch a dark slab through it, which is precisely the mixed-canvas failure that register forbids.
-The two palettes are whole sets rather than individual colour props — a diagram is only legible if
-its background, both node states and both edge states agree, and exposing them one at a time invites
-grey-on-grey. The light theme's background is transparent, because the video's canvas is already
-painted beneath it.
+`theme` is `"dark"` (the default) or `"light"`. The dark theme paints an opaque near-black background,
+which would put a dark slab on a light canvas. The light theme draws black line art on a transparent
+background. The component exposes two whole palettes and no single colour prop, because a diagram is
+legible only if its background, both node states and both edge states agree.
 
-### The stick register's components
+### Figure and panel components
 
-Four entries exist only for the [stick register](10-scene-authoring.md#visual-registers). None of
-them paints a background: the canvas is painted once for the whole video from `scene-config.json`'s
-`canvas` key, and a scene repainting it is one stray hex away from a visible seam.
+Four files serve videos that use line-art figures or a light canvas. None paints a background by
+default, because `CompositionBuilder` already paints the canvas and a repaint risks a visible seam.
 
-| | Kind | Notes |
-|---|---|---|
-| `StickFigure` | Wrapper | The figure itself. `pose`, `expression`, `attire`, `headwear`, `x`, `y`, `scale`, `flip`. Its geometry is a **joint table**, not hand-drawn paths — every pose is a set of elbow/hand/knee/foot coordinates in one local box, so any two poses share a head, a torso and a stroke weight, which is what makes a swap read as one character moving rather than two drawings. It never interpolates: change `pose` on a frame threshold and the swap is instant, which is the register, not a shortcut |
-| `StickScene` | Wrapper | White-ground scaffold — optional comic banner title, optional panel frame. Takes your content as children |
-| `Entrances` | Helpers | Named exports `PopIn` (6-frame scale pop), `SlideIn` (8-frame single-axis slide) and `Swap` (1-frame replacement). The register's only three arrivals |
-| `PanelImage` | Scene | A generated image contained in a bordered panel on the canvas, referenced from `scene-config` like `KenBurnsImage`. This is how a light-canvas video shows a real, specific subject: full-bleed would replace the canvas and the video would cut between two different-looking worlds. **A panel crops** — `objectFit: cover` trims from the centre — so size the panel to the image's real pixel ratio, or pass `focus` |
+`StickFigure` is a wrapper: the line-art figure. It takes `pose`, `expression`, `attire`,
+`attireColor`, `headwear`, `headwearColor`, `x`, `y`, `scale`, `flip`, `stroke`, `theme`, `color` and
+`fill`. `x` and `y` are the figure's centre in frame coordinates and are required. The accepted values
+are the `StickPose`, `StickExpression`, `StickAttire` and `StickHeadwear` types in the file.
 
-`StickFigure` has a deliberate constraint worth knowing before editing its pose table: a hand must
-stay clear of the head circle. The head is filled and drawn **after** the arms, so a hand tucked
-behind it renders as a severed forearm rather than as an arm passing behind.
+- The geometry is a joint table. Every pose is a set of elbow, hand, knee and foot coordinates in one
+  local box, so two poses share a head, a torso and a stroke weight, and a pose change reads as one
+  character moving.
+- The figure does not interpolate. Change `pose` on a frame threshold and the swap takes one frame.
+- `theme` is `"light"` (black on white, the default) or `"dark"`. It sets the line colour and the
+  head and torso fill together, and the fill must match the canvas.
+- In the pose table, a hand must stay clear of the head circle. The head is filled and drawn after
+  the arms, so a hand behind it renders as a severed forearm.
+
+`StickScene` is a wrapper: a scaffold with an optional banner `title` and an optional panel frame
+(`framed`), around your content as children. It also takes `theme`, `bannerHeight`, `frameInset`,
+`transparent` (default `true`), `background` and `ink`.
+
+`Entrances` exports three helpers: `PopIn` (a scale pop over 6 frames), `SlideIn` (a single-axis slide
+over 8 frames) and `Swap` (a replacement in one frame). `PopIn` and `SlideIn` apply a CSS `transform`,
+which makes the wrapper the containing block for every absolutely positioned descendant. A
+`StickFigure` or `PanelImage` nested inside one lands in the wrong place, with no type error.
+
+`PanelImage` is a scene: a generated image inside a bordered panel. It takes `src`, `width` and
+`height` (default 900 by 1000), `x` and `y` (the panel centre, default 540 and 900), `label`,
+`caption`, `ink`, `border`, `focus`, and the `ImageFX` scale and pan props. A light-canvas video uses
+it for a real, specific subject, because a full-bleed image would replace the canvas. A panel crops
+from the centre with `objectFit: cover`, so size the panel to the image's real pixel ratio, or pass
+`focus`.
 
 ---
 
 ## The Cartoon 3D kit
 
-`renderer/remotion/src/cartoon3d/` is not a scene but the frozen kit a Cartoon 3D video's own code is
-written against: `video.ts` (the `VideoDef` contract), `camera.ts` (the camera grammar: glides, pushes,
-kicks, the lens table), `CartoonShort.tsx` (the runner: one three.js world built from a `VideoDef`, posed
-per frame, with the post chain of ink, lens blur, bloom, neutral tone map and grade), `kit/` (the bean-head
-figure drawer and the lit cards it is drawn on, the batch builders, the painted textures, the light
-presets, the water shader), `post/` (ink, lens blur, grade) and `examples/chicago/` (the worked example
-the skill points at, typechecked with the project). The agent writes its `CartoonShort` scene and modules
-under `src/scenes/generated/<video_id>/` and imports the kit from there; see
-[Scene authoring — Cartoon 3D](10-scene-authoring.md#cartoon-3d). The beat gate and the stills command
-lines under `gate/` are bundled by `cartoon-tools/build.mjs` for the MCP server; `cartoon-tools/audio/`
-is the soundtrack engine (Python) and `cartoon-tools/stills-server.mjs` the renderer's stills server.
+`renderer/remotion/src/cartoon3d/` is the kit that a Cartoon 3D video's own code is written against.
+The agent writes a `CartoonShort` scene and its modules under `src/scenes/generated/<video_id>/` and
+imports the kit from there ([Scene Authoring](10-scene-authoring.md#cartoon-3d)). The dashboard labels
+the style **Cartoon 3D (experimental)**.
 
-The style is offered as **Cartoon 3D (experimental)**: every video is code the agent writes, and the look,
-the gate and the kit are still settling. **Credits:** the kit descends from
-[mromidev/claude-animated-shorts](https://github.com/mromidev/claude-animated-shorts) (MIT License,
-Copyright (c) 2026 Mr omi). `CartoonShort.tsx`, `kit/cast.ts`, `kit/lights.ts`, `kit/world.ts`,
-`kit/toon.ts` and `kit/build.ts` are adapted from its bridge template, `camera.ts` from its motion study,
-and `cartoon-tools/audio/` (`dsp.py`, `instruments.py`, `sfx_gen.py`, and the generalised `band.py`,
-`cues.py`, `mix.py`) from its synthesis library; each file's header names its origin. The repository's
-reference frames and sheets are not vendored.
+| Path | Holds |
+|---|---|
+| `video.ts` | The `VideoDef` contract a video implements |
+| `camera.ts` | The camera grammar: glides, pushes, kicks and the lens table |
+| `CartoonShort.tsx` | The runner. It builds one three.js world from a `VideoDef`, poses it per frame, and applies the post chain: ink, lens blur, bloom, neutral tone map and grade |
+| `kit/` | The figure drawer and the lit cards it is drawn on, the batch builders, the painted textures, the light presets and the water shader |
+| `post/` | The ink, lens blur and grade passes |
+| `gate/` | The beat gate and the stills command lines |
+| `examples/chicago/` | The worked example the skill points at. It is typechecked with the project |
+
+Three things run outside the composition: `cartoon-tools/build.mjs` bundles the `gate/` command lines
+for the MCP server, `cartoon-tools/audio/` is the soundtrack engine (Python), and
+`cartoon-tools/stills-server.mjs` is the renderer's stills server.
 
 ## The mascot layer
 
-A video with a mascot gets one extra layer from `CompositionBuilder`, `src/mascot/MascotLayer.tsx`. It sits
-**above the scenes and below the captions** (so the watermark and the captions are always drawn over it)
-and renders only when two things are true: the renderer passed the `mascotPath` render prop, and the
-scene-config carries a non-empty `mascot` cue list.
+A video with a mascot gets one extra layer from `CompositionBuilder`, `src/mascot/MascotLayer.tsx`. It
+sits above the scenes and below the captions. It renders only when the renderer passed the
+`mascotPath` render prop and the scene config carries a non-empty `mascot` cue list.
 
-`mascotPath` is a **render prop set by the renderer alone**, like `watermark`: it points at the
-version of the mascot's drawing code staged beside the job's other files
-(`/public/<video_id>/mascot.js`), and it is never a `scene-config.json` key, so an agent cannot name a
-file to load. The text-layout audit's composition names the props it takes one by one instead of
-spreading them, so it never receives `mascotPath` and **never boots a mascot**: the audit measures
-text, which comes out the same with or without the mascot, and the mascot's p5.js engine would only
-slow it down. The audit reports text that sits under the mascot's box from the cue track instead
-([Rendering and Review](11-rendering-and-review.md#the-text-layout-audit)).
+The renderer alone sets `mascotPath`, as it does `watermark`. The prop points at the version of the
+mascot's drawing code staged beside the job's other files (`/public/<video_id>/mascot.js`). It is not
+a `scene-config.json` key, so an agent cannot name a file to load.
 
-The engine is `renderer/remotion/public/mascot/`: `frame.html` hosts the drawing code in an iframe
-(560 by 640, transparent), `driver.js` plays the cue track (walks, emotions, looks, hops; it is the
-ground truth for cue semantics, walk speed and where the box lands), and `kit/` is the shared drawing
-kit, a p5.js and p5.brush watercolour look with a paper-edged outline so the character reads over
-video. The layer draws one frame per `delayRender` and hides the iframe while the mascot is off screen.
-**There is no lip sync, on purpose.** The mascot is never presented as the narrator; it reacts to what
-is said, so the layer is given no timeline and no words, and the mouth shows only the emotion.
+The `TextLayoutAudit` composition names its three props and does not spread them, so it receives no
+`mascotPath` and boots no mascot. The audit reports
+[text under the mascot's box](11-rendering-and-review.md#text-under-a-mascot) from the cue track.
+
+The engine is `renderer/remotion/public/mascot/`:
+
+- `frame.html` hosts the drawing code in a transparent iframe, 560 by 640.
+- `driver.js` plays the cue track: walks, emotions, looks and hops. It is the reference for what a cue
+  means, for walk speed and for where the box lands.
+- `kit/` is the shared drawing kit: a p5.js and p5.brush watercolour look with a paper-edged outline,
+  so that the character reads over video.
+
+The layer draws one frame per `delayRender` and hides the iframe while the mascot is off screen. The
+mascot has no lip sync: it reacts to the narration and is not the narrator. The layer receives no
+timeline and no words, and the mouth shows only the emotion.
 
 The same engine renders a mascot's three model sheets (`turn`, `feels`, `act`) for review, through the
-`MascotSheet` composition and `renderer/remotion/mascot-tools/render-sheet.mjs`. It has its own bundle
-entry point (`src/mascot/sheet-index.ts`), for the reason the GPU probe has: the main entry bundles every
-agent-written scene, so one broken scene would fail every sheet render. The MCP container runs it on
-software GL, so building a mascot never takes the GPU from a render.
-
-**Credits.** The engine descends from
-[JohnHeibel/ClaudeAnimationBase](https://github.com/JohnHeibel/ClaudeAnimationBase) (MIT License; its
-license is kept at `public/mascot/kit/LICENSE-ClaudeAnimationBase`) and ships p5.js (LGPL-2.1) and
-p5.brush (MIT), with their licenses beside them in `public/mascot/lib/`. The shipped mascot, Tubi, is
-original; none of the source's own characters are included.
+`MascotSheet` composition and `renderer/remotion/mascot-tools/render-sheet.mjs`. The sheet render has
+its own bundle entry point, `src/mascot/sheet-index.ts`, as the GPU test does: the main entry bundles
+every agent-written scene, so one broken scene would fail every sheet render. The MCP container
+renders sheets on software GL, so building a mascot does not take the GPU from a render.
 
 ## Building and checking
 
 ```bash
 cd renderer/remotion
-npm ci --ignore-scripts     # keep the flag; see below
+npm ci --ignore-scripts     # keep the flag for a local install
 npx tsc --noEmit            # what validate_job runs
+npm test                    # vitest
 npm run dev                 # Remotion Studio
 npm run build               # bundle
 ```
 
-**`tsconfig.json` has no `include`**, only an exclusion for the Remotion config file. That means
-`tsc` covers *everything* under `renderer/remotion/`, including the bind-mounted
-`src/scenes/generated/` tree — which is precisely what lets `validate_job` catch a broken
-agent-authored scene before a render is queued. `noUnusedLocals` is on. `allowJs` is off, so the
-audit driver's `.mjs` file is outside the typechecker entirely.
+`tsconfig.json` has no `include`, only an exclusion for the Remotion config file. `tsc` therefore
+covers everything under `renderer/remotion/`, including the bind-mounted `src/scenes/generated/` tree.
+That is how `validate_job` catches a broken agent-written scene before a render is queued.
+`noUnusedLocals` is on. `allowJs` is off, so the `.mjs` drivers are outside the typechecker.
 
-**Keep `--ignore-scripts` for a local install.** It is what holds the install to a few hundred
-megabytes instead of pulling `@remotion/renderer`'s headless Chromium. Typechecking does not need a
-browser. The cost is that `npx remotion render` is then not runnable locally — and render
-verification belongs in a container anyway, because `system-ui` resolves to a different face outside
-it and any geometry measured on the host is fiction.
+`--ignore-scripts` keeps a local install to a few hundred megabytes, because it skips the download of
+the headless Chromium that `@remotion/renderer` uses. Typechecking does not need a browser, and
+`npx remotion render` does. Verify a render in a container: `system-ui` resolves to a different face
+outside it, so text geometry measured on the host does not match a real render.
 
-A clean typecheck on your machine proves the *tree* typechecks, not that a rebuilt container will —
-`validate_job` runs `tsc` against the container's own `node_modules`. The Dockerfile runs a bare
-`npm ci` from the same lockfile, so the two agree today.
+`validate_job` runs `tsc` against the container's own `node_modules`. The Dockerfile runs `npm ci`
+from the same lockfile, so a clean typecheck on your machine and one in the container agree.
 
-> **`npm run lint` currently fails on two pre-existing errors** — a volume-callback preference in
-> `CompositionBuilder.tsx` and an unused prop in `StepFlowDiagram.tsx`. Neither affects the pipeline,
-> because `validate_job` runs `tsc`, not eslint. Note that the script is `eslint src && tsc`, so the
-> eslint failure short-circuits and `tsc` never runs under `npm run lint` even though it passes when
-> invoked directly.
+`npm run lint` is `eslint src && tsc`. eslint reports errors in the committed tree (a volume-callback
+preference in `CompositionBuilder.tsx`, an unused prop in `StepFlowDiagram.tsx`), so the script stops
+before `tsc`. Run `npx tsc --noEmit` directly. `validate_job` does not run eslint.
 
-There is **no JavaScript test runner in this project at all** — the dev dependencies are eslint,
-prettier and typescript. That is why every threshold in the text-layout audit lives in Python rather
-than in the probe: Python is the only layer with test coverage.
+`npm test` runs vitest ([the `renderer/remotion` suite](test-suites/renderer-remotion.md)). The tests
+run in Node with no browser, so they cannot reach the text-layout probe. Every threshold of the
+text-layout audit lives in `mcp/text_audit.py` for that reason.
+
+## Credits
+
+The Cartoon 3D kit descends from
+[mromidev/claude-animated-shorts](https://github.com/mromidev/claude-animated-shorts) (MIT License,
+Copyright (c) 2026 Mr omi). `CartoonShort.tsx`, `kit/cast.ts`, `kit/lights.ts`, `kit/world.ts`,
+`kit/toon.ts` and `kit/build.ts` are adapted from its bridge template, and `camera.ts` from its motion
+study. `cartoon-tools/audio/` (`dsp.py`, `instruments.py`, `sfx_gen.py`, and the generalised
+`band.py`, `cues.py`, `mix.py`) is adapted from its synthesis library. Each file's header names its
+origin. The source repository's reference frames and sheets are not included.
+
+The mascot engine descends from
+[JohnHeibel/ClaudeAnimationBase](https://github.com/JohnHeibel/ClaudeAnimationBase) (MIT License; its
+license is kept at `public/mascot/kit/LICENSE-ClaudeAnimationBase`). It ships p5.js (LGPL-2.1) and
+p5.brush (MIT), with their licenses beside them in `public/mascot/lib/`. The shipped mascot, Tubi, is
+original. None of the source's own characters are included.

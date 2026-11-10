@@ -1,465 +1,253 @@
-# VQA — Video Quality Assessment environment (TMDEV-68)
+# VQA: the video quality assessment environment
 
-A purpose-built Kasm Workspaces session for assessing Tubematic video quality without standing up
-the whole product: no dashboard, no cron, no `onboard.py` wizard. Open the session, run
-`/vqa-new-video "<topic>"`, watch the pipeline advance in chat, get a rendered mp4, ask for an
-on-demand AI review whenever you want one.
+This folder builds a [Kasm Workspaces](https://kasmweb.com/) image for judging the videos
+Tubematic renders. A session has no dashboard, no cron and no install wizard. You open Claude Code,
+run `/vqa-new-video "<topic>"`, approve the topic, the script and the video in chat, and get an
+mp4. You ask for an AI review when you want one.
 
-Base image: `kasmweb/ubuntu-noble-dind:1.19.0-rolling-daily` (root-mode Docker-in-Docker) — same
-base as [`kasm_workspace_testing/`](../kasm_workspace_testing/README.md), the existing full-onboarding testing
-environment. This is a sibling image with a different purpose, not a replacement for it.
+You need a Kasm Workspaces server. To test the installer, the dashboard or the poller, use
+[`kasm_workspace_testing/`](../kasm_workspace_testing/README.md). The design of this image is in
+[Development: `vqa/`](../docs/developer/17-development.md#vqa-video-quality-assessment).
 
-## Building the image
+## What is in this folder
+
+| Path | Contents |
+|---|---|
+| `build.sh`, `dockerfile_tubematic_vqa` | Build the image `tubematic/tubematic-vqa-env` |
+| `kasm_post_run_user.sh` | The launch hook. It prepares the session and starts the containers |
+| `custom_startup.sh`, `watch_bootstrap.sh` | Open a terminal that shows the launch hook's log |
+| `make_seed_db.py` | Writes the database a new session starts with |
+| `edit_settings.py`, `stage_script.py`, `review_video.py`, `reset_db.py` | The [utilities](#utilities) |
+| `agent/commands/` | The `/vqa-*` slash commands |
+| `statusline.py` | Claude Code's status line |
+| `vqa_test_topics.md` | Topics to try |
+| `tests/` | The utilities' tests ([`vqa/tests`](../docs/developer/test-suites/vqa.md)) |
+
+## Build the image
 
 ```bash
 cd vqa
-./build.sh            # builds tubematic/tubematic-vqa-env:latest
-./build.sh 1.0.0       # custom tag
-./build.sh --no-cache  # force a clean rebuild
-./build.sh --worktree worktree-vqa-9  # skip the prompt, name the source tree
+./build.sh                         # builds tubematic/tubematic-vqa-env:latest
+./build.sh 1.0.0                   # another tag
+./build.sh --no-cache              # clean rebuild
+./build.sh --worktree <path|branch|dirname>   # name the source tree, no prompt
 ```
 
-`build.sh` first asks **which git worktree to build into the image**, listing each one with its
-branch, HEAD, path, and an `*uncommitted` marker (uncommitted work is baked in and can't be
-recovered from the tag afterwards). Enter accepts the default — the worktree the script itself
-lives in. Everything comes from the chosen tree: the source, `dockerfile_tubematic_vqa`, and the
-startup hooks it copies in, so the image is genuinely that branch rather than a mix of two.
+`build.sh` builds from one git worktree and asks which. The list marks a worktree that has
+uncommitted work, which goes into the image too. An unattended caller must pass `--worktree`. See
+[Both build scripts offer worktrees only](../docs/developer/17-development.md#both-build-scripts-offer-worktrees-only).
 
-`--worktree <path|branch|dirname>` picks non-interactively, and errors rather than guessing if the
-value matches nothing or more than one worktree. With no TTY the prompt is skipped and the
-script's own worktree is used, so existing scripted `./build.sh <tag>` calls are unaffected. A
-wrapper run from a terminal *does* inherit a TTY and will stop at the prompt, so pass
-`--worktree <path>` from any wrapper that must run unattended.
+## Register the image in Kasm
 
-Branches without a worktree are deliberately **not** offered — they could only be staged from
-their committed tip, silently dropping uncommitted work. `git worktree add` one first.
+Register the image as a workspace by hand in the Kasm admin UI. `build.sh` does not do it.
 
-Same git-filtered staging as `kasm_workspace_testing/build.sh`: `git ls-files --cached --others
---exclude-standard` decides what enters the build context, so `.env`, `mounted/`, `.venv`,
-`vqa/logs/`, and `vqa/seed/` never reach the image regardless of what's sitting in your working
-tree when you build.
+- Set a Persistent Profile Path. Without one, each session loses its videos, its database, its
+  API keys and the Claude Code login when it ends.
+- Set the Docker Run Config Override to `{"privileged": true}`. The session runs Docker inside
+  the container, which needs it.
+- Give it at least 4 cores and 8 GB of memory.
+- Add no File Mapping. The API keys are stored in the session's database.
 
-## What's baked in vs. generated at session start
+The containers' images are not kept between sessions. Each launch builds them again, which is the
+slowest part of a launch.
 
-Everything a human normally answers during `onboard.py` is either baked into the image at build
-time or generated automatically by `vqa/kasm_post_run_user.sh` the moment a session launches —
-there is no wizard to run and **`onboard.py` must never be run inside this environment** (it would
-re-prompt for everything already handled here, and its `install_config` step would overwrite the
-settings this bootstrap seeds).
+## Where things live in a session
 
-| Baked into the image (`vqa/dockerfile_tubematic_vqa`) | Generated at session start (`vqa/kasm_post_run_user.sh`) |
-|---|---|
-| Source, Node 22, Claude Code CLI | Working tree refreshed from the image |
-| `.venv` (for the `vqa/*.py` utilities) | Claude Code skills/commands/MCP registration |
-| Seed DB (`vqa/make_seed_db.py`, at build time) | `mounted/` directories created |
-| `remotion-dev/skills` pre-fetched | DB seeded (only if not already present) |
-| — | `tubematic-api` + `tubematic-mcp` + `tubematic-worker` + `tubematic-renderer` built and started |
+| Location | Contents | Changes when |
+|---|---|---|
+| `/opt/tubematic` | The source, its Python environment and the seed database, from the image | You rebuild the image |
+| `~/tubematic` | The working tree, where Claude Code and `docker compose` run | A launch finds a new image and copies `/opt/tubematic` over it |
+| `~/.tubematic-data` | The database, job files, generated scenes, rendered videos, API keys and service tokens | The pipeline writes to it. The launch hook creates what is missing and replaces nothing |
+| `~/.claude`, `~/.claude.json` | Claude Code's login, settings, skills and commands | Each launch replaces the skills and commands |
 
-## The code/state split — why two directories
+The persistent profile keeps the home directory, so it keeps the last three.
 
-Everything a human cares about losing — rendered mp4s, the pipeline DB, job files, generated
-scenes, and Claude Code's own login — must survive session teardown. Kasm's persistent-profile
-mechanism only covers `$HOME` (`/home/kasm-user`), so all of that has to live there. But a
-persistent profile also **shadows** Kasm's normal profile-seeding: once something exists in a
-persisted `$HOME`, rebuilding the image never refreshes it. Staging the whole repo into `$HOME`
-would freeze the code at whichever version happened to be there on first launch, forever.
+- An edit under `~/tubematic` survives a relaunch of the same image. The next image replaces it.
+- A skill or command you add to `~/.claude` by hand is deleted at the next launch.
+- To keep a change, make it in the repository and rebuild the image.
+- Do not run `onboard.py` in a session. Its settings step overwrites the seeded settings.
 
-So the two concerns are split, and `vqa/kasm_post_run_user.sh` reconciles them on every launch:
+## Use a session
 
-| | Lives at | Owned by | Refreshed |
-|---|---|---|---|
-| Source, `.venv`, seed DB, remotion skills | `/opt/tubematic` | the image | every image rebuild |
-| Working tree (where `docker compose` runs) | `~/tubematic` | the persistent profile | rsync'd from `/opt` when the image changes |
-| `mounted/` — DB, jobs, scenes, **rendered mp4s** | `~/tubematic/mounted` | the persistent profile | **never touched by bootstrap** |
-| Claude Code config + skills | `~/.claude*` | the persistent profile | `skills/`+`commands/` wiped and re-copied every launch |
-
-`docker compose` is invoked from `~/tubematic`, so every bind mount (`${PWD}/mounted/...`) lands
-inside the persisted tree with no compose-file changes needed. API keys live in the settings
-table inside that same `mounted/` tree, so they persist too. Rendered
-videos end up at `~/tubematic/mounted/output_videos/proj_vqa/<video_id>.mp4` and stay there across
-relaunches.
-
-**A hand-edit under `~/tubematic` survives a relaunch of the same image, but is overwritten by the
-next image rebuild.** If you need a change to persist, make it in the repo and rebuild — don't
-patch the working tree directly.
-
-### Deleted and renamed skills/commands
-
-The working-tree rsync runs without `--delete` — that is deliberate, and it is what keeps
-`mounted/` safe. The side effect is that a file *removed* from the repo would never be removed
-from an already-persisted working tree, so a deleted skill would linger forever and a renamed one
-would leave both copies live and visible to the agent.
-
-Three directories are therefore treated as wholly image-owned and cleared before being
-repopulated, so they track the image exactly rather than accumulating:
-
-- `~/tubematic/agent_files/skills`, `~/tubematic/agent_files/claude/commands`, and
-  `~/tubematic/vqa/agent/commands` — deleted immediately before the rsync, on the refresh path
-  only (i.e. only when the image stamp changed).
-- `~/.claude/skills` and `~/.claude/commands` — deleted at the start of the Claude Code config
-  step, on **every** launch, then repopulated from the working tree and from
-  `/opt/tubematic/vqa/skills-cache`.
-
-In both cases the removal happens *before* the copy that repopulates them, in the same single
-pass of `kasm_post_run_user.sh` — a launch never ends with them missing. The two have different
-triggers, though (every launch vs. only on an image change), so the `~/.claude` wipe is guarded:
-if the working tree's skills are missing while its stamp claims to be current, bootstrap stops
-with instructions rather than clearing `~/.claude/skills` and leaving the session with none. Consequence worth
-knowing: a skill or command hand-installed into `~/.claude` inside a session will **not** survive
-a relaunch. Put it in the repo and rebuild.
-
-## How this actually starts — two Kasm hooks, not supervisord
-
-`kasm_post_run_user.sh` (the reconciliation script above) runs because it overwrites
-`/dockerstartup/kasm_post_run_user.sh` — one of the base image's own stub hooks, invoked
-automatically by the Kasm platform as `kasm-user` after session start, independent of anything
-else in the container's boot chain. It's what actually does everything in the table above: refresh
-the working tree, refresh Claude Code's skills/commands/MCP registration, create `mounted/`, create
-any missing service token and the render gateway's TLS pair (`tubematic_core.auth ensure`, run with
-the image's `/opt/tubematic/.venv` because the TLS pair needs `cryptography`), seed the DB, and bring up
-`tubematic-api`/`tubematic-mcp`/`tubematic-worker`/`tubematic-renderer`. The MCP registration is redone on every launch
-rather than skipped when present: the server needs its token, which Claude Code fetches through
-`scripts/mcp_auth_header.py`, and a registration persisted from an older image has no such helper.
-The VQA stack runs no dashboard, so it needs no dashboard password.
-
-The one other file this image overwrites is `$STARTUPDIR/custom_startup.sh` — the script that
-launches `supervisord` (and thus `dockerd`) in the first place. **`kasm_workspace_testing/`, this repo's
-other Kasm image, deliberately never touches this file**, after an earlier attempt in this repo's
-history (`00099ff`/`a69cd1c`/`7abf2d0`) edited it, hit a race, and was reverted — that incident came
-from inserting logic *inside* the process-supervision while-loop the file runs (auto-launching
-`onboard.py`, re-entering on every loop iteration until `supervisord` became visible to `pgrep`).
-This image's own addition (auto-opening a terminal that tails the bootstrap log, via
-`vqa/watch_bootstrap.sh`) is deliberately kept *outside* that loop and backgrounded, so it can only
-ever run once and never interacts with the loop's own `supervisord`-launch retry logic — see
-`vqa/custom_startup.sh`'s header comment for the exact, verified diff against the base image's
-original. If you ever need to touch this file again, diff it against a fresh pull of
-`kasmweb/ubuntu-noble-dind:1.19.0-rolling-daily` first; getting it wrong disables Docker-in-Docker
-entirely.
-
-## Registering the image as a Kasm workspace (manual — not automated by `build.sh`)
-
-- **Persistent Profile Path — mandatory.** This is what makes the whole design above work.
-  Without it, every session starts from scratch: rendered videos, the pipeline DB, and Claude
-  Code's own credentials are all lost at teardown, and you'll be asked to log in to Claude Code on
-  every single launch.
-- **Docker Run Config Override `{"privileged": true}` — mandatory.** This base image is root-mode
-  DinD; the rootless variant was abandoned after a kernel-level `newuidmap: write to uid_map
-  failed: Operation not permitted` on this host's Ubuntu 24.04 + AppArmor combination — see
-  `kasm_workspace_testing/README.md` for the full story, which applies identically here.
-- **No File Mapping is needed.** API keys used to arrive as a mapped `.env`; they now live in the
-  settings table, which sits in the persistent profile — so you enter them once, in the session,
-  and they survive every relaunch.
-- **Sizing:** at least 4 cores / 8 GB. The renderer needs `shm_size: 2gb` for Chromium on top of
-  the Node/Python/ffmpeg footprint of two containers.
-- **Nested container images are not persisted.** Every session rebuild rebuilds
-  `tubematic-renderer-image` from scratch (Remotion + Chromium — the slowest layer). If launches
-  feel slow, a Kasm Volume Mapping for `/var/lib/docker` is a later upgrade path that would let
-  images survive teardown too; it's deliberately not part of this design (see the design decisions
-  in `docs/infrastructure.md`'s VQA section for why).
-
-## Using the environment, step by step
-
-Once the workspace is registered (above) and you launch a session:
-
-1. **Wait for bootstrap to finish.** A terminal window opens automatically on session start
-   (`vqa/watch_bootstrap.sh`, launched from `vqa/custom_startup.sh` — see "How this actually
-   starts" above) once `~/tubematic/vqa/logs/bootstrap.log` exists, and tails it live — no need to
-   go find a terminal or the log yourself. It just tails (`Ctrl+C` to stop, or close the window);
-   it doesn't detect completion or hand off to a shell on its own. If that window doesn't appear
-   for any reason, open one manually (right-click the desktop → Open Terminal, or the
-   Files/Applications menu) and tail the same file:
-
-   ```bash
-   tail -f ~/tubematic/vqa/logs/bootstrap.log   # ends with "=== VQA environment ready ==="
-   ```
-
-   First launch of a given image build is the slowest — `tubematic-renderer-image` builds from
-   scratch (Remotion + Chromium). Later relaunches of the *same* image are much faster since
-   `kasm_post_run_user.sh` skips the working-tree refresh (see the code/state split above), though
-   the nested container image itself is never persisted (see Registering, above), so every launch
-   still rebuilds it.
-
-2. **Open Claude Code from `~/tubematic`.** This is the working tree `kasm_post_run_user.sh` set
-   up — it's where the MCP server is registered against and where `mounted/` lives.
+1. Launch a session and wait for the launch hook. A terminal opens and follows
+   `~/tubematic/vqa/logs/bootstrap.log`. The session is ready when the log ends with
+   `=== VQA environment ready ===`. If no terminal opens, open one and run
+   `tail -f ~/tubematic/vqa/logs/bootstrap.log`.
+2. On the first launch, [set the API keys](#api-keys).
+3. Start Claude Code from the working tree. Log in the first time.
 
    ```bash
    cd ~/tubematic
    claude
    ```
 
-3. **Create and drive a video with `/vqa-new-video`:**
+4. Create a video:
 
    ```
    /vqa-new-video "how binary search works"
    ```
 
-   This runs the tubematic-operator skill with VQA's chat-based checkpoints (no dashboard exists
-   here — see "Human checkpoints, without a dashboard" below). Expect to be asked to approve three
-   times in the conversation:
-   - **Topic approval** — right after the video is created.
-   - **Script approval** — before asking, the agent stages the script as two plain-text files
-     under `~/tubematic/mounted/jobs/<video_id>/` (see "Staged script + b-roll, as plain text"
-     below) and shows you both paths, alongside the script itself and the estimated ElevenLabs
-     character cost. This is the one non-refundable spend in the flow, and the only point where
-     you're looking at the script/b-roll plan *before* money is spent voicing it.
-   - **Video approval** — after rendering completes, once you've seen where the file landed.
+   The agent stops three times and waits for your answer in chat:
+   - At the topic, it shows the topic and its score and asks which visual style to use. The style
+     cannot change after you approve.
+   - At the script, it writes the [staged script files](#stage_scriptpy), then shows the script,
+     both file paths and the estimated ElevenLabs cost. Voicing is the one spend you cannot get
+     back, so read the script here.
+   - At the video, it tells you where the file is.
 
-   Everything in between (scripting, voicing, scene authoring, rendering) happens automatically;
-   you only need to respond at those three points.
+   Scripting, voicing, scene writing and rendering run between those stops without you.
+5. Watch the video. `mpv` is installed.
 
-4. **Watch the rendered video.** Once the video reaches `VIDEO_READY`, the file is at:
-
-   ```
-   ~/tubematic/mounted/output_videos/proj_vqa/<video_id>.mp4
+   ```bash
+   mpv ~/.tubematic-data/output_videos/proj_vqa/<video_id>.mp4
    ```
 
-   Open it with `mpv <path>` from a terminal, or double-click it in a file manager.
-
-5. **Ask for an AI review whenever you want one** — before or after approving the video, any
-   number of times:
+6. Ask for an AI review, before or after you approve the video, as often as you like:
 
    ```
    /vqa-review <video_id>
    ```
 
-   This can take a few minutes (see "AI review: on-demand, not automatic" below). It only prints a
-   critique in the conversation — it never changes the video's status or blocks you from doing
-   anything else while you wait.
+7. Check on the pipeline with `/tubematic-status` (pipeline status and the video list) and
+   `/tubematic-dashboard-status` (whether the containers are running).
+8. Repeat from step 4 for the next video. Each video is filed in the one domain, `proj_vqa`.
+9. Close the session when you are done. The containers stop with it.
 
-6. **Check on things without starting a new video:**
+## API keys
 
-   ```
-   /tubematic-status             # pipeline status + video counts + total spend
-   /tubematic-dashboard-status   # container health (docker compose ps, /health)
-   ```
-
-7. **Repeat from step 3 for the next video.** Every video files into the same `proj_vqa` project;
-   there's no domain-matching step to think about.
-
-8. **When you're done, just close the session.** Nothing to shut down manually —
-   `tubematic-api`/`tubematic-mcp`/`tubematic-worker`/`tubematic-renderer` stop with the container. Anything under `~/tubematic`
-   (rendered videos, the DB, Claude Code's login) is there again on your next launch, as long as
-   the workspace has a Persistent Profile Path configured (see Registering, above).
-
-## Required API keys (first launch)
-
-Keys are stored in the settings table, not a file. The bootstrap log warns if any is missing
-and the session still comes up — a keyless box is still useful for staging scripts and DB
-inspection. Set them once from a terminal in the session:
+The launch hook's log warns about each missing key, and the session still starts. Set the keys
+once from a terminal:
 
 ```bash
 cd ~/tubematic
-python3 vqa/edit_settings.py \\
-    --set gemini_api_key=... \\
-    --set elevenlabs_api_key=... \\
-    --set openai_api_key=...
+/opt/tubematic/.venv/bin/python3 vqa/edit_settings.py \
+    --set openai_api_key=... \
+    --set elevenlabs_api_key=... \
+    --set gemini_api_key=...
 ```
 
-They live under `~/tubematic/mounted/`, so the persistent profile keeps them across relaunches.
-`openai_api_key` draws every scene image and the `illustrated` style's characters — without it
-`generate_image` fails and `/vqa-new-video` does not offer that style. `gemini_api_key` is for
-on-demand review here.
+| Key | Used for |
+|---|---|
+| `openai_api_key` | Scene images, and the characters of the `illustrated` visual style. Without it `/vqa-new-video` does not offer that style |
+| `elevenlabs_api_key` | Voicing |
+| `gemini_api_key` | `/vqa-review` |
 
-The output-video path is left at its default (`${PWD}/mounted/output_videos`, inside the
-persisted tree) — pointing it outside `$HOME` would defeat persistence: videos would render
-successfully and disappear at teardown.
+## What a new session starts with
 
-## Seeded voice
+`make_seed_db.py` seeds one domain (`proj_vqa`) and these settings. Each other setting has the
+pipeline's default.
 
-The seed DB's default voice roster is ElevenLabs' standard premade "Rachel" voice
-(`21m00Tcm4TlvDq8ikWAM`, on `eleven_multilingual_v2`) — a real, publicly documented preset ID, not a placeholder that needs
-editing before `generate_voice` will work. **Confirm it's actually available on the account tied
-to `ELEVENLABS_API_KEY`** before the first `/vqa-new-video` run: `generate_voice`'s pre-spend guard
-only checks that the chosen `voice_id` is present in `settings.elevenlabs_voices` (the roster
-itself), not that ElevenLabs' API will actually accept it — an unavailable premade voice on a
-given plan surfaces as an opaque ElevenLabs API error on the first voicing attempt, not a clear
-config message. Swap it with `/vqa-settings` (see [Changing settings](#changing-settings)) if
-needed.
+| Setting | Seeded value |
+|---|---|
+| `elevenlabs_voices`, `elevenlabs_voice_id` | One voice: ElevenLabs' premade "Rachel" (`21m00Tcm4TlvDq8ikWAM`) on `eleven_multilingual_v2` |
+| `gemini_review_enabled` | `false` |
+| `image_model` | `gpt-image-2.5-flare` |
+| `render_timeout_secs` | `2700` |
+| `max_render_retries` | `1` |
 
-## AI review: on-demand, not automatic
+Check that your ElevenLabs account can use the seeded voice before the first video. The pipeline
+checks the roster and does not ask ElevenLabs, so an unavailable voice fails at voicing with an
+ElevenLabs API error. Replace it with `/vqa-settings`.
 
-The seed DB sets `gemini_review_enabled=false`, so a render lands straight at `VIDEO_READY`
-instead of looping through the renderer's automatic post-render review. This is deliberate, not a
-gap: that automatic path bounces a video to `REVISION_REQUESTED` on *any* non-empty `suggestions`
-list. VQA-7 removed the prompt's "expect at least one suggestion on nearly every review" quota,
-which makes that far less likely than it was — but the routing rule itself is unchanged, so leaving
-the automatic review on here would still risk unwanted revision loops.
+AI review is seeded off, because the automatic review sends a video with any finding back to
+`REVISION_REQUESTED`.
 
-Instead, review is a script you run when you want one: `/vqa-review <video_id>` (which runs
-`vqa/review_video.py` — see its docstring). It calls the exact same `run_ai_review()` the renderer
-uses, but writes nothing to the DB — no `gemini_feedback`, no `ai_review_count`, no status change
-— so re-reviewing the same video any number of times is free of side effects. A review can take up
-to ~7 minutes worst case (Gemini's upload-processing poll is bounded at 60 × 5s, plus up to 120s
-for the review call itself).
+## Utilities
 
-The review is handed the video's script in both forms — the authored wording (`videos.script`,
-what the captions show) and the exact text sent to ElevenLabs (`videos.tts_text`, with `<respell>`
-tags and lexicon terms substituted in, and any `<ipa>` tag written as its `"/IPA/"` form) — so its `mispronunciation` check has ground truth for what
-was meant to be said, and a deliberate respelling isn't reported as a defect. A video voiced before
-that column existed has no `tts_text` and falls back to the authored script alone.
+Each utility has a slash command. To run one yourself, use the image's Python environment from
+the working tree:
 
-`review_video.py` also reads `ai_review_model` and `ai_review_fps` from the settings table and
-passes them through, so `/vqa-review` reviews on exactly the configuration the pipeline would use.
-This matters more here than anywhere else: this script is the only way to evaluate a change to the
-review prompt at all, and it can only do that if the sampling rate and model are held fixed across
-a before/after pair. Change either with `/vqa-settings` (e.g.
-`edit_settings.py --set ai_review_fps=1`) and note that **the default is 10** — comparing a run
-made before a prompt change against one made after it, without pinning the rate, moves two
-variables at once. Keys absent from the seed DB fall back to the same defaults the renderer uses
-(`gemini-2.5-flash`, 10 fps).
+```bash
+cd ~/tubematic
+/opt/tubematic/.venv/bin/python3 vqa/<script> [arguments]
+```
 
-The feedback is shown in chat and also written to
-`~/tubematic/mounted/jobs/<video_id>/ai_review.txt` by default (overwritten on each re-run, same
-convention as the staged script files below) — the agent reports that path once the review lands,
-so you can reopen it later without re-running anything.
+| Script | Slash command | Purpose |
+|---|---|---|
+| `edit_settings.py` | `/vqa-settings` | Shows and changes pipeline settings |
+| `stage_script.py <video_id>` | Part of `/vqa-new-video` | Writes the script as two text files for review before voicing |
+| `review_video.py <video_id>` | `/vqa-review <video_id>` | Runs the AI review on a rendered video |
+| `reset_db.py --yes [--db-only]` | `/vqa-reset-db` | Returns the session to its first-launch state |
 
-## Staged script + b-roll, as plain text
-
-`/vqa-new-video` stages the script at the `SCRIPT_READY` checkpoint — **before** asking you to
-approve voicing, not after — by running `vqa/stage_script.py <video_id>`, which writes two files
-to `~/tubematic/mounted/jobs/<video_id>/`. Open either directly, no MCP tool call or DB query
-needed:
-
-- **`script_with_broll.txt`** — every segment's spoken text next to its visual/b-roll direction,
-  straight from `videos.script_segments`. This is the plan; the rendered video is what it actually
-  produced.
-- **`tts_text.txt`** — the text that would actually be sent to ElevenLabs: segments joined, then
-  the same phoneme-tag/`<respell>`/`<ipa>`/pronunciation-lexicon processing `generate_voice()`
-  applies — calling its `_build_tts_text` directly from `mcp/server.py` rather than a second,
-  drift-prone copy of that logic. A script with `<ipa>` tags on a model other than `eleven_v3` or `eleven_v4` is
-  refused here, exactly as `generate_voice` would refuse it.
-
-Staging only needs `videos.script_segments` to exist, not an actual ElevenLabs call — which is
-exactly why this can happen at `SCRIPT_READY`, ahead of the spend, rather than after voicing.
-**`tts_text.txt` is therefore a preview of what generate_voice() would send under the *current*
-settings, not a captured copy of literal bytes already sent.** It can only go stale if
-`settings.pronunciation_lexicon`, the video's voice, or that voice's model change between staging and
-the actual voicing call — if you edit the lexicon mid-review, re-run the staging command (part of the
-`SCRIPT_READY` checkpoint in `vqa/agent/commands/vqa-new-video.md`) before trusting the file again.
-
-If a revision loop rewrites the script later, `/vqa-new-video`'s own checkpoint instructions call
-for re-staging after the fix — there's no separate command for this, it's folded into the normal
-script-approval flow.
-
-## Changing settings
-
-This environment has no dashboard and no `onboard.py` wizard, so `/vqa-settings` (or directly:
-`/opt/tubematic/.venv/bin/python ~/tubematic/vqa/edit_settings.py`) is how a pipeline setting gets
-changed here. With no arguments it prints every effective setting; `--set key=value` (repeatable)
-changes them:
+### `edit_settings.py`
 
 ```
-edit_settings.py                                  # print every effective setting
-edit_settings.py --list image_model               # print selected settings
-edit_settings.py --set render_timeout_secs=2700
-edit_settings.py --set image_model=gpt-image-2.5-sunburst
+edit_settings.py                                  # print every setting in effect
+edit_settings.py --list image_model               # print the named settings
+edit_settings.py --set render_timeout_secs=2700   # change one; repeat --set for more
 edit_settings.py --set elevenlabs_voices='[{"name":"Rachel","voice_id":"21m00Tcm4TlvDq8ikWAM","model_id":"eleven_multilingual_v2"}]'
+edit_settings.py --help                           # every key with its allowed values
+edit_settings.py --restart renderer               # restart a stuck container
 ```
 
-Values pass through as raw strings — the API's `_coerce_setting` already accepts `"true"`/`"1800"`
-and JSON text for the list-valued keys, so the script owns no type table of its own to drift out of
-sync with `SETTINGS_SPEC`. Editing a list-valued key **replaces the whole list**; read the current
-value first and pass the full new one.
+- A change applies at once. No setting needs a restart, because each process reads the database
+  when it needs a value.
+- A list-valued key is replaced whole. Read the current value first and pass the full new list.
+- Read each `WARNING` line. It means the API accepted the write and the pipeline will use a
+  different value. The usual case is a default voice (`elevenlabs_voice_id`) that is not in
+  `elevenlabs_voices`: the API reads it as blank and voicing fails with "No default voice set".
+  Replacing the roster can cause this too.
+- Each voice in `elevenlabs_voices` carries its own `model_id`. There is no install-wide model key.
+- The research settings do nothing here, because a session runs no cron and no topic research.
+- `--restart` takes `renderer`, `worker`, `api` or `mcp`. `--restart mcp` also needs `--yes`,
+  because it disconnects Claude Code from the Tubematic tools.
+- Do not edit the database with SQL. The script writes through `POST /settings`, and some checks
+  exist only there.
 
-`--help` prints every settable key with its allowed values — the real model catalogs, roster cap
-and timeout floor, read off `renderer/api/pipeline.py` at display time rather than written out in
-the script, so the help can't drift from what `POST /settings` will accept. It also flags the six
-research/cron settings that exist in `SETTINGS_SPEC` but do nothing here, and notes that the
-defaults it shows are the pipeline's shipped ones, which `vqa/make_seed_db.py` seeds over in
-places — run with no arguments for the values actually in effect.
+### `stage_script.py`
 
-**Writes go over HTTP to `POST /settings`, never straight to SQLite.** That endpoint is the
-canonical write path: some checks live *only* there — the live webhook probe, and keeping a re-sent
-masked secret from overwriting the real key — so a direct-SQL edit reusing `_coerce_setting` would
-skip them.
+`/vqa-new-video` runs it at `SCRIPT_READY`, before it asks you to approve voicing. It writes two
+files to `~/.tubematic-data/jobs/<video_id>/`:
 
-**No setting needs a restart to take effect.** Every reader queries the database live at use time —
-`renderer/api/worker.py::_setting`, `renderer/api/render_results.py::_setting`,
-`mcp/server.py::_get_setting` and `renderer/api/pipeline.py::_read_all_settings` are each called
-per-use, with no module-level reads and no in-process cache — so a write applies to the very next
-read. `--restart renderer` and `--restart worker` exist for a genuinely wedged renderer or worker
-and nothing else. `--restart mcp` bounces the MCP server on port
-4100, dropping the Claude Code session's connection and every Tubematic tool with it, so it
-requires an explicit `--yes`; `--restart api` bounces Flask alone and needs no confirmation, since
-the two are separate containers.
+- `script_with_broll.txt` has each segment's spoken text beside its visual direction.
+- `tts_text.txt` has the text that voicing would send to ElevenLabs, with the pronunciation
+  lexicon and the `<respell>`, `<ipa>` and phoneme tags applied
+  (`mcp/server.py::_build_tts_text`).
 
-**Watch for `WARNING` lines.** A `200` from `POST /settings` does not mean every value took.
-`post_settings` responds with the *effective* settings (`_read_all_settings`), and the script diffs
-that against both what was asked for and what was in place beforehand. The case this exists for:
-the default-voice invariant is enforced on read, not by rejecting the write — an
-`elevenlabs_voice_id` naming no entry in `elevenlabs_voices` is stored happily and then blanked, so
-the write looks successful and the next `generate_voice` dies with "No default voice set".
+`tts_text.txt` is a preview under the current settings. If you change the pronunciation lexicon,
+the video's voice or that voice's model after staging, run the script again. The script refuses
+`<ipa>` or phoneme tags that the voice's model cannot speak, as voicing would.
 
-That invariant breaks from either side, which is why the diff covers unrequested keys too:
-**replacing the roster orphans the current default voice** even though the request never mentioned
-`elevenlabs_voice_id` — and swapping a voice is the most likely roster edit there is. Growing the
-roster while keeping the default, or changing a voice's model, are not warned about.
+### `review_video.py`
 
-There is no install-wide ElevenLabs model: every entry in `elevenlabs_voices` carries its own
-`model_id`, and a video's pronunciation mode (`"ipa"` for `eleven_v3` and `eleven_v4`, `"phoneme"` for the
-phoneme-compatible models, else `"respell"`) follows its voice's model. `elevenlabs_model_id` and
-`pronunciation_mode` are unknown keys to `POST /settings`.
+It runs the function the pipeline's automatic review runs
+(`renderer/api/ai_review.py::run_ai_review`), with the
+`ai_review_model` and `ai_review_fps` settings (defaults `gemini-2.5-flash` and `10`). To compare
+two reviews, keep both settings the same.
 
-## Resetting the environment
+- It prints the feedback and writes it to `~/.tubematic-data/jobs/<video_id>/ai_review.txt`. Each
+  run overwrites that file.
+- It writes nothing to the database and does not change the video's status, so you can repeat it.
+- It can take up to about seven minutes.
+- It gives the reviewer the script as written and the text sent to ElevenLabs, so a respelled
+  word is not reported as a mispronunciation.
 
-`/vqa-reset-db` (or directly: `/opt/tubematic/.venv/bin/python ~/tubematic/vqa/reset_db.py --yes`)
-wipes the pipeline database and reseeds it from scratch — back to exactly the first-launch state:
-one `proj_vqa` project, no videos, the default settings from `vqa/make_seed_db.py`. By default it
-also clears every file a video could have left behind (`mounted/jobs/`, `mounted/output_videos/`,
-`mounted/scenes/generated/`), since a DB-only reset would otherwise leave those as orphaned disk
-usage with nothing left pointing at them. Pass `--db-only` to keep existing renders and reset just
-the database.
+### `reset_db.py`
 
-**Destructive and irreversible — there is no undo.** Requires `--yes`; running it with no flags
-prints what it would delete and changes nothing, which is also what running `/vqa-reset-db`
-without confirming first should stop at — the command's own instructions require an explicit yes
-from you before it ever passes `--yes`.
+```
+reset_db.py                    # print what it would delete, change nothing
+reset_db.py --yes              # reset the database and delete each video's files
+reset_db.py --yes --db-only    # reset the database, keep the files
+```
 
-## Human checkpoints, without a dashboard
-
-The pipeline's three human checkpoints (`TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY`) normally
-need dashboard approval. Here, `/vqa-new-video` carries a fork of the operator skill's guidance
-that stops in chat at each one instead — see `vqa/agent/commands/vqa-new-video.md`. The
-`SCRIPT_READY` checkpoint stages the script/b-roll files (see above) and states the estimated
-ElevenLabs cost before asking, since that spend is non-refundable.
+A reset cannot be undone. It replaces the database with a new seed: one domain, no videos and the
+seeded settings. The API keys are settings, so set them again afterwards. Without `--db-only` it
+also empties `jobs/`, `output_videos/` and `scenes/generated/` under `~/.tubematic-data`.
+`/vqa-reset-db` asks you to confirm before it runs.
 
 ## Troubleshooting
 
-- Bootstrap log: `~/tubematic/vqa/logs/bootstrap.log` — every step it takes is logged there,
-  including which failure caused it to stop.
-- If bootstrap never seems to run at all (no log file ever appears, `/vqa-new-video` fails because
-  nothing's registered), check whether `/dockerstartup/kasm_post_run_user.sh` actually exists and
-  is executable inside the session (`ls -la /dockerstartup/kasm_post_run_user.sh`) — if the Kasm
-  platform never invokes this hook for some deployment-specific reason, nothing here runs
-  automatically, and the only diagnostic signal is its absence rather than a failure in it. Run it
-  manually (`bash /dockerstartup/kasm_post_run_user.sh`) to confirm the script itself works when
-  invoked directly.
-- If bootstrap fails waiting for `dockerd`, that's almost certainly the workspace not being
-  launched with `"privileged": true` (see above).
-- If the bootstrap log warns that no API key is configured, set them with `vqa/edit_settings.py`
-  as shown above. This is a warning, not a failure — the stack still comes up.
-- If no terminal window auto-opens on launch, that's `vqa/watch_bootstrap.sh` (launched from
-  `vqa/custom_startup.sh`) either never running or failing to reach the display — it has no effect
-  on whether the environment actually comes up, just on whether you see it happen. Open a terminal
-  manually and tail the log the same way either way.
-- If bootstrap fails with `mounted/data/tubematic.db existed before this working-tree refresh and
-  is gone after it` — stop and investigate before doing anything else with `mounted/` in this
-  session. This is a deliberate, fail-loud guard (not a normal failure mode) that only fires if
-  the working-tree refresh's protection for persisted data has somehow broken; see the code/state
-  split section above for what that protection is supposed to guarantee.
-- If `vqa/stage_script.py` or `vqa/review_video.py` fails with a plain permission error trying to
-  create a file/directory under `mounted/`, that shouldn't happen — `kasm_post_run_user.sh`'s
-  step 6 self-heals `mounted/`'s ownership to `kasm-user` on every launch specifically because
-  `tubematic-api`/`tubematic-worker`/`tubematic-renderer` run as root inside their containers, and either the
-  container or dockerd's own bind-mount auto-create can leave content under `mounted/` root-owned
-  on the host (invisible to the containers themselves, since root bypasses permission checks, but
-  not to these host-side scripts). If you hit this anyway, it likely means that self-heal step
-  didn't run or failed silently on this launch — check the bootstrap log around `mounted/
-  directories ready`, and as an immediate workaround: `sudo chown -R kasm-user:kasm-user
-  ~/tubematic/mounted`.
+Start with `~/tubematic/vqa/logs/bootstrap.log`. The launch hook logs each step and the reason
+for a stop.
 
-## Local (non-Kasm) alternative
-
-None — this environment's whole point is a disposable, pre-configured Kasm session. For local
-development against a real checkout, use the normal `onboard.py` flow at the repo root, or
-`kasm_workspace_testing/` for a Kasm session with the full onboarding wizard still in the loop.
+| Symptom | What to do |
+|---|---|
+| No terminal opens at launch | Open one and follow the log. The terminal is a viewer and the session starts without it |
+| The log file never appears | Kasm did not run the hook. Check that it exists with `ls -la /dockerstartup/kasm_post_run_user.sh`, then run it with `bash /dockerstartup/kasm_post_run_user.sh` |
+| `dockerd did not become ready within 120s` | The workspace is not privileged. See [Register the image in Kasm](#register-the-image-in-kasm) |
+| `WARNING: no API key configured for: ...` | [Set the keys](#api-keys) |
+| A container `did not become healthy within 300s` | Run `docker compose logs <service>` from `~/tubematic` |
+| `no skills found ... but the working tree is marked current` | Run `rm -f ~/tubematic/.vqa-image-id` and launch again. The hook then copies the working tree again |
+| `tubematic.db existed before this working-tree refresh and is gone after it` | Stop. The hook refused to seed a new database over a missing one. Find out what removed `~/.tubematic-data/data/tubematic.db` first |
+| A utility fails with a permission error under `~/.tubematic-data` | Run `sudo chown -R kasm-user:kasm-user ~/.tubematic-data`. The containers run as root and can leave root-owned files there |
+| Claude Code has no Tubematic tools | Look for `claude mcp add-json failed or timed out` in the log. Run the hook again with `bash /dockerstartup/kasm_post_run_user.sh`, then restart Claude Code |

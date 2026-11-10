@@ -50,16 +50,19 @@ your own — it holds the known causes and fixes, and this skill does not repeat
 
 | What they describe | Guide section |
 |---|---|
-| Nothing moves, a video is stuck, cron does nothing | Nothing is happening |
+| Nothing moves, cron does nothing | Nothing is happening |
+| No topics are proposed | No new topics |
+| A card says STUCK, or a video is Failed | A video is stuck or failed |
 | The agent says it has no Tubematic tools, or MCP answers 401 | The agent has no Tubematic tools |
 | The agent follows old instructions after an upgrade | The agent has stale skills |
 | A render fails, times out or loops | Renders |
 | The AI review keeps sending a video back | AI review |
 | Wrong pronunciation, voice errors, ElevenLabs refusals | Voice |
-| The dashboard will not load, or login fails | Dashboard |
+| Scene images fail | Images |
+| The dashboard will not load, or login fails | The dashboard |
 | Posts fail, scheduling or Auto Pilot misbehaves | Publishing |
 | Discord messages missing | Notifications |
-| Disk full, missing files, an empty database after an upgrade | Data and disk |
+| Disk full, missing files | Disk and data |
 
 An upgrade that refused or failed part-way is covered by `docs/user-guide/07-upgrading.md`
 instead, in the same directory.
