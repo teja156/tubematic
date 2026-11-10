@@ -80,7 +80,7 @@ _CUSTOM_FILE = re.compile(r"^prop-[a-z0-9-]{1,40}$")
 # render many times over on the CPU renderer (TMDEV-196's measurements), makes
 # frames differ between renders, or reaches outside the drawing.
 FORBIDDEN_SOURCE = (
-    (re.compile(r"""<filter\b|<fe[A-Z]|(?<![\w.])filter=\s*["'{]|\bfilter\s*:\s*["'`]"""),
+    (re.compile(r"""<filter\b|<fe[A-Z]|(?<![\w.])filter\s*=\s*["'{]|\bfilter\s*:\s*["'`]|style=\{\{[^}]*\bfilter\s*:"""),
      "an SVG filter (blur, shadow, turbulence): it multiplies the render time"),
     (re.compile(r"\brequire\s*\("), "require(): a prop names what it uses with import"),
     (re.compile(r"(?i)(linear|radial)Gradient"), "a gradient: it multiplies the render time; use flat fills"),

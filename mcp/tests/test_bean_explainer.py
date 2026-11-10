@@ -529,7 +529,8 @@ def test_scene_props_that_are_not_an_object_are_refused():
 def test_array_filter_is_ordinary_code_but_an_svg_filter_is_not():
     ok = ROCKET.replace("const lift", "const parts = [1, 0].filter(Boolean);\n  const lift", 1)
     assert _check_custom(_with_rocket(), {"vid_be1/prop-rocket": ok}) == []
-    for bad in ('<filter id="f" />', 'filter="url(#f)"', "style={{ filter: 'blur(2px)' }}"):
+    for bad in ('<filter id="f" />', 'filter="url(#f)"', "style={{ filter: 'blur(2px)' }}",
+                '<g filter = "url(#f)" />', "style={{ opacity: 1, filter: blur }}"):
         body = ROCKET.replace("<g transform", f"{bad}<g transform", 1)
         assert any("an SVG filter" in p for p in _check_custom(_with_rocket(), {"vid_be1/prop-rocket": body})), bad
 
