@@ -137,6 +137,17 @@ test.describe("VideoModal", () => {
   test("Mark as published moves a partial publish to Published (TMDEV-191)", async ({ page }) => {
     const video = await createVideo({ topic: `[${uid}] Partial publish` });
     await patchVideo(video.id, { status: "PARTIALLY_PUBLISHED" });
+    // A real partial publish has one row per account, at least one of each
+    // outcome. The stack cannot post (no postforme key), so the rows are
+    // served here; the button stays disabled until they load.
+    const row = { video_id: video.id, platform: "youtube", published_at: "", created_at: "", updated_at: "" };
+    await page.route(`**/api/proxy/videos/${video.id}/publications`, (route) =>
+      route.fulfill({
+        json: [
+          { ...row, id: "pub-ok", social_account_id: "acc-ok", status: "PUBLISHED", post_url: "https://example.com/p", error: "" },
+          { ...row, id: "pub-err", social_account_id: "acc-err", status: "FAILED", post_url: "", error: "token expired" },
+        ],
+      }));
 
     await page.goto("/");
     // No column of its own: it sits in Published, tagged PARTIAL.
@@ -152,6 +163,7 @@ test.describe("VideoModal", () => {
 
     const dialog = page.getByTestId("mark-published-dialog");
     await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("It went out to 1 of 2 account(s)");
     await expect(dialog.getByTestId("mark-published-warning")).toContainText("Download the video first");
     await expect(dialog.getByTestId("mark-published-download")).toHaveAttribute("download", `${video.id}.mp4`);
     await dialog.getByRole("button", { name: "Mark as published" }).click();

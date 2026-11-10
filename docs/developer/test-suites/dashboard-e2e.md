@@ -136,7 +136,9 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
 - A video flagged stuck through `POST /videos/<id>/agent-outcome`, the route the poller reports to,
   shows STUCK on its card, and **Retry agent** clears the flag without changing the status.
 - A `PARTIALLY_PUBLISHED` video sits in the Published column tagged PARTIAL, and **Mark as
-  published** moves it to `PUBLISHED`.
+  published** moves it to `PUBLISHED`. The test serves the video's publication rows (one posted,
+  one failed) with `page.route`, because the button stays disabled until the rows load and the
+  stack cannot post.
 
 Trap: the Voice and Voice model rows need the real API, because `voice_info` comes only from the
 single-video fetch and the list row the window opens on does not carry it.
