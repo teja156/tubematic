@@ -15,13 +15,13 @@ corner unless you turn it off on **Settings → Rendering**.
 
 | Style | What you get | Needs |
 |---|---|---|
-| **Auto** | The agent reads the script and picks one of the styles below for the whole video | Nothing |
+| **Auto** | No restriction. The agent chooses the canvas, and draws each part of the video in whatever way suits it. See [What Auto does](#what-auto-does) | Nothing |
 | **Motion Graphics** | A dark canvas. Generated images with slow camera moves, and animated diagrams. No drawn figures | Nothing |
 | **Stick Explainer** | A white canvas. Black hand-drawn line art, with stick figures for roles such as "the user" or "an attacker" | Nothing |
 | **Illustrated** | Generated cartoon or rendered characters that stay the same from scene to scene | An OpenAI key |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 
-A style sets the canvas and how people are drawn. It does not limit what a scene can show. A Stick
+A named style sets the canvas and how people are drawn. It does not limit what a scene can show. A Stick
 Explainer video still draws a process as a diagram, and still shows a generated image for a real
 place or person, inside a panel on the white canvas.
 
@@ -30,8 +30,7 @@ background would flash, and a viewer reads that as a broken render.
 
 ### Picking one
 
-- Choose **Auto** when you have no preference. After the agent decides, the video's card shows what
-  it picked.
+- Choose **Auto** when you have no preference.
 - Choose **Motion Graphics** for subjects you can photograph or diagram: places, machines, events,
   how data moves.
 - Choose **Stick Explainer** for walkthroughs with generic people in them: what a user clicks, what
@@ -40,7 +39,26 @@ background would flash, and a viewer reads that as a broken render.
   pose is one more OpenAI image call, so this style costs more per video than the two above.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
 
-Auto can choose Cartoon 3D only while a GPU is working.
+### What Auto does
+
+Auto does not pick one of the named styles. The agent makes two choices for the whole video, then
+decides how to draw each part of the script.
+
+1. Whether the video is Cartoon 3D. The agent chooses it when a place, and people moving through
+   it, carry the video. It can choose it only while a GPU is working and the video has no mascot.
+2. For every other video, a dark or a white canvas. It chooses dark when images carry the video,
+   and white when roles, processes and diagrams do.
+
+Each part of the script then gets its own treatment: an image, a diagram, line-art figures or
+generated characters. An Auto video can therefore mix what the named styles keep apart. One on a
+dark canvas can use line-art figures for "the user" and "the server", which Motion Graphics leaves
+out. The agent uses generated characters only for a character the viewer must recognise across
+scenes, and only while an OpenAI key is stored.
+
+The video's window shows what the agent settled under **Visual style**: Auto with a dark canvas,
+Auto with a light canvas, or Auto with Cartoon 3D. Until the agent has chosen, it reads
+"Auto (not yet chosen)". It does not name Motion Graphics, Stick Explainer or Illustrated, because
+an Auto video is none of them.
 
 ### Where you choose
 
