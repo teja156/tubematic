@@ -326,3 +326,14 @@ def test_a_packet_on_the_last_board_must_arrive_by_the_final_frame():
     errs = _check(_with(lambda b: b[1]["events"].append(
         {"type": "packet", "edge": "firewall>server", "at": 516, "tone": "ok"})))
     assert any("packet event at 516" in e for e in errs), errs
+
+
+def test_a_node_faults_once():
+    """The renderer keeps one fault per node; a second would erase the first."""
+    errs = _check(_with(lambda b: b[1]["events"].append({"type": "fault", "node": "attacker", "at": 450})))
+    assert any("'attacker' faults twice" in e for e in errs), errs
+
+
+def test_a_fault_before_its_node_enters_is_refused():
+    errs = _check(_with(lambda b: b[1]["events"].append({"type": "fault", "node": "server", "at": 440})))
+    assert any("fault on 'server' at 440 comes before it enters" in e for e in errs), errs

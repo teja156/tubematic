@@ -99,7 +99,7 @@ move. Edges are named `"from>to"` in events.
 | `packet` | something travels: a request, a reply, a signal | `edge`, `at`, optional `reverse`, `tone` |
 | `focus` | the narration dwells on one component; the rest dims until the next focus | `node`, `at` |
 | `chip` | a value worth reading appears on a connector (one chip at a time, about 2.5 s each) | `edge`, `at`, `text`, optional `tone` |
-| `fault` | the component that fails, or the attacker; it turns red | `node`, `at` |
+| `fault` | the component that fails, or the attacker; it turns red for the rest of the board (once per node) | `node`, `at` |
 
 **Tones** carry meaning, never decoration: `structure` (cyan, the default), `relation` (violet, a link
 between parts), `ok` (green, a success or a verified result), `fault` (red, the one failure or attack

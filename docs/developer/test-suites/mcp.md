@@ -458,7 +458,7 @@ text audit's per-board sampling ([System Flow](../10-scene-authoring.md#system-f
   `SystemFlow` entry of any type but `generated`.
 - An event that cannot be drawn and read before its board fades out is refused, a node's label
   typing included (the last board has no fade-out and ends on its final frame). Two chips or two
-  focuses too close together are refused. The
+  focuses too close together, and a second fault on one node, are refused. The
   stillness rule counts seconds at the timeline's frame rate, whatever `fps` the config claims.
 - The text audit samples each board.
 

@@ -39,7 +39,7 @@ it); at most 3 rows and 3 nodes per row. Within a row, the listed order is the l
 | `packet` | `edge`, `at`, `reverse` (bool), `tone` | `at` at least 15 frames after its edge's event; travels 20 frames and must arrive inside the board |
 | `focus` | `node`, `at` | after the node entered; lasts until the next focus |
 | `chip` | `edge`, `at`, `text`, `tone` | after the edge has drawn; text 1 to 24 characters; shown about 2.5 s or until the next chip |
-| `fault` | `node`, `at` | after the node entered; the node turns red for the rest of the board |
+| `fault` | `node`, `at` | after the node entered; at most one per node; the node turns red for the rest of the board |
 
 `tone` is one of `structure` (default), `relation`, `ok`, `fault`.
 

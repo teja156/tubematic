@@ -340,7 +340,8 @@ def _check_board(board: dict, where: str, start: int, end: int, visible_until: i
         if e not in edge_at:
             err(f"{where}: edge {e!r} is never drawn; give it an edge event.")
 
-    for ev in typed:
+    faulted: set[str] = set()
+    for ev in sorted(typed, key=lambda e: e["at"]):
         at, kind = ev["at"], ev["type"]
         if kind == "edge" and ev.get("edge") in edge_at:
             a, b = ev["edge"].split(">")
@@ -372,8 +373,14 @@ def _check_board(board: dict, where: str, start: int, end: int, visible_until: i
             nid = ev.get("node")
             if nid not in ids:
                 err(f"{where}: {kind} at {at} names {nid!r}, which is not a node of this board.")
-            elif nid in node_at and at < node_at[nid]:
+                continue
+            if nid in node_at and at < node_at[nid]:
                 err(f"{where}: {kind} on {nid!r} at {at} comes before it enters (at {node_at[nid]}).")
+            if kind == "fault":
+                if nid in faulted:
+                    err(f"{where}: {nid!r} faults twice; a fault lasts for the rest of the board, so give "
+                        "each node at most one.")
+                faulted.add(nid)
 
     for kind, gap in _MIN_GAP.items():
         ats = sorted(ev["at"] for ev in typed if ev["type"] == kind)
