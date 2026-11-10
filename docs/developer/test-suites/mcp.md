@@ -438,6 +438,26 @@ canvas the video already uses, since no code on the revision path reads the fiel
 default of `illustrated` or `cartoon_3d` is checked only when it changes: re-sending a stored
 default after the key or the GPU is gone must pass, or every later edit of that domain would fail.
 
+### `test_choose_visual_style.py`
+
+Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back
+([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
+
+- A pack pick becomes the video's `visual_style`, so `get_video`'s `style` names its authoring skill
+  and script guidance. `scenes` keeps `auto` and still counts as decided.
+- The choice is made once, only at `TOPIC_APPROVED`, never over a style a person chose, and never
+  for an archived video. A bad style, runner-up or reason is refused.
+- An unavailable style or runner-up is refused with the reason, and a mascot rules out a 3D world.
+- A status, style, pick or archive change between the checks and the `UPDATE` leaves the video
+  untouched, and so does a mascot landing before a 3D pick.
+- `style_routing` lists every candidate and the video's domain.
+- A move back to `TOPIC_PROPOSED`, guarded or not, returns an Auto pick to `auto`. A person's style
+  survives it, and other moves keep the pick. A changed `visual_style` clears the pick and the same
+  value keeps it.
+
+Trap: the race test is mutation-checked. Each clause of the `UPDATE`'s `WHERE` is there because a
+check made on an earlier read can be out of date by the write.
+
 ### `test_system_flow.py`
 
 Covers `mcp/system_flow.py`, the checks `write_scene_config` runs on a System Flow config, and the

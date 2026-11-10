@@ -109,8 +109,8 @@ Covers [the pipeline board](../15-dashboard.md#the-pipeline-board) and
 - The visual style travels in the same request as the topic approval, and the API answers `409` to
   a later change. Illustrated with no OpenAI key is a disabled option that the API refuses with
   `400`.
-- The style picker offers exactly the list `GET /visual-styles` serves, System Flow included, and a
-  System Flow pick is stored with the approval.
+- The style picker offers the list `GET /visual-styles` serves and nothing else, System Flow
+  included, and a System Flow pick is stored with the approval.
 - A status pill that hides a group keeps it hidden across a poll.
 - At 1280px the `TOPIC_PROPOSED` row's buttons stay on screen and the title keeps its width.
 
@@ -139,6 +139,10 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
   shows STUCK on its card, and **Retry agent** clears the flag without changing the status.
 - A `PARTIALLY_PUBLISHED` video sits in the Published column tagged PARTIAL, and **Mark as
   published** moves it to `PUBLISHED`.
+- A video whose style Auto picked shows the reason, and **Switch to …** moves it to
+  `TOPIC_APPROVED` with the runner-up as its style. The pick is seeded in the API container with
+  `docker compose exec`, because only the agent's `choose_visual_style` writes one and the test
+  stack runs no agent.
 
 Trap: the Voice and Voice model rows need the real API, because `voice_info` comes only from the
 single-video fetch and the list row the window opens on does not carry it.

@@ -29,12 +29,13 @@ Two conventions hold across the layer:
 
 ## The skills
 
-Nine skills ship in `agent_files/skills/`.
+Ten skills ship in `agent_files/skills/`.
 
 | Skill | Runs when | What it does |
 |---|---|---|
 | `tubematic-operator` | Any pipeline session | Checks the setup, routes each workable video by status and stops at human checkpoints |
 | `tubematic-topic-research` | A scheduled research run | Proposes and scores topics for the three research modes |
+| `tubematic-style-routing` | `TOPIC_APPROVED` on a video left on `auto`, before the script | Picks the video's style from the style packs' routing data and records it with `choose_visual_style` ([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)) |
 | `tubematic-script-writing-skill` | `TOPIC_APPROVED`, or a script revision | The scripting contract: segments, length budget, pronunciation, pause markup and each beat's visual brief |
 | `tubematic-create-script-writing-skill` | A script profile is queued at `PENDING` | Extracts a creator's style from transcripts into profile markdown |
 | `tubematic-scene-config` | `VOICE_READY`, and the revision path | Turns a voiced script and its timeline into images, scene TSX and `scene-config.json` |

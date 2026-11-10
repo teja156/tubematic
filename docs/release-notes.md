@@ -12,7 +12,7 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 ## v2.2.0
 
 2.2.0 adds System Flow, a visual style that turns a video into a diagram that builds itself while
-the narrator explains a system.
+the narrator explains a system, and Auto now picks a video's style before its script is written.
 
 ### Upgrade notes
 
@@ -22,7 +22,12 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs a new skill for System Flow, and a session started before it does not have it.
+   installs new skills for System Flow and for Auto's style choice, and a session started before it
+   does not have them.
+
+A video on Auto that was already past Topic Approved when you upgraded keeps working the way Auto
+did before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. Only videos
+approved after the upgrade get a style picked before their script.
 
 If you go back to 2.1.x later:
 
@@ -37,8 +42,23 @@ If you go back to 2.1.x later:
   the narration describes each step, with values such as an address or a status code shown beside
   them. It suits networking, protocols, system design, data pipelines and security flows. It needs no
   image generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's
-  default; Auto does not choose it. See
+  default, or leave the topic on Auto. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and
+  the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
+  agent writes a new script for it, and nothing has been paid for yet. See
+  [What Auto does](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does).
+
+### Changed
+
+- Auto picks the style when the agent picks up an approved topic, before it writes the script, and
+  can pick any style this install can make: Motion Graphics, Stick Explainer, Illustrated, System
+  Flow, Cartoon 3D and every style added later. The script is then written for that style. Before,
+  Auto decided after the voice was made, could only choose between a dark canvas, a white canvas and
+  Cartoon 3D, and never chose a named style. When no style clearly fits, Auto keeps that mixed
+  approach. A video's card and window show the picked style after the word Auto.
+- A topic sent back for revision returns to Auto if Auto had picked its style, so the agent picks
+  again for the revised topic.
 
 ---
 
