@@ -117,3 +117,5 @@ script or the video and brings it back.
 - [Using Tubematic](user-guide/03-using-tubematic.md): let Tubematic find topics for you.
 - [Visual Styles and Mascots](user-guide/13-visual-styles-and-mascots.md): choose how videos look.
 - [Publishing](user-guide/06-publishing.md): post videos to YouTube, Instagram, TikTok and Facebook.
+- [GPU Rendering](user-guide/10-gpu-rendering.md): render about three times faster on an NVIDIA GPU.
+- [Remote Renderers](user-guide/11-remote-renderers.md): let other machines render for this install.
