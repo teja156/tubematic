@@ -80,7 +80,9 @@ _CUSTOM_FILE = re.compile(r"^prop-[a-z0-9-]{1,40}$")
 # render many times over on the CPU renderer (TMDEV-196's measurements), makes
 # frames differ between renders, or reaches outside the drawing.
 FORBIDDEN_SOURCE = (
-    (re.compile(r"<filter\b|<fe[A-Z]|\bfilter\s*[=:]"), "an SVG filter (blur, shadow, turbulence): it multiplies the render time"),
+    (re.compile(r"""<filter\b|<fe[A-Z]|(?<![\w.])filter=\s*["'{]|\bfilter\s*:\s*["'`]"""),
+     "an SVG filter (blur, shadow, turbulence): it multiplies the render time"),
+    (re.compile(r"\brequire\s*\("), "require(): a prop names what it uses with import"),
     (re.compile(r"(?i)(linear|radial)Gradient"), "a gradient: it multiplies the render time; use flat fills"),
     (re.compile(r"<pattern\b"), "an SVG pattern: it multiplies the render time; use flat fills"),
     (re.compile(r"strokeDasharray|stroke-dasharray"), "a dashed stroke: it multiplies the render time"),
@@ -88,10 +90,11 @@ FORBIDDEN_SOURCE = (
     (re.compile(r"<image\b|<img\b|<foreignObject\b|dangerouslySetInnerHTML|\bfetch\(|\bimport\("),
      "an image, embedded HTML or a fetch: a prop is drawn from shapes only"),
 )
-# Every way a module names another: `import x from`, a bare `import "x"`,
-# `export ... from` and `require("x")`. A bare import of a missing module is
-# not a type error, and webpack failing on it would break every video's bundle.
-_IMPORT = re.compile(r"""^\s*(?:import|export)\b[^;]*?from\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']|\brequire\s*\(\s*["']([^"']*)["']""", re.M)
+# Every way a module names another with import: `import x from`, a bare
+# `import "x"` and `export ... from` (require is refused outright above). A
+# bare import of a missing module is not a type error, and webpack failing on
+# it would break every video's bundle.
+_IMPORT = re.compile(r"""^\s*(?:import|export)\b[^;]*?from\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']""", re.M)
 _ALLOWED_IMPORT = re.compile(r"^(react|remotion|\.\./\.\./installed/beanExplainer/(props/common|bean|contract))$")
 # Prop boxes at scale 1, in frame pixels: (width, height), every pixel the
 # drawing can reach (contract.ts says how they are measured). The text limits
@@ -245,10 +248,8 @@ def custom_prop_errors(custom, video_id: str, library: dict, sources: dict | Non
             for pattern, why in FORBIDDEN_SOURCE:
                 if pattern.search(body):
                     errs.append(f"{where} ({cid}): the drawing uses {why}.")
-            named = [next(g for g in groups if g) for groups in _IMPORT.findall(body)]
-            bad = [m for m in named if not _ALLOWED_IMPORT.match(m)]
-            if re.search(r"\brequire\s*\(", body) and not named:
-                bad.append("require(...)")
+            named = [next((g for g in groups if g), "") for groups in _IMPORT.findall(body)]
+            bad = [m or '""' for m in named if not _ALLOWED_IMPORT.match(m)]
             if bad:
                 errs.append(f"{where} ({cid}): it imports {', '.join(sorted(set(bad)))}; a prop imports only react, "
                             "remotion and ../../installed/beanExplainer/props/common (or bean, contract).")

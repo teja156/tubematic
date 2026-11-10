@@ -543,8 +543,8 @@ cannot be drawn fails the render, so no frame goes out without the bean.
 - A custom prop has more than 8 per video, an id a library prop has, a `src` that is not this video's
   `prop-<name>` file, a box outside 60 to 700 px a side, a text slot over 40 characters or more than 4
   acts. Its file is missing, has no default export, imports anything but `react`, `remotion` and the
-  library's `props/common`, `bean` and `contract` (in an `import`, an `export ... from` or a
-  `require`), or uses an SVG filter, a gradient, a pattern, a
+  library's `props/common`, `bean` and `contract` (in an `import` or an `export ... from`), calls
+  `require`, or uses an SVG filter, a gradient, a pattern, a
   dashed stroke, an image, embedded HTML, a fetch, randomness or the clock
   (`bean_explainer.py::FORBIDDEN_SOURCE`).
 - Nothing changes for more than 3 seconds.

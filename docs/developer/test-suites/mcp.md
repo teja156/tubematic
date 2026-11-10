@@ -469,7 +469,8 @@ Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean E
 - `validate_job`'s re-check finds a prop file redrawn with a gradient, or deleted, after the config was
   written. A value of the wrong type (a list where an id belongs, scene props that are not an object)
   gets a sentence back and raises nothing. `.filter(Boolean)` is ordinary code while an SVG filter is
-  refused, and every import form is checked (a bare `import`, `export ... from`, `require`). A config
+  refused, a variable named `filter` is not, every import form is checked (a bare `import`,
+  `export ... from`), and `require` is refused in any form, `require("")` included. A config
   that sets only `subtitles.emphasis` keeps the style's caption look.
 - `write_scene_config` reads the prop files a config names. `render_bean_props` refuses another
   style, a video with no config and a config with no `customProps`; it returns the picture (the

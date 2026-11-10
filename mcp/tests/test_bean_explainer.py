@@ -534,10 +534,21 @@ def test_array_filter_is_ordinary_code_but_an_svg_filter_is_not():
         assert any("an SVG filter" in p for p in _check_custom(_with_rocket(), {"vid_be1/prop-rocket": body})), bad
 
 
-@pytest.mark.parametrize("line", ['import "./side-effect";', 'export { x } from "lodash";', 'const fs = require("fs");'])
+@pytest.mark.parametrize("line", ['import "./side-effect";', 'export { x } from "lodash";'])
 def test_every_import_form_is_checked(line):
     body = line + "\n" + ROCKET
     assert any("it imports" in p for p in _check_custom(_with_rocket(), {"vid_be1/prop-rocket": body}))
+
+
+@pytest.mark.parametrize("line", ['const fs = require("fs");', 'const m = "fs"; require(m);', "require(`fs`);", 'require("");'])
+def test_require_is_refused_in_any_form(line):
+    body = line + "\n" + ROCKET
+    assert any("require()" in p for p in _check_custom(_with_rocket(), {"vid_be1/prop-rocket": body}))
+
+
+def test_a_variable_named_filter_is_not_an_svg_filter():
+    body = ROCKET.replace("const lift", "const filter = 1;\n  const opts = { filter: true };\n  const lift", 1)
+    assert _check_custom(_with_rocket(), {"vid_be1/prop-rocket": body}) == []
 
 
 def test_setting_only_emphasis_keeps_the_styles_caption_look(make_video):
