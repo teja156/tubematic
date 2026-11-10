@@ -49,7 +49,7 @@ def test_surrounding_whitespace_is_ignored():
 def test_the_list_starts_with_auto_and_holds_every_pack():
     assert tvs.VISUAL_STYLES[0] == "auto"
     assert set(tvs.VISUAL_STYLES[1:]) == {p.stem for p in tvs.PACKS_DIR.glob("*.json")}
-    assert {"motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow"} <= set(tvs.VISUAL_STYLES)
+    assert {"motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow", "whiteboard"} <= set(tvs.VISUAL_STYLES)
 
 
 def test_effective_canvas():
@@ -80,12 +80,27 @@ def test_system_flow():
     assert len(p["extra"]["icons"]) == len(set(p["extra"]["icons"]))
 
 
+def test_whiteboard():
+    """A whole-video style like System Flow, on the light canvas, with no
+    figures of any kind (a role is a doodle) and nothing to install."""
+    p = tvs.pack("whiteboard")
+    assert p["renderer"] == "dom" and tvs.effective_canvas("whiteboard", "dark") == "light"
+    assert p["authoring_skill"] == "tubematic-whiteboard"
+    assert not any(p["allows"].values()) and not any(p["needs"].values())
+    assert not tvs.figures_allowed("whiteboard") and not tvs.characters_allowed("whiteboard")
+    assert "review" in p and p["captions"]["fontFamily"].startswith("Kalam")
+    assert p["extra"]["doodles"] == sorted(set(p["extra"]["doodles"]))
+    # TMDEV-203 routes on these; each must name what sets it apart.
+    avoid = " ".join(p["routing"]["avoid_for"])
+    assert "System Flow" in avoid and "Stick" in avoid and "Motion Graphics" in avoid
+
+
 def test_the_public_list_says_why_a_style_is_unavailable():
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=False, gpu_status="unknown")}
     assert list(rows)[0] == "auto" and rows["auto"]["available"]
     assert rows["illustrated"]["unavailable_reason"] == "needs an OpenAI key"
     assert rows["cartoon_3d"]["unavailable_reason"] == "GPU not tested yet"
-    assert rows["system_flow"]["available"]
+    assert rows["system_flow"]["available"] and rows["whiteboard"]["available"]
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="not_usable")}
     assert rows["illustrated"]["available"]
     assert rows["cartoon_3d"]["unavailable_reason"] == "needs a working GPU"
@@ -95,6 +110,7 @@ def test_the_public_list_says_why_a_style_is_unavailable():
 
 def test_the_agent_view_names_the_authoring_skill():
     assert tvs.agent_view("system_flow")["authoring_skill"] == "tubematic-system-flow"
+    assert tvs.agent_view("whiteboard")["authoring_skill"] == "tubematic-whiteboard"
     assert tvs.agent_view("cartoon_3d")["authoring_skill"] == "tubematic-cartoon3d"
     assert tvs.agent_view("stick")["authoring_skill"] == "tubematic-scene-config"
     assert tvs.agent_view("auto")["authoring_skill"] == "tubematic-scene-config"

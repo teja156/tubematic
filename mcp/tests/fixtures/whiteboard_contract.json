@@ -1,0 +1,532 @@
+{
+ "_about": "Cases both sides of the Whiteboard contract must answer the same way: mcp/whiteboard.py (pytest) and renderer/remotion/src/scenes/installed/whiteboard/ (vitest). The expected values were computed once by the Python side; a change to either side's arithmetic fails one of the two suites.",
+ "wrap": [
+  {
+   "text": "Compound interest",
+   "size": 68,
+   "width": 940,
+   "lines": [
+    "Compound interest"
+   ]
+  },
+  {
+   "text": "doubles in about 7 years",
+   "size": 68,
+   "width": 430,
+   "lines": [
+    "doubles in",
+    "about 7 years"
+   ]
+  },
+  {
+   "text": "10% of 110 = 11",
+   "size": 68,
+   "width": 430,
+   "lines": [
+    "10% of 110 =",
+    "11"
+   ]
+  },
+  {
+   "text": "  the   interest itself earns  ",
+   "size": 68,
+   "width": 940,
+   "lines": [
+    "the interest itself earns"
+   ]
+  },
+  {
+   "text": "Supercalifragilisticexpialidocious",
+   "size": 68,
+   "width": 430,
+   "lines": [
+    "Supercalifragilisticexpialidocious"
+   ]
+  },
+  {
+   "text": "$100 saved",
+   "size": 58,
+   "width": 600,
+   "lines": [
+    "$100 saved"
+   ]
+  }
+ ],
+ "text_width": [
+  {
+   "text": "Compound interest",
+   "size": 68,
+   "width": 569.228
+  },
+  {
+   "text": "100 × 1.1 = 110",
+   "size": 80,
+   "width": 474.48
+  },
+  {
+   "text": "½ £ € °",
+   "size": 58,
+   "width": 220.4
+  },
+  {
+   "text": "→",
+   "size": 68,
+   "width": 51.0
+  }
+ ],
+ "timing": [
+  {
+   "item": {
+    "id": "a",
+    "kind": "text",
+    "text": "pays 10% a year"
+   },
+   "natural": 23,
+   "floor": 11
+  },
+  {
+   "item": {
+    "id": "b",
+    "kind": "text",
+    "text": "Year two",
+    "big": true
+   },
+   "natural": 28,
+   "floor": 8
+  },
+  {
+   "item": {
+    "id": "c",
+    "kind": "formula",
+    "text": "110 × 1.1 = 121"
+   },
+   "natural": 28,
+   "floor": 11
+  },
+  {
+   "item": {
+    "id": "d",
+    "kind": "doodle",
+    "doodle": "coin"
+   },
+   "natural": 30,
+   "floor": 18
+  },
+  {
+   "item": {
+    "id": "e",
+    "kind": "doodle",
+    "doodle": "coin",
+    "label": "all 110"
+   },
+   "natural": 41,
+   "floor": 26
+  },
+  {
+   "item": {
+    "id": "f",
+    "kind": "arrow",
+    "from": "a",
+    "to": "b"
+   },
+   "natural": 14,
+   "floor": 8
+  },
+  {
+   "item": {
+    "id": "g",
+    "kind": "circle",
+    "target": "a"
+   },
+   "natural": 12,
+   "floor": 8
+  }
+ ],
+ "place": [
+  {
+   "layout": "stack",
+   "slot": "1",
+   "item": {
+    "id": "a",
+    "kind": "text",
+    "text": "pays 10% a year"
+   },
+   "bbox": [
+    288.876,
+    135.9,
+    502.248,
+    78.2
+   ],
+   "lines": [
+    "pays 10% a year"
+   ],
+   "doodle": null,
+   "fits": true
+  },
+  {
+   "layout": "stack",
+   "slot": "2",
+   "item": {
+    "id": "b",
+    "kind": "text",
+    "text": "Year two",
+    "big": true
+   },
+   "bbox": [
+    359.542,
+    352.1,
+    360.916,
+    105.8
+   ],
+   "lines": [
+    "Year two"
+   ],
+   "doodle": null,
+   "fits": true
+  },
+  {
+   "layout": "stack",
+   "slot": "3",
+   "item": {
+    "id": "c",
+    "kind": "formula",
+    "text": "110 × 1.1 = 121"
+   },
+   "bbox": [
+    308.4,
+    589.0,
+    463.2,
+    92.0
+   ],
+   "lines": [
+    "110 × 1.1 = 121"
+   ],
+   "doodle": null,
+   "fits": true
+  },
+  {
+   "layout": "pair",
+   "slot": "left",
+   "item": {
+    "id": "d",
+    "kind": "doodle",
+    "doodle": "coin"
+   },
+   "bbox": [
+    80.0,
+    315.0,
+    410,
+    410
+   ],
+   "lines": [],
+   "doodle": [
+    285.0,
+    520.0,
+    410
+   ],
+   "fits": true
+  },
+  {
+   "layout": "pair",
+   "slot": "left",
+   "item": {
+    "id": "e",
+    "kind": "doodle",
+    "doodle": "coin",
+    "label": "all 110"
+   },
+   "bbox": [
+    96.35,
+    290.0,
+    377.3,
+    460.0
+   ],
+   "lines": [
+    "all 110"
+   ],
+   "doodle": [
+    285.0,
+    478.65,
+    377.3
+   ],
+   "fits": true
+  },
+  {
+   "layout": "stack",
+   "slot": "4",
+   "item": {
+    "id": "e",
+    "kind": "doodle",
+    "doodle": "coin",
+    "label": "all 110"
+   },
+   "bbox": [
+    357.224,
+    770.0,
+    365.552,
+    190.0
+   ],
+   "lines": [
+    "all 110"
+   ],
+   "doodle": [
+    452.224,
+    865.0,
+    190
+   ],
+   "fits": true
+  },
+  {
+   "layout": "compare",
+   "slot": "left_1",
+   "item": {
+    "id": "x",
+    "kind": "text",
+    "text": "doubles in about 7 years"
+   },
+   "bbox": [
+    78.994,
+    266.8,
+    412.012,
+    156.4
+   ],
+   "lines": [
+    "doubles in",
+    "about 7 years"
+   ],
+   "doodle": null,
+   "fits": true
+  },
+  {
+   "layout": "focus",
+   "slot": "center",
+   "item": {
+    "id": "d",
+    "kind": "doodle",
+    "doodle": "coin"
+   },
+   "bbox": [
+    340.0,
+    320.0,
+    400,
+    400
+   ],
+   "lines": [],
+   "doodle": [
+    540.0,
+    520.0,
+    400
+   ],
+   "fits": true
+  },
+  {
+   "layout": "compare",
+   "slot": "left_title",
+   "item": {
+    "id": "t",
+    "kind": "text",
+    "text": "Simple interest pays"
+   },
+   "fits": false
+  },
+  {
+   "layout": "compare",
+   "slot": "left_1",
+   "item": {
+    "id": "t",
+    "kind": "formula",
+    "text": "100 × 1.1 × 1.1 = 121"
+   },
+   "fits": false
+  },
+  {
+   "layout": "compare",
+   "slot": "left_1",
+   "item": {
+    "id": "t",
+    "kind": "doodle",
+    "doodle": "coin",
+    "label": "the whole balance"
+   },
+   "fits": false
+  },
+  {
+   "layout": "pair",
+   "slot": "left",
+   "item": {
+    "id": "t",
+    "kind": "text",
+    "text": "Supercalifragilisticexpialidocious"
+   },
+   "fits": false
+  }
+ ],
+ "region_origin": [
+  {
+   "i": 0,
+   "xy": [
+    0,
+    0
+   ]
+  },
+  {
+   "i": 1,
+   "xy": [
+    1240,
+    0
+   ]
+  },
+  {
+   "i": 2,
+   "xy": [
+    1240,
+    1280
+   ]
+  },
+  {
+   "i": 3,
+   "xy": [
+    0,
+    1280
+   ]
+  },
+  {
+   "i": 4,
+   "xy": [
+    0,
+    2560
+   ]
+  },
+  {
+   "i": 5,
+   "xy": [
+    1240,
+    2560
+   ]
+  }
+ ],
+ "arrow": [
+  {
+   "a": [
+    60,
+    280,
+    450,
+    480
+   ],
+   "b": [
+    570,
+    280,
+    450,
+    480
+   ],
+   "ends": [
+    [
+     528.0,
+     520.0
+    ],
+    [
+     552.0,
+     520.0
+    ]
+   ]
+  },
+  {
+   "a": [
+    60,
+    60,
+    960,
+    200
+   ],
+   "b": [
+    300,
+    400,
+    200,
+    100
+   ],
+   "ends": [
+    [
+     483.034,
+     278.0
+    ],
+    [
+     432.828,
+     382.0
+    ]
+   ]
+  }
+ ],
+ "schedule": {
+  "data": {
+   "regions": [
+    {
+     "startFrame": 0,
+     "layout": "stack",
+     "items": [
+      {
+       "id": "t",
+       "kind": "text",
+       "slot": "1",
+       "text": "Compound interest",
+       "big": true,
+       "at": 6
+      },
+      {
+       "id": "f",
+       "kind": "formula",
+       "slot": "2",
+       "text": "100 × 1.1 = 110",
+       "at": 40
+      },
+      {
+       "id": "u",
+       "kind": "underline",
+       "target": "f",
+       "at": 80
+      }
+     ]
+    },
+    {
+     "startFrame": 120,
+     "layout": "pair",
+     "items": [
+      {
+       "id": "c",
+       "kind": "doodle",
+       "slot": "left",
+       "doodle": "coin",
+       "label": "all 110",
+       "at": 170
+      }
+     ]
+    }
+   ],
+   "recapFrame": 260
+  },
+  "out": [
+   {
+    "region": 0,
+    "id": "t",
+    "start": 18,
+    "dur": 32
+   },
+   {
+    "region": 0,
+    "id": "f",
+    "start": 52,
+    "dur": 28
+   },
+   {
+    "region": 0,
+    "id": "u",
+    "start": 92,
+    "dur": 12
+   },
+   {
+    "region": 1,
+    "id": "c",
+    "start": 182,
+    "dur": 41
+   }
+  ]
+ }
+}

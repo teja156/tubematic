@@ -1,0 +1,152 @@
+{
+ "totalFrames": 1057,
+ "fps": 30,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "Whiteboard",
+   "startFrame": 0,
+   "durationInFrames": 1057,
+   "props": {
+    "whiteboard": {
+     "regions": [
+      {
+       "startFrame": 0,
+       "layout": "stack",
+       "items": [
+        {
+         "id": "title",
+         "kind": "text",
+         "slot": "1",
+         "text": "Compound interest",
+         "big": true,
+         "at": 6
+        },
+        {
+         "id": "bag",
+         "kind": "doodle",
+         "slot": "2",
+         "doodle": "money_bag",
+         "label": "$100 saved",
+         "ink": "blue",
+         "at": 43
+        },
+        {
+         "id": "rate",
+         "kind": "text",
+         "slot": "3",
+         "text": "pays 10% a year",
+         "ink": "orange",
+         "at": 107
+        },
+        {
+         "id": "year1",
+         "kind": "formula",
+         "slot": "4",
+         "text": "100 × 1.1 = 110",
+         "at": 191
+        },
+        {
+         "id": "u1",
+         "kind": "underline",
+         "target": "year1",
+         "ink": "orange",
+         "at": 235
+        }
+       ]
+      },
+      {
+       "startFrame": 294,
+       "layout": "stack",
+       "items": [
+        {
+         "id": "head",
+         "kind": "text",
+         "slot": "1",
+         "text": "Year two",
+         "big": true,
+         "at": 328
+        },
+        {
+         "id": "base",
+         "kind": "doodle",
+         "slot": "2",
+         "doodle": "coin",
+         "label": "all 110 earns",
+         "ink": "blue",
+         "at": 395
+        },
+        {
+         "id": "not_just",
+         "kind": "text",
+         "slot": "3",
+         "text": "not just the first 100",
+         "at": 452
+        },
+        {
+         "id": "year2",
+         "kind": "formula",
+         "slot": "4",
+         "text": "110 × 1.1 = 121",
+         "at": 548
+        },
+        {
+         "id": "hl",
+         "kind": "highlight",
+         "target": "year2",
+         "at": 595
+        }
+       ]
+      },
+      {
+       "startFrame": 672,
+       "layout": "focus",
+       "items": [
+        {
+         "id": "curve",
+         "kind": "doodle",
+         "slot": "center",
+         "doodle": "chart_up",
+         "ink": "blue",
+         "at": 718
+        },
+        {
+         "id": "top",
+         "kind": "text",
+         "slot": "top",
+         "text": "growth on growth",
+         "at": 746
+        },
+        {
+         "id": "point",
+         "kind": "arrow",
+         "from": "top",
+         "to": "curve",
+         "at": 773
+        },
+        {
+         "id": "double",
+         "kind": "text",
+         "slot": "bottom",
+         "text": "doubles in about 7 years",
+         "ink": "orange",
+         "at": 835
+        },
+        {
+         "id": "ring",
+         "kind": "circle",
+         "target": "double",
+         "ink": "orange",
+         "at": 880
+        }
+       ]
+      }
+     ],
+     "recapFrame": 920
+    }
+   }
+  }
+ ]
+}

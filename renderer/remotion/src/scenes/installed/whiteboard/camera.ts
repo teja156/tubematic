@@ -1,0 +1,85 @@
+/**
+ * The camera over the board: it rests on one region at a time, glides to the
+ * next when the narration moves on (and only then does the marker draw there),
+ * creeps in a little while it rests, and at the recap pulls back to show every
+ * region at once. It never cuts.
+ *
+ * The camera is applied as an SVG transform attribute on the board group: a
+ * CSS-transformed layer is re-composited every frame in software GL and cost
+ * about 1.3x in System Flow's measurements.
+ */
+import { Easing } from "remotion";
+import { BOARD, TIMING, type WhiteboardData } from "./contract";
+import { regionCenter, regionOrigin } from "./layout";
+
+export const W = 1080;
+export const H = 1920;
+
+/** Board point (x, y) sits at screen (sx, sy) at zoom z. */
+export type Cam = { x: number; y: number; z: number; sy: number };
+
+const glideEase = Easing.bezier(0.37, 0, 0.63, 1); // easeInOutSine
+const pullEase = Easing.bezier(0.65, 0, 0.35, 1);
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/** How far the camera creeps in over a region's rest. */
+const CREEP = 0.03;
+/** Where the recap map sits: its centre's screen y, and the room it may use. */
+const MAP_CENTER_Y = 680;
+const MAP_W = 1016;
+const MAP_H = 1240;
+/** Board margin kept around the regions in the recap, for the numbers. */
+const MAP_MARGIN = 140;
+
+function mix(a: Cam, b: Cam, t: number): Cam {
+  // Zoom in log space, so a pull-back reads as even.
+  return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: Math.exp(lerp(Math.log(a.z), Math.log(b.z), t)), sy: lerp(a.sy, b.sy, t) };
+}
+
+/** The whole-board view of the recap. */
+export function mapView(regionCount: number): Cam {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (let i = 0; i < regionCount; i++) {
+    const [x, y] = regionOrigin(i);
+    xs.push(x, x + BOARD.regionW);
+    ys.push(y, y + BOARD.regionH);
+  }
+  const x0 = Math.min(...xs) - MAP_MARGIN;
+  const x1 = Math.max(...xs) + MAP_MARGIN;
+  const y0 = Math.min(...ys) - MAP_MARGIN;
+  const y1 = Math.max(...ys) + MAP_MARGIN;
+  const z = Math.min(MAP_W / (x1 - x0), MAP_H / (y1 - y0));
+  return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z, sy: MAP_CENTER_Y };
+}
+
+export function cameraAt(data: WhiteboardData, frame: number): Cam {
+  const regions = data.regions;
+  const restOn = (i: number, f: number): Cam => {
+    const [x, y] = regionCenter(i);
+    const settle = i === 0 ? 0 : regions[i].startFrame + TIMING.glide;
+    const leave = i + 1 < regions.length ? regions[i + 1].startFrame : data.recapFrame;
+    const t = clamp01((f - settle) / Math.max(1, leave - settle));
+    return { x, y, z: 1 + CREEP * t, sy: BOARD.bandCenterY };
+  };
+  if (frame >= data.recapFrame) {
+    const from = restOn(regions.length - 1, data.recapFrame);
+    const t = pullEase(clamp01((frame - data.recapFrame) / TIMING.recapPull));
+    return mix(from, mapView(regions.length), t);
+  }
+  let i = 0;
+  for (let k = 0; k < regions.length; k++) if (regions[k].startFrame <= frame) i = k;
+  if (i > 0 && frame < regions[i].startFrame + TIMING.glide) {
+    const from = restOn(i - 1, regions[i].startFrame);
+    const to = restOn(i, regions[i].startFrame + TIMING.glide);
+    return mix(from, to, glideEase(clamp01((frame - regions[i].startFrame) / TIMING.glide)));
+  }
+  return restOn(i, frame);
+}
+
+/** The board group's SVG transform for a camera. */
+export const svgTransform = (c: Cam) =>
+  `translate(${(W / 2).toFixed(2)} ${c.sy.toFixed(2)}) scale(${c.z.toFixed(5)}) translate(${(-c.x).toFixed(2)} ${(-c.y).toFixed(2)})`;
+
+export const toScreen = (c: Cam, x: number, y: number): [number, number] => [(x - c.x) * c.z + W / 2, (y - c.y) * c.z + c.sy];
