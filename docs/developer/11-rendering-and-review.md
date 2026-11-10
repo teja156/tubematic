@@ -337,8 +337,12 @@ composition, and the built-in renderer's container is the one on the main instal
 GPU. The built-in renderer therefore runs `renderer/remotion/cartoon-tools/stills-server.mjs` as a
 child process. A remote renderer has no `/jobs` volume and runs none.
 
-- The project is bundled once and one Chromium stays open, so a still takes a few seconds. A cold
-  software-GL still in the MCP container takes 25 to 30.
+- It starts with nothing bundled and no browser. The first still bundles the project and opens one
+  Chromium, which then stay, so the stills after it take a few seconds each. A cold software-GL
+  still in the MCP container takes 25 to 30.
+- Ten minutes after the last request (`STILLS_IDLE_MS`) it closes the browser and deletes the
+  bundle, and the next still builds them again. Only Cartoon 3D authoring asks it for stills, so on
+  an install that never uses Cartoon 3D it stays a Node process of about 100 MB.
 - It starts with the GL options a render gets (`_gl_options`), so a GPU test that passes moves it
   onto the GPU and one that fails moves it back.
 - It serves the `/jobs` volume (mounted read-only) as its public directory, so a video's files are
