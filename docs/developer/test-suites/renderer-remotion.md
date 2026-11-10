@@ -52,8 +52,12 @@ Covers `contract.ts`, `layout.ts`, `schedule.ts`, `camera.ts` and `doodles.ts`
 - The doodle library is the pack's `extra.doodles`, no more and no less, and every doodle stroke stays inside its
   100 x 100 box.
 - Every slot lies inside its region, and no two slots of a layout overlap.
-- A resting region's centre sits in the writing band with the next region out of frame, and the
-  recap's whole-board view fits the frame above the captions.
+- A resting region's centre sits in the writing band with the next region out of frame, and a
+  full-width line stays inside the side safe zone at the end of a region's creep.
+- For every region count, the recap's whole-board view, circled numbers included, fits inside the
+  safe zone and above the captions, and the camera is still moving late in the recap.
+- A labelled doodle squeezed anywhere between its floor and its natural time keeps the doodle's
+  floor and the label's floor.
 
 Trap: the validator in `mcp/whiteboard.py` repeats this arithmetic step for step. Change a size, a
 slot or a timing here and the shared fixture fails until the Python side matches, which is the point:

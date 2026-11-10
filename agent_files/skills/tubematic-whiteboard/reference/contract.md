@@ -13,7 +13,7 @@ The one scene of a Whiteboard video:
 | Field | Type | Rule |
 |---|---|---|
 | `regions` | list | 2 to 6 regions, in the order the camera visits them |
-| `recapFrame` | integer | within 2 frames of a word's `startFrame`, after the last region starts; from here to the end (2 to 8 seconds) the camera pulls back to the whole board and numbers the regions |
+| `recapFrame` | integer | within 2 frames of a word's `startFrame`, after the last region starts; from here to the end the camera pulls back to the whole board over 30 frames, then a circled number pops onto each region every 6 frames. The recap lasts at most 8 seconds, and at least 2 seconds or 30 + 6 x (regions - 1) + 15 frames, whichever is longer |
 
 ## Region
 

@@ -597,8 +597,8 @@ It checks:
   rules are in [System Flow](10-scene-authoring.md#system-flow).
 - A `whiteboard` video holds the one installed `Whiteboard` scene, and its board passes
   `mcp/whiteboard.py` (regions and items on word starts, slots and fit, doodle names, arrows that
-  cross nothing, a marker that can keep up, no still stretch over 3.5 seconds, a recap of 2 to 8
-  seconds). No other style may use `Whiteboard`. Its `subtitles` are filled from the style pack when
+  cross nothing, a marker that can keep up, no still stretch over 3.5 seconds, a recap long enough
+  for every region's number and at most 8 seconds). No other style may use `Whiteboard`. Its `subtitles` are filled from the style pack when
   the config has none. The rules are in [Whiteboard](10-scene-authoring.md#whiteboard).
 
 It records two things in the same transaction as the rename of the staged file into place:

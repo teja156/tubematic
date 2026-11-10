@@ -324,6 +324,13 @@ def arrow_ends(a: tuple, b: tuple) -> tuple:
 
 # ── timing (schedule.ts) ──────────────────────────────────────────────────────
 
+def recap_min_frames(region_count: int) -> int:
+    """Frames the recap needs for the pull-back, every region's number to pop
+    and the last to be seen: Whiteboard.tsx pops number i at recapPull +
+    i * recapNumberStep."""
+    return TIMING["recapPull"] + (region_count - 1) * TIMING["recapNumberStep"] + TIMING["read"]
+
+
 def region_leave(regions: list, recap: int, i: int) -> int:
     return regions[i + 1]["startFrame"] if i + 1 < len(regions) else recap
 
@@ -394,7 +401,8 @@ def check(config: dict, fps: int, word_starts: list[int], doodles: list[str]) ->
     scene = config["scenes"][0]
     if scene.get("startFrame") != 0 or scene.get("durationInFrames") != total:
         err(f"The Whiteboard scene must start at frame 0 and last totalFrames ({total}) frames.")
-    wb = (scene.get("props") or {}).get(PROPS_KEY)
+    props = scene.get("props")
+    wb = props.get(PROPS_KEY) if isinstance(props, dict) else None
     if not isinstance(wb, dict) or not isinstance(wb.get("regions"), list):
         return errs + ["props.whiteboard must be {\"regions\": [...], \"recapFrame\": <frame>}."]
     regions = wb["regions"]
@@ -433,10 +441,11 @@ def check(config: dict, fps: int, word_starts: list[int], doodles: list[str]) ->
     elif not ok:
         err(f"recapFrame {recap} is not on a word; start the recap on a word (the nearest starts at {nearest}).")
     recap_len = total - recap
-    if not int(LIMITS["recapMinSeconds"] * fps) <= recap_len <= int(LIMITS["recapMaxSeconds"] * fps):
-        err(f"The recap lasts {recap_len} frames (recapFrame {recap} to the end at {total}); it must last "
-            f"{LIMITS['recapMinSeconds']} to {LIMITS['recapMaxSeconds']} seconds. Start it on the closing "
-            "sentence.")
+    recap_min = max(int(LIMITS["recapMinSeconds"] * fps), recap_min_frames(len(regions)))
+    if not recap_min <= recap_len <= int(LIMITS["recapMaxSeconds"] * fps):
+        err(f"The recap lasts {recap_len} frames (recapFrame {recap} to the end at {total}); with "
+            f"{len(regions)} regions it must last {recap_min} frames to {LIMITS['recapMaxSeconds']} seconds, "
+            "so every region's number has popped and been seen. Start it on the closing sentence.")
     if errs:
         return errs
 
@@ -464,7 +473,7 @@ def check(config: dict, fps: int, word_starts: list[int], doodles: list[str]) ->
 
 
 def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_starts: list[int], err) -> None:
-    layout = region.get("layout")
+    layout = _str(region.get("layout"))
     if layout not in LAYOUTS:
         err(f"{where}: layout {layout!r} is not one of {sorted(LAYOUTS)}.")
         return
@@ -493,7 +502,7 @@ def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_st
             err(f"{where}: item id {iid!r} is used twice.")
             continue
         what = f"{where}, item {iid!r}"
-        kind = it.get("kind")
+        kind = _str(it.get("kind"))
         if kind not in ITEM_KINDS:
             err(f"{what}: kind {kind!r} is not one of {list(ITEM_KINDS)}.")
             continue
@@ -513,14 +522,16 @@ def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_st
                 f"at frame {earliest} at the earliest (a later word).")
         prev_at = at
         ink = it.get("ink")
-        if kind == "highlight":
+        if ink is not None and not isinstance(ink, str):
+            err(f"{what}: ink must be one of {sorted(INKS)}.")
+        elif kind == "highlight":
             if ink is not None:
                 err(f"{what}: a highlight is always yellow; leave out ink.")
         elif ink is not None and ink not in INKS:
             err(f"{what}: ink {ink!r} is not one of {sorted(INKS)}.")
 
         if kind in PLACED:
-            slot = it.get("slot")
+            slot = _str(it.get("slot"))
             if slot not in slots:
                 err(f"{what}: slot {slot!r} is not a slot of the {layout} layout ({', '.join(slots)}).")
                 continue
@@ -531,7 +542,7 @@ def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_st
             text_key = "label" if kind == "doodle" else "text"
             text = it.get(text_key)
             if kind == "doodle":
-                if it.get("doodle") not in doodles:
+                if _str(it.get("doodle")) not in doodles:
                     err(f"{what}: doodle {it.get('doodle')!r} is not in the library; pick one of the listed names.")
                     continue
                 if text is not None and (not isinstance(text, str) or not text.strip()):
@@ -539,6 +550,9 @@ def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_st
                     continue
             elif not isinstance(text, str) or not text.strip():
                 err(f"{what}: text must be a short phrase.")
+                continue
+            if kind == "text" and "big" in it and not isinstance(it["big"], bool):
+                err(f"{what}: big must be true or false.")
                 continue
             if isinstance(text, str):
                 missing = sorted({ch for ch in text if ch not in GLYPH_EM})
@@ -552,7 +566,7 @@ def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_st
                 continue
             placed[iid] = place_item(it, slots[slot])["bbox"]
         elif kind == "arrow":
-            a, b = it.get("from"), it.get("to")
+            a, b = _str(it.get("from")), _str(it.get("to"))
             if a not in placed or b not in placed or a == b:
                 err(f"{what}: an arrow goes from one earlier text, formula or doodle item of this region "
                     "to another (from and to are their ids).")
@@ -570,8 +584,8 @@ def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_st
                         err(f"{what}: the arrow from {a!r} to {b!r} would cross {crossed!r}. Connect "
                             "neighbouring slots, or move the items.")
         else:
-            target = it.get("target")
-            tkind = seen.get(target, {}).get("kind")
+            target = _str(it.get("target"))
+            tkind = seen.get(target, {}).get("kind") if target else None
             if target not in placed:
                 err(f"{what}: target must be the id of an earlier text, formula or doodle item of this region.")
             elif kind in ("highlight", "underline") and tkind not in ("text", "formula"):
@@ -584,11 +598,17 @@ def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_st
         seen[iid] = it
 
 
+def _str(v):
+    """v when it is a string, else None, so a list or an object where a name
+    belongs is reported as a wrong value instead of raising."""
+    return v if isinstance(v, str) else None
+
+
 def _placeable(it: dict, slots: dict) -> bool:
     """Whether an item is well-formed enough to place, for the arrow-crossing
     check (a malformed one has its own error)."""
-    kind = it.get("kind")
-    if kind not in PLACED or it.get("slot") not in slots:
+    kind = _str(it.get("kind"))
+    if kind not in PLACED or _str(it.get("slot")) not in slots:
         return False
     if kind == "doodle":
         return it.get("label") is None or (isinstance(it.get("label"), str) and it["label"].strip() != "")

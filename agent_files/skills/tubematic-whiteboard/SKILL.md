@@ -53,7 +53,9 @@ item is wrong. Fix every problem it lists, then write again.
   last item of a region must also be finished 15 frames before the camera leaves. The tool tells you
   which item is too tight.
 - **Never still.** An item, a region or the recap starts at least every 3.5 seconds.
-- **The recap** starts on a word and lasts 2 to 8 seconds, to the end of the video.
+- **The recap** starts on a word and runs to the end of the video: at most 8 seconds, and at least
+  2 seconds or the time every region's number needs to pop and be seen (45 frames plus 6 for each
+  region after the first, so 75 frames for six regions), whichever is longer.
 - **Marks and arrows** point at earlier items of the same region; one highlight per region.
 
 ## Step 0 — read

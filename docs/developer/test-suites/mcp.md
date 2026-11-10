@@ -481,7 +481,9 @@ text audit's per-region sampling ([Whiteboard](../10-scene-authoring.md#whiteboa
   off a word, out of order or before the camera arrives, a mark or arrow on a missing or later item,
   an arrow across another item, a second highlight, a marker that cannot keep up, an item drawn as
   the camera leaves, a still stretch over 3.5 seconds at the narration's frame rate, and a recap
-  outside 2 to 8 seconds.
+  too short for every region's number or longer than 8 seconds.
+- A wrong type (a list where a name belongs, props that are not an object, a `big` that is not a
+  boolean) is refused with a message, never raised.
 - `write_scene_config` writes a sound config with the style's captions on the light canvas, refuses
   a bad one before writing anything, refuses `Whiteboard` on another style, other scenes on a
   Whiteboard video and a dark canvas, and skips the word check when there is no timeline.

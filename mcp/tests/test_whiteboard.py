@@ -181,11 +181,48 @@ def test_a_whiteboard_video_is_one_installed_generated_scene():
     (lambda b: _item(b, 0, "rate").update(at=43), "later than the previous item's"),
     (lambda b: _item(b, 1, "head").update(at=304), "before the camera has reached this region"),
     (lambda b: b["regions"][1].update(startFrame=300), "not on a word"),
-    (lambda b: b.update(recapFrame=1020), "must last 2 to 8 seconds"),
+    (lambda b: b.update(recapFrame=1020), "must last 60 frames to 8 seconds"),
 ])
 def test_a_bad_board_is_refused_with_a_reason(mutate, fragment):
     errs = _check(_with(mutate))
     assert any(fragment in e for e in errs), errs
+
+
+def test_the_recap_must_leave_time_for_every_regions_number():
+    """Number i pops recapPull + i * recapNumberStep frames into the recap; a
+    six-region board with a two-second recap would end before the sixth."""
+    assert wb.recap_min_frames(2) == 30 + 6 + 15
+    assert wb.recap_min_frames(6) == 30 + 5 * 6 + 15 > 60
+    errs = _check(_with(lambda b: b.update(recapFrame=1001)))  # 56 frames: under 2 s
+    assert any("it must last 60 frames" in e for e in errs), errs
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda b: _item(b, 0, "rate").update(slot=[]),
+    lambda b: _item(b, 0, "rate").update(ink=["blue"]),
+    lambda b: _item(b, 0, "rate").update(kind={}),
+    lambda b: _item(b, 0, "bag").update(doodle=["coin"]),
+    lambda b: _item(b, 0, "u1").update(target=["year1"]),
+    lambda b: _item(b, 2, "point").update(**{"from": {}}),
+    lambda b: b["regions"][0].update(layout=[]),
+])
+def test_a_wrong_type_is_reported_not_raised(mutate):
+    """Agent-written JSON can hold a list where a name belongs; the tool must
+    answer with a refusal, never an exception that fails the MCP call."""
+    assert _check(_with(mutate))
+
+
+def test_props_of_the_wrong_type_are_reported():
+    cfg = copy.deepcopy(EXAMPLE)
+    cfg["scenes"][0]["props"] = ["whiteboard"]
+    assert any("props.whiteboard must be" in e for e in _check(cfg))
+
+
+def test_big_must_be_a_boolean():
+    """Python reads {} as false and JavaScript as true: the two sides would lay
+    the text out at different sizes."""
+    errs = _check(_with(lambda b: _item(b, 0, "rate").update(big={})))
+    assert any("big must be true or false" in e for e in errs), errs
 
 
 def test_a_second_highlight_in_a_region_is_refused():

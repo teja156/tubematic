@@ -58,7 +58,8 @@ def test_the_skill_states_the_validators_limits():
     for phrase in (f"{wb.LIMITS['minRegions']} to {wb.LIMITS['maxRegions']} regions", f"at least {min_region} frames",
                    f"camera's {wb.TIMING['glide']}-frame glide", f"{wb.TIMING['glide'] - wb.TIMING['lag']} frames after",
                    f"finished {wb.TIMING['read']} frames before", f"every {wb.LIMITS['maxStillSeconds']} seconds",
-                   f"{wb.LIMITS['recapMinSeconds']} to {wb.LIMITS['recapMaxSeconds']} seconds",
+                   f"at most {wb.LIMITS['recapMaxSeconds']} seconds", f"at least\n  {wb.LIMITS['recapMinSeconds']} seconds",
+                   f"so {wb.recap_min_frames(6)} frames for six regions",
                    f"{wb.FLOOR['doodle']} frames plus its label", f"about {wb.TIMING['lag']} frames later"):
         assert phrase in text, phrase
 

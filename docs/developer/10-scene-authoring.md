@@ -473,7 +473,7 @@ A Whiteboard video is one installed scene, `Whiteboard`, that spans the whole vi
 no code and no coordinates for it. Its props carry `whiteboard: {regions, recapFrame}`. A region is
 one screen of a large board; the camera rests on one region at a time, glides to the next when the
 narration moves on, and from `recapFrame` pulls back to the whole board with a circled number on
-each region. The agent writes the data with the `tubematic-whiteboard` skill, whose
+each region, then keeps drifting out slowly to the last frame so the ending is never still. The agent writes the data with the `tubematic-whiteboard` skill, whose
 `reference/contract.md` documents every field and whose `reference/example-config.json` is the
 worked example.
 
@@ -506,7 +506,9 @@ The renderer's side is `src/scenes/installed/Whiteboard.tsx` with `whiteboard/`:
   its slot.
 - `schedule.ts` gives each item its start and duration.
 - `camera.ts` keeps the resting region in the writing band (14% to 68% of the height, above the
-  captions) and fits the whole board above the captions at the recap.
+  captions) and fits the whole board inside the safe zone and above the captions at the recap. Its
+  creep while resting is at most 2%, because a larger push moves a full-width line into the side
+  safe zone.
 - `ink.ts` resamples each stroke once with a seeded wobble, so a line looks hand-drawn and is the
   same on every frame.
 
@@ -522,7 +524,11 @@ camera's scale, so the text-layout audit can measure it.
   or another style uses `Whiteboard`.
 - There are fewer than 2 or more than 6 regions, a region after the first or the recap does not
   start within 2 frames of a word, a region is shorter than the camera's glide plus 2 seconds, or
-  the recap lasts under 2 or over 8 seconds.
+  the recap is shorter than 2 seconds or than the time every region's number needs to pop and be
+  read, or longer than 8 seconds.
+- A field holds the wrong type, such as a list where a name belongs or a `big` that is not `true` or
+  `false`. Each is reported as a refusal, since JavaScript and Python read some wrong types
+  differently.
 - An item's `at` is not on a word, comes before the previous item's, or comes before the camera has
   reached its region.
 - A slot does not exist in the layout or is used twice; text, a formula or a label does not fit its

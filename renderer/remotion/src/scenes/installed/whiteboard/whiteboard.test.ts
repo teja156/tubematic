@@ -4,11 +4,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { BOARD, LAYOUTS, itemFloor, itemNatural, textWidth, wrapText, type Layout, type PlacedItem, type WBItem, type WhiteboardData } from "./contract";
+import { BOARD, FLOOR, LAYOUTS, doodleShare, itemFloor, itemNatural, textWidth, wrapText, type DoodleItem, type Layout, type PlacedItem, type WBItem, type WhiteboardData } from "./contract";
 import { arrowEnds, fitProblem, placeItem, regionOrigin, type Pt } from "./layout";
 import { schedule } from "./schedule";
 import { DOODLES, DOODLE_NAMES } from "./doodles";
-import { H, W, cameraAt, mapView, toScreen } from "./camera";
+import { W, cameraAt, mapView, toScreen } from "./camera";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
 const CASES = JSON.parse(fs.readFileSync(path.join(ROOT, "mcp/tests/fixtures/whiteboard_contract.json"), "utf8"));
@@ -60,6 +60,19 @@ describe("the shared contract cases", () => {
   it("schedules the marker the way the validator does", () => {
     const out = schedule(CASES.schedule.data as WhiteboardData).map((s) => ({ region: s.region, id: s.item.id, start: s.start, dur: s.dur }));
     expect(out).toEqual(CASES.schedule.out);
+  });
+});
+
+describe("a labelled doodle's time", () => {
+  it("keeps the label's floor when the doodle is squeezed to its own floor", () => {
+    const it: DoodleItem = { id: "c", kind: "doodle", slot: "1", doodle: "coin", label: "coin", at: 0 };
+    const floor = itemFloor(it);
+    const labelFloor = floor - FLOOR.doodle;
+    for (let dur = floor; dur <= itemNatural(it) + 5; dur++) {
+      const share = doodleShare(it, dur);
+      expect(dur * share, `dur ${dur}`).toBeGreaterThanOrEqual(FLOOR.doodle - 1e-9);
+      expect(dur * (1 - share), `dur ${dur}`).toBeGreaterThanOrEqual(labelFloor - 1e-9);
+    }
   });
 });
 
@@ -117,14 +130,32 @@ describe("camera", () => {
     expect(nx).toBeGreaterThan(W);
   });
 
-  it("keeps the whole board inside the frame at the recap, above the captions", () => {
-    const end = mapView(data.regions.length);
-    for (let i = 0; i < data.regions.length; i++) {
-      const [x, y] = regionOrigin(i);
-      const [x0, y0] = toScreen(end, x, y);
-      const [x1, y1] = toScreen(end, x + BOARD.regionW, y + BOARD.regionH);
-      expect(x0 >= 0 && x1 <= W && y0 >= 0).toBe(true);
-      expect(y1).toBeLessThan(H * 0.68);
+  it("keeps the whole board inside the safe zone at the recap, above the captions, for every region count", () => {
+    for (let n = 2; n <= 6; n++) {
+      const end = mapView(n);
+      for (let i = 0; i < n; i++) {
+        const [x, y] = regionOrigin(i);
+        // The region and its circled number, which sits 70 px up and left of its corner.
+        const [x0, y0] = toScreen(end, x - 132, y - 132);
+        const [x1, y1] = toScreen(end, x + BOARD.regionW, y + BOARD.regionH);
+        expect(x0, `${n}/${i}`).toBeGreaterThanOrEqual(60);
+        expect(x1, `${n}/${i}`).toBeLessThanOrEqual(W - 60);
+        expect(y0, `${n}/${i}`).toBeGreaterThanOrEqual(150);
+        expect(y1, `${n}/${i}`).toBeLessThan(1340);
+      }
     }
+  });
+
+  it("keeps a full-width line inside the side safe zone at the end of a region's creep", () => {
+    const cam = cameraAt(data, data.regions[1].startFrame - 1);
+    const [ox] = regionOrigin(0);
+    const [left] = toScreen(cam, ox + 60 + BOARD.pad, 0);
+    expect(left).toBeGreaterThanOrEqual(60);
+  });
+
+  it("keeps moving through the recap, so the ending is never a still frame", () => {
+    const a = cameraAt(data, data.recapFrame + 40);
+    const b = cameraAt(data, data.recapFrame + 120);
+    expect(b.z).toBeLessThan(a.z);
   });
 });

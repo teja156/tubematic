@@ -197,6 +197,18 @@ export function itemNatural(it: WBItem): number {
   }
 }
 
+/** The part of a labelled doodle's `dur` frames spent drawing the doodle; the
+ *  rest writes the label. Squeezed below its natural time, each part keeps its
+ *  own floor, so the label is never written faster than text may be. */
+export function doodleShare(it: DoodleItem, dur: number): number {
+  if (!it.label) return 1;
+  const nat = itemNatural(it);
+  const flo = itemFloor(it);
+  if (dur >= nat) return SPEED.doodle / nat;
+  const t = nat > flo ? Math.max(0, (dur - flo) / (nat - flo)) : 0;
+  return (FLOOR.doodle + t * (SPEED.doodle - FLOOR.doodle)) / dur;
+}
+
 /** The fewest frames the item may be squeezed into. */
 export function itemFloor(it: WBItem): number {
   switch (it.kind) {

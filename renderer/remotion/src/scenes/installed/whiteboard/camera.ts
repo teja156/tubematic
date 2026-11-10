@@ -24,12 +24,17 @@ const pullEase = Easing.bezier(0.65, 0, 0.35, 1);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-/** How far the camera creeps in over a region's rest. */
-const CREEP = 0.03;
-/** Where the recap map sits: its centre's screen y, and the room it may use. */
-const MAP_CENTER_Y = 680;
-const MAP_W = 1016;
-const MAP_H = 1240;
+/** How far the camera creeps in over a region's rest. At most 2%: a 2% push
+ *  on a full-width line puts its ends at the 60 px side safe zone. */
+const CREEP = 0.02;
+/** The recap keeps pulling out slowly after it lands, so the ending is never a
+ *  still frame: this fraction of the zoom per frame. */
+const RECAP_DRIFT = 0.0003;
+/** Where the recap map sits: inside the safe zone (150 px at the top, 60 px at
+ *  the sides) and above the captions, which start near y 1340. */
+const MAP_CENTER_Y = 755;
+const MAP_W = 920;
+const MAP_H = 1150;
 /** Board margin kept around the regions in the recap, for the numbers. */
 const MAP_MARGIN = 140;
 
@@ -67,7 +72,9 @@ export function cameraAt(data: WhiteboardData, frame: number): Cam {
   if (frame >= data.recapFrame) {
     const from = restOn(regions.length - 1, data.recapFrame);
     const t = pullEase(clamp01((frame - data.recapFrame) / TIMING.recapPull));
-    return mix(from, mapView(regions.length), t);
+    const cam = mix(from, mapView(regions.length), t);
+    const drift = Math.max(0, frame - data.recapFrame - TIMING.recapPull) * RECAP_DRIFT;
+    return { ...cam, z: cam.z * (1 - drift) };
   }
   let i = 0;
   for (let k = 0; k < regions.length; k++) if (regions[k].startFrame <= frame) i = k;

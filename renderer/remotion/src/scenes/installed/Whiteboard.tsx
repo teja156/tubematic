@@ -22,7 +22,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AbsoluteFill, Easing, continueRender, delayRender, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import {
-  BOARD, BOARD_COLOR, HIGHLIGHTER, INKS, SIZES, SPEED, TIMING, itemNatural, type WBItem, type WhiteboardData,
+  BOARD, BOARD_COLOR, HIGHLIGHTER, INKS, SIZES, TIMING, doodleShare, type WBItem, type WhiteboardData,
 } from "./whiteboard/contract";
 import { DOODLES } from "./whiteboard/doodles";
 import { arrowEnds, placeRegion, regionOrigin, type Placement, type TextLine } from "./whiteboard/layout";
@@ -151,7 +151,7 @@ function prepare(data: WhiteboardData): Drawn[] {
         );
       }
       const width = Math.max(8, Math.min(12, (p?.doodle?.size ?? 200) * 0.03));
-      const share = it.label ? SPEED.doodle / Math.max(SPEED.doodle, itemNatural(it)) : 1;
+      const share = doodleShare(it, s.dur);
       d = { ...base, strokes, width, lines: p?.lines ?? [], strokeShare: share };
     } else if (it.kind === "arrow") {
       const a = pl.get(it.from);
