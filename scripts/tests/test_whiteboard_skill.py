@@ -84,3 +84,22 @@ def test_the_worked_example_passes_the_validator_against_its_own_timeline():
 
 def test_the_uninstaller_knows_the_skill():
     assert '"tubematic-whiteboard"' in (REPO / "uninstall.py").read_text()
+
+
+def test_the_skills_doodle_reference_is_the_shipped_library():
+    """The agent copies from reference/doodles.json; it must be what renders."""
+    ref = json.loads((SKILL / "reference" / "doodles.json").read_text())
+    lib = json.loads((REPO / "renderer/remotion/src/scenes/installed/whiteboard/doodles.json").read_text())
+    assert ref == lib
+    assert sorted(ref) == tvs.pack("whiteboard")["extra"]["doodles"]
+
+
+def test_the_skill_teaches_drawing_with_the_preview_and_the_validators_limits():
+    text = _text()
+    assert "preview_doodles" in text and "reference/doodles.json" in text
+    lim = wb.DOODLE_LIMITS
+    for phrase in (f"at most {lim['maxCustom']} of its own", f"At most {lim['maxStrokes']} strokes and {lim['maxPoints']} points",
+                   "Never draw a person"):
+        assert phrase in text, phrase
+    for primitive in wb.PRIMITIVES:
+        assert f"| `{primitive}` |" in text, primitive

@@ -45,7 +45,9 @@ If you go back to 2.1.x later:
 - The Whiteboard visual style. The video is one big white board: the camera rests on one part of it
   at a time, a floating marker writes and draws each step a moment after the narrator says it, in
   three inks, and the camera glides on to the next part as the narration moves on. The video ends by
-  pulling back to the whole board with each part numbered. It suits step-by-step reasoning,
+  pulling back to the whole board with each part numbered. The drawings come from a library of
+  simple doodles, and the agent draws its own in the same style when the library has none for an
+  object the video needs. It suits step-by-step reasoning,
   formulas and money arithmetic built up line by line, and a chain of causes that ends in one
   picture. It needs no image generation and no GPU. Choose it for a topic, on the **New Video**
   page, or as a domain's default; Auto does not choose it. See

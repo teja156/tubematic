@@ -644,6 +644,8 @@ Covers the `tubematic-whiteboard` skill ([Whiteboard](../10-scene-authoring.md#w
   `mcp/whiteboard.py` enforces.
 - The worked example passes the validator against its own timeline, and the uninstaller removes the
   skill.
+- The skill's `reference/doodles.json` is the shipped library and its names are the pack's list, and
+  the skill teaches every primitive, the preview tool and the custom-doodle limits.
 
 Trap: a skill that teaches a value the validator refuses teaches the agent to be refused on every
 video. Change a limit in `whiteboard.py` and the skill text together.

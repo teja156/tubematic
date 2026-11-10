@@ -22,6 +22,7 @@ import pytest
 import server
 import text_audit
 import whiteboard as wb
+import doodle_preview
 from tubematic_core import visual_styles as tvs
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -110,8 +111,32 @@ def test_the_shared_cases():
 
 
 def test_the_pack_lists_exactly_the_doodles_the_renderer_draws():
-    drawn = set(re.findall(r"^  (\w+): \[", (TS_DIR / "doodles.ts").read_text(), re.M))
+    drawn = set(json.loads((TS_DIR / "doodles.json").read_text()))
     assert drawn == set(DOODLES)
+
+
+LIBRARY = json.loads((TS_DIR / "doodles.json").read_text())
+
+
+def test_the_expander_matches_the_renderer():
+    """The shared cases: every primitive, and a digest of the whole library."""
+    for c in CASES["expand"]:
+        got = [[[round(x, 4), round(y, 4)] for x, y in st] for st in wb.expand_doodle(c["def"])]
+        assert got == c["points"], c["name"]
+    for name, d in LIBRARY.items():
+        e = wb.expand_doodle(d)
+        assert [len(st) for st in e] == CASES["library_digest"][name]["counts"], name
+        assert round(sum(x + 2 * y for st in e for x, y in st), 3) == CASES["library_digest"][name]["sum"], name
+
+
+def test_every_shipped_doodle_passes_the_rules_a_custom_one_must():
+    """The library is the agent's reference: copying one must never be refused."""
+    for name, d in LIBRARY.items():
+        assert wb.doodle_problems(name, d) == [], name
+
+
+def test_the_doodle_limits_match_the_renderer():
+    assert _ts_object("DOODLE_LIMITS") == wb.DOODLE_LIMITS
 
 
 def test_every_glyph_the_validator_allows_is_in_the_bundled_font():
@@ -164,7 +189,7 @@ def test_a_whiteboard_video_is_one_installed_generated_scene():
 @pytest.mark.parametrize("mutate, fragment", [
     (lambda b: b["regions"].__setitem__(slice(1, None), []), "2 to 6"),
     (lambda b: b["regions"][0].update(layout="grid"), "is not one of"),
-    (lambda b: _item(b, 0, "bag").update(doodle="unicorn"), "not in the library"),
+    (lambda b: _item(b, 0, "bag").update(doodle="unicorn"), "neither a shipped doodle"),
     (lambda b: _item(b, 0, "rate").update(ink="green"), "ink 'green'"),
     (lambda b: _item(b, 0, "rate").update(slot="2"), "already used"),
     (lambda b: _item(b, 0, "rate").update(slot="left"), "not a slot of the stack layout"),
@@ -223,6 +248,51 @@ def test_big_must_be_a_boolean():
     the text out at different sizes."""
     errs = _check(_with(lambda b: _item(b, 0, "rate").update(big={})))
     assert any("big must be true or false" in e for e in errs), errs
+
+
+BICYCLE = [
+    [{"circle": [24, 64, 16]}],
+    [{"circle": [76, 64, 16]}],
+    [{"line": [[24, 64], [44, 40], [68, 40], [76, 64]]}],
+    [{"line": [[44, 40], [52, 64], [68, 40]]}],
+    [{"line": [[40, 32], [50, 32]]}, {"line": [[66, 30], [74, 30]]}],
+]
+
+
+def _with_custom(doodles, slot_doodle="bicycle"):
+    def mutate(b):
+        b["doodles"] = doodles
+        _item(b, 0, "bag").update(doodle=slot_doodle)
+    return _with(mutate)
+
+
+def test_a_video_may_draw_its_own_doodle():
+    assert _check(_with_custom({"bicycle": BICYCLE})) == []
+
+
+@pytest.mark.parametrize("doodles, fragment", [
+    ({"coin": BICYCLE}, "is a shipped doodle"),
+    ({"Bike": BICYCLE}, "lowercase"),
+    ({"bicycle": BICYCLE, "unused": BICYCLE}, "defined but never drawn"),
+    ({"bicycle": [[{"circle": [95, 50, 10]}]]}, "outside the 0-100 box"),
+    ({"bicycle": [[{"spiral": [50, 50, 10]}]]}, "is not a primitive"),
+    ({"bicycle": [[{"circle": [50, 50]}]]}, "circle takes 3 to 4 numbers"),
+    ({"bicycle": [[{"arc": [50, 50, 10, 10, 0, 100000]}]]}, "at most a few full circles"),
+    ({"bicycle": [[{"star": [50, 50, 10, 20, 1000]}]]}, "whole count from 3 to 12"),
+    ({"bicycle": [[{"line": [[50, 50]]}]]}, "single point"),
+    ({"bicycle": [[{"line": [[10, 10], [20, 20]]}]] * 21}, "at most 20"),
+    ({"bicycle": "a bike"}, "non-empty list of strokes"),
+    ("bike", "doodles must be an object"),
+    ({f"d{i}": BICYCLE for i in range(9)}, "at most 8 per video"),
+])
+def test_a_bad_custom_doodle_is_refused(doodles, fragment):
+    errs = _check(_with_custom(doodles))
+    assert any(fragment in e for e in errs), errs
+
+
+def test_a_doodle_name_that_is_neither_shipped_nor_defined_is_refused():
+    errs = _check(_with_custom({}, slot_doodle="bicycle"))
+    assert any("neither a shipped doodle nor one this video defines" in e for e in errs), errs
 
 
 def test_a_second_highlight_in_a_region_is_refused():
@@ -367,3 +437,25 @@ def test_the_text_audit_samples_each_region_and_the_recap():
     for p, (start, end) in zip(passes, windows):
         assert p["first"] == start + text_audit.ENTRANCE_ALLOWANCE_FRAMES
         assert p["first"] + p["step"] * (p["count"] - 1) < end
+
+
+# ── preview_doodles ──────────────────────────────────────────────────────────
+
+def test_preview_draws_each_doodle_beside_the_shipped_references():
+    import io as _io
+    from PIL import Image
+    meta, image = server.preview_doodles({"bicycle": BICYCLE, "dam": [[{"rect": [10, 30, 80, 50, 4]}]]})
+    meta = json.loads(meta)
+    assert meta["doodles"] == ["bicycle", "dam"]
+    assert meta["references"] == list(server._DOODLE_PREVIEW_REFERENCES)
+    with Image.open(_io.BytesIO(image.data)) as img:
+        # four cells in one row: two of the agent's, two shipped
+        assert img.size == (4 * doodle_preview.CELL, doodle_preview.CELL + doodle_preview.LABEL_H)
+        assert max(img.size) <= server._READ_IMAGE_MAX_EDGE
+
+
+def test_preview_refuses_what_write_scene_config_would():
+    result = server.preview_doodles({"coin": BICYCLE, "blob": [[{"circle": [95, 50, 10]}]]})
+    assert "is a shipped doodle" in result["error"] and "outside the 0-100 box" in result["error"]
+    assert "give at least one" in server.preview_doodles({})["error"]
+    assert "must be an object" in server.preview_doodles(["bicycle"])["error"]

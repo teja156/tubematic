@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 48 tools
+## The 49 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -132,6 +132,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`generate_image`](#generate_image) | Generate a scene image |
 | [`generate_character`](#generate_character) | Generate a transparent character cut-out |
 | [`read_image`](#read_image) | Return a stored image as a picture |
+| [`preview_doodles`](#preview_doodles) | Draw a Whiteboard video's own doodles as a picture |
 
 ### Scene and render tools
 
@@ -516,7 +517,19 @@ the catalog rejects it.
 `read_image(video_id, image_name, grid=True)` returns the image itself after a text block. With
 `grid`, it overlays a labelled grid in normalised `[u, v]` coordinates (0 to 1 across and down the
 image), so the agent can read off an anchor point for an overlay. The grid is drawn on a copy in
-memory. `cartoon_still`, `cartoon_read_still` and `render_mascot_sheets` also return pictures.
+memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets` and `preview_doodles` also
+return pictures.
+
+### `preview_doodles`
+
+`preview_doodles(doodles)` takes the doodles a Whiteboard video defines for itself (`{name:
+strokes}`, the format of `props.whiteboard.doodles`), checks them with the rules
+`write_scene_config` applies (`whiteboard.check_doodles`), and returns the names and a picture: each
+doodle in a labelled cell over a faint 0-100 grid, beside the shipped `coin` and `car` in grey for
+scale. It needs no video and writes nothing. `mcp/doodle_preview.py` draws the sheet with Pillow
+from the same expanded geometry the renderer uses, without the hand wobble, so a call takes
+milliseconds. It exists because no check can tell whether a drawing reads as the object it is meant
+to be ([Whiteboard](10-scene-authoring.md#whiteboard)).
 
 ---
 

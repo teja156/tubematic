@@ -13,6 +13,7 @@ The one scene of a Whiteboard video:
 | Field | Type | Rule |
 |---|---|---|
 | `regions` | list | 2 to 6 regions, in the order the camera visits them |
+| `doodles` | object, optional | the video's own doodles, `{name: strokes}`; see **Doodles** below |
 | `recapFrame` | integer | within 2 frames of a word's `startFrame`, after the last region starts; from here to the end the camera pulls back to the whole board over 30 frames, then a circled number pops onto each region every 6 frames. The recap lasts at most 8 seconds, and at least 2 seconds or 30 + 6 x (regions - 1) + 15 frames, whichever is longer |
 
 ## Region
@@ -55,6 +56,22 @@ allowed, is `black` (default), `blue` or `orange`.
 
 Text uses only characters the bundled Kalam font has: printable ASCII and Latin-1 (so `× ÷ ² ³ ° ±
 ½ µ € £` are fine, `→ √ π ≈` are not).
+
+## Doodles
+
+A doodle is a list of strokes in a 100 x 100 box, y pointing down, drawn in order. A stroke is a list
+of segments joined into one continuous line; a segment is an object with one primitive: `line`
+(`[[x, y], ...]`), `poly` (at least 3 points, closed), `curve` (start, control, end), `arc` (`[cx, cy,
+rx, ry, from, to]`), `circle` (`[cx, cy, r]` plus an optional start angle), `ellipse` (`[cx, cy, rx,
+ry]` plus an optional rotation and start angle), `rect` (`[x, y, w, h]` plus an optional corner
+radius up to half the shorter side), `star` (`[cx, cy, inner, outer, points]`, 3 to 12 points) and
+`gear` (`[cx, cy, inner, outer, teeth]`, 3 to 24 teeth). Angles are degrees, 0 to the right and 90
+down. `reference/doodles.json` is the shipped library in this format.
+
+A video's own doodles (`whiteboard.doodles`): at most 8; names of 1 to 24 lowercase letters, digits
+or underscores that are not shipped names; each at most 20 strokes and 400 points once expanded,
+every stroke at least two points, every point inside the box; each one drawn by an item.
+`preview_doodles` applies the same checks and returns a picture.
 
 ## Timing
 

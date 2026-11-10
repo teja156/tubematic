@@ -23,7 +23,8 @@ number, so the viewer sees the argument as one map.
 **You write data, never code.** The whole video is one installed scene, `Whiteboard`, and everything
 about this video is its `props.whiteboard`: the regions, their layouts, the items in each layout's
 slots, and the frame the recap starts. The renderer does the positions, the handwriting, the marker,
-the camera and the captions. You give no coordinates and no sizes.
+the camera and the captions. You give no coordinates and no sizes, except inside a doodle you draw
+yourself (see **Drawing your own doodle**).
 
 There are no images in this style (never call `generate_image` or `generate_character`) and no
 people: a role ("the saver", "an attacker") is the `person` or `group` doodle with a label, or just a
@@ -117,11 +118,45 @@ Roughly what fits (the tool has the exact answer):
 `lightbulb`, `magnet`, `magnifier`, `money_bag`, `padlock`, `person`, `phone`, `question`, `rocket`,
 `scales`, `server`, `shield`, `star`, `sun`, `target`, `tree`, `warning`, `wifi`. Pick the nearest
 meaning and let the label say the rest. (The `cross` doodle is an X drawn as a picture; the `cross`
-item kind strikes out another item.)
+item kind strikes out another item.) When none of them carries the meaning, draw your own (below).
 
 **Inks** each mean one thing for the whole video: `black` (the default) for structure and plain
 writing, `blue` for the second concept or the thing that flows, `orange` for the keyword or the part
 you are tracking. Use the highlight for the single phrase the region exists to say.
+
+### Drawing your own doodle
+
+Draw one only for a specific object the step needs and the library has no doodle for: a bicycle, a
+dam, a lever. When a shipped doodle carries the meaning, use it, even if yours would be a little more
+exact. A video holds at most 8 of its own.
+
+1. Read `reference/doodles.json`, the shipped library in the format you write. Find the shipped
+   doodles closest to your object and copy how they are built: the outline first, then a few details;
+   2 to 8 strokes; simple shapes; about 6 units of margin inside the box.
+2. Write yours in `props.whiteboard.doodles`: `{"bicycle": [<stroke>, ...]}`. A stroke is a list of
+   segments joined into one line, and a segment is one primitive:
+
+   | Primitive | Value |
+   |---|---|
+   | `line` | `[[x, y], ...]`, an open line through the points |
+   | `poly` | `[[x, y], ...]`, closed back to the first point |
+   | `curve` | `[[x, y], [cx, cy], [x, y]]`, start, control point, end |
+   | `arc` | `[cx, cy, rx, ry, from, to]`, angles in degrees: 0 is right, 90 is down |
+   | `circle` | `[cx, cy, r]`, optionally a 4th value for the angle it starts at |
+   | `ellipse` | `[cx, cy, rx, ry]`, optionally a rotation in degrees and a start angle |
+   | `rect` | `[x, y, w, h]`, optionally a corner radius |
+   | `star` | `[cx, cy, inner radius, outer radius, points]` |
+   | `gear` | `[cx, cy, inner radius, outer radius, teeth]` |
+
+   Coordinates are in a 100 x 100 box, y pointing down, and every point must stay inside it. Two
+   segments in one stroke are joined by a line, so start a new stroke wherever the pen lifts.
+   At most 20 strokes and 400 points (a circle is about 47).
+3. Never draw a person, a face or a body: a role is the shipped `person` or `group` doodle.
+4. Call `preview_doodles` with the same object. It checks the rules above and shows each doodle beside
+   two shipped ones at the same scale. Look at it: if it does not read at once as the thing it is meant
+   to be, simplify it and preview again. Then use its name as an item's `doodle`, like a shipped one.
+
+A doodle you define but do not draw is refused, and its name may not reuse a shipped name.
 
 ## Step 4 — timing
 

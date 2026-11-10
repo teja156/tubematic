@@ -13,6 +13,7 @@
  * world pixel is one video pixel, so a size here is its size on a phone.
  */
 import { GLYPH_EM } from "./glyphs";
+import type { DoodleDef } from "./doodles";
 
 /** One region is one screen of board: as wide as the frame, as tall as the
  *  writing band. Regions sit in a grid of two columns, in snake order. */
@@ -45,6 +46,16 @@ export const LIMITS = {
   maxStillSeconds: 3.5,
   recapMinSeconds: 2,
   recapMaxSeconds: 8,
+};
+
+/** Limits on the doodles a video defines for itself (`whiteboard.doodles`).
+ *  Each stays a simple drawing that reads at phone size and draws in about a
+ *  second. */
+export const DOODLE_LIMITS = {
+  maxCustom: 8,
+  maxStrokes: 20,
+  maxPoints: 400,
+  box: 100,
 };
 
 export const TIMING = {
@@ -144,7 +155,7 @@ export type WBItem = TextItem | FormulaItem | DoodleItem | ArrowItem | MarkItem;
 export type PlacedItem = TextItem | FormulaItem | DoodleItem;
 
 export type WBRegion = { startFrame: number; layout: Layout; items: WBItem[] };
-export type WhiteboardData = { regions: WBRegion[]; recapFrame: number };
+export type WhiteboardData = { regions: WBRegion[]; recapFrame: number; doodles?: Record<string, DoodleDef> };
 
 export const isPlaced = (it: WBItem): it is PlacedItem =>
   it.kind === "text" || it.kind === "formula" || it.kind === "doodle";

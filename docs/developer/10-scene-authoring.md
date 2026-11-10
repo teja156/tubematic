@@ -488,9 +488,17 @@ Each region picks a layout, and each layout has named slots:
 
 An item is placed in a slot (`text`, `formula`, `doodle`) or points at earlier items (`arrow`,
 `highlight`, `underline`, `circle`, `box`, `cross`). Every item has an `at`, the start frame of the
-word it shows. A doodle is a name from the style pack's `extra.doodles`; the drawings are
-hand-built point lists in `whiteboard/doodles.ts`, because drawings an agent authors read as weak
-clip art and no check can judge a drawing before it is rendered.
+word it shows. A doodle names a drawing from the shipped library (`whiteboard/doodles.json`, listed
+in the style pack's `extra.doodles`) or one the video defines in `whiteboard.doodles`.
+
+Both are written in the same format: strokes in a 100 x 100 box, each stroke a list of primitives
+(`line`, `poly`, `curve`, `arc`, `circle`, `ellipse`, `rect`, `star`, `gear`) that `doodles.ts`
+expands into a polyline. The skill ships a copy of the library as its reference, so the agent copies
+the way a similar shipped doodle is built. The agent draws its own only for an object the library
+lacks, at most 8 per video. Before it writes one, it looks at it with
+[`preview_doodles`](06-mcp-server.md#preview_doodles), because no check can tell whether a drawing
+reads as the object it is meant to be, and a drawing an agent writes blind often does not. The
+validator checks only the geometry: the format, the limits, and every point inside the box.
 
 One floating marker draws the items in the order listed, starting each 12 frames after its word. An
 item gets its natural drawing time (about 16 characters a second for body text, a second for a

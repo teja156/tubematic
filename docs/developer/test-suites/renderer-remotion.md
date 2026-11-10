@@ -49,6 +49,8 @@ Covers `contract.ts`, `layout.ts`, `schedule.ts`, `camera.ts` and `doodles.ts`
 - Text wraps and measures, items get their drawing times, content is placed and judged to fit,
   regions and arrows are placed, and the marker is scheduled as in the shared cases
   `mcp/tests/test_whiteboard.py` runs (`mcp/tests/fixtures/whiteboard_contract.json`).
+- `expandDoodle` answers the shared expander cases and the shipped library's digest as the
+  validator does.
 - The doodle library is the pack's `extra.doodles`, no more and no less, and every doodle stroke stays inside its
   100 x 100 box.
 - Every slot lies inside its region, and no two slots of a layout overlap.

@@ -24,7 +24,7 @@ import { AbsoluteFill, Easing, continueRender, delayRender, spring, staticFile, 
 import {
   BOARD, BOARD_COLOR, HIGHLIGHTER, INKS, SIZES, TIMING, doodleShare, type WBItem, type WhiteboardData,
 } from "./whiteboard/contract";
-import { DOODLES } from "./whiteboard/doodles";
+import { DOODLES, expandDoodle, type P as DoodlePt } from "./whiteboard/doodles";
 import { arrowEnds, placeRegion, regionOrigin, type Placement, type TextLine } from "./whiteboard/layout";
 import { schedule, type Scheduled } from "./whiteboard/schedule";
 import { H, W, cameraAt, svgTransform, toScreen, type Cam } from "./whiteboard/camera";
@@ -124,6 +124,12 @@ function marksFor(it: WBItem, target: Placement, seed: string): { strokes: Ink[]
 
 function prepare(data: WhiteboardData): Drawn[] {
   const scheduled = schedule(data);
+  // The video's own doodles first (the validator refuses a name that shadows
+  // the library), then the shipped library.
+  const custom: Record<string, DoodlePt[][]> = Object.fromEntries(
+    Object.entries(data.doodles ?? {}).map(([name, def]) => [name, expandDoodle(def)]),
+  );
+  const doodleStrokes = (name: string) => custom[name] ?? DOODLES[name] ?? [];
   const placements = data.regions.map((region, ri) => {
     const o = regionOrigin(ri);
     const placed = placeRegion(region);
@@ -146,7 +152,7 @@ function prepare(data: WhiteboardData): Drawn[] {
       if (p?.doodle) {
         const { cx, cy, size } = p.doodle;
         const k = size / 100;
-        (DOODLES[it.doodle] ?? []).forEach((st, i) =>
+        doodleStrokes(it.doodle).forEach((st, i) =>
           strokes.push(inkStroke(st.map(([px, py]) => [cx - size / 2 + px * k, cy - size / 2 + py * k] as Pt), `${seed}:${i}`, Math.max(1.4, size * 0.006))),
         );
       }

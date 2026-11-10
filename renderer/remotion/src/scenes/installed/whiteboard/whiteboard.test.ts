@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { BOARD, FLOOR, LAYOUTS, doodleShare, itemFloor, itemNatural, textWidth, wrapText, type DoodleItem, type Layout, type PlacedItem, type WBItem, type WhiteboardData } from "./contract";
 import { arrowEnds, fitProblem, placeItem, regionOrigin, type Pt } from "./layout";
 import { schedule } from "./schedule";
-import { DOODLES, DOODLE_NAMES } from "./doodles";
+import { DOODLES, DOODLE_NAMES, LIBRARY_DEFS, expandDoodle, type DoodleDef } from "./doodles";
 import { W, cameraAt, mapView, toScreen } from "./camera";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
@@ -72,6 +72,28 @@ describe("a labelled doodle's time", () => {
       const share = doodleShare(it, dur);
       expect(dur * share, `dur ${dur}`).toBeGreaterThanOrEqual(FLOOR.doodle - 1e-9);
       expect(dur * (1 - share), `dur ${dur}`).toBeGreaterThanOrEqual(labelFloor - 1e-9);
+    }
+  });
+});
+
+describe("the doodle expander", () => {
+  it("expands every primitive the way the validator does", () => {
+    for (const c of CASES.expand) {
+      const got = expandDoodle(c.def as DoodleDef);
+      expect(got.map((st) => st.length), c.name).toEqual(c.points.map((st: number[][]) => st.length));
+      got.forEach((st, i) => st.forEach(([x, y], k) => {
+        close(x, c.points[i][k][0]);
+        close(y, c.points[i][k][1]);
+      }));
+    }
+  });
+
+  it("expands the whole shipped library the way the validator does", () => {
+    for (const [name, def] of Object.entries(LIBRARY_DEFS)) {
+      const e = expandDoodle(def);
+      const want = CASES.library_digest[name];
+      expect(e.map((st) => st.length), name).toEqual(want.counts);
+      close(e.flat().reduce((a, [x, y]) => a + x + 2 * y, 0), want.sum);
     }
   });
 });

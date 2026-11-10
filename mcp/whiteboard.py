@@ -178,6 +178,179 @@ def item_floor(it: dict) -> int:
     return FLOOR["mark"]
 
 
+# ── doodles (doodles.ts) ──────────────────────────────────────────────────────
+
+DOODLE_LIMITS = {"maxCustom": 8, "maxStrokes": 20, "maxPoints": 400, "box": 100}
+# Values each primitive takes: (fewest, most). line and poly take point lists.
+_ARITY = {"arc": (6, 6), "circle": (3, 4), "ellipse": (4, 6), "rect": (4, 5), "star": (5, 5), "gear": (5, 5)}
+PRIMITIVES = ("line", "poly", "curve") + tuple(_ARITY)
+
+
+def _rad(d: float) -> float:
+    return d * math.pi / 180
+
+
+def _arc_n(a0: float, a1: float) -> int:
+    return max(6, math.ceil(abs(a1 - a0) / 8))
+
+
+def _arc(cx, cy, rx, ry, a0, a1) -> list:
+    n = _arc_n(a0, a1)
+    out = []
+    for i in range(n + 1):
+        a = _rad(a0 + ((a1 - a0) * i) / n)
+        out.append((cx + math.cos(a) * rx, cy + math.sin(a) * ry))
+    return out
+
+
+def _segment_points(kind: str, v) -> list:
+    """The points of one validated segment, as doodles.ts expandSegment."""
+    if kind == "line":
+        return [(x, y) for x, y in v]
+    if kind == "poly":
+        return [(x, y) for x, y in v] + [(v[0][0], v[0][1])]
+    if kind == "curve":
+        (ax, ay), (qx, qy), (bx, by) = v
+        out = []
+        for i in range(13):
+            t = i / 12
+            u = 1 - t
+            out.append((u * u * ax + 2 * u * t * qx + t * t * bx, u * u * ay + 2 * u * t * qy + t * t * by))
+        return out
+    if kind == "arc":
+        return _arc(*v)
+    if kind == "circle":
+        cx, cy, r = v[:3]
+        frm = v[3] if len(v) > 3 else -100
+        return _arc(cx, cy, r, r, frm, frm + 365)
+    if kind == "ellipse":
+        cx, cy, rx, ry = v[:4]
+        rot = v[4] if len(v) > 4 else 0
+        frm = v[5] if len(v) > 5 else -100
+        if not rot:
+            return _arc(cx, cy, rx, ry, frm, frm + 365)
+        c, s = math.cos(_rad(rot)), math.sin(_rad(rot))
+        return [(cx + x * c - y * s, cy + x * s + y * c) for x, y in _arc(0, 0, rx, ry, frm, frm + 365)]
+    if kind == "rect":
+        x, y, w, h = v[:4]
+        r = v[4] if len(v) > 4 else 0
+        if not r:
+            return [(x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y - 1)]
+        return (_arc(x + r, y + r, r, r, 180, 270) + _arc(x + w - r, y + r, r, r, 270, 360)
+                + _arc(x + w - r, y + h - r, r, r, 0, 90) + _arc(x + r, y + h - r, r, r, 90, 180)
+                + [(x, y + r * 0.5)])
+    if kind == "star":
+        cx, cy, r0, r1, n = v
+        out = []
+        for i in range(n * 2 + 1):
+            a = _rad(-90 + (i * 180) / n)
+            r = r1 if i % 2 == 0 else r0
+            out.append((cx + math.cos(a) * r, cy + math.sin(a) * r))
+        return out
+    cx, cy, r0, r1, n = v  # gear
+    out = []
+    step = 360 / n
+    for i in range(n + 1):
+        a = -90 + i * step
+        for da, r in ((-step * 0.32, r0), (-step * 0.2, r1), (step * 0.2, r1), (step * 0.32, r0)):
+            out.append((cx + math.cos(_rad(a + da)) * r, cy + math.sin(_rad(a + da)) * r))
+    return out
+
+
+def _num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _pt(v) -> bool:
+    return isinstance(v, list) and len(v) == 2 and _num(v[0]) and _num(v[1])
+
+
+def _segment_problem(seg) -> str:
+    """Why a segment cannot be expanded, or ""; checked before expanding, so a
+    huge arc or a star with a million points is refused, never computed."""
+    if not isinstance(seg, dict) or len(seg) != 1:
+        return "each segment must be an object with one primitive, such as {\"circle\": [50, 50, 30]}"
+    kind, v = next(iter(seg.items()))
+    if kind not in PRIMITIVES:
+        return f"{kind!r} is not a primitive; use one of {', '.join(PRIMITIVES)}"
+    if kind in ("line", "poly", "curve"):
+        need = {"line": 1, "poly": 3, "curve": 3}[kind]
+        if not isinstance(v, list) or not all(_pt(p) for p in v) or len(v) < need or (kind == "curve" and len(v) != 3):
+            return {"line": "line takes a list of [x, y] points",
+                    "poly": "poly takes a list of at least 3 [x, y] points",
+                    "curve": "curve takes exactly 3 [x, y] points: start, control, end"}[kind]
+        return ""
+    lo, hi = _ARITY[kind]
+    if not isinstance(v, list) or not lo <= len(v) <= hi or not all(_num(x) for x in v):
+        return f"{kind} takes {lo}{'' if lo == hi else f' to {hi}'} numbers"
+    if kind == "arc" and _arc_n(v[4], v[5]) > DOODLE_LIMITS["maxPoints"]:
+        return "an arc may turn at most a few full circles"
+    if kind in ("circle", "ellipse") and min(v[2:3] if kind == "circle" else v[2:4]) <= 0:
+        return f"a {kind}'s radius must be above 0"
+    if kind == "rect" and (v[2] <= 0 or v[3] <= 0 or (len(v) > 4 and not 0 <= v[4] <= min(v[2], v[3]) / 2)):
+        return "a rect needs a positive width and height, and a corner radius from 0 to half the shorter side"
+    if kind in ("star", "gear"):
+        top = 12 if kind == "star" else 24
+        if not isinstance(v[4], int) or not 3 <= v[4] <= top or not 0 < v[2] < v[3]:
+            return (f"a {kind} is [cx, cy, inner radius, outer radius, count] with 0 < inner < outer and a "
+                    f"whole count from 3 to {top}")
+    return ""
+
+
+def expand_doodle(strokes: list) -> list:
+    """Every stroke of a validated doodle as one polyline, as doodles.ts expandDoodle."""
+    return [[pt for seg in stroke for pt in _segment_points(*next(iter(seg.items())))] for stroke in strokes]
+
+
+def doodle_problems(name: str, strokes) -> list[str]:
+    """Every problem with one doodle definition, [] when it is sound."""
+    where = f"doodle {name!r}"
+    if not isinstance(strokes, list) or not strokes:
+        return [f"{where} must be a non-empty list of strokes (each a list of segments)."]
+    if len(strokes) > DOODLE_LIMITS["maxStrokes"]:
+        return [f"{where} has {len(strokes)} strokes; at most {DOODLE_LIMITS['maxStrokes']}. Keep it simple."]
+    for k, stroke in enumerate(strokes):
+        if not isinstance(stroke, list) or not stroke:
+            return [f"{where}, stroke {k + 1}: a stroke is a non-empty list of segments."]
+        for seg in stroke:
+            problem = _segment_problem(seg)
+            if problem:
+                return [f"{where}, stroke {k + 1}: {problem}."]
+    expanded = expand_doodle(strokes)
+    total = sum(len(st) for st in expanded)
+    if total > DOODLE_LIMITS["maxPoints"]:
+        return [f"{where} expands to {total} points; at most {DOODLE_LIMITS['maxPoints']}. Use fewer or "
+                "shorter strokes."]
+    errs = []
+    for k, st in enumerate(expanded):
+        if len(st) < 2:
+            errs.append(f"{where}, stroke {k + 1} is a single point; a stroke needs at least two.")
+        out = next(((x, y) for x, y in st if not (0 <= x <= DOODLE_LIMITS["box"] and 0 <= y <= DOODLE_LIMITS["box"])), None)
+        if out:
+            errs.append(f"{where}, stroke {k + 1} reaches ({out[0]:.1f}, {out[1]:.1f}), outside the 0-100 box.")
+    return errs
+
+
+def check_doodles(defs, library: list[str]) -> list[str]:
+    """Every problem with a video's own doodles ({name: strokes}), [] when sound."""
+    if defs is None:
+        return []
+    if not isinstance(defs, dict):
+        return ["doodles must be an object: {\"name\": [strokes...]}."]
+    errs = []
+    if len(defs) > DOODLE_LIMITS["maxCustom"]:
+        errs.append(f"{len(defs)} custom doodles; at most {DOODLE_LIMITS['maxCustom']} per video. Use a shipped "
+                    "doodle where one carries the meaning.")
+    for name, strokes in defs.items():
+        if not _ID.match(name):
+            errs.append(f"doodle name {name!r} must be 1-24 lowercase letters, digits or underscores.")
+        elif name in library:
+            errs.append(f"doodle {name!r} is a shipped doodle; use it as it is, or give yours another name.")
+        else:
+            errs.extend(doodle_problems(name, strokes))
+    return errs
+
+
 # ── layout (layout.ts) ────────────────────────────────────────────────────────
 
 def region_origin(i: int) -> tuple[int, int]:
@@ -407,6 +580,11 @@ def check(config: dict, fps: int, word_starts: list[int], doodles: list[str]) ->
         return errs + ["props.whiteboard must be {\"regions\": [...], \"recapFrame\": <frame>}."]
     regions = wb["regions"]
     recap = wb.get("recapFrame")
+    custom = wb.get("doodles")
+    for problem in check_doodles(custom, doodles):
+        err(problem)
+    custom_names = list(custom) if isinstance(custom, dict) else []
+    usable = list(doodles) + custom_names
     if not LIMITS["minRegions"] <= len(regions) <= LIMITS["maxRegions"]:
         return errs + [f"{len(regions)} regions; a board has {LIMITS['minRegions']} to {LIMITS['maxRegions']}. "
                        "Merge or split steps of the argument."]
@@ -433,8 +611,13 @@ def check(config: dict, fps: int, word_starts: list[int], doodles: list[str]) ->
         if leave - r["startFrame"] < min_region:
             err(f"{where} lasts {leave - r['startFrame']} frames; a region needs at least {min_region} "
                 "(the camera's glide plus 2 seconds). Merge it with a neighbour.")
-        _check_region(r, i, where, doodles, word_starts, err)
+        _check_region(r, i, where, usable, word_starts, err)
 
+    used = {_str(it.get("doodle")) for r in regions for it in (r.get("items") if isinstance(r.get("items"), list) else [])
+            if isinstance(it, dict) and it.get("kind") == "doodle"}
+    for name in custom_names:
+        if name not in used:
+            err(f"doodle {name!r} is defined but never drawn; remove it from doodles.")
     ok, nearest = _near_word(recap, word_starts)
     if recap <= starts[-1]:
         err("recapFrame must come after the last region starts.")
@@ -543,7 +726,8 @@ def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_st
             text = it.get(text_key)
             if kind == "doodle":
                 if _str(it.get("doodle")) not in doodles:
-                    err(f"{what}: doodle {it.get('doodle')!r} is not in the library; pick one of the listed names.")
+                    err(f"{what}: doodle {it.get('doodle')!r} is neither a shipped doodle nor one this video "
+                        "defines in doodles.")
                     continue
                 if text is not None and (not isinstance(text, str) or not text.strip()):
                     err(f"{what}: label, when present, must be a short phrase.")

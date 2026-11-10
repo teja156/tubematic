@@ -582,4 +582,4 @@ and JetBrains Mono, each under the SIL Open Font License 1.1, with the license b
 uses [@dagrejs/dagre](https://github.com/dagrejs/dagre) (MIT License).
 
 `Whiteboard`'s font in `public/fonts/` is Kalam, under the SIL Open Font License 1.1, with the license
-beside it (`OFL-Kalam.txt`). Its doodles are original.
+beside it (`OFL-Kalam.txt`). Its shipped doodles (`whiteboard/doodles.json`) are original.

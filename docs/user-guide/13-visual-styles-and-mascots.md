@@ -73,7 +73,9 @@ an Auto video is none of them.
 A System Flow video has a fixed look, so its pick is the whole decision: the agent lays out the
 diagrams and times them to the narration, but it does not change the canvas or add images. A
 Whiteboard video is the same: the agent picks what to write and draw for each step from a fixed set
-of layouts and drawings, and times it to the narration.
+of layouts and a library of simple drawings, and times it to the narration. When the library has no
+drawing for an object the video needs, such as a bicycle, the agent draws a simple one in the same
+style and checks how it looks before using it.
 
 ### Where you choose
 

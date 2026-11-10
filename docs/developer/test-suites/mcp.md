@@ -488,6 +488,14 @@ text audit's per-region sampling ([Whiteboard](../10-scene-authoring.md#whiteboa
   a bad one before writing anything, refuses `Whiteboard` on another style, other scenes on a
   Whiteboard video and a dark canvas, and skips the word check when there is no timeline.
 - The text audit samples each region and the recap.
+- The doodle expander answers the shared cases (every primitive, and a digest of the whole shipped
+  library) as `doodles.ts` does, and every shipped doodle passes the rules a video's own doodle
+  must, since the agent copies from them. A video's own doodle is accepted, and refused when it
+  reuses a shipped name, is defined but never drawn, leaves the box, uses an unknown primitive or a
+  wrong number of values, asks for a huge arc or star, has a single-point stroke, too many strokes,
+  or is one of more than 8; an item naming a doodle that is neither shipped nor defined is refused.
+- `preview_doodles` returns the names and a picture with a cell for each doodle and the two shipped
+  references, and refuses what `write_scene_config` would.
 
 Trap: the validator's placement and timing must equal the renderer's to the frame. The tests that
 read `contract.ts` and the shared fixture are what catch a change made on one side only.

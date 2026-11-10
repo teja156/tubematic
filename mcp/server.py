@@ -95,6 +95,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
 import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
 import system_flow  # the System Flow checks (TMDEV-196); a sibling module like cartoon
 import whiteboard  # the Whiteboard checks (TMDEV-197); a sibling module like system_flow
+import doodle_preview  # draws a Whiteboard video's own doodles for the agent to look at (TMDEV-197)
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
@@ -5922,6 +5923,56 @@ def read_image(video_id: str, image_name: str, grid: bool = True):
     summary_text = json.dumps(summary, indent=2)
 
     return [summary_text, MCPImage(data=buf.getvalue(), format="png")]
+
+
+# The shipped Whiteboard doodles: /app/remotion in the image, renderer/remotion
+# in a checkout. The preview draws two of them beside the agent's for scale.
+_WHITEBOARD_LIBRARY_PATHS = (
+    REPO_ROOT / "remotion" / "src" / "scenes" / "installed" / "whiteboard" / "doodles.json",
+    REPO_ROOT / "renderer" / "remotion" / "src" / "scenes" / "installed" / "whiteboard" / "doodles.json",
+)
+_DOODLE_PREVIEW_REFERENCES = ("coin", "car")
+
+
+def _whiteboard_reference_doodles() -> dict:
+    for path in _WHITEBOARD_LIBRARY_PATHS:
+        try:
+            library = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        return {n: library[n] for n in _DOODLE_PREVIEW_REFERENCES if n in library}
+    return {}
+
+
+@mcp.tool
+def preview_doodles(doodles: dict):
+    """Draw Whiteboard doodles you defined yourself, to look at before you use them.
+
+    doodles: {name: strokes}, exactly as you will put it in
+    props.whiteboard.doodles (the tubematic-whiteboard skill's
+    reference/contract.md documents the format; reference/doodles.json is the
+    shipped library in the same format). At most 8.
+
+    Checks them with the same rules write_scene_config uses and returns
+    {"error": ...} listing every problem, or {doodles, references} followed by
+    a picture: each doodle in a cell over a faint 0-100 grid, then two shipped
+    doodles in grey for scale. The video draws them with a slight hand wobble
+    the picture leaves out. Look at each one: if it does not read at once as
+    the thing it is meant to be, simplify it or change it and preview again.
+    Needs no video and writes nothing.
+    """
+    library = tvs.pack(whiteboard.STYLE_ID)["extra"]["doodles"]
+    if isinstance(doodles, dict) and not doodles:
+        return {"error": "doodles is empty; give at least one {name: strokes}."}
+    problems = whiteboard.check_doodles(doodles, library)
+    if problems:
+        return {"error": "The doodles have problems: " + " ".join(problems)}
+    references = _whiteboard_reference_doodles()
+    font, _ = _load_grid_font(22 * doodle_preview.SUPERSAMPLE)
+    png = doodle_preview.render_sheet(doodles, references, font)
+    from fastmcp.utilities.types import Image as MCPImage
+    meta = {"doodles": list(doodles), "references": list(references)}
+    return [json.dumps(meta, indent=2), MCPImage(data=png, format="png")]
 
 
 @mcp.tool
