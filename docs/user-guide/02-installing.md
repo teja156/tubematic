@@ -75,11 +75,11 @@ You can add the optional keys later on **Settings → API Keys**.
 From a release:
 
 ```bash
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.0/tubematic-v2.1.0.tar.gz
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.0/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/tubematic-v2.1.1.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
-tar xzf tubematic-v2.1.0.tar.gz
-cd tubematic-v2.1.0
+tar xzf tubematic-v2.1.1.tar.gz
+cd tubematic-v2.1.1
 python3 onboard.py
 ```
 
