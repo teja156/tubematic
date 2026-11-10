@@ -34,11 +34,11 @@ usage. The dashboard shows what each video cost.
 Download the newest release, check it, and run the installer:
 
 ```bash
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/tubematic-v2.0.0.tar.gz
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.0/tubematic-v2.1.0.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.0/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
-tar xzf tubematic-v2.0.0.tar.gz
-cd tubematic-v2.0.0
+tar xzf tubematic-v2.1.0.tar.gz
+cd tubematic-v2.1.0
 python3 onboard.py
 ```
 
