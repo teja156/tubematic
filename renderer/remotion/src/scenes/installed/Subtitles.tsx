@@ -115,7 +115,17 @@ export interface SubtitleConfig {
   /** Vertical centre as a fraction of frame height. */
   position?: number;
   uppercase?: boolean;
+  /**
+   * Indexes into the timeline's words that are drawn on a red box once
+   * spoken: the key word of a line. Optional and empty by default; the Bean
+   * Explainer style uses it.
+   */
+  emphasis?: number[];
 }
+
+/** The key-word box: white text on red, scaling in with a little overshoot. */
+const EMPHASIS_BG = "#D0201C";
+const EMPHASIS_IN = 8;
 
 interface Props extends SubtitleConfig {
   words: TimelineWord[];
@@ -224,6 +234,7 @@ export default function Subtitles({
   background = "pill",
   position = 0.78,
   uppercase = false,
+  emphasis = [],
 }: Props) {
   const frame = useCurrentFrame();
   const webfont = FONTS[fontFamily];
@@ -231,6 +242,7 @@ export default function Subtitles({
   const weight = webfont ? webfont.weight : DEFAULT_WEIGHT;
 
   const chunks = React.useMemo(() => chunkWords(words ?? [], maxWords), [words, maxWords]);
+  const emphasised = React.useMemo(() => new Set((emphasis ?? []).map((i) => (words ?? [])[i]).filter(Boolean)), [emphasis, words]);
   if (!enabled || chunks.length === 0) return null;
 
   const index = visibleChunkIndex(chunks, frame);
@@ -291,6 +303,16 @@ export default function Subtitles({
           // caption legible at speed.
           const active = frame >= w.startFrame && frame <= w.endFrame;
           const spoken = frame > w.endFrame;
+          if (emphasised.has(w) && frame >= w.startFrame) {
+            const k = Math.min(1, (frame - w.startFrame) / EMPHASIS_IN);
+            const pop = 0.55 + 0.45 * (1 + 2.2 * (k - 1) ** 3 + 1.2 * (k - 1) ** 2);
+            return (
+              <span key={`${i}-${w.word}`} style={{ position: "relative", display: "inline-block", isolation: "isolate", color: "#ffffff", padding: "0 0.18em" }}>
+                <span style={{ position: "absolute", inset: "-0.06em 0 -0.1em 0", background: EMPHASIS_BG, border: `${Math.max(3, Math.round(fontSize * 0.08))}px solid #1E1C1A`, borderRadius: fontSize * 0.22, transform: `scale(${pop}) rotate(-2deg)`, zIndex: -1 }} />
+                <span style={{ position: "relative" }}>{w.word}</span>
+              </span>
+            );
+          }
           return (
             <span
               key={`${i}-${w.word}`}

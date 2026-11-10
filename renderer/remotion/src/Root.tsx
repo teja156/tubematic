@@ -4,6 +4,7 @@ import { CompositionBuilder } from "./CompositionBuilder";
 import { PlaceholderComposition } from "./Composition";
 import { TextLayoutProbe } from "./audit/TextLayoutProbe";
 import { MascotSheetComposition } from "./mascot/MascotSheet";
+import { BeanPropSheet, SHEET_PAGES } from "./scenes/installed/beanExplainer/BeanPropSheet";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
 // renders, plus a measurement probe. A separate composition rather than a prop
@@ -86,6 +87,19 @@ export const RemotionRoot: React.FC = () => {
           mascot-tools/render-sheet.mjs through its own entry point
           (src/mascot/sheet-index.ts); listed here so Studio can show it. */}
       <MascotSheetComposition />
+
+      {/* The Bean Explainer model sheet: one page per frame (poses, faces,
+          accessories and marks, then the prop library), for a person to
+          approve the style's fixed cast and props. No video uses it. */}
+      <Composition
+        id="BeanPropSheet"
+        component={BeanPropSheet}
+        durationInFrames={SHEET_PAGES}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
 
       {/* Phase 0 placeholder — smoke-test the container without real assets */}
       <Composition
