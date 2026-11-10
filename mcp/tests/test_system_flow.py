@@ -121,7 +121,7 @@ def test_a_system_flow_video_is_one_scene():
     (lambda b: b[0]["events"].append({"type": "focus", "node": "web2", "at": 100}), "before it enters"),
     (lambda b: b[0]["events"].append({"type": "chip", "edge": "lb>web2", "at": 260, "text": "x" * 30}), "chip at 260 text"),
     (lambda b: b[0]["events"].append({"type": "packet", "edge": "lb>web2", "at": 260, "tone": "loud"}), "tone"),
-    (lambda b: b[0]["events"].append({"type": "packet", "edge": "lb>web2", "at": 320}), "still be travelling"),
+    (lambda b: b[0]["events"].append({"type": "packet", "edge": "lb>web2", "at": 305}), "packet event at 305 needs 20 frames"),
     (lambda b: b[0]["events"].append({"type": "wave", "at": 100}), "needs a type"),
     (lambda b: b[0]["events"].append({"type": "node", "node": "dns", "at": 60}), "enters twice"),
     (lambda b: b[0]["events"].pop(4), None),  # dropping one focus keeps it valid
@@ -263,10 +263,13 @@ def test_a_system_flow_scene_of_another_type_is_refused():
 
 
 @pytest.mark.parametrize("event, fragment", [
-    ({"type": "node", "node": "web2", "at": 320}, "node event at 320 needs 16 frames"),
-    ({"type": "edge", "edge": "lb>web2", "at": 315}, "edge event at 315 needs 15 frames"),
+    ({"type": "node", "node": "web2", "at": 310}, "node event at 310 needs 31 frames"),
+    ({"type": "edge", "edge": "lb>web2", "at": 300}, "edge event at 300 needs 30 frames"),
+    ({"type": "chip", "edge": "lb>web2", "at": 300, "text": "200 OK"}, "chip event at 300 needs 30 frames"),
 ])
-def test_an_entrance_that_cannot_finish_before_the_cut_is_refused(event, fragment):
+def test_an_event_that_cannot_be_seen_before_the_board_fades_is_refused(event, fragment):
+    """The board fades out over its last 6 frames (frame 320 on in the
+    example's first board); an entrance finishing at the cut is never seen."""
     def late(b):
         b[0]["events"] = [e for e in b[0]["events"] if e.get("node") != event.get("node")
                           and e.get("edge") != event.get("edge")] + [event]
@@ -287,3 +290,10 @@ def test_the_stillness_rule_uses_the_narrations_fps_not_the_configs(make_video):
         if e.get("node") == "server":
             e["at"] = 430
     assert "nothing changes on screen" in server.write_scene_config(vid, cfg)["error"]
+
+
+def test_the_last_board_has_no_fade_out():
+    """Nothing follows the last board, so an event may run to the final frame."""
+    def late(b):
+        b[1]["events"].append({"type": "focus", "node": "server", "at": 536 - 15})
+    assert _check(_with(late)) == []

@@ -452,8 +452,8 @@ measured in `SystemFlow.tsx`'s header comment.
   cycle or a node that is not connected.
 - A label does not fit 2 lines of 14 characters, or an icon is not in the pack's list.
 - An event falls outside its board, comes in an order the scene cannot draw (an edge before its
-  source has landed, a packet before its edge has drawn), or starts too late to finish drawing
-  before the board cuts.
+  source has landed, a packet before its edge has drawn), or starts too late to be drawn and read
+  before the board fades out at its cut.
 - Nothing changes for more than 3.5 seconds, measured at the narration's frame rate.
 
 The limits make a full board readable: at the pull-back to a whole board of three rows of three,

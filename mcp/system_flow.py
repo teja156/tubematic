@@ -195,13 +195,29 @@ def check(config: dict, fps: int, word_starts: list[int], icons: list[str]) -> l
             nearest = min(word_starts, key=lambda w: abs(start - w))
             err(f"{where} starts at frame {start}, which is not on a word; cut on a word boundary "
                 f"(the nearest word starts at {nearest}).")
-        _check_board(board, where, start, end, still, icons, err)
+        # Every board but the last fades out over its final frames.
+        fade = TIMING["boardFade"] if i + 1 < len(boards) else 0
+        _check_board(board, where, start, end, end - fade, still, icons, err)
         if len(errs) >= MAX_ERRORS:
             break
     return errs
 
 
-def _check_board(board: dict, where: str, start: int, end: int, still: int, icons: list[str], err) -> None:
+# How long each event needs, from its frame, to have drawn and been on screen
+# long enough to read before the board starts fading out: an entrance or a
+# chip that finishes only at the cut is never seen whole.
+_SEEN_FOR = {
+    "node": TIMING["nodeIn"] + 15,
+    "edge": TIMING["edgeDraw"] + 15,
+    "packet": TIMING["packetTravel"],
+    "chip": 30,
+    "focus": 15,
+    "fault": 15,
+}
+
+
+def _check_board(board: dict, where: str, start: int, end: int, visible_until: int, still: int,
+                 icons: list[str], err) -> None:
     headline = board.get("headline")
     if not isinstance(headline, str) or not headline.strip():
         err(f"{where}: headline must be a short phrase (at most {LIMITS['headlineChars']} characters).")
@@ -283,10 +299,10 @@ def _check_board(board: dict, where: str, start: int, end: int, still: int, icon
             continue
         change_points.append(at)
         typed.append(ev)
-        done = {"node": TIMING["nodeIn"], "edge": TIMING["edgeDraw"]}.get(ev["type"], 0)
-        if at + done > end:
-            err(f"{where}: {ev['type']} event at {at} needs {done} frames to draw but the board cuts at "
-                f"{end}; start it by {end - done}.")
+        need = _SEEN_FOR[ev["type"]]
+        if at + need > visible_until:
+            err(f"{where}: {ev['type']} event at {at} needs {need} frames to draw and be read, but the "
+                f"board fades out from {visible_until}; start it by {visible_until - need}.")
         if ev["type"] == "node":
             if ev.get("node") not in ids:
                 err(f"{where}: node event at {at} names {ev.get('node')!r}, which is not a node of this board.")
@@ -331,8 +347,6 @@ def _check_board(board: dict, where: str, start: int, end: int, still: int, icon
             if kind == "packet":
                 if "reverse" in ev and not isinstance(ev["reverse"], bool):
                     err(f"{where}: packet at {at}: reverse must be true or false.")
-                if at + TIMING["packetTravel"] > end:
-                    err(f"{where}: packet on {e} at {at} would still be travelling when the board ends at {end}.")
             else:
                 text = ev.get("text")
                 if not isinstance(text, str) or not text.strip() or len(text) > LIMITS["chipChars"]:
