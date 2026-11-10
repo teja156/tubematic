@@ -333,7 +333,7 @@ const Header: React.FC<{ board: SFBoard; frame: number }> = ({ board, frame }) =
           {board.pill.slice(0, LIMITS.pillChars)}
         </div>
       )}
-      <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: 76, lineHeight: 1.08, color: INK, minHeight: 2 * 76 * 1.08 }}>
+      <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: 76, lineHeight: 1.2, color: INK, minHeight: 2 * 76 * 1.2 }}>
         {words.map((w, i) => {
           const shown = w.slice(0, Math.max(0, budget));
           budget -= w.length + 1;
