@@ -49,7 +49,8 @@ def test_surrounding_whitespace_is_ignored():
 def test_the_list_starts_with_auto_and_holds_every_pack():
     assert tvs.VISUAL_STYLES[0] == "auto"
     assert set(tvs.VISUAL_STYLES[1:]) == {p.stem for p in tvs.PACKS_DIR.glob("*.json")}
-    assert {"motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow"} <= set(tvs.VISUAL_STYLES)
+    assert {"motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow",
+            "bean_explainer"} <= set(tvs.VISUAL_STYLES)
 
 
 def test_effective_canvas():
@@ -78,6 +79,21 @@ def test_system_flow():
     assert not any(p["allows"].values()) and not any(p["needs"].values())
     assert "review" in p and "captions" in p
     assert len(p["extra"]["icons"]) == len(set(p["extra"]["icons"]))
+
+
+def test_bean_explainer():
+    p = tvs.pack("bean_explainer")
+    assert p["renderer"] == "dom" and p["canvas"] == "light"
+    assert p["authoring_skill"] == "tubematic-bean-explainer"
+    assert p["experimental"] is True
+    # its bean is a figure, but neither line art nor a generated character
+    assert tvs.figures_allowed("bean_explainer") is True
+    assert tvs.line_art_allowed("bean_explainer") is False
+    assert tvs.characters_allowed("bean_explainer") is False
+    assert not any(p["needs"].values())
+    assert "review" in p and "captions" in p
+    assert len(p["extra"]["props"]) >= 40
+    assert tvs.effective_canvas("bean_explainer", "dark") == "light"
 
 
 def test_the_public_list_says_why_a_style_is_unavailable():

@@ -94,6 +94,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
 # that vqa/stage_script.py uses.
 import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
 import system_flow  # the System Flow checks (TMDEV-196); a sibling module like cartoon
+import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
@@ -313,7 +314,12 @@ SUBTITLE_NUMERIC_RANGES = {
     "position": (0.05, 0.95),
 }
 SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
-                 "background", "position", "uppercase")
+                 "background", "position", "uppercase", "emphasis")
+# emphasis: indexes into the narration's words drawn on a red box (the key word
+# of a line). One in SUBTITLE_EMPHASIS_EVERY words at most: emphasis on every
+# other word is no emphasis. write_scene_config checks the indexes against the
+# timeline, which this function does not see.
+SUBTITLE_EMPHASIS_EVERY = 5
 
 
 def _validate_subtitles(sub) -> str:
@@ -353,6 +359,29 @@ def _validate_subtitles(sub) -> str:
     if "color" in sub and sub["color"] is not None:
         if not (isinstance(sub["color"], str) and sub["color"].strip()):
             return "config.subtitles.color must be a CSS colour string, or null to follow the canvas"
+    if "emphasis" in sub:
+        emph = sub["emphasis"]
+        if (not isinstance(emph, list)
+                or not all(isinstance(i, int) and not isinstance(i, bool) and i >= 0 for i in emph)
+                or len(set(emph)) != len(emph)):
+            return ("config.subtitles.emphasis must be a list of distinct word indexes (0 is the "
+                    "narration's first word)")
+    return ""
+
+
+def _emphasis_error(sub, word_count: int) -> str:
+    """The refusal for subtitles.emphasis indexes the narration does not have,
+    or for emphasis so dense it stops meaning anything; "" when fine."""
+    emph = sub.get("emphasis") if isinstance(sub, dict) else None
+    if not emph or not word_count:
+        return ""
+    bad = [i for i in emph if i >= word_count]
+    if bad:
+        return (f"config.subtitles.emphasis names word index(es) {bad}, but the narration has "
+                f"{word_count} words (0 to {word_count - 1})")
+    if len(emph) * SUBTITLE_EMPHASIS_EVERY > word_count:
+        return (f"config.subtitles.emphasis marks {len(emph)} of {word_count} words; at most one word "
+                f"in {SUBTITLE_EMPHASIS_EVERY} can be the key word, or nothing stands out")
     return ""
 
 
@@ -2249,7 +2278,9 @@ def update_video(
     art, panel-framed imagery), "illustrated" (characters are generated
     illustrated assets; you pick both the drawing style and the canvas from the
     topic), "system_flow" (the whole video is one diagram scene written as
-    data) or "cartoon_3d" (one 3D world; needs a working GPU).
+    data), "bean_explainer" (the whole video is one cartoon-bean scene written
+    as data, props from a fixed library) or "cartoon_3d" (one 3D world; needs
+    a working GPU).
     get_pipeline_status's visual_styles lists every style and whether this
     install can make it. The scene styles are permissions, not looks. Like script_profile_id, a human
     picks it at the topic checkpoint and it is frozen afterwards; set it here
@@ -2263,7 +2294,7 @@ def update_video(
     and never again: a revision round must render on the canvas the video
     already uses. Writable only when the style does not already fix a canvas —
     that is "auto" and "illustrated"; "motion_graphics", "stick",
-    "system_flow" and "cartoon_3d" fix theirs.
+    "system_flow", "bean_explainer" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer you settled on — "dom"
     (the scene components) or "cartoon_3d" (one Cartoon 3D world, written as
@@ -2837,7 +2868,7 @@ def upsert_project(
     default_visual_style: which visual register this domain's *curriculum*
         videos start in — "auto" or any style in get_pipeline_status's
         visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
-        "cartoon_3d").
+        "bean_explainer", "cartoon_3d").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -6051,7 +6082,9 @@ def write_scene_config(video_id: str, config: dict) -> dict:
             canvas), background ("pill"/"shadow"/"outline"/"none"; "outline"
             is bold text with a thick dark stroke and no plate, the look of
             narrated cartoon Shorts), position (fraction of
-            frame height), uppercase. Because the narration is captioned, a
+            frame height), uppercase, emphasis (a list of word indexes into
+            the narration, 0 first, drawn on a red box as the line's key word;
+            at most one word in 5). Because the narration is captioned, a
             scene should not also spell it out: put text in a scene only when
             the text is the thing being shown.
 
@@ -6087,6 +6120,13 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     render worker read, so this tool is the only correct way to produce a
     scene-config: **never** write scene-config.json using Claude Code's file
     tools, the same rule write_scene_file enforces for .tsx files.
+
+    A System Flow or Bean Explainer video is one installed scene (SystemFlow
+    or BeanExplainer) from frame 0 for totalFrames, whose props hold the whole
+    video as data; that data is checked here against the style's contract
+    (the tubematic-system-flow and tubematic-bean-explainer skills document
+    it) and refused with one sentence per problem. Either style fills
+    subtitles with its own caption look when the config has none.
 
     Call write_scene_file for every generated src referenced in config first,
     then call this, then the operator calls validate_job. Only the shape needed
@@ -6131,6 +6171,17 @@ def _timeline_word_starts(video_id: str) -> tuple[int, list[int]]:
         return int(tl.get("fps") or 30), [int(w["startFrame"]) for w in tl.get("words", [])]
     except (tjobs.UnsafePath, OSError, ValueError, TypeError, KeyError):
         return 30, []
+
+
+def _timeline_words(video_id: str) -> list[str]:
+    """The narration's words in order, from timeline.json; [] when there is no
+    readable timeline (the checks that need them are skipped)."""
+    try:
+        path = tjobs.job_file(JOBS_DIR, video_id, tjobs.TIMELINE)
+        tl = json.loads(path.read_text(encoding="utf-8"))
+        return [str(w["word"]) for w in tl.get("words", [])]
+    except (tjobs.UnsafePath, OSError, ValueError, TypeError, KeyError):
+        return []
 
 
 def _write_scene_config_locked(video_id: str, config: dict) -> dict:
@@ -6200,13 +6251,30 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         if "subtitles" not in config:
             config["subtitles"] = dict(tvs.pack(system_flow.STYLE_ID)["captions"])
 
+    # ── Bean Explainer (TMDEV-198) ───────────────────────────────────────────
+    # The same shape as System Flow: one installed BeanExplainer scene whose
+    # props hold the sections, shots and events as data, checked here against
+    # the pack's catalogue (props, poses, faces...) before it costs a render.
+    be_err = bean_explainer.check_scene_use(row["visual_style"], scenes)
+    if be_err:
+        return {"error": be_err}
+    if (row["visual_style"] or "") == bean_explainer.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = bean_explainer.check(config, fps, word_starts, _timeline_words(video_id),
+                                        tvs.pack(bean_explainer.STYLE_ID)["extra"])
+        if problems:
+            return {"error": "The Bean Explainer video has problems: " + " ".join(problems)}
+        if "subtitles" not in config:
+            config["subtitles"] = dict(tvs.pack(bean_explainer.STYLE_ID)["captions"])
+
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the
     # defaults into the file would freeze them at the values of the day the
     # config happened to be authored, and a later change to them would then
     # reach new videos only.
     if "subtitles" in config:
-        sub_err = _validate_subtitles(config["subtitles"])
+        sub_err = (_validate_subtitles(config["subtitles"])
+                   or _emphasis_error(config["subtitles"], len(_timeline_words(video_id))))
         if sub_err:
             return {"error": sub_err}
 
