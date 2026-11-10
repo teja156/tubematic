@@ -403,11 +403,16 @@ AUTO_PICK_RESET_SET = (
 NEW_STYLE_CLEARS_SET = "resolved_renderer = '', resolved_visual_style = ''"
 
 
-def style_change_clears_pick_set(value_expr: str = "?") -> str:
-    """SET fragments for a write of visual_style by a person: a changed value
-    replaces Auto's pick, so the record of that pick goes; the same value sent
-    again (the dashboard re-sends the picker on every approval) keeps it.
-    `value_expr` is the new value's expression; with "?" bind it three times."""
-    same = f"COALESCE(visual_style, '') = {value_expr}"
-    return ", ".join(f"{col} = CASE WHEN {same} THEN {col} ELSE '' END"
-                     for col in ("style_pick", "style_runner_up", "style_reason"))
+def style_change_clears_pick(value: str) -> tuple[str, list]:
+    """SET fragments and their parameters for a write of visual_style by a
+    person. A changed value replaces Auto's pick, so the record of that pick
+    goes, and so do the renderer and canvas recorded for the old scenes (the
+    style changes only at the topic, before a new script and new scenes; a
+    renderer left at "cartoon_3d" would still send them to the Cartoon 3D
+    renderer). The same value sent again (the dashboard re-sends the picker on
+    every approval) keeps everything."""
+    cols = ("style_pick", "style_runner_up", "style_reason", "resolved_renderer",
+            "resolved_visual_style")
+    sql = ", ".join(f"{col} = CASE WHEN COALESCE(visual_style, '') = ? THEN {col} ELSE '' END"
+                    for col in cols)
+    return sql, [value] * len(cols)

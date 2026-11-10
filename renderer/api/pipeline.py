@@ -2826,8 +2826,9 @@ def create_pipeline_blueprint() -> Blueprint:
             # an Auto pick back to Auto. Keep in sync: mcp/server.py's
             # update_video and set_video_status.
             if "visual_style" in fields:
-                set_sql.append(tvs.style_change_clears_pick_set())
-                set_params += [fields["visual_style"]] * 3
+                clear_sql, clear_params = tvs.style_change_clears_pick(fields["visual_style"])
+                set_sql.append(clear_sql)
+                set_params += clear_params
             elif fields.get("status") == "TOPIC_PROPOSED":
                 set_sql.append(tvs.AUTO_PICK_RESET_SET)
             where_sql, where_params = "", []

@@ -343,3 +343,15 @@ def test_a_topic_revision_keeps_the_scene_choices_of_a_style_a_person_chose(db):
     _set_resolved("", "dark")
     server.set_video_status("vid_1", "TOPIC_PROPOSED")
     assert _resolved() == ("", "dark")
+
+
+def test_a_person_changing_the_style_clears_the_old_scene_choices(db):
+    """A video the old Auto made Cartoon 3D, back at its topic: a person picks
+    another style, and the recorded 'cartoon_3d' renderer must go with the old
+    style, or the worker still renders it as Cartoon 3D."""
+    _video(status="TOPIC_PROPOSED")
+    _set_resolved("cartoon_3d", "dark")
+    assert "error" not in server.update_video("vid_1", visual_style="auto")  # same value
+    assert _resolved() == ("cartoon_3d", "dark")
+    assert "error" not in server.update_video("vid_1", visual_style="system_flow")
+    assert _resolved() == ("", "")

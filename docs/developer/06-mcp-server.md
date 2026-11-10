@@ -334,7 +334,8 @@ Fields writable only at `TOPIC_PROPOSED`:
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
   mascot is not refused. A mascot is refused on a `cartoon_3d` video.
 - A `visual_style` different from the stored one clears the record of a style `auto` picked
-  (`style_pick`, `style_runner_up`, `style_reason`). The same value again keeps it, because the
+  (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
+  scenes (`resolved_renderer`, `resolved_visual_style`). The same value again keeps them, because the
   dashboard re-sends the picker on every approval.
 
 Fields writable at any human checkpoint (`TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY`):

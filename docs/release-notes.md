@@ -61,6 +61,11 @@ If you go back to 2.1.x later:
 - A topic sent back for revision returns to Auto if Auto had picked its style, so the agent picks
   again for the revised topic.
 
+### Fixed
+
+- A video that Auto had made Cartoon 3D, sent back to its topic and then given another style, still
+  rendered as Cartoon 3D, or failed when no GPU was working.
+
 ---
 
 ## v2.1.1

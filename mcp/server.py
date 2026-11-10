@@ -2601,8 +2601,9 @@ def update_video(
     # A style chosen here replaces Auto's pick, so its record goes; the same
     # value again keeps it. Keep in sync: renderer/api/pipeline.py's patch_video.
     if "visual_style" in fields:
-        set_sql.append(tvs.style_change_clears_pick_set())
-        set_params += [fields["visual_style"]] * 3
+        clear_sql, clear_params = tvs.style_change_clears_pick(fields["visual_style"])
+        set_sql.append(clear_sql)
+        set_params += clear_params
     where_sql, where_params = "", []
     checked_status = None
     if topic_locked or agent_locked:

@@ -209,7 +209,7 @@ def test_both_processes_use_the_shared_reset_sql():
     api_src = pathlib.Path(pipeline.__file__).read_text()
     for src in (mcp_src, api_src):
         assert "tvs.AUTO_PICK_RESET_SET" in src
-        assert "tvs.style_change_clears_pick_set()" in src
+        assert "tvs.style_change_clears_pick(" in src
 
 
 def test_a_switch_clears_the_renderer_and_canvas_of_the_old_scenes(client, db_path):
@@ -226,3 +226,22 @@ def test_a_switch_clears_the_renderer_and_canvas_of_the_old_scenes(client, db_pa
     got = con.execute("SELECT visual_style, resolved_renderer, resolved_visual_style FROM videos").fetchone()
     con.close()
     assert got == ("illustrated", "", "")
+
+
+def test_a_person_changing_the_style_clears_the_old_scene_choices(client, db_path):
+    _video(db_path, status="TOPIC_PROPOSED", style="auto", pick="", runner_up="")
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET resolved_renderer = 'cartoon_3d', resolved_visual_style = 'dark'")
+    con.commit()
+    con.close()
+
+    def resolved():
+        c = sqlite3.connect(db_path)
+        out = c.execute("SELECT resolved_renderer, resolved_visual_style FROM videos").fetchone()
+        c.close()
+        return out
+
+    assert client.patch("/videos/vid_1", json={"visual_style": "auto"}).status_code == 200
+    assert resolved() == ("cartoon_3d", "dark")
+    assert client.patch("/videos/vid_1", json={"visual_style": "stick"}).status_code == 200
+    assert resolved() == ("", "")

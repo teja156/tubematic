@@ -277,7 +277,8 @@ Covers `POST /videos/<id>/switch-style` and the `PATCH` rules for a style Auto p
   longer a style or that the install cannot make, and for an archived or unknown video.
 - While the switch checks what the install can make, another writer is locked out, so nothing it
   checked can change before its write. The switch clears the renderer and canvas of the old scenes.
-- A changed `visual_style` clears the pick and the same value keeps it. A move back to
+- A changed `visual_style` clears the pick and the recorded renderer and canvas, and the same value
+  keeps them. A move back to
   `TOPIC_PROPOSED` returns a pick to `auto`, a person's style survives it, and an approval keeps it.
 - Both processes use the shared SQL fragments from `tubematic_core/visual_styles.py`.
 

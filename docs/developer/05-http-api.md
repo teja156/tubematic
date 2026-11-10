@@ -474,7 +474,8 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   (`tubematic_core/mascots.py::holds_pickable_sql`, `cartoon_mascot_clash_sql`), so an archive or a
   style write that commits in between also gets `409`.
 - A `visual_style` different from the stored one clears the record of a style Auto picked
-  (`style_pick`, `style_runner_up`, `style_reason`). The same value again keeps it. A `status` of
+  (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
+  scenes. The same value again keeps them. A `status` of
   `TOPIC_PROPOSED` without a `visual_style` returns a style Auto picked to `auto` and clears the
   record. Both are SQL fragments in `tubematic_core/visual_styles.py` that `update_video` and
   `set_video_status` also use.
