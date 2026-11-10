@@ -35,6 +35,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-troubleshooting",
     "tubematic-cartoon3d",
     "tubematic-system-flow",
+    "tubematic-style-routing",
     "tubematic-mascot-builder",
 ]
 
