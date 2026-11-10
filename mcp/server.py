@@ -1207,6 +1207,12 @@ def get_video(video_id: str) -> dict:
     cue track (write_scene_config's "mascot" key). mascots_available is true
     while at least one renderer's GPU is working; a mascot is chosen
     by a human at the topic, never by the video's agent.
+
+    style: what this video's visual_style means for the work, from its style
+    pack: {id, label, renderer, canvas, authoring_skill, allows}. At
+    VOICE_READY invoke the skill named by authoring_skill. Under "auto" that is
+    tubematic-scene-config, which settles the renderer and the canvas; renderer
+    and canvas are null there until it does.
     """
     _init_db()
     with _conn() as con:
@@ -1226,6 +1232,7 @@ def get_video(video_id: str) -> dict:
     # reads illustrated_available before choosing generated art.
     video["cartoon_3d_available"] = _gpu_probe_status() == "working"
     video["mascots_available"] = _gpu_probe_status() == "working"
+    video["style"] = tvs.agent_view(video.get("visual_style") or "")
     return video
 
 
@@ -4537,7 +4544,9 @@ def get_pipeline_status() -> dict:
     active_strategies, mining_available, research_runs_today,
     max_research_runs_per_day, research_window_resets_at, pronunciation_lexicon,
     elevenlabs_voices, elevenlabs_voice_id, agents, user_preferences,
-    illustrated_available, cartoon_3d_available, mascots_available.
+    illustrated_available, cartoon_3d_available, mascots_available,
+    visual_styles (every style, "auto" first, with whether this install can
+    produce it and why not).
     mascots_available is true while at least one renderer's GPU is working
     (a mascot is chosen by a human, so this is information only).
     mining_available is true when a Gemini API key is stored (the key itself is
@@ -4654,6 +4663,7 @@ def get_pipeline_status() -> dict:
         "illustrated_available": bool(_openai_key()),
         "cartoon_3d_available": _gpu_probe_status() == "working",
         "mascots_available": _gpu_probe_status() == "working",
+        "visual_styles": tvs.public_list(bool(_openai_key()), _gpu_probe_status()),
     }
 
 

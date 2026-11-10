@@ -32,6 +32,7 @@ import {
 import { styleOptions, videoStyleLabel } from "@/lib/visualStyles";
 import { MascotPicker } from "@/components/MascotPicker";
 import { approvalMascot, showMascotPicker } from "@/lib/mascots";
+import { useVisualStyles } from "@/components/VisualStylesProvider";
 
 interface VideoModalProps {
   video: Video | null;
@@ -333,6 +334,7 @@ const reviewToggleStyle: CSSProperties = {
 };
 
 export function VideoModal({ video: seed, initialTab, openRevise = false, initialPicks, voices = [], defaultVoiceId = "", scriptProfiles = [], agents, publishingEnabled = false, illustratedAvailable = true, gpu = null, mascots = [], onClose, onAction }: VideoModalProps) {
+  const visualStyles = useVisualStyles();
   const { timeZone, label: tzLabel } = useTimeZone();
   const [video, setVideo] = useState<Video | null>(null);
   const [reviseOpen, setReviseOpen] = useState(false);
@@ -1270,7 +1272,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           title="Visual register for this video"
                           className="w-full rounded border border-[#2a2a42] bg-[#131325] px-3 py-2 text-sm text-[#f0f0ff]"
                         >
-                          {styleOptions(illustratedAvailable, gpu).map((o) => (
+                          {styleOptions(visualStyles, illustratedAvailable, gpu, selectedStyle).map((o) => (
                             <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
                           ))}
                         </select>
@@ -1523,7 +1525,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                         />
                       </>
                     )}
-                    <MetaRow label="Visual style" value={videoStyleLabel(video)} />
+                    <MetaRow label="Visual style" value={videoStyleLabel(video, visualStyles)} />
                   </>
                 )}
                 {/* voice_info comes with the single-video fetch, not the list

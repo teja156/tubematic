@@ -4622,6 +4622,15 @@ def create_pipeline_blueprint() -> Blueprint:
         with _conn() as con:
             return jsonify(gpu_status(con))
 
+    @bp.get("/visual-styles")
+    def list_visual_styles():
+        """Every visual style, "auto" first, from the style packs, with whether
+        this install can produce it now and why not. The dashboard builds its
+        pickers from this; the write routes stay the authority on refusals."""
+        with _conn() as con:
+            key_set = bool(_secret(_read_all_settings(con), "openai_api_key", "OPENAI_API_KEY"))
+            return jsonify({"styles": tvs.public_list(key_set, trenderers.gpu_status(con)["status"])})
+
     @bp.post("/render/gpu/test")
     def request_gpu_test():
         """Ask the built-in renderer to probe again: the gateway's next

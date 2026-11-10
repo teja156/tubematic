@@ -400,3 +400,31 @@ def test_the_gpu_gate():
     assert pipeline.cartoon_3d_gpu_error("cartoon_3d", "unknown") == pipeline.CARTOON3D_GPU_UNKNOWN
     assert pipeline.cartoon_3d_gpu_error("cartoon_3d", "not_usable") == pipeline.CARTOON3D_NEEDS_GPU
     assert pipeline.cartoon_3d_gpu_error("stick", "unknown") == ""
+
+
+# ── GET /visual-styles (style packs, TMDEV-196) ──────────────────────────────
+
+def test_the_style_list_comes_from_the_packs(client):
+    rows = client.get("/visual-styles").get_json()["styles"]
+    assert [r["id"] for r in rows] == list(pipeline.VISUAL_STYLES)
+    by_id = {r["id"]: r for r in rows}
+    assert by_id["system_flow"]["label"] == "System Flow" and by_id["system_flow"]["available"]
+    assert by_id["cartoon_3d"]["experimental"] is True
+
+
+def test_the_style_list_says_what_this_install_cannot_make(client, db_path):
+    by_id = {r["id"]: r for r in client.get("/visual-styles").get_json()["styles"]}
+    assert by_id["illustrated"]["unavailable_reason"] == "needs an OpenAI key"
+    assert by_id["cartoon_3d"]["unavailable_reason"] == "GPU not tested yet"
+    con = sqlite3.connect(db_path)
+    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('openai_api_key', 'sk-test')")
+    con.commit()
+    con.close()
+    by_id = {r["id"]: r for r in client.get("/visual-styles").get_json()["styles"]}
+    assert by_id["illustrated"]["available"]
+
+
+def test_system_flow_needs_nothing_to_be_chosen(client):
+    vid = _video(client)
+    assert client.patch(f"/videos/{vid}", json={"visual_style": "system_flow"}).status_code == 200
+    assert client.get(f"/videos/{vid}").get_json()["visual_style"] == "system_flow"

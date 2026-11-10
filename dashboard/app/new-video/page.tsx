@@ -8,6 +8,7 @@ import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { AgentPickers, Field, resolvePickedModel, selectStyle } from "@/components/AgentPickers";
 import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
 import { voiceLabel } from "@/lib/voices";
+import { useVisualStyles } from "@/components/VisualStylesProvider";
 
 // The fixed domain every submission here is filed into. Keep in sync:
 // renderer/api/pipeline.py MANUAL_PROJECT_ID.
@@ -33,6 +34,7 @@ const inputStyle = {
 } as const;
 
 export default function NewVideoPage() {
+  const visualStyles = useVisualStyles();
   // undefined until /agents answers, and left so if it never does.
   const [agents, setAgents] = useState<Agent[] | undefined>(undefined);
   const [agentsFailed, setAgentsFailed] = useState(false);
@@ -218,7 +220,7 @@ export default function NewVideoPage() {
               onChange={(e) => setStyle(e.target.value as VisualStyle)}
               style={selectStyle}
             >
-              {styleOptions(canIllustrate, gpu).map((o) => (
+              {styleOptions(visualStyles, canIllustrate, gpu, style).map((o) => (
                 <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
               ))}
             </select>
