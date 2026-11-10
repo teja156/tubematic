@@ -374,3 +374,28 @@ def routing_candidates(openai_key_set: bool, gpu_status: str, has_mascot: bool) 
                 "images": SCENES_ROUTING["images"], "available": True,
                 "unavailable_reason": ""})
     return out
+
+
+STYLE_REASON_MAX_CHARS = 300
+
+# SET fragments shared by the MCP server and the API, so the two processes
+# cannot drift. SQLite evaluates every SET expression against the row as it
+# was before the UPDATE, so the order of the assignments does not matter.
+
+# A video going back to TOPIC_PROPOSED (a topic revision) gives an Auto pick
+# back to Auto: the topic it was decided on is about to change, and the next
+# approval routes it again. A style a person chose (style_pick '') is kept.
+AUTO_PICK_RESET_SET = (
+    "visual_style = CASE WHEN COALESCE(style_pick, '') != '' THEN 'auto' ELSE visual_style END, "
+    "style_pick = '', style_runner_up = '', style_reason = ''"
+)
+
+
+def style_change_clears_pick_set(value_expr: str = "?") -> str:
+    """SET fragments for a write of visual_style by a person: a changed value
+    replaces Auto's pick, so the record of that pick goes; the same value sent
+    again (the dashboard re-sends the picker on every approval) keeps it.
+    `value_expr` is the new value's expression; with "?" bind it three times."""
+    same = f"COALESCE(visual_style, '') = {value_expr}"
+    return ", ".join(f"{col} = CASE WHEN {same} THEN {col} ELSE '' END"
+                     for col in ("style_pick", "style_runner_up", "style_reason"))
