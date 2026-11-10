@@ -882,3 +882,24 @@ def test_no_usage_when_the_upload_fails_before_any_review(monkeypatch, video_fil
     result = ai_review.run_ai_review(str(video_file), {})
 
     assert "error" in result and "usage" not in result
+
+
+# ── a style pack's own review text (TMDEV-196) ───────────────────────────────
+
+def test_a_style_pack_review_block_replaces_the_canvas_contract():
+    """System Flow's look (dimmed parts, dotted connectors, no people) would
+    read as defects against the dark-canvas contract; any finding loops the
+    video, so the reviewer must be told the look is intended."""
+    from tubematic_core import visual_styles as tvs
+    text = tvs.pack("system_flow")["review"]
+    block = ai_review._register_block("dark", False, False, False, text)
+    assert block.startswith("INTENDED VISUAL STYLE")
+    assert "System Flow diagram" in block and "Do NOT report" in block
+    assert ai_review._STILL_JUDGE in block
+    assert ai_review._CANVAS_BLOCKS["dark"] not in block
+
+
+def test_without_a_style_block_the_contract_is_unchanged():
+    for args in (("dark", False, False, False), ("light", True, True, False), ("dark", True, False, True)):
+        assert ai_review._register_block(*args) == ai_review._register_block(*args, "")
+        assert ai_review._register_block(*args, "   ") == ai_review._register_block(*args)
