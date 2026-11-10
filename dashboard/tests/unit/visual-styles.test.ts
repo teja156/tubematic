@@ -9,7 +9,7 @@
  * set-versus-unset is readable without seeing the key.
  */
 import { describe, expect, it } from "vitest";
-import { cartoon3dAvailable, illustratedAvailable, styleLabel, styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { cartoon3dAvailable, illustratedAvailable, routeLabel, styleLabel, styleOptions, videoStyleLabel } from "@/lib/visualStyles";
 import { PACK_STYLES } from "./packStyles";
 
 describe("illustratedAvailable", () => {
@@ -112,5 +112,30 @@ describe("videoStyleLabel with a resolved renderer", () => {
     expect(videoStyleLabel({ visual_style: "auto", resolved_visual_style: "dark", resolved_renderer: "dom" }, PACK_STYLES)).toBe("Auto — dark canvas");
     expect(videoStyleLabel({ visual_style: "cartoon_3d", resolved_visual_style: "", resolved_renderer: "" }, PACK_STYLES)).toBe("Cartoon 3D (experimental)");
     expect(videoStyleLabel({ visual_style: "system_flow", resolved_visual_style: "", resolved_renderer: "" }, PACK_STYLES)).toBe("System Flow");
+  });
+});
+
+describe("videoStyleLabel with Auto's style pick (TMDEV-203)", () => {
+  const v = (visual_style: string, style_pick: string, resolved_visual_style = "") =>
+    ({ visual_style, style_pick, resolved_visual_style, resolved_renderer: "" as const });
+
+  it("marks a style Auto picked as automatic", () => {
+    expect(videoStyleLabel(v("system_flow", "system_flow"), PACK_STYLES)).toBe("Auto — System Flow");
+  });
+
+  it("names mixed scenes, and its canvas once chosen", () => {
+    expect(videoStyleLabel(v("auto", "scenes"), PACK_STYLES)).toBe("Auto — Mixed scenes");
+    expect(videoStyleLabel(v("auto", "scenes", "light"), PACK_STYLES)).toBe("Auto — Mixed scenes, light canvas");
+  });
+
+  it("reads a person's choice and an undecided video as before", () => {
+    expect(videoStyleLabel(v("system_flow", ""), PACK_STYLES)).toBe("System Flow");
+    expect(videoStyleLabel(v("auto", ""), PACK_STYLES)).toBe("Auto (not yet chosen)");
+    expect(videoStyleLabel(v("auto", "", "dark"), PACK_STYLES)).toBe("Auto — dark canvas");
+  });
+
+  it("labels a routing outcome", () => {
+    expect(routeLabel("scenes", PACK_STYLES)).toBe("Mixed scenes");
+    expect(routeLabel("system_flow", PACK_STYLES)).toBe("System Flow");
   });
 });

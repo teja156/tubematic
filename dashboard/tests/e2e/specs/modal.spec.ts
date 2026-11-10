@@ -1,3 +1,5 @@
+import { execSync } from "child_process";
+import path from "path";
 import { test, expect } from "@playwright/test";
 import { createVideo, patchVideo, addComment, getVideo, reportAgentOutcome, setSettings } from "../fixtures/seed";
 
@@ -275,5 +277,44 @@ test.describe("VideoModal", () => {
       // Other specs assume an empty roster (no voice picker rendered).
       await setSettings({ elevenlabs_voices: [], elevenlabs_voice_id: "" });
     }
+  });
+
+  // Auto's style pick (TMDEV-203). Only the agent's choose_visual_style writes
+  // a pick, and the test stack runs no agent, so the row is seeded in the API
+  // container the way stream.spec.ts seeds its files.
+  test("Switch to the runner-up sends the video back to scripting in that style", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Switch style` });
+    await patchVideo(video.id, { status: "SCRIPT_READY", script: "# Hello world" });
+    const repoRoot = path.resolve(__dirname, "../../../..");
+    execSync(
+      `docker compose -f "${path.join(repoRoot, "docker-compose.test.yml")}" exec -T tubematic-api-test python3 -`,
+      {
+        cwd: repoRoot,
+        input: [
+          "import sqlite3",
+          "con = sqlite3.connect('/data/tubematic.db')",
+          "con.execute(\"UPDATE videos SET visual_style = 'system_flow', style_pick = 'system_flow', "
+            + "style_runner_up = 'stick', style_reason = 'A request path through a system.' "
+            + `WHERE id = '${video.id}'\")`,
+          "con.commit()",
+        ].join("\n"),
+        stdio: ["pipe", "inherit", "inherit"],
+      },
+    );
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    await expect(modal.getByTestId("style-pick-reason")).toContainText("A request path through a system.");
+    await expect(modal.getByText("Auto — System Flow")).toBeVisible();
+
+    page.once("dialog", (d) => d.accept());
+    await modal.getByRole("button", { name: /^Switch to / }).click();
+    await expect.poll(async () => (await getVideo(video.id)).status, { timeout: 10_000 }).toBe("TOPIC_APPROVED");
+    const after = await getVideo(video.id) as unknown as Record<string, unknown>;
+    expect(after.visual_style).toBe("stick");
+    expect(after.style_runner_up).toBe("system_flow");
   });
 });

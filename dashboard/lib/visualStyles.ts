@@ -92,24 +92,40 @@ const CANVAS_LABELS: Record<string, string> = {
   light: "Auto — light canvas",
 };
 
+/** Auto's outcome when it keeps the mixed scene system (no style fit better).
+ *  Keep in sync: tubematic_core/visual_styles.py SCENES and SCENES_LABEL. */
+export const SCENES = "scenes";
+export const SCENES_LABEL = "Mixed scenes";
+
+/** The label of one of Auto's outcomes: a style's label, or "Mixed scenes". */
+export function routeLabel(id: string, styles: VisualStyleInfo[] | null): string {
+  return id === SCENES ? SCENES_LABEL : styleLabel(id, styles);
+}
+
 /**
  * How a video's style reads on a card once the pickers are gone.
  *
- * Under "auto" this says which canvas the agent chose, and marks it as
- * automatic: without that the dashboard cannot explain why two videos look
- * different, which is the reason the resolution is recorded at all. Before the
- * agent has chosen, it says so rather than implying one.
+ * When Auto picked the style (style_pick, before the script), the label says
+ * so: "Auto — System Flow". Under the mixed scene system it also names the
+ * canvas once the agent has chosen it. A video scripted before Auto picked
+ * styles reads as it always did: the canvas or the world the agent settled
+ * on. Before anything is chosen, it says so rather than implying one.
  */
 export function videoStyleLabel(
-  video: Pick<Video, "visual_style" | "resolved_visual_style" | "resolved_renderer">,
+  video: Pick<Video, "visual_style" | "resolved_visual_style" | "resolved_renderer" | "style_pick">,
   styles: VisualStyleInfo[] | null,
 ): string {
   const chosen = video.visual_style ?? "auto";
+  const pick = video.style_pick ?? "";
+  if (pick && pick !== SCENES && chosen === pick) return `Auto — ${styleLabel(pick, styles)}`;
   if (chosen !== "auto") return styleLabel(chosen, styles);
   // The renderer is the first thing auto settles (before any scene exists);
   // a Cartoon 3D world has no canvas worth naming.
   if (video.resolved_renderer === "cartoon_3d") return `Auto — ${styleLabel("cartoon_3d", styles)}`;
   const resolved = video.resolved_visual_style ?? "";
+  if (pick === SCENES) {
+    return resolved ? `Auto — ${SCENES_LABEL}, ${resolved} canvas` : `Auto — ${SCENES_LABEL}`;
+  }
   if (!resolved) return "Auto (not yet chosen)";
   return CANVAS_LABELS[resolved] ?? `Auto — ${resolved}`;
 }
