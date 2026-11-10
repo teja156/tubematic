@@ -68,23 +68,26 @@ GEOMETRY = {
 }
 EVENT_TYPES = ("pose", "prop", "act", "label", "mark", "impact", "strike", "arrow")
 CAST_IDS = ("narrator", "other")
+# The poses whose right arm reaches for the thing `at` names (bean.tsx's blendedPose).
+AIM_POSES = ("point", "present", "lean")
 LABEL_TONES = ("ink", "red")
 PROP_SCALE = (0.5, 1.4)
-# Prop boxes at scale 1, in frame pixels: (width, height). The text limits and
-# acts come from the pack; the boxes are geometry only this module needs.
+# Prop boxes at scale 1, in frame pixels: (width, height), every pixel the
+# drawing can reach (contract.ts says how they are measured). The text limits
+# and acts come from the pack; the boxes are geometry only this module needs.
 PROP_BOXES = {
-    "phone": (240, 420), "browser": (620, 130), "laptop": (440, 320), "sign": (380, 330),
-    "document": (300, 390), "note": (270, 270), "speech": (440, 250), "thought": (440, 270),
-    "pricetag": (320, 190), "calendar": (300, 320), "envelope": (340, 240),
-    "coins": (280, 220), "banknote": (380, 190), "wallet": (320, 240), "piggybank": (360, 280),
-    "creditcard": (380, 240), "chartup": (380, 320), "chartdown": (380, 320),
-    "brain": (340, 280), "heart": (300, 280), "stomach": (280, 320), "pill": (260, 140),
-    "coffee": (260, 320), "water": (200, 320), "bed": (480, 280), "dumbbell": (400, 160),
-    "apple": (240, 260),
-    "lock": (240, 320), "key": (340, 160), "server": (300, 380), "wifi": (320, 260),
-    "bug": (280, 280), "shield": (280, 330), "cursor": (160, 220),
-    "clock": (300, 330), "hourglass": (220, 340), "gears": (360, 300), "bulb": (220, 330),
-    "cloud": (400, 300), "trophy": (300, 340), "bomb": (300, 320), "magnifier": (340, 340),
+    "phone": (260, 440), "browser": (640, 150), "laptop": (460, 340), "sign": (400, 350),
+    "document": (330, 410), "note": (300, 310), "speech": (460, 270), "thought": (450, 300),
+    "pricetag": (340, 210), "calendar": (320, 340), "envelope": (360, 260),
+    "coins": (280, 250), "banknote": (400, 210), "wallet": (340, 270), "piggybank": (390, 310),
+    "creditcard": (400, 260), "chartup": (400, 340), "chartdown": (400, 340),
+    "brain": (400, 330), "heart": (300, 260), "stomach": (260, 340), "pill": (270, 180),
+    "coffee": (310, 390), "water": (210, 340), "bed": (500, 370), "dumbbell": (410, 150),
+    "apple": (260, 250),
+    "lock": (260, 430), "key": (330, 220), "server": (320, 400), "wifi": (350, 260),
+    "bug": (290, 300), "shield": (280, 340), "cursor": (270, 350),
+    "clock": (360, 340), "hourglass": (240, 360), "gears": (360, 280), "bulb": (340, 390),
+    "cloud": (410, 330), "trophy": (360, 370), "bomb": (330, 340), "magnifier": (260, 350),
 }
 
 # A cut (a section or shot start) lands on a word: within this many frames of one.
@@ -255,6 +258,8 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
     if not isinstance(sections, list) or len(sections) > LIMITS["maxSections"]:
         err(f"sections must be a list of at most {LIMITS['maxSections']}.")
         sections = []
+    if is_list and len(sections) < 2:
+        err("list is true, so sections must name at least two items: the carousel runs between sections.")
     content_start: dict[int, int] = {}   # shot index -> first frame its events may use
     sec_starts = []
     for i, sec in enumerate(sections):
@@ -318,7 +323,7 @@ def _check_shot(shot, i, start, end, content, cast_ids, extra, on_word, runs, ch
         err(f"{where}: list the events in frame order.")
     props: dict[str, dict] = {}     # instance id -> prop event
     labels: list[tuple] = []
-    bean_x: dict[str, list[float]] = {}
+    bean_x: dict[str, list[tuple[int, float]]] = {}   # who -> [(frame, x)] as the bean moves
     bean_first: dict[str, int] = {}
     last_pose: dict[str, int] = {}
     last_impact = None
@@ -357,12 +362,15 @@ def _check_shot(shot, i, start, end, content, cast_ids, extra, on_word, runs, ch
                 if not _num(e["x"]) or not 0.1 <= e["x"] <= 0.9:
                     err(f"{at}: x must be a number from 0.1 to 0.9.")
                 else:
-                    bean_x.setdefault(who, []).append(e["x"])
+                    bean_x.setdefault(who, []).append((f, e["x"]))
             elif who not in bean_first:
                 err(f"{at}: the bean's first pose in a shot needs x (where it stands, 0.1 to 0.9).")
             bean_first.setdefault(who, f)
             target = e.get("at")
-            if target is not None and target not in props and target not in bean_first:
+            if target is not None and e.get("pose") not in AIM_POSES:
+                err(f"{at}: at aims the arm of a {', '.join(AIM_POSES)} pose; the {e.get('pose')!r} pose "
+                    "does not reach for anything, so leave at out or change the pose.")
+            elif target is not None and target not in props and target not in bean_first:
                 err(f"{at}: at names {target!r}, which is not on stage yet.")
         elif t == "prop":
             prop = e.get("prop")
@@ -444,37 +452,71 @@ def _check_shot(shot, i, start, end, content, cast_ids, extra, on_word, runs, ch
     if elements > LIMITS["maxElementsPerShot"]:
         err(f"{where} puts {elements} props and labels on stage; at most "
             f"{LIMITS['maxElementsPerShot']} fit. Cut to a new shot to make room.")
-    _check_layout(where, props, labels, bean_x, err)
+    _check_layout(where, end, props, labels, bean_x, err)
 
 
-def _check_layout(where, props, labels, bean_x, err) -> None:
+# A bean that changes x hops there over this many frames (stage.ts).
+HOP_FRAMES = 8
+
+
+def bean_spans(moves: list[tuple[int, float]], end: int, scale: float) -> list[tuple[int, int, tuple]]:
+    """Where one bean stands over a shot: (from, to, box) spans, to exclusive.
+    A hop covers the boxes at both ends for its HOP_FRAMES, so a prop it sweeps
+    through is caught; a spot the bean has left is free again."""
+    spans = []
+    for k, (f, x) in enumerate(moves):
+        nxt = moves[k + 1][0] if k + 1 < len(moves) else end
+        box = bean_box(x, scale)
+        if k:
+            px = moves[k - 1][1]
+            if px != x:
+                prev = bean_box(px, scale)
+                sweep = (min(prev[0], box[0]), box[1], max(prev[2], box[2]), box[3])
+                spans.append((f, min(f + HOP_FRAMES, nxt), sweep))
+                f = min(f + HOP_FRAMES, nxt)
+        if f < nxt:
+            spans.append((f, nxt, box))
+    return spans
+
+
+def _check_layout(where, end, props, labels, bean_x, err) -> None:
     g = GEOMETRY
     scale = bean_scale(len(bean_x) or 1)
-    beans = [(who, bean_box(x, scale)) for who, xs in bean_x.items() for x in xs]
+    beans = [(who, a, b, box) for who, moves in bean_x.items() for a, b, box in bean_spans(moves, end, scale)]
 
     def inside(box) -> bool:
         return (box[0] >= g["safeLeft"] and box[2] <= g["safeRight"]
                 and box[1] >= g["stageTop"] and box[3] <= g["floorY"] + 20)
 
-    for who, box in beans:
+    def meets_bean(name, since, box) -> None:
+        # an element is on stage from `since` to the cut; a bean only where it stands then
+        for who, a, b, bbox in beans:
+            if b > since and _overlap(box, bbox):
+                err(f"{where}: {name} overlaps the {who} bean (from frame {max(a, since)}); move one of them.")
+                return
+
+    for who, _, _, box in beans:
         if box[0] < g["safeLeft"] or box[2] > g["safeRight"]:
             err(f"{where}: the {who} bean stands partly outside the frame's safe zone; move its x inward.")
+            break
+    if len(bean_x) == 2:
+        (w1, m1), (w2, m2) = bean_x.items()
+        for a1, b1, x1 in bean_spans(m1, end, scale):
+            if any(a1 < b2 and a2 < b1 and _overlap(x1, x2) for a2, b2, x2 in bean_spans(m2, end, scale)):
+                err(f"{where}: the {w1} and {w2} beans overlap; stand them further apart.")
+                break
     for pid, p in props.items():
         if not inside(p["box"]):
             err(f"{where}: the {pid} prop reaches outside the stage (between the header and the floor, "
                 "inside the side margins); move or shrink it.")
-        for who, box in beans:
-            if _overlap(p["box"], box):
-                err(f"{where}: the {pid} prop overlaps the {who} bean; move one of them.")
-    for k, (_, box, text) in enumerate(labels):
+        meets_bean(f"the {pid} prop", p["frame"], p["box"])
+    for k, (since, box, text) in enumerate(labels):
         if not inside(box):
             err(f"{where}: the label {text!r} reaches outside the stage.")
         for pid, p in props.items():
             if _overlap(box, p["box"]):
                 err(f"{where}: the label {text!r} overlaps the {pid} prop.")
-        for who, bbox in beans:
-            if _overlap(box, bbox):
-                err(f"{where}: the label {text!r} overlaps the {who} bean.")
+        meets_bean(f"the label {text!r}", since, box)
         for _, other, text2 in labels[k + 1:]:
             if _overlap(box, other):
                 err(f"{where}: the labels {text!r} and {text2!r} overlap.")
@@ -482,11 +524,18 @@ def _check_layout(where, props, labels, bean_x, err) -> None:
 
 def shot_windows(config: dict) -> list[tuple[int, int]]:
     """(start, end) of every shot of a Bean Explainer config, for the text-layout
-    audit to sample each like a scene. [] when the config is not one."""
+    audit to sample each like a scene. [] when the config is not one. A shot
+    that opens a list section starts after the badge carousel, where its events
+    may first appear: sampled earlier, the audit would measure the carousel."""
     scenes = config.get("scenes") or []
     if len(scenes) != 1 or not is_bean_scene(scenes[0]):
         return []
     data = (scenes[0].get("props") or {}).get(PROPS_KEY) or {}
     starts = [s.get("start") for s in data.get("shots") or [] if isinstance(s, dict) and _int(s.get("start"))]
     total = config.get("totalFrames") if _int(config.get("totalFrames")) else 0
-    return [(a, b) for a, b in zip(starts, starts[1:] + [total]) if b > a]
+    carousel = set()
+    if data.get("list") is True:
+        secs = [s.get("start") for s in data.get("sections") or [] if isinstance(s, dict) and _int(s.get("start"))]
+        carousel = set(secs[1:])
+    return [(a + (TIMING["carousel"] if a in carousel else 0), b)
+            for a, b in zip(starts, starts[1:] + [total]) if b > a + (TIMING["carousel"] if a in carousel else 0)]

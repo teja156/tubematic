@@ -55,67 +55,67 @@ A bean stands on the floor line (y 0.68) and is about 0.27 of the frame wide and
 
 ### Carry text
 
-| Prop | Size at scale 1 (px) | Text slot | Acts |
+| Prop | Size at scale 1 (px), its outline included | Text slot | Acts |
 |---|---|---|---|
-| `phone` | 240 x 420 | up to 40 characters | `buzz` |
-| `browser` | 620 x 130 | up to 26 characters | `flash` |
-| `laptop` | 440 x 320 | up to 30 characters | `flash` |
-| `sign` | 380 x 330 | up to 24 characters | `wobble` |
-| `document` | 300 x 390 | up to 20 characters | `stamp` |
-| `note` | 270 x 270 | up to 30 characters | none |
-| `speech` | 440 x 250 | up to 40 characters | none |
-| `thought` | 440 x 270 | up to 40 characters | none |
-| `pricetag` | 320 x 190 | up to 10 characters | `swing` |
-| `calendar` | 300 x 320 | up to 6 characters | `flip` |
-| `envelope` | 340 x 240 | up to 20 characters | `shake` |
+| `phone` | 260 x 440 | up to 40 characters | `buzz` |
+| `browser` | 640 x 150 | up to 26 characters | `flash` |
+| `laptop` | 460 x 340 | up to 30 characters | `flash` |
+| `sign` | 400 x 350 | up to 24 characters | `wobble` |
+| `document` | 330 x 410 | up to 20 characters | `stamp` |
+| `note` | 300 x 310 | up to 30 characters | none |
+| `speech` | 460 x 270 | up to 40 characters | none |
+| `thought` | 450 x 300 | up to 40 characters | none |
+| `pricetag` | 340 x 210 | up to 10 characters | `swing` |
+| `calendar` | 320 x 340 | up to 6 characters | `flip` |
+| `envelope` | 360 x 260 | up to 20 characters | `shake` |
 
 ### Money
 
-| Prop | Size at scale 1 (px) | Text slot | Acts |
+| Prop | Size at scale 1 (px), its outline included | Text slot | Acts |
 |---|---|---|---|
-| `coins` | 280 x 220 | none | `shake` |
-| `banknote` | 380 x 190 | up to 6 characters | `swing` |
-| `wallet` | 320 x 240 | none | `shake` |
-| `piggybank` | 360 x 280 | none | `shake` |
-| `creditcard` | 380 x 240 | up to 16 characters | `swing` |
-| `chartup` | 380 x 320 | up to 16 characters | `grow` |
-| `chartdown` | 380 x 320 | up to 16 characters | `grow` |
+| `coins` | 280 x 250 | none | `shake` |
+| `banknote` | 400 x 210 | up to 6 characters | `swing` |
+| `wallet` | 340 x 270 | none | `shake` |
+| `piggybank` | 390 x 310 | none | `shake` |
+| `creditcard` | 400 x 260 | up to 16 characters | `swing` |
+| `chartup` | 400 x 340 | up to 16 characters | `grow` |
+| `chartdown` | 400 x 340 | up to 16 characters | `grow` |
 
 ### Health and the body
 
-| Prop | Size at scale 1 (px) | Text slot | Acts |
+| Prop | Size at scale 1 (px), its outline included | Text slot | Acts |
 |---|---|---|---|
-| `brain` | 340 x 280 | none | `spark` |
-| `heart` | 300 x 280 | none | `beat` |
-| `stomach` | 280 x 320 | none | `shake` |
-| `pill` | 260 x 140 | none | `spin` |
-| `coffee` | 260 x 320 | none | `steam` |
-| `water` | 200 x 320 | none | `fill` |
-| `bed` | 480 x 280 | none | `zzz` |
-| `dumbbell` | 400 x 160 | none | `shake` |
-| `apple` | 240 x 260 | none | `spin` |
+| `brain` | 400 x 330 | none | `spark` |
+| `heart` | 300 x 260 | none | `beat` |
+| `stomach` | 260 x 340 | none | `shake` |
+| `pill` | 270 x 180 | none | `spin` |
+| `coffee` | 310 x 390 | none | `steam` |
+| `water` | 210 x 340 | none | `fill` |
+| `bed` | 500 x 370 | none | `zzz` |
+| `dumbbell` | 410 x 150 | none | `shake` |
+| `apple` | 260 x 250 | none | `spin` |
 
 ### Tech
 
-| Prop | Size at scale 1 (px) | Text slot | Acts |
+| Prop | Size at scale 1 (px), its outline included | Text slot | Acts |
 |---|---|---|---|
-| `lock` | 240 x 320 | none | `unlock` |
-| `key` | 340 x 160 | none | `spin` |
-| `server` | 300 x 380 | none | `flash` |
-| `wifi` | 320 x 260 | none | `pulse` |
-| `bug` | 280 x 280 | none | `wobble` |
-| `shield` | 280 x 330 | none | `flash` |
-| `cursor` | 160 x 220 | none | `click` |
+| `lock` | 260 x 430 | none | `unlock` |
+| `key` | 330 x 220 | none | `spin` |
+| `server` | 320 x 400 | none | `flash` |
+| `wifi` | 350 x 260 | none | `pulse` |
+| `bug` | 290 x 300 | none | `wobble` |
+| `shield` | 280 x 340 | none | `flash` |
+| `cursor` | 270 x 350 | none | `click` |
 
 ### Time and feeling
 
-| Prop | Size at scale 1 (px) | Text slot | Acts |
+| Prop | Size at scale 1 (px), its outline included | Text slot | Acts |
 |---|---|---|---|
-| `clock` | 300 x 330 | none | `ring` |
-| `hourglass` | 220 x 340 | none | `spin` |
-| `gears` | 360 x 300 | none | `turn` |
-| `bulb` | 220 x 330 | none | `light` |
-| `cloud` | 400 x 300 | none | `rain` |
-| `trophy` | 300 x 340 | none | `spark` |
-| `bomb` | 300 x 320 | none | `shake` |
-| `magnifier` | 340 x 340 | none | `wobble` |
+| `clock` | 360 x 340 | none | `ring` |
+| `hourglass` | 240 x 360 | none | `spin` |
+| `gears` | 360 x 280 | none | `turn` |
+| `bulb` | 340 x 390 | none | `light` |
+| `cloud` | 410 x 330 | none | `rain` |
+| `trophy` | 360 x 370 | none | `spark` |
+| `bomb` | 330 x 340 | none | `shake` |
+| `magnifier` | 260 x 350 | none | `wobble` |

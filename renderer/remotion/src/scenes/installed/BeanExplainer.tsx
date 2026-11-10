@@ -275,7 +275,7 @@ export default function BeanExplainer({ beanExplainer, durationInFrames }: { bea
           pose: b.pose, prevPose: b.prevPose, poseT: b.poseT, face: b.face, look: b.look, swapFrame: b.swapFrame,
           aim: aim ? toBody(b.x, GEOMETRY.floorY, b.scale, aim) : undefined,
           marks: b.marks, enter: b.enter, accessory: b.cast.accessory ?? "none", tint: b.cast.tint ?? "cream",
-          seed: b.seed, font: ROUND, uid: `bean-${b.id}`,
+          seed: b.seed, font: ROUND, uid: `bean-${b.id}`, poseAt: b.poseAt,
         };
         return { props, squash: squashAt(frame, b.swapFrame) };
       })

@@ -508,7 +508,8 @@ The bean is a bitmap because on the CPU renderer the live SVG bean cost about 0.
 frame whether or not it moved, and the bitmap about 0.07. Everything in the scene settles to a
 resting value (a spring reaches 1 and stays there, an act stops after two seconds), so a held frame does not
 repaint. The scene also follows System Flow's rules: no SVG filter, gradient, pattern or
-`stroke-dasharray`. The measured costs are in `BeanExplainer.tsx`'s header comment.
+`stroke-dasharray`. The measured costs are in `BeanExplainer.tsx`'s header comment. A bitmap that
+cannot be drawn fails the render, so no frame goes out without the bean.
 
 `mcp/bean_explainer.py` checks a config in `write_scene_config` and refuses it when:
 
@@ -516,11 +517,16 @@ repaint. The scene also follows System Flow's rules: no SVG filter, gradient, pa
   `totalFrames`, or another style uses `BeanExplainer`.
 - A shot or section after the first does not start within 2 frames of a word, a shot lasts under 1.5
   seconds or a section under 2, or a section does not start where a shot does.
-- A pose is not on a word, or comes less than 8 frames after the same bean's last pose.
+- A pose is not on a word, or comes less than 8 frames after the same bean's last pose, or names
+  `at` on a pose whose arm does not reach (only `point`, `present` and `lean` do).
+- `list` is on with fewer than two sections.
 - An event in a list video's section starts during the badge carousel, or within 6 frames of the
   next cut.
 - A shot holds more than 6 props and labels, a label overlaps a prop, a bean or another label, a prop
-  overlaps a bean, or anything leaves the stage. Props may overlap each other.
+  overlaps a bean, two beans overlap, or anything leaves the stage. A bean is checked only where it
+  stands while the other thing is on stage, and a hop covers the ground between its two spots for
+  its 8 frames. Props may overlap each other. Each prop's box in `contract.ts` is every pixel its
+  drawing reaches, outline and act included, measured with `BeanPropSheet`'s measure mode.
 - A label runs past 2 lines of 22 characters or repeats 4 narration words in a row.
 - A field, pose, face, mark, accessory, tint, prop, act or text slot is not in the catalogue, or an
   act starts before its prop has landed.
@@ -528,7 +534,7 @@ repaint. The scene also follows System Flow's rules: no SVG filter, gradient, pa
 
 `mcp/tests/test_bean_explainer.py` pins `bean_explainer.py` to `contract.ts` and to the pack. When
 the config has no `subtitles`, the pack's `captions` fill it. The text-layout audit samples each shot
-as if it were a scene. A Bean Explainer video can have a mascot; the skill keeps it small and to one
+as if it were a scene, from the end of the badge carousel when the shot opens a list section. A Bean Explainer video can have a mascot; the skill keeps it small and to one
 side.
 
 ---

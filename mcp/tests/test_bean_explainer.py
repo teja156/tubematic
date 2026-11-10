@@ -199,6 +199,46 @@ def test_too_many_elements_in_one_shot_are_refused():
     assert any("at most 6 fit" in p for p in _check(_with(crowd)))
 
 
+def test_a_hop_sweeps_the_ground_between_its_ends():
+    scale = be.bean_scale(1)
+    spans = be.bean_spans([(78, 0.25), (195, 0.8)], 288, scale)
+    assert [(a, b) for a, b, _ in spans] == [(78, 195), (195, 195 + be.HOP_FRAMES), (195 + be.HOP_FRAMES, 288)]
+    sweep = spans[1][2]
+    assert sweep[0] == be.bean_box(0.25, scale)[0] and sweep[2] == be.bean_box(0.8, scale)[2]
+
+
+def _hop_shot(d, prop_frame):
+    # both of the bean's spots are clear of the phone; only the hop crosses it
+    d["shots"][1]["events"] = [
+        {"type": "pose", "frame": 78, "who": "narrator", "pose": "stand", "face": "neutral", "x": 0.25},
+        {"type": "prop", "frame": prop_frame, "prop": "phone", "x": 0.55, "y": 0.5, "scale": 0.6},
+        {"type": "pose", "frame": 195, "who": "narrator", "pose": "stand", "face": "worried", "x": 0.8},
+    ]
+    d["shots"][1]["events"].sort(key=lambda e: e["frame"])
+
+
+def test_a_hop_through_a_prop_is_refused():
+    problems = _check(_with(lambda d: _hop_shot(d, 128)))
+    assert any("phone prop overlaps the narrator bean (from frame 195)" in p for p in problems), problems
+
+
+def test_a_prop_that_lands_after_the_hop_is_free():
+    problems = _check(_with(lambda d: _hop_shot(d, 213)))
+    assert not any("phone prop overlaps" in p for p in problems), problems
+
+
+def test_at_only_on_a_reaching_pose():
+    def aim_stand(d):
+        d["shots"][1]["events"][0]["at"] = "phone"
+    assert any("does not reach" in p for p in _check(_with(aim_stand)))
+
+
+def test_a_list_needs_at_least_two_sections():
+    def one(d):
+        d["sections"] = d["sections"][:1]
+    assert any("at least two items" in p for p in _check(_with(one)))
+
+
 def test_props_may_overlap_each_other():
     # a magnifier over an address bar, a cursor over a phone: the gags rely on it
     assert _check() == []
@@ -218,7 +258,8 @@ def test_the_scene_use_rule():
 
 
 def test_shot_windows():
-    assert be.shot_windows(EXAMPLE) == [(0, 78), (78, 288), (288, 447), (447, 716)]
+    # the list sections after the first open with the carousel; their shots start after it
+    assert be.shot_windows(EXAMPLE) == [(0, 78), (78, 288), (318, 447), (477, 716)]
     assert be.shot_windows({"scenes": []}) == []
 
 

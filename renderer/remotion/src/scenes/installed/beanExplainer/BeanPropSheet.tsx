@@ -83,9 +83,35 @@ function PropsPage({ page }: { page: number }) {
   );
 }
 
-export const BeanPropSheet: React.FC = () => {
+/**
+ * Measure mode (`--props='{"measure":"<prop>"}'`): the prop alone, centred on
+ * white at scale 1, drawn at its rest and at many moments of its act on top of
+ * one another, so the inked pixels are every place the drawing can reach. Its
+ * PROPS box in contract.ts is sized from this picture. Whole-prop acts (a spin,
+ * a swing) are left out: they last under a second.
+ */
+const Measure: React.FC<{ id: PropId }> = ({ id }) => {
+  const Draw = DRAWINGS[id];
+  const act = PROPS[id].acts[0] ?? "";
+  const drawn = act && !(WHOLE_PROP_ACTS as readonly string[]).includes(act);
+  const moments = [-1, ...(drawn ? [0, 3, 6, 9, 12, 16, 20, 25, 30, 40, 50, 60] : [])];
+  return (
+    <AbsoluteFill style={{ background: "#ffffff" }}>
+      <svg width={1080} height={1920}>
+        <g transform="translate(540 960)">
+          {moments.map((t) => (
+            <Draw key={t} frame={t < 0 ? 0 : t} actT={t} text={SAMPLE_TEXT[id] ? "W".repeat(PROPS[id].text) : ""} round={ROUND} hand={HAND} />
+          ))}
+        </g>
+      </svg>
+    </AbsoluteFill>
+  );
+};
+
+export const BeanPropSheet: React.FC<{ measure?: string }> = ({ measure }) => {
   const page = useCurrentFrame();
   useBeanFonts("BeanPropSheet");
+  if (measure && measure in PROPS) return <Measure id={measure as PropId} />;
   const titles = ["Bean Explainer: poses", "faces", "accessories, tints, marks"];
   const title = titles[page] ?? `props ${page - FIRST_PROP_PAGE + 1} of ${SHEET_PAGES - FIRST_PROP_PAGE}`;
   return (

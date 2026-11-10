@@ -20,7 +20,7 @@ export type BeanState = {
   cast: BECast;
   x: number; // frame pixels, after any hop
   hopY: number;
-  pose: Pose; prevPose: Pose; poseT: number; swapFrame: number;
+  pose: Pose; prevPose: Pose; poseT: number; swapFrame: number; poseAt: number;
   face: Face; look: Look;
   enter: number;
   aimAt: string | undefined;
@@ -114,7 +114,7 @@ export function stageAt(data: BeanExplainerData, total: number, frame: number): 
       id, cast: castOf(data, id), x, hopY,
       pose: cur.pose, prevPose: prev.pose,
       poseT: poses.length === 1 ? 1 : clamp01((frame - cur.frame) / TIMING.poseSnap),
-      swapFrame: poses.length === 1 ? -100 : cur.frame,
+      swapFrame: poses.length === 1 ? -100 : cur.frame, poseAt: cur.frame,
       face: cur.face, look: cur.look ?? "front", enter, aimAt: cur.at, marks, scale, seed: n * 7 + shot * 13 + 3,
     });
   });

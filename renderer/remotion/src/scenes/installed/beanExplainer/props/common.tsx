@@ -44,10 +44,27 @@ export function wrapTo(text: string, perLine: number, maxLines: number): string[
 }
 
 /**
+ * Width of `text` in ems, from per-character classes sized at or above the
+ * widest glyph of each class in Fredoka and Patrick Hand (W and M are the
+ * widest capitals). Over-estimating is the safe side: a fitted line may end a
+ * little short of its box, but never runs past it.
+ */
+export function textEms(text: string): number {
+  let em = 0;
+  for (const ch of text) {
+    if (ch === "W" || ch === "M" || ch === "m" || ch === "w") em += 0.98;
+    else if (/[A-Z0-9@#%&$]/.test(ch)) em += 0.74;
+    else if (/[iIl1.,:;'!|]/.test(ch)) em += 0.32;
+    else if (ch === " ") em += 0.28;
+    else em += 0.6;
+  }
+  return em;
+}
+
+/**
  * A text slot fitted to a box: wrapped to at most `maxLines` lines, then sized
- * so its longest line fits `width` and the block fits `height`, never above
- * `maxPx`. Characters are taken as 0.62 em wide, a little wider than Fredoka's
- * capitals, so a fitted line never touches its box.
+ * so its widest line (by textEms) fits `width` and the block fits `height`,
+ * never above `maxPx`.
  */
 export const FitText: React.FC<{
   text: string; x?: number; y?: number; width: number; height: number; maxPx: number;
@@ -56,8 +73,8 @@ export const FitText: React.FC<{
   if (!text) return null;
   const perLine = Math.max(6, Math.round(width / (maxPx * 0.62)));
   const lines = wrapTo(text, perLine, maxLines);
-  const longest = Math.max(...lines.map((l) => l.length), 1);
-  const px = Math.min(maxPx, width / (longest * 0.62), height / (lines.length * 1.15));
+  const widest = Math.max(...lines.map(textEms), 0.5);
+  const px = Math.min(maxPx, width / widest, height / (lines.length * 1.15));
   const top = y - ((lines.length - 1) * px * 1.15) / 2 + px * 0.36;
   return (
     <text x={x} y={top} textAnchor={anchor} fontSize={px} fontWeight={weight} fill={fill} style={{ fontFamily: font }}>

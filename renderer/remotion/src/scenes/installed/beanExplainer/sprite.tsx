@@ -14,12 +14,13 @@
  * scene, because they animate on every frame.
  *
  * The cache lives for the life of a render tab. A miss holds the frame with
- * delayRender until its bitmap exists, so no frame is captured without it.
+ * delayRender until its bitmap exists, so no frame is captured without it; a
+ * bitmap that cannot be drawn fails the render, never a frame with no bean.
  */
 import React, { useLayoutEffect, useReducer } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Img, continueRender, delayRender } from "remotion";
-import { Bean, blinkAt, type BeanProps } from "./bean";
+import { Img, cancelRender, continueRender, delayRender } from "remotion";
+import { Bean, WAVE_FRAMES, blinkAt, type BeanProps } from "./bean";
 
 /** The sprite's box in body coordinates: wide enough for any reach, tall enough for any hat or raised hand. */
 export const SPRITE = { left: -380, top: -880, width: 760, height: 940 } as const;
@@ -38,8 +39,8 @@ function lookOf(p: BeanProps): Look {
     scale: r(p.scale), pose: p.pose, prevPose: p.prevPose, poseT: r(p.poseT), face: p.face, look: p.look,
     aim: p.aim ? [Math.round(p.aim[0] / 4) * 4, Math.round(p.aim[1] / 4) * 4] : undefined,
     accessory: p.accessory, tint: p.tint, blink: r(p.blink ?? blinkAt(p.frame, p.seed)),
-    // the wave's hand swings on a ~19-frame cycle; a fixed set of phases is enough
-    waveFrame: p.pose === "wave" || p.prevPose === "wave" ? Math.round(p.frame) % 19 : 0,
+    // the hand waves for WAVE_FRAMES after the pose begins, then holds: a fixed set of phases
+    waveFrame: p.pose === "wave" ? Math.max(0, Math.min(Math.round(p.frame - (p.poseAt ?? 0)), WAVE_FRAMES)) : 0,
   };
 }
 
@@ -50,7 +51,7 @@ function markup(l: Look): string {
       <Bean frame={l.waveFrame} fps={30} x={-SPRITE.left * l.scale} y={-SPRITE.top * l.scale} scale={l.scale}
         pose={l.pose} prevPose={l.prevPose} poseT={l.poseT} face={l.face} look={l.look} swapFrame={-100}
         aim={l.aim} marks={[]} enter={1} accessory={l.accessory} tint={l.tint} seed={0} font="sans-serif"
-        uid="s" blink={l.blink} />
+        uid="s" blink={l.blink} poseAt={0} />
     </svg>,
   );
 }
@@ -87,10 +88,7 @@ export const BeanSprite: React.FC<{ p: BeanProps; squash: [number, number] }> = 
         rerender();
         continueRender(handle);
       })
-      .catch((err) => {
-        console.error("BeanSprite: could not draw the bean", err);
-        continueRender(handle);
-      });
+      .catch((err) => cancelRender(err));
     // `l` is fully described by `key`
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);

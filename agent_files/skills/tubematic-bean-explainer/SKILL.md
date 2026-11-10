@@ -45,16 +45,18 @@ event is wrong. Fix every problem it lists, then write again.
   {...}}}`.
 - **Shots** are cuts: the first starts at frame 0, the others on a word (within 2 frames of a word's
   `startFrame`), each at least 1.5 seconds long, at most 40 shots.
-- **Sections** start where a shot starts, each at least 2 seconds long, at most 12. In a list video
-  (`"list": true`) every section after the first opens with the badge carousel, and that shot's
-  events start 30 frames after the section does.
+- **Sections** start where a shot starts, each at least 2 seconds long, at most 12. A list video
+  (`"list": true`) has at least two sections; every section after the first opens with the badge
+  carousel, and that shot's events start 30 frames after the section does.
 - **Poses** land on a word (within 2 frames of its start), and one bean's poses are at least 8 frames
-  apart.
+  apart. `at` goes only on a `point`, `present` or `lean` pose: no other pose reaches for anything.
 - **A shot holds** at most 6 props and labels together (the beans do not count), at most 24 events,
   listed in frame order. An event ends at least 6 frames before the next cut.
 - **Layout:** everything stays on the stage (between the header and the floor, inside the side
-  margins). A label may not overlap a prop, a bean or another label; a prop may not overlap a bean.
-  Props may overlap each other (a cursor on a phone, a magnifier on an address bar).
+  margins). A label may not overlap a prop, a bean or another label; a prop may not overlap a bean,
+  where the bean stands while the prop is on stage. A bean that changes `x` hops there, and the hop
+  covers the ground between its two spots, so do not hop across a prop. Props may overlap each other
+  (a cursor on a phone, a magnifier on an address bar).
 - **Labels** are at most 2 lines of 22 characters, and never repeat 4 or more narration words in a
   row: the captions already say them.
 - **Props, poses, faces, marks, accessories, tints and acts** come from the catalogue; a prop's text

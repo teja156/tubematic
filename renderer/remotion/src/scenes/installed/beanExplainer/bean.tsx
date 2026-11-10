@@ -103,6 +103,9 @@ const FACES: Record<Face, FaceSpec> = {
   sad: { lid: 0.4, lidTilt: -14, brow: [[-14, -64], [-64, -46]], browArch: 2, mouth: "M -28,74 Q 0,54 28,74", pupil: 9, bags: true },
   angry: { lid: 0.36, lidTilt: 14, brow: [[-12, -40], [-64, -62]], browArch: 4, mouth: "M -26,70 Q 0,60 26,70", pupil: 8, bags: false },
 };
+/** How long a wave keeps waving after its swap, in frames since the swap. */
+export const WAVE_FRAMES = 30;
+
 const LOOK_DX: Record<Look, number> = { front: 0, left: -1, right: 1 };
 
 const Eye: React.FC<{ cx: number; side: -1 | 1; f: FaceSpec; look: number; blink: number; skin: string; id: string }> = ({ cx, side, f, look, blink, skin, id }) => {
@@ -341,13 +344,16 @@ export type BeanProps = {
   uid: string;
   /** Lid closure 0..1; computed from frame and seed when absent. */
   blink?: number;
+  /** The frame the current pose began (the wave counts from it); 0 when absent. */
+  poseAt?: number;
 };
 
 /** The pose at a moment: the blend of two table poses, the aim and the wave applied. */
-export function blendedPose(p: Pick<BeanProps, "pose" | "prevPose" | "poseT" | "aim" | "frame">): PoseSpec {
+export function blendedPose(p: Pick<BeanProps, "pose" | "prevPose" | "poseT" | "aim" | "frame" | "poseAt">): PoseSpec {
   const pa = { ...POSES[p.prevPose] }, pb = { ...POSES[p.pose] };
   if (p.aim && (p.pose === "point" || p.pose === "present" || p.pose === "lean")) pb.rHand = p.aim;
-  if (p.pose === "wave") pb.rHand = [pb.rHand[0] + Math.sin(p.frame / 3) * 26, pb.rHand[1]];
+  // waves for a second after the swap, then holds like every other pose
+  if (p.pose === "wave") pb.rHand = [pb.rHand[0] + Math.sin(Math.max(0, Math.min(p.frame - (p.poseAt ?? 0), WAVE_FRAMES)) / 3) * 26, pb.rHand[1]];
   const t = p.poseT;
   const lerp = (a: number, b: number) => a + (b - a) * t;
   const lerpV = (a: V, b: V): V => [lerp(a[0], b[0]), lerp(a[1], b[1])];
