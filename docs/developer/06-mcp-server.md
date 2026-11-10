@@ -381,8 +381,10 @@ only write of the style after the topic checkpoint.
 
 It refuses a `style` or `runner_up` that is not available (no OpenAI key, no working GPU, a mascot
 on a 3D-world style), a video not at `TOPIC_APPROVED`, a style a person chose, and a second
-decision. Every condition is repeated in the `UPDATE`'s `WHERE`, so a status change, a style write
-or a mascot committed between the check and the write leaves the video untouched. The result carries
+decision. Every condition on the row is repeated in the `UPDATE`'s `WHERE`, so a status change, a
+style write or a mascot committed between the check and the write leaves the video untouched. It
+reads what the install can make after taking the write lock (`BEGIN IMMEDIATE`), so a key removed in
+Settings or a GPU probe result cannot commit between that check and the write. The result carries
 the new `visual_style` and `style`, so the agent writes the script for it in the same session.
 
 ### `add_comment`

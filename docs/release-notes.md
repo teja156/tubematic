@@ -25,9 +25,10 @@ After you upgrade:
    installs new skills for System Flow and for Auto's style choice, and a session started before it
    does not have them.
 
-A video on Auto that was already past Topic Approved when you upgraded keeps working the way Auto
-did before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. Only videos
-approved after the upgrade get a style picked before their script.
+A video on Auto whose script was already written when you upgraded keeps working the way Auto did
+before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
+that is approved but not yet scripted gets a style picked before its script, like every video
+approved after the upgrade.
 
 If you go back to 2.1.x later:
 

@@ -275,7 +275,8 @@ Covers `POST /videos/<id>/switch-style` and the `PATCH` rules for a style Auto p
   leaves `auto`.
 - It is refused away from `SCRIPT_READY`, with no pick or no runner-up, for a runner-up that is no
   longer a style or that the install cannot make, and for an archived or unknown video.
-- A change landing between its checks and its `UPDATE` leaves the video and the comments untouched.
+- While the switch checks what the install can make, another writer is locked out, so nothing it
+  checked can change before its write.
 - A changed `visual_style` clears the pick and the same value keeps it. A move back to
   `TOPIC_PROPOSED` returns a pick to `auto`, a person's style survives it, and an approval keeps it.
 - Both processes use the shared SQL fragments from `tubematic_core/visual_styles.py`.

@@ -485,7 +485,8 @@ Takes the runner-up of the style Auto picked ([How Auto picks a
 style](10-scene-authoring.md#how-auto-picks-a-style)). No body. The video must be at
 `SCRIPT_READY`, before the paid voicing, and hold a `style_pick` and a `style_runner_up`.
 
-In one `UPDATE` that repeats every check, the route sets `visual_style` to the runner-up (`auto`
+The route runs as one write transaction (`BEGIN IMMEDIATE`) from its first read to its write, so an
+approval, a second switch, a removed key or a GPU probe result waits for it. It sets `visual_style` to the runner-up (`auto`
 for `scenes`), swaps `style_pick` and `style_runner_up`, sets `style_reason` to say a person
 switched it, and moves the video to `TOPIC_APPROVED`. It adds a `human` comment asking the agent to
 rewrite the script for the new style. The agent's next session writes a new script, which replaces

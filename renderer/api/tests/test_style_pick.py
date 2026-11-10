@@ -135,31 +135,31 @@ def test_an_archived_video_is_refused(client, db_path):
     assert client.post("/videos/vid_1/switch-style").status_code == 409
 
 
-def test_the_update_repeats_every_check(client, db_path, monkeypatch):
-    """A change committed between the checks and the UPDATE (simulated inside
-    routing_candidates, which runs between them) must leave the video alone."""
+def test_the_switch_holds_the_write_lock_while_it_checks(client, db_path, monkeypatch):
+    """An approval, a second switch, a key removed in Settings or a GPU probe
+    result cannot commit between the switch's checks and its write: while it
+    checks what the install can make, every other writer is locked out.
+    Mutation-check: drop BEGIN IMMEDIATE and the write below goes through."""
+    _video(db_path)
     real = tvs.routing_candidates
-    for change in ("status = 'VOICING'", "style_pick = 'motion_graphics'",
-                   "style_runner_up = 'motion_graphics'", f"archived_at = '{NOW}'"):
-        con = sqlite3.connect(db_path)
-        con.execute("DELETE FROM comments")
-        con.execute("DELETE FROM videos")
-        con.commit()
-        con.close()
-        _video(db_path)
+    seen = []
 
-        def racing(*a, _c=change, **kw):
-            c2 = sqlite3.connect(db_path)
-            c2.execute(f"UPDATE videos SET {_c} WHERE id = 'vid_1'")
-            c2.commit()
-            c2.close()
-            return real(*a, **kw)
+    def probing(*a, **kw):
+        other = sqlite3.connect(db_path, timeout=0)
+        try:
+            other.execute("UPDATE videos SET status = 'VOICING' WHERE id = 'vid_1'")
+            other.commit()
+            seen.append("wrote")
+        except sqlite3.OperationalError as exc:
+            seen.append(str(exc))
+        finally:
+            other.close()
+        return real(*a, **kw)
 
-        monkeypatch.setattr(tvs, "routing_candidates", racing)
-        r = client.post("/videos/vid_1/switch-style")
-        assert r.status_code == 409, change
-        assert _row(db_path)["status"] != "TOPIC_APPROVED", change
-        assert _comments(db_path) == [], change
+    monkeypatch.setattr(tvs, "routing_candidates", probing)
+    assert client.post("/videos/vid_1/switch-style").status_code == 200
+    assert seen == ["database is locked"]
+    assert _row(db_path)["status"] == "TOPIC_APPROVED"
 
 
 # ── giving a pick back ───────────────────────────────────────────────────────

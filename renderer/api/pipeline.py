@@ -3052,6 +3052,11 @@ def create_pipeline_blueprint() -> Blueprint:
         second switch goes back.
         """
         with _conn() as con:
+            # One write transaction from the first read to the write: an
+            # approval, a second switch, a key removed in Settings or a GPU
+            # probe result waits for it, so nothing checked below can change
+            # before the UPDATE. The UPDATE repeats the row checks anyway.
+            con.execute("BEGIN IMMEDIATE")
             row = con.execute(
                 "SELECT status, visual_style, style_pick, style_runner_up, mascot_id, archived_at "
                 "FROM videos WHERE id = ?", (video_id,)).fetchone()
@@ -3079,8 +3084,6 @@ def create_pipeline_blueprint() -> Blueprint:
             reason = (f"Switched by a person from {tvs.route_label(pick)} to "
                       f"{tvs.route_label(target)}.")
             now = _now()
-            # Every check above, repeated in the UPDATE: an approval or a
-            # second switch landing in between must find nothing to change.
             cur = con.execute(
                 "UPDATE videos SET visual_style = ?, style_pick = ?, style_runner_up = ?, "
                 "style_reason = ?, status = 'TOPIC_APPROVED', agent_no_progress_count = 0, "

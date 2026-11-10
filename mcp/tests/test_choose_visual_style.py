@@ -158,12 +158,12 @@ def test_a_mascot_rules_out_a_3d_world(db):
 
 
 def test_the_update_repeats_every_check(db, monkeypatch):
-    """The checks read the row, then the UPDATE runs: a change committed in
-    between (here simulated by changing the row after the read) must leave
-    the video untouched. Mutation-check: dropping any clause of the UPDATE's
-    WHERE makes one of these land."""
+    """The row is read, then the UPDATE runs: a change committed in between
+    (simulated right after the read) must leave the video untouched.
+    Mutation-check: dropping any clause of the UPDATE's WHERE makes one of
+    these land."""
     _video()
-    real_routing = tvs.routing_candidates
+    real_row = server._style_choice_row
 
     for change in ("UPDATE videos SET status = 'SCRIPT_READY'",
                    "UPDATE videos SET visual_style = 'stick'",
@@ -173,12 +173,13 @@ def test_the_update_repeats_every_check(db, monkeypatch):
             con.execute("UPDATE videos SET status = 'TOPIC_APPROVED', visual_style = 'auto', "
                         "style_pick = '', archived_at = NULL WHERE id = 'vid_1'")
 
-        def racing(*a, _change=change, **kw):
+        def racing(vid, _change=change):
+            row = real_row(vid)
             with server._conn() as con:
                 con.execute(_change + " WHERE id = 'vid_1'")
-            return real_routing(*a, **kw)
+            return row
 
-        monkeypatch.setattr(tvs, "routing_candidates", racing)
+        monkeypatch.setattr(server, "_style_choice_row", racing)
         err = server.choose_visual_style("vid_1", "system_flow", "A path.")
         assert "changed while the call was in flight" in err["error"], change
         assert _row()["visual_style"] != "system_flow", change
@@ -188,16 +189,45 @@ def test_a_mascot_landing_mid_call_stops_a_3d_pick(db, monkeypatch):
     _gpu(ok=True)
     _video()
     mid = _mascot()
-    real_routing = tvs.routing_candidates
+    real_row = server._style_choice_row
 
-    def racing(*a, **kw):
+    def racing(vid):
+        row = real_row(vid)
         with server._conn() as con:
             con.execute("UPDATE videos SET mascot_id = ? WHERE id = 'vid_1'", (mid,))
-        return real_routing(*a, **kw)
+        return row
 
-    monkeypatch.setattr(tvs, "routing_candidates", racing)
+    monkeypatch.setattr(server, "_style_choice_row", racing)
     assert "error" in server.choose_visual_style("vid_1", "cartoon_3d", "A place.")
     assert _row()["visual_style"] == "auto"
+
+
+def test_availability_is_read_under_the_write_lock(db, monkeypatch):
+    """A key removed in Settings, or a GPU probe result, cannot commit between
+    the availability check and the write: while the check runs, any other
+    writer is locked out. Mutation-check: drop BEGIN IMMEDIATE and the write
+    below goes through."""
+    import sqlite3
+    _video()
+    real = tvs.routing_candidates
+    seen = []
+
+    def probing(*a, **kw):
+        other = sqlite3.connect(str(server.DB_FILE), timeout=0)
+        try:
+            other.execute("UPDATE settings SET value = value WHERE key = 'nothing'")
+            other.execute("INSERT INTO settings (key, value) VALUES ('lock_probe', 'x')")
+            other.commit()
+            seen.append("wrote")
+        except sqlite3.OperationalError as exc:
+            seen.append(str(exc))
+        finally:
+            other.close()
+        return real(*a, **kw)
+
+    monkeypatch.setattr(tvs, "routing_candidates", probing)
+    assert "error" not in server.choose_visual_style("vid_1", "system_flow", "A path.")
+    assert seen == ["database is locked"]
 
 
 # ── get_video's style_routing ────────────────────────────────────────────────

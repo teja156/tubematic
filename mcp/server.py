@@ -2758,6 +2758,13 @@ def update_video(
     return {"video_id": video_id, "updated_fields": updated}
 
 
+def _style_choice_row(video_id: str):
+    """The row choose_visual_style checks before it writes."""
+    with _conn() as con:
+        return con.execute("SELECT status, visual_style, style_pick, mascot_id, archived_at "
+                           "FROM videos WHERE id = ?", (video_id,)).fetchone()
+
+
 @mcp.tool
 def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str = "") -> dict:
     """Record Auto's style decision for a video, before its script is written.
@@ -2803,9 +2810,7 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
         return {"error": f"reason is {len(reason)} characters; the limit is "
                          f"{tvs.STYLE_REASON_MAX_CHARS} (one sentence)"}
     _init_db()
-    with _conn() as con:
-        row = con.execute("SELECT status, visual_style, style_pick, mascot_id, archived_at "
-                          "FROM videos WHERE id = ?", (video_id,)).fetchone()
+    row = _style_choice_row(video_id)
     if not row:
         return {"error": f"Video not found: {video_id}"}
     if row["archived_at"]:
@@ -2820,19 +2825,22 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
     if row["status"] != "TOPIC_APPROVED":
         return {"error": f"Auto picks a style at TOPIC_APPROVED, before the script; this video "
                          f"is at {row['status']}"}
-    candidates = {c["id"]: c for c in tvs.routing_candidates(
-        bool(_openai_key()), _gpu_probe_status(), bool(row["mascot_id"]))}
-    for role, sid in (("style", style), ("runner_up", runner_up)):
-        if sid and not candidates[sid]["available"]:
-            return {"error": f"{role} {sid!r} ({candidates[sid]['label']}) is not available for "
-                             f"this video: {candidates[sid]['unavailable_reason']}. Pick another "
-                             "candidate and say in the reason which style you wanted and why it "
-                             "was unavailable."}
     new_style = DEFAULT_VISUAL_STYLE if style == tvs.SCENES else style
     with _conn() as con:
-        # Every check above, repeated in the UPDATE itself: a person editing
-        # the topic, a second session, or a mascot write in between must find
-        # nothing to overwrite.
+        # The write lock first, then what the install can make: a key removed
+        # in Settings or a GPU probe result cannot commit between this check
+        # and the write, because its writer waits for this transaction. The
+        # row checks above are repeated in the UPDATE's WHERE, so a status,
+        # style or mascot written since the read finds nothing to overwrite.
+        con.execute("BEGIN IMMEDIATE")
+        candidates = {c["id"]: c for c in tvs.routing_candidates(
+            bool(_openai_key()), _gpu_probe_status(), bool(row["mascot_id"]))}
+        for role, sid in (("style", style), ("runner_up", runner_up)):
+            if sid and not candidates[sid]["available"]:
+                return {"error": f"{role} {sid!r} ({candidates[sid]['label']}) is not available "
+                                 f"for this video: {candidates[sid]['unavailable_reason']}. Pick "
+                                 "another candidate and say in the reason which style you wanted "
+                                 "and why it was unavailable."}
         cur = con.execute(
             "UPDATE videos SET visual_style = ?, style_pick = ?, style_runner_up = ?, "
             "style_reason = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL "
