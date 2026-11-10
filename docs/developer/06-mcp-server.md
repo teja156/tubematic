@@ -523,13 +523,14 @@ return pictures.
 ### `preview_doodles`
 
 `preview_doodles(doodles)` takes the doodles a Whiteboard video defines for itself (`{name:
-strokes}`, the format of `props.whiteboard.doodles`), checks them with the rules
+strokes}`, the format of `props.whiteboard.doodles`), checks each one with the per-doodle rules
 `write_scene_config` applies (`whiteboard.check_doodles`), and returns the names and a picture: each
 doodle in a labelled cell over a faint 0-100 grid, beside the shipped `coin` and `car` in grey for
 scale. It needs no video and writes nothing. `mcp/doodle_preview.py` draws the sheet with Pillow
 from the same expanded geometry the renderer uses, without the hand wobble, so a call takes
 milliseconds. It exists because no check can tell whether a drawing reads as the object it is meant
-to be ([Whiteboard](10-scene-authoring.md#whiteboard)).
+to be ([Whiteboard](10-scene-authoring.md#whiteboard)). The board-level rules (every defined doodle drawn by an item,
+every item's doodle defined) apply only at `write_scene_config`.
 
 ---
 

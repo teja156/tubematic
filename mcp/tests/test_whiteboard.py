@@ -277,7 +277,7 @@ def test_a_video_may_draw_its_own_doodle():
     ({"bicycle": [[{"circle": [95, 50, 10]}]]}, "outside the 0-100 box"),
     ({"bicycle": [[{"spiral": [50, 50, 10]}]]}, "is not a primitive"),
     ({"bicycle": [[{"circle": [50, 50]}]]}, "circle takes 3 to 4 numbers"),
-    ({"bicycle": [[{"arc": [50, 50, 10, 10, 0, 100000]}]]}, "at most a few full circles"),
+    ({"bicycle": [[{"arc": [50, 50, 10, 10, 0, 9000]}]]}, "at most a few full circles"),
     ({"bicycle": [[{"star": [50, 50, 10, 20, 1000]}]]}, "whole count from 3 to 12"),
     ({"bicycle": [[{"line": [[50, 50]]}]]}, "single point"),
     ({"bicycle": [[{"line": [[10, 10], [20, 20]]}]] * 21}, "at most 20"),
@@ -288,6 +288,36 @@ def test_a_video_may_draw_its_own_doodle():
 def test_a_bad_custom_doodle_is_refused(doodles, fragment):
     errs = _check(_with_custom(doodles))
     assert any(fragment in e for e in errs), errs
+
+
+@pytest.mark.parametrize("segment", [
+    {"arc": [50, 50, 10, 10, -1e308, 1e308]},
+    {"circle": [50, 50, 10, 1e308]},
+    {"ellipse": [50, 50, 10, 10, 1e308]},
+    {"line": [[10 ** 400, 5], [5, 5]]},
+    {"circle": [50, 50, float("nan")]},
+])
+def test_an_extreme_number_is_refused_not_raised(segment):
+    """JSON can carry numbers that overflow the trigonometry or a float; each
+    must come back as a refusal, never an exception."""
+    errs = wb.check_doodles({"blob": [[segment]]}, DOODLES)
+    assert errs and "between" in errs[0], errs
+
+
+def test_a_huge_doodle_is_refused_without_being_expanded(monkeypatch):
+    """The point limit is counted from the values, so a doodle of a million
+    segments is refused at the first one over the limit."""
+    calls = []
+    monkeypatch.setattr(wb, "_segment_points", lambda *a: calls.append(a) or [])
+    errs = wb.check_doodles({"blob": [[{"gear": [50, 50, 10, 20, 24]}] * 1_000_000]}, DOODLES)
+    assert any("more than 400 points" in e for e in errs) and calls == []
+
+
+def test_the_point_count_matches_the_expansion():
+    for d in list(LIBRARY.values()) + [c["def"] for c in CASES["expand"]]:
+        for stroke in d:
+            counted = sum(wb._segment_count(*next(iter(seg.items()))) for seg in stroke)
+            assert counted == len(wb.expand_doodle([stroke])[0])
 
 
 def test_a_doodle_name_that_is_neither_shipped_nor_defined_is_refused():

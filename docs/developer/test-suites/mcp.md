@@ -495,7 +495,9 @@ text audit's per-region sampling ([Whiteboard](../10-scene-authoring.md#whiteboa
   wrong number of values, asks for a huge arc or star, has a single-point stroke, too many strokes,
   or is one of more than 8; an item naming a doodle that is neither shipped nor defined is refused.
 - `preview_doodles` returns the names and a picture with a cell for each doodle and the two shipped
-  references, and refuses what `write_scene_config` would.
+  references, and refuses a doodle `write_scene_config` would refuse for its own sake. An extreme
+  number (one that overflows the trigonometry or a float) is refused, never raised, and a doodle of a
+  million segments is refused from its point count without being expanded.
 
 Trap: the validator's placement and timing must equal the renderer's to the frame. The tests that
 read `contract.ts` and the shared fixture are what catch a change made on one side only.

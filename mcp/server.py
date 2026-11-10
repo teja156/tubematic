@@ -5953,7 +5953,9 @@ def preview_doodles(doodles: dict):
     reference/contract.md documents the format; reference/doodles.json is the
     shipped library in the same format). At most 8.
 
-    Checks them with the same rules write_scene_config uses and returns
+    Checks each doodle with the per-doodle rules write_scene_config uses (the
+    board-level ones, such as every doodle being drawn by an item, apply only
+    when you write the config) and returns
     {"error": ...} listing every problem, or {doodles, references} followed by
     a picture: each doodle in a cell over a faint 0-100 grid, then two shipped
     doodles in grey for scale. The video draws them with a slight hand wobble

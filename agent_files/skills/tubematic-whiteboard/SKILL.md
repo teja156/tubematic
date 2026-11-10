@@ -144,7 +144,7 @@ exact. A video holds at most 8 of its own.
    | `arc` | `[cx, cy, rx, ry, from, to]`, angles in degrees: 0 is right, 90 is down |
    | `circle` | `[cx, cy, r]`, optionally a 4th value for the angle it starts at |
    | `ellipse` | `[cx, cy, rx, ry]`, optionally a rotation in degrees and a start angle |
-   | `rect` | `[x, y, w, h]`, optionally a corner radius |
+   | `rect` | `[x, y, w, h]`, optionally a corner radius; without one it overlaps 1 unit above its top-left corner, so keep its top at 1 or more |
    | `star` | `[cx, cy, inner radius, outer radius, points]` |
    | `gear` | `[cx, cy, inner radius, outer radius, teeth]` |
 
@@ -152,7 +152,7 @@ exact. A video holds at most 8 of its own.
    segments in one stroke are joined by a line, so start a new stroke wherever the pen lifts.
    At most 20 strokes and 400 points (a circle is about 47).
 3. Never draw a person, a face or a body: a role is the shipped `person` or `group` doodle.
-4. Call `preview_doodles` with the same object. It checks the rules above and shows each doodle beside
+4. Call `preview_doodles` with the same object. It checks each doodle against the rules above and shows it beside
    two shipped ones at the same scale. Look at it: if it does not read at once as the thing it is meant
    to be, simplify it and preview again. Then use its name as an item's `doodle`, like a shipped one.
 

@@ -71,7 +71,10 @@ down. `reference/doodles.json` is the shipped library in this format.
 A video's own doodles (`whiteboard.doodles`): at most 8; names of 1 to 24 lowercase letters, digits
 or underscores that are not shipped names; each at most 20 strokes and 400 points once expanded,
 every stroke at least two points, every point inside the box; each one drawn by an item.
-`preview_doodles` applies the same checks and returns a picture.
+`preview_doodles` applies the per-doodle checks (all of these but the last) and returns a picture.
+
+A `rect` with no corner radius ends 1 unit above its top-left corner, so the line closes with a small
+overlap like a pen's; keep such a rect's top at 1 or more.
 
 ## Timing
 

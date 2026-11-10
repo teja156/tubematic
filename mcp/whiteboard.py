@@ -257,8 +257,39 @@ def _segment_points(kind: str, v) -> list:
     return out
 
 
+# The largest magnitude any doodle value may have. Coordinates live in 0-100
+# and an angle needs a few turns at most; the bound keeps a huge JSON number
+# from overflowing the trigonometry or the point count before a check refuses it.
+_MAX_VALUE = 10_000
+
+
 def _num(v) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        return False
+    try:
+        return math.isfinite(float(v)) and abs(float(v)) <= _MAX_VALUE
+    except OverflowError:  # an integer too large for a float
+        return False
+
+
+def _segment_count(kind: str, v) -> int:
+    """Points a validated segment expands to, counted from its values alone, so
+    the size limit is checked before anything is computed."""
+    if kind == "line":
+        return len(v)
+    if kind == "poly":
+        return len(v) + 1
+    if kind == "curve":
+        return 13
+    if kind == "arc":
+        return _arc_n(v[4], v[5]) + 1
+    if kind in ("circle", "ellipse"):
+        return _arc_n(0, 365) + 1
+    if kind == "rect":
+        return 4 * (_arc_n(0, 90) + 1) + 1 if len(v) > 4 and v[4] else 5
+    if kind == "star":
+        return 2 * v[4] + 1
+    return 4 * (v[4] + 1)  # gear
 
 
 def _pt(v) -> bool:
@@ -278,11 +309,13 @@ def _segment_problem(seg) -> str:
         if not isinstance(v, list) or not all(_pt(p) for p in v) or len(v) < need or (kind == "curve" and len(v) != 3):
             return {"line": "line takes a list of [x, y] points",
                     "poly": "poly takes a list of at least 3 [x, y] points",
-                    "curve": "curve takes exactly 3 [x, y] points: start, control, end"}[kind]
+                    "curve": "curve takes exactly 3 [x, y] points: start, control, end"}[kind] + (
+                f", each value a number between -{_MAX_VALUE} and {_MAX_VALUE}")
         return ""
     lo, hi = _ARITY[kind]
     if not isinstance(v, list) or not lo <= len(v) <= hi or not all(_num(x) for x in v):
-        return f"{kind} takes {lo}{'' if lo == hi else f' to {hi}'} numbers"
+        return (f"{kind} takes {lo}{'' if lo == hi else f' to {hi}'} numbers, each between "
+                f"-{_MAX_VALUE} and {_MAX_VALUE}")
     if kind == "arc" and _arc_n(v[4], v[5]) > DOODLE_LIMITS["maxPoints"]:
         return "an arc may turn at most a few full circles"
     if kind in ("circle", "ellipse") and min(v[2:3] if kind == "circle" else v[2:4]) <= 0:
@@ -309,6 +342,7 @@ def doodle_problems(name: str, strokes) -> list[str]:
         return [f"{where} must be a non-empty list of strokes (each a list of segments)."]
     if len(strokes) > DOODLE_LIMITS["maxStrokes"]:
         return [f"{where} has {len(strokes)} strokes; at most {DOODLE_LIMITS['maxStrokes']}. Keep it simple."]
+    total = 0
     for k, stroke in enumerate(strokes):
         if not isinstance(stroke, list) or not stroke:
             return [f"{where}, stroke {k + 1}: a stroke is a non-empty list of segments."]
@@ -316,11 +350,13 @@ def doodle_problems(name: str, strokes) -> list[str]:
             problem = _segment_problem(seg)
             if problem:
                 return [f"{where}, stroke {k + 1}: {problem}."]
+            total += _segment_count(*next(iter(seg.items())))
+            # Counted, never expanded, past the limit: a doodle of millions of
+            # segments costs no more than the first one over.
+            if total > DOODLE_LIMITS["maxPoints"]:
+                return [f"{where} expands to more than {DOODLE_LIMITS['maxPoints']} points. Use fewer or "
+                        "shorter strokes."]
     expanded = expand_doodle(strokes)
-    total = sum(len(st) for st in expanded)
-    if total > DOODLE_LIMITS["maxPoints"]:
-        return [f"{where} expands to {total} points; at most {DOODLE_LIMITS['maxPoints']}. Use fewer or "
-                "shorter strokes."]
     errs = []
     for k, st in enumerate(expanded):
         if len(st) < 2:
@@ -337,10 +373,10 @@ def check_doodles(defs, library: list[str]) -> list[str]:
         return []
     if not isinstance(defs, dict):
         return ["doodles must be an object: {\"name\": [strokes...]}."]
-    errs = []
     if len(defs) > DOODLE_LIMITS["maxCustom"]:
-        errs.append(f"{len(defs)} custom doodles; at most {DOODLE_LIMITS['maxCustom']} per video. Use a shipped "
-                    "doodle where one carries the meaning.")
+        return [f"{len(defs)} custom doodles; at most {DOODLE_LIMITS['maxCustom']} per video. Use a shipped "
+                "doodle where one carries the meaning."]
+    errs = []
     for name, strokes in defs.items():
         if not _ID.match(name):
             errs.append(f"doodle name {name!r} must be 1-24 lowercase letters, digits or underscores.")
