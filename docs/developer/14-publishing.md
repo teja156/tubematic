@@ -603,11 +603,14 @@ host's timezone.
 | `saves` | None | `saved` | None | None |
 
 - A figure a platform does not report is null. Zero views gives a null `stayed_pct`.
-- An `avg_watch_secs` or `watched_pct` of 0 is null. A platform sends 0 for a post it has not
-  measured yet, and a 0 would enter a group's median as a video nobody watched. A count of 0
-  (`reach`, `saves`, `engaged_views`) is kept.
-- A value that is not a number, is negative or is above `_MAX_READING` is null. No payload makes
-  the function raise.
+- A `watched_pct` of 0 is null, and so is an `avg_watch_secs` of 0 that comes with no share. A
+  platform sends 0 for a post it has not measured yet, and a 0 would enter a group's median as a
+  video nobody watched. The rule applies to the rounded figures. YouTube reports whole seconds, so
+  0 seconds beside a share above 0 is kept.
+- A count of 0 (`reach`, `saves`, `engaged_views`) is kept, and so is a `stayed_pct` of 0 when the
+  post has views.
+- A value that is not a number, is negative or is above `_MAX_READING` is null, and so is a
+  computed figure above it. No payload makes the function raise.
 - A `watched_pct` above 100 is kept, because a looping Short is watched more than once.
 - A payload with seconds and no share or length of its own takes `videos.duration_secs` as the
   length. Instagram's payloads are always in that case.

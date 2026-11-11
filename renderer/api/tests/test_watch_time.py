@@ -117,6 +117,45 @@ def test_an_average_of_no_seconds_is_not_a_reading(platform, raw):
     assert (out["avg_watch_secs"], out["watched_pct"]) == (None, None)
 
 
+def test_an_average_that_rounds_to_no_seconds_is_not_a_reading_either():
+    """30 ms is 0.0 s and 0.1% once rounded. The rule is applied to what is
+    shown, so the page never shows 0 s for a post nobody measured."""
+    out = postforme.extract_retention("instagram", dict(INSTAGRAM, ig_reels_avg_watch_time=30))
+    assert (out["avg_watch_secs"], out["watched_pct"]) == (None, None)
+    out = postforme.extract_retention("instagram", dict(INSTAGRAM, ig_reels_avg_watch_time=30),
+                                      duration_secs=60)
+    assert (out["avg_watch_secs"], out["watched_pct"]) == (0.0, 0.1)
+
+
+def test_whole_seconds_that_come_to_zero_beside_a_real_share_are_kept():
+    """YouTube reports whole seconds. A Short watched for under a second on
+    average reads 0 with a real percentage, and that is a measurement."""
+    out = postforme.extract_retention(
+        "youtube", dict(YOUTUBE, averageViewDuration=0, averageViewPercentage=4.2))
+    assert (out["avg_watch_secs"], out["watched_pct"]) == (0, 4.2)
+
+
+def test_no_engaged_views_of_some_views_is_a_reading():
+    """Views and engaged views come from one YouTube report, so when there are
+    views the 0 was measured. With no views nothing was (the test above)."""
+    out = postforme.extract_retention("youtube", dict(YOUTUBE, views=3, engagedViews=0))
+    assert out["stayed_pct"] == 0.0
+
+
+@pytest.mark.parametrize("platform, raw, duration", [
+    ("youtube", dict(YOUTUBE, views=5e-324), None),
+    ("instagram", INSTAGRAM, 1e-300),
+    ("facebook", dict(FACEBOOK, video_length=1e-300), None),
+])
+def test_a_division_by_a_vanishing_number_is_not_a_figure(platform, raw, duration):
+    """It comes out infinite, and an infinity in the answer is not JSON: the
+    browser could not read the page's data at all."""
+    out = postforme.extract_retention(platform, raw, duration_secs=duration)
+    assert json.loads(json.dumps(out, allow_nan=False)) == out
+    assert out["watched_pct"] is None or out["watched_pct"] < 1000
+    assert out["stayed_pct"] is None or out["stayed_pct"] <= 100
+
+
 @pytest.mark.parametrize("key, blank", [
     ("averageViewDuration", "avg_watch_secs"), ("averageViewPercentage", "watched_pct"),
     ("engagedViews", "stayed_pct"), ("views", "stayed_pct")])

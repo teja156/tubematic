@@ -413,7 +413,10 @@ publication rows of `GET /analytics` and `GET /videos/<id>/publications`,
 - An absent figure is null and a reported zero count stays zero. Zero views gives no stayed
   figure, a share above 100 is kept, and a value that is not a number, or is too large to divide, is
   not reported.
-- An average of 0 seconds and a 0 share are not reported, on every platform.
+- An average of 0 seconds with no share, and a 0 share, are not reported, on every platform. An
+  average that rounds to 0 follows the same rule, and YouTube's 0 whole seconds beside a real share
+  is kept.
+- A division by a vanishing length or view count gives no figure, so the answer stays valid JSON.
 - The routes read the latest snapshot, including snapshots stored by an earlier version. A payload
   that does not parse reports nothing, and watch figures are added to no total.
 - The grouped route answers for one account, the largest when none is named. A group's figure is

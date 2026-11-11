@@ -539,10 +539,14 @@ def extract_retention(platform: str, metrics: dict | None, duration_secs=None) -
     Same contract as extract_metrics: an absent figure is None, never 0, and
     an unknown platform is all None. Never raises, whatever the payload holds.
 
-    An average of 0 seconds is None as well, and so is a 0 share. Nobody
-    watches for no time: a platform sends 0 for a post it has not measured
-    yet, and a 0 would count in a group's median as a video nobody stayed on.
-    Counts are different, since nobody saving a video is a reading.
+    A 0 share is None as well, and so is an average of 0 seconds that comes
+    with no share. Nobody watches for no time: a platform sends 0 for a post
+    it has not measured yet, and a 0 would count in a group's median as a
+    video nobody stayed on. YouTube reports whole seconds, so 0 seconds beside
+    a real share is a view of under a second and is kept. Counts are
+    different, since nobody saving a video is a reading, and so is stayed to
+    watch: YouTube's views and engaged views come from one report, so 0
+    engaged of some views was measured.
 
     `duration_secs` is the video's own length. It is used where the payload
     has seconds and neither a share nor a length of its own, which is always
@@ -558,13 +562,13 @@ def extract_retention(platform: str, metrics: dict | None, duration_secs=None) -
         return None if value is None else value / divisor
 
     out = dict.fromkeys(RETENTION_KEYS)
-    out["avg_watch_secs"] = read("avg_watch_secs") or None
+    out["avg_watch_secs"] = read("avg_watch_secs")
     out["engaged_views"] = read("engaged_views")
     out["reach"] = read("reach")
     out["saves"] = read("saves")
 
-    out["watched_pct"] = read("watched_pct") or None
-    if out["watched_pct"] is None and out["avg_watch_secs"] is not None:
+    out["watched_pct"] = read("watched_pct")
+    if out["watched_pct"] is None and out["avg_watch_secs"]:
         length = read("length_secs") or _number(duration_secs)
         if length:
             out["watched_pct"] = out["avg_watch_secs"] / length * 100
@@ -573,9 +577,15 @@ def extract_retention(platform: str, metrics: dict | None, duration_secs=None) -
     if out["engaged_views"] is not None and views:
         out["stayed_pct"] = out["engaged_views"] / views * 100
 
+    # Checked on what will be shown: a division by a vanishing length or view
+    # count is not a figure, and 30 ms is 0 seconds once rounded.
     for key in ("avg_watch_secs", "watched_pct", "stayed_pct"):
         if out[key] is not None:
-            out[key] = round(out[key], 1)
+            out[key] = round(out[key], 1) if out[key] <= _MAX_READING else None
+    if not out["watched_pct"]:
+        out["watched_pct"] = None
+        if not out["avg_watch_secs"]:
+            out["avg_watch_secs"] = None
     for key in ("engaged_views", "reach", "saves"):
         if out[key] is not None:
             out[key] = int(out[key])
