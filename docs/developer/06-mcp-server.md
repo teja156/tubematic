@@ -637,8 +637,9 @@ outlined in red, so ink outside the box shows a box too small for the layout che
 
 `render_storybook_props(video_id)` renders the props a Storybook Atlas video's agent drew for it (the
 config's `customProps`, so `write_scene_config` comes first) on the book's paper and returns the
-picture after a JSON block. Each prop is drawn in every state, with its declared box outlined in red, a
-line under it saying whether the drawing fits the box, and the guide beside it at the same scale
+picture after a JSON block. Each prop has a row (two a row above four props): every state with its
+declared box outlined in red and a line under it saying whether the drawing fits the box, the guide
+beside it at the same scale, and its first state again on a night-navy swatch for the dark backdrops
 ([Storybook Atlas](10-scene-authoring.md#storybook-atlas)). It runs the same way as
 `render_bean_props`: `bean_preview.py::render_preview` with `script=STORYBOOK_SCRIPT` runs
 `renderer/remotion/storybook-tools/render-props.mjs` on software GL, under the same lock and

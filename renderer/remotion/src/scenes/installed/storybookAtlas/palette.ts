@@ -36,7 +36,7 @@ export const WOOD = "#8A6446";
 export const WOOD_DARK = "#5A4232";
 export const MOUSE = "#A99F92";
 
-/** The six garment colours a person can wear. */
+/** The garment colours a person can wear. The last two are light, for chapters on a dark backdrop. */
 export const GARMENT_COLORS = {
   ink: "#3B3A40",
   navy: "#34476A",
@@ -44,6 +44,8 @@ export const GARMENT_COLORS = {
   moss: "#5F7048",
   plum: "#6E4A63",
   ochre: "#B4893F",
+  cream: "#E3D6B8",
+  sky: "#9DB9D3",
 } as const;
 
 /** Skin tones: four flat picture-book tones. */

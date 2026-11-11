@@ -597,20 +597,23 @@ def _check_layout(where, f, here, guide, props, catalog, people, err) -> None:
     for k, (n1, x1, h1) in enumerate(standing):
         for n2, x2, h2 in standing[k + 1:]:
             if abs(x1 - x2) < h1 + h2:
-                err(f"{where}: at frame {f}, {n1} and {n2} stand in the same place; keep them "
-                    f"{h1 + h2} px apart.")
+                err(f"{where}: at frame {f}, {n1} (x {x1:g}) and {n2} (x {x2:g}) stand in the same place; keep "
+                    f"them {h1 + h2} px apart.")
                 return
         for p in floor:
             if x1 + h1 > p["box"][0] and x1 - h1 < p["box"][2]:
-                err(f"{where}: at frame {f}, {n1} stands inside {p['prop']}; stand beside it.")
+                err(f"{where}: at frame {f}, {n1} needs the floor from x {x1 - h1:g} to {x1 + h1:g}, which "
+                    f"{p['prop']} covers (x {p['box'][0]:g} to {p['box'][2]:g}); stand beside it.")
                 return
     # tags under things on the floor (names and prop tags) must not cover each other
     tags = [(w, s["x"], people[w]["name"]) for w, s in here.items() if s["visible"] and not s["walking"]]
     tags += [(p["prop"], p["x"], p["tag"]) for p in floor if p["tag"]]
     for k, (n1, x1, t1) in enumerate(tags):
         for n2, x2, t2 in tags[k + 1:]:
-            if abs(x1 - x2) < (tag_width(t1) + tag_width(t2)) / 2:
-                err(f"{where}: at frame {f}, the tags under {n1} and {n2} overlap; move them apart or shorten one.")
+            need = (tag_width(t1) + tag_width(t2)) / 2
+            if abs(x1 - x2) < need:
+                err(f"{where}: at frame {f}, the tags under {n1} and {n2} overlap: they need {need:g} px between "
+                    f"their middles and have {abs(x1 - x2):g}; move them apart or shorten one.")
                 return
     for p in wall:
         if not p["tag"]:

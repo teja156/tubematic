@@ -128,7 +128,7 @@ def test_the_example_passes():
     (lambda d: _ev(d, 0, "act").update(id="ghost"), "not on stage yet"),
     (lambda d: _ev(d, 0, "tag").update(on="ghost"), "not a prop on stage yet"),
     (lambda d: _ev(d, 0, "tag").update(text="x" * 25), "text of 1 to 24"),
-    (lambda d: _ev(d, 0, "guide").update(x=600), "stands inside relaycabinet"),
+    (lambda d: _ev(d, 0, "guide").update(x=600), "which relaycabinet covers (x 470 to 890)"),
     (lambda d: _ev(d, 0, "guide").update(pose="dance"), "pose must be one of"),
     (lambda d: _ev(d, 0, "guide").update(pose="walk1"), "pose must be one of"),
     (lambda d: _ev(d, 0, "guide").update(x=1050), "where the feet stop"),

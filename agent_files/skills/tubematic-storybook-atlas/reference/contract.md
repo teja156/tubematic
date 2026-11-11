@@ -77,7 +77,7 @@ The walking drawings are the scene's; a pose is what someone does once they arri
 | `face` | `none`, `moustache`, `beard` |
 | `hat` | `none`, `tophat`, `bowler`, `cap`, `bonnet` |
 | `garment` | `frockcoat`, `suit`, `dress`, `labcoat`, `overalls`, `waistcoat` |
-| `color` | `ink`, `navy`, `brick`, `moss`, `plum`, `ochre` |
+| `color` | `ink`, `navy`, `brick`, `moss`, `plum`, `ochre`, `cream`, `sky` |
 
 The guide's coats: `blue`, `sage`, `brick`, `plum`, `mustard`.
 
@@ -96,7 +96,7 @@ The guide's coats: `blue`, `sage`, `brick`, `plum`, `mustard`.
 | `factory` | a mill hall: high windows, iron columns, belts to a lathe and a press |
 | `maproom` | an explorer's map on the wall, a plan chest, a globe |
 
-On a dark backdrop dress people in light colours.
+On a dark backdrop dress people in the light colours, `cream` or `sky`.
 
 ## Props
 

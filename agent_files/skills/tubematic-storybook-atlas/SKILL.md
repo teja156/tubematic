@@ -81,6 +81,12 @@ or event is wrong. Fix every problem it lists, then write again.
 2. `get_timeline(video_id, include_words=True)`: `totalFrames`, `fps` and every word's
    `startFrame`/`endFrame`. Every frame you write comes from here.
 
+## What carries between chapters
+
+Each chapter starts with an empty stage except for the guide, who stands at x 210 when it opens. People
+and props do not carry over: a person's first event in a chapter walks them in again, and a prop that
+is still part of the story is placed again (`"enter": "fade"` makes it simply be there).
+
 ## Step 1 — chapters
 
 The script was written as a story in chapters (the problem, the attempt, the turn, what it changed).
@@ -107,7 +113,10 @@ them): `{"id": "ada", "name": "Ada Lovelace", "build": "short", "skin": "light",
 people for their time and work: a frock coat and top hat for a Victorian inventor, a lab coat for a
 chemist, overalls for a printer. They are picture-book figures recognised by their name tag and their
 clothes, never by their face. Give two people different garments or colours so they are told apart.
-On a dark backdrop (`nightsky`, `blueprint`), avoid the `ink` and `navy` colours.
+A person's `color` holds for the whole video, so plan it with the backdrops: on a dark backdrop
+(`nightsky`, `blueprint`) only the light colours `cream` and `sky` read well, and `ink` and `navy` all
+but disappear. Either dress someone who appears on a dark backdrop in `cream` or `sky`, or keep the
+dark-dressed people to the light chapters.
 
 ## Step 3 — events, timed to the words
 
@@ -123,9 +132,21 @@ On a dark backdrop (`nightsky`, `blueprint`), avoid the `ink` and `navy` colours
 | `morph` | ink dots swirl and become a thing or a word | `at`, `until`, `prop` or `word` |
 
 **Walking.** Everyone walks at 9 px a frame, so crossing the stage takes about 3 seconds. A walk starts
-on its word and the pose comes when it arrives. Plan where people stand before you write: the guide
-usually stays to one side (x 150 to 350), the people in the middle, the props beside them. Point a
-person or the guide at what the line is about (`pose: "point"` and `facing` towards it).
+on its word and the pose comes when it arrives. An `exit` walks off to the nearer edge at the same
+speed and takes no `x`. A new event for someone still walking starts from wherever they are on that
+frame. A walker faces the way they walk; once they stop they keep facing that way unless the event
+gives `facing`. List events in any order; two may share a frame.
+
+**Where things stand.** Only where people stand still is checked; walking past anyone is fine. On the
+floor line each thing takes a span centred on its `x`: a person x ± 80, the guide x ± 70, a floor prop
+its box width × `scale` (the lamp at scale 1 takes x ± 70). Spans of people, the guide and floor props
+must not overlap. A worked layout: the guide at 200 (130 to 270), a person at 380 (300 to 460), the
+relay cabinet at 700, scale 1 (490 to 910): nothing touches. The tags under people and floor props
+share one row: each is about 14 px a character plus 32, centred on its owner, and two must not touch
+(Grace Hopper's 12-character tag is about 200 px wide). A wall prop's tag hangs 12 px under the
+prop's base. Plan where people stand before you write: the guide usually stays to one side (x 150 to
+350), the people in the middle, the props beside them. Point a person or the guide at what the line
+is about (`pose: "point"` and `facing` towards it).
 
 **Props.** `x` is the middle of the prop's base in frame pixels. Floor props stand on the floor line
 (y 1344); wall props hang with their base at `y`. `scale` (0.6 to 1.4) sizes it; `enter` is `pop` (the
@@ -135,14 +156,29 @@ book opened, a lock undone), `cycle` runs its drawings for 1.6 s (a telegraph ta
 flickering), `glow` puts a warm halo behind it, and `wobble`, `bounce`, `shake`, `spin`, `swing` and
 `pulse` move it once.
 
-**Plates.** At most one or two a video, on the story's high points: the constellation for the name
-the story ends on (`"words": ["BUG"], "then": ["DEBUGGING"]`), the gauge for the one number the
-narration says, the morph for the moment a thing appears or is found. Time `until` to the end of the
-line that explains it.
+**Plates.** Use one or two a video, on the story's high points: the constellation for the name the
+story ends on, the gauge for the one number the narration says, the morph for the moment a thing
+appears or is found. Time `until` to the end of the line that explains it. A plate must close (its
+`until` plus 10 frames) at least 10 frames before its chapter ends, and nothing new starts on stage
+while it is open (a walk already under way finishes behind it).
 
-**Pacing.** Something new every 2 to 4 seconds; the tool refuses a stretch longer than 4. Build a
-chapter up: the place (the plaque), a prop, a person, a reaction, a tag. Do not put things on stage
-that the narration does not name.
+- **Landing the last word.** The ending name is usually said in the last seconds, too late to open a
+  2.5-second plate on it. Open the constellation a few seconds earlier, on the sentence that leads to
+  it, with a word that sets it up, and give the name as `then` with `thenAt` on the word itself
+  (`"words": ["BUG"], "then": ["DEBUGGING"]`). `then` replaces the first words; the same stars redraw
+  it. Write words in capitals or not: they are drawn in capitals.
+- **The gauge.** `from` is where the needle starts (often 0), `to` where it settles, `max` the top of
+  the dial: pick a round number a little above `to`. `danger` marks a red band from there to `max`, for
+  a limit. A number with no natural top (a ratio, "three times longer") is better said than gauged.
+
+**Pacing.** Something new every 2 to 4 seconds; the tool refuses a stretch longer than 4. Every event
+counts (a pose change, a tag, an act), and so do a walk's arrival, a plate closing and a
+constellation's `then`. Build a chapter up: the place (the plaque), a prop, a person, a reaction, a
+tag. Do not put things on stage that the narration does not name.
+
+**A push.** The portal prop (a door, the porthole, the window, the book, the relay cabinet, or one of
+yours with a `portal`) must have landed (10 frames after it appears) at least 14 frames before the
+chapter it leads into starts; it need not be switched open first.
 
 ## Step 3b — a prop the library does not have
 
@@ -156,17 +192,24 @@ relay, Babbage's engine, a particular instrument. Keep it to a few per video.
    and the door), `storybookAtlas/ink` (the `Sh` shape and path helpers) and
    `storybookAtlas/palette`. `reference/example-prop-moth.tsx` is a finished one.
 2. Draw it the same way: one component that takes `{ state }` and draws with its base at (0, 0),
-   x from -w/2 to w/2 and y from -h to 0, ending 3 px inside the box. Use `Sh` for every shape (a flat
-   fill, an ink outline, pencil hatching), colours from the palette, and big simple shapes that read
-   at phone size. Write no text in it: fonts do not load inside a prop.
+   x from -w/2 to w/2 and y from -h to 0, ending 3 px inside the box. Use `Sh` for every filled shape
+   (a flat fill, an ink outline, pencil hatching) and plain `<path>`, `<circle>` and `<line>` for ink
+   lines and dots, colours from the palette, and big simple shapes that read at phone size. Write no
+   text in it: fonts do not load inside a prop. A seeded random sequence of your own is fine;
+   `Math.random` and the clock are not. The library's small helpers (gear outlines, rods) are not
+   exported: copy one into your file when you need it. A prop that appears on a dark backdrop needs a
+   light outline or light parts somewhere, or it disappears.
 3. Write it with `write_scene_file(video_id, "prop-<name>", tsx)` and list it in `customProps`:
    `{"id": "moth", "src": "<the src write_scene_file returned>", "box": [300, 220], "place": "wall",
    "states": 1, "acts": ["wobble", "glow"]}` (add `"portal": [x, y]` if the camera should be able to
    push through it). Its `id` is then used like a library prop's.
-4. After `write_scene_config`, call `render_storybook_props(video_id)` and look at the picture. A red
-   "OVER" line under a prop means the drawing leaves its box and will be cut off: raise the box or
-   shrink the drawing. A drawing that does not read as the thing at a glance, or does not sit with the
-   guide beside it: redraw it. Rewrite the file and call `render_storybook_props` again; three looks
+4. After `write_scene_config`, call `render_storybook_props(video_id)` and look at the picture. Each of
+   your props has a row (two a row when there are more than four): every state side by side on the
+   paper inside its red box, the guide at the same scale on the left for size, and the first state
+   again on a night-navy swatch on the right. A red "OVER" line under a prop means the drawing leaves
+   its box and will be cut off: raise the box or shrink the drawing. A drawing that does not read as
+   the thing at a glance, sits badly beside the guide, or vanishes on the navy when the prop appears on
+   a dark backdrop: redraw it. Rewrite the file and call `render_storybook_props` again; three looks
    at most. `validate_job` typechecks the file and checks it against the rules above again.
 
 ## Step 4 — captions and mascot
@@ -177,7 +220,7 @@ track as the mascot skill describes, small and to one side, away from the guide 
 ## Step 5 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` and `fps` from the timeline, `"canvas":
-   "light"` (or leave it out) and the one scene. Fix every problem it reports. If the video has props
+   "light"` (or leave it out), `"sfx": []` (this style has no sound effects) and the one scene. Fix every problem it reports. If the video has props
    of your own, look at them now with `render_storybook_props` (Step 3b).
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures the
    plaque, the tags and the plates' text in a browser; an overlap is a measurement, so move or shorten
