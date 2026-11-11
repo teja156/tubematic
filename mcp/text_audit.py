@@ -55,6 +55,7 @@ import storybook_atlas  # chapter windows for the whole-video Storybook Atlas sc
 import terminal_doc  # beat windows for the whole-video Terminal Doc scene (TMDEV-199)
 import under_the_hood  # plate windows for the whole-video Under the Hood scene (TMDEV-201)
 import case_file_story  # beat windows for the whole-video Case File Story scene (TMDEV-202)
+import picture_checks  # which style drew a config, for the mixed-scenes first-frame pass (TMDEV-215)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
 
@@ -117,6 +118,25 @@ SAFE_ZONE_TOLERANCE_PX = 2.0
 # and is not in this code path at all. Raising it would do nothing for the audit
 # while loosening the render's own guard.
 TEXT_AUDIT_TIMEOUT_SECS = 180
+
+# The mixed-scenes first-frame pass (TMDEV-215). The first frame should show
+# the subject of the first sentence, already moving. Text is not enough (the
+# captions carry the words), and neither is the canvas. The probe lists the
+# scene layer's pictures at frame 0 and at FRAME0_MOTION_FRAME; these decide.
+FRAME0_MOTION_FRAME = 6
+# A picture counts as a subject from this share of the frame's area, seen at
+# this opacity or more: smaller or fainter is a decoration, not what the
+# viewer looks at.
+FRAME0_MIN_AREA = 0.01
+FRAME0_MIN_OPACITY = 0.2
+# A colour or gradient fill this large, or an SVG rect or a div filling it, is
+# the scene's backdrop, not a subject.
+FRAME0_BACKDROP_AREA = 0.9
+# What counts as moving between the two frames: a box shifting or resizing by
+# more than this many pixels, or an opacity change past this much.
+FRAME0_MOVE_PX = 0.5
+FRAME0_MOVE_OPACITY = 0.02
+_FRAME_AREA = FRAME_WIDTH * FRAME_HEIGHT
 
 # Longest text excerpt echoed into a warning line. Long enough that a headline
 # from a real scene survives intact — the excerpt is how the agent finds the
@@ -498,6 +518,56 @@ def _pair_key(scene: int, a: dict, b: dict) -> tuple:
     return (scene, *sorted((_excerpt(a), _excerpt(b))))
 
 
+def frame0_pass(scene_config: dict) -> dict | None:
+    """The extra pass that measures a mixed-scenes video's first frames, or
+    None for any other video (a data-driven style's first frame is checked
+    from its data by picture_checks). Kept out of plan_passes, whose plans
+    the style tests pin."""
+    if picture_checks.style_of(scene_config) != picture_checks.MIXED:
+        return None
+    return {"scene": 0, "first": 0, "step": FRAME0_MOTION_FRAME, "count": 2, "kind": "frame0"}
+
+
+def _is_backdrop(v: dict) -> bool:
+    share = (v.get("width", 0) * v.get("height", 0)) / _FRAME_AREA
+    return share >= FRAME0_BACKDROP_AREA and (v.get("kind") == "background" or v.get("tag") in ("rect", "div"))
+
+
+def _subjects(visuals: list[dict]) -> list[dict]:
+    return [v for v in visuals
+            if v.get("opacity", 0) >= FRAME0_MIN_OPACITY
+            and (v.get("width", 0) * v.get("height", 0)) / _FRAME_AREA >= FRAME0_MIN_AREA
+            and not _is_backdrop(v)]
+
+
+def _moved(a: dict, b: dict) -> bool:
+    return (any(abs(a.get(k, 0) - b.get(k, 0)) > FRAME0_MOVE_PX for k in ("x", "y", "width", "height"))
+            or abs(a.get("opacity", 0) - b.get("opacity", 0)) > FRAME0_MOVE_OPACITY)
+
+
+def frame0_findings(pass_result: dict, scene_config: dict) -> list[str]:
+    """Warnings for a mixed-scenes video's first frame: nothing on it but text
+    or a backdrop, or a picture that stands still. Silent when the frames
+    were not measured (the missing-frame warning already says so)."""
+    frames = {f.get("frame"): f.get("visuals") for f in pass_result.get("frames") or []}
+    first, later = frames.get(0), frames.get(FRAME0_MOTION_FRAME)
+    if first is None:
+        return []
+    scenes = scene_config.get("scenes") or []
+    label = _scene_label(scenes[0]) if scenes else "scene 0"
+    where = f"First frame (scene 0, {label})"
+    if not _subjects(first):
+        return [f"{where}: nothing is on screen at frame 0 but text or a backdrop. The first frame "
+                "should show what the first sentence names (a picture, a diagram already building, "
+                "a figure mid-action), never a title card or an empty frame that fills in."]
+    if later is None or any(v.get("tag") in ("canvas", "video") for v in first + later):
+        return []  # a canvas or a video can move without its box moving
+    if len(first) == len(later) and not any(_moved(a, b) for a, b in zip(first, later)):
+        return [f"{where}: nothing moves between frame 0 and frame {FRAME0_MOTION_FRAME}. Start the "
+                "first picture already moving (a push in, a line drawing, an element arriving)."]
+    return []
+
+
 def summarise(driver_output: dict, scene_config: dict, mascot_cues: list | None = None) -> list[str]:
     """Collapse per-frame measurements into one warning per colliding pair.
 
@@ -509,8 +579,14 @@ def summarise(driver_output: dict, scene_config: dict, mascot_cues: list | None 
     zones: dict[tuple, dict] = {}
     under_mascot: dict[tuple, dict] = {}
 
+    first_frame: list[str] = []
     for pass_result in driver_output.get("passes") or []:
         scene_index = pass_result.get("scene")
+        if pass_result.get("kind") == "frame0":
+            # Frame 0 is mid-entrance for text by design, so the text checks
+            # skip it; this pass is for the pictures.
+            first_frame += frame0_findings(pass_result, scene_config)
+            continue
         for frame_result in pass_result.get("frames") or []:
             frame = frame_result.get("frame")
             elements = frame_result.get("elements") or []
@@ -529,7 +605,7 @@ def summarise(driver_output: dict, scene_config: dict, mascot_cues: list | None 
                 if key not in zones:
                     zones[key] = {**hit, "scene": scene_index, "frame": frame}
 
-    warnings: list[str] = []
+    warnings: list[str] = list(first_frame)
     for hit in sorted(worst.values(), key=lambda h: -h["fraction"]):
         scene = scenes[hit["scene"]] if hit["scene"] < len(scenes) else {}
         a, b = hit["a"], hit["b"]
@@ -710,6 +786,9 @@ def audit_text_layout(video_id: str, scene_config: dict, scene_config_path: Path
         passes, notes = plan_passes(scene_config)
         if not passes:
             return notes
+        extra = frame0_pass(scene_config)
+        if extra:
+            passes = passes + [extra]
 
         public_dir = _stage(video_id, remotion_dir, scene_config_path,
                             timeline_path, audio_path)
@@ -718,6 +797,7 @@ def audit_text_layout(video_id: str, scene_config: dict, scene_config_path: Path
             "timelinePath": f"/public/{video_id}/timeline.json",
             "audioPath": f"/public/{video_id}/audio.mp3",
             "passes": passes,
+            "visualFrames": [0, FRAME0_MOTION_FRAME] if extra else [],
             "browserExecutable": os.getenv("PUPPETEER_EXECUTABLE_PATH") or None,
         })
         return notes + summarise(output, scene_config, mascot_cues)

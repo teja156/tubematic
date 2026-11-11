@@ -172,7 +172,78 @@ const inkRect = (el: Element): DOMRect => {
   return el.getBoundingClientRect();
 };
 
-const measure = (frame: number): string => {
+/**
+ * A picture element of the scene layer, for the first-frame pass (TMDEV-215).
+ * kind "picture" is an image, a canvas, a video, an SVG shape or an element
+ * whose background is an image; "background" is an element filled with a
+ * colour or a gradient. Python decides which of them is a subject.
+ */
+interface MeasuredVisual {
+  tag: string;
+  kind: "picture" | "background";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+}
+
+const PICTURE_TAGS = new Set([
+  "img", "canvas", "video", "path", "circle", "rect", "ellipse", "line", "polyline", "polygon", "image", "use",
+]);
+
+/** How long a picture frame must be quiet before its last measurement. */
+const VISUAL_SETTLE_MS = 300;
+
+/** The largest pictures reported per frame, so a scene drawn from thousands
+ *  of SVG paths still yields a short line. */
+const MAX_VISUALS = 300;
+
+const colourAlpha = (colour: string): number => {
+  if (!colour || colour === "transparent") {
+    return 0;
+  }
+  const m = colour.match(/rgba?\(([^)]+)\)/);
+  if (!m) {
+    return 1;
+  }
+  const parts = m[1].split(/[\s,/]+/).filter(Boolean);
+  return parts.length >= 4 ? Number.parseFloat(parts[3]) : 1;
+};
+
+const measureVisuals = (): MeasuredVisual[] => {
+  const out: MeasuredVisual[] = [];
+  document.querySelectorAll('[data-tm-layer="scene"]').forEach((layer) => {
+    layer.querySelectorAll("*").forEach((el) => {
+      const tag = el.tagName.toLowerCase();
+      let kind: MeasuredVisual["kind"] | null = null;
+      if (PICTURE_TAGS.has(tag)) {
+        kind = "picture";
+      } else {
+        const style = window.getComputedStyle(el);
+        const image = style.backgroundImage;
+        if (image && image !== "none") {
+          kind = image.includes("url(") ? "picture" : "background";
+        } else if (colourAlpha(style.backgroundColor) > 0) {
+          kind = "background";
+        }
+      }
+      if (!kind) {
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) {
+        return;
+      }
+      const { opacity } = accumulateFromAncestors(el);
+      out.push({ tag, kind, x: rect.x, y: rect.y, width: rect.width, height: rect.height, opacity });
+    });
+  });
+  out.sort((a, b) => b.width * b.height - a.width * a.height);
+  return out.slice(0, MAX_VISUALS);
+};
+
+const measure = (frame: number, visualFrames: number[]): string => {
   const all = Array.from(document.querySelectorAll("*"));
   const leaves: Element[] = all.filter(isLeafTextElement);
   // Document-order position of each measured element, so ancestor/descendant
@@ -214,10 +285,11 @@ const measure = (frame: number): string => {
     });
   });
 
-  return `${PROBE_LOG_PREFIX}${JSON.stringify({ frame, elements })}`;
+  const visuals = visualFrames.includes(frame) ? measureVisuals() : undefined;
+  return `${PROBE_LOG_PREFIX}${JSON.stringify({ frame, elements, visuals })}`;
 };
 
-export const TextLayoutProbe: React.FC = () => {
+export const TextLayoutProbe: React.FC<{ visualFrames?: number[] }> = ({ visualFrames = [] }) => {
   const frame = useCurrentFrame();
   const [fontHandle] = useState(() => delayRender("Text audit: waiting for fonts"));
   const [fontsReady, setFontsReady] = useState(false);
@@ -249,7 +321,25 @@ export const TextLayoutProbe: React.FC = () => {
   // its dynamic import() and calls setComponent, which triggers another commit,
   // so the final line for a frame always reflects the fully-loaded scene.
   useLayoutEffect(() => {
-    console.log(measure(frame));
+    console.log(measure(frame, visualFrames));
+    if (!visualFrames.includes(frame)) {
+      return;
+    }
+    // A picture frame is measured again once the page has been quiet for
+    // VISUAL_SETTLE_MS, holding the frame open until then. The probe only
+    // re-renders with the frame, so a scene whose lazy import commits after
+    // the probe's last commit (always the case on the first frame rendered)
+    // would otherwise be measured as an empty layer. Each new commit restarts
+    // the wait; the last line for the frame is the one the driver keeps.
+    const handle = delayRender(`Text audit: settling frame ${frame}`);
+    const timer = setTimeout(() => {
+      console.log(measure(frame, visualFrames));
+      continueRender(handle);
+    }, VISUAL_SETTLE_MS);
+    return () => {
+      clearTimeout(timer);
+      continueRender(handle);
+    };
   });
 
   // fontsReady is read so the fonts.ready resolution produces a commit (and

@@ -839,3 +839,94 @@ def test_audit_is_skipped_when_the_setting_is_off(db, tmp_path, monkeypatch):
     db("vid-1")
     server.validate_job("vid-1")
     assert called == []
+
+
+# ── The mixed-scenes first-frame pass (TMDEV-215) ──────────────────────────
+
+MIXED_CONFIG = {"totalFrames": 300, "scenes": [
+    {"type": "generated", "src": "vid/hook", "startFrame": 0, "durationInFrames": 300}]}
+
+
+def vis(tag, x, y, w, h, kind="picture", opacity=1.0):
+    return {"tag": tag, "kind": kind, "x": x, "y": y, "width": w, "height": h, "opacity": opacity}
+
+
+def frame0_output(at0, at6, text=None):
+    return {"passes": [{"scene": 0, "kind": "frame0", "requestedFrames": [0, 6], "frames": [
+        {"frame": 0, "elements": text or [], "visuals": at0},
+        {"frame": 6, "elements": text or [], "visuals": at6}]}], "errors": []}
+
+
+BACKDROP = vis("div", 0, 0, 1080, 1920, kind="background")
+
+
+def test_the_first_frame_pass_is_added_for_a_mixed_video_only():
+    assert text_audit.frame0_pass(MIXED_CONFIG) == {"scene": 0, "first": 0, "step": 6, "count": 2,
+                                                   "kind": "frame0"}
+    whole = {"scenes": [{"src": "SystemFlow", "props": {}}]}
+    assert text_audit.frame0_pass(whole) is None
+    # the plan the style tests pin is untouched by it
+    passes, _ = text_audit.plan_passes(MIXED_CONFIG)
+    assert all(p.get("kind") is None for p in passes) and all(p["first"] > 0 for p in passes)
+
+
+def test_a_picture_already_moving_on_frame_0_is_quiet():
+    out = frame0_output([BACKDROP, vis("img", 0, 0, 1080, 1920)], [BACKDROP, vis("img", -4, -7, 1088, 1934)])
+    assert text_audit.summarise(out, MIXED_CONFIG) == []
+
+
+def test_a_title_card_on_a_backdrop_is_warned():
+    title = [el(0, 200, 800, 600, 120, text="WHY YOUR PHONE LIES", font_size=96)]
+    gradient = vis("div", 0, 0, 1080, 1920, kind="background")
+    out = frame0_output([gradient], [gradient], text=title)
+    warnings = text_audit.summarise(out, MIXED_CONFIG)
+    assert len(warnings) == 1 and "nothing is on screen at frame 0 but text or a backdrop" in warnings[0]
+    assert warnings[0].startswith("First frame (scene 0")
+
+
+def test_a_faint_or_tiny_picture_is_not_a_subject():
+    faint = vis("img", 0, 0, 1080, 1920, opacity=0.05)
+    tiny = vis("path", 10, 10, 30, 30)
+    assert "nothing is on screen" in text_audit.summarise(frame0_output([faint, tiny], [faint, tiny]),
+                                                          MIXED_CONFIG)[0]
+
+
+def test_a_full_frame_svg_rect_is_a_backdrop_but_a_full_frame_photo_is_a_subject():
+    rect = vis("rect", 0, 0, 1080, 1920)
+    assert "nothing is on screen" in text_audit.summarise(frame0_output([rect], [rect]), MIXED_CONFIG)[0]
+    photo = vis("img", 0, 0, 1080, 1920)
+    assert "nothing moves" in text_audit.summarise(frame0_output([photo], [photo]), MIXED_CONFIG)[0]
+
+
+def test_a_picture_that_stands_still_is_warned():
+    box = vis("div", 300, 700, 480, 480, kind="background")
+    warnings = text_audit.summarise(frame0_output([BACKDROP, box], [BACKDROP, dict(box)]), MIXED_CONFIG)
+    assert len(warnings) == 1 and "nothing moves between frame 0 and frame 6" in warnings[0]
+
+
+def test_something_arriving_or_fading_counts_as_moving():
+    box = vis("div", 300, 700, 480, 480, kind="background")
+    arrow = vis("path", 400, 500, 200, 120)
+    assert text_audit.summarise(frame0_output([box], [box, arrow]), MIXED_CONFIG) == []
+    assert text_audit.summarise(frame0_output([box], [dict(box, opacity=0.9)]), MIXED_CONFIG) == []
+
+
+def test_a_canvas_is_assumed_to_move():
+    # A 3D or a 2D canvas redraws its pixels without its box moving.
+    canvas = vis("canvas", 0, 300, 1080, 1080)
+    assert text_audit.summarise(frame0_output([canvas], [dict(canvas)]), MIXED_CONFIG) == []
+
+
+def test_the_first_frame_pass_skips_the_text_checks():
+    # Text is mid-entrance at frame 0 by design; two overlapping boxes there
+    # are not a finding.
+    overlap = [el(0, 100, 100, 400, 100, text="a"), el(1, 120, 110, 400, 100, text="b")]
+    photo = vis("img", 0, 0, 1080, 1920)
+    out = frame0_output([photo], [dict(photo, x=-2)], text=overlap)
+    assert text_audit.summarise(out, MIXED_CONFIG) == []
+
+
+def test_an_unmeasured_first_frame_says_nothing_beyond_the_missing_frame():
+    out = {"passes": [{"scene": 0, "kind": "frame0", "requestedFrames": [0, 6], "frames": []}], "errors": []}
+    warnings = text_audit.summarise(out, MIXED_CONFIG)
+    assert len(warnings) == 1 and "could not measure scene 0" in warnings[0]
