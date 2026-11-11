@@ -741,7 +741,10 @@ page body clips horizontal overflow.
 - A field shows a new stored value only when you have typed nothing it has not sent, no save of it
   is on its way, and no refusal is shown (`mayFollow`). An answer to an older save would otherwise
   put an older value in the box while you type. A Preferences save waiting for its second does not
-  hide the outcome of one already on its way.
+  hide the outcome of one already on its way, and an earlier save answering while newer text waits
+  puts the field back to waiting.
+- A text field typed back to its stored value clears its refusal, and a focus and blur alone does
+  not send a refused value again (for the Discord webhook that would run its check each time).
 - A switch or a picker shows its new value while the save is on its way, and goes back to the
   stored value if the API refuses it. A typed field keeps what was typed, red, with the reason
   beside it, so the entry can be corrected while the stored value stays in force. An out-of-range
@@ -750,9 +753,11 @@ page body clips horizontal overflow.
   that is not in the roster as empty. Removing a voice offers **Undo**, which puts that one voice
   back into the roster as it is then, so a voice added since stays. It is the default again only if
   no other voice became the default meanwhile. A new id on the default voice moves the default with
-  it.
+  it. The add row empties only once a new voice is stored, so a refused one keeps what was typed.
 - Turning Publishing on opens a confirmation: with Auto Pilot on, it starts scheduling posts that
-  nobody approves one by one. Turning it off saves at once.
+  nobody approves one by one. The dialog reads `GET /autopilot` when it opens, because Auto Pilot
+  saves through its own route and the settings loaded with the page can be out of date about it.
+  Turning Publishing off saves at once.
 - Switching tabs never asks, because nothing is ever left unsaved. It clears the refusal messages,
   because their fields leave the screen with the tab.
 - The input components and `SaveStatus` are declared at module scope. Declared inside the page,
@@ -833,7 +838,8 @@ status beside the field that changed. What the settings mean is in
   read from the newest document sent (`current`), so a change made while a confirmed "on" is still
   on its way does not ask again, and **Cancel** does not undo a change still on its way.
 - Switching the gap between minutes and hours shows the same gap in the other unit and saves
-  nothing. Hours may carry a fraction.
+  nothing. Hours may carry a fraction. An answer to another save does not replace a gap being
+  typed, and does not switch the unit you picked when the gap is the same.
 
 - The warning stays on screen above the switch and is repeated in the confirmation. Its wording is
   `lib/autoPilot.ts::AUTO_PILOT_DISCLAIMER`.

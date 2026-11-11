@@ -173,6 +173,28 @@ function useBaseline<T>(value: T, status?: SaveState) {
   };
 }
 
+/** Commits a text field. Typed back to the stored value: nothing to send, and
+ *  a refusal shown for it no longer applies. A value whose refusal is on
+ *  screen is not sent again by a mere focus and blur (for the Discord webhook
+ *  that would run its check again each time). */
+function commitText(
+  v: string,
+  baseline: { current: () => string; mark: (v: string) => void },
+  lastSent: { current: string | null },
+  status: SaveState | undefined,
+  onCommit: (v: string) => void,
+  onSame?: () => void,
+) {
+  if (v === baseline.current()) {
+    onSame?.();
+    return;
+  }
+  if (status?.state === "error" && v === lastSent.current) return;
+  baseline.mark(v);
+  lastSent.current = v;
+  onCommit(v);
+}
+
 /** Whether a field may show the stored value now: not while you have typed
  *  something not yet committed, not while a save of it is on its way (an
  *  older answer would put an older value in the box), and not while a refusal
@@ -265,16 +287,19 @@ function SecretInput({
   testId,
   status,
   onCommit,
+  onSame,
 }: {
   value: string;
   testId: string;
   status?: SaveState;
   onCommit: (v: string) => void;
+  onSame?: () => void;
 }) {
   const [local, setLocal] = useState(value);
   const [focused, setFocused] = useState(false);
   const baseline = useBaseline(value, status);
   const dirty = useRef(false);
+  const lastSent = useRef<string | null>(null);
 
   useEffect(() => {
     if (mayFollow(dirty.current, baseline.inFlight(), status)) setLocal(value);
@@ -283,9 +308,7 @@ function SecretInput({
   function commit() {
     setFocused(false);
     dirty.current = false;
-    if (local.trim() === baseline.current()) return;
-    baseline.mark(local.trim());
-    onCommit(local.trim());
+    commitText(local.trim(), baseline, lastSent, status, onCommit, onSame);
   }
 
   return (
@@ -329,15 +352,18 @@ function TextInput({
   testId,
   status,
   onCommit,
+  onSame,
 }: {
   value: string;
   testId: string;
   status?: SaveState;
   onCommit: (v: string) => void;
+  onSame?: () => void;
 }) {
   const [local, setLocal] = useState(value);
   const baseline = useBaseline(value, status);
   const dirty = useRef(false);
+  const lastSent = useRef<string | null>(null);
 
   useEffect(() => {
     if (mayFollow(dirty.current, baseline.inFlight(), status)) setLocal(value);
@@ -345,9 +371,7 @@ function TextInput({
 
   function commit() {
     dirty.current = false;
-    if (local.trim() === baseline.current()) return;
-    baseline.mark(local.trim());
-    onCommit(local.trim());
+    commitText(local.trim(), baseline, lastSent, status, onCommit, onSame);
   }
 
   return (
@@ -419,6 +443,13 @@ function PreferencesEditor({
       latest.current = value;
     }
   }, [value, status?.state]);
+
+  // An earlier save answering while newer text waits for its second must not
+  // read as all saved: the field goes back to waiting (and the page keeps its
+  // leave-page prompt). A refusal still shows as it is.
+  useEffect(() => {
+    if (status?.state === "saved" && unsent.current) onWaiting();
+  }, [status?.state]);
 
   function flush() {
     if (timer.current) {
@@ -563,6 +594,9 @@ function SettingsBody() {
   // refused change drops out of here and the stored value shows again.
   const [optimistic, setOptimistic] = useState<Partial<Settings>>({});
   const [confirmPublishing, setConfirmPublishing] = useState(false);
+  // Whether Auto Pilot is on, read when the Publishing confirmation opens;
+  // null until then, or if the read fails (the loaded settings then decide).
+  const [autoPilotOn, setAutoPilotOn] = useState<boolean | null>(null);
   const statuses = useSaveStatus();
   const enqueue = useSerialQueue();
   const [tab, setTab] = useState<TabKey>(TABS[0].key);
@@ -671,8 +705,12 @@ function SettingsBody() {
       onInvalid: (message: string) => statuses.fail(key, message),
       // Typed back to what is stored: a refusal no longer applies. A save
       // still on its way keeps its status.
-      onSame: () => { if (statuses.get(key)?.state === "error") statuses.clear(key); },
+      onSame: () => clearError(key),
     };
+  }
+
+  function clearError(key: string) {
+    if (statuses.get(key)?.state === "error") statuses.clear(key);
   }
 
   /** A switch or picker: saved on change, shown at once, snapped back if refused. */
@@ -683,23 +721,35 @@ function SettingsBody() {
   function togglePublishing() {
     // Turning publishing on lets approved videos be posted (and, with Auto
     // Pilot on, scheduled unattended), so it is confirmed first. Off saves at once.
-    if (val("publishing_enabled")) choose("publishing_enabled", false);
-    else setConfirmPublishing(true);
+    if (val("publishing_enabled")) {
+      choose("publishing_enabled", false);
+      return;
+    }
+    setConfirmPublishing(true);
+    // Auto Pilot saves through its own route, so the settings loaded with the
+    // page can be out of date about it; the dialog's warning reads it fresh.
+    setAutoPilotOn(null);
+    apiFetch("/autopilot")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setAutoPilotOn(b && typeof b.enabled === "boolean" ? b.enabled : null))
+      .catch(() => {});
   }
 
-  function saveVoices(voices: Voice[], defaultVoiceId: string, removed?: RemovedVoice) {
+  function saveVoices(voices: Voice[], defaultVoiceId: string, removed?: RemovedVoice): Promise<boolean> {
     // The roster and the default go together: a default that is not in the
     // roster reads back as "" (TMDEV-51), so splitting them could blank it.
-    void save(
+    return save(
       { elevenlabs_voices: voices, elevenlabs_voice_id: defaultVoiceId },
       "voices",
       { optimistic: true },
     ).then((ok) => {
-      if (!ok || removed === undefined) return;
-      push("success", `Removed voice "${removed.voice.name}".`, {
-        label: "Undo",
-        onClick: () => restoreVoice(removed),
-      });
+      if (ok && removed !== undefined) {
+        push("success", `Removed voice "${removed.voice.name}".`, {
+          label: "Undo",
+          onClick: () => { void restoreVoice(removed); },
+        });
+      }
+      return ok;
     });
   }
 
@@ -1185,6 +1235,7 @@ function SettingsBody() {
             testId={`input-${key.replace(/_/g, "-")}`}
             status={statuses.get(key)}
             onCommit={(v) => { void save({ [key]: v } as Partial<Settings>, key); }}
+            onSame={() => clearError(key)}
           />
         </Row>
       ))}
@@ -1242,6 +1293,7 @@ function SettingsBody() {
             value={val("discord_webhook_url")}
             testId="input-discord-webhook-url"
             status={statuses.get("discord_webhook_url")}
+            onSame={() => clearError("discord_webhook_url")}
             onCommit={(v) => {
               void save({ discord_webhook_url: v }, "discord_webhook_url",
                         { label: v ? "Checking the webhook…" : undefined });
@@ -1257,6 +1309,7 @@ function SettingsBody() {
             testId="input-dashboard-base-url"
             status={statuses.get("dashboard_base_url")}
             onCommit={(v) => { void save({ dashboard_base_url: v }, "dashboard_base_url"); }}
+            onSame={() => clearError("dashboard_base_url")}
           />
         </Row>
 
@@ -1415,7 +1468,7 @@ function SettingsBody() {
           <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--dim)", margin: 0 }}>
             Approved videos get a Publish button, and each publish you start asks you first.
           </p>
-          {s.auto_pilot_enabled && (
+          {(autoPilotOn ?? s.auto_pilot_enabled) && (
             <p data-testid="publishing-confirm-auto-pilot"
                style={{ fontSize: 13, lineHeight: 1.6, color: "var(--amber)", margin: 0 }}>
               Auto Pilot is on: videos it approves in its projects start being scheduled to post,
@@ -1559,7 +1612,8 @@ function VoicesEditor({
 }: {
   voices: Voice[];
   defaultVoiceId: string;
-  onSave: (voices: Voice[], defaultVoiceId: string, removed?: RemovedVoice) => void;
+  /** Resolves to whether the change was stored. */
+  onSave: (voices: Voice[], defaultVoiceId: string, removed?: RemovedVoice) => Promise<boolean>;
   saving: boolean;
   inputStyle: React.CSSProperties;
 }) {
@@ -1586,10 +1640,14 @@ function VoicesEditor({
 
   function addVoice() {
     if (!newName.trim() || !newId.trim() || voices.length >= MAX_VOICES) return;
-    onSave([...voices, { name: newName.trim(), voice_id: newId.trim(), model_id: newModel }],
-           defaultVoiceId);
-    setNewName("");
-    setNewId("");
+    // The row empties only once the voice is stored: refused, what you typed
+    // (a long ElevenLabs id) is still there to correct.
+    void onSave([...voices, { name: newName.trim(), voice_id: newId.trim(), model_id: newModel }],
+                defaultVoiceId).then((ok) => {
+      if (!ok) return;
+      setNewName("");
+      setNewId("");
+    });
   }
 
   return (
@@ -1688,13 +1746,15 @@ function AgentWeight({
   agent: Agent;
   disabled: boolean;
   inputStyle: React.CSSProperties;
-  onSave: (n: number) => void;
+  /** Resolves once the save is over, whatever became of it. */
+  onSave: (n: number) => Promise<unknown>;
   onInvalid: (message: string) => void;
   /** Typed back to the stored weight: a refusal shown for it no longer applies. */
   onSame: () => void;
 }) {
   const [local, setLocal] = useState(String(agent.weight));
-  // The weight sent and not yet reloaded, so Enter then blur sends it once.
+  // The weight on its way, so Enter then blur sends it once. Cleared when
+  // that save is over, so the same number can be sent again after a refusal.
   const sent = useRef<number | null>(null);
   useEffect(() => { setLocal(String(agent.weight)); sent.current = null; }, [agent.weight]);
 
@@ -1708,12 +1768,13 @@ function AgentWeight({
       return;
     }
     if (n === agent.weight) {
+      sent.current = null;
       onSame();
       return;
     }
     if (n === sent.current) return;
     sent.current = n;
-    onSave(n);
+    void onSave(n).finally(() => { if (sent.current === n) sent.current = null; });
   }
 
   return (

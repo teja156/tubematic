@@ -172,13 +172,19 @@ Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-setti
   asks before closing only while one is on its way, and switching tabs never asks.
 - Enter followed by blur sends one save and keeps its outcome. A field typed back to its stored
   value while another save is on its way is still sent, and an answer to an older save does not
-  overwrite what is being typed. A new id on the default voice moves the default with it.
+  overwrite what is being typed. A new id on the default voice moves the default with it, and a
+  refused new voice keeps what was typed in the add row.
+- A text field typed back to its stored value clears its refusal, and a focus and blur does not
+  send the refused value again. A refused agent weight can be sent again.
+- The Publishing confirmation reads Auto Pilot fresh, so its warning shows after Auto Pilot was
+  turned on in the same visit.
 - Turning Publishing on asks first, and Cancel saves nothing; turning it off does not ask.
   Removing a voice offers an **Undo** that puts that voice back and keeps a voice added since.
 - The Preferences text saves a second after typing stops, at once on blur, and on a tab switch
   made before the second is up. A trailing space or line break stays in the box when the API
   answers with the text trimmed. An answer to an older save does not replace newer text, and typing
-  back to text on its way keeps that save's outcome, a refusal included.
+  back to text on its way keeps that save's outcome, a refusal included. An earlier save answering
+  while newer text waits does not read as saved.
 - Each field saves only its own key, with its bounds and units (timeouts shown in minutes and
   stored in seconds).
 - An API key renders as the mask the server returned. Clearing the field posts an empty string.
@@ -237,7 +243,7 @@ Covers `components/AutoPilotPanel.tsx` and `lib/autoPilot.ts`
 - Enter followed by blur on the gap sends one save and keeps its outcome. Switching the gap's unit
   only changes how it reads, and a fraction of an hour is accepted.
 - **Cancel** in the confirmation keeps a change still on its way on screen. A number typed back to
-  its value clears its refusal.
+  its value clears its refusal. A gap being typed is not replaced when another save answers.
 - Only accounts that are allowed and connected are offered.
 - The gap shows in hours and is sent in minutes. At the in-progress limit the tab says why nothing
   new starts.

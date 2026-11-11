@@ -144,6 +144,11 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   // failed since the panel last matched what is stored.
   const sentRef = useRef<AutoPilotConfig | null>(null);
   const failed = useRef(new Set<string>());
+  // The gap as the field shows it, for answers that arrive later, and
+  // whether it holds typing not yet committed.
+  const gapShown = useRef<{ text: string; unit: GapUnit }>({ text: "", unit: "hours" });
+  gapShown.current = { text: gapText, unit: gapUnit };
+  const gapDirty = useRef(false);
 
   function showGap(mins: number) {
     const gap = splitGap(mins);
@@ -151,11 +156,22 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
     setGapText(String(gap.value));
   }
 
-  function adopt(state: AutoPilotState) {
+  /** Puts a gap in the field, unless you are typing in it or it already
+   *  shows that gap: an answer to another save must neither wipe a gap being
+   *  typed nor switch the unit you picked. */
+  function followGap(mins: number) {
+    if (gapDirty.current) return;
+    const { text, unit } = gapShown.current;
+    if (Math.round(gapMins(Number(text), unit)) === mins && text.trim() !== "") return;
+    showGap(mins);
+  }
+
+  function adopt(state: AutoPilotState, initial = false) {
     setSaved(state);
     savedRef.current = state;
     setDraft(configOf(state));
-    showGap(state.gap_mins);
+    if (initial) showGap(state.gap_mins);
+    else followGap(state.gap_mins);
   }
 
   useEffect(() => {
@@ -172,7 +188,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
           setError((state && state.error) || `Could not load Auto Pilot (HTTP ${ap.status}).`);
           return;
         }
-        adopt(state);
+        adopt(state, true);
         const list = await pr.json();
         setProjects(Array.isArray(list) ? list : []);
         const accts = ac.ok ? await ac.json() : null;
@@ -255,7 +271,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
           sentRef.current = null;
           if (savedRef.current) {
             setDraft(configOf(savedRef.current));
-            showGap(savedRef.current.gap_mins);
+            followGap(savedRef.current.gap_mins);
           }
         }
         return refused ?? "the API sent back something that is not a configuration";
@@ -282,17 +298,20 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
     if (saved) {
       const base = current();
       setDraft(configOf(base));
-      showGap(base.gap_mins);
+      followGap(base.gap_mins);
     }
   }
 
   function commitGap(text: string, unit: GapUnit) {
     const t = text.trim();
+    gapDirty.current = false;
     // Hours may carry a fraction (1.5 hours is 90 minutes); minutes are whole.
     const ok = unit === "hours" ? /^\d+(\.\d+)?$/.test(t) : /^\d+$/.test(t);
     const mins = Math.round(gapMins(Number(t), unit));
     if (!ok || mins > MAX_AUTO_PILOT_GAP_MINS) {
       statuses.fail("gap", `must be from 0 minutes to ${MAX_AUTO_PILOT_GAP_MINS / 60 / 24} days`);
+      // Kept as typed, to be corrected: no answer may replace it meanwhile.
+      gapDirty.current = true;
       return;
     }
     if (mins === draft!.gap_mins) {
@@ -309,6 +328,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
    *  changed, only how it reads. */
   function changeGapUnit(unit: GapUnit) {
     const mins = draft!.gap_mins;
+    gapDirty.current = false;
     setGapUnit(unit);
     setGapText(unit === "hours" ? String(Math.round((mins / 60) * 100) / 100) : String(mins));
     if (statuses.get("gap")?.state === "error") statuses.clear("gap");
@@ -378,7 +398,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
           min={0}
           step="any"
           value={gapText}
-          onChange={(e) => setGapText(e.target.value)}
+          onChange={(e) => { gapDirty.current = true; setGapText(e.target.value); }}
           onBlur={() => commitGap(gapText, gapUnit)}
           onKeyDown={(e) => { if (e.key === "Enter") commitGap(gapText, gapUnit); }}
           style={{ ...inputStyle, width: 80 }}

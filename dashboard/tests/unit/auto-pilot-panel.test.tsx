@@ -234,6 +234,27 @@ describe("AutoPilotPanel", () => {
     await waitFor(() => expect(posted(fn)?.gap_mins).toBe(90));
   });
 
+  it("a gap being typed is not replaced when another save answers", async () => {
+    const answers: Array<() => void> = [];
+    const fn = stub({ ...STATE, projects: { linux: [] } });
+    const base = fn.getMockImplementation()!;
+    fn.mockImplementation((url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/autopilot") && init?.method === "POST") {
+        return new Promise((resolve) => answers.push(() => resolve(base(url, init))));
+      }
+      return base(url, init);
+    });
+    render(<AutoPilotPanel inputStyle={{}} />);
+    const limit = await screen.findByTestId("auto-pilot-limit-spc_yt");
+    fireEvent.change(limit, { target: { value: "3" } });
+    fireEvent.blur(limit);
+    await waitFor(() => expect(answers).toHaveLength(1));
+    fireEvent.change(screen.getByTestId("input-auto-pilot-gap"), { target: { value: "6" } });
+    answers[0]();
+    await waitFor(() => expect(screen.getByTestId("auto-pilot-status-limit-spc_yt")).toHaveTextContent("✓ Saved"));
+    expect(screen.getByTestId("input-auto-pilot-gap")).toHaveValue(6);
+  });
+
   it("Cancel during a save on its way keeps that change on screen", async () => {
     const answers: Array<() => void> = [];
     const fn = stub({ ...STATE, enabled: true, projects: { linux: [] } });

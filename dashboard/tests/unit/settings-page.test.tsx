@@ -532,6 +532,19 @@ describe("SettingsPage", () => {
     expect(postedBodies(fetchMock)[0]).toMatchObject({ elevenlabs_voice_id: "new-id" });
   });
 
+  it("a refused new voice keeps what was typed in the add row", async () => {
+    render(<SettingsPage />);
+    await waitFor(() => screen.getByTestId("tab-voice"));
+    await openTab("voice");
+    const held = holdPosts();
+    fireEvent.change(screen.getByTestId("voice-add-name"), { target: { value: "Second" } });
+    fireEvent.change(screen.getByTestId("voice-add-id"), { target: { value: "long-elevenlabs-id" } });
+    await act(async () => { fireEvent.click(screen.getByTestId("voice-add")); });
+    await held.answer(0, { ok: false, status: 400, json: async () => ({ error: "bad voice" }) });
+    expect((screen.getByTestId("voice-add-id") as HTMLInputElement).value).toBe("long-elevenlabs-id");
+    expect(screen.queryByTestId("voice-row-1")).toBeNull();
+  });
+
   it("removing a voice offers an Undo that saves the roster and default back", async () => {
     const fetchMock = vi.mocked(fetch);
     // The API answers a save with what it stored.
@@ -1323,6 +1336,17 @@ describe("SettingsPage — agents tab", () => {
     expect(JSON.parse((call[1] as RequestInit).body as string)).toEqual({ weight: 40 });
   });
 
+  it("a refused weight can be sent again once the save is over", async () => {
+    const fn = stubAgents([makeAgent()], { status: 409, body: { error: "agent is busy" } });
+    await renderTab("agents");
+    const input = await screen.findByTestId("agent-weight-claude");
+    fireEvent.change(input, { target: { value: "5" } });
+    await act(async () => { fireEvent.blur(input); });
+    await waitFor(() => expect(screen.getByTestId("agent-error-claude").textContent).toContain("agent is busy"));
+    await act(async () => { fireEvent.blur(input); });
+    await waitFor(() => expect(mutations(fn)).toHaveLength(2));
+  });
+
   it("refuses to save a weight outside 0..100, and says why beside the row", async () => {
     const fn = stubAgents([makeAgent()]);
     await renderTab("agents");
@@ -1647,6 +1671,23 @@ describe("SettingsPage — save behaviour", () => {
     expect(input.value).toBe("3");
   });
 
+  it("a text field typed back to its stored value clears its refusal", async () => {
+    await renderTab("notifications");
+    const held = holdPosts();
+    const url = screen.getByTestId("input-dashboard-base-url");
+    fireEvent.change(url, { target: { value: "ftp://box" } });
+    await act(async () => { fireEvent.blur(url); });
+    await held.answer(0, { ok: false, status: 400, json: async () => ({ error: "must start with http" }) });
+    expect(screen.getByTestId("status-input-dashboard-base-url").textContent).toBe("Not saved: must start with http");
+    // A focus and blur alone does not send the refused value again.
+    await act(async () => { fireEvent.blur(url); });
+    expect(held.count()).toBe(1);
+    fireEvent.change(url, { target: { value: "" } });
+    await act(async () => { fireEvent.blur(url); });
+    expect(held.count()).toBe(1);
+    expect(screen.getByTestId("status-input-dashboard-base-url").textContent).toBe("");
+  });
+
   it("a switch shows its new value at once and goes back when the API refuses it", async () => {
     await renderTab("rendering");
     const held = holdPosts();
@@ -1752,6 +1793,17 @@ describe("SettingsPage — publishing", () => {
     await flushSaves();
     expect(savedBody(fetchMock)).toBeNull();
     expect(screen.getByTestId("toggle-publishing")).toHaveTextContent("OFF");
+  });
+
+  it("the publishing dialog reads Auto Pilot fresh, not from the settings loaded with the page", async () => {
+    stubFetch({ ...MOCK_SETTINGS, auto_pilot_enabled: false });
+    const base = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(((url: string, init?: RequestInit) => String(url).endsWith("/autopilot")
+      ? Promise.resolve({ ok: true, json: async () => ({ enabled: true }) } as Response)
+      : base(url, init)) as typeof fetch);
+    await renderTab("publishing");
+    await act(async () => { fireEvent.click(screen.getByTestId("toggle-publishing")); });
+    await waitFor(() => expect(screen.getByTestId("publishing-confirm-auto-pilot")).toBeTruthy());
   });
 
   it("confirming turns publishing on; the dialog warns when Auto Pilot is on", async () => {
@@ -2120,6 +2172,19 @@ describe("SettingsPage — user preferences (TMDEV-117)", () => {
     await held.answer(0, { ok: false, status: 400, json: async () => ({ error: "too long" }) });
     expect(screen.getByTestId("status-input-user-preferences").textContent).toBe("Not saved: too long");
     expect(box.value).toBe("abc");
+  });
+
+  it("an earlier save answering while newer text waits does not read as saved", async () => {
+    stubFetch();
+    await renderTab("preferences");
+    const held = holdPosts();
+    const box = screen.getByTestId("input-user-preferences") as HTMLTextAreaElement;
+    await act(async () => { fireEvent.change(box, { target: { value: "abc" } }); });
+    await act(async () => { fireEvent.blur(box); });
+    await act(async () => { fireEvent.change(box, { target: { value: "abc def" } }); });
+    await held.answer(0, okAnswer({ ...MOCK_SETTINGS, user_preferences: "abc" }));
+    expect(screen.getByTestId("status-input-user-preferences").textContent).toBe("Saving…");
+    expect(screen.getByTestId("saves-summary").textContent).toContain("Saving…");
   });
 
   it("an answer to an older save does not replace newer text", async () => {
