@@ -21,6 +21,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Illustrated** | Generated cartoon or rendered characters that stay the same from scene to scene | An OpenAI key |
 | **System Flow** | A dark canvas with one diagram per subject. Components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors while the narration explains each step. No people and no images | Nothing |
 | **Bean Explainer (experimental)** | A bald cartoon character with a thick outline reacts pose by pose to the narration on a bright colour field, while props and short handwritten labels build up beside it. No images | Nothing |
+| **Terminal Doc** | A dark, mostly empty screen where the text is the picture: monospace capitals that scramble, rearrange and resolve out of noise, and quoted sources with citations. An amber CRT look suits retro computing topics. Captions are typed into a log strip. No images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 
 Motion Graphics, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
@@ -46,6 +47,9 @@ background would flash, and a viewer reads that as a broken render.
   how people behave, and "every X explained" lists, where each item gets its own section. The props
   come from a fixed library of everyday objects, so it suits subjects a phone, a coin, a clock or a
   sign can stand for better than specific real products or places. It is experimental.
+- Choose **Terminal Doc** for topics that turn on a word, a key or a number: ciphers and codes,
+  passwords and hashes, encodings, famous unsolved codes, what a computer does with text. It has no
+  pictures of real things or people, so it does not suit places or life stories.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
 
 ### What Auto does
@@ -82,7 +86,9 @@ diagrams and times them to the narration, but it does not change the canvas or a
 Explainer video works the same way: the agent picks the background colour, the character's
 accessory and the props, and times every pose to the narration. When the library has nothing for an
 object the video needs, the agent draws that prop itself in the same style and checks the drawing
-before the video renders.
+before the video renders. A Terminal Doc video too: the agent picks the house look or the amber CRT
+look and times every word, number and bracket to the narration, and for a transformation no shipped
+animation shows (a letter shift, two strings combined) it writes one and checks it first.
 
 ### Where you choose
 

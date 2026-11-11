@@ -50,8 +50,8 @@ skill also call a style a **register**.
 style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
-does not decide any beat's treatment. `cartoon_3d`, `system_flow` and `bean_explainer` replace the
-scene system with one whole-video scene of their own.
+does not decide any beat's treatment. `cartoon_3d`, `system_flow`, `bean_explainer` and `terminal_doc`
+replace the scene system with one whole-video scene of their own.
 
 | `visual_style` | Canvas | Figures | Hand-drawn line art | Generated characters |
 |---|---|---|---|---|
@@ -61,6 +61,7 @@ scene system with one whole-video scene of their own.
 | `illustrated` | The agent chooses | Yes | No | Yes |
 | `system_flow` | `dark` | No | No | No |
 | `bean_explainer` | `light`, painted over by its own colour field | Its own cast | No | No |
+| `terminal_doc` | `dark` | No | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
@@ -68,8 +69,9 @@ The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `ch
 `characters_allowed` gates the `generate_character` tool. `figures_allowed` and `line_art_allowed` go
 into the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses), so the reviewer judges a video
 against the look it was meant to have. `cartoon_3d` replaces the scene system with one 3D world
-([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)), and
-`bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)).
+([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)),
+`bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)), and `terminal_doc`
+with one typographic scene ([Terminal Doc](#terminal-doc)).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
 chosen. Two styles have a need:
@@ -295,7 +297,7 @@ resolve, so a video with no images passes.
 
 The renderer draws the narration over every video as captions
 ([Captions](09-remotion-project.md#captions)). A scene therefore carries no text unless the text is
-the content. The skill's complete list of justified text:
+the content. Terminal Doc is the one style whose content is text ([Terminal Doc](#terminal-doc)). The skill's complete list of justified text:
 
 - A number the viewer must read.
 - A label pinned to part of a diagram or an image.
@@ -601,6 +603,84 @@ prop files again as they are on disk (`server.py::_bean_custom_prop_errors`), be
 redraws a prop after the config is written. The text-layout audit samples each shot
 as if it were a scene, from the end of the badge carousel when the shot opens a list section. A Bean Explainer video can have a mascot; the skill keeps it small and to one
 side.
+
+## Terminal Doc
+
+A Terminal Doc video is one installed scene, `TerminalDoc`, that spans the whole video: a dark
+typographic documentary where the text is the picture. Sparse monospace capitals sit on near-black,
+letters lift out of a word and arc into a new one, numbers resolve out of glyph noise, and one element
+at a time glows red or blue. The agent writes `props.terminalDoc: {skin, beats, customMoves}` with the
+`tubematic-terminal-doc` skill, whose `reference/contract.md` documents every field and whose
+`reference/example-config.json` is the worked example.
+
+`skin` is the house look (white and grey on near-black) or `crt` (amber phosphor with scanlines and a
+vignette). The agent picks it per video; the captions follow it. A beat is a cut and starts empty.
+Its events are moves, each placed in a named slot (a context line, three stage bands `a` to `c`, a
+note line), never in pixels:
+
+| Move | What the scene draws |
+|---|---|
+| `word` | A string scrambles, types or cuts in |
+| `rearrange` | The letters of one element lift and arc into a new string; missing letters come out of noise |
+| `encode` | A string flies into a box labelled with an operation (HASH, BASE64) and comes out as another |
+| `number` | A number resolves out of glyph noise right to left, or counts up |
+| `wall` | A grey ciphertext wall fades up behind the stage, and holds across beats |
+| `grid` | An alphabet or table builds row by row across the stage |
+| `stream` | Guesses race through a slot and lock on the target in red |
+| `bracket` | A hairline under an element with a short label, and a quoted note with a citation |
+| `glow` | One element, row or span turns red or blue; a later glow fades it out |
+| `type` | A command typed behind a `$` prompt, then its output |
+| `push` | A slow push-in over a held beat |
+| `clear` | Elements fade out and free their slots |
+| `custom` | A move the agent wrote for this video |
+
+Where no shipped move can show a beat, the agent writes its own: a TSX component in
+`generated/<video_id>/move-<name>.tsx` that draws from the frame it is given, built from
+`terminalDoc/kit.tsx`, listed in `customMoves` and looked at with
+[`preview_terminal_moves`](06-mcp-server.md#preview_terminal_moves) before it submits. It is held to
+Bean Explainer's render-cost and import rules, and it may not read the frame itself, which is what lets
+the preview show four moments of it in one picture.
+
+The renderer's side is `src/scenes/installed/TerminalDoc.tsx` with `terminalDoc/`:
+
+- `contract.ts` holds the slots, sizes, limits, timings and how long each move takes.
+- `stage.ts` works out what is on stage at a frame; `moves.tsx` draws each move.
+- `kit.tsx` holds the helpers the shipped moves and the agent's moves share, and the two skins.
+- `backdrop.tsx` draws the ciphertext wall and the CRT glass on canvases.
+- `fonts.tsx` loads IBM Plex Mono and VT323 apart from the scene, for the preview.
+
+Every glyph sits in a cell 0.6 of its size wide whatever the font, so the validator's fit check is a
+character count and a letter can leave its cell to fly somewhere else. The wall is drawn to a canvas
+only when its flicker changes, with its fades baked into each glyph: in software GL a wall of DOM text
+under a mask gradient cost about 1.6 CPU-seconds a frame. The measured costs are in
+`TerminalDoc.tsx`'s header comment.
+
+`mcp/terminal_doc.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `terminal_doc` video has anything but the one `TerminalDoc` scene, from frame 0 for
+  `totalFrames`, or another style uses `TerminalDoc`.
+- A beat after the first does not start within 2 frames of a word, or lasts under 2 seconds.
+- A move names an unknown slot, size, tone or skin, a string does not fit the frame at its size, a
+  note wraps past 2 lines of 36 characters, or a value is out of its range.
+- Two elements share a slot, more than 4 elements are on screen at once, an `encode` plays while
+  slot `b` is taken, or a bracket reaches into a taken slot below it.
+- A move acts on an element that is not on stage or has not finished its own move, or finishes less
+  than 15 frames before its beat's cut.
+- Stage text repeats 4 or more narration words in a row.
+- A custom move has more than 6 per video, a shipped move's name, a `src` that is not this video's
+  `move-<name>` file, or a source that breaks Bean Explainer's rules or reads the frame itself
+  (`terminal_doc.py::FORBIDDEN_SOURCE`).
+- Nothing changes on stage for more than 3 seconds.
+
+`mcp/tests/test_terminal_doc.py` pins `terminal_doc.py` to `contract.ts` and to the pack. The pack's
+captions, with the skin's colours over them, fill every `subtitles` key the config leaves out: the
+[`log` look](09-remotion-project.md#captions). `validate_job` checks the custom move files again as
+they are on disk (`server.py::_td_custom_move_errors`). The text-layout audit samples each beat as if
+it were a scene. A Terminal Doc video can have a mascot; the skill keeps it below the captions, off
+the stage.
+
+The section [On-screen text is the exception](#on-screen-text-is-the-exception) does not apply to this
+style: its stage is text, and the echo rule above keeps it from repeating the captions.
 
 ---
 

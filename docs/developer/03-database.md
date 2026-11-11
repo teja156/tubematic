@@ -139,7 +139,8 @@ first. Any write to the column changes render order.
 
 `motion_graphics`, `stick` and `illustrated` are permission sets: each names which scene
 vocabularies the video may draw from. `system_flow` makes the whole video one diagram scene written
-as data, and `bean_explainer` one cartoon-bean scene written as data. `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
+as data, `bean_explainer` one cartoon-bean scene written as data, and `terminal_doc` one typographic
+scene written as data. `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
 video) and needs a working GPU. `auto` leaves the choice to the agent. The values are checked in
 code against the style packs, and the column has no CHECK constraint, so a new style needs no
 migration.

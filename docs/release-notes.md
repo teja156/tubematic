@@ -11,9 +11,10 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds two visual styles: System Flow, which turns a video into a diagram that builds itself
-while the narrator explains a system, and Bean Explainer, a cartoon character that reacts to the
-narration among everyday props. Auto now picks a video's style before its script is written.
+2.2.0 adds three visual styles: System Flow, which turns a video into a diagram that builds itself
+while the narrator explains a system, Bean Explainer, a cartoon character that reacts to the
+narration among everyday props, and Terminal Doc, a dark typographic documentary for codes,
+passwords and computing. Auto now picks a video's style before its script is written.
 
 ### Upgrade notes
 
@@ -23,7 +24,7 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs new skills for System Flow, Bean Explainer and Auto's style choice, and a session
+   installs new skills for System Flow, Bean Explainer, Terminal Doc and Auto's style choice, and a session
    started before it does not have them.
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did
@@ -41,10 +42,10 @@ sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow or Bean Explainer cannot render on 2.1.x. Finish it, or switch it to
-  another style while it waits at its topic, before you go back.
-- A domain whose default style is System Flow or Bean Explainer starts its new videos on Auto under
-  2.1.x.
+- A video set to System Flow, Bean Explainer or Terminal Doc cannot render on 2.1.x. Finish it, or
+  switch it to another style while it waits at its topic, before you go back.
+- A domain whose default style is System Flow, Bean Explainer or Terminal Doc starts its new videos
+  on Auto under 2.1.x.
 
 ### Added
 
@@ -64,6 +65,16 @@ If you go back to 2.1.x later:
   items. It suits habits, health, money, behaviour and "every X explained" lists, and needs no image
   generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's default;
   Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Terminal Doc visual style. The text is the picture: sparse monospace capitals on a dark,
+  mostly empty screen, where a password flies into a box marked HASH and comes out as a digest,
+  letters lift and rearrange into a new word, numbers resolve out of flickering noise, guesses race
+  until one matches, and thin brackets tie a claim to its quoted source. One word or number glows at
+  a time. The captions are typed into a terminal log strip. For retro computing topics the agent can
+  use an amber CRT look instead. When no built-in animation can show a step (a letter shift, two
+  strings combined), the agent writes one for the video and checks it before the render. It suits
+  ciphers and codes, passwords and hashes, encodings and famous unsolved codes, needs no image
+  generation and no GPU, and Auto can pick it. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
 - A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and

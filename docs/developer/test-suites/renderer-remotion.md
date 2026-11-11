@@ -2,8 +2,9 @@
 
 The suite covers the pure TypeScript helpers of the Remotion project's
 [Cartoon 3D kit](../09-remotion-project.md#the-cartoon-3d-kit) and of the
-[`SystemFlow`](../09-remotion-project.md#systemflow) and
-[`BeanExplainer`](../09-remotion-project.md#beanexplainer) scenes. Each test file sits beside the code
+[`SystemFlow`](../09-remotion-project.md#systemflow),
+[`BeanExplainer`](../09-remotion-project.md#beanexplainer) and
+[`TerminalDoc`](../09-remotion-project.md#terminaldoc) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -41,6 +42,22 @@ Covers `contract.ts`, `stage.ts`, the rig in `bean.tsx` and the prop library
 
 Trap: a remainder matters for render time. A spring that only approaches its rest repaints its
 layer on every frame, which on the CPU renderer cost more than drawing the bean.
+
+## Terminal Doc
+
+### `src/scenes/installed/terminalDoc/terminalDoc.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the letter map in `moves.tsx` and the kit
+([Terminal Doc](../10-scene-authoring.md#terminal-doc)).
+
+- The characters that fit at each size, a number's cells, note wrapping and every move's length
+  agree with the shared cases `mcp/tests/test_terminal_doc.py` runs.
+- The beat on screen is the last one started, and a beat starts empty. An `encode` hands its source's
+  letters to the new element. A later glow fades the earlier one out, the wall's level holds across
+  beats, and a push eases in and holds.
+- A `rearrange` flies each letter to the nearest cell holding the same character and makes the rest
+  from noise. Noise, scrambles and typing are pure functions of their seed and frame, so two renders
+  of a video draw the same frames.
 
 ## System Flow
 

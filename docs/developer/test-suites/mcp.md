@@ -483,6 +483,37 @@ Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean E
   other scenes on a Bean Explainer video. `emphasis` beyond the narration's last word, on more than
   one word in 5, repeated, or not a list of numbers is refused, on any style.
 
+### `test_terminal_doc.py`
+
+Covers `mcp/terminal_doc.py`, the checks `write_scene_config` runs on a Terminal Doc config,
+`preview_terminal_moves`, `validate_job`'s re-check of the agent's own moves, and the text audit's
+per-beat sampling ([Terminal Doc](../10-scene-authoring.md#terminal-doc)).
+
+- The limits, timings, geometry, sizes, slots, custom-move limits and catalogues equal the ones in the
+  renderer's `contract.ts`, read from the TypeScript source, and the pack's `extra` lists the same
+  moves, slots, sizes, tones, reveals, cuts and skins. Both sides answer the shared cases in
+  `fixtures/terminal_doc_contract.json` (characters per size, number cells, note wrapping, every
+  move's length).
+- The `log` caption look and its `accent` are values `_validate_subtitles` accepts, read from
+  `Subtitles.tsx`'s type: without that, the server would refuse the style's own captions in either
+  skin.
+- The skill's worked example passes. Each refusal names its beat, event and cause: an unknown skin,
+  move, slot, size or tone, a cut off the words, a string too wide for its size, an encode not from
+  `a` to `c` or with `b` taken, a move on an element that is still playing or not on stage, two
+  elements in one slot, a reused id, more than 4 elements on screen, a bracket reaching into a taken
+  slot, stage text that repeats the narration, a move too close to its cut, and a still stretch over
+  3 seconds. A cleared slot can be used again.
+- A move the agent wrote (the skill's `example-move-caesar.tsx`) passes. A bad `customMoves` entry, a
+  text longer than the move takes, and a move file that is missing, uses a filter, randomness or
+  `useCurrentFrame`, imports anything but the kit, or has no default export are refused, at write time
+  and again by `validate_job` after a rewrite. A video id that is a UUID works for the files and the
+  preview script.
+- `write_scene_config` writes the pack's `log` captions, in amber for the `crt` skin, under the keys
+  the config sets, refuses a broken config before writing anything, and refuses `TerminalDoc` on
+  another style and other scenes on a Terminal Doc video. `preview_terminal_moves` refuses another
+  style, a video with no config and a config with no moves, returns the picture (the renderer stubbed)
+  with each move's slot and text, and gives way to a heavy check that holds the lock.
+
 ### `test_choose_visual_style.py`
 
 Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back
