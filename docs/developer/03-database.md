@@ -119,7 +119,7 @@ One row per video, from proposed topic to published file.
 | `last_render_renderer_name` | TEXT NOT NULL | `''` | That renderer's name at the time of the render, so a later rename or removal leaves it unchanged |
 | `last_render_on_gpu` | INTEGER NOT NULL | `0` | `1` when that render ran on the GPU |
 | `last_render_seconds` | REAL NOT NULL | `0` | The Remotion run as the renderer measured it, the figure `render_timings` keeps. It excludes fetching the bundle and uploading the mp4. `0` means not reported |
-| `duration_secs` | REAL | NULL | The video's length in seconds, stored from `timeline.json` by the worker's hourly pass and by `archive_video` as it deletes the files. NULL means not known. Analytics divides Instagram's watched seconds by it. See [Watch figures](14-publishing.md#watch-figures) |
+| `duration_secs` | REAL | NULL | The video's length in seconds, stored from `timeline.json` by the worker's hourly pass, by `POST /analytics/refresh` and by `archive_video` as it deletes the files. NULL means not known. Analytics divides Instagram's watched seconds by it. See [Watch figures](14-publishing.md#watch-figures) |
 | `publish_title` | TEXT NOT NULL | `''` | The title the video is posted with, written by the agent with the script. Separate from `title` |
 | `publish_description` | TEXT NOT NULL | `''` | The post's description, written by the agent with the script |
 | `scheduled_at` | TEXT NOT NULL | `''` | When a scheduled post goes out, UTC. `''` means not scheduled. The worker moves a `SCHEDULED` video to `PUBLISHING` once it has passed. See [Scheduling a post](14-publishing.md#scheduling-a-post) |
@@ -712,7 +712,7 @@ only in the pre-migration backup.
 | `0019_renderers.sql` | Creates `renderers`, `renderer_enrollments`, `render_timings` and `idx_render_timings_renderer`, adds the five lease columns to `videos`, and inserts the built-in renderer's row | No |
 | `0020_style_pick.sql` | Adds `videos.style_pick`, `style_runner_up` and `style_reason`, `''` on every existing video | No |
 | `0021_last_render.sql` | Adds `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu` and `last_render_seconds`, empty on every existing video | No |
-| `0024_video_duration.sql` | Adds `videos.duration_secs`, NULL on every existing video. The worker fills it for published videos whose files exist, and archiving a video stores it | No |
+| `0024_video_duration.sql` | Adds `videos.duration_secs`, NULL on every existing video. The worker fills it for videos that have a publication and whose files exist, and archiving a video stores it | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so

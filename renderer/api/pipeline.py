@@ -1073,8 +1073,10 @@ def _readable_duration_secs(video_id: str):
     try:
         duration = _video_duration_secs(video_id)
     except Exception:  # noqa: BLE001 - any shape of bad file means "not known"
-        log.warning("could not read the length of %s from its timeline", video_id,
-                    extra={"video_id": video_id})
+        # Debug, like a length out of range below: the video is asked again on
+        # every pass until it is archived, and a warning an hour says nothing new.
+        log.debug("could not read the length of %s from its timeline", video_id,
+                  extra={"video_id": video_id})
         return None
     # The value is stored once and returned with every video. 1e999 in a
     # damaged file parses to infinity, which no browser can read back as JSON.
@@ -2005,7 +2007,9 @@ SCRIPT_LENGTH_BANDS = ((0, "Under 150 words"), (150, "150 to 199 words"),
                        (200, "200 to 249 words"), (250, "250 to 299 words"),
                        (300, "300 words or more"))
 
-_SCRIPT_MARKUP = re.compile(r"<[^>]*>|\[[^\]\n]*\]")
+# A tag holds no "<" of its own, so a stray "<" in the words ("a < b") cannot
+# pair with the ">" of a later tag and take everything between with it.
+_SCRIPT_MARKUP = re.compile(r"<[^<>]*>|\[[^\[\]\n]*\]")
 
 
 def _script_words(script) -> int:
@@ -5102,6 +5106,10 @@ def create_pipeline_blueprint() -> Blueprint:
         Bounded by the per-account walk: one feed per account regardless of how
         many videos have been published. Returns counts rather than the payload
         — the page re-fetches /analytics itself, so this stays one job.
+
+        It first stores the length of published videos that have none, as the
+        worker's pass does (fill_video_durations): one timeline read per such
+        video that is still on disk.
         """
         _settings, api_key, err = _publishing_context()
         if err:

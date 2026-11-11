@@ -1045,7 +1045,8 @@ Each group is `{key, label, videos, avg_watch_secs, watched_pct, stayed_pct}`. E
 How posts are grouped is in [Publishing internals](14-publishing.md#get-analyticswatch-time).
 
 `POST /analytics/refresh` captures metrics for every account now and returns
-`{accounts, snapshots, errors}`.
+`{accounts, snapshots, errors}`. It first stores `videos.duration_secs` for published videos that
+have none ([Watch figures](14-publishing.md#watch-figures)).
 
 ### Auto Pilot
 

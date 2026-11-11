@@ -637,8 +637,8 @@ Two places store it from the video's `timeline.json`:
   dashboard.
 
 A timeline that cannot be read, or that gives a length above `MAX_STORED_DURATION_SECS`, leaves the
-length null. A video archived by a version that did not
-store lengths keeps a null length, and its Instagram posts report no `watched_pct`.
+length null. A video whose files were deleted before its length was stored keeps a null length, and
+its Instagram posts report no `watched_pct`.
 
 ### `GET /analytics/watch-time`
 
@@ -651,8 +651,9 @@ a time because each platform counts a view and a watched second in its own way.
   those posts. `videos` counts every post in the group.
 - `min_group` is `pipeline.py::WATCH_MIN_GROUP` (20). The dashboard marks a group with fewer videos.
 - `pipeline.py::_watch_group_of` places a post in a group. A `visual_style` of `auto` or `''` reads
-  as "Mixed scenes", or as Cartoon 3D when `resolved_renderer` is `cartoon_3d`. Script length is the word count of `videos.script` without its markup
-  (`_script_words`), in the bands of `SCRIPT_LENGTH_BANDS`.
+  as "Mixed scenes", or as Cartoon 3D when `resolved_renderer` is `cartoon_3d`.
+- Script length is the word count of `videos.script` without its markup (`_script_words`), in the
+  bands of `SCRIPT_LENGTH_BANDS`.
 - Groups come largest first. Script length bands come shortest first.
 
 ### Analytics outlive the files

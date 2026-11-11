@@ -536,6 +536,15 @@ def test_script_words_leave_markup_out_and_keep_the_wrapped_word():
     assert pipeline._script_words("") == 0 and pipeline._script_words(None) == 0
 
 
+def test_a_stray_angle_bracket_in_the_words_does_not_swallow_the_script():
+    """ "a < b" is not a tag. Paired with the ">" of a later tag it would take
+    every word between them out of the count and put a long script in the
+    shortest band."""
+    script = "If a < b then we win. " + "word " * 200 + '<break time="1s"/> done [pause] now'
+    assert pipeline._script_words(script) == 208
+    assert pipeline._script_length_band(script)[1] == "200 to 249 words"
+
+
 def test_larger_groups_come_first_where_there_is_no_natural_order(client, env):
     for i in range(3):
         _video(env, f"vid_big{i}", project="big")

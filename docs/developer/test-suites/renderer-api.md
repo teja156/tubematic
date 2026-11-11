@@ -418,14 +418,15 @@ publication rows of `GET /analytics` and `GET /videos/<id>/publications`,
   seconds beside a real share is kept. A reported share of 0 gets the stored length like an absent
   one.
 - A division by a vanishing length or view count gives no figure, so the answer stays valid JSON.
-- The routes read the latest snapshot, including snapshots stored by an earlier version. A payload
+- The routes read the latest snapshot, whatever its age. A payload
   that does not parse reports nothing, and watch figures are added to no total.
 - The grouped route answers for one account, the largest when none is named. A group's figure is
   the median, `videos` counts every post and `n` counts the posts that report the measure.
-- Script length bands come back shortest first, and markup in a script is not counted as words.
+- Script length bands come back shortest first, and markup in a script is not counted as words. A
+  stray `<` in the words does not remove the words after it.
 - The length is stored for published, unarchived videos with a readable `timeline.json`, and a
   stored length is not overwritten. One unreadable timeline leaves the other videos' lengths stored.
-  An infinite or day-long length is not stored. `POST /analytics/refresh` stores lengths too.
+  An infinite length, or one above a day, is not stored. `POST /analytics/refresh` stores lengths too.
 - A video on `auto` whose `resolved_renderer` is `cartoon_3d` is grouped as Cartoon 3D.
 - A failure while storing lengths leaves the metrics poll running.
 
