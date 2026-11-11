@@ -99,6 +99,27 @@ The guide's coats: `blue`, `sage`, `brick`, `plum`, `mustard`.
 
 On a dark backdrop dress people in the light colours, `cream` or `sky`.
 
+Each backdrop's own furniture and landmarks are part of the picture, so a prop placed over one hides
+it or reads as a mistake (a letter hung across the harbour's ship). Keep wall props in the open areas
+below, and stand floor props and people in front of low furniture, never inside a
+tall piece. Boxes are frame pixels; "full height" means from the top of the stage to the floor line.
+
+| Backdrop | Busy: keep wall props off these | Open wall |
+|---|---|---|
+| `study` | the bookcase x 0 to 270, full height; the curtained window x 770 to 1060, y 410 to 900 | x 300 to 740, y 430 to 1100 |
+| `workshop` | the pegboard x 40 to 370, y 430 to 900; two jar shelves x 780 to 1050, y 530 to 620 and 760 to 840; the workbench x 30 to 330, y 1100 down | x 400 to 760, full height; x 780 to 1020 below y 860 |
+| `nightsky` | the moon x 870 to 1000, y 520 to 650; the hills y 1160 down | the sky x 60 to 840, y 430 to 1100 |
+| `laboratory` | the flask cabinet x 30 to 260, full height; the molecule chart x 800 to 1030, y 490 to 720; the bench and retort x 800 to 1060, y 1000 down | x 300 to 760, y 430 to 1000 |
+| `street` | the left shop x 0 to 250 and the right shop x 820 to 1080, full height, with their gas lamps | x 280 to 800, y 430 to 950 |
+| `countryside` | the oak x 0 to 280, y 540 down; the sun x 850 to 950, y 450 to 550; the windmill x 840 to 960, y 830 to 1000; the fence x 860 to 1080, y 1220 down | x 300 to 820, y 470 to 1000 |
+| `harbour` | the ship x 740 to 1080, full height; the lighthouse x 80 to 160, y 830 to 1080 | the sky x 200 to 720, y 430 to 1050 |
+| `blueprint` | the gear drawing x 20 to 260 and the wheel drawing x 840 to 1060, both y 450 to 660; the piston x 60 to 240 and the bolt x 850 to 1000, both y 950 to 1300 | x 300 to 800, full height |
+| `factory` | the left window, column, belts and lathe x 0 to 290, and the right window, column, wheel and press x 740 to 1080, full height | x 300 to 720, full height |
+| `maproom` | the wall map x 130 to 1020, y 410 to 810; the plan chest x 30 to 300 and the globe x 840 to 1060, both y 1000 down | x 300 to 820, y 830 to 1000 |
+
+The open areas are where the eye goes: in a busy backdrop such as `street`, `harbour` or `factory`,
+put the chapter's main prop and people in the middle third.
+
 ## Props
 
 `box` is the prop's size at scale 1 (width x height, px). `states` is how many drawings it has:

@@ -156,7 +156,9 @@ prop's base. Plan where people stand before you write: the guide usually stays t
 is about (`pose: "point"` and `facing` towards it).
 
 **Props.** `x` is the middle of the prop's base in frame pixels. Floor props stand on the floor line
-(y 1344); wall props hang with their base at `y`. `scale` (0.6 to 1.4) sizes it; `enter` is `pop` (the
+(y 1344); wall props hang with their base at `y`. Hang a wall prop only in its backdrop's open wall, which
+`reference/contract.md` gives for each backdrop: a letter hung across the harbour's ship hides the ship and
+reads as a mistake. `scale` (0.6 to 1.4) sizes it; `enter` is `pop` (the
 default), `drop` (falls in), `slide` (from the nearer edge), `rise` or `fade`. Each prop's box, place,
 states and acts are in the catalogue: `switch` changes it to its second drawing for good (a lamp lit, a
 book opened, a lock undone), `cycle` runs its drawings for 1.6 s (a telegraph tapping, relays
