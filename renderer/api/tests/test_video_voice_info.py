@@ -178,3 +178,14 @@ def test_a_changed_install_default_still_reports_the_voiced_model(client, db_pat
                         units={"credits": 100}, videos=["vid-1"], raw={"voice_id": "old"})
     info = _info(client)
     assert info["model_id"] == "eleven_v3" and info["model_voiced"] is True
+
+
+def test_an_old_untagged_voicing_does_not_answer_once_other_voices_spoke(client, db_path):
+    """Voiced in one voice before the tag existed, then re-voiced with every
+    segment in another voice: the old row is not this voicing's model."""
+    _video(db_path)
+    _voiced_with(db_path, "eleven_v3")                       # untagged, old
+    tusage.record_usage(db_path, service="elevenlabs", model="eleven_multilingual_v2",
+                        operation="voice", units={"credits": 100}, videos=["vid-1"],
+                        raw={"voice_id": "r1"})
+    assert _info(client)["model_id"] == "eleven_multilingual_v2"

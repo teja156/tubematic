@@ -486,8 +486,8 @@ A voice's `speed` is ElevenLabs' `voice_settings.speed`, from `SPEED_MIN` (0.7) 
 in steps of `SPEED_STEP` (0.05). Only the models in `voice_models.py::SPEED_MODELS` honour it:
 `eleven_multilingual_v2`, `eleven_flash_v2_5`, `eleven_turbo_v2_5`, `eleven_flash_v2` and
 `eleven_turbo_v2`. `eleven_v3` and `eleven_v4` answer a request with a speed and ignore it, so
-`POST /settings` refuses a speed on them with a `400`, and `generate_voice` refuses one before it
-spends.
+`POST /settings` refuses a speed on them with a `400`. A roster stored around that check (by hand
+in the database) reads as empty, so `generate_voice` spends nothing on it.
 
 A speed of 1.0 is never stored (`voice_models.py::normalize_roster_entry`). A roster in which no voice
 has a speed keeps the shape older versions read, and older versions read a roster with any other key

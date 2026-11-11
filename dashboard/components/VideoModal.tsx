@@ -1032,7 +1032,12 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                                 onChange={(e) => handleSegmentVoice(seg.id, e.target.value)}
                                 style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--ink-2)", background: "transparent", border: "1px solid var(--border)", padding: "2px 6px", marginBottom: 6 }}
                               >
-                                <option value="">Video voice ({voiceName(videoVoiceId)})</option>
+                                <option value=""
+                                        disabled={!!seg.voice_id && seg.voice_id !== videoVoiceId
+                                                  && !!segmentVoiceConflict(video, seg.id, videoVoiceId)}
+                                        title={segmentVoiceConflict(video, seg.id, videoVoiceId) || undefined}>
+                                  Video voice ({voiceName(videoVoiceId)})
+                                </option>
                                 {seg.voice_id && seg.voice_id !== videoVoiceId
                                   && !voices.some((v) => v.voice_id === seg.voice_id) && (
                                   <option value={seg.voice_id} disabled>{seg.voice_id} (not in roster)</option>

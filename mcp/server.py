@@ -4369,6 +4369,13 @@ def generate_voice(video_id: str, script: str) -> dict:
     is cleaned with the bracket/em-dash regex and no timeline.segments is
     written.
 
+    A segment may carry its own "voice_id": that roster voice speaks it
+    instead of the video's. Such a script is voiced in runs of consecutive
+    segments with the same voice, one ElevenLabs request per run with that
+    voice's model and speed, then joined into one audio.mp3; every run's
+    voice, markup and speed is checked before the first request, and
+    `credits` is the sum over the runs. A one-voice script is one request.
+
     Voice selection: the video's own voice_id (set via create_video or
     update_video) wins; if it's blank, the install default
     (settings.elevenlabs_voice_id) is used — errors before any ElevenLabs
@@ -4426,7 +4433,6 @@ def generate_voice(video_id: str, script: str) -> dict:
     err = _video_id_error(video_id)
     if err:
         return err
-    import httpx
 
     elevenlabs_key = _elevenlabs_key()
     if not elevenlabs_key:
@@ -4460,7 +4466,7 @@ def generate_voice(video_id: str, script: str) -> dict:
     if voice is None:
         return {"error": "No default voice set — pick one in the Voices step of onboarding, "
                           "or set a default voice in the Settings dashboard"}
-    voice_id, model_id, voice_label = voice["voice_id"], voice["model_id"], voice["name"]
+    model_id, voice_label = voice["model_id"], voice["name"]
 
     # Claim the video for this call before doing any billed work — the status
     # check above is a plain read, so two concurrent calls could otherwise
@@ -4518,8 +4524,9 @@ def generate_voice(video_id: str, script: str) -> dict:
             tts_text = _apply_lexicon(tts_text, lexicon)
             runs.append({"voice": voice, "segments": None, "tts_text": tts_text})
 
-        # A speed the voice's model would ignore is refused, never sent:
-        # Settings refuses it too, so this guards a roster written around it.
+        # A speed the voice's model would ignore is refused, never sent. This
+        # is defensive only: every roster reader already drops a roster that
+        # holds one, so no voice with such a speed resolves this far.
         for run in runs:
             err = tvoice.speed_error(tvoice.voice_speed(run["voice"]), run["voice"]["model_id"],
                                      run["voice"]["name"])

@@ -104,6 +104,16 @@ describe("VideoModal — a voice per segment", () => {
     expect(s1.selectedOptions[0].disabled).toBe(true);
   });
 
+  it("the video voice is greyed out for a segment it cannot speak", async () => {
+    const video = makeVideo("SCRIPT_READY", {
+      segment_voice_conflicts: { s2: { t1: "v4 cannot speak <break/>" } } });
+    mockFetch(video);
+    render(<VideoModal video={video} voices={VOICES} defaultVoiceId="t1" onClose={() => {}} onAction={() => {}} />);
+    const s2 = await screen.findByTestId("segment-voice-s2") as HTMLSelectElement;
+    expect(s2.options[0].disabled).toBe(true);
+    expect(s2.options[0].title).toMatch(/cannot speak/);
+  });
+
   it("no picker with one voice on the roster", async () => {
     const video = makeVideo("SCRIPT_READY");
     mockFetch(video);

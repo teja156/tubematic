@@ -297,9 +297,9 @@ def last_voice_model(con: sqlite3.Connection, video_id: str,
 
     A script with more than one voice is voiced in several calls, each tagged
     with its voice in raw_usage (TMDEV-216). With voice_id, the newest call
-    for that voice answers; a call from before the tag existed (untagged)
-    answers when there is none, since it was the video's only voice; failing
-    both, the newest call of any voice."""
+    for that voice answers; when the video has no tagged call at all, the
+    newest untagged one (from before the tag existed, when the video had one
+    voice); failing both, the newest call of any voice."""
     base = ("SELECT e.model FROM usage_events e "
             "JOIN usage_event_videos l ON l.event_id = e.id "
             "WHERE l.video_id = ? AND e.service = 'elevenlabs' AND e.operation = 'voice' ")
@@ -307,7 +307,9 @@ def last_voice_model(con: sqlite3.Connection, video_id: str,
     if voice_id:
         row = con.execute(base + "AND json_extract(e.raw_usage, '$.voice_id') = ? " + order,
                           (video_id, voice_id)).fetchone()
-        if row is None:
+        tagged_any = con.execute(base + "AND json_extract(e.raw_usage, '$.voice_id') IS NOT NULL "
+                                 + order, (video_id,)).fetchone()
+        if row is None and tagged_any is None:
             row = con.execute(base + "AND (e.raw_usage IS NULL "
                               "OR json_extract(e.raw_usage, '$.voice_id') IS NULL) " + order,
                               (video_id,)).fetchone()

@@ -119,12 +119,12 @@ def test_a_voice_with_a_speed_sends_it(job_db, recorder):
     assert recorder.payloads[0]["voice_settings"]["speed"] == 1.15
 
 
-def test_a_speed_on_a_model_that_ignores_it_is_refused_before_spend(job_db, recorder):
-    # A roster written around Settings: Teja (v4) with a speed.
+def test_a_roster_with_a_speed_on_a_model_that_ignores_it_voices_nothing(job_db, recorder):
+    """A roster written around Settings (Teja on v4 with a speed) is malformed,
+    so the roster reader drops all of it and no voice resolves: no spend."""
     server._set_setting("elevenlabs_voices", json.dumps([{**TEJA, "speed": 1.1}]))
-    # The reader drops such a roster entirely, so nothing resolves: no spend.
     job_db("v1", script_segments=[_seg("s1", "Hello there.")], voice_id="t1")
-    assert "error" in server.generate_voice("v1", "")
+    assert "no longer in elevenlabs_voices" in server.generate_voice("v1", "")["error"]
     assert recorder.payloads == []
 
 
