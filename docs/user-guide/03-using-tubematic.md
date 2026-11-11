@@ -86,7 +86,7 @@ curriculum seed. You can change those numbers on **Settings → Research**.
 A video you create on the **New Video** page is not scored. It is filed under a domain called
 **Manual Videos**.
 
-![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button and its Edit defaults button](../images/topics.png)
+![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button and its Edit defaults button. The first domain is open and shows its style, voice, agent and topic cap](../images/topics.png)
 
 ### Adding a domain
 
