@@ -207,7 +207,9 @@ relay, Babbage's engine, a particular instrument. Keep it to a few per video.
    `Math.random` and the clock are not. The library's small helpers (gear outlines, rods) are not
    exported: copy one into your file when you need it. A prop that appears on a dark backdrop needs a
    light outline or light parts somewhere, or it disappears.
-3. Write it with `write_scene_file(video_id, "prop-<name>", tsx)` and list it in `customProps`:
+3. Write it with `write_scene_file(video_id, "prop-<name>", tsx)`, where `<name>` is lowercase letters,
+   digits and hyphens (`prop-great-eastern`, never an underscore; the `id` in `customProps` may use
+   `_`), and list it in `customProps`:
    `{"id": "moth", "src": "<the src write_scene_file returned>", "box": [300, 220], "place": "wall",
    "states": 1, "acts": ["wobble", "glow"]}` (add `"portal": [x, y]` if the camera should be able to
    push through it). Its `id` is then used like a library prop's.
