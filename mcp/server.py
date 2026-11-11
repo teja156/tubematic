@@ -2590,6 +2590,15 @@ def update_video(
     # reopens at every human checkpoint. /tubematic-submit-new-job sets both
     # between create_video (lands at TOPIC_PROPOSED) and its own flip to
     # TOPIC_APPROVED.
+    # A style write clears the recorded renderer and canvas when it changes
+    # the style, in the same UPDATE, so a value for them in the same call would
+    # be dropped without a word. They are recorded at scene time, long after
+    # the style is settled, so the two never belong in one call.
+    both = [k for k in ("resolved_renderer", "resolved_visual_style") if k in fields]
+    if "visual_style" in fields and both:
+        return {"error": f"visual_style and {', '.join(both)} cannot be written in one call: the "
+                         "style is set at the topic, and the renderer and canvas are recorded "
+                         "later, when the scenes are authored"}
     topic_locked = [k for k in TOPIC_ONLY_FIELDS if k in fields]
     agent_locked = [k for k in AGENT_CHECKPOINT_FIELDS if k in fields]
     set_sql = [f"{k} = ?" for k in fields]
@@ -2703,7 +2712,7 @@ def update_video(
                 (video_id,)).fetchone()
         if not row:
             return {"error": f"Video not found: {video_id}"}
-        if fields["resolved_renderer"] == "cartoon_3d" and (row["style_pick"] or "") != "":
+        if fields["resolved_renderer"] == "cartoon_3d" and (row["style_pick"] or "") == tvs.SCENES:
             return {"error": "Auto picked mixed scenes for this video before its script, so it renders "
                              "with the scene components ('dom'). A 3D world is the cartoon_3d style, "
                              "which Auto picks with choose_visual_style before the script."}
@@ -2734,10 +2743,19 @@ def update_video(
     # mascot on a Cartoon 3D video. Keep in sync: pipeline.py's patch_video.
     pair = [k for k in ("visual_style", "resolved_renderer", "mascot_id") if k in fields]
     if pair:
-        exprs = [("?" if k in fields else f"COALESCE(videos.{k}, '')")
-                 for k in ("visual_style", "resolved_renderer", "mascot_id")]
+        exprs, expr_params = [], []
+        for k in ("visual_style", "resolved_renderer", "mascot_id"):
+            if k in fields:
+                exprs.append("?")
+                expr_params.append(fields[k])
+            elif k == "resolved_renderer" and "visual_style" in fields:
+                # A changed style clears the renderer in this same UPDATE.
+                exprs.append(tvs.renderer_after_style_write_sql())
+                expr_params.append(fields["visual_style"])
+            else:
+                exprs.append(f"COALESCE(videos.{k}, '')")
         where_sql += " AND NOT " + tmascots.cartoon_mascot_clash_sql(*exprs)
-        where_params += [fields[k] for k in ("visual_style", "resolved_renderer", "mascot_id") if k in fields]
+        where_params += expr_params
     with _conn() as con:
         cur = con.execute(
             f"UPDATE videos SET {', '.join(set_sql)} WHERE id = ? AND archived_at IS NULL"
@@ -6962,14 +6980,6 @@ class _RendererContradiction(Exception):
         self.resolved = resolved
 
 
-def _row_get(row, key: str) -> str:
-    """A column of a sqlite3.Row or dict, or "" when the caller did not select it."""
-    try:
-        return row[key] or ""
-    except (IndexError, KeyError):
-        return ""
-
-
 def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
     """The scene kind must agree with the video's renderer: a Cartoon 3D scene
     only on a cartoon_3d video or an auto video that resolved to cartoon_3d,
@@ -6997,7 +7007,7 @@ def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
         if style == "auto" and resolved and resolved != "cartoon_3d":
             return (f"this video's 'auto' resolved to the {resolved!r} renderer, which is written once; a "
                     f"Cartoon 3D scene cannot follow (a revision renders with the renderer the video already uses)"), ""
-        if unresolved_auto and _row_get(row, "style_pick"):
+        if unresolved_auto and (row["style_pick"] or ""):
             return ("Auto picked mixed scenes for this video before its script, so it is authored with "
                     "the scene components; a Cartoon 3D scene needs the cartoon_3d style"), ""
         if unresolved_auto:

@@ -457,7 +457,9 @@ Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes 
   pick, or a person changing the style. A style a person chose keeps its canvas through a return to
   the topic.
 - A video Auto routed to mixed scenes cannot record the `cartoon_3d` renderer or take a Cartoon 3D
-  scene, while a video from before Auto picked styles still can.
+  scene through `write_scene_config`, while a video from before Auto picked styles still can.
+- `visual_style` and a `resolved_*` field are refused in one call, and a style change with a mascot
+  is not refused for the Cartoon 3D renderer the same write clears.
 - A move back to `TOPIC_PROPOSED`, guarded or not, returns an Auto pick to `auto`. A person's style
   survives it, and other moves keep the pick. A changed `visual_style` clears the pick and the same
   value keeps it.

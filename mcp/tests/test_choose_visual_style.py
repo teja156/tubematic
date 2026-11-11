@@ -393,3 +393,47 @@ def test_a_cartoon_scene_is_refused_on_a_routed_mixed_scenes_video(db):
     assert "Auto picked mixed scenes" in err and resolve == ""
     legacy = dict(row, style_pick="")
     assert server._check_cartoon_renderer(legacy, scenes) == ("", "cartoon_3d")
+
+
+def test_write_scene_config_refuses_a_cartoon_scene_on_a_routed_mixed_scenes_video(db):
+    """Through the real tool, so the column the check reads must be selected."""
+    _gpu(ok=True)
+    _video()
+    server.choose_visual_style("vid_1", "scenes", "No style fits.")
+    with server._conn() as con:
+        con.execute("UPDATE videos SET status = 'VOICE_READY' WHERE id = 'vid_1'")
+    config = {"totalFrames": 300, "fps": 30, "canvas": "dark",
+              "scenes": [{"type": "generated", "src": "vid_1/CartoonShort", "startFrame": 0,
+                          "durationInFrames": 300,
+                          "props": {"cartoon3d": {"beats": [{"start": 0, "end": 299, "shot": "the quay"}]}}}]}
+    err = server.write_scene_config("vid_1", config)
+    assert "Auto picked mixed scenes" in err.get("error", ""), err
+    assert _resolved() == ("", "")
+
+
+def test_the_mixed_scenes_message_is_only_for_mixed_scenes(db):
+    _gpu(ok=True)
+    _video()
+    server.choose_visual_style("vid_1", "system_flow", "A path.")
+    with server._conn() as con:
+        con.execute("UPDATE videos SET status = 'VOICE_READY' WHERE id = 'vid_1'")
+    err = server.update_video("vid_1", resolved_renderer="cartoon_3d")["error"]
+    assert "mixed scenes" not in err and "nothing to resolve" in err
+
+
+def test_a_style_and_a_recorded_renderer_or_canvas_are_never_written_together(db):
+    _video(status="TOPIC_PROPOSED")
+    err = server.update_video("vid_1", visual_style="auto", resolved_visual_style="dark")
+    assert "cannot be written in one call" in err["error"]
+    assert _resolved() == ("", "")
+
+
+def test_a_style_change_with_a_mascot_is_not_judged_against_the_old_3d_renderer(db):
+    """The same UPDATE clears the renderer, so the clash check must not use it."""
+    _gpu(ok=True)
+    mid = _mascot()
+    _video(status="TOPIC_PROPOSED")
+    _set_resolved("cartoon_3d", "")
+    out = server.update_video("vid_1", visual_style="stick", mascot_id=mid)
+    assert "error" not in out, out
+    assert _resolved() == ("", "") and _row()["visual_style"] == "stick"

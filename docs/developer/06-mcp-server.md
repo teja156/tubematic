@@ -336,7 +336,9 @@ Fields writable only at `TOPIC_PROPOSED`:
 - A `visual_style` different from the stored one clears the record of a style `auto` picked
   (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
   scenes (`resolved_renderer`, `resolved_visual_style`). The same value again keeps them, because the
-  dashboard re-sends the picker on every approval.
+  dashboard re-sends the picker on every approval. A call that writes `visual_style` together with
+  either `resolved_*` field is refused. A mascot is judged against the renderer the video will have
+  after the write, so a changed style is not refused for a Cartoon 3D renderer it clears.
 
 Fields writable at any human checkpoint (`TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY`):
 

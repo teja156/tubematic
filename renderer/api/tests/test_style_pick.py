@@ -245,3 +245,25 @@ def test_a_person_changing_the_style_clears_the_old_scene_choices(client, db_pat
     assert resolved() == ("cartoon_3d", "dark")
     assert client.patch("/videos/vid_1", json={"visual_style": "stick"}).status_code == 200
     assert resolved() == ("", "")
+
+
+def test_an_approval_that_changes_the_style_is_not_refused_for_the_old_3d_renderer(client, db_path):
+    """A video whose old Auto recorded the Cartoon 3D renderer, back at its
+    topic: approving it as Stick with a mascot must pass, because the same
+    UPDATE clears that renderer."""
+    _video(db_path, status="TOPIC_PROPOSED", style="auto", pick="", runner_up="")
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET resolved_renderer = 'cartoon_3d'")
+    con.execute("INSERT INTO mascots (id, name, status, approved_version, archived, created_at, updated_at) "
+                "VALUES ('moss', 'Moss', 'READY', 1, 0, ?, ?)", (NOW, NOW))
+    con.execute("INSERT INTO mascot_versions (mascot_id, version, code, created_at, approved_at) "
+                "VALUES ('moss', 1, '// c', ?, ?)", (NOW, NOW))
+    con.execute("UPDATE renderers SET gpu_probe = ?, gpu_verified = 1 WHERE id = 'builtin'",
+                (json.dumps({"configured": True, "ok": True}),))
+    con.commit()
+    con.close()
+    r = client.patch("/videos/vid_1", json={"status": "TOPIC_APPROVED", "onlyIfCurrentStatus": "TOPIC_PROPOSED",
+                                            "visual_style": "stick", "mascot_id": "moss"})
+    assert r.status_code == 200, r.get_json()
+    got = _row(db_path)
+    assert (got["status"], got["visual_style"]) == ("TOPIC_APPROVED", "stick")

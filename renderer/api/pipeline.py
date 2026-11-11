@@ -2766,8 +2766,12 @@ def create_pipeline_blueprint() -> Blueprint:
                     err = _cartoon_mascot_error(stored_mascot) if (
                         stored_mascot and held and not switching) else ""
                 else:
-                    err = _approval_pair_error(
-                        con, (cur_vid["resolved_renderer"] or "") == "cartoon_3d", held)
+                    # A changed style clears the recorded renderer in this
+                    # same UPDATE, so the pair is judged without it.
+                    style_changes = ("visual_style" in fields
+                                     and fields["visual_style"] != (cur_vid["visual_style"] or ""))
+                    renderer_after = "" if style_changes else (cur_vid["resolved_renderer"] or "")
+                    err = _approval_pair_error(con, renderer_after == "cartoon_3d", held)
                 if err:
                     return jsonify({"error": err}), 409
 
@@ -2857,9 +2861,12 @@ def create_pipeline_blueprint() -> Blueprint:
                     mascot_sql, mascot_p = "?", [fields["mascot_id"]]
                 else:
                     mascot_sql, mascot_p = "COALESCE(videos.mascot_id, '')", []
+                renderer_sql, renderer_p = (
+                    (tvs.renderer_after_style_write_sql(), [fields["visual_style"]])
+                    if "visual_style" in fields else ("COALESCE(videos.resolved_renderer, '')", []))
                 where_sql += " AND NOT " + tmascots.cartoon_mascot_clash_sql(
-                    style_sql, "COALESCE(videos.resolved_renderer, '')", mascot_sql)
-                where_params += style_p + mascot_p
+                    style_sql, renderer_sql, mascot_sql)
+                where_params += style_p + renderer_p + mascot_p
                 if mascot_guarded:
                     where_sql += " AND " + tmascots.holds_pickable_sql(mascot_sql)
                     where_params += mascot_p * 2

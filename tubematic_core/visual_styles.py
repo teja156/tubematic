@@ -407,6 +407,15 @@ AUTO_PICK_RESET_SET = (
 NEW_STYLE_CLEARS_SET = "resolved_renderer = '', resolved_visual_style = ''"
 
 
+def renderer_after_style_write_sql(value_expr: str = "?") -> str:
+    """The renderer a row will have once a write of visual_style lands, as an
+    SQL expression (bind the new value once for "?"): a changed style clears
+    the recorded renderer (style_change_clears_pick), so a check made in the
+    same UPDATE's WHERE must not judge the pair against the old one."""
+    return (f"CASE WHEN COALESCE(videos.visual_style, '') = {value_expr} "
+            "THEN COALESCE(videos.resolved_renderer, '') ELSE '' END")
+
+
 def style_change_clears_pick(value: str) -> tuple[str, list]:
     """SET fragments and their parameters for a write of visual_style by a
     person. A changed value replaces Auto's pick, so the record of that pick

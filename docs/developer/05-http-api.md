@@ -475,7 +475,9 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   style write that commits in between also gets `409`.
 - A `visual_style` different from the stored one clears the record of a style Auto picked
   (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
-  scenes. The same value again keeps them. A `status` of `TOPIC_PROPOSED` without a `visual_style`
+  scenes. The same value again keeps them. The mascot checks of the same request judge the video
+  by the renderer it will have after the write, so a changed style is not refused for a Cartoon 3D
+  renderer it clears. A `status` of `TOPIC_PROPOSED` without a `visual_style`
   returns a style Auto picked to `auto` and clears the record, and on every `auto` video it clears
   the recorded renderer and canvas. Both are SQL fragments in `tubematic_core/visual_styles.py` that `update_video` and
   `set_video_status` also use.
