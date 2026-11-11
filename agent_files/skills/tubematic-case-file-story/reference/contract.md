@@ -22,9 +22,9 @@ term card is near-black all over.
 ## The whole video
 
 ```json
-{"totalFrames": 1441, "canvas": "dark",
+{"totalFrames": 1423, "canvas": "dark",
  "scenes": [{"type": "generated", "source": "installed", "src": "CaseFileStory",
-             "startFrame": 0, "durationInFrames": 1441,
+             "startFrame": 0, "durationInFrames": 1423,
              "props": {"caseFile": {"accent": "pink", "hud": [ ... ], "beats": [ ... ]}}}]}
 ```
 

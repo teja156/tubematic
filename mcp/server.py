@@ -5885,8 +5885,8 @@ _IMAGE_EDIT_TIMEOUT_SECS = 600
 # folder alone is a check-then-act race: parallel calls each see 11 pictures,
 # all pass and all are billed. A reservation counts until the file exists, and
 # lapses after _IMAGE_RESERVE_SECS so a call that died without releasing it
-# does not hold a slot. It must outlast the longest call, or a slow call's
-# slot is given away while it is still being paid for.
+# does not hold a slot. It is longer than the longest wait for a response, so
+# a slow call keeps its slot while it is being paid for.
 _IMAGE_RESERVE_SECS = 900
 _image_reservations: dict[str, dict[str, float]] = {}
 _image_reservations_lock = threading.Lock()

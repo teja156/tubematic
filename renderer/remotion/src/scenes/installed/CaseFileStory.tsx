@@ -20,7 +20,7 @@
  * threshold's dashes are rectangles); the count grid is one Canvas 2D layer;
  * cards are flat colour.
  *
- * Measured in CPU-seconds per frame over the whole skill example (1441 frames,
+ * Measured in CPU-seconds per frame over the whole skill example (about 1,400 frames,
  * rendered from a prebuilt bundle with software GL, concurrency 2): 0.41
  * here, 0.26 for System Flow's example on the same day by the same method
  * (1.6x, the ratio Under the Hood measured). The slow push makes every frame

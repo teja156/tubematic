@@ -588,8 +588,8 @@ the scene and the painting style after it. It refuses, before any request, a lea
 without `reference="house"`, the house sheet used for another picture, and a reference that is not
 yet a picture of the video, and a picture named `house`, the name kept for the house sheet
 (`server.py::_case_file_image_plan`). The result carries `reference`. A call with a reference
-waits up to 600 seconds for OpenAI, as `generate_character` does, and a reserved slot outlasts
-that.
+waits up to 600 seconds for OpenAI's response, as `generate_character` does, and a reserved slot
+lasts 900 seconds, longer than that wait.
 The reasons are in [Case File Story](10-scene-authoring.md#the-lead-and-the-stills).
 
 ### `generate_character`

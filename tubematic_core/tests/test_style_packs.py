@@ -197,6 +197,12 @@ def test_case_file_story():
                    "at most 26 characters", "at most 16 characters", "at most 10 characters"):
         assert phrase in script, phrase
     assert "comes before the ending" in script
+    # what is real and what belongs to the invented situation
+    assert "Every law, limit, threshold, penalty and term in it is real" in script
+    assert "belong to the invented situation" in script
+    # the choice question varies from video to video, and a closing line the preferences ask for follows it
+    assert "starts with the first option" in script and "a closing line the preferences ask for" in script
+    assert "close-ups and the closing choice" in p["review"]
 
 
 def test_a_pack_that_takes_no_mascot_must_say_why():

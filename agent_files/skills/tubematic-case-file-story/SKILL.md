@@ -84,7 +84,8 @@ card brief. Lay the story out as beats:
 - A **bars** card where it says several amounts one by one against a limit ("nine thousand on Monday,
   nine on Tuesday").
 - A **term** card where it names what this is and what it is in law: the consequence.
-- The **choice** on the last sentence, which is only the two options.
+- The **choice** on the sentence that is only the two options: the script's last, or the one before
+  a closing line when the preferences asked for one.
 
 Plan the stills first and count them: 8 to 12 is usual, 16 is the ceiling. Choose the meters from what
 the script counts, and note the beat where each value changes.
@@ -113,7 +114,8 @@ generate_image(video_id, "<name>", "<the scene>", reference="lead")
 ```
 
 For a still **without the lead** (an object, a street, an empty room), leave `reference` out and end
-the prompt with "No people."
+the prompt with "No people." Name a still anything except `lead` and `house`, which are kept for the
+two sheets.
 
 The prompt is only the scene. The server adds the lead's description and the painting style to every
 prompt, so do not describe the lead's head or the art style. Write three things:
@@ -184,7 +186,7 @@ sentence, `stamp` what it is ("FEDERAL CRIME", "FRAUD", "RED FLAG"), `citation` 
 when the script gives one. Use the script's words; never invent a law.
 
 **The choice** reuses the last moment's still or a new one. `options` are the two things the last
-sentence offers, in the order it says them, one or two words each in capitals. The second is drawn in
+sentence offers, in the order it says them, at most 10 characters each, in capitals. The second is drawn in
 the accent colour.
 
 ## Step 5 — captions

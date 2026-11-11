@@ -1,5 +1,5 @@
 {
- "totalFrames": 1441,
+ "totalFrames": 1423,
  "canvas": "dark",
  "scenes": [
   {
@@ -7,7 +7,7 @@
    "source": "installed",
    "src": "CaseFileStory",
    "startFrame": 0,
-   "durationInFrames": 1441,
+   "durationInFrames": 1423,
    "props": {
     "caseFile": {
      "accent": "pink",
@@ -190,8 +190,8 @@
         "HAND IN"
        ],
        "optionFrames": [
-        1351,
-        1379
+        1333,
+        1361
        ]
       }
      ]

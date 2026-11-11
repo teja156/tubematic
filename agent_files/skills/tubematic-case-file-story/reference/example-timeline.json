@@ -1,7 +1,7 @@
 {
- "totalFrames": 1441,
+ "totalFrames": 1423,
  "fps": 30,
- "audioDurationSeconds": 48.03,
+ "audioDurationSeconds": 47.43,
  "words": [
   {
    "word": "You",
@@ -479,44 +479,34 @@
    "endFrame": 1321
   },
   {
-   "word": "Do",
+   "word": "Hide",
    "startFrame": 1333,
-   "endFrame": 1339
-  },
-  {
-   "word": "you",
-   "startFrame": 1341,
-   "endFrame": 1349
-  },
-  {
-   "word": "hide",
-   "startFrame": 1351,
-   "endFrame": 1361
+   "endFrame": 1343
   },
   {
    "word": "it,",
-   "startFrame": 1363,
-   "endFrame": 1369
+   "startFrame": 1345,
+   "endFrame": 1351
   },
   {
    "word": "or",
-   "startFrame": 1371,
-   "endFrame": 1377
+   "startFrame": 1353,
+   "endFrame": 1359
   },
   {
    "word": "hand",
-   "startFrame": 1379,
-   "endFrame": 1389
+   "startFrame": 1361,
+   "endFrame": 1371
   },
   {
    "word": "it",
-   "startFrame": 1391,
-   "endFrame": 1397
+   "startFrame": 1373,
+   "endFrame": 1379
   },
   {
    "word": "in?",
-   "startFrame": 1399,
-   "endFrame": 1405
+   "startFrame": 1381,
+   "endFrame": 1387
   }
  ]
 }

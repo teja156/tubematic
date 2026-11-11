@@ -129,7 +129,7 @@ If you go back to 2.1.x later:
   physical: a grid of icons that fills as a counter climbs, bars appearing one by one under a
   dashed limit, and the name of what happened with its definition and a stamp. The video ends on a
   choice, with two buttons for the options the narrator asks about. The people in the story are
-  invented, the figures and laws are real, a scheme is explained the way a news report would and
+  invented, the laws, limits and terms are real, a scheme is explained the way a news report would and
   always ends found out or named as a crime, and there is no violence. It needs an OpenAI key and
   uses up to 16 generated pictures per video, plus one reference picture of the character; it needs
   no GPU. Its videos have no mascot. Choose it for a topic, on the **New Video** page, or as a

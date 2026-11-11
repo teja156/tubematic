@@ -654,8 +654,8 @@ the style: the reference picture, the text added to the prompt and the cap on pi
   of its own: a video that already holds 16 stills can still make it, and it never takes a still's
   place. Under the Hood keeps its own cap and wording.
 
-- An edit from a reference waits up to 600 seconds and a picture from text 180, and a reserved
-  slot outlasts both: a slow call keeps its slot until it ends.
+- An edit from a reference waits up to 600 seconds for a response and a picture from text 180, and
+  a reserved slot lasts longer than both waits.
 
 Trap: the refusals for a wrong reference run before the scene-work claim and the cap, so a refused
 call reserves no picture slot and reaches no paid endpoint.

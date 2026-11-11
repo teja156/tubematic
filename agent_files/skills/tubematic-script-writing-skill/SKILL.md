@@ -531,7 +531,8 @@ of that object and what is labelled on it.
 `case_file_story` has no named people at all: its one person is "you", shown as the style's own
 blank-faced lead, and every brief is a place with what you are doing in it, or a card. Its story
 is a situation the viewer steps into, not an incident reported as real, so rule 14 bears on its
-figures, laws and terms, which must all be real.
+laws, limits and terms, which must all be real. The amounts in the story and its meters' values
+are part of the invented situation.
 
 ### The treatment follows the beat's subject, not the writer's habit
 

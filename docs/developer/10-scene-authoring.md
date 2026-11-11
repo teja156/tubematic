@@ -1016,7 +1016,7 @@ band under it, so one caption colour reads on every beat.
 The pack's `script` text sets the story's form, because Auto picks the style before the script is
 written: second person and present tense, two or three quantities that move, one number made
 physical, the real name of what happened with its definition, and a last sentence that is only the
-two options. It also sets the subject's limits: invented people with no names, real figures and
+two options (a closing line the preferences ask for comes after it). It also sets the subject's limits: invented people with no names, real limits, terms and
 laws, a scheme explained as a news report would and never as instructions, an ending in which the
 scheme is found out or named as a crime, and no violence.
 
