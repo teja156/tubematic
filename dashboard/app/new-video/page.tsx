@@ -119,8 +119,12 @@ export default function NewVideoPage() {
   const domainLive = domainAgent(agents, manualDefaults.default_agent_id);
   const domainModel = domainLive?.models.includes(manualDefaults.default_agent_model)
     ? manualDefaults.default_agent_model : "";
+  // While the agent list has not loaded (or failed), whether the domain's
+  // agent is live is unknown, so the choice only says that the domain has one.
   const automatic = {
-    agent: domainLive ? `Domain default (${domainLive.name})` : "Automatic (dealt by weight)",
+    agent: domainLive ? `Domain default (${domainLive.name})`
+      : agents === undefined && manualDefaults.default_agent_id ? "Domain default"
+      : "Automatic (dealt by weight)",
     model: domainModel ? `${domainModel} (domain default)` : "Agent default",
     effort: manualDefaults.default_agent_effort
       ? `${manualDefaults.default_agent_effort} (domain default)` : effortOptionLabel(domainLive),

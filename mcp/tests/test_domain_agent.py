@@ -131,6 +131,24 @@ def test_a_model_alone_is_checked_against_the_stored_agent(db):
     assert _defaults(row) == ("codex", "gpt-a", "")
 
 
+def test_a_stale_model_can_be_cleared_while_its_agent_is_uninstalled(db):
+    """The stored agent is not being changed, so its being uninstalled is not
+    this call's business, and the refusal must not name a field never passed."""
+    server.upsert_project("dom", "Domain", default_agent_id="codex",
+                          default_agent_model="gpt-b")
+    _sql("UPDATE agents SET archived_at = ? WHERE id = 'codex'", (T0,))
+    row = server.upsert_project("dom", "Domain", default_agent_model="")
+    assert _defaults(row) == ("codex", "", "")
+
+
+def test_a_new_model_is_refused_while_its_agent_is_uninstalled(db):
+    server.upsert_project("dom", "Domain", default_agent_id="codex",
+                          default_agent_model="gpt-b")
+    _sql("UPDATE agents SET archived_at = ? WHERE id = 'codex'", (T0,))
+    result = server.upsert_project("dom", "Domain", default_agent_model="gpt-a")
+    assert "default_agent_model" in result["error"]
+
+
 def test_a_stored_pair_that_went_stale_does_not_block_another_edit(db):
     server.upsert_project("dom", "Domain", default_agent_id="codex",
                           default_agent_model="gpt-b")

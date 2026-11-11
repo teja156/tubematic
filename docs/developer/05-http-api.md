@@ -344,9 +344,10 @@ What the route fills in:
 
 - A `title` over 70 characters is clipped at a word boundary, with a `warning`. The create is not
   refused, because a refused create during a research run would lose the topic.
-- `agent_id`, `agent_model` and `agent_effort` come from the domain while it names a live agent.
-  Otherwise `agent_id` is dealt from the assignment deck and `agent_model` is `""` (see
-  [Assignment](07-agent-layer.md#assignment)). An `agent_id` in the body is ignored.
+- `agent_id` and `agent_model` come from the domain while it names a live agent. Otherwise
+  `agent_id` is dealt from the assignment deck and `agent_model` is `""`. `agent_effort` is the
+  domain's `default_agent_effort` in both cases (see [Assignment](07-agent-layer.md#assignment)).
+  An `agent_id` in the body is ignored.
 - With no `voice_id`, the video takes its domain's `default_voice_id` if that voice is on the
   roster, whatever its `strategy`. Otherwise `voice_id` is `""`, the install default. The voice is
   copied onto the row, so a later change to the domain's default does not change filed videos.
@@ -657,8 +658,9 @@ every edit and a value that became invalid later must not block other edits:
 - `default_voice_id` on the roster.
 - `default_script_profile_id` being `READY`.
 - `default_mascot_id` being pickable, with a working GPU.
-- `default_agent_id` and `default_agent_model`, as a pair: the agent is live and its `models` holds
-  the model.
+- `default_agent_id` and `default_agent_model`, as a pair: a new agent is live, and the agent's
+  `models` holds the model. The stored agent passes when it is sent again, so a model it dropped
+  can be cleared with `''` while the agent is uninstalled.
 
 The id of an existing domain is not checked, so a domain filed under an older id stays editable.
 The id names the domain's output directory. A `topic_cap` below the domain's count is accepted and

@@ -161,6 +161,26 @@ describe("NewVideoPage", () => {
     expect(blank("new-video-effort")).toBe("medium (agent default)");
   });
 
+  it("says only that the domain has an agent when the agent list cannot be loaded", async () => {
+    // Whether that agent is live is unknown here, and the API decides either
+    // way, so the page must not claim the weighted deal.
+    mockApi({ agents: "fail", projects: [MANUAL] });
+    render(<NewVideoPage />);
+    await waitFor(() => expect(blank("new-video-agent")).toBe("Domain default"));
+    expect(blank("new-video-effort")).toBe("max (domain default)");
+  });
+
+  it("a picked agent with no usable model list does not show the domain's model", async () => {
+    mockApi({
+      agents: [...AGENTS, agent({ id: "bare", name: "Bare", models: [], is_default: false })],
+      projects: [MANUAL],
+    });
+    await ready();
+    await waitFor(() => expect(blank("new-video-model")).toBe("gpt-5 (domain default)"));
+    fireEvent.change(screen.getByTestId("new-video-agent"), { target: { value: "bare" } });
+    expect(blank("new-video-model")).toBe("Agent default");
+  });
+
   it("a picked agent takes nothing from the manual domain", async () => {
     mockApi({ projects: [MANUAL] });
     await ready();

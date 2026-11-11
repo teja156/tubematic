@@ -179,6 +179,23 @@ def test_a_kept_model_since_dropped_does_not_block_other_edits(client, db_path, 
     assert r.status_code == 201
 
 
+def test_a_stale_model_can_be_cleared_while_its_agent_is_uninstalled(client, db_path, agents):
+    """Naming the stored agent again is not a change of agent, so its being
+    uninstalled is not this edit's business. Without that, the only way to drop
+    the model would be to move the domain to another agent."""
+    _project(client, default_agent_id="codex", default_agent_model="gpt-b")
+    _sql(db_path, "UPDATE agents SET archived_at = ? WHERE id = 'codex'", (T0,))
+    r = _project(client, default_agent_id="codex")
+    assert r.status_code == 201 and json.loads(r.data)["default_agent_model"] == ""
+
+
+def test_a_new_model_is_refused_while_its_agent_is_uninstalled(client, db_path, agents):
+    _project(client, default_agent_id="codex", default_agent_model="gpt-b")
+    _sql(db_path, "UPDATE agents SET archived_at = ? WHERE id = 'codex'", (T0,))
+    assert _project(client, default_agent_id="codex",
+                    default_agent_model="gpt-a").status_code == 400
+
+
 def test_a_changed_model_is_checked_even_when_the_agent_is_kept(client, agents):
     _project(client, default_agent_id="codex", default_agent_model="gpt-b")
     r = _project(client, default_agent_id="codex", default_agent_model="sonnet")
@@ -282,6 +299,17 @@ def test_a_picked_effort_beats_the_manual_domains(client, agents):
     assert _picks(_manual(client, agent_effort="low")) == ("codex", "", "low")
 
 
+def test_a_model_in_the_request_beats_the_manual_domains(client, agents):
+    """The dashboard cannot send this (its model picker is disabled under
+    Automatic), but the route takes it, and it is checked against the agent the
+    video ends up on: the domain's."""
+    _project(client, pid=pipeline.MANUAL_PROJECT_ID, default_agent_id="codex",
+             default_agent_model="gpt-b")
+    assert _picks(_manual(client, agent_model="gpt-a")) == ("codex", "gpt-a", "")
+    r = client.post("/videos/manual", json={"title": "T", "topic": "x", "agent_model": "sonnet"})
+    assert r.status_code == 400
+
+
 def test_a_picked_agent_overrides_the_domains_agent_model_and_effort_together(client, agents):
     _project(client, pid=pipeline.MANUAL_PROJECT_ID, default_agent_id="codex",
              default_agent_model="gpt-b", default_agent_effort="max")
@@ -293,15 +321,16 @@ def test_a_picked_agent_overrides_the_domains_agent_model_and_effort_together(cl
 # ── the MCP copy ─────────────────────────────────────────────────────────────
 
 def _mcp_functions(*names):
+    """The MCP server's own copies, with the helpers they call: everything from
+    _agent_models to _truncate_title is the server's agent block, so a drift in
+    _agent_model_error or _agent_id_error there shows up here too."""
+    import math
+    import random
     path = pathlib.Path(__file__).resolve().parents[3] / "mcp" / "server.py"
     src = path.read_text()
-    ns = {"_pick_agent_id": pipeline._pick_agent_id, "_agent_models": pipeline._agent_models,
-          "_agent_id_error": pipeline._agent_id_error,
-          "_agent_model_error": pipeline._agent_model_error,
-          "AGENT_EFFORTS": pipeline.AGENT_EFFORTS}
-    for name in names:
-        start = src.index(f"def {name}(")
-        exec(compile(src[start:src.index("\ndef ", start + 1)], str(path), "exec"), ns)
+    ns = {"random": random, "json": json, "math": math, "AGENT_EFFORTS": pipeline.AGENT_EFFORTS}
+    start = src.index("def _agent_models(")
+    exec(compile(src[start:src.index("\ndef _truncate_title(", start)], str(path), "exec"), ns)
     return [ns[name] for name in names]
 
 
@@ -344,9 +373,11 @@ def test_the_refusals_match_the_mcp_copy(db_path, tmp_path):
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
     try:
-        for aid in ("", "claude", "codex", "gone", "ghost"):
-            for model in ("", "sonnet", "gpt-b"):
-                assert (mcp_fn(con, aid, model)
-                        == pipeline._domain_agent_error(con, aid, model)), (aid, model)
+        for stored in ("", "codex", "gone"):
+            for aid in ("", "claude", "codex", "gone", "ghost"):
+                for model in ("", "sonnet", "gpt-b"):
+                    assert (mcp_fn(con, aid, model, stored)
+                            == pipeline._domain_agent_error(con, aid, model, stored)), \
+                        (stored, aid, model)
     finally:
         con.close()

@@ -1475,12 +1475,15 @@ def _domain_agent(con, project_id):
     return _pick_agent_id(con), "", effort
 
 
-def _domain_agent_error(con, agent_id: str, model: str):
+def _domain_agent_error(con, agent_id: str, model: str, stored_agent_id: str = ""):
     """Why a domain cannot take this agent and model as its default, or None.
 
-    The agent must be live and the model one of its own; a model with no agent
-    has no list to belong to. Callers run this only when the pair changes, so a
-    stored pair that went stale never blocks another edit to the domain.
+    A new agent must be live, and a model must be one of the agent's own; a
+    model with no agent has no list to belong to. The domain's stored agent may
+    be named again even when it has since been uninstalled, as a video's may:
+    that is how a model it no longer offers gets cleared. Callers run this only
+    when the pair changes, so a stored pair that went stale never blocks
+    another edit to the domain.
     Keep in sync: renderer/api/pipeline.py's _domain_agent_error (agreement test).
     """
     if not agent_id:
@@ -1488,7 +1491,8 @@ def _domain_agent_error(con, agent_id: str, model: str):
             return ("default_agent_model needs a default_agent_id: a model belongs to one "
                     "agent's list")
         return None
-    err = _agent_id_error(con, None, agent_id) or _agent_model_error(con, agent_id, model)
+    err = (_agent_id_error(con, stored_agent_id, agent_id)
+           or _agent_model_error(con, agent_id, model))
     if err:
         return (err.replace("agent_model", "default_agent_model")
                 .replace("agent_id", "default_agent_id")
@@ -1668,10 +1672,11 @@ def create_video(
     which pronunciation and pause markup the script may use.
     The human will see TOPIC_PROPOSED cards in the dashboard and approve/reject.
 
-    The result carries the video's agent_id, agent_model and agent_effort. They
-    come from the project when it names an agent (list_projects'
-    default_agent_id, default_agent_model, default_agent_effort); otherwise the
-    video is dealt an agent by weight, and a blank model or effort means that
+    The result carries the video's agent_id, agent_model and agent_effort. The
+    agent and model come from the project when it names an agent
+    (list_projects' default_agent_id and default_agent_model); otherwise the
+    video is dealt an agent by weight. The effort is the project's
+    default_agent_effort either way. A blank model or effort means that
     agent's own.
 
     A paused or expired project_id is refused (expired: the domain already
@@ -3257,7 +3262,7 @@ def upsert_project(
             else:
                 new_model = stored_model if new_agent == stored_agent else ""
             if (new_agent, new_model) != (stored_agent, stored_model):
-                err = _domain_agent_error(con, new_agent, new_model)
+                err = _domain_agent_error(con, new_agent, new_model, stored_agent)
                 if err:
                     return {"error": err}
             default_agent_id, default_agent_model = new_agent, new_model

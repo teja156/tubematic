@@ -955,6 +955,9 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     expect(screen.getByTestId("domain-chip-mascot-seed-1").textContent).toBe("MascotNone");
     expect(screen.queryByTestId("domain-chip-profile-seed-1")).toBeNull();
     expect(screen.getByTestId("domain-topics-seed-1").textContent).toBe("12 / 300 topics");
+    // The name is cut with an ellipsis when it is long, so the whole of it is
+    // on hover.
+    expect(screen.getByTestId("domain-name-seed-1").getAttribute("title")).toBe("Linux internals");
   });
 
   it("says so when a domain overrides nothing", async () => {

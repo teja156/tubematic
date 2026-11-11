@@ -374,7 +374,7 @@ function DomainRow({ project, videoCounts, onToggle, onSave, lists, canIllustrat
             is what the line wraps on. */}
         <div style={{ flex: "1 1 300px", minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span data-testid={`domain-name-${project.id}`} style={{ fontFamily: "var(--sans)", fontSize: 14, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0, maxWidth: "100%" }}>
+            <span data-testid={`domain-name-${project.id}`} title={project.name} style={{ fontFamily: "var(--sans)", fontSize: 14, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0, maxWidth: "100%" }}>
               {project.name}
             </span>
             {project.description && (

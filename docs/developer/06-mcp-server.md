@@ -454,7 +454,8 @@ HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
 
 - `default_agent_id` is a live agent's id, or `""` for the weighted deal. `default_agent_model` is
   one of that agent's models and is refused without an agent. Changing the agent without passing a
-  model clears the stored model, because it belongs to the other agent's list.
+  model clears the stored model, because it belongs to the other agent's list. `""` for the model
+  is accepted while the stored agent is uninstalled.
 - `default_agent_effort` is one of the five effort levels and needs no agent.
 
 The description limit, the four defaults above it and the agent with its model are checked only

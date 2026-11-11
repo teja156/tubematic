@@ -147,7 +147,8 @@ Covers a domain's agent, model and effort in `upsert_project`, `create_video` an
 - `upsert_project` keeps an omitted field and clears on `""`. It refuses an agent that is not
   live, a model outside the agent's list, a model with no agent and an unknown effort, and writes
   nothing when it refuses.
-- A stored agent and model that became invalid do not block another edit of the domain.
+- A stored agent and model that became invalid do not block another edit of the domain, and the
+  model can be cleared while its agent is uninstalled.
 
 Trap: changing the agent without naming a model clears the stored model. Keeping it would refuse
 the call, because the stored model belongs to the previous agent's list.

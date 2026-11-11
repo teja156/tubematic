@@ -62,7 +62,7 @@ export function AgentPickers({
   const picked = liveAgents.find((a) => a.id === agentId) ?? null;
   const resolved = resolvePickedModel(picked, model);
   const agentNote = agentsFailed
-    ? "Agent list not loaded — the video will be dealt an agent automatically."
+    ? "Agent list not loaded. The agent will be chosen automatically."
     : agents !== undefined && liveAgents.length === 0
       ? "No agents installed. Install one on the host with onboard.py --install-agent."
       : undefined;
@@ -94,7 +94,7 @@ export function AgentPickers({
             ? picked.models.map((m, i) => (
                 <option key={m} value={m}>{i === 0 ? `${m} (default)` : m}</option>
               ))
-            : <option value="">{automatic?.model ?? "Agent default"}</option>}
+            : <option value="">{picked ? "Agent default" : automatic?.model ?? "Agent default"}</option>}
         </select>
       </Field>
 

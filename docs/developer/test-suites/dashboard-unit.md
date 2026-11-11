@@ -119,7 +119,8 @@ Covers the request body of [the New Video page](../15-dashboard.md#the-new-video
 - The voice picker's **Default** names the voice the API will give the video.
 - The blank agent, model and effort choices name the Manual Videos domain's agent, model and effort
   while that agent is live, and the request for them is unchanged. An uninstalled domain agent
-  reads as Automatic. A picked agent shows its own effort level.
+  reads as Automatic. A picked agent shows its own effort level and never the domain's model. With
+  no agent list, the blank agent choice reads **Domain default** without a name.
 - Submit is blocked with a title over 70 code points, and a refusal keeps the input.
 
 ### `script-profiles-page.test.tsx`

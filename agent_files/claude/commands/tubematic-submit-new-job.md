@@ -60,9 +60,10 @@ Step 4 — Create the video and immediately approve it.
   the script are about, so the title is a name for it, not the first 70 characters of it. If the
   user's topic is already 70 characters or fewer, use it as the title unchanged.
   tubematic:create_video(topic=TOPIC, title=SHORT_TITLE, strategy="manual", producibility_score=SCORE, project_id=PROJECT_ID, voice_id=CHOSEN_VOICE_ID)
-  The result carries the video's agent_id, agent_model and agent_effort. They come from the
-  domain when it names an agent of its own; otherwise the video was dealt an agent by weight. A
-  blank agent_model or agent_effort means that agent's own.
+  The result carries the video's agent_id, agent_model and agent_effort. The agent and model
+  come from the domain when it names an agent of its own; otherwise the video was dealt an agent
+  by weight. The effort is the domain's whenever it has set one. A blank agent_model or
+  agent_effort means that agent's own.
 
   If the user asked for a specific agent (e.g. "have Codex do it"), move the video to it: call
   tubematic:get_pipeline_status(), find that agent in `agents` (only live agents are listed, and

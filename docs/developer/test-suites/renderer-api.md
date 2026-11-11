@@ -249,11 +249,13 @@ Covers a domain's agent, model and effort: `_domain_agent`, `_domain_agent_error
 - A domain agent uninstalled since falls back to the deal without its model. A model the agent
   dropped seeds `''`. An effort with no agent is copied onto the dealt agent's video.
 - `POST /videos/manual` takes the `manual` domain's three values when the request names no agent,
-  and none of them when it names one.
+  and none of them when it names one. A model or effort in the request replaces the domain's.
 - `POST /projects` refuses an agent that is not live, a model outside the agent's list, a model
   with no agent, and a non-string. It checks the agent and model as a pair, when either changes.
+- `POST /projects` accepts the stored agent again with a blank model while that agent is
+  uninstalled, and refuses a new model for it.
 - `_domain_agent` and `_domain_agent_error` return what the MCP server's copies return, over every
-  branch.
+  branch. The MCP copies run with the MCP server's own `_agent_id_error` and `_agent_model_error`.
 
 Trap: the pause and topic-cap race tests replace `_pick_agent_id` to act between the early check
 and the `INSERT`. `_domain_agent` must keep calling it on the path that deals, or those tests pass

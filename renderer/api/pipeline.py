@@ -668,20 +668,24 @@ def _domain_agent(con, project_id):
     return _pick_agent_id(con), "", effort
 
 
-def _domain_agent_error(con, agent_id: str, model: str):
+def _domain_agent_error(con, agent_id: str, model: str, stored_agent_id: str = ""):
     """Why a domain cannot take this agent and model as its default, or None.
 
-    The agent must be live and the model one of its own; a model with no agent
-    has no list to belong to. Callers run this only when the pair changes, so a
-    stored pair that went stale never blocks another edit to the domain.
-    Keep in sync: mcp/server.py's _domain_agent_error.
+    A new agent must be live, and a model must be one of the agent's own; a
+    model with no agent has no list to belong to. The domain's stored agent may
+    be named again even when it has since been uninstalled, as a video's may:
+    that is how a model it no longer offers gets cleared. Callers run this only
+    when the pair changes, so a stored pair that went stale never blocks
+    another edit to the domain.
+    Keep in sync: mcp/server.py's _domain_agent_error (agreement test).
     """
     if not agent_id:
         if model:
             return ("default_agent_model needs a default_agent_id: a model belongs to one "
                     "agent's list")
         return None
-    err = _agent_id_error(con, None, agent_id) or _agent_model_error(con, agent_id, model)
+    err = (_agent_id_error(con, stored_agent_id, agent_id)
+           or _agent_model_error(con, agent_id, model))
     if err:
         return (err.replace("agent_model", "default_agent_model")
                 .replace("agent_id", "default_agent_id")
@@ -3659,7 +3663,8 @@ def create_pipeline_blueprint() -> Blueprint:
                                and (prev["default_agent_id"] or "") == default_agent
                                and (prev["default_agent_model"] or "") == default_agent_model)
             if not agent_unchanged:
-                err = _domain_agent_error(con, default_agent, default_agent_model)
+                err = _domain_agent_error(con, default_agent, default_agent_model,
+                                          (prev["default_agent_id"] or "") if prev else "")
                 if err:
                     return jsonify({"error": err}), 400
             con.execute(
