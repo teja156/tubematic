@@ -25,6 +25,7 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 | `tubematic-system-flow/` | Writes a System Flow video as data (boards, components, connectors and events timed to the narration) for the one `SystemFlow` scene, validates and submits it |
 | `tubematic-whiteboard/` | Writes a Whiteboard video as data (regions of handwriting, formulas, doodles and marks timed to the narration) for the one `Whiteboard` scene, validates and submits it |
 | `tubematic-bean-explainer/` | Writes a Bean Explainer video as data (sections, shots, the bean's poses and props from the fixed library, timed to the narration) for the one `BeanExplainer` scene, validates and submits it |
+| `tubematic-storybook-atlas/` | Writes a Storybook Atlas video as data (chapters, backdrops, the guide's and people's walks, props from the hatched library, plates, timed to the narration) for the one `StorybookAtlas` scene, validates and submits it |
 | `tubematic-terminal-doc/` | Writes a Terminal Doc video as data (beats and typographic moves timed to the narration, plus any move written for the video) for the one `TerminalDoc` scene, validates and submits it |
 | `tubematic-mascot-builder/` | Writes or revises one mascot's p5.js drawing code, renders its three model sheets and submits it for human review |
 | `tubematic-troubleshooting/` | Diagnoses a broken install with a person, collects redacted evidence and drafts a bug report. A person must ask for it by name |

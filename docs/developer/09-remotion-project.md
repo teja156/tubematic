@@ -308,6 +308,9 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
   ([Scene Authoring](10-scene-authoring.md#bean-explainer)).
 - A Whiteboard video has the one `Whiteboard` scene and its board passes the Whiteboard checks; no
   other video uses `Whiteboard` ([Scene Authoring](10-scene-authoring.md#whiteboard)).
+- A Storybook Atlas video has the one `StorybookAtlas` scene and its chapters pass the Storybook
+  Atlas checks; no other video uses `StorybookAtlas`
+  ([Scene Authoring](10-scene-authoring.md#storybook-atlas)).
 - A Terminal Doc video has the one `TerminalDoc` scene and its beats and moves pass the Terminal Doc
   checks; no other video uses `TerminalDoc` ([Scene Authoring](10-scene-authoring.md#terminal-doc)).
 
@@ -317,9 +320,9 @@ is queued or rendering (`status_mismatch`).
 
 `canvas` is the only default the tool writes into most files. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
-style's look. A Bean Explainer config gets them under whatever `subtitles` keys it sets, so a config that
-sets only `emphasis` keeps the look. A Terminal Doc config gets them the same way, with its skin's
-colours and font over the pack's. The
+style's look. A Bean Explainer or Storybook Atlas config gets them under whatever `subtitles` keys it
+sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config gets them the same
+way, with its skin's colours and font over the pack's. The
 components apply the other defaults at render time, so a changed default reaches every video whose
 config omits the key.
 
@@ -345,7 +348,7 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `fontFamily` | `system-ui, sans-serif` | A non-empty string. See [Fonts](#fonts) |
 | `fontSize` | `62` | 28 to 120 |
 | `color` | `null` | A CSS colour. `null` follows the canvas: white on dark, near-black on light |
-| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"none"` or `"log"` (typed into a terminal log strip) |
+| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label hugging the phrase, a diamond each side, every word at full strength, a 2-frame fade and no rise), `"none"` or `"log"` (typed into a terminal log strip) |
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
 | `accent` | `null` | A CSS colour for the word being spoken in the `log` look. `null` uses `color` |
@@ -469,6 +472,26 @@ floating marker and the closing pull-back. Its helpers are in `whiteboard/`. It 
 handwriting font (Kalam) from `public/fonts/` before the first frame, and the style pack's captions
 use the same font. It draws its ink on a canvas; its contract, its layouts and the measurement that
 put the ink on a canvas are in [Whiteboard](10-scene-authoring.md#whiteboard).
+
+### `StorybookAtlas`
+
+`StorybookAtlas` draws a whole Storybook Atlas video from `props.storybookAtlas`, with its own paper,
+frame, plaque, backdrops, guide, people, props and plates; its helpers and the prop library are in
+`storybookAtlas/`. It loads EB Garamond from `public/fonts/` before the first frame; the style's
+caption label uses it too, which this scene loads. The `StorybookSheet` composition renders the guide,
+the people and their knobs, every backdrop as a chapter frame and the prop library (each prop with a
+check that its drawing fits its box), one page per frame, for a person to check a drawing: `npx
+remotion still src/index.ts StorybookSheet out.png --frame=<page>`. `--props='{"group":"<file>"}'`
+shows one prop file's props and `--props='{"chapter":"<backdrop>"}'` one backdrop; `"hold"`,
+`"frames"` and `"drop"` make it a render-cost probe. No video uses it.
+
+A Storybook Atlas video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
+imported the same way as Bean Explainer's. `storybook-tools/render-props.mjs` renders them for the
+`render_storybook_props` tool on the `StorybookPropPreview` composition, from a bundle entry it writes
+per call into `storybook-tools/.tmp/` (ignored by git). `storybook-tools/sync-contract.mjs` rewrites the
+style pack's `extra` and `mcp/tests/fixtures/storybook_atlas_contract.json` from the renderer's code. The
+contract and the reason every drawing is a cached bitmap are in
+[Storybook Atlas](10-scene-authoring.md#storybook-atlas).
 
 ### `TerminalDoc`
 
@@ -635,6 +658,9 @@ them.
 
 `Whiteboard`'s font in `public/fonts/` is Kalam, under the SIL Open Font License 1.1, with the license
 beside it (`OFL-Kalam.txt`). Its shipped doodles (`whiteboard/doodles.json`) are original.
+
+`StorybookAtlas`'s guide, people, props and backdrops are original drawings. Its font in
+`public/fonts/` is EB Garamond, under the SIL Open Font License 1.1, with the license beside it.
 
 `TerminalDoc`'s fonts in `public/fonts/` are IBM Plex Mono and VT323, each under the SIL Open Font
 License 1.1, with the license beside them.
