@@ -96,6 +96,9 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
 - `public_list` explains an unavailable style, and `agent_view` names the authoring skill.
 - System Flow and Bean Explainer each have their renderer, canvas, skill and permissions pinned; Bean
   Explainer's bean counts as a figure but neither line art nor a generated character.
+- Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
+  routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
+  apart from.
 - A malformed pack is refused with the field at fault, `auto` cannot be a pack, and every shipped
   pack passes. The optional `routing.images`, `routing.moods` and `script` are checked when
   present, and a pack without them still loads.

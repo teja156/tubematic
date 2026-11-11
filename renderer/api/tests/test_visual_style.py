@@ -156,7 +156,7 @@ def test_visual_style_is_frozen_after_the_topic_checkpoint(client):
 
 def test_an_unknown_visual_style_is_rejected(client):
     vid = _video(client)
-    resp = client.patch(f"/videos/{vid}", json={"visual_style": "whiteboard"})
+    resp = client.patch(f"/videos/{vid}", json={"visual_style": "watercolour"})
     assert resp.status_code == 400
     assert "Invalid visual_style" in json.loads(resp.data)["error"]
 
@@ -393,7 +393,7 @@ def test_the_gpu_gate():
               '{"configured": true, "ok": true}', '[]']
     assert [pipeline.gpu_probe_status(r) for r in probes] == [
         "unknown", "unknown", "unknown", "not_configured", "not_usable", "working", "unknown"]
-    for style in ("auto", "stick", "illustrated", "system_flow", ""):
+    for style in ("auto", "stick", "illustrated", "system_flow", "whiteboard", ""):
         for status in ("unknown", "not_configured", "not_usable", "working"):
             assert pipeline.cartoon_3d_gpu_error(style, status) == "", (style, status)
     assert pipeline.cartoon_3d_gpu_error("cartoon_3d", "working") == ""
@@ -428,3 +428,11 @@ def test_system_flow_needs_nothing_to_be_chosen(client):
     vid = _video(client)
     assert client.patch(f"/videos/{vid}", json={"visual_style": "system_flow"}).status_code == 200
     assert client.get(f"/videos/{vid}").get_json()["visual_style"] == "system_flow"
+
+
+def test_whiteboard_needs_nothing_to_be_chosen(client):
+    vid = _video(client)
+    assert client.patch(f"/videos/{vid}", json={"visual_style": "whiteboard"}).status_code == 200
+    by_id = {r["id"]: r for r in client.get("/visual-styles").get_json()["styles"]}
+    assert by_id["whiteboard"]["label"] == "Whiteboard" and by_id["whiteboard"]["available"]
+    assert by_id["whiteboard"]["canvas"] == "light"
