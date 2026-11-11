@@ -314,3 +314,10 @@ def test_the_real_join_measures_each_run_and_keeps_the_total(tmp_path):
     out.write_bytes(joined)
     _, measured = server._join_voice_audio(ffmpeg, [joined])
     assert measured[0] == pytest.approx(sum(durations), abs=0.06)
+
+
+def test_the_roster_reader_keeps_a_speed_and_drops_a_roster_with_a_bad_one(job_db):
+    _roster(TEJA, {**RACHEL, "speed": 1.15})
+    assert server._get_voices()[1]["speed"] == 1.15
+    _roster(TEJA, {**RACHEL, "speed": 1.33})
+    assert server._get_voices() == []

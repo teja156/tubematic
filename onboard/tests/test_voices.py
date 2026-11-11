@@ -147,3 +147,50 @@ def test_empty_roster_and_no_default_seeds_empty(tmp_path, monkeypatch):
     rows = _seed_and_read(tmp_path, monkeypatch, {})
     assert json.loads(rows["elevenlabs_voices"]) == []
     assert rows["elevenlabs_voice_id"] == ""
+
+
+# ── speed (TMDEV-216) ────────────────────────────────────────────────────────
+
+def test_parse_voices_keeps_a_speed_on_a_model_that_honours_it():
+    entry = {"name": "A", "voice_id": "a", "model_id": "eleven_multilingual_v2", "speed": 1.15}
+    assert _parse_voices(json.dumps([entry])) == [entry]
+
+
+def test_parse_voices_drops_a_roster_with_a_speed_on_v4():
+    """The same rule as the API and MCP readers: a speed eleven_v4 would ignore
+    is malformed, so the roster reads as empty rather than half-true."""
+    entry = {"name": "A", "voice_id": "a", "model_id": "eleven_v4", "speed": 1.1}
+    assert _parse_voices(json.dumps([entry])) == []
+
+
+class _Answer:
+    def __init__(self, value):
+        self.value = value
+
+    def ask(self):
+        return self.value
+
+
+def _drive_ask_voices(monkeypatch, answers, current):
+    import onboard.prompt as prompt
+    queue = list(answers)
+    monkeypatch.setattr(prompt.questionary, "text", lambda *a, **k: _Answer(queue.pop(0)))
+    monkeypatch.setattr(prompt.questionary, "select", lambda *a, **k: _Answer(queue.pop(0)))
+    monkeypatch.setattr(prompt, "rail", lambda *a, **k: None)
+    return json.loads(prompt._ask_voices(current))
+
+
+def test_re_entering_a_voice_keeps_the_speed_set_on_the_dashboard(monkeypatch):
+    """Onboarding never asks for a speed; re-entering a voice must not reset
+    one a person set in Settings."""
+    current = json.dumps([{"name": "A", "voice_id": "a", "model_id": "eleven_multilingual_v2",
+                           "speed": 1.15}])
+    out = _drive_ask_voices(monkeypatch, ["A", "a", "eleven_multilingual_v2", ""], current)
+    assert out == [{"name": "A", "voice_id": "a", "model_id": "eleven_multilingual_v2", "speed": 1.15}]
+
+
+def test_moving_a_voice_to_a_model_that_ignores_speed_drops_it(monkeypatch):
+    current = json.dumps([{"name": "A", "voice_id": "a", "model_id": "eleven_multilingual_v2",
+                           "speed": 1.15}])
+    out = _drive_ask_voices(monkeypatch, ["A", "a", "eleven_v4", ""], current)
+    assert out == [{"name": "A", "voice_id": "a", "model_id": "eleven_v4"}]
