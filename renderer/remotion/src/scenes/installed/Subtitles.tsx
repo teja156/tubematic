@@ -246,7 +246,8 @@ export default function Subtitles({
   const frame = useCurrentFrame();
   const webfont = FONTS[fontFamily];
   const family = webfont ? webfont.load() : fontFamily;
-  const weight = webfont ? webfont.weight : DEFAULT_WEIGHT;
+  // a printed label is set in the regular weight its serif ships, never a synthetic bold
+  const weight = webfont ? webfont.weight : background === "label" ? 500 : DEFAULT_WEIGHT;
 
   const chunks = React.useMemo(() => chunkWords(words ?? [], maxWords), [words, maxWords]);
   const emphasised = React.useMemo(() => new Set((emphasis ?? []).map((i) => (words ?? [])[i]).filter(Boolean)), [emphasis, words]);

@@ -41,17 +41,17 @@ import { NUMERALS, Plaque } from "./storybookAtlas/frame";
 import { useStorybookFonts } from "./storybookAtlas/fonts";
 import { GUIDE_BOX, guideDrawing, type GuidePose } from "./storybookAtlas/guide";
 import { BEIGE, INK, IVORY, SERIF, STARGOLD, TEXT } from "./storybookAtlas/palette";
-import { Constellation, Gauge, Morph, Plate } from "./storybookAtlas/plates";
+import { Constellation, Gauge, MORPH_DENSITY, Morph, Plate } from "./storybookAtlas/plates";
 import { PROPS as DRAWINGS } from "./storybookAtlas/props";
 import { propDrawing } from "./storybookAtlas/props/draw";
 import type { PropDrawing, PropEntry } from "./storybookAtlas/props/types";
 import {
-  actMotion, actorAt, chapterIndexAt, clamp01, ease, movesOf, plateAt, portalOf, propsAt, transitionAt,
+  actMotion, actorAt, chapterIndexAt, clamp01, ease, eventOrder, movesOf, plateAt, portalOf, propsAt, transitionAt,
   type ActorState, type PropState,
 } from "./storybookAtlas/stage";
 
 // ── the kit: library props plus the video's own ─────────────────────────────
-type Kit = { specs: Record<string, PropSpec>; drawing: (prop: string, state: number) => Drawing | null };
+type Kit = { specs: Record<string, PropSpec>; drawing: (prop: string, state: number, density?: number) => Drawing | null };
 
 function makeKit(custom: CustomProp[], draws: Record<string, PropDrawing>): Kit {
   const specs: Record<string, PropSpec> = { ...PROPS };
@@ -66,7 +66,7 @@ function makeKit(custom: CustomProp[], draws: Record<string, PropDrawing>): Kit 
     specs[c.id] = c;
     if (draws[c.id]) entries[c.id] = { ...c, label: c.id, draw: draws[c.id] };
   }
-  return { specs, drawing: (prop, state) => (entries[prop] ? propDrawing(prop, entries[prop], state) : null) };
+  return { specs, drawing: (prop, state, density) => (entries[prop] ? propDrawing(prop, entries[prop], state, density) : null) };
 }
 
 function useKit(list: CustomProp[]): Kit | null {
@@ -210,7 +210,7 @@ const ChapterView: React.FC<{ data: StorybookAtlasData; i: number; frame: number
   }
   // a prop shows its latest tag: a new tag replaces the one before (the validator checks them the same way)
   const latest = new Map<string, Extract<StorybookAtlasData["chapters"][0]["events"][0], { type: "tag" }>>();
-  for (const e of [...c.events].sort((a, b) => a.at - b.at)) {
+  for (const e of [...c.events].sort(eventOrder)) {
     if (e.type === "tag" && e.at <= frame) latest.set(e.on, e);
   }
   for (const [on, e] of latest) {
@@ -237,8 +237,8 @@ const ChapterView: React.FC<{ data: StorybookAtlasData; i: number; frame: number
 };
 
 /** The camera for a push: scale towards the portal and bring it to the centre of the frame. */
-function pushTransform(c: Chapter, kit: Kit, t: number): { transform: string; origin: string } | null {
-  const portal = portalOf(c, kit.specs);
+function pushTransform(c: Chapter, kit: Kit, t: number, cut: number): { transform: string; origin: string } | null {
+  const portal = portalOf(c, kit.specs, cut);
   if (!portal) return null;
   const spec = kit.specs[portal.prop];
   const s = portal.scale ?? 1;
@@ -269,13 +269,14 @@ export default function StorybookAtlas({ storybookAtlas }: { storybookAtlas?: St
   const data = storybookAtlas;
   const kit = useKit(data?.customProps ?? []);
   if (!data || !kit || data.chapters.length === 0) return <AbsoluteFill style={{ background: IVORY }} />;
-  const cast = new Map(data.cast.map((m) => [m.id, m]));
+  // a story with no people may leave `cast` out; the validator allows it
+  const cast = new Map((data.cast ?? []).map((m) => [m.id, m]));
   const i = chapterIndexAt(data.chapters, frame);
   const tr = transitionAt(data, frame);
 
   let body: React.ReactNode;
   if (tr?.kind === "push") {
-    const cam = pushTransform(data.chapters[tr.from], kit, tr.t);
+    const cam = pushTransform(data.chapters[tr.from], kit, tr.t, data.chapters[tr.from + 1].start - TIMING.pushFrames);
     const white = clamp01((tr.t - 0.55) / 0.45);
     body = (
       <>
@@ -307,7 +308,7 @@ export default function StorybookAtlas({ storybookAtlas }: { storybookAtlas?: St
             {plate.e.type === "constellation" && <Constellation e={plate.e} frame={frame} />}
             {plate.e.type === "gauge" && <Gauge e={plate.e} frame={frame} />}
             {plate.e.type === "morph" && (
-              <Morph e={plate.e} frame={frame} drawing={plate.e.prop ? kit.drawing(plate.e.prop, 0) : null} spec={plate.e.prop ? kit.specs[plate.e.prop] ?? null : null} />
+              <Morph e={plate.e} frame={frame} drawing={plate.e.prop ? kit.drawing(plate.e.prop, 0, MORPH_DENSITY) : null} spec={plate.e.prop ? kit.specs[plate.e.prop] ?? null : null} />
             )}
           </Plate>
         )}

@@ -77,6 +77,14 @@ GUIDE_HALF = 70
 TAG_CHAR_PX, TAG_PAD_PX = 14, 32
 # Guide and people stand with their feet inside these x limits.
 ACTOR_X = (110, 970)
+# A tag must lie inside the frame's inner rule.
+TAG_X = (30, 1050)
+
+
+def event_order(e: dict) -> tuple:
+    """Events in time; on one frame, what puts something on stage before what refers to it (an act or a
+    tag on a prop placed that frame): stage.ts's eventOrder."""
+    return (e["at"], 1 if e.get("type") in ("act", "tag") else 0)
 
 CUSTOM = {"maxProps": 8, "minSide": 60, "maxSide": 700, "maxStates": 4, "maxActs": 4}
 _CUSTOM_FILE = re.compile(r"^prop-[a-z0-9-]{1,40}$")
@@ -89,11 +97,12 @@ FORBIDDEN_SOURCE = (
     (re.compile(r"\brequire\s*\("), "require(): a prop names what it uses with import"),
     (re.compile(r"(?i)(linear|radial)Gradient"), "a gradient: the book is flat ink and colour"),
     (re.compile(r"<pattern\b"), "an SVG pattern of its own: use Sh's pen hatching"),
-    (re.compile(r"strokeDasharray|stroke-dasharray"), "a dashed stroke"),
-    (re.compile(r"Math\.random|Date\.now|new Date\b|performance\s*\.|\bcrypto\b"),
-     "randomness or the clock: every render must draw the same frames"),
-    (re.compile(r"\bglobalThis\b|\bwindow\b|\bdocument\b|\beval\s*\(|\bFunction\s*\(|new\s+Function\b|\bimport\s*\("),
-     "the page, eval, a Function constructor or a dynamic import: a prop only draws shapes"),
+    (re.compile(r"Math\.random|Date\.now|new Date\b|\bperformance\s*\.|\bcrypto\s*\.|\bset(?:Timeout|Interval)\s*\("),
+     "randomness, the clock or a timer: every render must draw the same frames"),
+    (re.compile(r"\bglobalThis\b|\b(?:window|document|self|navigator)\s*[.\[]|\beval\s*\(|\bFunction\s*\(|new\s+Function\b"
+                r"|\bimport\s*\(|\bXMLHttpRequest\b|\bWebSocket\b|\bWorker\b"),
+     "the page (window, document, globalThis), eval, a Function constructor, a dynamic import or a network call: "
+     "a prop only draws shapes"),
     (re.compile(r"<text\b|<tspan\b"), "SVG text: fonts do not load inside a prop's bitmap; draw writing as ink strokes"),
     (re.compile(r"<image\b|<img\b|<foreignObject\b|dangerouslySetInnerHTML|\bfetch\b"),
      "an image, embedded HTML or a fetch: a prop is drawn from shapes only"),
@@ -101,13 +110,44 @@ FORBIDDEN_SOURCE = (
 # Every way a module names another with import, anywhere on a line: `import x from "m"`, `import x from"m"`,
 # a bare `import "m"` and `export ... from "m"`. A dynamic import is refused in FORBIDDEN_SOURCE.
 _IMPORT = re.compile(r"""\b(?:import|export)\b[^;"'`]*?\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']""")
-_COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
-
-
 def _code(body: str) -> str:
-    """The source with its comments removed, so a comment that mentions a window or an image is not
-    read as code. A string holding // is cut short too, which can only hide code, never invent it."""
-    return _COMMENT.sub(" ", body)
+    """The source with its comments blanked, so a comment that mentions an image or a fetch is not read
+    as code. String-aware: a // or /* inside a string, a template literal or its ${...} stays code."""
+    out: list[str] = []
+    i, n = 0, len(body)
+    stack: list[str] = []  # "`" inside a template literal, "{" inside one of its ${...}
+    while i < n:
+        ch = body[i]
+        in_template = bool(stack) and stack[-1] == "`"
+        if in_template:
+            if ch == "\\":
+                out.append(body[i:i + 2]); i += 2; continue
+            if ch == "`":
+                stack.pop(); out.append(ch); i += 1; continue
+            if body.startswith("${", i):
+                stack.append("{"); out.append("${"); i += 2; continue
+            out.append(ch); i += 1; continue
+        if ch in "\"'":
+            j = i + 1
+            while j < n and body[j] != ch and body[j] != "\n":
+                j += 2 if body[j] == "\\" else 1
+            out.append(body[i:j + 1]); i = j + 1; continue
+        if ch == "`":
+            stack.append("`"); out.append(ch); i += 1; continue
+        if ch == "{" and stack:
+            stack.append("{"); out.append(ch); i += 1; continue
+        if ch == "}" and stack and stack[-1] == "{":
+            stack.pop(); out.append(ch); i += 1; continue
+        if body.startswith("//", i):
+            j = body.find("\n", i)
+            j = n if j < 0 else j
+            out.append(" "); i = j; continue
+        if body.startswith("/*", i):
+            j = body.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            out.append(" "); i = j; continue
+        out.append(ch); i += 1
+    return "".join(out)
 
 
 _ALLOWED_IMPORT = re.compile(r"^(react|\.\./\.\./installed/storybookAtlas/(ink|palette))$")
@@ -441,7 +481,7 @@ def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on
                 "number frame `at`.")
             continue
         evs.append(e)
-    evs.sort(key=lambda e: e["at"])
+    evs.sort(key=event_order)
     last = end - TIMING["endMargin"]
     for e in evs:
         if not start <= e["at"] < last:
@@ -637,6 +677,12 @@ def _check_layout(where, f, here, guide, props, catalog, people, err) -> None:
     # tags under things on the floor (names and prop tags) must not cover each other
     tags = [(w, s["x"], people[w]["name"]) for w, s in here.items() if s["visible"] and not s["walking"]]
     tags += [(p["prop"], p["x"], p["tag"]) for p in floor if p["tag"]]
+    for n1, x1, t1 in tags:
+        half = tag_width(t1) / 2
+        if x1 - half < TAG_X[0] or x1 + half > TAG_X[1]:
+            err(f"{where}: at frame {f}, the tag under {n1} ({t1!r}, about {2 * half:g} px wide) runs off the "
+                f"frame; move it inward or shorten it.")
+            return
     for k, (n1, x1, t1) in enumerate(tags):
         for n2, x2, t2 in tags[k + 1:]:
             need = (tag_width(t1) + tag_width(t2)) / 2
@@ -649,6 +695,9 @@ def _check_layout(where, f, here, guide, props, catalog, people, err) -> None:
             continue
         w = tag_width(p["tag"])
         tag = (p["x"] - w / 2, p["box"][3] + 12, p["x"] + w / 2, p["box"][3] + 60)
+        if tag[0] < TAG_X[0] or tag[2] > TAG_X[1]:
+            err(f"{where}: at frame {f}, the tag under {p['prop']} runs off the frame; move it inward or shorten it.")
+            return
         for q in wall:
             if q is not p and _overlap(tag, q["box"]):
                 err(f"{where}: at frame {f}, the tag under {p['prop']} covers {q['prop']}.")
@@ -709,7 +758,15 @@ def chapter_windows(config: dict) -> list[tuple[int, int]]:
         start = ch["start"] + (TIMING["wipeFrames"] if i > 0 else 0)
         nxt = chapters[i + 1] if i + 1 < len(chapters) else None
         end = (nxt["start"] - (TIMING["pushFrames"] if nxt.get("enter") == "push" else 0)) if nxt else total
-        cuts = sorted({start, end} | {e["at"] for e in ch.get("events") or [] if isinstance(e, dict) and _int(e.get("at"))
-                                      and start < e["at"] < end})
-        out.extend((a, b) for a, b in zip(cuts, cuts[1:]) if b > a)
+        evs = [e for e in ch.get("events") or [] if isinstance(e, dict) and _int(e.get("at"))]
+        # a plate is a stretch of its own, cut where it has opened and where it starts to close
+        marks = {e["at"] for e in evs}
+        marks |= {e["at"] + TIMING["plateOpen"] for e in evs if e.get("type") in PLATE_EVENTS}
+        marks |= {e["until"] for e in evs if e.get("type") in PLATE_EVENTS and _int(e.get("until"))}
+        marks |= {e["until"] + TIMING["plateOpen"] for e in evs if e.get("type") in PLATE_EVENTS and _int(e.get("until"))}
+        cuts = sorted({start, end} | {m for m in marks if start < m < end})
+        # the shutters opening and closing are not a page anyone reads: leave those stretches out
+        moving = {e["at"] for e in evs if e.get("type") in PLATE_EVENTS}
+        moving |= {e["until"] for e in evs if e.get("type") in PLATE_EVENTS and _int(e.get("until"))}
+        out.extend((a, b) for a, b in zip(cuts, cuts[1:]) if b > a and not (a in moving and b - a <= TIMING["plateOpen"]))
     return out

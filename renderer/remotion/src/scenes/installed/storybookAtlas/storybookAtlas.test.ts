@@ -13,7 +13,8 @@ import { GUIDE_POSES } from "./guide";
 import { COAT_COLORS, GARMENT_COLORS, SKIN } from "./palette";
 import { PROPS as DRAWINGS } from "./props";
 import { ACTS } from "./props/types";
-import { actMotion, actorAt, plateAt, propsAt, transitionAt, walkFrames } from "./stage";
+import { actMotion, actorAt, eventOrder, plateAt, portalOf, propsAt, transitionAt, walkFrames } from "./stage";
+import { libraryDrawing, propDrawing } from "./props/draw";
 import { needleAt } from "./plates";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
@@ -135,6 +136,33 @@ describe("the stage", () => {
     expect(transitionAt(DATA, c2.start)?.kind).toBe("white");
     expect(transitionAt(DATA, c3.start + 1)?.kind).toBe("wipe");
     expect(transitionAt(DATA, c3.start + TIMING.wipeFrames)).toBeNull();
+  });
+
+  it("puts a prop on stage before an act or a tag on it listed earlier on the same frame", () => {
+    const evs = [
+      { type: "act", at: 50, id: "l", act: "switch" },
+      { type: "prop", at: 50, id: "l", prop: "lamp", x: 500 },
+    ] as StorybookAtlasData["chapters"][0]["events"];
+    expect([...evs].sort(eventOrder).map((e) => e.type)).toEqual(["prop", "act"]);
+    expect(propsAt(evs, 60, PROPS)[0].base).toBe(1);
+  });
+
+  it("pushes through the last portal that has landed, never one still arriving", () => {
+    const chapter = {
+      start: 0, title: "T", byline: "B", backdrop: "study", events: [
+        { type: "prop", at: 10, id: "d", prop: "door", x: 300 },
+        { type: "prop", at: 95, id: "p", prop: "porthole", x: 700, y: 900 },
+      ],
+    } as StorybookAtlasData["chapters"][0];
+    expect(portalOf(chapter, PROPS, 100)?.id).toBe("d");
+    expect(portalOf(chapter, PROPS, 105)?.id).toBe("p");
+  });
+
+  it("keeps a sharper drawing of a prop apart from its ordinary one", () => {
+    const one = libraryDrawing("coin", 0);
+    const three = propDrawing("coin", DRAWINGS.coin, 0, 3);
+    expect(one.key).not.toBe(three.key);
+    expect([three.width, three.density]).toEqual([one.width, 3]);
   });
 
   it("keeps the example's events inside its chapters", () => {

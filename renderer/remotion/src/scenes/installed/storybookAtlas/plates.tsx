@@ -102,7 +102,8 @@ export const Constellation: React.FC<{ e: CE; frame: number }> = ({ e, frame }) 
   const settledAt = b ? C.move + C.perWord + C.nextWord : C.arrive + C.nextWord * (e.words.length - 1) + C.perWord;
   const since = b && tb >= 0 ? tb : t;
   const twinkle = since > settledAt + 24 ? -1 : Math.floor(frame / 4) % 6;
-  const key = `${Math.min(t, 10000)}:${tb}:${twinkle}`;
+  // once the stars have settled and stopped twinkling the picture is still: one key, one paint
+  const key = twinkle < 0 ? `still:${b && tb >= 0 ? "then" : "first"}` : `${t}:${tb}:${twinkle}`;
   const ref = useCanvasDraw((ctx) => {
     for (const [x, y, o] of field) {
       ctx.globalAlpha = o;
@@ -209,6 +210,8 @@ export const Gauge: React.FC<{ e: GE; frame: number }> = ({ e, frame }) => {
 // ── morph ─────────────────────────────────────────────────────────────────────
 type ME = Extract<PlateEvent, { type: "morph" }>;
 export const MORPH = { turn: 18, scatter: 12, regroup: 18, reveal: 10, dots: 700 } as const;
+/** The morph reveals its prop fitted to a 700 x 620 box, up to about 4x; drawn at this density it stays sharp. */
+export const MORPH_DENSITY = 3;
 const BOX = { w: 700, h: 620 } as const;
 
 const targets = new Map<string, [number, number][]>();

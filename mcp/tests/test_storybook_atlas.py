@@ -228,6 +228,32 @@ def test_malformed_and_ill_timed_events_are_refused_not_crashed(mutate, fragment
     assert any(fragment in p for p in problems), problems
 
 
+def test_a_story_with_no_people_may_leave_the_cast_out():
+    def castless(d):
+        del d["cast"]
+        d["chapters"][1]["events"] = [e for e in d["chapters"][1]["events"] if e["type"] != "person"]
+        d["chapters"][1]["events"].append({"type": "guide", "at": 733, "pose": "point", "facing": "right"})
+        d["chapters"][1]["events"].append({"type": "guide", "at": 637, "pose": "think"})
+    assert _check(_with(castless)) == []
+
+
+def test_on_one_frame_a_prop_comes_before_what_names_it():
+    def tag_first(d):
+        evs = d["chapters"][0]["events"]
+        evs.insert(0, {"type": "tag", "at": 101, "on": "cabinet", "text": "Mark II"})
+        evs[:] = [e for e in evs if not (e["type"] == "tag" and e["at"] == 138)]
+    assert _check(_with(tag_first)) == []
+
+
+def test_a_tag_off_the_frame_is_refused():
+    def edge(d):
+        d["cast"][0]["name"] = "Rear Admiral G. M. Hopper"[:24]
+        _ev(d, 1, "person").update(x=130)
+        _ev(d, 1, "guide").update(x=330)
+    problems = _check(_with(edge))
+    assert any("runs off the frame" in p for p in problems), problems
+
+
 def test_a_person_walking_past_the_guide_is_fine():
     """Grace walks in from the left past the guide at 210: only where people
     stand still is checked, so the example passes."""
@@ -252,7 +278,20 @@ def test_chapter_windows_cut_at_each_event_and_skip_the_transitions():
     # chapter 3 is wiped into: its first frames are left out
     assert not any(a < chapters[2]["start"] + sa.TIMING["wipeFrames"] and b > chapters[2]["start"] for a, b in windows)
     cuts = {a for a, _ in windows}
-    assert {e["at"] for c in chapters for e in c["events"] if e["at"] >= c["start"] + sa.TIMING["wipeFrames"]} <= cuts
+    late = [e for c in chapters for e in c["events"] if e["at"] >= c["start"] + sa.TIMING["wipeFrames"]]
+    assert {e["at"] for e in late if e["type"] not in sa.PLATE_EVENTS} <= cuts
+    # a plate's stretch starts once its shutters are open; the opening itself is not sampled
+    assert {e["at"] + sa.TIMING["plateOpen"] for e in late if e["type"] in sa.PLATE_EVENTS} <= cuts
+    assert not {e["at"] for e in late if e["type"] in sa.PLATE_EVENTS} & cuts
+
+
+def test_the_text_audit_samples_every_plate_while_it_is_open():
+    passes, _ = text_audit.plan_passes(EXAMPLE)
+    frames = {p["first"] + p["step"] * k for p in passes for k in range(p["count"])}
+    for c in _data(EXAMPLE)["chapters"]:
+        for e in c["events"]:
+            if e["type"] in sa.PLATE_EVENTS:
+                assert any(e["at"] + sa.TIMING["plateOpen"] <= f < e["until"] for f in frames), e
 
 
 def test_the_text_audit_samples_each_stretch():
@@ -294,10 +333,24 @@ def test_a_bad_custom_prop_entry_is_refused(changes, fragment):
     (MOTH.replace("<g transform", '<text x="0">MOTH</text><g transform', 1), "SVG text"),
     (MOTH.replace("<g transform", '<linearGradient id="g" /><g transform', 1), "a gradient"),
     (MOTH.replace("void state;", "void state; Math.random();"), "randomness"),
+    (MOTH.replace("void state;", "void state; setTimeout(() => 0, 1);"), "a timer"),
 ])
 def test_a_custom_prop_file_that_breaks_the_rules_is_refused(body, fragment):
     errs, _ = sa.custom_prop_errors([MOTH_SPEC], "vid_example", EXTRA["props"], {MOTH_SPEC["src"]: body})
     assert any(fragment in e for e in errs), errs
+
+
+def test_a_string_holding_comment_marks_does_not_hide_code():
+    for line in ('const a = "/*";\nconst f = window.fetch;\nconst b = "*/";', 'const s = "//"; const f = window.fetch;',
+                 'const t = `${"//"}`; fetch("u");'):
+        errs, _ = sa.custom_prop_errors([MOTH_SPEC], "vid_example", EXTRA["props"], {MOTH_SPEC["src"]: MOTH + "\n" + line})
+        assert errs, line
+
+
+def test_ordinary_names_and_dashes_are_not_refused():
+    body = MOTH + '\nconst window = (x: number) => x;\nconst d = <g id="document" strokeDasharray="1 11" />;\n'
+    errs, _ = sa.custom_prop_errors([MOTH_SPEC], "vid_example", EXTRA["props"], {MOTH_SPEC["src"]: body})
+    assert errs == []
 
 
 @pytest.mark.parametrize("line", [
@@ -395,6 +448,12 @@ def test_the_label_caption_background_is_accepted_on_any_style(make_video):
     cfg = _for(vid)
     cfg["subtitles"] = {"background": "label"}
     assert "error" not in server.write_scene_config(vid, cfg)
+    other = make_video("vid_sa5s", style="motion_graphics")
+    plain = {"totalFrames": EXAMPLE["totalFrames"], "fps": 30, "subtitles": {"background": "label"},
+             "scenes": [{"type": "generated", "source": "installed", "src": "KenBurnsImage", "startFrame": 0,
+                         "durationInFrames": EXAMPLE["totalFrames"], "props": {}}]}
+    result = server.write_scene_config(other, plain)
+    assert "background" not in result.get("error", ""), result
     cfg["subtitles"] = {"background": "parchment"}
     assert "background" in server.write_scene_config(vid, cfg)["error"]
 

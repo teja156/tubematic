@@ -97,6 +97,16 @@ export function actorAt(moves: Move[], frame: number, start: number | null): Act
   return { x, visible, walking: false, step: 0, pose, facing, posedAt };
 }
 
+/**
+ * Events in time; on one frame, what puts something on stage comes before
+ * what refers to it (an act or a tag on a prop placed that frame), whatever
+ * order they were listed in. mcp/storybook_atlas.py::event_order is the same.
+ */
+export function eventOrder(a: SAEvent, b: SAEvent): number {
+  const rank = (e: SAEvent) => (e.type === "act" || e.type === "tag" ? 1 : 0);
+  return a.at - b.at || rank(a) - rank(b);
+}
+
 /** Each chapter's [start, end) in frames. */
 export function chapterSpans(chapters: Chapter[], total: number): [number, number][] {
   return chapters.map((c, i) => [c.start, i + 1 < chapters.length ? chapters[i + 1].start : total]);
@@ -112,7 +122,7 @@ export function chapterIndexAt(chapters: Chapter[], frame: number): number {
 export function movesOf(events: SAEvent[]): { guide: Move[]; people: Map<string, Move[]> } {
   const guide: Move[] = [];
   const people = new Map<string, Move[]>();
-  for (const e of [...events].sort((a, b) => a.at - b.at)) {
+  for (const e of [...events].sort(eventOrder)) {
     if (e.type === "guide") guide.push({ at: e.at, x: e.x, pose: e.pose, facing: e.facing });
     if (e.type === "person") {
       const list = people.get(e.who) ?? [];
@@ -153,7 +163,7 @@ export function propBase(spec: PropSpec, y: number | undefined): number {
 /** The props on stage in a chapter at `frame`, with their state and act. */
 export function propsAt(events: SAEvent[], frame: number, specs: Record<string, PropSpec>): PropState[] {
   const out = new Map<string, PropState>();
-  const sorted = [...events].sort((a, b) => a.at - b.at);
+  const sorted = [...events].sort(eventOrder);
   for (const e of sorted) {
     if (e.at > frame) break;
     if (e.type === "prop") {
@@ -257,11 +267,15 @@ export function transitionAt(data: StorybookAtlasData, frame: number): Transitio
   return null;
 }
 
-/** The portal prop a push goes through: the last one placed in the chapter, or null. */
-export function portalOf(chapter: Chapter, specs: Record<string, PropSpec>): Extract<SAEvent, { type: "prop" }> | null {
+/**
+ * The portal prop a push goes through: the last one in the chapter that has
+ * landed by `cut` (the push's first frame), or null. The validator requires
+ * one to have landed by then.
+ */
+export function portalOf(chapter: Chapter, specs: Record<string, PropSpec>, cut: number): Extract<SAEvent, { type: "prop" }> | null {
   let found: Extract<SAEvent, { type: "prop" }> | null = null;
-  for (const e of [...chapter.events].sort((a, b) => a.at - b.at)) {
-    if (e.type === "prop" && specs[e.prop]?.portal) found = e;
+  for (const e of [...chapter.events].sort(eventOrder)) {
+    if (e.type === "prop" && specs[e.prop]?.portal && e.at + TIMING.propIn <= cut) found = e;
   }
   return found;
 }

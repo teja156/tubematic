@@ -6,14 +6,15 @@ import type { Drawing } from "../bitmap";
 import { PROPS } from "./index";
 import type { PropEntry } from "./types";
 
-/** The prop in a state as a cached drawing, its base at (w/2, h) in the box. */
-export function propDrawing(id: string, entry: PropEntry, state: number): Drawing {
+/** The prop in a state as a cached drawing, its base at (w/2, h) in the box; `density` above 1 for one shown enlarged. */
+export function propDrawing(id: string, entry: PropEntry, state: number, density = 1): Drawing {
   const [w, h] = entry.box;
   const Draw = entry.draw;
   return {
-    key: `prop:${id}:${state}`,
+    key: `prop:${id}:${state}@${density}`,
     width: w,
     height: h,
+    density,
     render: () => (
       <g transform={`translate(${w / 2} ${h})`}>
         <Draw state={state} />

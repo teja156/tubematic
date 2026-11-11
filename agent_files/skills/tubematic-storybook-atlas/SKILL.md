@@ -73,9 +73,10 @@ or event is wrong. Fix every problem it lists, then write again.
 - **Your own props:** at most 8 per video, each a `prop-<name>` file of this video that exists before
   the config is written, with a box of 60 to 700 px a side, 1 to 4 states and 1 to 4 acts. The file
   default-exports the drawing, imports only `react` and `../../installed/storybookAtlas/ink` (or
-  `palette`), and uses no filter, gradient, pattern of its own, dashed stroke, SVG text, image, fetch,
-  randomness or clock, and nothing from the page (`window`, `document`, `globalThis`), `eval`, a
-  `Function` constructor or a dynamic import. Comments are not checked.
+  `palette`), and uses no filter, gradient, pattern of its own, SVG text, image, fetch, randomness,
+  clock or timer, and nothing from the page (`window.`, `document.`, `globalThis`), `eval`, a
+  `Function` constructor, a dynamic import or a network call. Comments are not checked. A dashed
+  stroke is fine: a prop is drawn once into a bitmap.
 - **Never still:** something new on stage at least every 4 seconds.
 
 ## Step 0 — read
@@ -140,15 +141,16 @@ dark-dressed people to the light chapters.
 on its word and the pose comes when it arrives. An `exit` walks off to the nearer edge at the same
 speed and takes no `x`. A new event for someone still walking starts from wherever they are on that
 frame. A walker faces the way they walk; once they stop they keep facing that way unless the event
-gives `facing`. List events in any order; two may share a frame.
+gives `facing`. List events in any order; two may share a frame, and on one frame a prop arrives
+before an act or a tag that names it.
 
 **Where things stand.** Only where people stand still is checked; walking past anyone is fine. On the
 floor line each thing takes a span centred on its `x`: a person x ± 80, the guide x ± 70, a floor prop
 its box width × `scale` (the lamp at scale 1 takes x ± 70). Spans of people, the guide and floor props
 must not overlap. A worked layout: the guide at 200 (130 to 270), a person at 380 (300 to 460), the
 relay cabinet at 700, scale 1 (490 to 910): nothing touches. The tags under people and floor props
-share one row: each is about 14 px a character plus 32, centred on its owner, and two must not touch
-(Grace Hopper's 12-character tag is about 200 px wide). A wall prop's tag hangs 12 px under the
+share one row: each is about 14 px a character plus 32, centred on its owner, two must not touch, and
+none may run off the frame (x 30 to 1050) (Grace Hopper's 12-character tag is about 200 px wide). A wall prop's tag hangs 12 px under the
 prop's base. Plan where people stand before you write: the guide usually stays to one side (x 150 to
 350), the people in the middle, the props beside them. Point a person or the guide at what the line
 is about (`pose: "point"` and `facing` towards it).
