@@ -349,7 +349,7 @@ row mounted could show one choice and send another.
 | Field | Approve Topic | Approve Script | Request Revision |
 |---|---|---|---|
 | `script_profile_id`, `visual_style` | Always | No | No |
-| `mascot_id` | When the mascot picker is shown. `""` for a style that takes no mascot (Cartoon 3D, Under the Hood) | No | No |
+| `mascot_id` | When the mascot picker is shown. `""` for a style that takes no mascot (Cartoon 3D, Under the Hood, Case File Story) | No | No |
 | `voice_id` | Only when a voice was picked | Always, the shown voice | No |
 | `agent_id` | Only when a different agent was picked | Same | Same |
 | `agent_model` | Always: the picked model, or the agent's default (`""` when the picker is disabled) | When picked, or when the agent changed | Same as Approve Script |

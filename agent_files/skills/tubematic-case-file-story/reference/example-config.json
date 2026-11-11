@@ -1,0 +1,202 @@
+{
+ "totalFrames": 1423,
+ "canvas": "dark",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "CaseFileStory",
+   "startFrame": 0,
+   "durationInFrames": 1423,
+   "props": {
+    "caseFile": {
+     "accent": "pink",
+     "hud": [
+      {
+       "id": "cash",
+       "label": "CASH",
+       "kind": "money",
+       "value": 40000
+      },
+      {
+       "id": "banked",
+       "label": "BANKED",
+       "kind": "money",
+       "value": 0
+      },
+      {
+       "id": "suspicion",
+       "label": "SUSPICION",
+       "kind": "percent",
+       "value": 0
+      }
+     ],
+     "beats": [
+      {
+       "type": "shot",
+       "start": 0,
+       "image": "/public/vid_example01/images/the-bag.png",
+       "focus": [
+        0.5,
+        0.62
+       ],
+       "punch": {
+        "frame": 90,
+        "at": [
+         0.5,
+         0.5
+        ]
+       }
+      },
+      {
+       "type": "shot",
+       "start": 190,
+       "image": "/public/vid_example01/images/counting.png",
+       "focus": [
+        0.5,
+        0.5
+       ],
+       "punch": {
+        "frame": 222,
+        "at": [
+         0.5,
+         0.36
+        ]
+       }
+      },
+      {
+       "type": "count",
+       "start": 246,
+       "title": "$40,000 IN TWENTIES",
+       "unit": "each one is 50 bills",
+       "icon": "bill",
+       "to": 2000,
+       "kind": "count",
+       "result": "2,000 BILLS",
+       "resultFrame": 365
+      },
+      {
+       "type": "shot",
+       "start": 389,
+       "image": "/public/vid_example01/images/the-bank.png",
+       "focus": [
+        0.55,
+        0.5
+       ]
+      },
+      {
+       "type": "shot",
+       "start": 498,
+       "image": "/public/vid_example01/images/the-counter.png",
+       "focus": [
+        0.5,
+        0.4
+       ],
+       "punch": {
+        "frame": 617,
+        "at": [
+         0.62,
+         0.3
+        ]
+       }
+      },
+      {
+       "type": "shot",
+       "start": 642,
+       "image": "/public/vid_example01/images/cash-machine.png",
+       "focus": [
+        0.45,
+        0.4
+       ]
+      },
+      {
+       "type": "bars",
+       "start": 692,
+       "title": "FOUR DEPOSITS",
+       "kind": "money",
+       "threshold": {
+        "value": 10000,
+        "label": "REPORTED AT $10,000"
+       },
+       "bars": [
+        {
+         "label": "MON",
+         "value": 9000,
+         "frame": 692
+        },
+        {
+         "label": "TUE",
+         "value": 9000,
+         "frame": 756
+        },
+        {
+         "label": "WED",
+         "value": 9000,
+         "frame": 800
+        },
+        {
+         "label": "THU",
+         "value": 9000,
+         "frame": 847
+        }
+       ],
+       "payoff": "$36,000. NOTHING REPORTED.",
+       "payoffFrame": 896
+      },
+      {
+       "type": "shot",
+       "start": 973,
+       "image": "/public/vid_example01/images/the-desk.png",
+       "focus": [
+        0.45,
+        0.5
+       ],
+       "set": {
+        "cash": 4000,
+        "banked": 36000,
+        "suspicion": 58
+       },
+       "panel": "suspicion"
+      },
+      {
+       "type": "term",
+       "start": 1037,
+       "term": "STRUCTURING",
+       "definition": "Splitting cash into smaller deposits to stay under a reporting limit.",
+       "stamp": "FEDERAL CRIME",
+       "citation": "31 U.S.C. 5324",
+       "stampFrame": 1145
+      },
+      {
+       "type": "shot",
+       "start": 1256,
+       "image": "/public/vid_example01/images/the-knock.png",
+       "focus": [
+        0.5,
+        0.4
+       ],
+       "hud": false
+      },
+      {
+       "type": "choice",
+       "start": 1333,
+       "image": "/public/vid_example01/images/the-door.png",
+       "focus": [
+        0.55,
+        0.45
+       ],
+       "options": [
+        "HIDE",
+        "HAND IN"
+       ],
+       "optionFrames": [
+        1333,
+        1361
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

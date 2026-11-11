@@ -5,8 +5,9 @@ The suite covers the pure TypeScript helpers of the Remotion project's
 [`SystemFlow`](../09-remotion-project.md#systemflow),
 [`BeanExplainer`](../09-remotion-project.md#beanexplainer),
 [`Whiteboard`](../09-remotion-project.md#whiteboard),
-[`TerminalDoc`](../09-remotion-project.md#terminaldoc) and
-[`UnderTheHood`](../09-remotion-project.md#underthehood) scenes. Each test file sits beside the code
+[`TerminalDoc`](../09-remotion-project.md#terminaldoc),
+[`UnderTheHood`](../09-remotion-project.md#underthehood) and
+[`CaseFileStory`](../09-remotion-project.md#casefilestory) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -96,6 +97,30 @@ Covers `contract.ts`, `stage.ts` and the presenter's pose table
   spot; a zoom-through rushes the outgoing plate into its `through` point, which holds still, and the
   new plate settles from 1.25x; a cut cross-fades over its fade frames.
 - Counters tick in steps and settle on their value; a stat counts up to its value and stays there.
+
+## Case File Story
+
+### `src/scenes/installed/caseFileStory/caseFileStory.test.ts`
+
+Covers `contract.ts`, `stage.ts` and the icon tables
+([Case File Story](../10-scene-authoring.md#case-file-story)).
+
+- The number format, the meter cells, the camera's scale and view, the fit of a one-line text, the
+  bars' layout, the frames of a beat's parts and the quiet stretches are computed as in the shared cases
+  `mcp/tests/test_case_file_story.py` runs.
+- Every accent has a colour, and every icon has a drawing and a fill.
+- The view of a still never reaches past its edge at any focus or scale. A shot pushes in, then
+  cuts 1.5 times tighter on its punch frame and moves toward the punch point.
+- The meter row shows the starting values, then a shot's new value dissolving in from its cut. It
+  is hidden on a card, on a shot that hides it and on the choice. The large panel counts from the
+  old value to the new one.
+- The count grid and its counter finish together and the result lands on its frame; a count under
+  forty shows that many icons, centred in the grid's box, with the counter level with the icons; each bar comes
+  up on its own frame and the payoff line after the last.
+- The worked example starts at frame 0, shows a term card before its closing choice and has no
+  stretch over the stillness limit.
+- Under the `fill` caption look a word is grey until it is spoken, then the text colour, and a
+  text colour the blend cannot parse switches on the word's frame without throwing.
 
 ## System Flow
 
