@@ -177,13 +177,14 @@ describe("RenderersPanel", () => {
     expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
   });
 
-  it("Rename sends a PATCH with the trimmed name, and refuses an empty one without a request", async () => {
+  it("Rename saves on Enter with the trimmed name, and refuses an empty one without a request", async () => {
     const fn = stub([list([GPU_BOX])]);
     render(<RenderersPanel />);
     const g = await card("r2");
     fireEvent.click(g.getByTestId("renderer-rename"));
+    expect(g.queryByTestId("renderer-rename-save")).toBeNull();
     fireEvent.change(g.getByTestId("renderer-rename-input"), { target: { value: "  " } });
-    fireEvent.click(g.getByTestId("renderer-rename-save"));
+    fireEvent.keyDown(g.getByTestId("renderer-rename-input"), { key: "Enter" });
     expect(g.getByTestId("renderer-name-error")).toBeInTheDocument();
     expect(callsTo(fn, "PATCH", "/renderers/r2")).toHaveLength(0);
     fireEvent.change(g.getByTestId("renderer-rename-input"), { target: { value: " Render box " } });
@@ -192,6 +193,30 @@ describe("RenderersPanel", () => {
     expect(JSON.parse((callsTo(fn, "PATCH", "/renderers/r2")[0][1] as RequestInit).body as string))
       .toEqual({ name: "Render box" });
     await waitFor(() => expect(g.queryByTestId("renderer-rename-input")).toBeNull());
+  });
+
+  it("a new name also saves when the field loses focus; Escape and Cancel drop it", async () => {
+    const fn = stub([list([GPU_BOX])]);
+    render(<RenderersPanel />);
+    const g = await card("r2");
+    fireEvent.click(g.getByTestId("renderer-rename"));
+    fireEvent.change(g.getByTestId("renderer-rename-input"), { target: { value: "Dropped" } });
+    fireEvent.keyDown(g.getByTestId("renderer-rename-input"), { key: "Escape" });
+    fireEvent.click(g.getByTestId("renderer-rename"));
+    fireEvent.change(g.getByTestId("renderer-rename-input"), { target: { value: "Also dropped" } });
+    // Pressing Cancel must not blur the field first and save the name.
+    const cancel = g.getByTestId("renderer-rename-cancel");
+    expect(fireEvent.mouseDown(cancel)).toBe(false);
+    fireEvent.click(cancel);
+    expect(callsTo(fn, "PATCH", "/renderers/r2")).toHaveLength(0);
+
+    fireEvent.click(g.getByTestId("renderer-rename"));
+    fireEvent.change(g.getByTestId("renderer-rename-input"), { target: { value: "Studio" } });
+    fireEvent.blur(g.getByTestId("renderer-rename-input"));
+    await waitFor(() => expect(callsTo(fn, "PATCH", "/renderers/r2")).toHaveLength(1));
+    expect(JSON.parse((callsTo(fn, "PATCH", "/renderers/r2")[0][1] as RequestInit).body as string))
+      .toEqual({ name: "Studio" });
+    await waitFor(() => expect(g.getByTestId("renderer-status")).toHaveTextContent("✓ Saved"));
   });
 
   it("Remove asks first, naming the renderer, then sends a DELETE", async () => {

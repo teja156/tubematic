@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock heavy child components
@@ -1893,7 +1893,14 @@ describe("SettingsPage — log retention (TMDEV-86)", () => {
 });
 
 describe("SettingsPage — user preferences (TMDEV-117)", () => {
-  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+  // Leaving the page sends text still waiting to be saved; unmount while the
+  // fetch stub is still in place, and let that save and its reloads finish.
+  afterEach(async () => {
+    cleanup();
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it("shows the stored preferences in a textbox on their own tab", async () => {
     stubFetch({ ...MOCK_SETTINGS, user_preferences: "Scripts: calm tone." });

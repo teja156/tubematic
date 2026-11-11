@@ -1297,7 +1297,7 @@ function SettingsBody() {
         </TabsContent>
 
         <TabsContent value="costs">
-          <CostsPanel inputStyle={inputStyle} />
+          <CostsPanel inputStyle={inputStyle} notify={(message, action) => push("success", message, action)} />
         </TabsContent>
 
         <TabsContent value="auto-pilot">

@@ -21,6 +21,8 @@ import { SectionLabel } from "@/components/SectionLabel";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, formatDateTime } from "@/lib/datetime";
+import { SaveStatus } from "@/components/SaveStatus";
+import { useSaveStatus, type SaveState } from "@/lib/saveStatus";
 import {
   CHIP, GPU_STEP_COMMAND, NAME_MAX_CHARS, REMOTE_SCRIPT, REMOTE_UPGRADE_COMMAND, RENDERERS_STEP_COMMAND,
   anyProbePending, computeLine, describeDevice, gpuVerdict, hasGpu, isRenderersList, lastSeen, nameError,
@@ -97,12 +99,14 @@ interface CardProps {
   timeZone: string;
   busy: boolean;
   error: string;
+  /** How the last change to this renderer went (enable, disable, rename). */
+  status?: SaveState;
   onPatch: (body: { enabled?: boolean; name?: string }) => Promise<boolean>;
   onRemove: () => void;
   onTest: () => void;
 }
 
-function RendererCard({ r, now, timeZone, busy, error, onPatch, onRemove, onTest }: CardProps) {
+function RendererCard({ r, now, timeZone, busy, error, status, onPatch, onRemove, onTest }: CardProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(r.name);
   const [nameProblem, setNameProblem] = useState("");
@@ -111,12 +115,19 @@ function RendererCard({ r, now, timeZone, busy, error, onPatch, onRemove, onTest
   const gpus = r.compute?.gpus ?? [];
   const machine = computeLine(r);
 
+  // The new name saves on Enter or when the field loses focus; Escape or
+  // Cancel leaves the name as it was.
   async function saveName() {
     const problem = nameError(draft);
     setNameProblem(problem);
     if (problem) return;
     if (draft.trim() === r.name) { setEditing(false); return; }
     if (await onPatch({ name: draft.trim() })) setEditing(false);
+  }
+
+  function cancelRename() {
+    setEditing(false);
+    setNameProblem("");
   }
 
   // The probe verdict belongs to the configured GPU. With several GPUs
@@ -133,14 +144,16 @@ function RendererCard({ r, now, timeZone, busy, error, onPatch, onRemove, onTest
             <input data-testid="renderer-rename-input" aria-label="Renderer name" value={draft}
                    maxLength={NAME_MAX_CHARS + 20} autoFocus style={input}
                    onChange={(e) => setDraft(e.target.value)}
+                   onBlur={() => { if (!busy) void saveName(); }}
                    onKeyDown={(e) => {
-                     if (e.key === "Enter") saveName();
-                     if (e.key === "Escape") { setEditing(false); setNameProblem(""); }
+                     if (e.key === "Enter") void saveName();
+                     if (e.key === "Escape") cancelRename();
                    }} />
-            <button type="button" data-testid="renderer-rename-save" disabled={busy} onClick={saveName}
-                    style={{ ...button, ...dimmed(busy) }}>Save</button>
+            {/* mousedown is stopped so the field never loses focus to this
+                button, which would save the name Cancel is meant to drop. */}
             <button type="button" data-testid="renderer-rename-cancel"
-                    onClick={() => { setEditing(false); setNameProblem(""); }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={cancelRename}
                     style={{ ...button, color: "var(--dim)" }}>Cancel</button>
           </span>
         ) : (
@@ -149,6 +162,7 @@ function RendererCard({ r, now, timeZone, busy, error, onPatch, onRemove, onTest
           </span>
         )}
         {r.builtin && <span style={note}>BUILT-IN</span>}
+        {status?.state !== "error" && <SaveStatus status={status} testId="renderer-status" />}
         <span data-testid="renderer-chip" data-chip={chip}
               style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: CHIP[chip].color,
                        border: `1px solid ${CHIP[chip].color}`, padding: "1px 6px", textTransform: "uppercase" }}>
@@ -419,6 +433,7 @@ export function RenderersPanel() {
   const [list, setList] = useState<RenderersList | null>(null);
   const [error, setError] = useState("");
   const [cardErrors, setCardErrors] = useState<Record<string, string>>({});
+  const statuses = useSaveStatus();
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [adding, setAdding] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -481,6 +496,13 @@ export function RenderersPanel() {
 
   const path = (r: Renderer) => `/renderers/${encodeURIComponent(r.id)}`;
 
+  /** Enable, disable or rename: saved at once, with "Saving…" then "✓ Saved"
+   *  beside the name. A refusal shows in the card's own error line. */
+  async function patch(r: Renderer, body: { enabled?: boolean; name?: string }) {
+    return statuses.run(r.id, async () =>
+      (await act(r.id, path(r), jsonInit("PATCH", body))) ? null : "refused");
+  }
+
   function remove(r: Renderer) {
     if (!window.confirm(`Remove the renderer "${r.name}"? It stops getting work at once, and a render it `
                         + "is running goes back in the queue. To use that machine again, add it with a new token.")) {
@@ -502,7 +524,8 @@ export function RenderersPanel() {
         {renderers.map((r) => (
           <RendererCard key={r.id} r={r} now={now} timeZone={timeZone} busy={!!busy[r.id]}
                         error={cardErrors[r.id] ?? ""}
-                        onPatch={(body) => act(r.id, path(r), jsonInit("PATCH", body))}
+                        status={statuses.get(r.id)}
+                        onPatch={(body) => patch(r, body)}
                         onRemove={() => remove(r)}
                         onTest={() => act(r.id, `${path(r)}/gpu-test`, { method: "POST" })} />
         ))}
