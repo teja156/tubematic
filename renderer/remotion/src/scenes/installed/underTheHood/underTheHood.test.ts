@@ -130,5 +130,8 @@ describe("numbers", () => {
     expect(statValue(0, 5, 0)).toBe(0);
     expect(statValue(0, 5, TIMING.statCount)).toBe(5);
     expect(statValue(0, 5, TIMING.statCount * 3)).toBe(5);
+    // the value the agent wrote, not one that rounds to another last digit
+    expect(statValue(686, -97.65, TIMING.statCount)).toBe(-97.65);
+    expect(statValue(-50, 9.95, TIMING.statCount)).toBe(9.95);
   });
 });

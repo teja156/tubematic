@@ -180,6 +180,19 @@ def test_a_long_stretch_with_nothing_new_is_refused():
     assert any("Nothing new happens from frame 536 to 669" in p for p in _check(cfg))
 
 
+def test_a_pose_that_repeats_the_current_one_is_refused():
+    # 536 is "think"; making 603 "think" too would pad a still stretch with nothing
+    cfg = _with(lambda p: p[3]["events"][3].update(pose="think"))
+    assert any("already in the 'think' pose" in x for x in _check(cfg))
+    cfg = _with(lambda p: p[0]["events"][0].update(pose="idle"))   # the presenter starts idle
+    assert any("already in the 'idle' pose" in x for x in _check(cfg))
+
+
+def test_a_refused_plate_with_malformed_events_gets_a_sentence_not_a_crash():
+    problems = _check(_with(lambda p: p[1].update(focus="x", events=1.5)))
+    assert problems and all(isinstance(x, str) for x in problems)
+
+
 def test_two_pose_swaps_too_close_together_read_as_a_twitch():
     cfg = _with(lambda p: p[1]["events"].insert(1, {"type": "pose", "frame": 146, "pose": "think"}))
     assert any("read as a twitch" in p for p in _check(cfg))
@@ -378,6 +391,7 @@ def test_the_caption_look_is_checked(look, ok):
 # ── the cap on paid photographs ──────────────────────────────────────────────
 
 def test_a_thirteenth_photograph_is_refused_before_the_paid_call(make_video, monkeypatch):
+    monkeypatch.setattr(server, "_image_reservations", {})
     vid = make_video(images=[f"p{k}" for k in range(12)])
     monkeypatch.setattr(server, "_openai_key", lambda: "sk-test")
     monkeypatch.setattr(server, "_guard_scene_work", lambda *a, **k: None)
@@ -392,7 +406,19 @@ def test_a_thirteenth_photograph_is_refused_before_the_paid_call(make_video, mon
     assert "the most a video may use (12)" in result["error"]
 
 
-def test_regenerating_a_photograph_and_other_styles_are_not_capped(make_video):
+def test_parallel_calls_cannot_each_take_the_last_slot(make_video, monkeypatch):
+    monkeypatch.setattr(server, "_image_reservations", {})
+    vid = make_video(images=[f"p{k}" for k in range(11)])
+    images = server.JOBS_DIR / vid / "images"
+    assert server._image_cap_error(vid, "p11", images) == ""         # takes the 12th slot
+    assert "being made now" in server._image_cap_error(vid, "p12", images)
+    assert server._image_cap_error(vid, "p11", images) == ""         # the same name again is fine
+    monkeypatch.setattr(server.time, "time", lambda: 10 ** 12)        # a failed call's hold lapses
+    assert server._image_cap_error(vid, "p12", images) == ""
+
+
+def test_regenerating_a_photograph_and_other_styles_are_not_capped(make_video, monkeypatch):
+    monkeypatch.setattr(server, "_image_reservations", {})
     vid = make_video(images=[f"p{k}" for k in range(12)])
     images = server.JOBS_DIR / vid / "images"
     assert server._image_cap_error(vid, "p3", images) == ""          # a regeneration replaces p3

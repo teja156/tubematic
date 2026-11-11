@@ -51,7 +51,7 @@ LIMITS = {
     "minArcs": 3,
     "maxArcs": 9,
     "minPlateSeconds": 1.5,
-    "maxStillSeconds": 3.5,
+    "maxStillSeconds": 3,
 }
 TIMING = {
     "fade": 3,
@@ -327,8 +327,9 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
     for i, p in enumerate(plates):
         if not sound[i]:
             # its own problem is reported; its events still count as changes
-            changes.update(e["frame"] for e in p.get("events") or []
-                           if isinstance(e, dict) and _int(e.get("frame")))
+            evs = p.get("events")
+            if isinstance(evs, list):
+                changes.update(e["frame"] for e in evs if isinstance(e, dict) and _int(e.get("frame")))
             continue
         # a zoom-through takes what is pinned to this plate away zoomOut frames before the cut
         nxt = plates[i + 1] if i + 1 < len(plates) else {}
@@ -475,10 +476,15 @@ def _check_events(p, i, start, end, fps, extra, on_word, changes, last_pose, err
                 err(f"{at}: pose must be one of {', '.join(extra['poses'])}.")
             if not on_word(f):
                 err(f"{at}: a pose swaps on a word; move it within {TIMING['snap']} frames of a word's start.")
-            if last_pose is not None and f - last_pose < TIMING["minPoseGap"]:
-                err(f"{at}: it comes {f - last_pose} frames after the last pose; swaps closer than "
+            # (frame, pose) of the last pose; the presenter starts idle
+            prev_frame, prev_pose = last_pose if last_pose is not None else (None, "idle")
+            if prev_frame is not None and f - prev_frame < TIMING["minPoseGap"]:
+                err(f"{at}: it comes {f - prev_frame} frames after the last pose; swaps closer than "
                     f"{TIMING['minPoseGap']} frames read as a twitch.")
-            last_pose = f
+            if e.get("pose") == prev_pose:
+                err(f"{at}: the presenter is already in the {prev_pose!r} pose, so this changes nothing on "
+                    "screen; pick another pose or leave it out.")
+            last_pose = (f, e.get("pose"))
         elif t == "callout":
             text, chip, tone = e.get("text"), e.get("chip"), e.get("tone", "white")
             if not _text(text, LIMITS["calloutChars"]):

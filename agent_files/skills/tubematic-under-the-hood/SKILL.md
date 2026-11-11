@@ -65,7 +65,8 @@ event is wrong. Fix every problem it lists, then write again.
   chip 10, a unit or sign 3. A stat or chart number is at most 9999999 either way; the stat must fit
   the frame and the chart's value 900 px (about 9 characters). A counter row of four takes up to 3
   digits each, three up to 4, one or two up to 5.
-- **Never still:** something new (an event, a pose or a plate) at least every 3.5 seconds.
+- **Never still:** something new (an event, a pose or a plate) at least every 3 seconds. A pose
+  that repeats the presenter's current one changes nothing and is refused.
 
 ## Step 0 — read
 

@@ -41,8 +41,9 @@ export const LIMITS = {
   maxArcs: 9,
   minPlateSeconds: 1.5,
   // The longest stretch, in seconds, with nothing new apart from the slow
-  // push. The look lives on constant small changes.
-  maxStillSeconds: 3.5,
+  // push. The look lives on constant small changes; the AI review is told the
+  // same number.
+  maxStillSeconds: 3,
 } as const;
 
 export const TIMING = {

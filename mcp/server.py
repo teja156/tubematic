@@ -1726,7 +1726,7 @@ def _approval_mascot_error(con, video_id: str) -> dict | None:
                  else (held["visual_style"] or "").strip())
     if tmascots.no_mascot_error(no_mascot):
         # A style that takes no mascot; approving buys paid work that ends refused or FAILED.
-        return {"error": f"This video's style is {no_mascot} and it holds the mascot {held['mascot_id']!r}. "
+        return {"error": f"This video's style is {tvs.route_label(no_mascot)} and it holds the mascot {held['mascot_id']!r}. "
                          f"{tmascots.no_mascot_error(no_mascot)} A human must clear the mascot on the "
                          "dashboard before the topic is approved."}
     if _mascot_pick_error(con, held["mascot_id"]):
@@ -5603,29 +5603,45 @@ def _redact_keys(text: str) -> str:
     return text
 
 
+# Names a capped video's generate_image calls are generating right now. The
+# folder alone is a check-then-act race: parallel calls each see 11 pictures,
+# all pass and all are billed. A reservation counts until the file exists, and
+# lapses after _IMAGE_RESERVE_SECS so a failed call does not hold a slot.
+_IMAGE_RESERVE_SECS = 300
+_image_reservations: dict[str, dict[str, float]] = {}
+_image_reservations_lock = threading.Lock()
+
+
 def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
-    """The refusal for one generated photograph too many, or "".
+    """The refusal for one generated photograph too many, or "" (and then the
+    name is reserved for this call).
 
     A style whose pack caps its photographs (Under the Hood: routing.images)
-    is refused a NEW image name once the video's images folder holds that many
-    pictures; regenerating an existing name stays allowed, because a bad still
-    must be replaceable. Checked before the paid call, since the cap is about
-    spend."""
+    is refused a NEW image name once the video's images folder and the calls
+    in flight hold that many; regenerating an existing name stays allowed,
+    because a bad still must be replaceable. Checked before the paid call,
+    since the cap is about spend."""
     with _conn() as con:
         vrow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
     style = ((vrow["visual_style"] if vrow else "") or "").strip()
     if style != under_the_hood.STYLE_ID:
         return ""
     cap = tvs.pack(style)["routing"].get("images", 0)
-    try:
-        names = {f.stem for f in images_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS}
-    except OSError:
-        names = set()
-    if image_name in names or len(names) < cap:
-        return ""
-    return (f"This Under the Hood video already has {len(names)} photographs, the most a video may "
-            f"use ({cap}). Reuse one of them on another plate with a different focus or zoom, or "
-            "regenerate one under its own name to replace it.")
+    with _image_reservations_lock:
+        now = time.time()
+        held = {n: t for n, t in _image_reservations.get(video_id, {}).items() if now - t < _IMAGE_RESERVE_SECS}
+        try:
+            names = {f.stem for f in images_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS}
+        except OSError:
+            names = set()
+        names |= set(held)
+        if image_name in names or len(names) < cap:
+            held[image_name] = now
+            _image_reservations[video_id] = held
+            return ""
+    return (f"This Under the Hood video already has {len(names)} photographs, counting any being made "
+            f"now, the most a video may use ({cap}). Reuse one of them on another plate with a "
+            "different focus or zoom, or regenerate one under its own name to replace it.")
 
 
 @mcp.tool

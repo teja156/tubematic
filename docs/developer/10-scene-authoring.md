@@ -681,9 +681,10 @@ every frame is a new photograph to capture and encode, which the look requires.
   chart; 6 frames earlier on a plate a zoom-through ends).
 - A stat or chart number is beyond 9999999 either way, a stat or a chart's value is too wide for the
   frame, or a counter row's digits do not fit their columns. The widths are estimates from the bundled
-  fonts' typical characters, not their widest: a label of all M or W can still run past its chip, which
-  the text-layout audit then reports.
-- Nothing new happens for more than 3.5 seconds.
+  fonts' typical characters, not their widest: a label of all M or W can still run past its chip, and
+  the text-layout audit reports that only when the overflow reaches other text.
+- Nothing new happens for more than 3 seconds, the stretch the AI review is told to report. A pose
+  that repeats the presenter's current pose does not count as new and is refused.
 
 `write_scene_config` reads each photograph's height over width from its file into the plate's
 `aspect`, because every pinned-point check depends on it; the agent never writes it. `validate_job`

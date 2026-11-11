@@ -503,7 +503,8 @@ Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under
   chip outside the band or on its point or over another, a bad region, arc count, counter values,
   stat affix, label, slot or width, a bad chart, a chart on a photograph or a callout on a plain
   plate, a second footnote, text too late to read, events out of order, too many elements, poses too
-  close together, and a still stretch over 3.5 seconds. More than 12 different photographs is
+  close together or repeating the current pose, and a still stretch over 3 seconds. More than 12
+  different photographs is
   refused and a reused one is free. A zoom-through counts the plate's text as leaving 6 frames early.
   A value of the wrong type gets a sentence back and raises nothing.
 - The text audit samples each plate and stops before a zoom-through.

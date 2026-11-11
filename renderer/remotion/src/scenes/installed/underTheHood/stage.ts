@@ -129,5 +129,7 @@ export function counterValue(from: number, to: number, t: number): number {
 
 /** A stat's value `t` frames after it starts, counting up over statCount frames. */
 export function statValue(from: number, to: number, t: number): number {
+  // exactly `to` once counted, so the last digit is the one the agent wrote
+  if (t >= TIMING.statCount) return to;
   return from + (to - from) * easeOut(t / TIMING.statCount);
 }

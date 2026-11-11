@@ -136,4 +136,5 @@ point near the band's edge must wait until the settle is over (8 frames).
 
 ## The whole video
 
-Something new (an event or a plate) at least every 3.5 seconds.
+Something new (an event or a plate) at least every 3 seconds. A pose that repeats the presenter's
+current pose changes nothing and is refused.

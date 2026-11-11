@@ -682,7 +682,7 @@ It checks:
 - An `under_the_hood` video holds the one installed `UnderTheHood` scene, and its plates and events
   pass `mcp/under_the_hood.py` (plates and poses on word starts, at most 12 different photographs,
   each covering the plate band, pinned points that stay visible through the push, chips inside the
-  band with no overlaps, per-plate limits, no still stretch over 3.5 seconds). No other style may use
+  band with no overlaps, per-plate limits, no still stretch over 3 seconds). No other style may use
   `UnderTheHood`. Each plate's `aspect` is read from its photograph, and the style pack's caption
   settings fill every `subtitles` key the config leaves out. The rules are in
   [Under the Hood](10-scene-authoring.md#under-the-hood).

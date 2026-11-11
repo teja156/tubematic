@@ -335,7 +335,9 @@ const ChartText: React.FC<{ e: UTHChart; frame: number }> = ({ e, frame }) => {
   const t = clamp01((frame - e.frame) / (e.duration ?? 88));
   const k = easeOut(t) * (e.points.length - 1);
   const i = Math.min(e.points.length - 2, Math.floor(k));
-  const v = e.points.length > 1 ? e.points[i] + (e.points[i + 1] - e.points[i]) * (k - i) : e.points[0];
+  // exactly the last point once drawn, so the last digit is the one the agent wrote
+  const v = t >= 1 ? e.points[e.points.length - 1]
+    : e.points.length > 1 ? e.points[i] + (e.points[i + 1] - e.points[i]) * (k - i) : e.points[0];
   const typed = e.label.slice(0, Math.max(0, frame - e.frame));
   const chipIn = easeOut((frame - e.frame - (e.duration ?? 88)) / TIMING.chipIn);
   return (
