@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 import pytest
 
 import picture_checks as pc
+import system_flow
 import whiteboard
 import server
 
@@ -110,6 +111,16 @@ def test_a_first_frame_with_no_subject_is_warned(style, mutate, fragment):
     assert len(warnings) == 1 and fragment in warnings[0] and warnings[0].startswith("First frame:")
 
 
+def test_a_system_flow_node_in_the_first_frames_opens_the_video():
+    # the renderer draws a node entering by TIMING.openWithin half grown on frame 0
+    config = _example("system_flow")
+    first = _props(config)["boards"][0]["events"][0]
+    first["at"] = system_flow.TIMING["openWithin"]
+    assert pc.first_frame_warnings(config) == []
+    first["at"] += 1
+    assert pc.first_frame_warnings(config)
+
+
 def test_a_mixed_video_is_left_to_the_text_audit():
     mixed = {"scenes": [{"type": "generated", "src": "vid/title-card", "startFrame": 0}]}
     assert pc.first_frame_warnings(mixed) == []
@@ -134,6 +145,12 @@ def test_a_beat_owes_its_change_once_where_it_starts():
     assert [s["role"] for s in out] == ["opening", "reopen", "turn", "", "", "payoff", ""]
     assert out[1]["beat"] == "Wrong suspect 1" and out[1]["startFrame"] == 100
     assert "role" not in tl[0]  # the inputs are not changed
+
+
+def test_a_beat_label_matches_whatever_its_case_and_spacing():
+    tl, script = _segments(["Symptom", "wrong  suspect 1", "TURN", "Root cause "])
+    assert [s["role"] for s in pc.annotate_segments(tl, script, ROLES)] == [
+        "opening", "reopen", "turn", "payoff"]
 
 
 def test_segments_without_beats_or_without_a_formula_owe_nothing_past_the_opening():

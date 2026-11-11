@@ -146,7 +146,8 @@ Covers `tubematic_core/script_checks.py`
 
 - A clean script raises nothing. Each check fires on the script it is for: a closing ask, a recap
   ending, a greeting opener, a first sentence that repeats the title or a title that copies a short
-  first sentence, a staged run-up, no turn in
+  first sentence, a segment beat the formula does not have (case and spacing aside), a staged
+  run-up, no turn in
   the middle, a length outside the band or past the ceiling, a kept opening that is not the
   script's opening, a closing shared with the domain's recent scripts.
 - Each check stays quiet on text that only uses its words: "follow" and "subscribe" as ordinary

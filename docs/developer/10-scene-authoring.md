@@ -381,8 +381,8 @@ The voice starts a few frames into the video, so a picture on frame 0 cannot sit
 styles that time events to words accept an event at frame 0 for that reason: Bean Explainer and
 Storybook Atlas take any event there, and Whiteboard takes region 1's first item. Whiteboard draws
 that item from `TIMING.openLead` frames before frame 0 instead of `TIMING.lag` frames after its word,
-so the first frame shows ink being drawn, and System Flow draws a node whose event is at frame 0 half
-grown on the first frame. Both changes touch the opening frames only and cost no measurable render
+so the first frame shows ink being drawn, and System Flow draws a node whose event is within
+`TIMING.openWithin` frames of the start half grown on the first frame. Both changes touch the opening frames only and cost no measurable render
 time (frames 0 to 149 of each skill's example, whole-tree CPU seconds, on software GL).
 
 ---
@@ -439,11 +439,13 @@ lists the pictures of the scene layer, the element `CompositionBuilder` marks
 `data-tm-layer="scene"`, at frames 0 and 6. On those frames it holds the frame open and measures
 again once the page has stopped changing, so a lazily loaded scene is seen. Each picture carries its
 box, its opacity and a `look` (stroke offset, colours, background position), so a line drawing on or
-a colour change counts as movement. `text_audit.py::frame0_findings` decides: an image, a canvas, an
-SVG shape or a filled box counts as a subject from `FRAME0_MIN_AREA` of the frame at
-`FRAME0_MIN_OPACITY`, and a colour or gradient fill or an SVG rect covering `FRAME0_BACKDROP_AREA`
-of the frame is the backdrop. A canvas or a video counts as moving, because its pixels change inside
-a box that stays still. The text checks skip this pass, because text is mid-entrance on frame 0.
+a colour change counts as movement. `text_audit.py::frame0_findings` decides: an image, a canvas or
+a filled box counts as a subject from `FRAME0_MIN_AREA` of the frame at `FRAME0_MIN_OPACITY`, and
+the shapes of one SVG count together, by the box around them, so a figure drawn from a head, a torso
+and thin limbs is one subject. A colour or gradient fill or an SVG rect covering
+`FRAME0_BACKDROP_AREA` of the frame is the backdrop, and a filled card holding only text is a title
+card; neither is a subject. A canvas or a video counts as moving, because its pixels change inside a
+box that stays still. The text checks skip this pass, because text is mid-entrance on frame 0.
 
 ### Picture warnings
 
@@ -459,7 +461,8 @@ becomes one warning line.
 What counts as an opening with no subject, by style (`picture_checks.py::_first_frame_problem`,
 with `FIRST_FRAME_WINDOW` as the early limit):
 
-- System Flow: board 1 has no node by frame 3, so the video opens on the headline alone.
+- System Flow: board 1 has no node by `TIMING.openWithin` (frame 3), so the video opens on the
+  headline alone.
 - Whiteboard: region 1 does not open on a doodle or an arrow at frame 0.
 - Bean Explainer: the first shot has no pose or prop by frame 3.
 - Terminal Doc: beat 1 has nothing on stage by frame 3.

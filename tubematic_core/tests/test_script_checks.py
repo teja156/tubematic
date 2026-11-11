@@ -13,6 +13,7 @@ import pytest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
+from tubematic_core import formulas as tf
 from tubematic_core import script_checks as sc  # noqa: E402
 
 FORMULA = "broken-expectation"  # 130 to 200 words
@@ -191,6 +192,19 @@ def test_a_title_that_copies_a_short_opening_is_flagged():
 
 def test_an_opening_that_continues_a_long_title_is_not_flagged():
     assert "title_repeat" not in ids(publish_title="Git loses a renamed file: where the history goes")
+
+
+def test_a_segment_beat_the_formula_does_not_have_is_flagged():
+    # The scene author finds the turn and the payoff by beat name; a label the
+    # formula does not have hides them.
+    names = list(tf.beat_names(FORMULA))
+    assert "beat_unknown" not in ids(beats=names + ["", names[0].upper() + "  "])
+    found = sc.check(CLEAN, publish_title=TITLE, formula_id=FORMULA, kept_hook=HOOK,
+                     beats=[names[0], "The twist", "The twist"])
+    warn = next(w for w in found if w["id"] == "beat_unknown")
+    assert '"The twist"' in warn["message"] and warn["message"].count("The twist") == 1
+    # no formula on record: nothing to compare against
+    assert "beat_unknown" not in ids(formula_id="", beats=["anything"])
 
 
 def test_a_short_title_cannot_be_repeated():

@@ -536,11 +536,32 @@ def _is_backdrop(v: dict) -> bool:
     return share >= FRAME0_BACKDROP_AREA and (v.get("kind") == "background" or v.get("tag") == "rect")
 
 
+def _big_enough(v: dict) -> bool:
+    return (v.get("width", 0) * v.get("height", 0)) / _FRAME_AREA >= FRAME0_MIN_AREA
+
+
 def _subjects(visuals: list[dict]) -> list[dict]:
-    return [v for v in visuals
-            if v.get("opacity", 0) >= FRAME0_MIN_OPACITY
-            and (v.get("width", 0) * v.get("height", 0)) / _FRAME_AREA >= FRAME0_MIN_AREA
-            and not _is_backdrop(v)]
+    """The pictures that can be what the viewer looks at. The shapes of one
+    <svg> are judged together, by the box around the visible ones: a stick
+    figure is a head, a torso and thin limbs, none of them large alone. A
+    filled card holding only text is a title card, not a subject."""
+    seen = [v for v in visuals if v.get("opacity", 0) >= FRAME0_MIN_OPACITY
+            and not _is_backdrop(v) and not v.get("textOnly")]
+    out = [v for v in seen if v.get("group", -1) < 0 and _big_enough(v)]
+    groups: dict[int, list[dict]] = {}
+    for v in seen:
+        if v.get("group", -1) >= 0:
+            groups.setdefault(v["group"], []).append(v)
+    for members in groups.values():
+        x0 = min(v["x"] for v in members)
+        y0 = min(v["y"] for v in members)
+        x1 = max(v["x"] + v["width"] for v in members)
+        y1 = max(v["y"] + v["height"] for v in members)
+        union = {"tag": "svg", "kind": "picture", "x": x0, "y": y0, "width": x1 - x0,
+                 "height": y1 - y0, "opacity": 1.0}
+        if _big_enough(union) and not _is_backdrop(union):
+            out.append(union)
+    return out
 
 
 def _moved(a: dict, b: dict) -> bool:
@@ -560,8 +581,10 @@ def frame0_findings(pass_result: dict, scene_config: dict) -> list[str]:
     if first is None:
         return []
     scenes = scene_config.get("scenes") or []
-    label = _scene_label(scenes[0]) if scenes else "scene 0"
-    where = f"First frame (scene 0, {label})"
+    first_scene = next((i for i, sc in enumerate(scenes)
+                        if isinstance(sc, dict) and sc.get("startFrame") == 0), 0)
+    label = _scene_label(scenes[first_scene]) if scenes else "no scene"
+    where = f"First frame (scene {first_scene}, {label})"
     if not _subjects(first):
         return [f"{where}: nothing is on screen at frame 0 but text or a backdrop. The first frame "
                 "should show what the first sentence names (a picture, a diagram already building, "

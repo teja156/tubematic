@@ -187,9 +187,9 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
         {Object.values(layout.nodes).map((n) => {
           const t0 = enter[n.id];
           if (t0 === undefined || frame < t0) return null;
-          // A node entering at frame 0 opens the video: it starts half grown,
-          // so the first frame shows it and it is still moving.
-          const pIn = ramp(frame, t0 === 0 ? -TIMING.nodeIn / 2 : t0, TIMING.nodeIn);
+          // A node entering in the video's first frames opens it: it starts
+          // half grown, so the first frame shows it and it is still moving.
+          const pIn = ramp(frame, t0 <= TIMING.openWithin ? t0 - TIMING.nodeIn / 2 : t0, TIMING.nodeIn);
           const sc = 0.8 + 0.2 * easeOutExpo(pIn);
           const faulted = (faultAt[n.id] ?? Infinity) <= frame;
           const shake = faulted ? Math.sin((frame - faultAt[n.id]) * 2.2) * 6 * (1 - ramp(frame, faultAt[n.id], 10)) : 0;

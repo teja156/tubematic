@@ -189,6 +189,12 @@ interface MeasuredVisual {
   /** What can change while the box stays put: a stroke drawing on, a
    *  colour, a background pan. Python compares it between two frames. */
   look: string;
+  /** For an SVG shape: which <svg> it belongs to (document order), so Python
+   *  can judge a figure drawn from many small shapes as one picture. -1 for
+   *  anything else. */
+  group: number;
+  /** A filled box whose only content is text: a card behind a headline. */
+  textOnly: boolean;
 }
 
 const PICTURE_TAGS = new Set([
@@ -218,6 +224,7 @@ const colourAlpha = (colour: string): number => {
 
 const measureVisuals = (): MeasuredVisual[] => {
   const out: MeasuredVisual[] = [];
+  const svgs = Array.from(document.querySelectorAll('[data-tm-layer="scene"] svg'));
   document.querySelectorAll('[data-tm-layer="scene"]').forEach((layer) => {
     layer.querySelectorAll("*").forEach((el) => {
       const tag = el.tagName.toLowerCase();
@@ -243,7 +250,13 @@ const measureVisuals = (): MeasuredVisual[] => {
       const { opacity } = accumulateFromAncestors(el);
       const st = window.getComputedStyle(el);
       const look = [st.strokeDashoffset, st.stroke, st.fill, st.backgroundColor, st.backgroundPosition, st.backgroundSize].join("|");
-      out.push({ tag, kind, x: rect.x, y: rect.y, width: rect.width, height: rect.height, opacity, look });
+      const owner = tag === "svg" ? null : el.closest("svg");
+      const group = owner ? svgs.indexOf(owner) : -1;
+      const textOnly =
+        kind === "background" &&
+        (el.textContent ?? "").trim().length > 0 &&
+        el.querySelector("img, svg, canvas, video") === null;
+      out.push({ tag, kind, x: rect.x, y: rect.y, width: rect.width, height: rect.height, opacity, look, group, textOnly });
     });
   });
   out.sort((a, b) => b.width * b.height - a.width * a.height);

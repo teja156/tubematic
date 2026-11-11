@@ -218,6 +218,18 @@ def label(formula_id: str) -> str:
     return formula["label"] if formula else (formula_id or "")
 
 
+def beat_key(name) -> str:
+    """A beat name as it is compared: case and spacing do not matter, so a
+    segment labelled "the turn" still finds the formula's "The turn"."""
+    return " ".join(str(name or "").casefold().split())
+
+
+def beat_names(formula_id: str) -> tuple:
+    """A formula's beat names, in order; () for no formula or an unknown one."""
+    formula = FORMULAS.get(formula_id or "")
+    return tuple(b["name"] for b in formula["beats"]) if formula else ()
+
+
 def beat_roles(formula_id: str) -> dict:
     """{beat name: role} for the beats of a formula that have one; {} for no
     formula or an unknown one (a script written before formulas)."""

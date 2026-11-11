@@ -98,12 +98,14 @@ Hook types are one closed list, `formulas.py::HOOK_TYPES`, shared by every formu
 lets openings be compared across formulas.
 
 A beat's `role` is one of `formulas.py::BEAT_ROLES`: `turn`, `reopen` (a re-opening of the
-question) or `payoff`. A formula has one payoff and no second one, starting at `PAYOFF_FROM_MIN`
-percent or later, and at most one turn; other beats have no role. The roles reach the scene author as each
+question) or `payoff`. A formula has a single payoff, starting at `PAYOFF_FROM_MIN` percent or
+later, and at most one turn; other beats have no role. The roles reach the scene author as each
 segment's `role` in [`get_timeline`](06-mcp-server.md#get_timeline): a turn or a re-opening gets a
 visible change on its first word, and the payoff the video's strongest picture
 ([The opening and the beats](10-scene-authoring.md#the-opening-and-the-beats)). The roles are data
-because a beat's name says what it is about, not whether the picture must change there.
+because a beat's name describes the beat and does not say where the picture must change. A segment's
+beat is matched to the formula's names whatever its case and spacing, and a label the formula does
+not have raises the `beat_unknown` script warning.
 
 The agent reads formulas as text. `scripts/gen_formula_references.py` renders one reference file per
 formula into the skill's `formulas/` folder, and the table in the skill's `SKILL.md` that maps the
@@ -174,6 +176,7 @@ it on the Script tab. A fault inside a check is logged and the script is stored 
 | `hook_mismatch` | The opening marked `kept` is not how the first segment begins |
 | `greeting_opener` | A greeting or an agenda line in the first two sentences |
 | `title_repeat` | The first sentence holds most of the publish title's words, or the title holds most of a short first sentence's words |
+| `beat_unknown` | A segment's `beat` is not a beat name of the recorded formula, so its picture duty is lost |
 | `staged_runup` | A phrase that announces a turn ("Here's the thing") |
 | `no_turn` | No turn word in the middle of the script |
 | `over_ceiling` | More than `WORD_CEILING` words |

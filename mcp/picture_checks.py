@@ -32,6 +32,7 @@ import system_flow
 import terminal_doc
 import under_the_hood
 import whiteboard
+from tubematic_core import formulas as tformulas
 
 # A first frame counts as showing something when a picture element starts by
 # this frame: a few frames into an entrance it is already on screen and moving.
@@ -132,19 +133,21 @@ def annotate_segments(timeline_segments: list, script_segments: list, roles: dic
     """
     beats = {s.get("id"): (s.get("beat") or "") for s in script_segments or []
              if isinstance(s, dict)}
+    by_key = {tformulas.beat_key(name): role for name, role in roles.items()}
     out, previous = [], None
     for seg in timeline_segments or []:
         if not isinstance(seg, dict):
             continue
         beat = beats.get(seg.get("id"), "")
+        key = tformulas.beat_key(beat)
         if not out:
             role = OPENING
-        elif beat and beat != previous:
-            role = roles.get(beat, "")
+        elif key and key != previous:
+            role = by_key.get(key, "")
         else:
             role = ""
         out.append({**seg, "beat": beat, "role": role})
-        previous = beat
+        previous = key
     return out
 
 
@@ -157,9 +160,10 @@ def _first_frame_problem(style: str, config: dict) -> str | None:
     if style == system_flow.STYLE_ID:
         boards = _list(_props(config, system_flow), "boards")
         events = _list(boards[0], "events") if boards else []
-        if not any(e.get("type") == "node" and _int(e.get("at")) and e["at"] <= early for e in events):
+        within = system_flow.TIMING["openWithin"]  # the renderer draws these half grown on frame 0
+        if not any(e.get("type") == "node" and _int(e.get("at")) and e["at"] <= within for e in events):
             return ("board 1 has no node on screen until after frame "
-                    f"{early}, so the video opens on the headline alone. Add a node event at frame 0 "
+                    f"{within}, so the video opens on the headline alone. Add a node event at frame 0 "
                     "for the component the first sentence names")
     elif style == whiteboard.STYLE_ID:
         regions = _list(_props(config, whiteboard), "regions")

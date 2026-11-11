@@ -44,6 +44,9 @@ export const TIMING = {
   // character every labelTypeFrames frames (about 15 a second).
   labelTypeDelay: 6,
   labelTypeFrames: 2,
+  // A node entering within this many frames of the video's start opens it:
+  // it is drawn half grown from the first frame.
+  openWithin: 3,
 } as const;
 
 export const TONES = ["structure", "relation", "ok", "fault"] as const;

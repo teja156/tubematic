@@ -146,7 +146,7 @@ def _warn(warn_id: str, message: str) -> dict:
 
 
 def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_hook: str = "",
-          recent_scripts=()) -> list[dict]:
+          recent_scripts=(), beats=()) -> list[dict]:
     """Warnings for one script, as [{"id", "message"}], in a fixed order.
 
     script: the spoken text, markup already removed.
@@ -155,6 +155,7 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
     kept_hook: the text of the opening the writer kept, markup removed, or "".
     recent_scripts: spoken texts of the same domain's earlier scripts, newest
         first; only the first RECENT_SCRIPTS are read.
+    beats: each segment's beat label, in order ("" for none).
     """
     sents = sentences(script)
     out = []
@@ -172,6 +173,15 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
         out.append(_warn("hook_mismatch",
                          "The opening marked as used is not how the script begins: the first "
                          "segment starts with other words."))
+    names = {tformulas.beat_key(n) for n in tformulas.beat_names(formula_id)}
+    unknown = sorted({b for b in beats or () if isinstance(b, str) and b.strip()
+                      and tformulas.beat_key(b) not in names}) if names else []
+    if unknown:
+        out.append(_warn("beat_unknown",
+                         "These segment beats are not beats of the formula: "
+                         + ", ".join(f'"{b}"' for b in unknown)
+                         + ". Label each segment with a beat name from the formula's reference "
+                           "file, or the scene author cannot tell where the picture must change."))
     if _GREETING.search(first_two):
         out.append(_warn("greeting_opener",
                          "The script opens on a greeting or an agenda line. Open on the act, "

@@ -925,6 +925,33 @@ def test_a_full_frame_css_photo_is_a_subject():
     assert out == []
 
 
+def test_a_figure_drawn_from_small_svg_shapes_is_one_subject():
+    # A stick figure at its default size: a head and a torso, neither 1% of
+    # the frame alone, and thin limbs.
+    head = dict(vis("circle", 480, 700, 104, 104), group=0)
+    torso = dict(vis("path", 492, 804, 80, 216), group=0)
+    arm = dict(vis("path", 420, 830, 70, 6), group=0)
+    out = text_audit.summarise(frame0_output([BACKDROP, head, torso, arm],
+                                             [BACKDROP, head, dict(torso, y=806), arm]), MIXED_CONFIG)
+    assert out == []
+    # the same shapes as separate pictures are each too small
+    loose = [dict(v, group=-1) for v in (head, torso, arm)]
+    assert "nothing is on screen" in text_audit.summarise(frame0_output(loose, loose), MIXED_CONFIG)[0]
+
+
+def test_a_coloured_card_holding_only_text_is_a_title_card():
+    card = dict(vis("div", 90, 660, 900, 600, kind="background"), textOnly=True)
+    out = text_audit.summarise(frame0_output([BACKDROP, card], [BACKDROP, dict(card, y=650)]), MIXED_CONFIG)
+    assert len(out) == 1 and "nothing is on screen" in out[0]
+
+
+def test_the_warning_names_the_scene_on_frame_0():
+    config = {"scenes": [{"type": "generated", "src": "vid/later", "startFrame": 150},
+                         {"type": "generated", "src": "vid/hook", "startFrame": 0}]}
+    out = text_audit.summarise(frame0_output([BACKDROP], [BACKDROP]), config)
+    assert out[0].startswith("First frame (scene 1, vid/hook)")
+
+
 def test_a_canvas_is_assumed_to_move():
     # A 3D or a 2D canvas redraws its pixels without its box moving.
     canvas = vis("canvas", 0, 300, 1080, 1080)

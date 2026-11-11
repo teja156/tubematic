@@ -2436,7 +2436,7 @@ def _kept_hook_text(hooks) -> str:
 
 
 def _script_warnings(script: str, publish_title: str, formula_id: str, hooks: list,
-                     project_id, video_id: str) -> list:
+                     project_id, video_id: str, beats=()) -> list:
     """The advisory checks' findings for a script about to be stored.
 
     Never raises: the checks are advice, so a fault in one must not stop the
@@ -2446,7 +2446,7 @@ def _script_warnings(script: str, publish_title: str, formula_id: str, hooks: li
         return tchecks.check(
             script, publish_title=publish_title, formula_id=formula_id,
             kept_hook=_kept_hook_text(hooks),
-            recent_scripts=_recent_domain_scripts(project_id, video_id))
+            recent_scripts=_recent_domain_scripts(project_id, video_id), beats=beats)
     except Exception:  # noqa: BLE001 - advisory path, see the docstring
         log.exception("script checks failed for %s; the script is stored without warnings",
                       video_id)
@@ -2785,7 +2785,9 @@ def update_video(
                 record_sets += [("formula_id = ?", ""), ("hook_type = ?", ""),
                                 ("hook_alternatives = ?", "")]
             warnings = _script_warnings(spoken or "", publish_title or "", record_formula,
-                                        record_hooks, vrow["project_id"], video_id)
+                                        record_hooks, vrow["project_id"], video_id,
+                                        beats=[s.get("beat") or "" for s in script_segments or []
+                                               if isinstance(s, dict)])
             record_sets.append(("script_warnings = ?", json.dumps(warnings)))
 
     if title is not None and len(title) > VIDEO_TITLE_MAX_LEN:

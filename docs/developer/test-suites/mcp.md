@@ -841,8 +841,10 @@ Covers `mcp/picture_checks.py` and its place in `validate_job`
 
 - Each data-driven style's worked example is read as its style and opens on a subject, and the
   same example with its opening pushed late, its subject removed or its words first is warned once.
-- A segment owes its beat's role once, where the beat starts. Segments with no beat, or a video
-  with no formula, owe nothing past the opening and get no beat warnings.
+- A segment owes its beat's role once, where the beat starts, and a beat label matches whatever its
+  case and spacing. Segments with no beat, or a video with no formula, owe nothing past the opening
+  and get no beat warnings. A Cartoon 3D config gets none either.
+- A System Flow node entering by `TIMING.openWithin` opens the video; one frame later is warned.
 - A mixed-scenes video that cuts on every beat is quiet. A turn or payoff inside a running scene is
   warned with its time, segment, beat and first words. A cut `CHANGE_LEAD` frames before the word
   or `CHANGE_WINDOW` after it counts, one frame further does not.
@@ -869,7 +871,9 @@ Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
 - The frame-0 pass is added for a mixed-scenes video only, outside the pinned sampling plan. It warns
   when frame 0 shows only text or a backdrop (a full-frame fill or SVG rect, a faint or tiny
   picture) and when nothing moves by frame 6. A picture already moving, something arriving or
-  fading, and a canvas are quiet. Its frames skip the text checks.
+  fading, and a canvas are quiet. The shapes of one SVG count as one picture, so a stick figure is a
+  subject, and a filled card holding only text is a title card. A line drawing on counts as moving,
+  and the warning names the scene on frame 0. Its frames skip the text checks.
 
 Trap: every threshold lives in this module, because it is the only layer the tests reach. The
 browser probe and its driver need a browser, so a threshold moved into the probe leaves the
