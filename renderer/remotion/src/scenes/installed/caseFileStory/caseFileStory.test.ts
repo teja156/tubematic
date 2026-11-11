@@ -9,7 +9,8 @@ import {
   type Beat, type CaseFileData, type Shot,
 } from "./contract";
 import { ICON_DRAW, ICON_FILL } from "./icons";
-import { barsAt, beatIndexAt, countAt, hudAt, meterValues, panelAt, quietSpans, viewAt } from "./stage";
+import { fillWordColor } from "../Subtitles";
+import { barsAt, beatIndexAt, countAt, gridCellAt, hudAt, meterValues, panelAt, quietSpans, viewAt } from "./stage";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
 const CASES = JSON.parse(fs.readFileSync(path.join(ROOT, "mcp/tests/fixtures/case_file_story_contract.json"), "utf8"));
@@ -119,6 +120,34 @@ describe("the cards", () => {
     const card = { type: "count" as const, start: 0, title: "T", icon: "envelope" as const, to: 7, kind: "count" as const, result: "R" };
     expect(countAt(card, 0)).toMatchObject({ total: 7, cells: 0 });
     expect(countAt(card, partFrames(card)[1])).toMatchObject({ total: 7, cells: 7, text: "7" });
+  });
+
+  it("fills a full grid from its top left and centres a short one in the same box", () => {
+    expect(gridCellAt(0, 40)).toEqual([49, 49]);
+    expect(gridCellAt(39, 40)).toEqual([7 * 98 + 49, 4 * 98 + 49]);
+    // three icons: one row, centred both ways in the 784 by 490 box
+    const xs = [0, 1, 2].map((i) => gridCellAt(i, 3)[0]);
+    expect((xs[0] + xs[2]) / 2).toBe(784 / 2);
+    expect(gridCellAt(0, 3)[1]).toBe(490 / 2);
+    // twelve icons: a full row, then four centred under it
+    expect(gridCellAt(0, 12)[0]).toBe(49);
+    expect((gridCellAt(8, 12)[0] + gridCellAt(11, 12)[0]) / 2).toBe(784 / 2);
+  });
+});
+
+describe("the fill caption look", () => {
+  it("keeps a word grey until it is spoken, then turns it to the text colour and leaves it there", () => {
+    expect(fillWordColor(5, 10, "#FFFFFF")).toBe("#979295");
+    expect(fillWordColor(10, 10, "#FFFFFF")).not.toBe("#979295");
+    expect(fillWordColor(11, 10, "#FFFFFF")).toBe("#FFFFFF");
+    expect(fillWordColor(500, 10, "#FFFFFF")).toBe("#FFFFFF");
+  });
+
+  it("never throws on a text colour the blend cannot parse", () => {
+    for (const ink of ["cream", "currentColor", "var(--ink)"]) {
+      expect(fillWordColor(10, 10, ink)).toBe("#979295");
+      expect(fillWordColor(11, 10, ink)).toBe(ink);
+    }
   });
 
   it("puts each bar up on its own frame and the payoff after the last", () => {

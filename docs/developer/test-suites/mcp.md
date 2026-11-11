@@ -609,8 +609,7 @@ the style: the reference picture, the text added to the prompt and the cap on pi
   last part comes too late to read. A shot or a finished card that sits unchanged for over 4
   seconds is refused, and a punch-in fixes the shot. More than 16 different stills is refused and a
   reused one is free. A value of the wrong type gets a sentence back and raises nothing, and so does
-  a broken beat whose own problem falls past the 12 that are reported. A term in capitals is sized
-  to fit its card.
+  a broken beat whose own problem falls past the 12 that are reported.
 - The text audit samples each beat, a card from the frame its last part has appeared.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
   one, refuses `CaseFileStory` on another style and other scenes on a Case File Story video.
@@ -619,7 +618,7 @@ the style: the reference picture, the text added to the prompt and the cap on pi
   endpoint, at 16:9, with the outfit between the pack's lead description and sheet style. A still
   with `reference="lead"` sends the video's own sheet and the pack's lead description and painting
   style around the scene. A still with no reference goes to the generations endpoint with the
-  painting style added.
+  painting style added. A still is sent at 9:16 whatever `aspect_ratio` asks for.
 - `generate_image` refuses, before any request goes out, a lead sheet without `reference="house"`,
   the house sheet used for another picture, a reference that is not yet an image of the video, a
   reference with a path in it, and a reference on a video of another style, whose prompt is sent

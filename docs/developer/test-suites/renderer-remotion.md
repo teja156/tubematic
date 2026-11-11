@@ -115,10 +115,12 @@ Covers `contract.ts`, `stage.ts` and the icon tables
   is hidden on a card, on a shot that hides it and on the choice. The large panel counts from the
   old value to the new one.
 - The count grid and its counter finish together and the result lands on its frame; a count under
-  forty shows that many icons; each bar comes
+  forty shows that many icons, centred in the grid's box; each bar comes
   up on its own frame and the payoff line after the last.
 - The worked example starts at frame 0, shows a term card before its closing choice and has no
   stretch over the stillness limit.
+- Under the `fill` caption look a word is grey until it is spoken, then the text colour, and a
+  text colour the blend cannot parse switches on the word's frame without throwing.
 
 ## System Flow
 

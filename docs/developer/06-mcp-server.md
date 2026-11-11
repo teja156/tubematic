@@ -568,8 +568,8 @@ model and sizes, which keeps the story's lead the same character in every still:
 | Call | Reference picture | Result |
 |---|---|---|
 | `image_name="lead"`, `reference="house"` | The house lead's sheet shipped in `mcp/case_file_assets/` | The video's lead sheet, always 16:9. The prompt is the outfit |
-| `reference="lead"`, or another image of the video | That image | A still with the lead painted into the scene the prompt describes |
-| No `reference` | None | A still with no lead in it |
+| `reference="lead"`, or another image of the video | That image | A still with the lead painted into the scene the prompt describes, always 9:16 |
+| No `reference` | None | A still with no lead in it, always 9:16 |
 
 On such a video the tool adds the pack's fixed text to the prompt: the lead's description before
 the scene and the painting style after it. It refuses, before any request, a lead sheet asked for

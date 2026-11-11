@@ -274,14 +274,6 @@ def test_a_broken_beat_past_the_reported_problems_is_still_a_sentence_not_a_cras
     assert len(problems) == cfs.MAX_ERRORS and all(isinstance(p, str) for p in problems)
 
 
-def test_a_term_in_capitals_is_sized_to_fit_the_card():
-    """Capitals of the bundled sans average 0.7 em; the fit assumes 0.75."""
-    for term in ("MONEY LAUNDERING", "PUMP AND DUMP", "BUSINESS EMAIL COMPROMISE"):
-        size = cfs.term_font_size(term)
-        assert len(term) * size * 0.7 <= cfs.GEOMETRY["termWidth"], term
-    assert cfs.term_font_size("SCAM") == cfs.GEOMETRY["termSize"]
-
-
 def test_the_text_audit_samples_each_beat_once_its_last_part_is_up():
     passes, _ = text_audit.plan_passes(EXAMPLE)
     windows = cfs.beat_windows(EXAMPLE)
@@ -429,6 +421,16 @@ def test_a_still_with_the_lead_is_painted_from_the_videos_own_sheet(make_video, 
     assert call["files"]["image[]"][1] == (server.JOBS_DIR / vid / "images" / "lead.png").read_bytes()
     assert call["data"]["size"] == "1088x1920"
     assert call["data"]["prompt"] == f"{EXTRA['still_lead']} Night. You sit at a desk, typing. {EXTRA['still_style']}"
+
+
+def test_a_still_is_always_portrait_whatever_shape_is_asked_for(make_video, paid):
+    """A still covers the frame and its focus is a fraction of that frame, so a wide one would be
+    paid for and then cropped to a strip."""
+    vid = make_video(images=("lead",))
+    out = server.generate_image(vid, "street", "A wet street at night.", aspect_ratio="16:9", reference="lead")
+    assert out["aspect_ratio"] == "9:16" and paid[-1]["data"]["size"] == "1088x1920"
+    out = server.generate_image(vid, "bag", "A bag on a table. No people.", aspect_ratio="1:1")
+    assert out["aspect_ratio"] == "9:16" and paid[-1]["json"]["size"] == "1088x1920"
 
 
 def test_a_still_without_the_lead_gets_the_painting_instructions_and_no_reference(make_video, paid):

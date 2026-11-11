@@ -5659,8 +5659,10 @@ def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: st
     if reference == cfs.HOUSE_REFERENCE:
         return {"error": f"reference=\"{cfs.HOUSE_REFERENCE}\" only makes the lead sheet (image_name "
                          f"\"{cfs.LEAD_NAME}\"). For a still with the lead in it, pass reference=\"{cfs.LEAD_NAME}\"."}
+    # A still covers the frame, and its focus and punch points are read as
+    # fractions of that frame: any other shape would be cropped to a strip.
     if not reference:
-        return {"prompt": f"{prompt.strip()} {extra['still_style']}", "aspect_ratio": aspect_ratio, "ref_path": None}
+        return {"prompt": f"{prompt.strip()} {extra['still_style']}", "aspect_ratio": "9:16", "ref_path": None}
     err = _check_image_name(reference, ".png")
     if err:
         return {"error": err.replace("image_name", "reference")}
@@ -5673,7 +5675,7 @@ def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: st
                 f"reference=\"{cfs.HOUSE_REFERENCE}\")." if reference == cfs.LEAD_NAME else "")
         return {"error": f"reference {reference!r} is not an image of this video yet.{hint}"}
     return {"prompt": f"{extra['still_lead']} {prompt.strip()} {extra['still_style']}",
-            "aspect_ratio": aspect_ratio, "ref_path": ref_path}
+            "aspect_ratio": "9:16", "ref_path": ref_path}
 
 
 # Names a capped video's generate_image calls are generating right now. The
@@ -5770,7 +5772,7 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     the whole render rather than degrading to a blank frame.
 
     Returns {video_id, image_name, filename, path, public_path, width, height,
-    provider, model, aspect_ratio, size_bytes}.
+    provider, model, aspect_ratio, reference, size_bytes}.
 
     `width`/`height` are the file's REAL pixel dimensions, not the aspect_ratio
     that was asked for — a provider answers with its own nearest bucket. Use
@@ -5789,6 +5791,8 @@ def generate_image(video_id: str, image_name: str, prompt: str,
       - reference="lead" (or the name of another image of this video) paints
         that character into the scene your prompt describes.
       - no reference: a still with no lead in it (an object, an exterior).
+    A still of such a video is always 9:16, because it fills the frame, and
+    the lead sheet always 16:9, whatever aspect_ratio says.
     For a case_file_story video the style's fixed painting instructions are
     added to every prompt, so describe only the scene: the place, what the
     lead is doing, the light. Such a video may have at most 16 stills, besides
@@ -5858,7 +5862,9 @@ def generate_image(video_id: str, image_name: str, prompt: str,
 
         resp = None  # stays None when the request itself fails
         try:
-            with httpx.Client(timeout=180) as client:
+            # An edit from a reference gets the time generate_character gives
+            # the same endpoint: a call that times out may still be billed.
+            with httpx.Client(timeout=600 if ref_path is not None else 180) as client:
                 if ref_path is None:
                     resp = client.post(
                         OPENAI_IMAGES_URL,

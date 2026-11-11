@@ -251,6 +251,23 @@ export function visibleChunkIndex(
 const FILL_AHEAD = "#979295";
 const FILL_FRAMES = 2;
 
+/**
+ * A word's colour under the "fill" look: grey until one frame before it is
+ * spoken, then the text colour, blended over FILL_FRAMES. A text colour the
+ * blend cannot parse (a CSS name it does not know, a variable) switches on
+ * the word's frame, so a caption colour can never fail a render.
+ */
+export function fillWordColor(frame: number, startFrame: number, ink: string): string {
+  const k = Math.max(0, Math.min(1, (frame - startFrame + 1) / FILL_FRAMES));
+  if (k >= 1) return ink;
+  if (k <= 0) return FILL_AHEAD;
+  try {
+    return interpolateColors(k, [0, 1], [FILL_AHEAD, ink]);
+  } catch {
+    return FILL_AHEAD;
+  }
+}
+
 /** Frames a word is shown before its audio starts: the eye reads ahead of the ear. */
 export const SELECTION_LEAD = 2;
 const SELECTION_BLUE = "#3D6FBC";
@@ -441,9 +458,7 @@ export default function Subtitles({
             );
           }
           if (fill) {
-            // a word turns from grey to the text colour over two frames and stays
-            const k = Math.max(0, Math.min(1, (frame - w.startFrame + 1) / FILL_FRAMES));
-            return <span key={`${i}-${w.word}`} style={{ color: interpolateColors(k, [0, 1], [FILL_AHEAD, ink]) }}>{w.word}</span>;
+            return <span key={`${i}-${w.word}`} style={{ color: fillWordColor(frame, w.startFrame, ink) }}>{w.word}</span>;
           }
           return (
             <span

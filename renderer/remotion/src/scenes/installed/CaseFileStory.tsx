@@ -34,7 +34,7 @@ import {
 } from "./caseFileStory/contract";
 import { MONO, SANS, useCaseFileFonts } from "./caseFileStory/fonts";
 import { ICON_DRAW, ICON_FILL } from "./caseFileStory/icons";
-import { barsAt, beatIndexAt, clamp01, countAt, easeOut, hudAt, panelAt, viewAt } from "./caseFileStory/stage";
+import { barsAt, beatIndexAt, clamp01, countAt, easeOut, gridCellAt, hudAt, panelAt, viewAt } from "./caseFileStory/stage";
 
 const INK = "#16130F";
 const CREAM = "#F0EADE";
@@ -162,8 +162,7 @@ const CountGrid: React.FC<{ card: CountCard; total: number; cells: number }> = (
     c.clearRect(0, 0, w, h);
     const draw = ICON_DRAW[card.icon];
     for (let i = 0; i < total; i++) {
-      const cx = (i % G.gridCols) * G.gridCell + G.gridCell / 2;
-      const cy = Math.floor(i / G.gridCols) * G.gridCell + G.gridCell / 2;
+      const [cx, cy] = gridCellAt(i, total);
       if (i < cells) draw(c, cx, cy, G.gridCell * 0.86, ICON_FILL[card.icon], INK);
       else draw(c, cx, cy, G.gridCell * 0.86, GHOST, "rgba(22,19,15,0.0)");
     }

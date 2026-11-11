@@ -133,8 +133,8 @@ of a beat and the next, or between the last part and the beat's end.
 | Call | Makes |
 |---|---|
 | `generate_image(video_id, "lead", "<the outfit>", reference="house")` | The video's lead sheet (always 16:9). Once per video, first |
-| `generate_image(video_id, "<name>", "<the scene>", reference="lead")` | A still with the lead painted in |
-| `generate_image(video_id, "<name>", "<the scene> No people.")` | A still without the lead |
+| `generate_image(video_id, "<name>", "<the scene>", reference="lead")` | A still with the lead painted in (always 9:16) |
+| `generate_image(video_id, "<name>", "<the scene> No people.")` | A still without the lead (always 9:16) |
 
 The server adds the lead's description and the painting style to every prompt of a Case File Story
 video. A video may hold 16 stills, and the lead sheet besides; regenerating a name replaces it and

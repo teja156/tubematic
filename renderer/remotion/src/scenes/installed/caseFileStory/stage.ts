@@ -100,6 +100,21 @@ export function countAt(card: CountCard, frame: number): { total: number; cells:
   };
 }
 
+/**
+ * The centre of icon `i` of `total` inside the count grid's own box. Rows fill
+ * left to right; a last row that is not full, and a grid of fewer rows, are
+ * centred in the box, so three icons sit in the middle of the card.
+ */
+export function gridCellAt(i: number, total: number): [number, number] {
+  const G = GEOMETRY;
+  const rows = Math.ceil(total / G.gridCols);
+  const row = Math.floor(i / G.gridCols);
+  const inRow = row === rows - 1 ? total - row * G.gridCols : G.gridCols;
+  const left = ((G.gridCols - inRow) * G.gridCell) / 2;
+  const top = ((G.gridRows - rows) * G.gridCell) / 2;
+  return [left + (i % G.gridCols) * G.gridCell + G.gridCell / 2, top + row * G.gridCell + G.gridCell / 2];
+}
+
 /** How many bars of a bars card are up at a frame, and whether its payoff line is. */
 export function barsAt(card: BarsCard, frame: number): { shown: number; payoff: boolean } {
   const parts = partFrames(card);

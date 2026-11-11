@@ -1003,7 +1003,7 @@ no code for it. Its props carry `caseFile: {accent, hud, beats}`, written with t
 | Beat | What the scene draws |
 |---|---|
 | `shot` | A painted still covering the frame, pushing in 2.5% a second. `punch` cuts 1.5 times tighter on a word, `set` changes meters on the cut, `panel` shows one meter large while it counts, and `hud: false` hides the meter row |
-| `count` | A cream card: a title, a grid of 40 icons that fills while a counter climbs, and a result line |
+| `count` | A cream card: a title, a grid of up to 40 icons that fills while a counter climbs, and a result line |
 | `bars` | A cream card: black bars that appear one per counted word under a dashed threshold line with its label, and a payoff line |
 | `term` | A near-black card: a term in the accent colour, a one-sentence definition, a tilted stamp that slams in and a citation line |
 | `choice` | The last beat: a still with two buttons naming the options the narration asks about |
@@ -1037,7 +1037,8 @@ A call with a reference goes to OpenAI's image edits endpoint with the reference
 using the `image_model` setting. For this style `server.py::_case_file_image_plan` adds the pack's
 `extra` text to every prompt: the lead's description before the scene and the painting style after
 it. The house look is then the same whatever the agent writes, and the agent's prompt is only the
-scene. The lead sheet is always 16:9. The same function refuses, before any paid call, a
+scene. The lead sheet is always 16:9 and a still always 9:16, because a still covers the frame and
+its `focus` is a fraction of that frame. The same function refuses, before any paid call, a
 `reference` on a video of another style, a lead sheet asked for without `reference="house"`, the
 house sheet used for anything else, and a reference that is not yet a picture of this video.
 
@@ -1078,8 +1079,9 @@ push: every frame is a new full-frame painting to capture and encode, which the 
 - A shot lasts under 1 second, a punch-in is off a word or within 12 frames of the shot's start or
   end, `set` names a meter `hud` does not list, or `panel` names a meter the shot's `set` does not
   change.
-- A card's text is over its limit (a one-line text is drawn smaller when it would run past the
-  card's width, so the limits are counts of characters), an icon or a kind is not in the pack's list, a bar, a result, a
+- A card's text is over its limit (a title, a unit, a result, a term and a choice option are drawn
+  smaller when they would run past their width, and a payoff line wraps, so the limits are counts of
+  characters), an icon or a kind is not in the pack's list, a bar, a result, a
   payoff line, a definition, a stamp or a choice button is timed off a word or out of order, or a
   card's last part appears less than 20 frames before the beat ends.
 - More than 4 seconds pass between one part of a beat and the next, or between the last part and
