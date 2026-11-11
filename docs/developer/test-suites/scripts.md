@@ -639,6 +639,36 @@ Covers the `tubematic-bean-explainer` skill ([Bean Explainer](../10-scene-author
 Trap: `reference/contract.md`'s catalogue is generated from the pack. A prop added to the library
 and left out of that file is a prop no agent will use.
 
+### `test_storybook_atlas_skill.py`
+
+Covers the `tubematic-storybook-atlas` skill ([Storybook Atlas](../10-scene-authoring.md#storybook-atlas)).
+
+- The skill is loadable by an unattended run, its pack names it as the authoring skill, and the
+  operator skill routes to it.
+- `reference/contract.md` lists the pack's props and no others, each with its box, states, acts and
+  portal, every backdrop, every knob value and every coat. The skill names every backdrop, pose and
+  event type.
+- The limits the skill states are the ones `mcp/storybook_atlas.py` enforces, the worked example
+  passes the validator, and the uninstaller removes the skill.
+- The skill teaches props of the agent's own within the validator's limits, and its worked custom
+  prop, `example-prop-moth.tsx`, passes the validator's source checks.
+
+Trap: `reference/contract.md`'s tables are generated from the pack. A prop or backdrop added to the
+library and left out of that file is one no agent will use.
+
+### `test_terminal_doc_skill.py`
+
+Covers the `tubematic-terminal-doc` skill ([Terminal Doc](../10-scene-authoring.md#terminal-doc)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The skill and `reference/contract.md` list every move, and the contract every slot (with its
+  centre and sizes), size (with its characters per line), tone, skin, reveal and cut.
+- The limits the skill and the contract state are the ones `mcp/terminal_doc.py` enforces, the
+  worked example passes the validator and uses at least ten of the moves, and the uninstaller removes
+  the skill.
+- The skill teaches moves of the agent's own within the validator's limits, and its worked move,
+  `example-move-caesar.tsx`, passes the validator's source checks.
 ### `test_under_the_hood_skill.py`
 
 Covers the `tubematic-under-the-hood` skill ([Under the Hood](../10-scene-authoring.md#under-the-hood)).

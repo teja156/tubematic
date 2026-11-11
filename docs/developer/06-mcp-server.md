@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 51 tools
+## The 53 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -144,6 +144,8 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`delete_scene_file`](#delete_scene_file) | Delete one generated scene or module |
 | [`list_scene_files`](#list_scene_files) | List generated and installed scenes |
 | [`render_bean_props`](#render_bean_props) | Render a Bean Explainer video's own props as a picture |
+| [`render_storybook_props`](#render_storybook_props) | Render a Storybook Atlas video's own props as a picture |
+| [`preview_terminal_moves`](#preview_terminal_moves) | Render a Terminal Doc video's own moves as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
 | [`get_timeline`](#get_timeline) | Read `timeline.json` |
@@ -575,8 +577,8 @@ the catalog rejects it.
 `read_image(video_id, image_name, grid=True)` returns the image itself after a text block. With
 `grid`, it overlays a labelled grid in normalised `[u, v]` coordinates (0 to 1 across and down the
 image), so the agent can read off an anchor point for an overlay. The grid is drawn on a copy in
-memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets` and `preview_doodles` also
-return pictures.
+memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets`, `render_bean_props`,
+`preview_doodles`, `render_storybook_props` and `preview_terminal_moves` also return pictures.
 
 ### `preview_doodles`
 
@@ -615,8 +617,10 @@ while it renders.
 `read_scene_file(scene_name, video_id="", source="generated")` returns a scene's source.
 `scene_name` is the bare stem, or the composed `"<video_id>/<scene_name>"` that `list_scene_files`
 returns. `source="installed"` reads the installed library. An installed name may also be a path
-inside an installed scene's folder, up to three parts (`beanExplainer/props/lifeProps`), which is
-how a Bean Explainer agent reads the library props it models its own on. The path must match
+inside an installed scene's folder, up to three parts (`beanExplainer/props/lifeProps`,
+`storybookAtlas/props/things`), which is how a Bean Explainer or Storybook Atlas agent reads the
+library props it models its own on, and a Terminal Doc agent reads the kit its moves are built
+from (`terminalDoc/kit`). The path must match
 `_INSTALLED_NESTED` and resolve inside the installed library.
 
 A Cartoon 3D module is named bare with its `video_id` (`sets/street.ts`) or composed as
@@ -652,6 +656,31 @@ outlined in red, so ink outside the box shows a box too small for the layout che
   error and renders nothing. The render's own timeout (`bean_preview.py::TIMEOUT_SECS`, 240 s) is
   shorter than that wait, so a `validate_job` queued behind a preview gets its turn. A preview killed
   on its timeout leaves its bundle folder in `bean-tools/.tmp/`, which the next preview removes.
+
+### `render_storybook_props`
+
+`render_storybook_props(video_id)` renders the props a Storybook Atlas video's agent drew for it (the
+config's `customProps`, so `write_scene_config` comes first) on the book's paper and returns the
+picture after a JSON block. Each prop has a row (two a row above four props): every state with its
+declared box outlined in red and a line under it saying whether the drawing fits the box, the guide
+beside it at the same scale, and its first state again on a night-navy swatch for the dark backdrops
+([Storybook Atlas](10-scene-authoring.md#storybook-atlas)). It runs the same way as
+`render_bean_props`: `bean_preview.py::render_preview` with `script=STORYBOOK_SCRIPT` runs
+`renderer/remotion/storybook-tools/render-props.mjs` on software GL, under the same lock and
+timeouts, and a killed preview leaves its folder in `storybook-tools/.tmp/`.
+
+### `preview_terminal_moves`
+
+`preview_terminal_moves(video_id)` renders the moves a Terminal Doc video's agent wrote for it (the
+config's `customMoves`, so `write_scene_config` comes first) and returns the picture after a JSON
+block. Each move is drawn at four moments, from its first frame to its last, cropped to the slot box
+it draws in and outlined in red, with the text the config gives it, on the video's skin
+([Terminal Doc](10-scene-authoring.md#terminal-doc)). A move draws from the frame it is given, never
+from `useCurrentFrame`, which is what lets one still show four moments of it.
+
+`mcp/terminal_preview.py::render_preview` runs `renderer/remotion/terminal-tools/render-moves.mjs`
+the way [`render_bean_props`](#render_bean_props) runs its script: software GL, a bundle entry per
+call that imports only this video's move files, the same `_heavy_checks_lock` and the same timeouts.
 
 ### `list_scene_files`
 
@@ -700,6 +729,18 @@ It checks:
   no still stretch over 3 seconds). No other style may use `BeanExplainer`. The style pack's caption
   settings fill every `subtitles` key the config leaves out. The rules are in
   [Bean Explainer](10-scene-authoring.md#bean-explainer).
+- A `storybook_atlas` video holds the one installed `StorybookAtlas` scene, and its chapters pass
+  `mcp/storybook_atlas.py` (chapters and events on word starts, the catalogue, the video's own props
+  and their files, plates, people and tags that do not stand in one place, no still stretch over 4
+  seconds). No other style may use `StorybookAtlas`. The style pack's caption settings fill every
+  `subtitles` key the config leaves out. The rules are in
+  [Storybook Atlas](10-scene-authoring.md#storybook-atlas).
+- A `terminal_doc` video holds the one installed `TerminalDoc` scene, and its beats and moves pass
+  `mcp/terminal_doc.py` (cuts on word starts, one element per slot, at most 4 on screen, strings that
+  fit, moves in a playable order and finished before the cut, stage text that does not repeat the
+  narration, the video's own moves and their files, no still stretch over 3 seconds). No other style
+  may use `TerminalDoc`. The style pack's caption settings, in the skin's colours, fill every
+  `subtitles` key the config leaves out. The rules are in [Terminal Doc](10-scene-authoring.md#terminal-doc).
 - An `under_the_hood` video holds the one installed `UnderTheHood` scene, and its plates and events
   pass `mcp/under_the_hood.py` (plates and poses on word starts, at most 12 different photographs,
   each covering the plate band, pinned points that stay visible through the push, chips inside the
@@ -758,13 +799,14 @@ because the array is large.
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
    and the [beat gate](#cartoon_beat_gate) has passed for the source on disk. An open gate is one
    error naming the tool that closes it. A symlink anywhere in the source tree fails the check.
-9. A Bean Explainer video's own props: each file its `customProps` names exists and still passes
-   the source rules `write_scene_config` applied, since the agent may have redrawn it since
-   (`server.py::_bean_custom_prop_errors`).
-10. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
+9. A Bean Explainer or Storybook Atlas video's own props: each file its `customProps` names exists
+   and still passes the source rules `write_scene_config` applied, since the agent may have redrawn
+   it since (`server.py::_bean_custom_prop_errors`, `server.py::_storybook_custom_prop_errors`).
+10. A Terminal Doc video's own moves, the same way (`server.py::_td_custom_move_errors`).
+11. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
    `write_scene_config` already checked the cues (see
    [the `mascot` key](10-scene-authoring.md#mascots)).
-11. A typecheck of this video's scenes passes: `npx tsc --noEmit -p` with a temporary config that
+12. A typecheck of this video's scenes passes: `npx tsc --noEmit -p` with a temporary config that
     extends `tsconfig.json` and includes the video's own `generated/<video_id>/` directory and any
     other generated file its config names. `tsc` follows their imports, so the installed components
     and kits they use are checked too. Other videos' scenes are not: the generated tree holds every
@@ -774,7 +816,7 @@ because the array is large.
     `npx` runs `tsc` as a child of its own, and the error asks the agent to call again. The first
     20 lines of a failure are reported. The check is skipped if `npx` is unavailable or the video
     has no generated scenes.
-12. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
+13. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
     It runs when the checks above found no errors, the `text_layout_audit_enabled` setting is on
     and the video is not Cartoon 3D (a painted canvas has no text rects to measure). Its findings
     go to `warnings`. For a mascot video it also

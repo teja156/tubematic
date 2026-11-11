@@ -94,9 +94,11 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   as the table in the test says.
 - The refusal messages come from the packs, and the GPU gate passes only `working`.
 - `public_list` explains an unavailable style, and `agent_view` names the authoring skill.
-- System Flow, Bean Explainer and Under the Hood each have their renderer, canvas, skill and
-  permissions pinned; Bean Explainer's bean and Under the Hood's presenter count as figures but
-  neither line art nor generated characters. Under the Hood needs an OpenAI key, caps its
+- System Flow, Bean Explainer, Storybook Atlas, Terminal Doc and Under the Hood each have their
+  renderer, canvas, skill and permissions pinned; Bean Explainer's bean, Storybook Atlas's people and
+  Under the Hood's presenter count as figures but neither line art nor generated characters.
+  Storybook Atlas's captions use the `label` background, Terminal Doc's are the `log` look, and each
+  Terminal Doc skin changes only caption keys. Under the Hood needs an OpenAI key, caps its
   photographs at 12, takes no mascot and uses the `selection` caption look. A pack that takes no
   mascot must say why.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its

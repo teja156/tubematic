@@ -1,0 +1,512 @@
+{
+ "totalFrames": 1413,
+ "fps": 30,
+ "audioDurationSeconds": 47.1,
+ "words": [
+  {
+   "word": "In",
+   "startFrame": 6,
+   "endFrame": 14
+  },
+  {
+   "word": "the",
+   "startFrame": 15,
+   "endFrame": 24
+  },
+  {
+   "word": "summer",
+   "startFrame": 25,
+   "endFrame": 37
+  },
+  {
+   "word": "of",
+   "startFrame": 38,
+   "endFrame": 46
+  },
+  {
+   "word": "1947,",
+   "startFrame": 47,
+   "endFrame": 57
+  },
+  {
+   "word": "at",
+   "startFrame": 64,
+   "endFrame": 72
+  },
+  {
+   "word": "Harvard,",
+   "startFrame": 73,
+   "endFrame": 86
+  },
+  {
+   "word": "a",
+   "startFrame": 93,
+   "endFrame": 100
+  },
+  {
+   "word": "machine",
+   "startFrame": 101,
+   "endFrame": 114
+  },
+  {
+   "word": "called",
+   "startFrame": 115,
+   "endFrame": 127
+  },
+  {
+   "word": "the",
+   "startFrame": 128,
+   "endFrame": 137
+  },
+  {
+   "word": "Mark",
+   "startFrame": 138,
+   "endFrame": 148
+  },
+  {
+   "word": "Two",
+   "startFrame": 149,
+   "endFrame": 158
+  },
+  {
+   "word": "filled",
+   "startFrame": 159,
+   "endFrame": 171
+  },
+  {
+   "word": "a",
+   "startFrame": 172,
+   "endFrame": 179
+  },
+  {
+   "word": "whole",
+   "startFrame": 180,
+   "endFrame": 191
+  },
+  {
+   "word": "room.",
+   "startFrame": 192,
+   "endFrame": 202
+  },
+  {
+   "word": "Its",
+   "startFrame": 215,
+   "endFrame": 224
+  },
+  {
+   "word": "relays",
+   "startFrame": 225,
+   "endFrame": 237
+  },
+  {
+   "word": "clicked",
+   "startFrame": 238,
+   "endFrame": 251
+  },
+  {
+   "word": "open",
+   "startFrame": 252,
+   "endFrame": 262
+  },
+  {
+   "word": "and",
+   "startFrame": 263,
+   "endFrame": 272
+  },
+  {
+   "word": "shut,",
+   "startFrame": 273,
+   "endFrame": 283
+  },
+  {
+   "word": "thousands",
+   "startFrame": 290,
+   "endFrame": 305
+  },
+  {
+   "word": "of",
+   "startFrame": 306,
+   "endFrame": 314
+  },
+  {
+   "word": "times",
+   "startFrame": 315,
+   "endFrame": 326
+  },
+  {
+   "word": "a",
+   "startFrame": 327,
+   "endFrame": 334
+  },
+  {
+   "word": "minute,",
+   "startFrame": 335,
+   "endFrame": 347
+  },
+  {
+   "word": "doing",
+   "startFrame": 354,
+   "endFrame": 365
+  },
+  {
+   "word": "sums",
+   "startFrame": 366,
+   "endFrame": 376
+  },
+  {
+   "word": "no",
+   "startFrame": 377,
+   "endFrame": 385
+  },
+  {
+   "word": "person",
+   "startFrame": 386,
+   "endFrame": 398
+  },
+  {
+   "word": "could",
+   "startFrame": 399,
+   "endFrame": 410
+  },
+  {
+   "word": "keep",
+   "startFrame": 411,
+   "endFrame": 421
+  },
+  {
+   "word": "up",
+   "startFrame": 422,
+   "endFrame": 430
+  },
+  {
+   "word": "with.",
+   "startFrame": 431,
+   "endFrame": 441
+  },
+  {
+   "word": "Then",
+   "startFrame": 478,
+   "endFrame": 488
+  },
+  {
+   "word": "one",
+   "startFrame": 489,
+   "endFrame": 498
+  },
+  {
+   "word": "afternoon,",
+   "startFrame": 499,
+   "endFrame": 514
+  },
+  {
+   "word": "the",
+   "startFrame": 521,
+   "endFrame": 530
+  },
+  {
+   "word": "machine",
+   "startFrame": 531,
+   "endFrame": 544
+  },
+  {
+   "word": "began",
+   "startFrame": 545,
+   "endFrame": 556
+  },
+  {
+   "word": "to",
+   "startFrame": 557,
+   "endFrame": 565
+  },
+  {
+   "word": "stumble.",
+   "startFrame": 566,
+   "endFrame": 579
+  },
+  {
+   "word": "Grace",
+   "startFrame": 592,
+   "endFrame": 603
+  },
+  {
+   "word": "Hopper",
+   "startFrame": 604,
+   "endFrame": 616
+  },
+  {
+   "word": "and",
+   "startFrame": 617,
+   "endFrame": 626
+  },
+  {
+   "word": "her",
+   "startFrame": 627,
+   "endFrame": 636
+  },
+  {
+   "word": "team",
+   "startFrame": 637,
+   "endFrame": 647
+  },
+  {
+   "word": "went",
+   "startFrame": 648,
+   "endFrame": 658
+  },
+  {
+   "word": "looking,",
+   "startFrame": 659,
+   "endFrame": 672
+  },
+  {
+   "word": "relay",
+   "startFrame": 679,
+   "endFrame": 690
+  },
+  {
+   "word": "by",
+   "startFrame": 691,
+   "endFrame": 699
+  },
+  {
+   "word": "relay.",
+   "startFrame": 700,
+   "endFrame": 711
+  },
+  {
+   "word": "In",
+   "startFrame": 724,
+   "endFrame": 732
+  },
+  {
+   "word": "relay",
+   "startFrame": 733,
+   "endFrame": 744
+  },
+  {
+   "word": "seventy,",
+   "startFrame": 745,
+   "endFrame": 758
+  },
+  {
+   "word": "they",
+   "startFrame": 765,
+   "endFrame": 775
+  },
+  {
+   "word": "found",
+   "startFrame": 776,
+   "endFrame": 787
+  },
+  {
+   "word": "it:",
+   "startFrame": 788,
+   "endFrame": 796
+  },
+  {
+   "word": "a",
+   "startFrame": 809,
+   "endFrame": 816
+  },
+  {
+   "word": "moth,",
+   "startFrame": 817,
+   "endFrame": 827
+  },
+  {
+   "word": "pressed",
+   "startFrame": 834,
+   "endFrame": 847
+  },
+  {
+   "word": "between",
+   "startFrame": 848,
+   "endFrame": 861
+  },
+  {
+   "word": "the",
+   "startFrame": 862,
+   "endFrame": 871
+  },
+  {
+   "word": "contacts.",
+   "startFrame": 872,
+   "endFrame": 886
+  },
+  {
+   "word": "They",
+   "startFrame": 923,
+   "endFrame": 933
+  },
+  {
+   "word": "taped",
+   "startFrame": 934,
+   "endFrame": 945
+  },
+  {
+   "word": "the",
+   "startFrame": 946,
+   "endFrame": 955
+  },
+  {
+   "word": "moth",
+   "startFrame": 956,
+   "endFrame": 966
+  },
+  {
+   "word": "into",
+   "startFrame": 967,
+   "endFrame": 977
+  },
+  {
+   "word": "the",
+   "startFrame": 978,
+   "endFrame": 987
+  },
+  {
+   "word": "logbook,",
+   "startFrame": 988,
+   "endFrame": 1001
+  },
+  {
+   "word": "and",
+   "startFrame": 1008,
+   "endFrame": 1017
+  },
+  {
+   "word": "wrote",
+   "startFrame": 1018,
+   "endFrame": 1029
+  },
+  {
+   "word": "beside",
+   "startFrame": 1030,
+   "endFrame": 1042
+  },
+  {
+   "word": "it:",
+   "startFrame": 1043,
+   "endFrame": 1051
+  },
+  {
+   "word": "first",
+   "startFrame": 1064,
+   "endFrame": 1075
+  },
+  {
+   "word": "actual",
+   "startFrame": 1076,
+   "endFrame": 1088
+  },
+  {
+   "word": "case",
+   "startFrame": 1089,
+   "endFrame": 1099
+  },
+  {
+   "word": "of",
+   "startFrame": 1100,
+   "endFrame": 1108
+  },
+  {
+   "word": "bug",
+   "startFrame": 1109,
+   "endFrame": 1118
+  },
+  {
+   "word": "being",
+   "startFrame": 1119,
+   "endFrame": 1130
+  },
+  {
+   "word": "found.",
+   "startFrame": 1131,
+   "endFrame": 1142
+  },
+  {
+   "word": "The",
+   "startFrame": 1155,
+   "endFrame": 1164
+  },
+  {
+   "word": "word",
+   "startFrame": 1165,
+   "endFrame": 1175
+  },
+  {
+   "word": "bug",
+   "startFrame": 1176,
+   "endFrame": 1185
+  },
+  {
+   "word": "was",
+   "startFrame": 1186,
+   "endFrame": 1195
+  },
+  {
+   "word": "already",
+   "startFrame": 1196,
+   "endFrame": 1209
+  },
+  {
+   "word": "old.",
+   "startFrame": 1210,
+   "endFrame": 1219
+  },
+  {
+   "word": "But",
+   "startFrame": 1232,
+   "endFrame": 1241
+  },
+  {
+   "word": "from",
+   "startFrame": 1242,
+   "endFrame": 1252
+  },
+  {
+   "word": "then",
+   "startFrame": 1253,
+   "endFrame": 1263
+  },
+  {
+   "word": "on,",
+   "startFrame": 1264,
+   "endFrame": 1272
+  },
+  {
+   "word": "fixing",
+   "startFrame": 1279,
+   "endFrame": 1291
+  },
+  {
+   "word": "a",
+   "startFrame": 1292,
+   "endFrame": 1299
+  },
+  {
+   "word": "machine",
+   "startFrame": 1300,
+   "endFrame": 1313
+  },
+  {
+   "word": "had",
+   "startFrame": 1314,
+   "endFrame": 1323
+  },
+  {
+   "word": "a",
+   "startFrame": 1324,
+   "endFrame": 1331
+  },
+  {
+   "word": "name:",
+   "startFrame": 1332,
+   "endFrame": 1342
+  },
+  {
+   "word": "debugging.",
+   "startFrame": 1355,
+   "endFrame": 1370
+  }
+ ]
+}

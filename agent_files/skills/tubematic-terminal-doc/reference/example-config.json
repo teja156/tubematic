@@ -1,0 +1,255 @@
+{
+ "canvas": "dark",
+ "totalFrames": 1188,
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "TerminalDoc",
+   "startFrame": 0,
+   "durationInFrames": 1188,
+   "props": {
+    "terminalDoc": {
+     "skin": "house",
+     "beats": [
+      {
+       "start": 0,
+       "events": [
+        {
+         "type": "word",
+         "at": 6,
+         "id": "ctx",
+         "slot": "context",
+         "text": "WHAT THE SERVER KEEPS",
+         "tone": "grey"
+        },
+        {
+         "type": "word",
+         "at": 17,
+         "id": "pw",
+         "slot": "a",
+         "text": "SUNSHINE",
+         "size": "l"
+        },
+        {
+         "type": "glow",
+         "at": 96,
+         "target": "pw",
+         "tone": "red"
+        },
+        {
+         "type": "encode",
+         "at": 161,
+         "id": "digest",
+         "from": "pw",
+         "slot": "c",
+         "text": "A941A4C4FD0C01CD",
+         "size": "m",
+         "label": "HASH",
+         "sub": "SHA-256"
+        },
+        {
+         "type": "glow",
+         "at": 257,
+         "target": "digest",
+         "tone": "blue"
+        }
+       ]
+      },
+      {
+       "start": 291,
+       "events": [
+        {
+         "type": "wall",
+         "at": 291,
+         "level": 1
+        },
+        {
+         "type": "word",
+         "at": 291,
+         "id": "ctx2",
+         "slot": "context",
+         "text": "26 LETTERS · 8 PLACES",
+         "tone": "grey"
+        },
+        {
+         "type": "number",
+         "at": 358,
+         "id": "keys",
+         "slot": "b",
+         "value": "208,827,064,576",
+         "size": "l"
+        },
+        {
+         "type": "bracket",
+         "at": 418,
+         "target": "keys",
+         "label": "26 x 26 ... x 26",
+         "tone": "grey"
+        }
+       ]
+      },
+      {
+       "start": 459,
+       "events": [
+        {
+         "type": "wall",
+         "at": 459,
+         "level": 0
+        },
+        {
+         "type": "word",
+         "at": 459,
+         "id": "stored",
+         "slot": "a",
+         "text": "A941A4C4FD0C01CD",
+         "size": "m",
+         "tone": "grey",
+         "reveal": "cut"
+        },
+        {
+         "type": "glow",
+         "at": 497,
+         "target": "stored",
+         "tone": "blue"
+        },
+        {
+         "type": "stream",
+         "at": 562,
+         "id": "guess",
+         "slot": "b",
+         "size": "l",
+         "frames": 45,
+         "guesses": [
+          "QWERTYUI",
+          "PASSWORD",
+          "LETMEIN1",
+          "DRAGONFL",
+          "MONKEYSS",
+          "FOOTBALL",
+          "STARFISH",
+          "SUNLIGHT",
+          "SUNDRESS",
+          "SUNSHADE"
+         ],
+         "target": "SUNSHINE"
+        },
+        {
+         "type": "bracket",
+         "at": 609,
+         "target": "guess",
+         "label": "MATCH",
+         "tone": "red"
+        }
+       ]
+      },
+      {
+       "start": 663,
+       "events": [
+        {
+         "type": "number",
+         "at": 683,
+         "id": "secs",
+         "slot": "b",
+         "value": "20.9 S",
+         "size": "xl"
+        },
+        {
+         "type": "glow",
+         "at": 735,
+         "target": "secs",
+         "tone": "red"
+        },
+        {
+         "type": "bracket",
+         "at": 768,
+         "target": "secs",
+         "label": "ONE GPU",
+         "tone": "grey",
+         "note": "HASHCAT BENCHMARK, SHA-256, ONE RTX 4090",
+         "cite": 1
+        }
+       ]
+      },
+      {
+       "start": 826,
+       "cut": "collapse",
+       "events": [
+        {
+         "type": "word",
+         "at": 826,
+         "id": "w",
+         "slot": "a",
+         "text": "SUNSHINE",
+         "size": "l"
+        },
+        {
+         "type": "rearrange",
+         "at": 888,
+         "id": "phrase",
+         "from": "w",
+         "slot": "b",
+         "text": "SUNSHINE OVER COLD HARBOR",
+         "size": "m"
+        },
+        {
+         "type": "type",
+         "at": 975,
+         "id": "cmd",
+         "slot": "c",
+         "text": "len(phrase)",
+         "size": "m",
+         "output": [
+          "22 LETTERS"
+         ]
+        }
+       ]
+      },
+      {
+       "start": 1014,
+       "events": [
+        {
+         "type": "word",
+         "at": 1014,
+         "id": "ctx3",
+         "slot": "context",
+         "text": "26 LETTERS · 22 PLACES",
+         "tone": "grey"
+        },
+        {
+         "type": "push",
+         "at": 1051,
+         "frames": 90,
+         "scale": 1.08
+        },
+        {
+         "type": "number",
+         "at": 1072,
+         "id": "big",
+         "slot": "b",
+         "value": "1.3 × 10^31",
+         "size": "xl"
+        },
+        {
+         "type": "glow",
+         "at": 1095,
+         "target": "big",
+         "tone": "blue"
+        },
+        {
+         "type": "word",
+         "at": 1124,
+         "id": "yrs",
+         "slot": "c",
+         "text": "ABOUT 31 TRILLION YEARS",
+         "size": "s",
+         "tone": "grey"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

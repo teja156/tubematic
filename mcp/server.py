@@ -98,9 +98,12 @@ import system_flow  # the System Flow checks (TMDEV-196); a sibling module like 
 import whiteboard  # the Whiteboard checks (TMDEV-197); a sibling module like system_flow
 import doodle_preview  # draws a Whiteboard video's own doodles for the agent to look at (TMDEV-197)
 import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
+import storybook_atlas  # the Storybook Atlas checks (TMDEV-200), the same way
 import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
+import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
+import terminal_preview  # renders a Terminal Doc video's own moves for the agent to look at
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
 JOBS_DIR     = Path(os.getenv("TUBEMATIC_JOBS_DIR", str(DATA_ROOT / "jobs")))
@@ -312,14 +315,14 @@ AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
 # one word at a time is a deliberate style, not a mistake.
 # Keep in sync: renderer/remotion/src/scenes/installed/Subtitles.tsx (which
 # holds the defaults — they are NOT repeated here, so there is nothing to drift).
-SUBTITLE_BACKGROUNDS = ("pill", "shadow", "outline", "none")
+SUBTITLE_BACKGROUNDS = ("pill", "shadow", "outline", "label", "none", "log")
 SUBTITLE_NUMERIC_RANGES = {
     "maxWords": (1, 7),
     "fontSize": (28, 120),
     "position": (0.05, 0.95),
 }
 SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
-                 "background", "position", "uppercase", "emphasis", "look")
+                 "background", "position", "uppercase", "emphasis", "accent", "look")
 # look: "selection" builds the line word by word with the key words in a blue
 # text-selection box (the Under the Hood style); "plain", or absent, is the
 # look every other style has.
@@ -368,6 +371,10 @@ def _validate_subtitles(sub) -> str:
     if "color" in sub and sub["color"] is not None:
         if not (isinstance(sub["color"], str) and sub["color"].strip()):
             return "config.subtitles.color must be a CSS colour string, or null to follow the canvas"
+    if "accent" in sub and sub["accent"] is not None:
+        if not (isinstance(sub["accent"], str) and sub["accent"].strip()):
+            return ("config.subtitles.accent must be a CSS colour string (the word being spoken in the "
+                    "\"log\" look), or null for the text colour")
     if "look" in sub and sub["look"] not in SUBTITLE_LOOKS:
         return (f"config.subtitles.look must be one of {list(SUBTITLE_LOOKS)}, got {sub['look']!r}")
     if "emphasis" in sub:
@@ -2335,10 +2342,12 @@ def update_video(
     topic), "system_flow" (the whole video is one diagram scene written as
     data), "whiteboard" (the whole video is one whiteboard scene written as
     data), "bean_explainer" (the whole video is one cartoon-bean scene written
-    as data, props from a fixed library), "under_the_hood" (the whole video
-    is one scene of close-up photographs with labels pinned to them, written
-    as data; needs an OpenAI key) or "cartoon_3d" (one 3D world; needs
-    a working GPU).
+    as data, props from a fixed library), "storybook_atlas" (the whole video is
+    one picture-book scene in chapters, written as data), "terminal_doc" (the
+    whole video is one typographic scene written as data: strings, numbers and
+    ciphertext on a dark terminal), "under_the_hood" (the whole video is one
+    scene of close-up photographs with labels pinned to them, written as data;
+    needs an OpenAI key) or "cartoon_3d" (one 3D world; needs a working GPU).
     get_pipeline_status's visual_styles lists every style and whether this
     install can make it. The scene styles are permissions, not looks. Like script_profile_id, a human
     picks it at the topic checkpoint and it is frozen afterwards; set it here
@@ -2354,7 +2363,8 @@ def update_video(
     and never again: a revision round must render on the canvas the video
     already uses. Writable only when the style does not already fix a canvas —
     that is "auto" and "illustrated"; "motion_graphics", "stick",
-    "system_flow", "whiteboard", "bean_explainer", "under_the_hood" and "cartoon_3d" fix theirs.
+    "system_flow", "whiteboard", "bean_explainer", "storybook_atlas", "terminal_doc",
+    "under_the_hood" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer the video uses — "dom"
     (the scene components). Auto reaches Cartoon 3D by picking the cartoon_3d
@@ -3063,7 +3073,8 @@ def upsert_project(
     default_visual_style: which visual register this domain's *curriculum*
         videos start in — "auto" or any style in get_pipeline_status's
         visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
-        "bean_explainer", "cartoon_3d", "whiteboard", "under_the_hood").
+        "bean_explainer", "storybook_atlas", "terminal_doc", "cartoon_3d",
+        "whiteboard", "under_the_hood").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -4645,8 +4656,15 @@ def validate_job(video_id: str) -> dict:
     try:
         if "scene_config" in dir() and isinstance(scene_config, dict):
             errors.extend(_bean_custom_prop_errors(video_id, scene_config))
+            errors.extend(_storybook_custom_prop_errors(video_id, scene_config))
     except Exception as e:
         errors.append(f"Custom prop check failed: {e}")
+    # A Terminal Doc video's own moves (TMDEV-199), for the same reason.
+    try:
+        if "scene_config" in dir() and isinstance(scene_config, dict):
+            errors.extend(_td_custom_move_errors(video_id, scene_config))
+    except Exception as e:
+        errors.append(f"Custom move check failed: {e}")
 
     # An Under the Hood plate's aspect (TMDEV-201). write_scene_config reads it
     # from the photograph, but the skill lets the agent regenerate a photograph
@@ -6431,9 +6449,11 @@ def write_scene_config(video_id: str, config: dict) -> dict:
             {"enabled": false} only when you can say why this video is better
             without them. Optional keys: maxWords (1-7, how many words are on
             screen at once), fontFamily, fontSize, color (null follows the
-            canvas), background ("pill"/"shadow"/"outline"/"none"; "outline"
-            is bold text with a thick dark stroke and no plate, the look of
-            narrated cartoon Shorts), position (fraction of
+            canvas), background ("pill"/"shadow"/"outline"/"label"/"none"/"log";
+            "outline" is bold text with a thick dark stroke and no plate, the
+            look of narrated cartoon Shorts; "label" is a printed ivory label
+            with a diamond each side, the Storybook Atlas look; "log" is typed
+            into a terminal log strip, the Terminal Doc look), position (fraction of
             frame height), uppercase, emphasis (a list of word indexes into
             the narration, 0 first, drawn on a red box as the line's key word;
             at most one word in 5). Because the narration is captioned, a
@@ -6473,14 +6493,16 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     scene-config: **never** write scene-config.json using Claude Code's file
     tools, the same rule write_scene_file enforces for .tsx files.
 
-    A System Flow, Bean Explainer or Under the Hood video is one installed
-    scene (SystemFlow, BeanExplainer or UnderTheHood) from frame 0 for
-    totalFrames, whose props hold the whole video as data; that data is
-    checked here against the style's contract (the tubematic-system-flow,
-    tubematic-bean-explainer and tubematic-under-the-hood skills document it)
-    and refused with one sentence per problem. Each style fills subtitles
-    with its own caption look. For Under the Hood this also fills each
-    plate's aspect from its photograph's file.
+    A System Flow, Bean Explainer, Whiteboard, Storybook Atlas or Under the
+    Hood video is one installed scene (SystemFlow, BeanExplainer, Whiteboard,
+    StorybookAtlas or UnderTheHood) from frame 0 for totalFrames, whose props
+    hold the whole video as data; that data is checked here against the
+    style's contract (the tubematic-system-flow, tubematic-bean-explainer,
+    tubematic-whiteboard, tubematic-storybook-atlas and tubematic-under-the-hood
+    skills document it) and refused with one sentence per problem. Each style
+    fills subtitles with its own caption look when the config has none. For
+    Under the Hood this also fills each plate's aspect from its photograph's
+    file.
 
     Call write_scene_file for every generated src referenced in config first,
     then call this, then the operator calls validate_job. Only the shape needed
@@ -6601,12 +6623,13 @@ def _uth_with_aspects(video_id: str, config: dict) -> dict:
     return config
 
 
-def _bean_custom_sources(video_id: str, config) -> dict[str, str]:
-    """The text of every prop file a Bean Explainer config's customProps names,
-    by src, for the validator's source checks. A file that cannot be read is
-    left out, which the validator reports as missing."""
+def _bean_custom_sources(video_id: str, config, props_key: str = bean_explainer.PROPS_KEY) -> dict[str, str]:
+    """The text of every prop file a Bean Explainer config's customProps names
+    (or a Storybook Atlas config's, with its props_key), by src, for the
+    validator's source checks. A file that cannot be read is left out, which
+    the validator reports as missing."""
     try:
-        data = config["scenes"][0]["props"][bean_explainer.PROPS_KEY]
+        data = config["scenes"][0]["props"][props_key]
         custom = data.get("customProps") or []
     except (KeyError, IndexError, TypeError, AttributeError):
         return {}
@@ -6623,6 +6646,21 @@ def _bean_custom_sources(video_id: str, config) -> dict[str, str]:
         except (tjobs.UnsafePath, OSError, ValueError):
             continue
     return out
+
+
+def _storybook_custom_prop_errors(video_id: str, config) -> list[str]:
+    """validate_job's re-check of a Storybook Atlas config's own props against
+    their files as they are now; [] when the config has none."""
+    try:
+        custom = config["scenes"][0]["props"][storybook_atlas.PROPS_KEY].get("customProps") or []
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return []
+    if not isinstance(custom, list) or not custom:
+        return []
+    errs, _ = storybook_atlas.custom_prop_errors(
+        custom, video_id, tvs.pack(storybook_atlas.STYLE_ID)["extra"]["props"],
+        _bean_custom_sources(video_id, config, storybook_atlas.PROPS_KEY))
+    return [f"Custom prop: {e}" for e in errs]
 
 
 @mcp.tool
@@ -6694,6 +6732,180 @@ def render_bean_props(video_id: str):
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     meta = {"video_id": video_id, "props": [c.get("id") for c in custom]}
+    return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
+
+
+@mcp.tool
+def render_storybook_props(video_id: str):
+    """Look at the props you drew for a Storybook Atlas video before you submit it.
+
+    Renders the props listed in the video's scene-config `customProps` (so
+    write_scene_config first) on the book's paper: every state of each, its
+    declared box outlined in red, a line under it saying whether the drawing
+    fits the box ("fits", or what overflows and by how many pixels), and the
+    guide beside it at the same scale for size. A drawing that overflows is
+    cut off in the video: enlarge the box or shrink the drawing. Rewrite a prop
+    with write_scene_file and call this again; it reads the files as they are
+    now. It renders on the CPU and waits its turn behind other heavy checks,
+    so it can take a minute or two.
+
+    Returns {video_id, props} followed by the picture, or {"error": ...} (a
+    render failure carries the renderer's error output, often a type error in
+    a prop file: fix it and call again).
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    if (row["visual_style"] or "") != storybook_atlas.STYLE_ID:
+        return {"error": "render_storybook_props is for Storybook Atlas videos; this video's visual_style is "
+                         f"{row['visual_style'] or 'auto'!r}."}
+    try:
+        config = json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+        data = config["scenes"][0]["props"][storybook_atlas.PROPS_KEY]
+    except (tjobs.UnsafePath, OSError, ValueError, KeyError, IndexError, TypeError):
+        return {"error": "This video has no Storybook Atlas scene-config yet: write it with write_scene_config "
+                         "(customProps listing your props) first."}
+    custom = data.get("customProps") or []
+    if not custom:
+        return {"error": "The scene-config lists no customProps, so there is nothing of yours to preview."}
+    spec = {"props": custom}
+    if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):
+        return {"error": f"Other checks kept the renderer busy for {HEAVY_CHECK_WAIT_SECS}s. Nothing is wrong "
+                         "with this video; call render_storybook_props again."}
+    try:
+        with tempfile.TemporaryDirectory(prefix="tubematic-storybook-props-") as tmp:
+            out_png = Path(tmp) / "props.png"
+            try:
+                bean_preview.render_preview(_MASCOT_REMOTION, spec, out_png, script=bean_preview.STORYBOOK_SCRIPT)
+            except bean_preview.BeanPreviewError as e:
+                return {"error": str(e)}
+            from PIL import Image as PILImage
+            from fastmcp.utilities.types import Image as MCPImage
+            with PILImage.open(out_png) as src:
+                src.load()
+                img = src.convert("RGB")
+    finally:
+        _heavy_checks_lock.release()
+    longest = max(img.size)
+    if longest > _READ_IMAGE_MAX_EDGE:
+        ratio = _READ_IMAGE_MAX_EDGE / longest
+        img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))), PILImage.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    meta = {"video_id": video_id, "props": [c.get("id") for c in custom]}
+    return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
+
+
+def _td_custom_list(config) -> list:
+    """A Terminal Doc config's customMoves, or [] for any other config."""
+    try:
+        custom = config["scenes"][0]["props"][terminal_doc.PROPS_KEY].get("customMoves") or []
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return []
+    return custom if isinstance(custom, list) else []
+
+
+def _td_custom_sources(video_id: str, config) -> dict[str, str]:
+    """The text of every move file a Terminal Doc config's customMoves names, by
+    src. A file that cannot be read is left out, which the validator reports as
+    missing."""
+    out: dict[str, str] = {}
+    for c in _td_custom_list(config):
+        src = c.get("src") if isinstance(c, dict) else None
+        if not isinstance(src, str) or src.count("/") != 1 or src.split("/")[0] != video_id:
+            continue
+        name = src.split("/")[1]
+        if _check_scene_name(name):
+            continue
+        try:
+            out[src] = _source_path(video_id, None, name, ".tsx").read_text(encoding="utf-8")
+        except (tjobs.UnsafePath, OSError, ValueError):
+            continue
+    return out
+
+
+def _td_custom_move_errors(video_id: str, config) -> list[str]:
+    """validate_job's re-check of a Terminal Doc config's own moves against their
+    files as they are now; [] when the config has none."""
+    custom = _td_custom_list(config)
+    if not custom:
+        return []
+    errs, _ = terminal_doc.custom_move_errors(custom, video_id, _td_custom_sources(video_id, config))
+    return [f"Custom move: {e}" for e in errs]
+
+
+@mcp.tool
+def preview_terminal_moves(video_id: str):
+    """Look at the moves you wrote for a Terminal Doc video before you submit it.
+
+    Renders every move listed in the video's scene-config `customMoves` (so
+    write_scene_config first) on the video's skin: four moments of each, from
+    its first frame to its last, inside the slot box it is drawn in (outlined),
+    with the text the config gives it. Ink outside the box will run into the
+    slot above or below. Rewrite a move with write_scene_file and call this
+    again; it reads the files as they are now. It renders on the CPU and waits
+    its turn behind other heavy checks, so it can take a minute or two.
+
+    Returns {video_id, moves} followed by the picture, or {"error": ...} (a
+    render failure carries the renderer's error output, often a type error in
+    a move file: fix it and call again).
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    if (row["visual_style"] or "") != terminal_doc.STYLE_ID:
+        return {"error": "preview_terminal_moves is for Terminal Doc videos; this video's visual_style is "
+                         f"{row['visual_style'] or 'auto'!r}."}
+    try:
+        config = json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+        data = config["scenes"][0]["props"][terminal_doc.PROPS_KEY]
+    except (tjobs.UnsafePath, OSError, ValueError, KeyError, IndexError, TypeError):
+        return {"error": "This video has no Terminal Doc scene-config yet: write it with write_scene_config "
+                         "(customMoves listing your moves) first."}
+    custom = data.get("customMoves") or []
+    if not custom:
+        return {"error": "The scene-config lists no customMoves, so there is nothing of yours to preview."}
+    uses: dict[str, dict] = {}
+    for beat in data.get("beats") or []:
+        for e in beat.get("events") or []:
+            if e.get("type") == "custom" and isinstance(e.get("move"), str):
+                uses.setdefault(e["move"], {"slot": e.get("slot", "b"), "text": e.get("text", "")})
+    spec = {"skin": terminal_doc.skin_of(config),
+            "moves": [{**c, **uses.get(c.get("id"), {"slot": "b", "text": ""})} for c in custom]}
+    if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):
+        return {"error": f"Other checks kept the renderer busy for {HEAVY_CHECK_WAIT_SECS}s. Nothing is wrong "
+                         "with this video; call preview_terminal_moves again."}
+    try:
+        with tempfile.TemporaryDirectory(prefix="tubematic-terminal-moves-") as tmp:
+            out_png = Path(tmp) / "moves.png"
+            try:
+                terminal_preview.render_preview(_MASCOT_REMOTION, spec, out_png)
+            except terminal_preview.TerminalPreviewError as e:
+                return {"error": str(e)}
+            from PIL import Image as PILImage
+            from fastmcp.utilities.types import Image as MCPImage
+            with PILImage.open(out_png) as src:
+                src.load()
+                img = src.convert("RGB")
+    finally:
+        _heavy_checks_lock.release()
+    longest = max(img.size)
+    if longest > _READ_IMAGE_MAX_EDGE:
+        ratio = _READ_IMAGE_MAX_EDGE / longest
+        img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))), PILImage.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    meta = {"video_id": video_id, "moves": [c.get("id") for c in custom]}
     return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
 
 
@@ -6811,6 +7023,40 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         if given is None or isinstance(given, dict):
             config["subtitles"] = {**tvs.pack(bean_explainer.STYLE_ID)["captions"], **(given or {})}
 
+    # ── Storybook Atlas (TMDEV-200) ──────────────────────────────────────────
+    # The same shape again: one installed StorybookAtlas scene whose props hold
+    # the guide, the cast and the chapters as data, checked against the pack's
+    # catalogue before it costs a render. Its caption label is part of the
+    # look, so the pack's caption settings sit under whatever the config sets.
+    sa_err = storybook_atlas.check_scene_use(row["visual_style"], scenes)
+    if sa_err:
+        return {"error": sa_err}
+    if (row["visual_style"] or "") == storybook_atlas.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = storybook_atlas.check(config, fps, word_starts, tvs.pack(storybook_atlas.STYLE_ID)["extra"],
+                                         video_id, _bean_custom_sources(video_id, config, storybook_atlas.PROPS_KEY))
+        if problems:
+            return {"error": "The Storybook Atlas video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(storybook_atlas.STYLE_ID)["captions"], **(given or {})}
+    # ── Terminal Doc (TMDEV-199) ─────────────────────────────────────────────
+    # The same shape again: one installed TerminalDoc scene whose props hold
+    # the beats and moves as data. Its typed LOG captions are part of the
+    # look, in the skin's colours, under whatever the config sets.
+    td_err = terminal_doc.check_scene_use(row["visual_style"], scenes)
+    if td_err:
+        return {"error": td_err}
+    if (row["visual_style"] or "") == terminal_doc.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = terminal_doc.check(config, fps, word_starts, _timeline_words(video_id), video_id,
+                                      _td_custom_sources(video_id, config))
+        if problems:
+            return {"error": "The Terminal Doc video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**terminal_doc.captions_for(tvs.pack(terminal_doc.STYLE_ID),
+                                                               terminal_doc.skin_of(config)), **(given or {})}
     # ── Under the Hood (TMDEV-201) ───────────────────────────────────────────
     # The same shape again: one installed UnderTheHood scene whose props hold
     # plates (generated photographs) and the events pinned to them. Each

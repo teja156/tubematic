@@ -68,10 +68,11 @@
         "system_flow"
       ],
       "ok": [
-        "stick"
+        "stick",
+        "terminal_doc"
       ],
-      "future": "Terminal Doc (TMDEV-199) may share this one",
-      "note": ""
+      "future": "",
+      "note": "Messages passing between a browser and a server are a path between components (System Flow); Terminal Doc can show the keys and the first encrypted bytes, so it is acceptable."
     },
     {
       "title": "How a pin tumbler lock works",
@@ -126,6 +127,19 @@
       "note": ""
     },
     {
+      "title": "How a pickpocket team works a crowded train",
+      "brief": "The spotter picks the target, the blocker stops in the doorway, the dipper lifts the wallet and passes it to a runner before anyone looks round.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A trick acted out step by step by generic roles: Stick."
+    },
+    {
       "title": "How a fridge pushes heat out",
       "brief": "The refrigerant loop: compressor, condenser, expansion valve and evaporator, and why the back of the fridge is warm.",
       "expect": [
@@ -156,14 +170,15 @@
       "title": "How base64 turns bytes into text",
       "brief": "Taking three bytes, regrouping them into four six-bit chunks and mapping each to a letter, and why the output ends in equals signs.",
       "expect": [
-        "stick"
+        "terminal_doc"
       ],
       "ok": [
+        "stick",
         "system_flow",
         "scenes"
       ],
-      "future": "Terminal Doc (TMDEV-199)",
-      "note": ""
+      "future": "",
+      "note": "Bytes regrouped and mapped to letters is text transformed character by character."
     },
     {
       "title": "Why the sky is blue",
@@ -255,26 +270,28 @@
       "title": "The feud between Tesla and Edison",
       "brief": "How Nikola Tesla and Thomas Edison went from employer and employee to rivals in the war of the currents, scene by scene.",
       "expect": [
-        "illustrated"
+        "storybook_atlas"
       ],
       "ok": [
+        "illustrated",
         "motion_graphics",
         "scenes"
       ],
-      "future": "Storybook Atlas (TMDEV-200)",
+      "future": "",
       "note": ""
     },
     {
       "title": "Ada Lovelace and the first program",
       "brief": "Ada Lovelace's friendship with Charles Babbage and how her notes on the Analytical Engine described the first algorithm for a machine.",
       "expect": [
-        "illustrated"
+        "storybook_atlas"
       ],
       "ok": [
+        "illustrated",
         "motion_graphics",
         "scenes"
       ],
-      "future": "Storybook Atlas (TMDEV-200)",
+      "future": "",
       "note": ""
     },
     {
@@ -360,28 +377,30 @@
       "title": "The history of the QWERTY keyboard",
       "brief": "From Sholes's typewriter in the 1870s to today's phones: why the letters ended up in this order and why we never switched.",
       "expect": [
-        "scenes"
+        "storybook_atlas"
       ],
       "ok": [
+        "scenes",
         "motion_graphics",
         "illustrated"
       ],
-      "future": "Storybook Atlas (TMDEV-200)",
+      "future": "",
       "note": ""
     },
     {
       "title": "How the Enigma code was broken",
       "brief": "How the Enigma machine scrambled letters, the mistakes German operators made, and how Turing's bombe at Bletchley Park used them.",
       "expect": [
-        "scenes"
+        "terminal_doc"
       ],
       "ok": [
+        "scenes",
         "stick",
         "motion_graphics",
         "illustrated"
       ],
-      "future": "Terminal Doc (TMDEV-199)",
-      "note": ""
+      "future": "",
+      "note": "The story turns on letters being scrambled and unscrambled, and on cribs: strings the stage can show."
     },
     {
       "title": "How money laundering moves dirty cash",
@@ -422,6 +441,164 @@
       ],
       "future": "",
       "note": ""
+    },
+    {
+      "title": "The first computer bug was a real moth",
+      "brief": "In 1947 Grace Hopper's team at Harvard found a moth stuck in a relay of the Mark II computer, taped it into the logbook, and gave 'debugging' its most famous story.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "scenes",
+        "illustrated"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How the printing press spread across Europe",
+      "brief": "From Gutenberg's workshop in Mainz around 1450 to print shops in two hundred towns fifty years later: how one invention changed who could read.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "scenes",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Milo the robot learns to cook",
+      "brief": "A short story about Milo, a clumsy kitchen robot, who burns the toast, floods the sink and finally makes his family breakfast.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "An invented protagonist the viewer follows: Illustrated, not Storybook Atlas."
+    },
+    {
+      "title": "Two friends start a lemonade stand",
+      "brief": "Follow Priya and Tom as they set up a lemonade stand, argue about the price, lose customers and work out what people will pay.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "bean_explainer",
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Invented recurring characters, told in the present: Illustrated."
+    },
+    {
+      "title": "How one tweet wiped billions off a stock",
+      "brief": "The fake post from a verified account, the minutes of panic selling, the chart of the drop and the correction, and what changed afterwards.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": "Fast news with a real company and a chart: no single style fits."
+    },
+    {
+      "title": "Five inventions that failed before they worked",
+      "brief": "The light bulb, the airplane, the telephone, the camera and the vacuum cleaner: one quick idea each about the failures before the success.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": "History, but a list of named items: Bean Explainer, not Storybook Atlas."
+    },
+    {
+      "title": "What is inside a mechanical typewriter",
+      "brief": "How pressing a key swings a typebar up to the ribbon, moves the carriage one space, and rings the bell at the end of the line.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "An old machine, but its insides part by part with no story: Under the Hood, not Storybook Atlas."
+    },
+    {
+      "title": "Why an 8-character password falls in seconds",
+      "brief": "How a stolen password hash is cracked by guessing: the keyspace of eight lowercase letters, a graphics card testing billions of guesses a second, and why a long passphrase holds out.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "One string, its hash and one big number carry the whole video."
+    },
+    {
+      "title": "Kryptos: the CIA sculpture nobody has fully solved",
+      "brief": "The four encrypted passages on the Kryptos sculpture outside CIA headquarters, how three were cracked with a keyed alphabet, and the clues the artist has released for the last one.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Ciphertext, a keyed alphabet and released clues are text on screen. Case File Story (TMDEV-202) may later share unsolved-mystery topics."
+    },
+    {
+      "title": "What a hash function does to your password",
+      "brief": "Why the same password always gives the same hash, why one changed letter changes the whole hash, and why sites store hashes with a salt instead of passwords.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "stick",
+        "system_flow",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A string going into a hash and coming out changed is this style's core move."
+    },
+    {
+      "title": "How a VPN tunnels your traffic",
+      "brief": "How your device wraps every packet in an encrypted envelope, sends it to the VPN server, and how that server forwards it so websites see its address instead of yours.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick",
+        "terminal_doc"
+      ],
+      "future": "",
+      "note": "Negative control for Terminal Doc: encryption is mentioned, but the subject is the path packets travel between components."
+    },
+    {
+      "title": "Why the Titanic sank",
+      "brief": "The ship and its famous passengers, the iceberg warnings that were missed, how the flooded compartments pulled the bow down, and why there were too few lifeboats.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "illustrated",
+        "stick"
+      ],
+      "future": "",
+      "note": "Real photographs, named people, a mechanism and a story in one video: no single style carries every beat, so the mixed scene system fits best."
     },
     {
       "title": "Why your phone battery wears out",
