@@ -172,6 +172,9 @@ of the band.** Go past its middle only when cutting the words would cost a beat 
 depends on. A script earns a minute and a half or more only by re-opening its question every few
 sentences; a recap never earns the time.
 
+When `style.script` gives a length of its own (a number of words, chapters or steps), that length
+wins over the band (Step 2).
+
 Count words across every segment's `voice` field combined. `update_video` returns a warning for a
 script outside its formula's band or past the ceiling; it does not refuse it.
 
@@ -616,7 +619,8 @@ before these existed), in which case write both from the script now; blanks are 
    script, `formula_id` and `hooks`. **At most one extra write.** Never loop on warnings, and never
    bend a sound script to silence one: any warning raised by the closing line the preferences
    asked for stays, a `no_turn` on a script whose turn simply uses none of the listed words stays,
-   and a `recap_ending` on a closing sentence `style.script` asks for stays.
+   a `recap_ending` on a closing sentence `style.script` asks for stays, and a `length_band` on a
+   script whose length `style.script` set stays.
 3. If `update_video` rejects `formula_id` or `hooks` as arguments it does not know, the tool
    server is older than this skill: send the same call without those two.
 4. In `respell` or `ipa` mode only, and only if there are one or more new lexicon entries:
