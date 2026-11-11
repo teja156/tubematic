@@ -1,9 +1,9 @@
 "use client";
 
 // Watch figures by group (TMDEV-212): seconds watched, share of the video
-// watched and stayed to watch, for one account at a time, grouped by visual
-// style, script profile, domain or script length. Lives on the Analytics
-// page's Watch time tab.
+// watched and stayed to watch, for one account at a time, grouped each way
+// the API returns (visual style, script profile, domain, script length,
+// formula and opening). Lives on the Analytics page's Watch time tab.
 //
 // One account at a time because a platform counts a view and a watched second
 // its own way and every account has its own audience. The API picks the

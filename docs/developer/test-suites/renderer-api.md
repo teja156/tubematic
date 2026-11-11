@@ -443,8 +443,10 @@ publication rows of `GET /analytics` and `GET /videos/<id>/publications`,
   An infinite length, or one above a day, is not stored. `POST /analytics/refresh` stores lengths too.
 - A video on `auto` whose `resolved_renderer` is `cartoon_3d` is grouped as Cartoon 3D.
 - The `formula` and `hook_type` groupings use the labels of `tubematic_core/formulas.py`. A video
-  with neither on record is in a group named "Not recorded". An id the formula files do not know is
-  shown as its own label. One hook type under two formulas is one group.
+  with neither on record is in a group named "Not recorded", and one with a formula and no hook
+  type, or the reverse, is in the named group of the one it has. An id `formulas.py` does not know
+  is shown as its own label. Each group's `key` is the stored id. One hook type under two formulas
+  is one group.
 - A failure while storing lengths leaves the metrics poll running.
 
 Trap: archiving deletes `timeline.json`, the only other record of a video's length, while its

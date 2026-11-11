@@ -244,6 +244,8 @@ Covers `components/WatchTimePanel.tsx`, the Analytics page's **Watch time** tab.
 - The first request names no account and the select shows the account the API answered for.
   Picking an account sends its id.
 - Changing **Group by** redraws the table from the same response.
+- The **Group by** list is the response's list of groupings, and a group whose `key` is the empty
+  string ("Not recorded") gets a row like any other.
 - A group under the response's `min_group` is tagged `TOO FEW` and still listed.
 - A figure only some of a group's videos report shows how many, with `too few` under the
   threshold, and a figure none reports is a dash.

@@ -546,6 +546,8 @@ def test_grouping_by_formula_uses_the_formulas_label(client, env):
     groups = _dimension(_watch(client), "formula")
     assert {label: g["videos"] for label, g in groups.items()} == {
         pipeline.tformulas.label(formula): 2, "Not recorded": 1, "a-formula-since-removed": 1}
+    # The dashboard builds its row ids from the key, so it is the stored id and never the label.
+    assert groups[pipeline.tformulas.label(formula)]["key"] == formula
     assert groups["Not recorded"]["key"] == ""
     assert pipeline.tformulas.label(formula) != formula
 
@@ -562,16 +564,22 @@ def test_grouping_by_opening_uses_the_hook_types_label(client, env):
     assert {label: g["videos"] for label, g in groups.items()} == {
         pipeline.tformulas.HOOK_TYPES["question"]: 2, pipeline.tformulas.HOOK_TYPES["scene"]: 1,
         "Not recorded": 1, "a_type_since_removed": 1}
+    assert groups[pipeline.tformulas.HOOK_TYPES["question"]]["key"] == "question"
+    assert groups["Not recorded"]["key"] == ""
+    assert pipeline.tformulas.HOOK_TYPES["question"] != "question"
 
 
-def test_a_formula_recorded_without_an_opening_groups_under_each_on_its_own(client, env):
+def test_a_formula_and_an_opening_are_grouped_each_on_its_own(client, env):
     """The two are separate columns. A video with one and not the other is in
-    the named group of the one it has."""
+    the named group of the one it has and in Not recorded for the other."""
     formula = next(iter(pipeline.tformulas.FORMULAS))
-    _recorded(env, "vid_a", formula, "")
+    _recorded(env, "vid_formula_only", formula, "")
+    _recorded(env, "vid_opening_only", "", "scene")
     data = _watch(client)
-    assert set(_dimension(data, "formula")) == {pipeline.tformulas.label(formula)}
-    assert set(_dimension(data, "hook_type")) == {"Not recorded"}
+    assert {label: g["videos"] for label, g in _dimension(data, "formula").items()} == {
+        pipeline.tformulas.label(formula): 1, "Not recorded": 1}
+    assert {label: g["videos"] for label, g in _dimension(data, "hook_type").items()} == {
+        pipeline.tformulas.HOOK_TYPES["scene"]: 1, "Not recorded": 1}
 
 
 def test_script_words_leave_markup_out_and_keep_the_wrapped_word():

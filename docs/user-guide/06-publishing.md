@@ -206,8 +206,7 @@ How to read the table:
   many, for example `25% (30 of 40)`. It adds `too few` when fewer than 20 report it.
 - A group with fewer than 20 videos is marked `TOO FEW`. One unusual video can move its figure, so
   treat it as a hint.
-- **Not recorded** holds the videos with no formula or opening on record. Every script written
-  before scripts recorded them is there.
+- **Not recorded** holds the videos whose script has no formula or opening on record.
 - Compare groups inside one account. Platforms count views and watch time differently, and every
   account has its own audience.
 

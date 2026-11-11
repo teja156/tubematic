@@ -1,7 +1,7 @@
 /**
  * The Analytics page's Watch time tab (TMDEV-212): seconds watched, share
- * watched and stayed to watch for one account, grouped by visual style, script
- * profile, domain or script length.
+ * watched and stayed to watch for one account, grouped each way the API
+ * returns. The panel holds no list of groupings of its own.
  *
  * What these guard: figures are read one account at a time and the API picks
  * the first one; a group too small to read is marked instead of hidden; a
@@ -34,6 +34,11 @@ const YOUTUBE = {
     { id: "script_profile", label: "Script profile", groups: [group("", "No profile", 56)] },
     { id: "domain", label: "Domain", groups: [group("git", "Git", 56)] },
     { id: "script_length", label: "Script length", groups: [group("200", "200 to 249 words", 56)] },
+    { id: "formula", label: "Formula", groups: [
+      group("follow-the-flow", "Follow the Flow", 30),
+      // Scripts with no formula on record: the key is the empty string.
+      group("", "Not recorded", 26),
+    ] },
   ],
 };
 
@@ -145,6 +150,18 @@ describe("WatchTimePanel", () => {
     expect(screen.getByTestId("watch-group-200")).toHaveTextContent("200 to 249 words");
     expect(screen.queryByTestId("watch-group-system_flow")).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a grouping it has no name for, and the group whose key is empty", async () => {
+    stub();
+    render(<WatchTimePanel names={{}} />);
+    await screen.findByTestId("watch-group-system_flow");
+    expect(screen.getByRole("option", { name: "Formula" })).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId("watch-group-by"), { target: { value: "formula" } });
+    expect(screen.getByTestId("watch-group-follow-the-flow")).toHaveTextContent("Follow the Flow");
+    // No formula on record: the API's key is "", and the row is still there.
+    expect(screen.getByTestId("watch-group-")).toHaveTextContent("Not recorded");
+    expect(screen.getByTestId("watch-group-")).toHaveTextContent("26");
   });
 
   it("says so when the platform reports no watch figure at all", async () => {
