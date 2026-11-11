@@ -339,6 +339,20 @@
     1010,
     1350
    ]
+  },
+  {
+   "stat": {
+    "value": 2,
+    "label": "Gap",
+    "chip": "ABCDEFGHIJ",
+    "place": "lower"
+   },
+   "box": [
+    760,
+    1050,
+    1010,
+    1350
+   ]
   }
  ],
  "stat_text": [

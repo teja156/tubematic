@@ -772,6 +772,15 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
             return True
         cartoon = renderers.video_kind(video) == "cartoon_3d"
         mascot_id = video["mascot_id"] or ""
+        # The same backstop for any other style that takes no mascot (Under the
+        # Hood: its presenter stands where the mascot would).
+        no_mascot = tmascots.no_mascot_error(video["visual_style"] or "")
+        if not cartoon and no_mascot and mascot_id:
+            refuse(me, vid, "FAILED",
+                   f"Not rendered, moved to FAILED: this video's style takes no mascot and it holds the "
+                   f"mascot {mascot_id!r}. {no_mascot} Create the video again.",
+                   "a style that takes no mascot, with a mascot")
+            return True
         # A Cartoon 3D video never carries a mascot: the API and the MCP server
         # refuse the pair and clear the mascot on a switch to the style. One
         # that holds both anyway is refused, rather than rendered without the

@@ -513,7 +513,9 @@ Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under
   before writing anything, refuses `UnderTheHood` on another style and other scenes on an Under the
   Hood video. `subtitles.look` accepts `plain` and `selection` only.
 - `generate_image` refuses a 13th new photograph on an Under the Hood video before any request goes
-  out, and allows regenerating an existing one; other styles are not capped.
+  out, and allows regenerating an existing one; other styles are not capped. A name being generated
+  holds its slot, so a second new name cannot take the last one meanwhile, and a call that fails gives
+  the slot back.
 
 Trap: a plate whose own fields are bad is skipped for every check that projects through its camera,
 including the next plate's zoom-through, or a malformed `focus` raised instead of being reported.

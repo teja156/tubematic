@@ -340,8 +340,9 @@ defaults, the seeding of new videos and the per-video pick.
 
 Trap: the approving `PATCH` refuses a mascot archived since it was seeded, and repeats the check in
 its `UPDATE`, so an archive or a style write that commits between the check and the write still gets
-`409`. No sequence of requests may leave a Cartoon 3D video holding a mascot, because
-[the gateway refuses to hand it out](../11-rendering-and-review.md#refused-before-anything-renders).
+`409`. No sequence of requests may leave a Cartoon 3D or Under the Hood video holding a mascot,
+because [the gateway refuses to hand it out](../11-rendering-and-review.md#refused-before-anything-renders),
+which `test_render_gateway.py` checks for both styles.
 
 ## Publishing and Auto Pilot
 

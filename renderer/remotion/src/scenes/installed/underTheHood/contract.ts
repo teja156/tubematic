@@ -110,6 +110,9 @@ export const GEOMETRY = {
   statFontPx: 170,
   statCharPx: 110,
   statLabelCharPx: 28,
+  // The stat's chip: JetBrains Mono at 34 px (20.4 px a character), padding and border.
+  statChipCharPx: 21,
+  statChipPadPx: 40,
   // The chart's box on a plate with no photograph.
   chartLeft: 90,
   chartRight: 990,
@@ -222,13 +225,14 @@ export function statText(value: number, decimals = 0, prefix = "", suffix = ""):
   return `${prefix}${value.toFixed(decimals)}${suffix}`;
 }
 
-/** A stat block's box: the numeral (at its wider end of the count) and its label, right-aligned. */
-export function statBox(e: Pick<UTHStat, "value" | "from" | "decimals" | "prefix" | "suffix" | "label" | "place">): Box {
+/** A stat block's box: the numeral (at its wider end of the count), its label and its chip, right-aligned. */
+export function statBox(e: Pick<UTHStat, "value" | "from" | "decimals" | "prefix" | "suffix" | "label" | "chip" | "place">): Box {
   const numeral = Math.max(
     ...[e.from ?? 0, e.value].map((v) => chars(statText(v, e.decimals ?? 0, e.prefix ?? "", e.suffix ?? ""))),
   ) * GEOMETRY.statCharPx;
   const label = chars(e.label) * GEOMETRY.statLabelCharPx;
-  const w = Math.max(numeral, label);
+  const chip = e.chip ? chars(e.chip) * GEOMETRY.statChipCharPx + GEOMETRY.statChipPadPx : 0;
+  const w = Math.max(numeral, label, chip);
   const top = e.place === "upper" ? GEOMETRY.statUpperTop : GEOMETRY.statLowerTop;
   return [GEOMETRY.statRight - w, top, GEOMETRY.statRight, top + GEOMETRY.statHeight];
 }

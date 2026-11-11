@@ -93,6 +93,8 @@ GEOMETRY = {
     "statFontPx": 170,
     "statCharPx": 110,
     "statLabelCharPx": 28,
+    "statChipCharPx": 21,
+    "statChipPadPx": 40,
     "chartLeft": 90,
     "chartRight": 990,
     "chartTop": 700,
@@ -183,13 +185,14 @@ def _to_fixed(value, decimals: int) -> str:
 
 
 def stat_box(e: dict) -> tuple[float, float, float, float]:
-    """A stat block's box: the numeral (at its wider end of the count) and its
-    label, right-aligned."""
+    """A stat block's box: the numeral (at its wider end of the count), its
+    label and its chip, right-aligned."""
     g = GEOMETRY
     numeral = max(len(stat_text(v, e.get("decimals", 0), e.get("prefix", ""), e.get("suffix", "")))
                   for v in (e.get("from", 0), e["value"])) * g["statCharPx"]
     label = len(e["label"]) * g["statLabelCharPx"]
-    w = max(numeral, label)
+    chip = len(e["chip"]) * g["statChipCharPx"] + g["statChipPadPx"] if e.get("chip") else 0
+    w = max(numeral, label, chip)
     top = g["statUpperTop"] if e.get("place") == "upper" else g["statLowerTop"]
     return (g["statRight"] - w, top, g["statRight"], top + g["statHeight"])
 

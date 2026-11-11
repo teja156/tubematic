@@ -180,6 +180,15 @@ def test_a_long_stretch_with_nothing_new_is_refused():
     assert any("Nothing new happens from frame 536 to 669" in p for p in _check(cfg))
 
 
+def test_a_stats_chip_counts_in_its_box():
+    # a one-character stat with a long chip: the chip reaches 244 px left of the right edge
+    def crowd(p):
+        p[4]["events"][1].update(value=2, label="Gap", chip="ABCDEFGHIJ", place="lower")
+        p[4]["events"].pop(0)   # the arcs, so only the two boxes are in play
+        p[4]["events"].insert(1, {"type": "callout", "frame": 790, "text": "Pin", "at": [0.6, 0.6], "chip": [0.77, 0.68]})
+    assert any("overlaps" in x or "lies under" in x for x in _check(_with(crowd)))
+
+
 def test_a_pose_that_repeats_the_current_one_is_refused():
     # 536 is "think"; making 603 "think" too would pad a still stretch with nothing
     cfg = _with(lambda p: p[3]["events"][3].update(pose="think"))
@@ -415,6 +424,29 @@ def test_parallel_calls_cannot_each_take_the_last_slot(make_video, monkeypatch):
     assert server._image_cap_error(vid, "p11", images) == ""         # the same name again is fine
     monkeypatch.setattr(server.time, "time", lambda: 10 ** 12)        # a failed call's hold lapses
     assert server._image_cap_error(vid, "p12", images) == ""
+
+
+def test_a_failed_paid_call_gives_its_slot_back(make_video, monkeypatch):
+    monkeypatch.setattr(server, "_image_reservations", {})
+    vid = make_video(images=[f"p{k}" for k in range(11)])
+    monkeypatch.setattr(server, "_openai_key", lambda: "sk-test")
+    monkeypatch.setattr(server, "_guard_scene_work", lambda *a, **k: None)
+
+    class Fails:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def post(self, *a, **k):
+            class R:
+                status_code, text = 400, "content policy"
+                def json(self): return {}
+            return R()
+
+    import httpx
+    monkeypatch.setattr(httpx, "Client", Fails)
+    assert "error" in server.generate_image(vid, "new-a", "a still", aspect_ratio="1:1")
+    images = server.JOBS_DIR / vid / "images"
+    assert server._image_cap_error(vid, "new-b", images) == ""    # the failed name holds nothing
 
 
 def test_regenerating_a_photograph_and_other_styles_are_not_capped(make_video, monkeypatch):

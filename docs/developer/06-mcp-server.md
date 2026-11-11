@@ -550,9 +550,11 @@ side. The scene skill tells the agent to leave the default alone, because any ot
 cropped hard to fit the frame. The Under the Hood skill asks for `1:1`, because its plates are drawn
 at their own shape in a band narrower than the frame.
 
-On an `under_the_hood` video the tool refuses a new `image_name` once the video's images folder holds
-12 pictures, the pack's `routing.images`, before any request; regenerating an existing name is
-allowed (`server.py::_image_cap_error`).
+On an `under_the_hood` video the tool refuses a new `image_name` once the video's images folder and
+its calls in flight hold 12 pictures, the pack's `routing.images`, before any request; regenerating an
+existing name is allowed (`server.py::_image_cap_error`). A call reserves its name under a lock before
+the request and releases it when it ends, so parallel calls cannot each take the last slot and a
+failed call does not keep one.
 
 ### `generate_character`
 

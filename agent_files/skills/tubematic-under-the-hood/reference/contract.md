@@ -99,7 +99,7 @@ optional chip under it. One per plate.
 | `prefix`, `suffix` | At most 3 characters each: `$`, `%`, `µm`, `pF` |
 | `label` | 1 to 22 characters, shown in capitals |
 | `chip` | Optional, 1 to 10 characters: `+429%` |
-| `place` | `lower` (default, y 1050 to 1350) or `upper` (y 500 to 800). The numeral is 110 px a character and the label 28; the block must fit between x 60 and 1010 |
+| `place` | `lower` (default, y 1050 to 1350) or `upper` (y 500 to 800). The numeral is 110 px a character, the label 28 and the chip 21 plus 40; the block, as wide as the widest of the three, must fit between x 60 and 1010 |
 
 **`chart`**: a thin line drawing left to right on a plate with no photograph, the value at its head
 shown large above it, the axis label typing on under it, and the chip popping at the end. One per

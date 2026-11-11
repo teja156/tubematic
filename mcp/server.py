@@ -5644,6 +5644,16 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
             "different focus or zoom, or regenerate one under its own name to replace it.")
 
 
+def _release_image_reservation(video_id: str, image_name: str) -> None:
+    """Drop a name _image_cap_error reserved, when its call ends either way."""
+    with _image_reservations_lock:
+        held = _image_reservations.get(video_id)
+        if held is not None:
+            held.pop(image_name, None)
+            if not held:
+                _image_reservations.pop(video_id, None)
+
+
 @mcp.tool
 def generate_image(video_id: str, image_name: str, prompt: str,
                    aspect_ratio: str = "9:16") -> dict:
@@ -5737,69 +5747,73 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     cap_err = _image_cap_error(video_id, image_name, images_dir)
     if cap_err:
         return {"error": cap_err}
-
-    import httpx
-
-    resp = None  # stays None when the request itself fails
     try:
-        with httpx.Client(timeout=180) as client:
-            resp = client.post(
-                OPENAI_IMAGES_URL,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "size": OPENAI_SIZE_BY_ASPECT[aspect_ratio],
-                },
-            )
-        if resp.status_code == 200:
-            usage = _response_json(resp).get("usage")
-            _record_usage(service="openai", model=model, operation="image",
-                          units=tusage.openai_image_units(usage), raw=usage,
-                          videos=[video_id])
-        if resp.status_code != 200:
-            _provider_failed("openai", model, "image", resp=resp)
-            return {"error": _openai_access_error(resp, model)
-                    or _redact_keys(f"OpenAI {resp.status_code}: {resp.text[:400]}")}
-        data = resp.json().get("data") or []
-        b64 = data[0].get("b64_json") if data else None
-        if not b64:
-            _provider_failed("openai", model, "image", resp=resp, error="no image data")
-            return {"error": "OpenAI returned no image data"}
-        mime = "image/png"
-    except Exception as e:
-        _provider_failed("openai", model, "image", resp=resp, error=f"{type(e).__name__}: {e}")
-        return {"error": _redact_keys(f"Image generation failed: {e}")}
+        import httpx
 
-    try:
-        image_bytes = base64.b64decode(b64)
-    except Exception as e:
-        _provider_failed("openai", model, "image", resp=resp,
-                         error=f"undecodable image data: {e}")
-        return {"error": f"Could not decode image data: {e}"}
+        resp = None  # stays None when the request itself fails
+        try:
+            with httpx.Client(timeout=180) as client:
+                resp = client.post(
+                    OPENAI_IMAGES_URL,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": model,
+                        "prompt": prompt,
+                        "size": OPENAI_SIZE_BY_ASPECT[aspect_ratio],
+                    },
+                )
+            if resp.status_code == 200:
+                usage = _response_json(resp).get("usage")
+                _record_usage(service="openai", model=model, operation="image",
+                              units=tusage.openai_image_units(usage), raw=usage,
+                              videos=[video_id])
+            if resp.status_code != 200:
+                _provider_failed("openai", model, "image", resp=resp)
+                return {"error": _openai_access_error(resp, model)
+                        or _redact_keys(f"OpenAI {resp.status_code}: {resp.text[:400]}")}
+            data = resp.json().get("data") or []
+            b64 = data[0].get("b64_json") if data else None
+            if not b64:
+                _provider_failed("openai", model, "image", resp=resp, error="no image data")
+                return {"error": "OpenAI returned no image data"}
+            mime = "image/png"
+        except Exception as e:
+            _provider_failed("openai", model, "image", resp=resp, error=f"{type(e).__name__}: {e}")
+            return {"error": _redact_keys(f"Image generation failed: {e}")}
 
-    ext = _IMAGE_EXT_BY_MIME.get(mime, "png")
-    filename = f"{image_name}.{ext}"
-    try:
-        path = tjobs.image_file(JOBS_DIR, video_id, filename)
-    except tjobs.UnsafePath as e:
-        return {"error": str(e)}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(image_bytes)
+        try:
+            image_bytes = base64.b64decode(b64)
+        except Exception as e:
+            _provider_failed("openai", model, "image", resp=resp,
+                             error=f"undecodable image data: {e}")
+            return {"error": f"Could not decode image data: {e}"}
 
-    return {
-        "video_id": video_id,
-        "image_name": image_name,
-        "filename": filename,
-        "path": str(path),
-        "public_path": f"/public/{video_id}/images/{filename}",
-        "width": _image_pixel_size(path)[0],
-        "height": _image_pixel_size(path)[1],
-        "provider": "openai",
-        "model": model,
-        "aspect_ratio": aspect_ratio,
-        "size_bytes": len(image_bytes),
-    }
+        ext = _IMAGE_EXT_BY_MIME.get(mime, "png")
+        filename = f"{image_name}.{ext}"
+        try:
+            path = tjobs.image_file(JOBS_DIR, video_id, filename)
+        except tjobs.UnsafePath as e:
+            return {"error": str(e)}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(image_bytes)
+
+        return {
+            "video_id": video_id,
+            "image_name": image_name,
+            "filename": filename,
+            "path": str(path),
+            "public_path": f"/public/{video_id}/images/{filename}",
+            "width": _image_pixel_size(path)[0],
+            "height": _image_pixel_size(path)[1],
+            "provider": "openai",
+            "model": model,
+            "aspect_ratio": aspect_ratio,
+            "size_bytes": len(image_bytes),
+        }
+    finally:
+        # Once the file exists the folder counts it; a failed call must not
+        # keep the slot (a different name would be refused for nothing).
+        _release_image_reservation(video_id, image_name)
 
 
 # Above this, an image content block is resized down anyway, so paying to ship

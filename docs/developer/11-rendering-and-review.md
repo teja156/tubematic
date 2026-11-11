@@ -138,8 +138,8 @@ render is not handed out.
   (`voice_file_path`, `timeline_path`, `scene_config_path`) whose file (`audio.mp3`,
   `timeline.json`, `scene-config.json`) is absent, or whose value is empty because that step did not
   finish. Images are optional and are not checked.
-- A Cartoon 3D video that also holds a mascot, and a mascot video whose pinned code cannot be read,
-  go to `FAILED`
+- A Cartoon 3D or Under the Hood video that also holds a mascot, and a mascot video whose pinned
+  code cannot be read, go to `FAILED`
   ([The mascot's code](20-gpu-and-remote-renderers.md#the-mascots-code)).
 
 The gateway derives every source path from the video's id (`tubematic_core/jobfiles.py`) and does
