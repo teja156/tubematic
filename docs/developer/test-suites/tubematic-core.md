@@ -410,6 +410,16 @@ Covers `0023`: `videos.formula_id`, `hook_type`, `hook_alternatives` and `script
 Trap: `''` means no formula on record, which is true of every script written before the upgrade, so
 the migration has no backfill.
 
+### `test_video_duration_migration.py`
+
+Covers `0024`: `videos.duration_secs`.
+
+- Existing videos keep their status, script and `updated_at`, and read NULL in the new column.
+- A second run changes nothing, and a new video starts at NULL.
+
+Trap: the default is NULL because 0 would be a length. Analytics would divide by it, or show a
+share for a video whose length nobody recorded.
+
 ### `test_topic_angle_migration.py`
 
 Covers `0026`: `videos.angle`, `angle_kind` and `angle_score`.

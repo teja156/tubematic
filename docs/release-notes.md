@@ -160,6 +160,21 @@ If you go back to 2.1.x later:
   its GPU or its CPU, and how long the render took. They describe the last successful render. Videos
   rendered before this version show neither. See
   [Remote Renderers](https://docs.tubematic.ai/user-guide/remote-renderers).
+- Watch figures in **Analytics**. The **Videos** tab shows, for each post, the average length of a
+  view (**Watched**), that length as a share of the video (**% watched**) and the share of views in
+  which the viewer kept watching (**Stayed**), and can sort by each. A video's window shows the
+  same figures per post, with reach and saves. The figures come from readings Tubematic already
+  stored, so posts published before the upgrade show them too. Each platform reports its own set:
+  TikTok reports none, and a figure a platform did not report shows as a dash. Instagram's
+  **% watched** needs the video's length, which Tubematic stores from this version on, so it shows
+  for videos whose files still exist when you upgrade and for every video published afterwards.
+  See [Watch figures](https://docs.tubematic.ai/user-guide/publishing#watch-figures).
+- A **Watch time** tab in **Analytics**. It groups one account's posts by visual style, script
+  profile, domain, script length, script formula or opening, and shows the three watch figures for
+  each group, with the number of videos behind them. A group with fewer than 20 videos is marked as
+  too small to read. A video whose script was written before the upgrade has no formula or opening
+  on record and is grouped under **Not recorded**. See
+  [Comparing groups of videos](https://docs.tubematic.ai/user-guide/publishing#comparing-groups-of-videos).
 
 ### Changed
 

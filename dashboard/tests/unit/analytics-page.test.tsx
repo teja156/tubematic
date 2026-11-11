@@ -9,6 +9,10 @@
  *
  * TMDEV-130 split the page into Videos and Spend tabs, added the sort, and
  * named accounts in the filter from a live lookup that must fail quietly.
+ *
+ * TMDEV-212 added the watch columns (seconds watched, share watched, stayed
+ * to watch) and the Watch time tab. Platforms report different subsets of
+ * those, so the dash-not-zero rule carries more weight there than anywhere.
  */
 import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -26,6 +30,10 @@ vi.mock("@/components/TimeZoneProvider", () => ({
 
 vi.mock("@/components/SpendCard", () => ({
   SpendCard: () => <div data-testid="spend-card-stub" />,
+}));
+
+vi.mock("@/components/WatchTimePanel", () => ({
+  WatchTimePanel: () => <div data-testid="watch-time-stub" />,
 }));
 
 function row(over: Record<string, unknown> = {}) {
@@ -221,6 +229,70 @@ describe("AnalyticsPage", () => {
     });
     expect(await screen.findByTestId("spend-card-stub")).toBeInTheDocument();
     expect(screen.queryByTestId("total-views")).toBeNull();
+  });
+
+  it("mounts the watch figures only on the Watch time tab", async () => {
+    stubFetch();
+    render(<AnalyticsPage />);
+    await screen.findByTestId("total-views");
+    expect(screen.queryByTestId("watch-time-stub")).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("tab-watch"));
+    });
+    expect(await screen.findByTestId("watch-time-stub")).toBeInTheDocument();
+  });
+
+  it("shows seconds watched, share watched and stayed to watch per post", async () => {
+    stubFetch({
+      ...DATA,
+      publications: [row({ avg_watch_secs: 31, watched_pct: 41.5, stayed_pct: 60 })],
+    });
+    render(<AnalyticsPage />);
+    expect(await screen.findByTestId("watched-pub1")).toHaveTextContent("31 s");
+    expect(screen.getByTestId("watched-pct-pub1")).toHaveTextContent("41.5%");
+    expect(screen.getByTestId("stayed-pub1")).toHaveTextContent("60%");
+  });
+
+  it("shows a watch figure the platform did not report as a dash, and explains the dash", async () => {
+    // Instagram: seconds, no share without the video's length, never a stayed
+    // figure. A share above 100 (a looping Short) is shown as it is.
+    stubFetch({
+      ...DATA,
+      publications: [
+        row({ id: "ig", platform: "instagram", avg_watch_secs: 23.5, watched_pct: null,
+              stayed_pct: null }),
+        row({ id: "loop", avg_watch_secs: 40, watched_pct: 134.2, stayed_pct: 0 }),
+        // An API from before these fields sends none of them.
+        row({ id: "old" }),
+      ],
+    });
+    render(<AnalyticsPage />);
+    expect(await screen.findByTestId("watched-ig")).toHaveTextContent("23.5 s");
+    expect(screen.getByTestId("watched-pct-ig")).toHaveTextContent("—");
+    expect(screen.getByTestId("stayed-ig")).toHaveTextContent("—");
+    expect(screen.getByTestId("watched-pct-loop")).toHaveTextContent("134.2%");
+    expect(screen.getByTestId("stayed-loop")).toHaveTextContent("0%");
+    expect(screen.getByTestId("watched-old")).toHaveTextContent("—");
+    expect(screen.getByTestId("analytics-legend")).toHaveTextContent("did not report");
+  });
+
+  it("sorts by the watch figures, with an unreported one below a real zero", async () => {
+    stubFetch({
+      ...DATA,
+      publications: [
+        row({ id: "none", avg_watch_secs: null, watched_pct: null, stayed_pct: null }),
+        row({ id: "short", avg_watch_secs: 9, watched_pct: 80, stayed_pct: 0 }),
+        row({ id: "long", avg_watch_secs: 44, watched_pct: 30, stayed_pct: 55 }),
+      ],
+    });
+    render(<AnalyticsPage />);
+    await screen.findByTestId("analytics-row-none");
+    fireEvent.change(screen.getByTestId("sort-by"), { target: { value: "avg_watch_secs" } });
+    expect(rowOrder()).toEqual(["analytics-row-long", "analytics-row-short", "analytics-row-none"]);
+    fireEvent.change(screen.getByTestId("sort-by"), { target: { value: "watched_pct" } });
+    expect(rowOrder()).toEqual(["analytics-row-short", "analytics-row-long", "analytics-row-none"]);
+    fireEvent.change(screen.getByTestId("sort-by"), { target: { value: "stayed_pct" } });
+    expect(rowOrder()).toEqual(["analytics-row-long", "analytics-row-short", "analytics-row-none"]);
   });
 
   it("sorts highest first, with an unreported metric below a real zero", async () => {

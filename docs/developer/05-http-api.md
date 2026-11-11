@@ -119,6 +119,7 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `POST` | [`/videos/<video_id>/publish/retry`](#post-videosvideo_idpublishretry) | Recover a failed publish |
 | `POST` | [`/videos/<video_id>/schedule/cancel`](#post-videosvideo_idschedulecancel) | Cancel a scheduled post |
 | `GET` | [`/analytics`](#analytics) | Read stored performance figures |
+| `GET` | [`/analytics/watch-time`](#analytics) | Read one account's watch figures by group |
 | `POST` | [`/analytics/refresh`](#analytics) | Poll performance figures now |
 | `GET` | [`/autopilot`](#auto-pilot) | Read the Auto Pilot configuration |
 | `POST` | [`/autopilot`](#auto-pilot) | Replace the Auto Pilot configuration |
@@ -976,8 +977,8 @@ one does internally is in [Publishing internals](14-publishing.md#http-routes).
 
 The routes that reach postforme, and `POST /publishing/accounts`, answer `503` when
 `publishing_enabled` is false or no `postforme_api_key` is stored. The check runs before any
-outbound call. `GET /videos/<video_id>/publications`, `publish-prefill`, `GET /analytics` and the
-two `/autopilot` routes have no such check.
+outbound call. `GET /videos/<video_id>/publications`, `publish-prefill`, `GET /analytics`,
+`GET /analytics/watch-time` and the two `/autopilot` routes have no such check.
 
 ### Accounts
 
@@ -1007,7 +1008,9 @@ any outbound call. `502` when postforme fails (the body carries its message) or 
 
 `GET /videos/<video_id>/publications` returns the video's publication rows, ordered by platform:
 `id`, `video_id`, `platform`, `social_account_id`, `status`, `post_url`, `error`, `published_at`,
-`created_at`, `updated_at`.
+`created_at`, `updated_at`. Each row also carries its latest snapshot: `views`, `likes`,
+`comments`, `shares`, the six [watch figures](14-publishing.md#watch-figures) and `fetched_at`.
+They are all null for a row with no snapshot.
 
 `POST /videos/<video_id>/publish-prefill` is a read that calls no model. It returns
 `{title, description, duration_secs, youtube_short, youtube_shorts_max_secs}`. `title` and
@@ -1063,12 +1066,28 @@ parameters `platform` and `social_account_id` filter every part of the response.
 |---|---|
 | `totals` | `views`, `likes`, `comments`, `shares`, `publications`, `videos` |
 | `by_platform` | The four metrics summed per platform. An unreported metric adds 0 |
-| `publications` | Each published row with its latest `views`, `likes`, `comments`, `shares` (null when unreported), `fetched_at` and the video's `title` |
+| `publications` | Each published row with its latest `views`, `likes`, `comments`, `shares` (null when unreported), `fetched_at`, the video's `title` and the watch figures `avg_watch_secs`, `watched_pct`, `stayed_pct`, `engaged_views`, `reach` and `saves` (null when unreported, see [Watch figures](14-publishing.md#watch-figures)) |
 | `by_month` | `[{month: "YYYY-MM", views}]`: views gained in each of the last 12 months, oldest first. Months before any snapshot are left out. A figure can be negative |
 | `timezone` | The zone the months were cut in (the host's, or `UTC`) |
 
+`GET /analytics/watch-time` returns one account's watch figures by group, from local snapshots.
+The optional `social_account_id` selects the account. Without it the answer is for the account with
+the most published posts.
+
+| Field | Meaning |
+|---|---|
+| `accounts` | `[{id, platform, videos}]`: every account with a published post, the largest first |
+| `social_account_id`, `platform`, `videos` | The account answered for and its number of published posts. `''` and 0 when nothing is published |
+| `min_group` | A group with fewer videos is too small to read (20) |
+| `dimensions` | `[{id, label, groups}]` for `visual_style`, `script_profile`, `domain`, `script_length`, `formula` and `hook_type` |
+
+Each group is `{key, label, videos, avg_watch_secs, watched_pct, stayed_pct}`. Each measure is
+`{median, n}`: the median over the `n` posts that report it, and `median` is null when `n` is 0.
+How posts are grouped is in [Publishing internals](14-publishing.md#get-analyticswatch-time).
+
 `POST /analytics/refresh` captures metrics for every account now and returns
-`{accounts, snapshots, errors}`.
+`{accounts, snapshots, errors}`. It first stores `videos.duration_secs` for published videos that
+have none ([Watch figures](14-publishing.md#watch-figures)).
 
 ### Auto Pilot
 
