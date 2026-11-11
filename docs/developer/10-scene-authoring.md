@@ -664,7 +664,9 @@ under a mask gradient cost about 1.6 CPU-seconds a frame. The measured costs are
   note wraps past 2 lines of 36 characters, or a value is out of its range.
 - Two elements share a slot, more than 4 elements are on screen at once, or a bracket reaches into a
   taken slot below it. An `encode`'s box holds slot `b` while it plays and a bracket's note holds the
-  note slot to the cut, against elements before and after them.
+  note slot to the cut, a bracket that reaches below its slot holds the slot below, and a `rearrange`
+  or `encode` holds its source's slot until the source's last letter has left it, against elements
+  before and after them.
 - A move acts on an element that is not on stage or has not finished its own move, or finishes less
   than 15 frames before its beat's cut. A typed command or a custom move is given a glow, which
   neither draws.
@@ -674,7 +676,7 @@ under a mask gradient cost about 1.6 CPU-seconds a frame. The measured costs are
 - A custom move has more than 6 per video, a shipped move's name, a `src` that is not this video's
   `move-<name>` file, or a source that breaks Bean Explainer's rules, uses a CSS gradient, backdrop
   filter or blend mode, a dynamic import, `performance.now`, Remotion's media or render-control parts,
-  or reads the frame itself (`terminal_doc.py::FORBIDDEN_SOURCE`).
+  state, effects or timers, or reads the frame itself (`terminal_doc.py::FORBIDDEN_SOURCE`).
 - Nothing changes on stage for more than 3 seconds.
 
 `mcp/tests/test_terminal_doc.py` pins `terminal_doc.py` to `contract.ts` and to the pack. The pack's

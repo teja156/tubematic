@@ -279,9 +279,11 @@ const NumberView: React.FC<{ el: ElState; ctx: MoveContext; opacity: number }> =
     const appear = clamp01((t - i * 0.4) / 3);
     const locked = t >= lock;
     const flash = clamp01(1 - (t - lock) / 10);
-    const c = locked ? (g ? g.color : interpolateColors(flash, [0, 1], [color, skin.tones.white])) : skin.noise;
+    // A glow with a span lights only its characters, as the settled row does.
+    const lit = g && (!g.ev.span || (i >= g.ev.span[0] && i < g.ev.span[1]));
+    const c = locked ? (lit ? g.color : interpolateColors(flash, [0, 1], [color, skin.tones.white])) : skin.noise;
     nodes.push(
-      <Glyph key={i} x={cam.X(cx)} y={cam.Y(sup ? y - size * 0.36 : y)} size={sz * cam.s} ch={locked ? ch : noiseGlyph(seedOf(e.id) + i, t, 2)} color={c} skin={skin} opacity={opacity * appear} shadow={locked && g ? g.shadow : undefined} />,
+      <Glyph key={i} x={cam.X(cx)} y={cam.Y(sup ? y - size * 0.36 : y)} size={sz * cam.s} ch={locked ? ch : noiseGlyph(seedOf(e.id) + i, t, 2)} color={c} skin={skin} opacity={opacity * appear} shadow={locked && lit ? g.shadow : undefined} />,
     );
   });
   return <>{nodes}</>;
@@ -347,6 +349,10 @@ const StreamView: React.FC<{ el: ElState; ctx: MoveContext; opacity: number }> =
 
 // ── type ─────────────────────────────────────────────────────────────────────
 
+/** A typed block's width in pixels: the command (prompt included) at its size, the output at size s. */
+export const typeWidthPx = (cmdCells: number, size: number, outs: string[]) =>
+  Math.max(cmdCells * size * CELL, ...outs.map((o) => o.length * SIZES.s * CELL));
+
 export const typeLayout = (size: number, outputs: number, slotY: number) => {
   const outLh = SIZES.s * 1.2;
   const h = size * 1.2 + outputs * outLh;
@@ -365,8 +371,9 @@ const TypeView: React.FC<{ el: ElState; ctx: MoveContext; opacity: number }> = (
   const shown = `$ ${typed(e.text, t, TIMING.typeRate)}`;
   const done = shown.length >= line.length;
   const typedEnd = Math.ceil(e.text.length / TIMING.typeRate);
-  const width = Math.max(line.length, ...outs.map((o) => o.length));
-  const left = W / 2 - (width * SIZES.s * CELL) / 2;
+  // The block is centred by its widest line in pixels: the command is drawn at
+  // its own size, the output at size s.
+  const left = W / 2 - typeWidthPx(line.length, size, outs) / 2;
   const cmdCx = left + (line.length * size * CELL) / 2;
   const nodes: React.ReactNode[] = [];
   nodes.push(<Row key="cmd" text={done ? line : shown} cells={line.length} y={cam.Y(cmdY)} size={size * cam.s} cx={cam.X(cmdCx)} color={toneOf(el, skin)} skin={skin} opacity={opacity} span={{ from: 0, to: 1, color: skin.tones.dim }} />);
@@ -398,7 +405,7 @@ export function extentOf(el: ElState): { x0: number; x1: number; bottom: number 
   if (e.type === "type") {
     const outs = e.output ?? [];
     const { cmdY, outY } = typeLayout(size, outs.length, SLOTS[e.slot].y);
-    const width = Math.max(e.text.length + 2, ...outs.map((o) => o.length)) * SIZES.s * CELL;
+    const width = typeWidthPx(e.text.length + 2, size, outs);
     return { x0: W / 2 - width / 2, x1: W / 2 + width / 2, bottom: outs.length ? outY(outs.length - 1) + SIZES.s * 0.62 : cmdY + size * 0.62 };
   }
   const cells = e.type === "number" ? numberCells(e.value) : finalText(e).length;

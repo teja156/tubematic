@@ -112,6 +112,13 @@ _COUNTABLE = re.compile(r"^\d{1,3}(,\d{3})*$|^\d{1,12}$")
 # of it in one picture.
 FORBIDDEN_SOURCE = _BEAN_FORBIDDEN + (
     (re.compile(r"\buse(CurrentFrame|VideoConfig)\b"), "useCurrentFrame or useVideoConfig: a move draws from the t it is given"),
+    # A move is a pure function of t: state kept between frames differs between
+    # the render's parallel tabs and when frames are rendered out of order.
+    (re.compile(r"\buse(State|Ref|Effect|LayoutEffect|Reducer)\b|\bset(Timeout|Interval)\b|\brequestAnimationFrame\b"),
+     "state, an effect or a timer: a move draws each frame from t alone"),
+    # Bean's pattern lets a CSS filter through as `.filter =` or an object key
+    # outside an inline style.
+    (re.compile(r"\.filter\s*=(?!=)|\bfilter\s*:"), "a CSS or canvas filter: it multiplies the render time"),
     # A move is DOM, so its gradients and filters are CSS strings Bean's
     # SVG-shaped patterns do not see; each one is full-area work per frame.
     (re.compile(r"(?i)-gradient\s*\(|backdrop-?filter|mix-?blend-?mode"),
@@ -544,6 +551,12 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                 continue
             if src_el:
                 src_el.gone = at
+                # Its letters wait in their cells until their turn to fly (and a
+                # rearrange fades the letters it does not use in place), so the
+                # source slot stays held while they do.
+                n_src = max(len(from_text.replace(" ", "")), 1)
+                upto = at + (TIMING["stagger"] * (n_src - 1) + TIMING["arc"] if t == "encode" else dur)
+                holds.append((src_el.slots, at, upto, f"the letters of {e['from']!r}"))
             if t == "encode":
                 holds.append((("b",), at, at + dur + TIMING["collapse"], f"the {e['label']} box"))
             el = _El(e, slots, _final_text(e), size, at, at + dur)
@@ -580,6 +593,7 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                     err(f"{what}: the bracket under {e['target']!r} reaches into slot {below}, which holds {busy!r}; "
                         "use a smaller size or a free slot below.")
                     continue
+                holds.append(((below,), at, end, f"the bracket under {e['target']!r}"))
             if e.get("note"):
                 if at < note_until:
                     err(f"{what}: another bracket's note is still in the note slot.")

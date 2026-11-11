@@ -575,3 +575,40 @@ def test_a_push_and_a_move_of_your_own_cannot_share_a_beat():
 def test_a_move_that_reaches_past_glyphs_or_costs_renders_is_refused(line, fragment):
     problems = _check_custom(_with_caesar(), {"vid_td1/move-caesar": line + "\n" + CAESAR})
     assert any(fragment in p for p in problems), problems
+
+
+# ── review round 2 ───────────────────────────────────────────────────────────
+
+def test_a_source_slot_stays_held_while_its_letters_wait_to_fly():
+    # the encode starts at 161; SUNSHINE's last letter leaves slot a at 161 + 3*7 + 16
+    problems = _check(_beat0_with({"type": "word", "at": 163, "id": "salt", "slot": "a", "text": "SALTED", "size": "l"}))
+    assert any("holds \"the letters of 'pw'\"" in p for p in problems), problems
+    # once they have all flown, the slot is free again
+    assert _check(_beat0_with({"type": "word", "at": 200, "id": "salt", "slot": "a", "text": "SALTED", "size": "l"})) == []
+
+
+def test_a_bracket_reaching_into_the_slot_below_holds_it():
+    def add(d):
+        ev = d["beats"][3]["events"]                       # "20.9 S" is xl in b: its bracket reaches into c
+        b = next(e for e in ev if e["type"] == "bracket")
+        b.pop("note"); b.pop("cite")
+        ev.append({"type": "word", "at": ev[-1]["at"] + 25, "id": "late", "slot": "c", "text": "ONE GPU", "size": "m"})
+    problems = _check(_with(add))
+    assert any("holds \"the bracket under 'secs'\"" in p for p in problems), problems
+
+
+@pytest.mark.parametrize("line, fragment", [
+    ('const s = { filter: "blur(4px)" };', "a CSS or canvas filter"),
+    ('function f(c) { c.filter = "blur(30px)"; }', "a CSS or canvas filter"),
+    ('import { useRef } from "react";', "state, an effect or a timer"),
+    ('const id = setTimeout(() => 0, 5);', "state, an effect or a timer"),
+    ('const n = requestAnimationFrame(() => 0);', "state, an effect or a timer"),
+])
+def test_a_move_with_state_or_a_filter_is_refused(line, fragment):
+    problems = _check_custom(_with_caesar(), {"vid_td1/move-caesar": line + "\n" + CAESAR})
+    assert any(fragment in p for p in problems), problems
+
+
+def test_an_array_filter_and_a_comparison_are_not_filters():
+    body = CAESAR.replace("const SHIFT = 3;", "const SHIFT = [3].filter(Boolean)[0]; const same = SHIFT == 3;")
+    assert _check_custom(_with_caesar(), {"vid_td1/move-caesar": body}) == []

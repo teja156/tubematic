@@ -49,8 +49,9 @@ event is wrong. Fix every problem it lists, then write again.
 - **Events** in a beat are listed in frame order, at most 24, each inside its beat. A move must
   finish at least 15 frames before its beat's cut, or nobody sees it land.
 - **Slots:** one element per slot at a time. A slot is freed by a `clear`, or by a `rearrange` or
-  `encode` that takes the element's letters. An `encode`'s box holds slot `b` until it has played,
-  and a bracket's note holds the `note` slot until the cut.
+  `encode` that takes the element's letters, once the last of them has left. An `encode`'s box holds
+  slot `b` until it has played, a bracket's note holds the `note` slot until the cut, and a bracket
+  that reaches below its slot holds the slot below.
 - **Restraint:** at most 4 elements on screen at once, the context line and a bracket's note
   included.
 - **Fit:** a string fits the frame at its size: at most 40 characters at `s`, 25 at `m`, 16 at `l`,
@@ -68,7 +69,8 @@ event is wrong. Fix every problem it lists, then write again.
   `../../installed/terminalDoc/kit` (or `contract`) with a static `import` (never `require` or
   `import(...)`), and uses no filter, gradient (SVG or CSS), backdrop filter, blend mode, pattern,
   dashed stroke, image, audio or video, `staticFile`, `delayRender`, fetch, randomness, clock,
-  `performance.now`, `useCurrentFrame` or `useVideoConfig`.
+  `performance.now`, state, effects or timers (`useState`, `useRef`, `useEffect`, `setTimeout`),
+  `useCurrentFrame` or `useVideoConfig`: it is a pure function of `t`.
 
 ## Step 0 — read
 
