@@ -191,8 +191,10 @@ postforme states that Instagram can take up to 48 hours to report some figures o
 The **Watch time** tab groups one account's posts and shows the three figures for each group.
 
 1. Choose the account. The tab opens on the account with the most posts.
-2. Choose **Group by**: visual style, script profile, domain or script length. Script length is
-   the script's word count, in bands of 50 words.
+2. Choose **Group by**: visual style, script profile, domain, script length, formula or opening.
+   Script length is the script's word count, in bands of 50 words. Formula is the
+   [script formula](03-using-tubematic.md#script-formulas) the agent chose, and opening is the kind
+   of opening the script starts with, such as a question or a scene.
 
 How to read the table:
 
@@ -202,6 +204,8 @@ How to read the table:
   many, for example `25% (30 of 40)`. It adds `too few` when fewer than 20 report it.
 - A group with fewer than 20 videos is marked `TOO FEW`. One unusual video can move its figure, so
   treat it as a hint.
+- **Not recorded** holds the videos with no formula or opening on record. Every script written
+  before scripts recorded them is there.
 - Compare groups inside one account. Platforms count views and watch time differently, and every
   account has its own audience.
 

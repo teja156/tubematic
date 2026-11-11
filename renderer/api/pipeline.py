@@ -2058,11 +2058,22 @@ def _watch_group_of(dimension: str, row) -> tuple:
     if dimension == "domain":
         project = row["project_id"] or ""
         return project, row["project_name"] or project or "No domain", 0
+    if dimension == "formula":
+        # '' is a script written before scripts recorded a formula, or one
+        # whose words were replaced without a record.
+        formula = row["formula_id"] or ""
+        return formula, tformulas.label(formula) or WATCH_NOT_RECORDED, 0
+    if dimension == "hook_type":
+        hook = row["hook_type"] or ""
+        return hook, tformulas.HOOK_TYPES.get(hook, hook) or WATCH_NOT_RECORDED, 0
     return _script_length_band(row["script"])
 
 
+WATCH_NOT_RECORDED = "Not recorded"
+
 WATCH_DIMENSIONS = (("visual_style", "Visual style"), ("script_profile", "Script profile"),
-                    ("domain", "Domain"), ("script_length", "Script length"))
+                    ("domain", "Domain"), ("script_length", "Script length"),
+                    ("formula", "Formula"), ("hook_type", "Opening"))
 
 
 def _watch_groups(rows: list, dimension: str) -> list:
@@ -4757,7 +4768,8 @@ def create_pipeline_blueprint() -> Blueprint:
                 account_id = accounts[0]["id"]
             fetched = con.execute(
                 "SELECT vp.platform, v.visual_style, v.resolved_renderer, v.script_profile_id,"
-                " v.project_id, v.script, v.duration_secs, sp.name AS profile_name,"
+                " v.project_id, v.script, v.duration_secs, v.formula_id, v.hook_type,"
+                " sp.name AS profile_name,"
                 " p.name AS project_name,"
                 " m.raw_json" + _LATEST_METRIC_FROM
                 + " LEFT JOIN script_profiles sp ON sp.id = v.script_profile_id"

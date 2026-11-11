@@ -153,9 +153,10 @@ If you go back to 2.1.x later:
   for videos whose files still exist when you upgrade and for every video published afterwards.
   See [Watch figures](https://docs.tubematic.ai/user-guide/publishing#watch-figures).
 - A **Watch time** tab in **Analytics**. It groups one account's posts by visual style, script
-  profile, domain or script length and shows the three watch figures for each group, with the
-  number of videos behind them. A group with fewer than 20 videos is marked as too small to read.
-  See
+  profile, domain, script length, script formula or opening, and shows the three watch figures for
+  each group, with the number of videos behind them. A group with fewer than 20 videos is marked as
+  too small to read. A video whose script was written before the upgrade has no formula or opening
+  on record and is grouped under **Not recorded**. See
   [Comparing groups of videos](https://docs.tubematic.ai/user-guide/publishing#comparing-groups-of-videos).
 
 ### Changed

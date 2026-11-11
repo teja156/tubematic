@@ -1054,7 +1054,7 @@ the most published posts.
 | `accounts` | `[{id, platform, videos}]`: every account with a published post, the largest first |
 | `social_account_id`, `platform`, `videos` | The account answered for and its number of published posts. `''` and 0 when nothing is published |
 | `min_group` | A group with fewer videos is too small to read (20) |
-| `dimensions` | `[{id, label, groups}]` for `visual_style`, `script_profile`, `domain` and `script_length` |
+| `dimensions` | `[{id, label, groups}]` for `visual_style`, `script_profile`, `domain`, `script_length`, `formula` and `hook_type` |
 
 Each group is `{key, label, videos, avg_watch_secs, watched_pct, stayed_pct}`. Each measure is
 `{median, n}`: the median over the `n` posts that report it, and `median` is null when `n` is 0.

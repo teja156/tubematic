@@ -201,7 +201,8 @@ Two pages share this tab. Script profiles are covered in
   people watched it. You can filter by platform and account. A dash means the platform reported no
   figure.
 - **Watch time** compares how long people watched across groups of videos: by visual style, script
-  profile, domain or script length. See [Publishing](06-publishing.md#comparing-groups-of-videos).
+  profile, domain, script length, formula or opening. See
+  [Publishing](06-publishing.md#comparing-groups-of-videos).
 - **Spend** shows what the install spent today, this week, this month or over a range of days. It
   includes spend that belongs to no single video, such as research.
 

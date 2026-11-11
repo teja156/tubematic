@@ -642,8 +642,9 @@ its Instagram posts report no `watched_pct`.
 
 ### `GET /analytics/watch-time`
 
-The route groups one account's published posts by visual style, script profile, domain and script
-length, and returns all four groupings in one response. `social_account_id` selects the account.
+The route groups one account's published posts by visual style, script profile, domain, script
+length, formula and hook type, and returns every grouping in one response (`WATCH_DIMENSIONS`).
+`social_account_id` selects the account.
 Without it the route answers for the account with the most published posts. One account is read at
 a time because each platform counts a view and a watched second in its own way.
 
@@ -654,6 +655,9 @@ a time because each platform counts a view and a watched second in its own way.
   as "Mixed scenes", or as Cartoon 3D when `resolved_renderer` is `cartoon_3d`.
 - Script length is the word count of `videos.script` without its markup (`_script_words`), in the
   bands of `SCRIPT_LENGTH_BANDS`.
+- The `formula` grouping reads `videos.formula_id` and the `hook_type` grouping reads
+  `videos.hook_type`. The labels come from `tubematic_core/formulas.py` (`label` and `HOOK_TYPES`).
+  An id that module does not know is shown as its own label, and `''` reads as "Not recorded".
 - Groups come largest first. Script length bands come shortest first.
 
 ### Analytics outlive the files

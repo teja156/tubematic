@@ -433,7 +433,7 @@ def test_an_account_with_no_posts_answers_with_empty_groups(client, env):
     assert data["videos"] == 0 and data["platform"] == ""
     assert all(d["groups"] == [] for d in data["dimensions"])
     assert [d["id"] for d in data["dimensions"]] == [
-        "visual_style", "script_profile", "domain", "script_length"]
+        "visual_style", "script_profile", "domain", "script_length", "formula", "hook_type"]
 
 
 def test_a_groups_figure_is_the_median_of_its_videos(client, env):
@@ -527,6 +527,51 @@ def test_script_length_groups_are_word_bands_in_order(client, env):
     assert [(g["label"], g["videos"]) for g in dim["groups"]] == [
         ("Under 150 words", 1), ("150 to 199 words", 1), ("200 to 249 words", 1),
         ("300 words or more", 2), ("No script", 1)]
+
+
+def _recorded(env, vid, formula, hook):
+    _video(env, vid)
+    _sql(env, "UPDATE videos SET formula_id = ?, hook_type = ? WHERE id = ?", (formula, hook, vid))
+    _post(env, vid, "youtube", "spc_yt", YOUTUBE)
+
+
+def test_grouping_by_formula_uses_the_formulas_label(client, env):
+    """A script with no formula on record (every script written before scripts
+    recorded one) is its own group, named as such, and never a blank row. A
+    formula a later version dropped keeps its id as the label."""
+    formula = next(iter(pipeline.tformulas.FORMULAS))
+    for vid, recorded in (("vid_a", formula), ("vid_b", formula), ("vid_c", ""),
+                          ("vid_d", "a-formula-since-removed")):
+        _recorded(env, vid, recorded, "")
+    groups = _dimension(_watch(client), "formula")
+    assert {label: g["videos"] for label, g in groups.items()} == {
+        pipeline.tformulas.label(formula): 2, "Not recorded": 1, "a-formula-since-removed": 1}
+    assert groups["Not recorded"]["key"] == ""
+    assert pipeline.tformulas.label(formula) != formula
+
+
+def test_grouping_by_opening_uses_the_hook_types_label(client, env):
+    """The opening's type is one closed list shared by every formula, so the
+    same type under two formulas is one group."""
+    formulas = list(pipeline.tformulas.FORMULAS)
+    for vid, formula, hook in (("vid_a", formulas[0], "question"), ("vid_b", formulas[1], "question"),
+                               ("vid_c", formulas[0], "scene"), ("vid_d", "", ""),
+                               ("vid_e", formulas[0], "a_type_since_removed")):
+        _recorded(env, vid, formula, hook)
+    groups = _dimension(_watch(client), "hook_type")
+    assert {label: g["videos"] for label, g in groups.items()} == {
+        pipeline.tformulas.HOOK_TYPES["question"]: 2, pipeline.tformulas.HOOK_TYPES["scene"]: 1,
+        "Not recorded": 1, "a_type_since_removed": 1}
+
+
+def test_a_formula_recorded_without_an_opening_groups_under_each_on_its_own(client, env):
+    """The two are separate columns. A video with one and not the other is in
+    the named group of the one it has."""
+    formula = next(iter(pipeline.tformulas.FORMULAS))
+    _recorded(env, "vid_a", formula, "")
+    data = _watch(client)
+    assert set(_dimension(data, "formula")) == {pipeline.tformulas.label(formula)}
+    assert set(_dimension(data, "hook_type")) == {"Not recorded"}
 
 
 def test_script_words_leave_markup_out_and_keep_the_wrapped_word():
