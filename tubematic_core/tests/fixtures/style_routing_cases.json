@@ -1,0 +1,423 @@
+{
+  "_about": "The fixed topic set Auto's style routing is checked against (TMDEV-203). expect: the right outcome(s), best first; ok: also acceptable; future: a coming style expected to take the topic over once its pack ships. Each style ticket updates these in its own merge. Read by tubematic_core/tests/test_style_routing.py and scripts/eval_style_routing.py.",
+  "cases": [
+    {
+      "title": "How DNS finds a website",
+      "brief": "What happens between typing a domain name and your browser getting an IP address: the resolver, root, TLD and authoritative servers, and caching along the way.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "What happens when you press Enter on a URL",
+      "brief": "The full path of a web request: DNS lookup, TCP and TLS handshakes, the load balancer, the app server, the database, and the response travelling back.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How a CDN makes sites fast",
+      "brief": "Why a request served from an edge server near you is faster than one that travels to the origin, and what happens on a cache miss.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How SQL injection reaches the database",
+      "brief": "How a crafted input travels from a login form through the app into a SQL query and dumps the users table, and how parameterised queries stop it.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How Kafka moves a message",
+      "brief": "A message's trip from a producer to a topic partition, through replication to followers, to a consumer group that reads it at its own pace.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "The TLS handshake, step by step",
+      "brief": "How a browser and a server agree on keys before any data is sent: hello messages, the certificate, key exchange and the first encrypted request.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "Terminal Doc (TMDEV-199) may share this one",
+      "note": ""
+    },
+    {
+      "title": "How a pin tumbler lock works",
+      "brief": "Why the right key lines up the pins at the shear line, why the wrong one does not, and how lock picking exploits tiny manufacturing gaps.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "Under the Hood (TMDEV-201)",
+      "note": ""
+    },
+    {
+      "title": "How vaccines train your immune system",
+      "brief": "What a vaccine shows your immune cells, how they remember it, and why a later real infection is fought off faster.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "scenes",
+        "illustrated"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Why compound interest grows so fast",
+      "brief": "Working out how 1,000 dollars at 7 percent becomes 7,600 in 30 years, and why the last ten years add more than the first twenty.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Money arithmetic worked out step by step: the board's numbers and formula are the video."
+    },
+    {
+      "title": "How a phishing email tricks you",
+      "brief": "A walkthrough from the attacker's fake login page to the victim typing their password, and the three tells that give it away.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "system_flow",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How a fridge pushes heat out",
+      "brief": "The refrigerant loop: compressor, condenser, expansion valve and evaporator, and why the back of the fridge is warm.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "scenes",
+        "system_flow"
+      ],
+      "future": "Under the Hood (TMDEV-201)",
+      "note": ""
+    },
+    {
+      "title": "How a touchscreen feels your finger",
+      "brief": "How a capacitive screen's grid of electrodes notices the charge your finger draws and works out where you touched.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "Under the Hood (TMDEV-201)",
+      "note": ""
+    },
+    {
+      "title": "How base64 turns bytes into text",
+      "brief": "Taking three bytes, regrouping them into four six-bit chunks and mapping each to a letter, and why the output ends in equals signs.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "system_flow",
+        "scenes"
+      ],
+      "future": "Terminal Doc (TMDEV-199)",
+      "note": ""
+    },
+    {
+      "title": "Why the sky is blue",
+      "brief": "How sunlight scatters off air molecules, why short blue wavelengths scatter most, and why sunsets turn red.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A chain of causes that ends in one picture (scattering, then the colour, then the sunset)."
+    },
+    {
+      "title": "Why 0.999 repeating equals 1",
+      "brief": "Three short proofs that 0.999... and 1 are the same number: one third times three, ten x minus x, and the gap that has no size.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "A derivation built up line by line; nothing to photograph and no roles to act out."
+    },
+    {
+      "title": "How a lever lets you lift a car",
+      "brief": "Effort, load and fulcrum: why a long lever arm trades distance for force, worked out with the numbers for lifting one corner of a car.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "One object with forces on it and a formula built up: the board's core case."
+    },
+    {
+      "title": "The five most expensive watches ever sold",
+      "brief": "The Patek Philippe Grandmaster Chime, Paul Newman's Rolex Daytona and three more, what each sold for and why.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "What the James Webb telescope's first image shows",
+      "brief": "The SMACS 0723 deep field: the galaxy cluster, the gravitationally lensed arcs behind it, and how old that light is.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "The tallest buildings in the world",
+      "brief": "The Burj Khalifa, Merdeka 118, Shanghai Tower and the rest of the top five, with their heights and what makes each stand up.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Inside the Vision Pro: what Apple put in it",
+      "brief": "The named parts of Apple's headset (the M2 and R1 chips, the micro-OLED panels, the EyeSight screen) and what each does.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "Under the Hood (TMDEV-201)",
+      "note": ""
+    },
+    {
+      "title": "The feud between Tesla and Edison",
+      "brief": "How Nikola Tesla and Thomas Edison went from employer and employee to rivals in the war of the currents, scene by scene.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "Storybook Atlas (TMDEV-200)",
+      "note": ""
+    },
+    {
+      "title": "Ada Lovelace and the first program",
+      "brief": "Ada Lovelace's friendship with Charles Babbage and how her notes on the Analytical Engine described the first algorithm for a machine.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "Storybook Atlas (TMDEV-200)",
+      "note": ""
+    },
+    {
+      "title": "Sam's first week as a junior developer",
+      "brief": "Following one new developer, Sam, through the first pull request, the first broken build and the first code review, as a short story.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "Case File Story (TMDEV-202)",
+      "note": ""
+    },
+    {
+      "title": "A night watch in a medieval castle",
+      "brief": "Walk the walls with a guard on night watch and see how the gatehouse, the murder holes and the guard rotation kept the castle safe.",
+      "expect": [
+        "cartoon_3d"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "A morning in an ancient Roman market",
+      "brief": "Stroll through a forum market at dawn with a merchant setting up stall, and see what Romans bought, how they paid and who kept order.",
+      "expect": [
+        "cartoon_3d"
+      ],
+      "ok": [
+        "illustrated",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "A telegram crosses 1920s London",
+      "brief": "Follow a messenger boy from the telegraph office through the streets of 1920s London to deliver one urgent telegram.",
+      "expect": [
+        "cartoon_3d"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Five surprising facts about honey",
+      "brief": "Why honey never spoils, how many flowers one jar takes, and three more facts, each with its own picture or quick animation.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Why we procrastinate",
+      "brief": "What happens in your brain when you put off a task, why the reward of later feels smaller, and two tricks that help.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "stick",
+        "illustrated"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "The history of the QWERTY keyboard",
+      "brief": "From Sholes's typewriter in the 1870s to today's phones: why the letters ended up in this order and why we never switched.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "illustrated"
+      ],
+      "future": "Storybook Atlas (TMDEV-200)",
+      "note": ""
+    },
+    {
+      "title": "How the Enigma code was broken",
+      "brief": "How the Enigma machine scrambled letters, the mistakes German operators made, and how Turing's bombe at Bletchley Park used them.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "stick",
+        "motion_graphics",
+        "illustrated"
+      ],
+      "future": "Terminal Doc (TMDEV-199)",
+      "note": ""
+    },
+    {
+      "title": "How money laundering moves dirty cash",
+      "brief": "Placement, layering and integration: how one criminal's cash passes through shell companies until it looks like a clean salary.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "stick",
+        "system_flow"
+      ],
+      "future": "Case File Story (TMDEV-202)",
+      "note": ""
+    },
+    {
+      "title": "Every type of cyber attack explained",
+      "brief": "Phishing, ransomware, DDoS, man-in-the-middle, SQL injection and more, one quick idea each.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "system_flow",
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Habits that quietly wreck your sleep",
+      "brief": "A quick list of everyday habits that ruin sleep without you noticing: scrolling in bed, late coffee, the weekend lie-in, and a too-warm room, each with one easy fix.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    }
+  ]
+}

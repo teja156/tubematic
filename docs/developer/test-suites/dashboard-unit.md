@@ -325,6 +325,15 @@ Trap: `publishingEnabled` defaults to off, so a page that does not fetch setting
 Covers the video window's Delete action: it is offered at the deletable statuses only, fires once
 after a confirm and deletes nothing on cancel. An archived video shows the Archived badge.
 
+### `video-modal-switch-style.test.tsx`
+
+Covers the video window's **Why this style** row and **Switch to …** button
+([Auto's style pick](../15-dashboard.md#autos-style-pick)).
+
+- An Auto pick shows its reason and runner-up. A style a person chose shows neither.
+- The switch is offered only at `SCRIPT_READY` with a runner-up, posts to `/switch-style` after a
+  confirm, does nothing when the confirm is declined, and shows the server's refusal.
+
 ### `video-modal-retry-agent.test.tsx`
 
 Covers **Retry agent**, `lib/videoStatus.ts::isAgentStuck` and the board card's STUCK tag. The
@@ -628,7 +637,8 @@ Covers `lib/visualStyles.ts` ([Visual-style picker](../15-dashboard.md#visual-st
 - `cartoon3dAvailable` is true only while the GPU probe says working, and `styleOptions` tells an
   untested GPU apart from a missing one.
 - Before the list loads, a picker offers only the value it holds, and a label shows the raw id.
-- `videoStyleLabel` names the world an Auto video settled on.
+- `videoStyleLabel` names the world an Auto video settled on, and marks a style Auto picked before
+  the script with the style's label, or Mixed scenes with its canvas, after the word Auto.
 
 `packStyles.ts` builds the style list from the real pack files in `tubematic_core/style_packs/`, and
 `vitest.setup.ts` makes `useVisualStyles()` return it in every test, so no test holds its own copy

@@ -139,6 +139,10 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
   shows STUCK on its card, and **Retry agent** clears the flag without changing the status.
 - A `PARTIALLY_PUBLISHED` video sits in the Published column tagged PARTIAL, and **Mark as
   published** moves it to `PUBLISHED`.
+- A video whose style Auto picked shows the reason, and **Switch to …** moves it to
+  `TOPIC_APPROVED` with the runner-up as its style. The pick is seeded in the API container with
+  `docker compose exec`, because only the agent's `choose_visual_style` writes one and the test
+  stack runs no agent.
 
 Trap: the Voice and Voice model rows need the real API, because `voice_info` comes only from the
 single-video fetch and the list row the window opens on does not carry it.

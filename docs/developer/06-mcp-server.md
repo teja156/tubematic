@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 49 tools
+## The 51 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -102,6 +102,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`create_video`](#create_video) | File a topic at `TOPIC_PROPOSED` |
 | [`set_video_status`](#set_video_status) | Guarded status write |
 | [`update_video`](#update_video) | Partial update: script, publish text, voice, agent, style |
+| [`choose_visual_style`](#choose_visual_style) | Record the style `auto` picks, before the script |
 | [`add_comment`](#add_comment) | Add an agent comment |
 
 ### Domain tools
@@ -142,6 +143,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`read_scene_file`](#read_scene_file) | Read one scene's source |
 | [`delete_scene_file`](#delete_scene_file) | Delete one generated scene or module |
 | [`list_scene_files`](#list_scene_files) | List generated and installed scenes |
+| [`render_bean_props`](#render_bean_props) | Render a Bean Explainer video's own props as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
 | [`get_timeline`](#get_timeline) | Read `timeline.json` |
@@ -188,23 +190,25 @@ The calls one video takes when it has no mascot and is not Cartoon 3D:
 
 1. `get_video(video_id)` returns the status, the comments, the `pronunciation_mode` to write for
    and the `script_profile_id`.
-2. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
-3. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…)` stores the
+2. `choose_visual_style(video_id, style, reason, runner_up)` records the style `auto` picks, when
+   `style_routing.decided` is `false`. The script is then written for that style.
+3. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
+4. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…)` stores the
    script and the text the video is posted with.
-4. `upsert_pronunciation_lexicon(entries=[…])` registers recurring terms, if the script has any.
-5. `add_comment(video_id, "agent", …)` says what was written.
-6. `set_video_status(video_id, "SCRIPT_READY", only_if_current_status="TOPIC_APPROVED")` stops at
+5. `upsert_pronunciation_lexicon(entries=[…])` registers recurring terms, if the script has any.
+6. `add_comment(video_id, "agent", …)` says what was written.
+7. `set_video_status(video_id, "SCRIPT_READY", only_if_current_status="TOPIC_APPROVED")` stops at
    the script checkpoint. A human approves, which moves the video to `VOICING`.
-7. `generate_voice(video_id, script)` writes the audio and the timeline and moves the video to
+8. `generate_voice(video_id, script)` writes the audio and the timeline and moves the video to
    `VOICE_READY`.
-8. `get_timeline(video_id)` returns each segment's frame span.
-9. `list_scene_files(source="installed")` lists the reusable scene library.
-10. `generate_image(video_id, image_name, prompt)` creates each image and returns its `public_path`.
-11. `read_image(video_id, image_name)` shows the image, so a bad one is replaced before a render.
-12. `write_scene_file(video_id, scene_name, tsx_content)` writes each new scene and returns its `src`.
-13. `write_scene_config(video_id, config)` writes `scene-config.json`.
-14. `validate_job(video_id)` returns `errors` to fix and `warnings` to judge.
-15. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
+9. `get_timeline(video_id)` returns each segment's frame span.
+10. `list_scene_files(source="installed")` lists the reusable scene library.
+11. `generate_image(video_id, image_name, prompt)` creates each image and returns its `public_path`.
+12. `read_image(video_id, image_name)` shows the image, so a bad one is replaced before a render.
+13. `write_scene_file(video_id, scene_name, tsx_content)` writes each new scene and returns its `src`.
+14. `write_scene_config(video_id, config)` writes `scene-config.json`.
+15. `validate_job(video_id)` returns `errors` to fix and `warnings` to judge.
+16. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
 
 ---
 
@@ -231,7 +235,8 @@ videos.
 | `illustrated_available` | `true` when an OpenAI key is stored. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
-| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows}`. Under `auto`, `renderer` and `canvas` are `null` and `authoring_skill` is `tubematic-scene-config` |
+| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config` and `script` is `""` |
+| `style_routing` | The style decision `auto` makes before the script: `{decided, pick, runner_up, reason, candidates, domain}`. See [How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style) |
 
 At `VOICE_READY` the operator skill invokes the skill named in `style.authoring_skill`.
 
@@ -240,10 +245,16 @@ scene-config is written.
 
 The flags are on `get_video` because a scheduled session is scoped to one video. Under `auto`, the
 scene-config skill reads `illustrated_available` before it chooses generated character art (when it
-is `false`, characters are line art and `generate_character` is not called) and
-`cartoon_3d_available` before it resolves the renderer to Cartoon 3D. Under a forced `illustrated`
-style it makes no check: the style can be chosen only while a key is stored, and
+is `false`, characters are line art and `generate_character` is not called). Under a forced
+`illustrated` style it makes no check: the style can be chosen only while a key is stored, and
 `generate_character` refuses before any spend if the key has gone.
+
+`style_routing.decided` is `true` once `auto` has picked (`pick` is a style id, or `scenes` for the
+mixed scene system) and whenever a person chose the style. `candidates` is
+`tubematic_core/visual_styles.py::routing_candidates`: every style pack in pack order, then
+`scenes`, each with its `routing` block, its generated-image count and whether this install and
+this video can have it (`available`, `unavailable_reason`). `domain` is the `{name, description}`
+of the video's domain.
 
 ### `create_video`
 
@@ -284,6 +295,11 @@ It refuses:
   was picked (a human chooses another, or none), or when the video is Cartoon 3D, by its style or
   its resolved renderer, and holds a mascot. Both checks are repeated in the `UPDATE`'s `WHERE`.
 
+A move to `TOPIC_PROPOSED` (a topic revision) gives a style `auto` picked back to `auto`, in the
+same `UPDATE`: `visual_style` returns to `auto` and the three `style_*` columns are cleared, so the
+revised topic is routed again after its next approval. On every `auto` video the two `resolved_*`
+columns are cleared too. A style a person chose is kept, with its recorded canvas.
+
 ### `update_video`
 
 `update_video(video_id, title=…, script=…, script_segments=…, youtube_url=…, video_version=…,
@@ -319,6 +335,12 @@ Fields writable only at `TOPIC_PROPOSED`:
 - A new `mascot_id` must exist, be approved and not archived, and some renderer's GPU test must
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
   mascot is not refused. A mascot is refused on a `cartoon_3d` video.
+- A `visual_style` different from the stored one clears the record of a style `auto` picked
+  (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
+  scenes (`resolved_renderer`, `resolved_visual_style`). The same value again keeps them, because the
+  dashboard re-sends the picker on every approval. A call that writes `visual_style` together with
+  either `resolved_*` field is refused. A mascot is judged against the renderer the video will have
+  after the write, so a changed style is not refused for a Cartoon 3D renderer it clears.
 
 Fields writable at any human checkpoint (`TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY`):
 
@@ -337,14 +359,42 @@ Fields the agent writes once, at scene-config time. A second, different value is
 
 - `resolved_visual_style` is the canvas the agent settled on (`dark` or `light`). It is refused
   when `visual_style` already fixes the canvas.
-- `resolved_renderer` is the renderer `auto` settled on (`dom` or `cartoon_3d`). It is refused when
-  `visual_style` already names the renderer. `cartoon_3d` needs the same working GPU and a video
-  with no mascot.
+- `resolved_renderer` is the renderer an `auto` video uses (`dom` or `cartoon_3d`). `auto` reaches
+  Cartoon 3D by picking the `cartoon_3d` style with `choose_visual_style`, so a video still at
+  `auto` when its scenes are written records `dom`. `cartoon_3d` is kept for a video that recorded
+  it before `auto` picked styles, and refused on a video `auto` routed to mixed scenes
+  (`style_pick` is `scenes`); `write_scene_config` refuses a Cartoon 3D scene there for the same
+  reason. It is refused when `visual_style` already names the renderer.
+  `cartoon_3d` needs the same working GPU and a video with no mascot.
 
 A `title` over 70 characters is rejected. The tool takes none of the four job-path columns:
 `generate_voice`, `write_scene_config` and the render gateway write those, and FastMCP refuses a
 call that passes one as an unexpected argument, so nothing is applied (see
 [Path columns](03-database.md#path-columns)).
+
+### `choose_visual_style`
+
+`choose_visual_style(video_id, style, reason, runner_up="")` records the style `auto` picks for a
+video, once, at `TOPIC_APPROVED`, before the script is written. The
+[tubematic-style-routing skill](10-scene-authoring.md#how-auto-picks-a-style) calls it. It is the
+only write of the style after the topic checkpoint.
+
+- `style` is a candidate id from `style_routing.candidates`. A style pack's id is written into
+  `visual_style`, so the script, the gates, the AI review prompt and the authoring skill all read the
+  picked style. `scenes` leaves `visual_style` at `auto`. The same `UPDATE` clears
+  `resolved_renderer` and `resolved_visual_style`, which belong to scenes the new script replaces.
+- `reason` is one sentence of at most 300 characters (`STYLE_REASON_MAX_CHARS`). The dashboard
+  shows it beside the choice.
+- `runner_up` is another candidate, or `""`. The dashboard offers it as a switch at `SCRIPT_READY`
+  ([`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style)).
+
+It refuses a `style` or `runner_up` that is not available (no OpenAI key, no working GPU, a mascot
+on a 3D-world style), a video not at `TOPIC_APPROVED`, a style a person chose, and a second
+decision. Every condition on the row is repeated in the `UPDATE`'s `WHERE`, so a status change, a
+style write or a mascot committed between the check and the write leaves the video untouched. It
+reads what the install can make after taking the write lock (`BEGIN IMMEDIATE`), so a key removed in
+Settings or a GPU probe result cannot commit between that check and the write. The result carries
+the new `visual_style` and `style`, so the agent writes the script for it in the same session.
 
 ### `add_comment`
 
@@ -547,14 +597,19 @@ one directory deep at most (`story.ts`, `sets/street.ts`), is written beside the
 its own video is refused, because that composed name already means the video's root module.
 
 The file is written beside its target and moved over it, so a failed write leaves the last good
-file. A video that is `RENDER_QUEUED` or `RENDERING` is refused with `status_mismatch`, because the
-renderer bundles the generated tree while it renders.
+file. The temporary file gets the mode a plain `open()` would give it (`0o666` less the umask), so
+the host user can read a scene the root-run MCP container wrote. A video that is `RENDER_QUEUED`
+or `RENDERING` is refused with `status_mismatch`, because the renderer bundles the generated tree
+while it renders.
 
 ### `read_scene_file`
 
 `read_scene_file(scene_name, video_id="", source="generated")` returns a scene's source.
 `scene_name` is the bare stem, or the composed `"<video_id>/<scene_name>"` that `list_scene_files`
-returns. `source="installed"` reads the installed library.
+returns. `source="installed"` reads the installed library. An installed name may also be a path
+inside an installed scene's folder, up to three parts (`beanExplainer/props/lifeProps`), which is
+how a Bean Explainer agent reads the library props it models its own on. The path must match
+`_INSTALLED_NESTED` and resolve inside the installed library.
 
 A Cartoon 3D module is named bare with its `video_id` (`sets/street.ts`) or composed as
 `list_scene_files` lists it (`<video_id>/sets/street.ts`). `delete_scene_file` uses the same parser
@@ -572,6 +627,23 @@ A Cartoon 3D module is named bare with its `video_id` (`sets/street.ts`) or comp
 only for a legacy flat scene. It is refused with `status_mismatch` while the video is queued or
 rendering. This tool does not look the video up, so a given `video_id` has its shape checked before
 any path is built, and the target must stay inside `generated/`.
+
+### `render_bean_props`
+
+`render_bean_props(video_id)` renders the props a Bean Explainer video's agent drew for it (the
+config's `customProps`, so `write_scene_config` comes first) and returns the picture after a JSON
+block. Each prop is drawn at rest and over four moments of its first act, with its declared box
+outlined in red, so ink outside the box shows a box too small for the layout checks
+([Bean Explainer](10-scene-authoring.md#bean-explainer)).
+
+- `mcp/bean_preview.py::render_preview` runs `renderer/remotion/bean-tools/render-props.mjs` on
+  software GL in this container. The script writes a bundle entry per call that imports only this
+  video's prop files, so another video's broken scene cannot fail it.
+- The render holds `_heavy_checks_lock`, the lock `validate_job`'s typecheck holds, so previews and
+  typechecks run one at a time; a call that waits longer than `HEAVY_CHECK_WAIT_SECS` returns an
+  error and renders nothing. The render's own timeout (`bean_preview.py::TIMEOUT_SECS`, 240 s) is
+  shorter than that wait, so a `validate_job` queued behind a preview gets its turn. A preview killed
+  on its timeout leaves its bundle folder in `bean-tools/.tmp/`, which the next preview removes.
 
 ### `list_scene_files`
 
@@ -614,6 +686,13 @@ It checks:
   cross nothing, a marker that can keep up, no still stretch over 3.5 seconds, a recap long enough
   for every region's number and at most 8 seconds). No other style may use `Whiteboard`. Its `subtitles` are filled from the style pack when
   the config has none. The rules are in [Whiteboard](10-scene-authoring.md#whiteboard).
+- A `bean_explainer` video holds the one installed `BeanExplainer` scene, and its sections and shots
+  pass `mcp/bean_explainer.py` (cuts and poses on word starts, the prop library, the video's own
+  props and their files, the other catalogues, a layout with no label over a prop or a bean, labels that do not repeat the narration,
+  no still stretch over 3 seconds). No other style may use `BeanExplainer`. The style pack's caption
+  settings fill every `subtitles` key the config leaves out. The rules are in
+  [Bean Explainer](10-scene-authoring.md#bean-explainer).
+- `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
 
 It records two things in the same transaction as the rename of the staged file into place:
 
@@ -642,7 +721,7 @@ because the array is large.
 ### `validate_job`
 
 `validate_job(video_id)` returns `{passed, errors, warnings}`, and `passed` depends only on
-`errors`. The agent calls it before `submit_render`. It runs eleven checks in order:
+`errors`. The agent calls it before `submit_render`. It runs twelve checks in order:
 
 1. `audio.mp3`, `timeline.json` and `scene-config.json` exist in `<jobs>/<video_id>/`. The location
    is derived from the id and is not read from the stored path columns. A column that is still empty
@@ -663,10 +742,13 @@ because the array is large.
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
    and the [beat gate](#cartoon_beat_gate) has passed for the source on disk. An open gate is one
    error naming the tool that closes it. A symlink anywhere in the source tree fails the check.
-9. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
+9. A Bean Explainer video's own props: each file its `customProps` names exists and still passes
+   the source rules `write_scene_config` applied, since the agent may have redrawn it since
+   (`server.py::_bean_custom_prop_errors`).
+10. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
    `write_scene_config` already checked the cues (see
    [the `mascot` key](10-scene-authoring.md#mascots)).
-10. A typecheck of this video's scenes passes: `npx tsc --noEmit -p` with a temporary config that
+11. A typecheck of this video's scenes passes: `npx tsc --noEmit -p` with a temporary config that
     extends `tsconfig.json` and includes the video's own `generated/<video_id>/` directory and any
     other generated file its config names. `tsc` follows their imports, so the installed components
     and kits they use are checked too. Other videos' scenes are not: the generated tree holds every
@@ -676,7 +758,7 @@ because the array is large.
     `npx` runs `tsc` as a child of its own, and the error asks the agent to call again. The first
     20 lines of a failure are reported. The check is skipped if `npx` is unavailable or the video
     has no generated scenes.
-11. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
+12. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
     It runs when the checks above found no errors, the `text_layout_audit_enabled` setting is on
     and the video is not Cartoon 3D (a painted canvas has no text rects to measure). Its findings
     go to `warnings`. For a mascot video it also

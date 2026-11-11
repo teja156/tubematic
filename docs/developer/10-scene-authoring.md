@@ -42,13 +42,15 @@ Both wrong forms fail the typecheck in `validate_job`, before a render. If a sce
 ## Visual styles
 
 Every video has a visual style, stored in `videos.visual_style`. A person picks it when approving the
-topic and it is frozen after that ([Frozen choices](02-pipeline.md#frozen-choices)). The code and the
+topic and it is frozen after that ([Frozen choices](02-pipeline.md#frozen-choices)). A person who
+leaves it on `auto` lets the agent pick one before the script is written
+([How Auto picks a style](#how-auto-picks-a-style)). The code and the
 skill also call a style a **register**.
 [Visual Styles and Mascots](../user-guide/13-visual-styles-and-mascots.md#the-styles) shows what each
 style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
-does not decide any beat's treatment. `cartoon_3d`, `system_flow` and `whiteboard` replace the
+does not decide any beat's treatment. `cartoon_3d`, `system_flow`, `bean_explainer` and `whiteboard` replace the
 scene system with one whole-video scene of their own.
 
 | `visual_style` | Canvas | Figures | Hand-drawn line art | Generated characters |
@@ -58,6 +60,7 @@ scene system with one whole-video scene of their own.
 | `stick` | `light` | Yes | Yes | No |
 | `illustrated` | The agent chooses | Yes | No | Yes |
 | `system_flow` | `dark` | No | No | No |
+| `bean_explainer` | `light`, painted over by its own colour field | Its own cast | No | No |
 | `whiteboard` | `light` | No | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
@@ -67,7 +70,8 @@ The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `ch
 into the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses), so the reviewer judges a video
 against the look it was meant to have. `cartoon_3d` replaces the scene system with one 3D world
 ([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)), and
-`whiteboard` with one board scene ([Whiteboard](#whiteboard)).
+`bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)), and `whiteboard`
+with one board scene ([Whiteboard](#whiteboard)).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
 chosen. Two styles have a need:
@@ -101,8 +105,14 @@ style.
 | `authoring_skill` | The skill that authors a video in this style; `get_video` returns it as `style.authoring_skill` |
 | `review` | Optional. The style's own block for the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses) |
 | `captions` | Optional. The `subtitles` settings `write_scene_config` fills in when a config has none |
-| `routing` | What the style suits and avoids, and the signals in a topic or script that point to it |
-| `extra` | Style-specific data, such as System Flow's icon list or Whiteboard's doodle list |
+| `routing` | What Auto reads to pick a style: `best_for`, `avoid_for`, `signals`, and the optional `moods` and `images` (below) |
+| `script` | Optional. How to write the narration and each segment's `visual` brief for this style; `get_video` returns it as `style.script` and the script-writing skill follows it |
+| `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's cast and prop catalogue or Whiteboard's doodle library |
+
+The `routing` block lists what the style suits (`best_for`), what it must not get (`avoid_for`) and
+the signals in a topic or script that point to it (`signals`). Two fields are optional: `moods`, the
+tones the style suits, and `images`, a whole number of generated images a video costs at most (0
+when absent). [How Auto picks a style](#how-auto-picks-a-style) reads all five.
 
 `tubematic_core/tests/test_style_packs.py` pins every gate's answer for each style, `auto`, a blank
 value and an unknown one. Adding a style is a new pack file, the style's renderer work and its
@@ -124,29 +134,67 @@ the canvas. A wrong `theme` typechecks and renders a figure that cannot be seen.
 
 A scene leaves its own background transparent where the canvas should show through.
 
-### What `auto` decides
+### How Auto picks a style
 
-Under `auto` the agent makes two video-wide choices and records each once. Every beat still gets its
-own treatment.
+A video on `auto` gets its style before its script, at `TOPIC_APPROVED`, because the script is
+written for the style: a walk through a system, a story, a list. The
+`tubematic-style-routing` skill makes the choice and `choose_visual_style` records it once.
 
-1. The renderer, before any scene exists: `update_video(resolved_renderer="dom" | "cartoon_3d")`. The
-   agent picks Cartoon 3D when a place and people moving through it carry the video. It picks `dom`
-   (the scene components) otherwise, and always when `cartoon_3d_available` is false or the video has
-   a mascot. If it wanted a world the install cannot render, it says so in its handback. A later
-   change would discard every scene.
-2. On the `dom` renderer, the canvas: `update_video(resolved_visual_style="dark" | "light")`. The
-   skill's rule is `dark` when images carry the video (about a third or more of the beats are PHOTO
-   or HYBRID) and `light` when roles, processes and diagrams carry it. A tie goes to `dark`.
+```mermaid
+flowchart TD
+    A["TOPIC_APPROVED<br/>visual_style = auto"] --> B["get_video:<br/>style_routing.candidates"]
+    B --> C["describe the topic<br/>on fixed axes"]
+    C --> D["rule out: unavailable,<br/>a plain avoid_for match"]
+    D --> E["score: best_for 3 or 1,<br/>each signal 1"]
+    E --> F{"a clear fit?<br/>3 points or more"}
+    F -->|yes| G["the highest; ties by<br/>specificity, a person's hint,<br/>mood, images, order"]
+    F -->|no| H["scenes:<br/>the mixed scene system"]
+    G --> I["choose_visual_style"]
+    H --> I
+    I --> J["script written for<br/>the picked style"]
+```
 
-`write_scene_config` records either value if the agent wrote a config without recording it. On a
-revision the agent reads the recorded values and does not choose again.
+The candidates are data: `tubematic_core/visual_styles.py::routing_candidates` lists every style
+pack in pack order, then `scenes`, each with its `routing` block and whether this install and this
+video can have it. A style that needs an OpenAI key or a working GPU the install lacks is
+unavailable, and so is a 3D-world style on a video with a mascot. The skill names no style, so a new
+pack with a `routing` block is a candidate the day it ships.
 
-If the video has character beats, the agent also chooses once between line-art figures and generated
-characters. Generated characters are for recurring characters the viewer must recognise, and only
-while `illustrated_available` is true.
+The outcome is recorded in three columns ([`videos`](03-database.md#videos)):
 
-`auto` says which vocabularies are available. The skill tells the agent to use the fewest that carry
-the video. A video that uses every vocabulary because it was allowed to is a defect.
+| `visual_style` | `style_pick` | Meaning |
+|---|---|---|
+| a pack id | `''` | A person chose the style |
+| a pack id | the same id | Auto picked it before the script |
+| `auto` | `scenes` | Auto kept the mixed scene system |
+| `auto` | `''` | Not decided. Before `TOPIC_APPROVED` it is routed when picked up; after it, the video takes the mixed scene system |
+
+A pack Auto picks is written into `visual_style` itself, so the gates, the AI review prompt and the
+authoring skill read it as if a person had chosen it. `style_runner_up` and `style_reason` are shown
+on the dashboard, where a person can switch to the runner-up at `SCRIPT_READY`
+([`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style)), which sends the
+video back to `TOPIC_APPROVED` for a new script. A video moved back to `TOPIC_PROPOSED` returns to
+`auto`, so its revised topic is routed again.
+
+`scenes` is the mixed scene system: every beat drawn from any vocabulary, on a canvas the agent
+chooses at `VOICE_READY`. Its renderer is always `dom`, recorded in `videos.resolved_renderer`. The
+agent chooses the canvas once, `update_video(resolved_visual_style="dark" | "light")`: `dark` when
+images carry the video (about a third or more of the beats are PHOTO or HYBRID) and `light` when
+roles, processes and diagrams carry it. A tie goes to `dark`. `write_scene_config` records it if the
+agent wrote a config without recording it. On a revision the agent reads the recorded values and does
+not choose again. An `auto` video whose `resolved_renderer` is `cartoon_3d` is a Cartoon 3D Short,
+authored by the Cartoon 3D skill.
+
+If a mixed-scenes video has character beats, the agent also chooses once between line-art figures
+and generated characters. Generated characters are for recurring characters the viewer must
+recognise, and only while `illustrated_available` is true.
+
+Mixed scenes say which vocabularies are available. The skill tells the agent to use the fewest that
+carry the video. A video that uses every vocabulary because it was allowed to is a defect.
+
+The topic set in `tubematic_core/tests/fixtures/style_routing_cases.json` and the hand-run
+`scripts/eval_style_routing.py` check the routing; see
+[Style routing](test-suites/style-routing.md).
 
 ### Generated characters
 
@@ -464,6 +512,97 @@ The limits make a full board readable: at the pull-back to a whole board of thre
 labels stay at 40 px or more. `mcp/tests/test_system_flow.py` pins `system_flow.py` to `contract.ts`.
 When the config has no `subtitles`, the pack's `captions` fill it. The text-layout audit samples
 each board as if it were a scene.
+
+## Bean Explainer
+
+A Bean Explainer video is one installed scene, `BeanExplainer`, that spans the whole video: a bald,
+big-headed character (the bean) with a thick outline reacts to the narration on a flat colour field,
+while props, labels and reaction marks build up beside it. The agent writes no code for it. Its props
+carry `beanExplainer: {field, title, list, cast, sections, shots}`, written with the
+`tubematic-bean-explainer` skill, whose `reference/contract.md` documents every field and the prop
+catalogue, and whose `reference/example-config.json` is the worked example.
+
+- A section has a header, a colour and a badge prop. With `list` on, a strip of badges slides to the
+  next section at each section change (the badge carousel).
+- A shot is a cut. Inside a shot every event stays on stage until the next cut (an additive build).
+- The cast is one house bean, the narrator, and at most one other. The agent picks each one's
+  accessory and tint; the drawing is fixed.
+
+| Event | What the scene draws |
+|---|---|
+| `pose` | The bean swaps to a pose and a face in two frames, then holds. `at` aims a reaching arm at a prop |
+| `prop` | A prop from the library, or one the agent drew, pops, drops, slides or rises in, with its text slot filled |
+| `act` | The prop's own animation (a phone buzzes, a clock rings), for two seconds |
+| `label` | A short handwritten note, ink or red |
+| `mark` | A reaction beside the bean's head (sweat, question mark, alarm), until its next pose |
+| `impact` | A short camera shake and zoom pulse |
+| `strike`, `arrow` | A red X over a prop, a red arrow between two things on stage |
+
+Most props come from a library of 42, drawn once in the bean's line and colours and checked by a
+person on a model sheet (the `BeanPropSheet` composition). The agent picks a prop by id and fills its
+text slot. For an object the viewer must recognise and the library lacks, the agent draws its own:
+a TSX component it writes with `write_scene_file` as `generated/<video_id>/prop-<name>.tsx`,
+modelled on the library props it reads with `read_scene_file`, and lists in the config's
+`customProps` with its box, text limit and acts. The scene imports these files and treats them like
+library props. The agent looks at them with [`render_bean_props`](06-mcp-server.md#render_bean_props)
+before it submits, and `validate_job` typechecks them. A custom prop is held to the library's line and
+palette by the skill and the preview; the checks below hold it to the library's render-cost rules.
+
+The renderer's side is `src/scenes/installed/BeanExplainer.tsx` with `beanExplainer/`:
+
+- `contract.ts` holds the limits, timings, geometry and catalogues, including `PROPS` (each prop's
+  box, text limit and acts).
+- `bean.tsx` is the rig: a two-bone arm and leg solver over a pose table, faces as lid, brow and mouth
+  swaps.
+- `sprite.tsx` draws each distinct look of the bean once, as a bitmap, and reuses it on every frame
+  that looks the same.
+- `stage.ts` works out what is on stage at a frame, and `props/` holds the library.
+- `kit.ts` answers "draw this prop" and "how big is it" for library and custom props alike, and
+  `fonts.tsx` loads the style's fonts apart from the scene, so the sheet and the preview do not bundle
+  every agent-written prop the scene imports.
+- `BeanPropPreview.tsx` is the picture `render_bean_props` returns.
+
+The bean is a bitmap because on the CPU renderer the live SVG bean cost about 0.3 CPU-seconds per
+frame whether or not it moved, and the bitmap about 0.07. Everything in the scene settles to a
+resting value (a spring reaches 1 and stays there, an act stops after two seconds), so a held frame does not
+repaint. The scene also follows System Flow's rules: no SVG filter, gradient, pattern or
+`stroke-dasharray`. The measured costs are in `BeanExplainer.tsx`'s header comment. A bitmap that
+cannot be drawn fails the render, so no frame goes out without the bean.
+
+`mcp/bean_explainer.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `bean_explainer` video has anything but the one `BeanExplainer` scene, from frame 0 for
+  `totalFrames`, or another style uses `BeanExplainer`.
+- A shot or section after the first does not start within 2 frames of a word, a shot lasts under 1.5
+  seconds or a section under 2, or a section does not start where a shot does.
+- A pose is not on a word, or comes less than 8 frames after the same bean's last pose, or names
+  `at` on a pose whose arm does not reach (only `point`, `present` and `lean` do).
+- `list` is on with fewer than two sections.
+- An event in a list video's section starts during the badge carousel, or within 6 frames of the
+  next cut.
+- A shot holds more than 6 props and labels, a label overlaps a prop, a bean or another label, a prop
+  overlaps a bean, two beans overlap, or anything leaves the stage. A bean is checked only where it
+  stands while the other thing is on stage, and a hop covers the ground between its two spots for
+  its 8 frames. Props may overlap each other. Each prop's box in `contract.ts` is every pixel its
+  drawing reaches, outline and act included, measured with `BeanPropSheet`'s measure mode.
+- A label runs past 2 lines of 22 characters or repeats 4 narration words in a row.
+- A field, pose, face, mark, accessory, tint, prop, act or text slot is not in the catalogue or the
+  video's `customProps`, or an act starts before its prop has landed.
+- A custom prop has more than 8 per video, an id a library prop has, a `src` that is not this video's
+  `prop-<name>` file, a box outside 60 to 700 px a side, a text slot over 40 characters or more than 4
+  acts. Its file is missing, has no default export, imports anything but `react`, `remotion` and the
+  library's `props/common`, `bean` and `contract` (in an `import` or an `export ... from`), calls
+  `require`, or uses an SVG filter, a gradient, a pattern, a
+  dashed stroke, an image, embedded HTML, a fetch, randomness or the clock
+  (`bean_explainer.py::FORBIDDEN_SOURCE`).
+- Nothing changes for more than 3 seconds.
+
+`mcp/tests/test_bean_explainer.py` pins `bean_explainer.py` to `contract.ts` and to the pack. The
+pack's `captions` fill every `subtitles` key the config leaves out. `validate_job` checks the custom
+prop files again as they are on disk (`server.py::_bean_custom_prop_errors`), because the agent
+redraws a prop after the config is written. The text-layout audit samples each shot
+as if it were a scene, from the end of the badge carousel when the shot opens a list section. A Bean Explainer video can have a mascot; the skill keeps it small and to one
+side.
 
 ---
 

@@ -39,6 +39,7 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `PATCH` | [`/videos/<video_id>`](#patch-videosvideo_id) | Change status and editable fields |
 | `POST` | [`/videos/<video_id>/agent-outcome`](#post-videosvideo_idagent-outcome) | Report a finished agent session |
 | `POST` | [`/videos/<video_id>/agent-retry`](#post-videosvideo_idagent-retry) | Release a stuck video |
+| `POST` | [`/videos/<video_id>/switch-style`](#post-videosvideo_idswitch-style) | Take Auto's runner-up style at `SCRIPT_READY` |
 | `POST` | [`/videos/<video_id>/comments`](#post-videosvideo_idcomments) | Add a comment |
 | `DELETE` | [`/videos/<video_id>`](#delete-videosvideo_id) | Delete files, archive the row |
 | `GET` | [`/retention/backlog`](#get-retentionbacklog) | Size of unpublished leftovers |
@@ -472,6 +473,37 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   a mascot. The `UPDATE` repeats both checks in its `WHERE` clause
   (`tubematic_core/mascots.py::holds_pickable_sql`, `cartoon_mascot_clash_sql`), so an archive or a
   style write that commits in between also gets `409`.
+- A `visual_style` different from the stored one clears the record of a style Auto picked
+  (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
+  scenes. The same value again keeps them. The mascot checks of the same request judge the video
+  by the renderer it will have after the write, so a changed style is not refused for a Cartoon 3D
+  renderer it clears. A `status` of `TOPIC_PROPOSED` without a `visual_style`
+  returns a style Auto picked to `auto` and clears the record, and on every `auto` video it clears
+  the recorded renderer and canvas. Both are SQL fragments in `tubematic_core/visual_styles.py` that `update_video` and
+  `set_video_status` also use.
+
+### `POST /videos/<video_id>/switch-style`
+
+Takes the runner-up of the style Auto picked ([How Auto picks a
+style](10-scene-authoring.md#how-auto-picks-a-style)). No body. The video must be at
+`SCRIPT_READY` and hold a `style_pick` and a `style_runner_up`. The new script is voiced when it is
+approved, so on a video that reached `SCRIPT_READY` through a revision after it was voiced, voicing
+is paid again.
+
+The route runs as one write transaction (`BEGIN IMMEDIATE`) from its first read to its write, so an
+approval, a second switch, a removed key or a GPU probe result waits for it. It clears
+`resolved_renderer` and `resolved_visual_style`, which belong to the scenes the new script replaces,
+and sets `visual_style` to the runner-up (`auto`
+for `scenes`), swaps `style_pick` and `style_runner_up`, sets `style_reason` to say a person
+switched it, and moves the video to `TOPIC_APPROVED`. It adds a `human` comment asking the agent to
+rewrite the script for the new style. The agent's next session writes a new script, which replaces
+the old one. A second switch goes back.
+
+| Status | When |
+|---|---|
+| `200` | The switch landed. The body is the video |
+| `404` | No such video |
+| `409` | The video is archived, not at `SCRIPT_READY`, has no Auto pick or no runner-up, the runner-up is not a style any more or this install cannot make it (with the reason), or the video changed while the request was in flight |
 
 ### `POST /videos/<video_id>/agent-outcome`
 

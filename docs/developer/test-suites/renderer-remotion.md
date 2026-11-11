@@ -2,7 +2,8 @@
 
 The suite covers the pure TypeScript helpers of the Remotion project's
 [Cartoon 3D kit](../09-remotion-project.md#the-cartoon-3d-kit) and of the
-[`SystemFlow`](../09-remotion-project.md#systemflow) and
+[`SystemFlow`](../09-remotion-project.md#systemflow),
+[`BeanExplainer`](../09-remotion-project.md#beanexplainer) and
 [`Whiteboard`](../09-remotion-project.md#whiteboard) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
@@ -19,6 +20,28 @@ does not run `npm test`, so run the suite yourself after you change either modul
 
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).
+
+## Bean Explainer
+
+### `src/scenes/installed/beanExplainer/beanExplainer.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the rig in `bean.tsx` and the prop library
+([Bean Explainer](../10-scene-authoring.md#bean-explainer)).
+
+- Labels wrap and prop, label and bean boxes are computed as in the shared cases
+  `mcp/tests/test_bean_explainer.py` runs.
+- Every prop the contract lists has a drawing and every pose a pose spec; every whole-prop act is
+  back at rest when its play time ends.
+- Inside a shot the stage only grows, and a cut empties it. The badge carousel plays at a list
+  section change and holds that section's content until it ends. A pose swaps in two frames. A
+  bean's marks clear at its next pose.
+- The arm never reaches past its length, nothing squashes after the snap, a settled spring is
+  1 with no remainder, and blinks are brief and rare.
+- The prop kit serves a video's own prop (drawing, box, acts) like a library prop, and a library prop
+  always wins over a custom prop of the same id.
+
+Trap: a remainder matters for render time. A spring that only approaches its rest repaints its
+layer on every frame, which on the CPU renderer cost more than drawing the bean.
 
 ## System Flow
 
@@ -100,3 +123,24 @@ answers into the [beat gate](../10-scene-authoring.md#cartoon-3d)'s verdict.
 Trap: the verdict needs two judges because two judges can disagree about the same frame. The `need`
 values are asserted word for word because `gate/beatGateCli.ts` prints them to tell the author which
 judge to run next.
+
+### `renderer/remotion/cartoon-tools/out-path.test.ts`
+
+Covers `renderer/remotion/cartoon-tools/out-path.mjs::outPathError` and `planRequest`, the checks the
+[stills server](../11-rendering-and-review.md#the-stills-server) runs on every file a request would
+write, before it bundles or opens a browser.
+
+- The paths the Cartoon 3D tools write (`<video_id>/cartoon/stills/…`, `<video_id>/cartoon/beatgate/…`)
+  pass, and an output directory under a video's `cartoon/` folder passes.
+- A path elsewhere in `/jobs`, outside it, relative, or escaping with `..` is refused, as is a file that
+  is not a PNG and a missing path.
+- A path through any symlink is refused, a dangling one and one pointing back inside included,
+  because a dangling link at the end of the path looks like a file not yet created. A folder not yet
+  created passes.
+- `planRequest` returns the exact frame and file pairs the server writes. Frames that are not a list
+  of non-negative integers are refused, because a string iterates character by character and would
+  skip the per-file check. A `/stills` prefix that climbs out of the folder is refused.
+
+Trap: the renderer mounts `/jobs` read-write so the server can write stills, and its port takes
+requests with no credential. This check is what keeps such a request from overwriting a video's
+scene-config, timeline or audio.

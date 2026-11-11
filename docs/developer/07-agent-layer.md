@@ -29,17 +29,19 @@ Two conventions hold across the layer:
 
 ## The skills
 
-Nine skills ship in `agent_files/skills/`.
+Ten skills ship in `agent_files/skills/`.
 
 | Skill | Runs when | What it does |
 |---|---|---|
 | `tubematic-operator` | Any pipeline session | Checks the setup, routes each workable video by status and stops at human checkpoints |
 | `tubematic-topic-research` | A scheduled research run | Proposes and scores topics for the three research modes |
+| `tubematic-style-routing` | `TOPIC_APPROVED` on a video left on `auto`, before the script | Picks the video's style from the style packs' routing data and records it with `choose_visual_style` ([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)) |
 | `tubematic-script-writing-skill` | `TOPIC_APPROVED`, or a script revision | The scripting contract: segments, length budget, pronunciation, pause markup and each beat's visual brief |
 | `tubematic-create-script-writing-skill` | A script profile is queued at `PENDING` | Extracts a creator's style from transcripts into profile markdown |
 | `tubematic-scene-config` | `VOICE_READY`, and the revision path | Turns a voiced script and its timeline into images, scene TSX and `scene-config.json` |
 | `tubematic-cartoon3d` | `VOICE_READY` for a Cartoon 3D video, and its revision path | Writes the shots, camera, sets and cast as TypeScript, passes the beat gate with the `cartoon_*` tools and adds a soundtrack ([Cartoon 3D](10-scene-authoring.md#cartoon-3d)) |
 | `tubematic-system-flow` | `VOICE_READY` for a System Flow video, and its revision path | Writes the video as one diagram scene's data (boards, components, connectors, events timed to the narration), then validates and submits it ([System Flow](10-scene-authoring.md#system-flow)) |
+| `tubematic-bean-explainer` | `VOICE_READY` for a Bean Explainer video, and its revision path | Writes the video as one cartoon-bean scene's data (sections, shots, the bean's poses and props from the fixed library, timed to the narration), then validates and submits it ([Bean Explainer](10-scene-authoring.md#bean-explainer)) |
 | `tubematic-whiteboard` | `VOICE_READY` for a Whiteboard video, and its revision path | Writes the video as one board scene's data (regions of handwriting, formulas, doodles and marks timed to the narration), then validates and submits it ([Whiteboard](10-scene-authoring.md#whiteboard)) |
 | `tubematic-mascot-builder` | A mascot waits to be built or changed (the poller names the skill and the mascot id) | Writes one mascot's p5.js drawing code, renders its three model sheets with `render_mascot_sheets` and submits it for human review with `submit_mascot` |
 | `tubematic-troubleshooting` | A person asks for it by name | Triages a broken install with that person, runs the diagnostics collector and drafts a redacted bug report |

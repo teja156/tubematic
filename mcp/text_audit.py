@@ -50,6 +50,7 @@ from tubematic_core import mascots as tmascots
 
 import system_flow  # board windows for the whole-video System Flow scene (TMDEV-196)
 import whiteboard  # region windows for the whole-video Whiteboard scene (TMDEV-197)
+import bean_explainer  # shot windows for the whole-video Bean Explainer scene (TMDEV-198)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
 
@@ -203,6 +204,21 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
                 last = b_end - 1 - tail
                 if first > last:
                     first = last = b_start + max(0, (b_end - b_start) // 2)
+                span = last - first
+                count = min(SAMPLES_PER_SCENE, span + 1)
+                step = max(1, span // max(1, count - 1))
+                passes.append({"scene": index, "first": first, "step": step,
+                               "count": min(count, span // step + 1)})
+            continue
+        # A Bean Explainer scene also spans the whole video; each shot is a cut,
+        # and is sampled like a scene once its pops have settled.
+        shots = bean_explainer.shot_windows(scene_config) if bean_explainer.is_bean_scene(scene) else []
+        if shots:
+            for s_start, s_end in shots:
+                first = min(s_start + ENTRANCE_ALLOWANCE_FRAMES, s_end - 1)
+                last = s_end - 1 - bean_explainer.TIMING["endMargin"]
+                if first > last:
+                    first = last = s_start + max(0, (s_end - s_start) // 2)
                 span = last - first
                 count = min(SAMPLES_PER_SCENE, span + 1)
                 step = max(1, span // max(1, count - 1))

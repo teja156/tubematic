@@ -23,12 +23,15 @@ conversation, then call `tubematic:set_video_status` yourself. Do not advance pa
 your own judgment.
 
   - `TOPIC_PROPOSED` → show the topic and producibility score, **and ask which visual style to
-    use** — `auto` (unrestricted: you pick the canvas and use whichever vocabularies the beats
-    actually require), `motion_graphics` (dark canvas, no figures at all), `stick` (white canvas,
+    use** — `auto` (after approval, before the script, you pick the style that fits the topic
+    with the tubematic-style-routing skill, as the operator skill does at `TOPIC_APPROVED`; when
+    no style clearly fits, it stays mixed scenes: you pick the canvas later and use whichever
+    vocabularies the beats actually require), `motion_graphics` (dark canvas, no figures at all), `stick` (white canvas,
     hand-drawn line figures), `illustrated` (generated character artwork, you choose the canvas
     and whether the art is playful or serious), `system_flow` (the whole video is one diagram per
-    subject, written as data), `whiteboard` (the whole video is one big board of handwriting and
-    doodles, written as data) or `cartoon_3d` (a 3D world; it needs a working GPU). There is no
+    subject, written as data), `bean_explainer` (a cartoon bean reacting among props, written as
+    data), `whiteboard` (the whole video is one big board of handwriting and doodles, written as
+    data) or `cartoon_3d` (a 3D world; it needs a working GPU). There is no
     dashboard here, so this chat is the only place that choice can be made, and it is frozen the
     moment the topic is approved. `get_pipeline_status()` returns every style as `visual_styles`,
     each with `available` and `unavailable_reason`: offer an unavailable one only by saying it is

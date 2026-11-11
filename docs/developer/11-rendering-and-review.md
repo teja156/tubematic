@@ -362,8 +362,14 @@ child process. A remote renderer has no `/jobs` volume and runs none.
   server again.
 - It starts with the GL options a render gets (`_gl_options`), so a GPU test that passes moves it
   onto the GPU and one that fails moves it back.
-- It serves the `/jobs` volume (mounted read-only) as its public directory, so a video's files are
+- It serves the `/jobs` volume as its public directory, so a video's files are
   `/public/<video_id>/…` with nothing copied.
+- It writes each still to the path the request names, so the renderer mounts `/jobs` read-write.
+  Its port takes requests with no credential, so `cartoon-tools/out-path.mjs::planRequest` checks
+  every file a request would write before it bundles or opens a browser, and the server answers 400
+  to a path outside `/jobs/<video_id>/cartoon/`, a path through any symlink, or frames that are not
+  non-negative integers. It checks again once the request's turn comes, since renders are
+  serialised, and then writes only the files that were checked.
 - It listens on `TUBEMATIC_STILLS_PORT` (4455) on the Compose network only. The MCP container
   reaches it as `TUBEMATIC_STILLS_SERVER`, and renders its stills locally when it does not answer.
 - It renders one still at a time and shares the GPU with renders.
@@ -405,8 +411,9 @@ smaller box's area, five samples per scene, a 45-frame allowance at a scene's st
 counts as settled, the 150/170/60/60 safe zone, and a 180-second timeout.
 
 A System Flow video's one scene changes its diagram at every board, so the audit samples each board
-as if it were a scene, with the same allowance at each board's start. A Whiteboard video's one scene
-is sampled the same way, per region and once more for the closing pull-back.
+as if it were a scene, with the same allowance at each board's start. A Bean Explainer video's one
+scene is sampled the same way, shot by shot, and a Whiteboard video's region by region and once
+more for the closing pull-back.
 
 A Cartoon 3D video skips the audit. Its one scene is a painted canvas with no text rectangles, and
 the composition draws its captions. Its checks are the typecheck and the beat gate in

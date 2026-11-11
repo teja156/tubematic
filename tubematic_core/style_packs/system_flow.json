@@ -24,6 +24,7 @@
     "fontSize": 64,
     "maxWords": 3
   },
+  "script": "Every beat's `visual` is a **component** brief: which components are on screen, what travels between them, and the one value worth showing (a port, a latency, `200 OK`). The video is a diagram throughout, so a role (\"the user\", \"an attacker\") is a component with an icon, never a figure.\n\nThe narration is the diagram's script. Write it as a walk through a system: name each component the moment it matters, one step per sentence, in the order things travel, and say the reply's path back when there is one. Keep each subject to about nine components; when the subject changes (from the request to the defence, say), start a new sentence, because the diagram cuts to a new board there. Name the values a viewer should see (an address, a status code, a port), since each becomes a label on the connector. Never write a beat that needs a person, a place or a photograph: this style has none.",
   "routing": {
     "best_for": [
       "networking and protocols",
@@ -44,7 +45,13 @@
       "latency, throughput or a bottleneck is the point",
       "the topic is an architecture or a protocol"
     ],
-    "images_per_video": "0"
+    "moods": [
+      "precise",
+      "calm",
+      "technical"
+    ],
+    "images_per_video": "0",
+    "images": 0
   },
   "extra": {
     "icons": [

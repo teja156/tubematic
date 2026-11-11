@@ -264,6 +264,27 @@ Trap: a default inherited from the domain is kept and not rewritten when no Open
 The approving `PATCH` refuses it, before any spend. An unknown canvas must produce no contract,
 because a wrong contract tells the reviewer to accept defects.
 
+
+### `test_style_pick.py`
+
+Covers `POST /videos/<id>/switch-style` and the `PATCH` rules for a style Auto picked
+([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
+
+- The switch moves the video to `TOPIC_APPROVED` with the runner-up as its style, swaps the pick and
+  the runner-up, and adds a human comment. A second switch goes back, and a switch to `scenes`
+  leaves `auto`.
+- It is refused away from `SCRIPT_READY`, with no pick or no runner-up, for a runner-up that is no
+  longer a style or that the install cannot make, and for an archived or unknown video.
+- While the switch checks what the install can make, another writer is locked out, so nothing it
+  checked can change before its write. The switch clears the renderer and canvas of the old scenes.
+- A changed `visual_style` clears the pick and the recorded renderer and canvas, and the same value
+  keeps them. An approval that changes the style and sets a mascot is not refused for the old
+  Cartoon 3D renderer. A move back to
+  `TOPIC_PROPOSED` returns a pick to `auto`, a person's style survives it, and an approval keeps it.
+- Both processes use the shared SQL fragments from `tubematic_core/visual_styles.py`.
+
+Trap: the dashboard re-sends the style picker's value on every approval, so a rule that cleared the
+pick on any `visual_style` write would erase every Auto pick at its first approval.
 ### `test_voice_models.py`
 
 Covers per-voice ElevenLabs models over HTTP.

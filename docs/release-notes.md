@@ -11,9 +11,10 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds two visual styles. System Flow turns a video into a diagram that builds itself while the
-narrator explains a system. Whiteboard works an idea out on one big board, written and drawn as the
-narrator speaks.
+2.2.0 adds three visual styles: System Flow, which turns a video into a diagram that builds itself
+while the narrator explains a system; Bean Explainer, a cartoon character that reacts to the
+narration among everyday props; and Whiteboard, which works an idea out on one big board, written
+and drawn as the narrator speaks. Auto now picks a video's style before its script is written.
 
 ### Upgrade notes
 
@@ -23,14 +24,27 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs new skills for System Flow and Whiteboard, and a session started before it does not have
-   them.
+   installs new skills for System Flow, Bean Explainer, Whiteboard and Auto's style choice, and a
+   session started before it does not have them.
+
+A video on Auto whose script was already written when you upgraded keeps working the way Auto did
+before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
+that is approved but not yet scripted gets a style picked before its script, like every video
+approved after the upgrade.
+
+If you upgrade from 2.1.0 or 2.1.1, `upgrade.py` can stop and list generated scenes it cannot read.
+Those versions saved every new scene so that only the root user could read it. Make them readable,
+then run `upgrade.py` again:
+
+```bash
+sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {} +
+```
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow or Whiteboard cannot render on 2.1.x. Finish it, or switch it to
-  another style while it waits at its topic, before you go back.
-- A domain whose default style is System Flow or Whiteboard starts its new videos on Auto under
+- A video set to System Flow, Bean Explainer or Whiteboard cannot render on 2.1.x. Finish it, or
+  switch it to another style while it waits at its topic, before you go back.
+- A domain whose default style is System Flow, Bean Explainer or Whiteboard starts its new videos on Auto under
   2.1.x.
 
 ### Added
@@ -40,7 +54,17 @@ If you go back to 2.1.x later:
   the narration describes each step, with values such as an address or a status code shown beside
   them. It suits networking, protocols, system design, data pipelines and security flows. It needs no
   image generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's
-  default; Auto does not choose it. See
+  default, or leave the topic on Auto. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Bean Explainer visual style (experimental). A bald, big-headed cartoon character with a thick
+  outline stands on one bright colour field and reacts to the narration pose by pose, while props
+  from a library of everyday objects (a phone, a browser bar, coins, a clock, a pill, a lock and about
+  35 more, and any the agent draws for the video in the same style), short handwritten labels,
+  reaction marks and red crosses build up beside it. In a
+  list video each item gets a header and a coloured badge, and a strip of badges slides between
+  items. It suits habits, health, money, behaviour and "every X explained" lists, and needs no image
+  generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's default;
+  Auto can pick it for a topic that fits. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - The Whiteboard visual style. The video is one big white board: the camera rests on one part of it
   at a time, a floating marker writes and draws each step a moment after the narrator says it, in
@@ -50,8 +74,37 @@ If you go back to 2.1.x later:
   object the video needs. It suits step-by-step reasoning,
   formulas and money arithmetic built up line by line, and a chain of causes that ends in one
   picture. It needs no image generation and no GPU. Choose it for a topic, on the **New Video**
-  page, or as a domain's default; Auto does not choose it. See
+  page, or as a domain's default; Auto can pick it for a topic that fits. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
+- A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and
+  the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
+  agent writes a new script for it, which is voiced when you approve it. See
+  [What Auto does](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does).
+
+### Changed
+
+- Auto picks the style when the agent picks up an approved topic, before it writes the script, and
+  can pick any style this install can make: Motion Graphics, Stick Explainer, Illustrated, System
+  Flow, Bean Explainer, Whiteboard, Cartoon 3D and every style added later. The script is then written for that style. Before,
+  Auto decided after the voice was made, could only choose between a dark canvas, a white canvas and
+  Cartoon 3D, and never chose a named style. When no style clearly fits, Auto keeps that mixed
+  approach. A video's card and window show the picked style after the word Auto.
+- A topic sent back for revision returns to Auto if Auto had picked its style, so the agent picks
+  again for the revised topic.
+
+### Fixed
+
+- A video that Auto had made Cartoon 3D, sent back to its topic and then given another style, still
+  rendered as Cartoon 3D, or failed when no GPU was working.
+- Scenes the agent wrote were saved so that only the root user could read them, and `upgrade.py`
+  then refused to upgrade. Its message now says why and prints the command that fixes them.
+- Cartoon 3D videos stopped before their render: every preview frame failed with
+  `EROFS: read-only file system`, the agent could not pass the beat gate, and the video was
+  flagged stuck. If you edited `docker-compose.yml` by hand to work around it, you do not need the
+  edit any more. A release-tarball upgrade replaces the file. On a source install, run
+  `git checkout -- docker-compose.yml` before you check out the new version, or Git refuses the
+  checkout.
 
 ---
 

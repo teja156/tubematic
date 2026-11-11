@@ -348,6 +348,9 @@ Covers a Cartoon 3D video's TypeScript modules through `write_scene_file`, `read
 - `submit_render` holds the per-video source lock from the readiness check to the queue and
   records the source fingerprint. A write that was waiting on the lock is then refused.
 - A write that fails leaves the last good file and no temporary file.
+- A new and an overwritten file both get `0o666` less the umask. The temporary file is `0600`,
+  and the MCP container runs as root, so without this the host user cannot read the scene and
+  `upgrade.py` refuses.
 - A name reads and deletes as `list_scene_files` lists it.
 
 Trap: the module name parser reads its two arguments and does not look at the directories on
@@ -364,6 +367,9 @@ Covers `read_scene_file`.
 - What `write_scene_file` wrote is what the read returns, so a scene can be copied from one video
   to another.
 - The read is not blocked by a scene-work claim and takes none.
+- A path inside an installed scene's folder (`beanExplainer/props/lifeProps`, with or without
+  `.ts`/`.tsx`) reads as a reference. A path that climbs out, starts at the root, runs past three
+  parts or looks like a video's composed name is refused.
 
 ### `test_write_scene_config.py`
 
@@ -437,6 +443,75 @@ Trap: write-once on `resolved_visual_style` is the only thing that keeps a revis
 canvas the video already uses, since no code on the revision path reads the field. A domain
 default of `illustrated` or `cartoon_3d` is checked only when it changes: re-sending a stored
 default after the key or the GPU is gone must pass, or every later edit of that domain would fail.
+
+### `test_bean_explainer.py`
+
+Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean Explainer config, the
+`subtitles.emphasis` check, and the text audit's per-shot sampling
+([Bean Explainer](../10-scene-authoring.md#bean-explainer)).
+
+- The limits, timings, geometry, event types and cast ids equal the ones in the renderer's
+  `contract.ts`, read from the TypeScript source. The style pack's catalogues (poses, faces, looks,
+  marks, accessories, tints, entrances, fields, section colours, and every prop with its text limit
+  and acts) equal the renderer's, and every prop has one drawing and no drawing lacks a prop. Both sides answer the
+  shared cases in `fixtures/bean_explainer_contract.json` (label wrapping, prop, label and bean
+  boxes).
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its shot or event and cause: an unknown field, accessory, pose, prop or act, two
+  beans with one tint, a header too long, a badge that is not a prop, a section with no shot at its
+  start, a cut or a pose off the words, a missing first `x`, a text slot over its limit, a scale out
+  of range, an act before its prop lands, a label that repeats the narration, a label over a prop or
+  the bean, a prop over the bean or off the stage, an event during the carousel or too close to a
+  cut, a strike on nothing, too many elements, poses too close together, and a still stretch over
+  3 seconds. Props may overlap each other, which the gags in the example rely on.
+- A prop the agent drew (the skill's `example-prop-rocket.tsx`) passes, serves as a badge, and is
+  placed by its declared box. A bad `customProps` entry (a library id, another video's file, a box out
+  of range, a text slot too long, a bad act name) is refused, and so is a prop file that is missing,
+  uses a filter, a gradient or randomness, imports another package or has no default export.
+- `validate_job`'s re-check finds a prop file redrawn with a gradient, or deleted, after the config was
+  written. A value of the wrong type (a list where an id belongs, scene props that are not an object)
+  gets a sentence back and raises nothing. `.filter(Boolean)` is ordinary code while an SVG filter is
+  refused, a variable named `filter` is not, every import form is checked (a bare `import`,
+  `export ... from`), and `require` is refused in any form, `require("")` included. A config
+  that sets only `subtitles.emphasis` keeps the style's caption look.
+- `write_scene_config` reads the prop files a config names. `render_bean_props` refuses another
+  style, a video with no config and a config with no `customProps`; it returns the picture (the
+  renderer stubbed) and gives way to a heavy check that holds the lock.
+- `write_scene_config` writes a sound config with the style's captions, keeps an `emphasis` it was
+  given, refuses a bad one before writing anything, refuses `BeanExplainer` on another style and
+  other scenes on a Bean Explainer video. `emphasis` beyond the narration's last word, on more than
+  one word in 5, repeated, or not a list of numbers is refused, on any style.
+
+### `test_choose_visual_style.py`
+
+Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back
+([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
+
+- A pack pick becomes the video's `visual_style`, so `get_video`'s `style` names its authoring skill
+  and script guidance. `scenes` keeps `auto` and still counts as decided.
+- The choice is made once, only at `TOPIC_APPROVED`, never over a style a person chose, and never
+  for an archived video. A bad style, runner-up or reason is refused.
+- An unavailable style or runner-up is refused with the reason, and a mascot rules out a 3D world.
+- A status, style, pick or archive change between the row read and the `UPDATE` leaves the video
+  untouched, and so does a mascot landing before a 3D pick. While the tool reads what the install
+  can make, another writer is locked out.
+- `style_routing` lists every candidate and the video's domain.
+- A pick clears the renderer and canvas recorded for earlier scenes, including a `cartoon_3d`
+  renderer on a video with a mascot, and so does a return to the topic of an `auto` video or an Auto
+  pick, or a person changing the style. A style a person chose keeps its canvas through a return to
+  the topic.
+- A video Auto routed to mixed scenes cannot record the `cartoon_3d` renderer or take a Cartoon 3D
+  scene through `write_scene_config`, while a video from before Auto picked styles still can.
+- `visual_style` and a `resolved_*` field are refused in one call, and a style change with a mascot
+  is not refused for the Cartoon 3D renderer the same write clears.
+- A move back to `TOPIC_PROPOSED`, guarded or not, returns an Auto pick to `auto`. A person's style
+  survives it, and other moves keep the pick. A changed `visual_style` clears the pick and the same
+  value keeps it.
+
+Trap: the race and lock tests are mutation-checked. Each clause of the `UPDATE`'s `WHERE` is there
+because a check made on an earlier read can be out of date by the write, and the write lock is what
+keeps a removed key or a failed GPU from landing between the availability check and the write.
 
 ### `test_system_flow.py`
 

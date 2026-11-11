@@ -49,7 +49,8 @@ def test_surrounding_whitespace_is_ignored():
 def test_the_list_starts_with_auto_and_holds_every_pack():
     assert tvs.VISUAL_STYLES[0] == "auto"
     assert set(tvs.VISUAL_STYLES[1:]) == {p.stem for p in tvs.PACKS_DIR.glob("*.json")}
-    assert {"motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow", "whiteboard"} <= set(tvs.VISUAL_STYLES)
+    assert {"motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow",
+            "bean_explainer", "whiteboard"} <= set(tvs.VISUAL_STYLES)
 
 
 def test_effective_canvas():
@@ -93,6 +94,19 @@ def test_whiteboard():
     # TMDEV-203 routes on these; each must name what sets it apart.
     avoid = " ".join(p["routing"]["avoid_for"])
     assert "System Flow" in avoid and "Stick" in avoid and "Motion Graphics" in avoid
+def test_bean_explainer():
+    p = tvs.pack("bean_explainer")
+    assert p["renderer"] == "dom" and p["canvas"] == "light"
+    assert p["authoring_skill"] == "tubematic-bean-explainer"
+    assert p["experimental"] is True
+    # its bean is a figure, but neither line art nor a generated character
+    assert tvs.figures_allowed("bean_explainer") is True
+    assert tvs.line_art_allowed("bean_explainer") is False
+    assert tvs.characters_allowed("bean_explainer") is False
+    assert not any(p["needs"].values())
+    assert "review" in p and "captions" in p
+    assert len(p["extra"]["props"]) >= 40
+    assert tvs.effective_canvas("bean_explainer", "dark") == "light"
 
 
 def test_the_public_list_says_why_a_style_is_unavailable():
@@ -135,6 +149,7 @@ def _valid(**over):
     ({"needs": {"openai_key": True, "gpu": False}}, "messages.openai_key"),
     ({"routing": {"best_for": [], "avoid_for": []}}, "routing.signals"),
     ({"review": ""}, "review"),
+    ({"script": "  "}, "script"),
 ])
 def test_a_malformed_pack_is_refused(over, fragment):
     with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
@@ -149,3 +164,30 @@ def test_auto_cannot_be_a_pack():
 def test_every_shipped_pack_passes():
     for path in tvs.PACKS_DIR.glob("*.json"):
         tvs._check_pack(path, json.loads(path.read_text()))
+
+
+@pytest.mark.parametrize("routing_over, fragment", [
+    ({"images": -1}, "routing.images"),
+    ({"images": True}, "routing.images"),
+    ({"images": "3"}, "routing.images"),
+    ({"moods": ["calm", ""]}, "routing.moods"),
+    ({"images_per_video": 3}, "routing.images_per_video"),
+])
+def test_the_optional_routing_fields_are_checked_when_present(routing_over, fragment):
+    data = _valid()
+    data["routing"] = {**data["routing"], **routing_over}
+    with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
+        tvs._check_pack(pathlib.Path("stick.json"), data)
+
+
+def test_a_pack_written_before_the_optional_fields_still_loads():
+    data = _valid()
+    data["routing"] = {k: data["routing"][k] for k in ("best_for", "avoid_for", "signals")}
+    data.pop("script", None)
+    tvs._check_pack(pathlib.Path("stick.json"), data)
+
+
+def test_the_agent_view_carries_the_style_script_guidance():
+    assert "component" in tvs.agent_view("system_flow")["script"]
+    assert tvs.agent_view("stick")["script"] == ""
+    assert tvs.agent_view("auto")["script"] == ""

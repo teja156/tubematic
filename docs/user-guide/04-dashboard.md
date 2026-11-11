@@ -227,6 +227,7 @@ on the row.
 | Topic Proposed | **Approve Topic** | The agent writes the script next |
 | Topic Proposed | **Reject Topic** | The topic leaves the pipeline |
 | Script Ready | **Approve Script** | The agent voices the script. ElevenLabs charges from here |
+| Script Ready, when Auto picked the style | **Switch to …** | The video takes the style Auto ranked second, and the agent rewrites the script for it. See [What Auto does](13-visual-styles-and-mascots.md#what-auto-does) |
 | Video Ready | **Approve Video** | The video moves to Video Approved. Nothing is posted |
 | Any of the three above | **Request Revision** | Opens a dialog for your comment. The agent reworks the topic, script or video |
 | Video Approved | **Publish…** | Opens the publish dialog. See [Publishing](06-publishing.md#publishing-a-video) |
