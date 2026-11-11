@@ -42,7 +42,7 @@ LIMITS = {
     "recapMinSeconds": 2,
     "recapMaxSeconds": 8,
 }
-TIMING = {"lag": 12, "glide": 42, "snap": 2, "read": 15, "gap": 2, "openLead": 6, "recapPull": 30,
+TIMING = {"lag": 12, "glide": 42, "snap": 2, "read": 15, "gap": 2, "openLead": 15, "recapPull": 30,
           "recapNumberStep": 6}
 SPEED = {"text": 1.875, "big": 4, "formula": 2.5, "label": 1.875, "doodle": 30, "arrow": 14, "mark": 12}
 FLOOR = {"text": 0.9, "formula": 1.0, "minText": 8, "doodle": 18, "arrow": 8, "mark": 8}

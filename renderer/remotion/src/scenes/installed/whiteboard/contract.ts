@@ -71,7 +71,7 @@ export const TIMING = {
   gap: 2,
   /** The board's first item, when it is at frame 0, starts this many frames
    *  early, so the first frame already shows it part drawn (no blank board). */
-  openLead: 6,
+  openLead: 15,
   /** The recap's pull-back to the whole board. */
   recapPull: 30,
   /** Frames between the numbers that pop onto the regions in the recap. */

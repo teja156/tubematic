@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 import pytest
 
 import picture_checks as pc
+import whiteboard
 import server
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -207,7 +208,7 @@ def test_a_whiteboard_doodle_counts_when_the_marker_starts_it():
     config = _example("whiteboard")
     regions = _props(config)["regions"]
     frames = pc.change_frames("whiteboard", config)
-    assert -6 in frames  # the opening doodle is already being drawn at frame 0
+    assert -whiteboard.TIMING["openLead"] in frames  # the opening doodle is already being drawn at frame 0
     doodle = next(it for r in regions[1:] for it in r["items"] if it["kind"] == "doodle")
     assert doodle["at"] + 12 in frames  # its word is not the change; the marker starting it is
 
