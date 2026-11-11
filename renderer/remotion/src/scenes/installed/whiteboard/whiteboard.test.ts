@@ -8,7 +8,7 @@ import { BOARD, FLOOR, LAYOUTS, doodleShare, itemFloor, itemNatural, textWidth, 
 import { arrowEnds, fitProblem, placeItem, regionOrigin, type Pt } from "./layout";
 import { schedule } from "./schedule";
 import { DOODLES, DOODLE_NAMES, LIBRARY_DEFS, expandDoodle, type DoodleDef } from "./doodles";
-import { W, cameraAt, mapView, toScreen } from "./camera";
+import { W, cameraAt, mapView, onScreen, toScreen } from "./camera";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
 const CASES = JSON.parse(fs.readFileSync(path.join(ROOT, "mcp/tests/fixtures/whiteboard_contract.json"), "utf8"));
@@ -173,6 +173,14 @@ describe("camera", () => {
     const [ox] = regionOrigin(0);
     const [left] = toScreen(cam, ox + 60 + BOARD.pad, 0);
     expect(left).toBeGreaterThanOrEqual(60);
+  });
+
+  it("counts writing of a region the camera has left as off screen, and the resting region's as on screen", () => {
+    const cam = cameraAt(data, data.regions[1].startFrame + 60);
+    const [ax, ay] = regionOrigin(0);
+    const [bx, by] = regionOrigin(1);
+    expect(onScreen(cam, ax + 70, ay + 100, 900, 80)).toBe(false);
+    expect(onScreen(cam, bx + 70, by + 100, 900, 80)).toBe(true);
   });
 
   it("keeps moving through the recap, so the ending is never a still frame", () => {

@@ -27,7 +27,7 @@ import {
 import { DOODLES, expandDoodle, type P as DoodlePt } from "./whiteboard/doodles";
 import { arrowEnds, placeRegion, regionOrigin, type Placement, type TextLine } from "./whiteboard/layout";
 import { schedule, type Scheduled } from "./whiteboard/schedule";
-import { H, W, cameraAt, svgTransform, toScreen, type Cam } from "./whiteboard/camera";
+import { H, W, cameraAt, onScreen, svgTransform, toScreen, type Cam } from "./whiteboard/camera";
 import { inkPoint, inkStroke, type Ink, type Pt } from "./whiteboard/ink";
 
 const HAND = "Kalam, 'Comic Sans MS', cursive";
@@ -433,7 +433,7 @@ export default function Whiteboard({ whiteboard }: { whiteboard?: WhiteboardData
         if (!d.lines.length) return null;
         const rev = lineReveal(d, progress(d, frame).pt);
         return d.lines.map((l, k) => {
-          if (rev[k] <= 0) return null;
+          if (rev[k] <= 0 || !onScreen(cam, l.x, l.y, l.width, lh(l.size))) return null;
           const [sx, sy] = toScreen(cam, l.x, l.y);
           return (
             <div

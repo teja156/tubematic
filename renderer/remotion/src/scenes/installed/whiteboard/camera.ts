@@ -91,3 +91,12 @@ export const svgTransform = (c: Cam) =>
   `translate(${(W / 2).toFixed(2)} ${c.sy.toFixed(2)}) scale(${c.z.toFixed(5)}) translate(${(-c.x).toFixed(2)} ${(-c.y).toFixed(2)})`;
 
 export const toScreen = (c: Cam, x: number, y: number): [number, number] => [(x - c.x) * c.z + W / 2, (y - c.y) * c.z + c.sy];
+
+/** Whether any part of a board rectangle is in the frame. Text that is not is
+ *  left out of the page: the text-layout audit measures every text element on
+ *  the page, and writing from a region the camera has left would otherwise be
+ *  reported as off-screen text on every sampled frame. */
+export function onScreen(c: Cam, x: number, y: number, w: number, h: number): boolean {
+  const [x0, y0] = toScreen(c, x, y);
+  return x0 < W && y0 < H && x0 + w * c.z > 0 && y0 + h * c.z > 0;
+}

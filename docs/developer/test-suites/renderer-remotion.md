@@ -56,6 +56,8 @@ Covers `contract.ts`, `layout.ts`, `schedule.ts`, `camera.ts` and `doodles.ts`
 - Every slot lies inside its region, and no two slots of a layout overlap.
 - A resting region's centre sits in the writing band with the next region out of frame, and a
   full-width line stays inside the side safe zone at the end of a region's creep.
+- Writing in a region the camera has left counts as off screen, and the resting region's as on
+  screen.
 - For every region count, the recap's whole-board view, circled numbers included, fits inside the
   safe zone and above the captions, and the camera is still moving late in the recap.
 - A labelled doodle squeezed anywhere between its floor and its natural time keeps the doodle's

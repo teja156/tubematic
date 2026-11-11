@@ -524,7 +524,8 @@ All ink is drawn on one canvas per frame with the camera as the canvas transform
 paths, the hand-drawn polylines made the scene cost about 1.7 times a System Flow render in software
 GL, and a straight line of the same length cost almost nothing, so the cost is the path geometry.
 On a canvas the scene costs 1.1 times System Flow. Text stays HTML, in screen coordinates at the
-camera's scale, so the text-layout audit can measure it.
+camera's scale, so the text-layout audit can measure it. Text wholly outside the frame (a region the
+camera has left) is left out of the page, or the audit would report it as off-screen text.
 
 `mcp/whiteboard.py` checks a config in `write_scene_config` and refuses it when:
 
