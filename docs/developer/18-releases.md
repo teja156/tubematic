@@ -598,9 +598,8 @@ errs towards refusing. It recognises a generic arrow function's type parameters 
 
 Two more cases refuse, because the check cannot tell whether the file imports the component:
 
-- a generated scene the upgrade cannot read. 2.1.0 and 2.1.1 wrote new scenes as root with mode
-  0600, so the refusal prints the `sudo find … -perm 600 -exec chmod 664 {} +` command that makes
-  them readable,
+- a generated scene the upgrade cannot read. The refusal prints the
+  `sudo find … -perm 600 -exec chmod 664 {} +` command that makes root-owned `0600` scenes readable,
 - a module path with an escape that cannot be decoded (an octal escape, or a malformed `\x` or
   `\u`), which TypeScript also rejects.
 

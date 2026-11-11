@@ -583,8 +583,9 @@ its own video is refused, because that composed name already means the video's r
 
 The file is written beside its target and moved over it, so a failed write leaves the last good
 file. The temporary file gets the mode a plain `open()` would give it (`0o666` less the umask), so
-the host user can read a scene the root-run MCP container wrote. A video that is `RENDER_QUEUED` or `RENDERING` is refused with `status_mismatch`, because the
-renderer bundles the generated tree while it renders.
+the host user can read a scene the root-run MCP container wrote. A video that is `RENDER_QUEUED`
+or `RENDERING` is refused with `status_mismatch`, because the renderer bundles the generated tree
+while it renders.
 
 ### `read_scene_file`
 

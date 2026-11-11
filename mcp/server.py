@@ -6197,8 +6197,12 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
             fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".", suffix=".tmp")
             # mkstemp makes the file 0600 and this container runs as root, so the
             # host user (upgrade.py's scene check) could not read it: give it the
-            # mode a plain open() would (TMDEV-204)
-            os.fchmod(fd, _new_file_mode())
+            # mode a plain open() would (TMDEV-204). A filesystem that refuses
+            # chmod keeps the write going with whatever mode it gives.
+            try:
+                os.fchmod(fd, _new_file_mode())
+            except OSError:
+                pass
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 fh.write(tsx_content)
                 fh.flush()

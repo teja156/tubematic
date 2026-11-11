@@ -50,6 +50,7 @@ Flags:
 import json
 import posixpath
 import re
+import shlex
 import shutil
 import sqlite3
 import sys
@@ -771,7 +772,7 @@ def _check_removed_giffx(data_root: Path, rep, *, configs: bool = True) -> bool:
         rep.warn("These generated scenes cannot be read by this user, so they cannot be "
                  "checked for the removed GifFX component. Tubematic 2.1.0 and 2.1.1 wrote "
                  "new scenes as root with mode 0600; make them readable with "
-                 f"`sudo find {generated} -type f -perm 600 -exec chmod 664 {{}} +` (or delete "
+                 f"`sudo find {shlex.quote(str(generated))} -type f -perm 600 -exec chmod 664 {{}} +` (or delete "
                  "them), then re-run this upgrade: "
                  + ", ".join(str(p) for p in unreadable))
     if undecodable:
