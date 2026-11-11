@@ -50,8 +50,10 @@
     "broken-expectation"
    ],
    "ok": [
-    "myth-break-model"
-   ]
+    "myth-break-model",
+    "paradox-mechanism-reframe"
+   ],
+   "note": "Both fit: the bin reports the space free (a tool's report that looks wrong) and the file survives (a thing the viewer owns behaving impossibly)."
   },
   {
    "title": "The upload said it worked and the page did not change",
@@ -128,8 +130,10 @@
     "why-dont-they-just"
    ],
    "ok": [
-    "follow-the-flow"
-   ]
+    "follow-the-flow",
+    "paradox-mechanism-reframe"
+   ],
+   "note": "A site that checks a password it cannot read is also a paradox the viewer has met."
   },
   {
    "title": "Why the calendar needs a leap day",
@@ -332,15 +336,16 @@
    "experimental": true
   },
   {
-   "title": "Five signs an email is phishing",
-   "brief": "Common marks of a phishing email: a sender address whose domain is close to, but not, the real one; a link whose visible text and real destination differ; pressure to act within hours; a request for a password, a code or a payment that the real organisation would never ask for by email; and an attachment the recipient did not expect. Any one can appear in a real message, and several together are the signal.",
+   "title": "Three checks before you click a link in an email",
+   "brief": "Phishing was the most reported kind of complaint in the FBI Internet Crime Complaint Center's 2023 report, with nearly 300,000 reports, and one click on the wrong link can hand over an account. Three checks catch most of it: hover over the link to see where it really goes, because the visible text and the destination can differ; read the sender's domain letter by letter, because look-alike domains swap one character; and treat a deadline of a few hours as a warning sign, because real organisations rarely demand action that fast. The last one sounds wrong to most people, because urgency feels like proof the message matters.",
    "expect": [
     "stake-first-list"
    ],
    "ok": [
     "myth-break-model"
    ],
-   "experimental": true
+   "experimental": true,
+   "note": "A three-item list with a stake. A list of five or more that must all be covered does not fit this formula."
   },
   {
    "title": "Researchers read passwords from the sound of typing",

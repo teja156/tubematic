@@ -14,7 +14,7 @@
   ],
   "avoid_for": [
     "items that form a sequence: that is a flow",
-    "more than four items",
+    "a list whose every item must be covered when there are more than four: the formula keeps the three or four strongest",
     "a list with no stake: nothing makes the viewer need it"
   ],
   "signals": [
