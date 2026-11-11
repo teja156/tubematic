@@ -324,6 +324,15 @@ def test_an_illustrated_topic_with_no_openai_key_is_not_approved(env):
     assert len(notes) == 1 and "OpenAI" in notes[0]
 
 
+def test_an_under_the_hood_topic_with_no_openai_key_is_named_by_its_own_style(env):
+    _auto_pilot(env, {"auto": []})
+    _video(env, "v", "TOPIC_PROPOSED", visual_style="under_the_hood")
+    worker._sweep_auto_pilot()
+    assert _row(env, "v")["status"] == "TOPIC_PROPOSED"
+    (note,) = _comments(env, "v")
+    assert "Under the Hood" in note and "illustrated" not in note.lower()
+
+
 def test_a_blocked_topic_is_approved_once_the_cause_is_fixed(env):
     _auto_pilot(env, {"auto": []})
     _video(env, "v", "TOPIC_PROPOSED", visual_style="illustrated")

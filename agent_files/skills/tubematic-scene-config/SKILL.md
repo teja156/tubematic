@@ -215,8 +215,9 @@ Five styles are different in kind: they do not restrict the scene system, they *
 `bean_explainer` is one cartoon-bean scene whose sections, shots, poses and props are written as
 data; `whiteboard` is one board scene whose regions of writing and doodles are written as data;
 `storybook_atlas` is one picture-book scene whose chapters, people and props are written as
-data, and `terminal_doc` is one typographic scene whose beats and moves are written as data.
-None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
+data, `terminal_doc` is one typographic scene whose beats and moves are written as data, and
+`under_the_hood` is one scene of close-up photographs with labels, arcs and counters pinned to them,
+written as data. None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
 when it is not `tubematic-scene-config`, stop here and invoke that skill.
 
 Read `visual_style` from `get_video`:
@@ -232,10 +233,11 @@ Read `visual_style` from `get_video`:
 | `whiteboard` | Light | Nothing here: the whole video is the one `Whiteboard` board scene, written as data by the tubematic-whiteboard skill. |
 | `storybook_atlas` | Its own paper | Nothing here: the whole video is the one `StorybookAtlas` scene, written as data by the tubematic-storybook-atlas skill. |
 | `terminal_doc` | Dark | Nothing here: the whole video is the one `TerminalDoc` scene, written as data by the tubematic-terminal-doc skill. |
+| `under_the_hood` | Dark | Nothing here: the whole video is the one `UnderTheHood` scene, written as data by the tubematic-under-the-hood skill. |
 | `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery. This is the **mixed scene system**: the style-routing skill picked it before the script because no single style fit. |
 
 The three named scene styles are restrictions; `cartoon_3d`, `system_flow`, `bean_explainer`,
-`whiteboard`, `storybook_atlas` and `terminal_doc` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
+`whiteboard`, `storybook_atlas`, `terminal_doc` and `under_the_hood` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
 than the mixed scene system (a style it picked is the video's `visual_style` by now), or when the
 video was scripted before Auto picked styles. It is the absence of a restriction: **you pick the
 register.**

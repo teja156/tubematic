@@ -18,6 +18,8 @@ interface Pack {
   experimental: boolean;
   canvas: "dark" | "light" | null;
   needs: { openai_key: boolean; gpu: boolean };
+  renderer: string;
+  mascot?: boolean;
 }
 
 const packs: Pack[] = fs
@@ -27,6 +29,10 @@ const packs: Pack[] = fs
   .sort((a, b) => a.order - b.order);
 
 export const PACK_STYLES: VisualStyleInfo[] = [
-  { id: "auto", label: "Auto", experimental: false, canvas: null, needs: { openai_key: false, gpu: false } },
-  ...packs.map((p) => ({ id: p.id, label: p.label, experimental: p.experimental, canvas: p.canvas, needs: p.needs })),
+  { id: "auto", label: "Auto", experimental: false, canvas: null, needs: { openai_key: false, gpu: false }, mascot: true },
+  ...packs.map((p) => ({
+    id: p.id, label: p.label, experimental: p.experimental, canvas: p.canvas, needs: p.needs,
+    // as visual_styles.py::public_list serves it
+    mascot: p.renderer !== "cartoon_3d" && p.mascot !== false,
+  })),
 ];

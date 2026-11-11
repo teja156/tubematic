@@ -50,7 +50,8 @@ def test_the_list_starts_with_auto_and_holds_every_pack():
     assert tvs.VISUAL_STYLES[0] == "auto"
     assert set(tvs.VISUAL_STYLES[1:]) == {p.stem for p in tvs.PACKS_DIR.glob("*.json")}
     assert {"motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow",
-            "bean_explainer", "whiteboard", "storybook_atlas", "terminal_doc"} <= set(tvs.VISUAL_STYLES)
+            "bean_explainer", "whiteboard", "storybook_atlas", "terminal_doc",
+            "under_the_hood"} <= set(tvs.VISUAL_STYLES)
 
 
 def test_effective_canvas():
@@ -141,10 +142,44 @@ def test_terminal_doc():
     assert tvs.effective_canvas("terminal_doc", "light") == "dark"
 
 
+def test_under_the_hood():
+    p = tvs.pack("under_the_hood")
+    assert p["renderer"] == "dom" and p["canvas"] == "dark"
+    assert p["authoring_skill"] == "tubematic-under-the-hood"
+    assert p["experimental"] is True
+    # its presenter is a figure drawn by the scene, never a generated character
+    assert tvs.figures_allowed("under_the_hood") is True
+    assert tvs.line_art_allowed("under_the_hood") is False
+    assert tvs.characters_allowed("under_the_hood") is False
+    # built on generated photographs: refused without an OpenAI key, like Illustrated
+    assert tvs.needs_openai_key("under_the_hood") is True and tvs.needs_gpu("under_the_hood") is False
+    assert "OpenAI" in tvs.openai_key_error("under_the_hood")
+    assert p["routing"]["images"] == 12
+    assert p["captions"]["look"] == "selection"
+    assert tvs.effective_canvas("under_the_hood", "light") == "dark"
+    # its own presenter stands where a mascot would: no mascot, like Cartoon 3D
+    assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
+    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood"}
+    rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
+    assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
+    assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
+
+
+def test_a_pack_that_takes_no_mascot_must_say_why():
+    data = json.loads((tvs.PACKS_DIR / "stick.json").read_text())
+    data["mascot"] = False
+    with pytest.raises(tvs.PackError, match="messages.mascot"):
+        tvs._check_pack(pathlib.Path("stick.json"), data)
+    data["mascot"] = "no"
+    with pytest.raises(tvs.PackError, match="mascot, when present"):
+        tvs._check_pack(pathlib.Path("stick.json"), data)
+
+
 def test_the_public_list_says_why_a_style_is_unavailable():
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=False, gpu_status="unknown")}
     assert list(rows)[0] == "auto" and rows["auto"]["available"]
     assert rows["illustrated"]["unavailable_reason"] == "needs an OpenAI key"
+    assert rows["under_the_hood"]["unavailable_reason"] == "needs an OpenAI key"
     assert rows["cartoon_3d"]["unavailable_reason"] == "GPU not tested yet"
     assert rows["system_flow"]["available"] and rows["whiteboard"]["available"]
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="not_usable")}
