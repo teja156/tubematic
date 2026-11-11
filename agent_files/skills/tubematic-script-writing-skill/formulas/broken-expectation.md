@@ -45,6 +45,7 @@ The callback to the title's phrase, or the general rule the case stands for. A o
 - Naming the mechanism in the first sentence
 - A symptom the viewer cannot picture or reproduce
 - Three or more mechanisms: one failure, one cause
+- A callback that opens 'And that's why' or 'So that's how': it reads as a recap. State the title's phrase as a plain sentence
 
 ## Template
 

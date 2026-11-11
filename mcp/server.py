@@ -2330,7 +2330,7 @@ def _script_record_error(formula_id, hooks) -> str | None:
                     "is the first sentence or two, not the script")
         if "kept" in hook and not isinstance(hook["kept"], bool):
             return f"hooks[{i}].kept must be true or false"
-        note = hook.get("note", "")
+        note = hook.get("note") or ""       # null is how an agent writes "no note"
         if not isinstance(note, str) or len(note) > HOOK_NOTE_MAX_LEN:
             return f"hooks[{i}].note must be a string of at most {HOOK_NOTE_MAX_LEN} characters"
     types = [h["type"] for h in hooks]
@@ -2346,7 +2346,7 @@ def _stored_hooks(hooks: list) -> list:
     """Openings in the shape hook_alternatives stores: spoken text only, so the
     dashboard shows no markup, and every key present."""
     return [{"type": h["type"], "text": _strip_non_spoken(h["text"]),
-             "kept": bool(h.get("kept")), "note": " ".join(h.get("note", "").split())}
+             "kept": bool(h.get("kept")), "note": " ".join((h.get("note") or "").split())}
             for h in hooks]
 
 
@@ -2684,7 +2684,13 @@ def update_video(
     record_sets, warnings = [], None
     if script_segments is not None or script is not None:
         spoken = script if script_segments is not None else _strip_non_spoken(script or "")
-        if formula_id is not None or (script or "") != (vrow["script"] or ""):
+
+        def words_of(text):
+            # Spoken words only: a stored flat script keeps its markup and its
+            # line breaks, and neither is a change of words.
+            return " ".join(_strip_non_spoken(text or "").split())
+
+        if formula_id is not None or words_of(script) != words_of(vrow["script"]):
             if formula_id is not None:
                 record_formula, record_hooks = formula_id, _stored_hooks(hooks)
             else:

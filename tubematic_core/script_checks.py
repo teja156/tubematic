@@ -37,19 +37,29 @@ CLOSING_WORDS = 3
 
 _A = r"(?:'|’)"  # an apostrophe, straight or curly
 
+# Where an ask can begin: the start of the sentence, after a comma or a
+# joining word, or after "don't forget to" and its kin. "Clients subscribe to
+# the topic" and "two servers share this with every client" use the same
+# words in the middle of a statement and are not asks.
+_LEAD = (rf"(?:^|[,;:]\s+|\b(?:and|so|then|please|now)\s+"
+         rf"|\b(?:don{_A}?t forget to|make sure (?:to|you)|be sure to|remember to)\s+)")
+# "Follow this packet" and "subscribe to the topic" are instructions about the
+# subject. "Follow the channel" is the ask.
+_FOLLOW = (r"follow\b(?! (?:the|this|that|a|an|it|its|each|every|one|your|these|those|them"
+           r"|him|her)\b(?! (?:channel|page|account)))")
+_SUBSCRIBE = r"subscribe\b(?! to (?:the|a|an|this|that|each|every)\b(?! (?:channel|page)))"
 _CLOSING_ASK = re.compile(
     r"\bfollow\b[^.?!]{0,40}\bfor more\b"
-    r"|\bfollow (?:me|us|along|this|the (?:channel|page|account))\b"
-    r"|\bsubscribe\b"
+    rf"|{_LEAD}(?:(?:hit|tap|smash) |drop (?:a|us a) |give (?:this|us|me) a )?(?:{_FOLLOW}|{_SUBSCRIBE})"
     r"|\blike and (?:subscribe|share|follow|comment)\b"
     r"|\b(?:share|comment) and (?:subscribe|like|follow)\b"
-    r"|\b(?:smash|hit) (?:the|that) (?:like|bell|follow|subscribe)\b"
+    r"|\b(?:smash|hit|tap) (?:the|that) (?:like|bell|follow|subscribe)\b"
     r"|\bthanks for watching\b"
     r"|\bsee you (?:next|in the next|soon)\b"
     r"|\bstay tuned\b"
-    r"|\b(?:share|send) this (?:with|to)\b"
-    r"|\b(?:comment below|in the comments|let (?:me|us) know"
-    r"|tell (?:me|us) (?:in|below|what you|your))\b",
+    rf"|{_LEAD}(?:share|send) this (?:with|to)\b"
+    r"|\b(?:comment below|in the comments)\b"
+    rf"|{_LEAD}(?:let (?:me|us) know|tell (?:me|us) (?:in|below|what you|your))\b",
     re.I)
 _RECAP = re.compile(
     r"\b(?:next time|so remember|the (?:lesson|takeaway|moral)"
@@ -60,9 +70,10 @@ _RECAP = re.compile(
 _GREETING = re.compile(
     r"\b(?:welcome (?:back )?to|(?:hey|hi|hello) (?:guys|everyone|there|folks|and welcome)"
     rf"|what{_A}?s up|in (?:this|today{_A}?s) (?:video|short|episode)"
-    rf"|today,? (?:we{_A}?re|we are|i{_A}?m|i am|we will|we{_A}?ll|i will|i{_A}?ll|let{_A}?s) "
-    r"(?:going to |gonna )?(?:look|talk|dive|explor|cover|break|learn|discuss|explain|walk|go)"
-    r"|let me (?:show|tell) you)",
+    r"|let me (?:show|tell) you)\b"
+    rf"|\btoday,? (?:we{_A}?re|we are|i{_A}?m|i am|we will|we{_A}?ll|i will|i{_A}?ll|let{_A}?s) "
+    r"(?:going to |gonna )?(?:look|talk|div(?:e|ing)|explor(?:e|ing)|cover|break|learn|discuss"
+    r"|explain|walk|show)",
     re.I)
 _RUNUP = re.compile(
     rf"\bhere{_A}?s the (?:\w+ )?(?:thing|catch|trick|part|kicker|twist|problem|deal|truth)\b"
@@ -78,9 +89,11 @@ _WORD = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)*")
 # dots is rescanned from every dot.
 _SENTENCE_END = re.compile(r"(?<![.!?])[.!?]+[\"'”’)\]]*\s+(?=[^a-z\s])")
 # A full stop after one of these is part of the word, not the end of a
-# sentence: a title or a short form before a name, or a single initial.
-_ABBREVIATION = re.compile(r"(?:\b(?:dr|mr|mrs|ms|st|vs|prof|gen|col|lt|sgt|jr|sr|inc|ltd)"
-                           r"|\b[a-z])\.$", re.I)
+# sentence: a title or a short form that comes before a name. Single letters
+# and dotted runs are left alone: "written in C." and "at 3 a.m." end
+# sentences as often as "U.S." does not.
+_ABBREVIATION = re.compile(r"\b(?:dr|mr|mrs|prof|st|vs|jr|sr|lt|sgt)\.$", re.I)
+_ABBREVIATION_REACH = 6  # the longest short form above, with its stop
 _STOPWORDS = frozenset(
     "a an the and or but of to in on at for with from by as is are was were be been it its this "
     "that these those how why what when where who which do does did your you".split())
@@ -96,7 +109,9 @@ def sentences(text: str) -> list[str]:
     text = " ".join((text or "").split())
     out, start = [], 0
     for match in _SENTENCE_END.finditer(text):
-        if _ABBREVIATION.search(text[start:match.end()].rstrip()):
+        # Only the word before the stop is read, so a long text stays linear.
+        stop = match.start() + 1
+        if _ABBREVIATION.search(text[max(start, stop - _ABBREVIATION_REACH):stop]):
             continue
         out.append(text[start:match.end()].strip())
         start = match.end()

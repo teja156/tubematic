@@ -82,7 +82,8 @@
   "pitfalls": [
     "Naming the mechanism in the first sentence",
     "A symptom the viewer cannot picture or reproduce",
-    "Three or more mechanisms: one failure, one cause"
+    "Three or more mechanisms: one failure, one cause",
+    "A callback that opens 'And that's why' or 'So that's how': it reads as a recap. State the title's phrase as a plain sentence"
   ],
   "template": "You [did one small thing]. And [tool] [reports something that looks wrong]. So you blame [the obvious suspect]. But [the second suspect] does it too. [Tool] is not broken. It [answers a different question]. [Fact with a number]. [Fact]. [Fact]. The real cause: [one sentence]. That is why [the title's phrase]. [One-line fix]."
 }

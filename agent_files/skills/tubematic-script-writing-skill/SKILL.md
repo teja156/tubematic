@@ -37,8 +37,9 @@ needs its script written.
 (Step 4, rule 10). If `user_preferences` asks for a closing line (a follow ask, a sign-off, a
 question to the viewer), add exactly one sentence after the payoff that does what the preference
 asks, tied to this video's subject, in the voice of the profile or the generic style. Word it
-differently from video to video unless the preference gives the exact words. `update_video` will
-still return a `closing_ask` warning for it; that is expected, and the line stays.
+differently from video to video unless the preference gives the exact words. `update_video` may
+return a warning about that sentence (`closing_ask`, or `closing_repeat` or `recap_ending` when
+its wording trips them); that is expected, and the line stays.
 
 **A length preference** moves the script inside its formula's band, or decides between two
 formulas that both fit. It never passes the ceiling (Step 3).
@@ -611,9 +612,9 @@ before these existed), in which case write both from the script now; blanks are 
    words, never a refusal; the script is already stored. Decide for each whether it names a real
    problem in this script. If any does, fix those and call `update_video` once more with the whole
    script, `formula_id` and `hooks`. **At most one extra write.** Never loop on warnings, and never
-   bend a sound script to silence one: a `closing_ask` on a closing line the preferences asked for
-   stays, a `no_turn` on a script whose turn simply uses none of the listed words stays, and a
-   `recap_ending` on a closing sentence `style.script` asks for stays.
+   bend a sound script to silence one: any warning raised by the closing line the preferences
+   asked for stays, a `no_turn` on a script whose turn simply uses none of the listed words stays,
+   and a `recap_ending` on a closing sentence `style.script` asks for stays.
 3. If `update_video` rejects `formula_id` or `hooks` as arguments it does not know, the tool
    server is older than this skill: send the same call without those two.
 4. In `respell` or `ipa` mode only, and only if there are one or more new lexicon entries:

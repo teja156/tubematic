@@ -175,8 +175,8 @@ script on its first false positive. The agent reads the list, fixes what is a re
 writes the script again at most once. The AI review does not run these checks, because a review
 finding sends a video to revision and a paid re-voice.
 
-A script whose closing line was asked for in the preferences still gets `closing_ask`. The server
-cannot tell that the line was asked for.
+A script whose closing line was asked for in the preferences can still get `closing_ask`. The
+server cannot tell that the line was asked for.
 
 Every pattern and threshold is a constant in `script_checks.py`. The checks are regular expressions
 and counts, so they catch a script that fell back to a stock shape and do not judge whether a script

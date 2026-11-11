@@ -135,12 +135,14 @@ Covers `tubematic_core/script_checks.py`
   ending, a greeting opener, a first sentence that repeats the title, a staged run-up, no turn in
   the middle, a length outside the band or past the ceiling, a kept opening that is not the
   script's opening, a closing shared with the domain's recent scripts.
-- Each check stays quiet on text that only uses its words: "follow" as an ordinary verb, an ask in
-  the middle of the script, a callback that explains the title.
+- Each check stays quiet on text that only uses its words: "follow" and "subscribe" as ordinary
+  verbs about the subject, an ask in the middle of the script, a callback that explains the title.
 - The band allows `BAND_SLACK` and no more. A script with no formula, or with a formula this version
   does not know, is not measured against a band.
 - An ellipsis inside a sentence does not end it, a closing quote stays with its sentence, and a
-  title or an initial (`Dr.`, `U.S.`) does not end one. A long run of dots is read in linear time.
+  title before a name (`Dr.`, `St.`) does not end one. A sentence that ends on a short word ("in
+  C.", "at 3 a.m.") still ends. A long run of dots and a long run of short sentences are read in
+  linear time.
 - A closing line the preferences asked for is not a repeat: the sentence before it is compared.
 
 Trap: the quiet half matters as much as the firing half. The list is shown to a person and handed to

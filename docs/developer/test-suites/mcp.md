@@ -185,7 +185,8 @@ Covers what `update_video` records with a script: `formula_id`, `hooks` and the 
 - A flagged script is still written, and the stored warnings equal the returned ones. A script with
   no record is accepted and gets `no_formula`.
 - A pronunciation fix that resends the script with no record keeps it, checks nothing and returns
-  no warnings, on a script with a record and on one without. A rewrite that sends none clears it.
+  no warnings, on a script with a record, on one without, and on a stored flat script that holds
+  markup and line breaks. A rewrite that sends none clears it.
   A rewrite with a new record replaces it.
 - A fault inside the checks does not stop the write.
 - The closing sentence is compared with the 30 newest other scripts of the same domain, and with

@@ -133,7 +133,8 @@ def test_the_length_starts_from_the_lower_half_of_the_band():
 def test_a_closing_line_comes_only_from_the_preferences():
     part = _section("## Step 1", "## Step 2")
     assert "only when the preferences ask for one" in part
-    assert "`closing_ask`" in part
+    for warning in ("`closing_ask`", "`closing_repeat`", "`recap_ending`"):
+        assert warning in part, warning
 
 
 def test_the_ceiling_in_the_skill_is_the_one_the_checks_use():

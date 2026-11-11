@@ -244,8 +244,8 @@ in your script profile's voice.
 | Scene Story | One person inside one moment: a near miss, a strange true incident, an ordinary life in a big event |
 | Escalating Ladder | Something with a natural measure: size, cost, speed, time to break, risk, depth |
 
-Each formula has its own length, so scripts are not all the same length. No script is longer than
-three minutes.
+Each formula has its own length, so scripts are not all the same length. The agent writes every
+script to fit inside three minutes.
 
 A script ends on its payoff, with no closing line after it. To have scripts end with a line of
 your own, such as asking viewers to follow, say so in

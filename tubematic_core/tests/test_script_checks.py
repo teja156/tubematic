@@ -284,10 +284,71 @@ def test_a_long_run_of_dots_is_read_in_linear_time():
     assert time.monotonic() - started < 1.0
 
 
-def test_a_title_or_an_initial_does_not_end_a_sentence():
-    assert sc.sentences("Dr. Brown joined the U.S. Navy. Then he left.") == [
-        "Dr. Brown joined the U.S. Navy.", "Then he left."]
-    assert sc.sentences("He said no. Then he left.") == ["He said no.", "Then he left."]
+def test_a_title_before_a_name_does_not_end_a_sentence():
+    assert sc.sentences("Dr. Brown met Mr. Lee at St. Mary's. Then he left.") == [
+        "Dr. Brown met Mr. Lee at St. Mary's.", "Then he left."]
+
+
+@pytest.mark.parametrize("text", [
+    "He said no. Then he left.",
+    "It was written in C. Rust fixes that.",
+    "The pager fired at 3 a.m. Nobody saw it coming.",
+    "It took 40 ms. Nobody noticed.",
+    "They chose plan B. It worked.",
+])
+def test_a_sentence_that_ends_on_a_short_word_still_ends(text):
+    assert len(sc.sentences(text)) == 2
+
+
+def test_many_short_sentences_are_split_in_linear_time():
+    import time
+    started = time.monotonic()
+    assert len(sc.sentences("Ask Dr. Lee. " * 4000)) == 4000
+    assert time.monotonic() - started < 1.0
+
+
+@pytest.mark.parametrize("ending", [
+    "Follow so you never miss one.",
+    "Follow to see part two.",
+    "Hit follow.",
+    "Don't forget to follow.",
+    "Make sure to follow.",
+    "Drop a follow.",
+    "And subscribe, it helps.",
+    "Follow the channel for the next one.",
+])
+def test_the_usual_follow_lines_are_closing_asks(ending):
+    assert "closing_ask" in ids(swap_end(ending))
+
+
+@pytest.mark.parametrize("ending", [
+    "Clients subscribe to the topic.",
+    "Follow this packet across the ocean.",
+    "Subscribe to the topic and the broker does the rest.",
+    "Two servers share this with every client.",
+    "The attacker would send this to every address.",
+    "Both of them let us know when the link drops.",
+])
+def test_the_same_words_about_the_subject_are_not_closing_asks(ending):
+    assert "closing_ask" not in ids(swap_end(ending))
+
+
+@pytest.mark.parametrize("opening", [
+    "Today we're diving into TLS.",
+    "Today I'll show you how DNS works.",
+    "Today we are exploring the kernel.",
+])
+def test_agenda_openers_found_in_review_are_flagged(opening):
+    assert "greeting_opener" in ids(f"{opening} {CLEAN}", kept_hook="")
+
+
+@pytest.mark.parametrize("opening", [
+    "In this shortcut, the kernel skips the check.",
+    "Welcome tomorrow's engineers with a broken build.",
+    "Today, let's go to 1988.",
+])
+def test_openers_that_only_start_like_a_greeting_are_not(opening):
+    assert "greeting_opener" not in ids(f"{opening} {CLEAN}", kept_hook="")
 
 
 @pytest.mark.parametrize("ending", [

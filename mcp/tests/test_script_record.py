@@ -281,6 +281,30 @@ def test_a_pronunciation_fix_on_a_script_with_no_record_raises_nothing(video):
     assert server.get_video(video)["script_warnings"] == []
 
 
+def test_a_pronunciation_fix_on_a_stored_flat_script_raises_nothing(video):
+    # A flat script is stored with its markup and its line breaks. Resent as
+    # segments with a tag added, its spoken words are the same.
+    with server._conn() as con:
+        con.execute("UPDATE videos SET script = ? WHERE id = ?",
+                    ('Daemon rode out at dawn.\nNobody followed. <break time="0.5s" /> '
+                     "Follow for more.", video))
+    fixed = [{"id": "s1", "visual": "",
+              "voice": '<respell as="Daymon">Daemon</respell> rode out at dawn. Nobody followed. '
+                       "Follow for more."}]
+    result = write(video, script_segments=fixed)
+    assert "error" not in result and "warnings" not in result
+    flat = server.update_video(video, script='<respell as="Daymon">Daemon</respell> rode out at '
+                               "dawn. Nobody followed. Follow for more.", **PUBLISH)
+    assert "error" not in flat and "warnings" not in flat
+    assert _row()["script_warnings"] == ""
+
+
+def test_a_null_note_is_no_note(video):
+    result = write(video, formula_id=FORMULA, hooks=hooks(h0={"note": None}))
+    assert "error" not in result
+    assert server.get_video(video)["hook_alternatives"][0]["note"] == ""
+
+
 def test_a_fault_in_the_checks_does_not_stop_the_write(video, monkeypatch):
     def boom(*a, **kw):
         raise RuntimeError("a check broke")
