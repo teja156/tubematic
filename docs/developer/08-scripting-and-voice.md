@@ -22,6 +22,8 @@ A script is an ordered list of segments:
 - `voice` is spoken aloud. No other field is.
 - `beat` is optional. It names the beat of the script's [formula](#formulas) the segment belongs
   to, and the dashboard shows it beside the segment.
+- `voice_id` is optional. It names a roster voice that speaks this segment in place of the video's
+  voice (see [A voice per segment](#a-voice-per-segment)).
 - `visual` is a brief for the scene author. Its kind depends on the video's
   [visual style](10-scene-authoring.md#visual-styles): under `stick`, a beat about a generic
   role gets a pose brief ("scientist at a console, shocked, red alert pops in"), and otherwise a
@@ -45,6 +47,8 @@ publish title and description, which the agent writes while it has the whole scr
 - no standalone punctuation word (`the catch ...`)
 - well-formed `<respell>` and `<ipa>` tags
 - a `beat`, when present, that is a non-empty string of at most `SEGMENT_BEAT_MAX_LEN` characters
+- a `voice_id`, when present, that names a voice in the roster
+  (`tubematic_core/voice_models.py::segment_voice_error`)
 
 Segments follow the beats of the script's formula, in order. Each segment is one visual idea, so a
 long beat splits into several segments and two short beats that share a picture can share one.
@@ -101,8 +105,8 @@ file only. To change a formula, edit its JSON file and run the script.
 `scripts/tests/test_script_writing_skill.py` fails while the generated text differs from the data.
 
 To add a formula, add its file and run the script. `update_video` then accepts the id and
-`GET /script-formulas` lists it. A formula that needs a second voice cannot ship, because a video
-has one voice.
+`GET /script-formulas` lists it. The skill chooses a formula that needs a second voice only when the
+roster holds a voice besides the video's (see [A voice per segment](#a-voice-per-segment)).
 
 ### What outranks a formula
 
@@ -225,17 +229,56 @@ the audio against it (see [AI Review](21-ai-review.md#what-it-is-given)).
 A legacy flat script is a video with a `script` and no `script_segments`. Its voicing path strips
 bracketed text and break tags itself, and writes no `segments` to the timeline.
 
+A voice with a `speed` other than 1.0 sends it as `voice_settings.speed`. A voice at 1.0 sends no
+speed, so its request is the one sent before speeds existed. See [Speed](#speed).
+
+### A voice per segment
+
+A segment may name its own roster voice in `voice_id`. Every other segment is spoken by the video's
+voice. `mcp/server.py::_plan_voice_runs` groups consecutive segments with the same voice into runs
+(`voice_models.py::segment_runs`), and `generate_voice` makes one request per run, in play order. A
+script with one voice is one run, voiced with the same request as before.
+
+Before the first request, every run is checked: its voice is still in the roster, its markup suits
+its voice's model, and its speed suits that model. A script with more than one run also needs
+`ffmpeg` on the MCP container's `PATH`. Any failure returns an error and spends nothing.
+
+Each request carries `previous_text` and `next_text`, up to 200 characters of the neighbouring runs'
+spoken words, so the intonation carries across the change of voice. `eleven_v3` answers these fields
+with a 400 (`voice_models.py::CONTEXT_REFUSED_MODELS`), so a run on that model goes without them.
+
+`_join_voice_audio` decodes each run to WAV, measures its length from the WAV's frame count, joins
+the WAVs and encodes one mp3. Each run's words are offset by the decoded length of the runs before
+it. The alignment's last time is not used for the offset, because on `eleven_v4` it can end about
+0.08 s after the audio does.
+
+A voice change costs no extra credits, because credits are charged per character. It costs one more
+request per run. When a later run fails, the credits of the runs already voiced are recorded, the
+video stays at `VOICING`, and a retry voices every run again. Each run's ledger row carries its
+voice in `raw_usage`, so the video window's Voice model row reports the video voice's model
+(`tubematic_core/usage.py::last_voice_model`).
+
+`videos.tts_text` holds every run's text joined with a space. The AI review is told the names of the
+voices when there are two or more (see [AI Review](21-ai-review.md#the-prompts-guard-clauses)).
+
+The `voice_id` of a segment always names a voice other than the video's. A `voice_id` equal to the
+video's voice is dropped when the segments are written (`voice_models.py::normalize_segment_voices`),
+so a later change of the video's voice moves every segment that has no voice of its own.
+
 ### Voice previews
 
 `POST /voices/<voice_id>/preview` generates or replays a cached sample of a roster voice, spoken
-with that voice's model. The Settings page sends the row's model in the request body, so a model
+with that voice's model. The Settings page sends the row's model and speed in the request body, so a
 change can be heard before it is saved. The dashboard's preview button toggles play and pause, and
 it resets when the voice or model it is given changes.
 
 - A preview is generated on demand and cached. Saving settings generates none, because that would
   tie a database write to up to ten paid, slow calls that can fail.
-- The cache key is `(voice_id, model_id, sample_text)`. A model change therefore produces a fresh
-  sample, and the human-typed `voice_id` is not used in a file path.
+- The cache key is `(voice_id, model_id, speed, sample_text)`, with the speed left out at 1.0 so a
+  preview cached before speeds existed is still found. A model or speed change therefore produces a
+  fresh sample, and the human-typed `voice_id` is not used in a file path.
+- A speed in the body is refused with a `400` on a model outside `SPEED_MODELS`. A voice's stored
+  speed is dropped when the body names such a model.
 - Its credits are recorded with no video. The usage ledger treats that as a normal case, and the
   preview appears in the Analytics page's Spend tab. Do not invent a video id for it.
 
@@ -259,7 +302,7 @@ it resets when the voice or model it is given changes.
 |---|---|
 | `totalFrames` | `round(audioDurationSeconds × 30)`. The canonical length of the video |
 | `fps` | Always 30 |
-| `audioDurationSeconds` | The last character-end time in the ElevenLabs alignment |
+| `audioDurationSeconds` | The last character-end time in the ElevenLabs alignment. With more than one voice, the sum of the runs' decoded lengths |
 | `words[]` | Per-word frame spans, built by walking the character-level alignment and splitting on word boundaries. Drives the caption reveal |
 | `segments[]` | Per-segment frame spans. Present when the video had `script_segments` |
 
@@ -428,8 +471,24 @@ different models.
 
 ### The roster
 
-The roster is the `elevenlabs_voices` setting, a list of `{name, voice_id, model_id}`. It holds at
-most 10 voices (`MAX_VOICES`, copied in onboarding, the API, the MCP server and the Settings page).
+The roster is the `elevenlabs_voices` setting, a list of `{name, voice_id, model_id}` with an
+optional `speed`. It holds at most 10 voices (`MAX_VOICES`, copied in onboarding, the API, the MCP
+server and the Settings page). The API, the MCP server and onboarding read it with the same rules,
+`voice_models.py::roster_entry_error`, and read a roster with a malformed entry as empty.
+
+### Speed
+
+A voice's `speed` is ElevenLabs' `voice_settings.speed`, from `SPEED_MIN` (0.7) to `SPEED_MAX` (1.2)
+in steps of `SPEED_STEP` (0.05). Only the models in `voice_models.py::SPEED_MODELS` honour it:
+`eleven_multilingual_v2`, `eleven_flash_v2_5`, `eleven_turbo_v2_5`, `eleven_flash_v2` and
+`eleven_turbo_v2`. `eleven_v3` and `eleven_v4` answer a request with a speed and ignore it, so
+`POST /settings` refuses a speed on them with a `400`, and `generate_voice` refuses one before it
+spends.
+
+A speed of 1.0 is never stored (`voice_models.py::normalize_roster_entry`). A roster in which no voice
+has a speed keeps the shape older versions read, and older versions read a roster with any other key
+as empty. On `eleven_multilingual_v2`, 1.15 brings a technical script from about 155 to about 185
+words a minute. Onboarding does not ask for a speed and keeps one set on the dashboard.
 
 A fresh install starts with two voices, `tubematic_core/voice_models.py::DEFAULT_VOICES`: Teja on
 `eleven_v4` as the install default, and Adam on `eleven_v3`. Onboarding offers them as the default
@@ -462,6 +521,14 @@ prevent it:
    shows it disabled.
 3. `generate_voice` checks again before it spends, because a voice's model can be changed in
    Settings after the script was written.
+
+Each check reads every segment against the voice that speaks it. A change of the video's voice is
+checked against the segments without a voice of their own (`voice_models.py::video_voice_conflict`).
+Approval to `VOICING` checks every segment, with or without a voice in the request
+(`pipeline.py::_script_voice_conflict`), because a segment's own voice may have had its model edited.
+At `SCRIPT_READY` a person can give a segment another voice on the Script tab
+(`PATCH /videos/<id>` with `segment_voices`), and a voice that cannot speak the segment's markup is
+refused with a `409`.
 
 The API computes the conflicts with one function, `voice_models.py::markup_conflict`, and sends
 them on the video payload, so the dashboard disables the same voices the API refuses. The human

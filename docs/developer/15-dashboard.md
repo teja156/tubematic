@@ -367,6 +367,14 @@ a script is written for its voice's model.
 - A shown voice that is not on the roster (removed since it was chosen, or none) is listed first and
   disabled, so the select cannot display a different voice from the one in force.
 - The Pipeline and Projects pages pass the roster to the video window. Library does not.
+- A voice with a speed other than 1.0 is labelled with it ("1.15x").
+
+On the Script tab at `SCRIPT_READY`, when the roster has a second voice, each segment has its own
+voice select. Its first option is the video's voice, and a voice listed in the video's
+`segment_voice_conflicts` for that segment is disabled with the reason as hover text. A pick sends
+`PATCH /videos/<id>` with `segment_voices` and reloads the video (see
+[A segment's voice](05-http-api.md#a-segments-voice)). At other statuses a segment with its own
+voice shows that voice's name, and Details lists the video's other voices under **Other voices**.
 
 Wherever no voice picker is shown, and on every archived video, the video window's Details shows a
 read-only **Voice** and **Voice model** from the video's `voice_info`. The model is the one
@@ -699,7 +707,10 @@ differ. A tab with unsaved edits shows an amber dot, and switching away asks for
 tab row wraps onto a second line on a narrow window, because the page body clips horizontal
 overflow.
 
-- On Voice, each roster row has its own model picker and preview button.
+- On Voice, each roster row has its own model picker, speed select and preview button. The speed
+  select is disabled on a model outside `SPEED_MODELS` (copied from
+  `tubematic_core/voice_models.py` and pinned by a test), a voice moved to such a model loses its
+  speed, and a speed of 1.00 is not sent. The preview plays the row's unsaved model and speed.
 - Preferences is one textbox with a live count against the 6000-character cap. See
   [User preferences](07-agent-layer.md#user-preferences).
 - API keys render through `SecretInput`, a password field that unmasks only while focused. It shows

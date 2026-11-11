@@ -454,6 +454,21 @@ current one and the target, and an exemption would pass the edit through to a pa
 voice that has left the roster resolves to nothing, because a fallback would spend on a voice nobody
 chose.
 
+### `test_voice_speed_and_segments.py`
+
+Covers the speed and segment-voice rules in `voice_models.py`
+([Speed](../08-scripting-and-voice.md#speed),
+[A voice per segment](../08-scripting-and-voice.md#a-voice-per-segment)).
+
+- `SPEED_MODELS` is the catalog without `eleven_v3` and `eleven_v4`. A speed in range on the step is
+  allowed there; on `eleven_v3` or `eleven_v4` only 1.0 is.
+- A roster entry may carry `speed` and nothing else beyond its three keys. A speed of 1.0 is not
+  stored, and others are rounded.
+- A segment voice equal to the video's is dropped, consecutive segments with one voice form a run,
+  and each segment's markup is checked against its own voice.
+- A change of the video's voice checks only the segments it speaks, and still refuses markup it
+  cannot speak.
+
 ### `test_youtube.py`
 
 Covers `youtube.py`, the rule for what a mining URL may be.

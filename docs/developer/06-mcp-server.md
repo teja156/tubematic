@@ -316,8 +316,10 @@ returns `video_archived`.
 
 Script and voice:
 
-- `script_segments` is validated against the model of the video's voice, and the flat `script` is
-  derived from it. `<phoneme>` tags are refused for a voice whose model would strip them. See
+- `script_segments` is validated segment by segment against the model of the voice that speaks it,
+  and the flat `script` is derived from it. `<phoneme>` tags are refused for a voice whose model
+  would strip them. A segment's optional `voice_id` must be on the roster, and one equal to the
+  video's voice is dropped. See
   [Scripting and Voice](08-scripting-and-voice.md#the-model-follows-the-voice).
 - Any write of `script_segments` or `script` must carry `publish_title` (at most 100 characters,
   YouTube's limit) and `publish_description` (at most 2000, which keeps the combined caption under
@@ -500,8 +502,14 @@ spends ElevenLabs credits. It returns
 writes.
 
 The request is `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/with-timestamps` with
-`{stability: 0.5, similarity_boost: 0.75}` and `output_format: "mp3_44100_128"`.
-`enable_ssml_parsing` is sent only when the outgoing text contains a `<phoneme` tag.
+`{stability: 0.5, similarity_boost: 0.75}` and `output_format: "mp3_44100_128"`. A voice with a
+`speed` other than 1.0 adds it to those settings. `enable_ssml_parsing` is sent only when the
+outgoing text contains a `<phoneme` tag.
+
+A script whose segments name more than one voice is voiced in runs, one request per run of
+consecutive same-voice segments, then joined with `ffmpeg` (see
+[A voice per segment](08-scripting-and-voice.md#a-voice-per-segment)). Every run is checked before
+the first request. `credits` in the result is the sum over the runs.
 
 The voice is the video's own `voice_id`, else the install default, and the model is that voice's
 `model_id` (see [The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice)).
@@ -1003,7 +1011,9 @@ voice to −14 LUFS at the video's length (`cartoon-tools/audio/mix.py`, numpy a
 
 - Each entry of `elevenlabs_voices` adds a derived `pronunciation_mode`, the one `get_video` would
   report for a video on that voice, so a revision that changes the voice can write for a model
-  `get_video` does not report yet. The stored roster keeps its `{name, voice_id, model_id}` shape.
+  `get_video` does not report yet, and a segment with its own voice is written for that voice's
+  model. The stored roster keeps its `{name, voice_id, model_id}` shape, with a `speed` on a voice
+  that has one.
 - `agents` lets a skill offer a video's agent's models and name the effort level it will otherwise
   run at. The HTTP `/pipeline/status` has no such field. The poller reads `GET /agents`.
 - `spend` is split into videos, research and other agent sessions, with the unpriced-call count and

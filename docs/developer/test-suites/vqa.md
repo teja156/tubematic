@@ -108,6 +108,9 @@ because `server.py` imports its sibling modules when it loads.
 
 ## Imports
 
+A script with a second voice is staged run by run, through `mcp/server.py::_plan_voice_runs`, the
+planning `generate_voice` uses.
+
 ### `test_host_side_imports.py`
 
 Covers the import fallback at the top of `renderer/api/pipeline.py` and `mcp/server.py`.

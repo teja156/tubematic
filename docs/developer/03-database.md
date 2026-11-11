@@ -381,7 +381,7 @@ failure to record and does not raise, so bookkeeping cannot fail a video.
 | `model` | TEXT NOT NULL, `''` | The model id the call used |
 | `operation` | TEXT NOT NULL | `voice`, `voice_preview`, `ai_review`, `mining`, `image`, `character`, `agent_pipeline`, `agent_research`, `agent_profile` or `agent_mascot`. Readers also accept `publish_metadata` and `agent_unscoped`, which no current writer produces |
 | `units` | TEXT NOT NULL, `'{}'` | JSON counts: `input`, `input_audio`, `input_image`, `output`, `reasoning`, `output_image`, `cache_read`, `cache_write` and `cache_write_1h` tokens, or ElevenLabs `credits` |
-| `raw_usage` | TEXT | The provider's own usage object, verbatim |
+| `raw_usage` | TEXT | The provider's own usage object, verbatim. On ElevenLabs `voice` rows, `{"voice_id": ...}`: the voice the call spoke |
 | `request_id` | TEXT | ElevenLabs' `request-id` response header on voice and preview rows. `NULL` elsewhere |
 | `cost_usd` | REAL | Dollars at API list price, or `NULL` when no rate was known |
 | `cost_basis` | TEXT NOT NULL | `priced` (units × rates), `reported` (the agent CLI's own figure), `credits` (ElevenLabs) or `unpriced` |
@@ -401,7 +401,9 @@ failure to record and does not raise, so bookkeeping cannot fail a video.
 
 `videos` keeps only `voice_id`, and a roster voice's model can be edited after voicing, so the
 ledger is the one record of which model voiced a video. `usage.py::last_voice_model` reads it from
-the video's latest `voice` row. See `voice_info` under
+the video's latest `voice` row. A video spoken in more than one voice is voiced in several calls,
+and each call's `raw_usage` is `{"voice_id": ...}`, so the reader can take the row of the video's
+own voice. A row without the tag is from a one-voice voicing. See `voice_info` under
 [`GET /videos/<id>`](05-http-api.md#get-videosvideo_id).
 
 | `usage_event_videos` column | Type | Meaning |

@@ -290,12 +290,13 @@ The full row plus `comments[]` in chronological order. `gemini_feedback` is not 
 video route. The last two are `[]` for a video with no
 [script record](08-scripting-and-voice.md#what-a-script-records).
 
-Three computed fields describe the voice:
+Four computed fields describe the voice:
 
 | Field | On | Meaning |
 |---|---|---|
 | `effective_voice_id` | Lists and single videos | The video's `voice_id`, else the install default. `""` when neither is on the roster |
-| `voice_conflicts` | Lists and single videos | `{voice_id: reason}` for each roster voice whose model cannot speak the stored script |
+| `voice_conflicts` | Lists and single videos | `{voice_id: reason}` for each roster voice whose model cannot speak the segments the video's voice speaks |
+| `segment_voice_conflicts` | Single videos | `{segment id: {voice_id: reason}}` for each roster voice that cannot speak a segment's markup. Empty outside `SCRIPT_READY` |
 | `voice_info` | Single videos | The voice and model for the modal's read-only Voice rows |
 
 `voice_conflicts` comes from the check that makes `PATCH` answer `409` for such a voice, so a
@@ -308,7 +309,8 @@ Every response that returns one video carries `voice_info`: this route, `PATCH`,
 row.
 
 ```json
-{"voice_id": "a1", "name": "Adam", "model_id": "eleven_v3", "model_voiced": true}
+{"voice_id": "a1", "name": "Adam", "model_id": "eleven_v3", "model_voiced": true,
+ "other_voices": [{"voice_id": "r1", "name": "Rachel", "model_id": "eleven_multilingual_v2"}]}
 ```
 
 - `voice_id` is the video's own voice, else the install default. It is kept when the voice has
@@ -321,6 +323,10 @@ row.
   because a revision can switch the voice before the next voicing. `model_id` is then the voice's
   current roster model and `model_voiced` is `false`. The same applies when the ledger has no
   voicing row. `model_id` is `""` when neither is known.
+- A video spoken in more than one voice has one voicing row per run, each tagged with its voice.
+  `model_id` is read from the rows of the video's own voice.
+- `other_voices` lists the other voices the video's segments name, in script order. `name` and
+  `model_id` are `""` for one that has left the roster.
 
 ### `POST /videos`
 
@@ -402,7 +408,8 @@ so a rename on the Projects page is kept. Nothing is written until every field h
 The main write path. The body may hold any of `status`, `title`, `script`, `video_version`,
 `youtube_url`, `gemini_feedback`, `voice_id`, `agent_id`, `agent_model`, `agent_effort`,
 `script_profile_id`, `visual_style`, `publish_title`, `publish_description` and `mascot_id`, plus
-the optional guard `onlyIfCurrentStatus`.
+the optional guard `onlyIfCurrentStatus`. A body with `segment_voices` follows its own rules (see
+[A segment's voice](#a-segments-voice)).
 
 ```json
 {"status": "TOPIC_APPROVED", "onlyIfCurrentStatus": "TOPIC_PROPOSED", "visual_style": "auto"}
@@ -423,7 +430,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 | `409` | `agent_id`, `agent_model` or `agent_effort` sent while the video is not at a human checkpoint |
 | `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D or Under the Hood video keeps a mascot |
 | `409` | `{"error": "Status precondition failed", "current", "expected"}` |
-| `409` | `{"error", "voice_conflict": true}`: the voice's model cannot speak the stored script |
+| `409` | `{"error", "voice_conflict": true}`: the voice's model cannot speak the stored script, or, on approval to `VOICING`, a segment's own voice cannot speak that segment |
 | `409` | A model was written alone and the video's agent changed while the request was in flight |
 
 #### Field rules
@@ -473,7 +480,9 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 - The voice conflict check runs on every request that carries `voice_id`, including an approval
   that re-sends the video's own voice. That voice passes unless its model was changed in Settings
   after the script was written. The check is skipped at `TOPIC_PROPOSED`, and a voice written there
-  is bound to that status.
+  is bound to that status. It reads only the segments without a voice of their own.
+- A `status` of `VOICING` from `SCRIPT_READY` checks every segment against the voice that speaks it,
+  with or without `voice_id` in the body, and answers `409` with `voice_conflict` when one cannot.
 - A `mascot_id` is checked only when it changes, so a client that echoes the stored value is not
   refused for a GPU that has gone since. A switch to `cartoon_3d` or `under_the_hood` clears the mascot in the same
   `UPDATE`, and a changed mascot resets `mascot_version` to 0.
@@ -490,6 +499,22 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   returns a style Auto picked to `auto` and clears the record, and on every `auto` video it clears
   the recorded renderer and canvas. Both are SQL fragments in `tubematic_core/visual_styles.py` that `update_video` and
   `set_video_status` also use.
+
+#### A segment's voice
+
+The Script tab sends `{"segment_voices": {"<segment id>": "<voice_id>"}}` to give a segment its own
+voice, or `""` to give it back to the video's voice. It is sent alone, without
+`onlyIfCurrentStatus`. The segments are rewritten and nothing else changes: the spoken words, the
+script record and the warnings stay. A `voice_id` equal to the video's voice is stored as no voice.
+
+| Status | Cause |
+|---|---|
+| `200` | The updated row plus `comments[]` |
+| `400` | Another key in the body, an empty or non-string map, an unknown segment id, or a voice not on the roster |
+| `404` | Video not found |
+| `409` | The video is archived, not at `SCRIPT_READY`, has no segments, or has no voice on the roster |
+| `409` | `{"error", "voice_conflict": true}`: the voice cannot speak that segment's markup |
+| `409` | The segments changed between the read and the write. The `UPDATE` is bound to the segments it read |
 
 ### `POST /videos/<video_id>/switch-style`
 
@@ -699,18 +724,20 @@ Body: any subset of the declared keys. The response is the full settings object,
 ### `POST /voices/<voice_id>/preview`
 
 Generates an ElevenLabs sample of a roster voice with that voice's own model, or replays a cached
-one. An optional body `{"model_id": ...}` names another model, which lets the Settings page play a
-model change before it is saved. A missing or non-JSON body is accepted.
+one. An optional body `{"model_id": ..., "speed": ...}` names another model or speed, which lets the
+Settings page play a change before it is saved. Without `speed`, the voice's stored speed is used,
+or 1.0 when the model named does not honour speed. A missing or non-JSON body is accepted.
 
 | Status | Cause |
 |---|---|
 | `200` | `{path, cached, credits}`. `credits` is the plan credits the generation spent, 0 for a cache hit |
-| `400` | `voice_id` does not match `[A-Za-z0-9_-]+` or is not on the roster, or `model_id` is not a supported model. No ElevenLabs call is made |
+| `400` | `voice_id` does not match `[A-Za-z0-9_-]+` or is not on the roster, `model_id` is not a supported model, or `speed` is out of range or set on a model that ignores it. No ElevenLabs call is made |
 | `503` | No ElevenLabs key is configured |
 | `502` | ElevenLabs rejected the request, or the call failed |
 
-The cache file name is a hash of the voice id, the model and the sample text. A voice whose model
-changes therefore gets a new sample, and the typed `voice_id` does not reach a file path. A cache
+The cache file name is a hash of the voice id, the model, the speed (left out at 1.0) and the sample
+text. A voice whose model or speed changes therefore gets a new sample, and the typed `voice_id`
+does not reach a file path. A cache
 hit makes no outbound call.
 
 A generated preview is recorded in the usage ledger with no video, with credits from ElevenLabs'

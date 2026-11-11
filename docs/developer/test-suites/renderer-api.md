@@ -330,6 +330,50 @@ Trap: a voice's model can be edited in Settings after voicing, so reading the ro
 the audio was not made with. The ledger is ignored from `TOPIC_PROPOSED` through `VOICING`: a
 revision may have switched the voice, and the old row would pair the new voice with the old model.
 
+A video spoken in two voices reports the model of the video's own voice, read from the ledger rows
+tagged with it, and lists the other voices of its segments in `other_voices`.
+
+### `test_voice_speed.py`
+
+Covers a voice's speed in `POST /settings` and in voice previews
+([Speed](../08-scripting-and-voice.md#speed)).
+
+- A speed on a model that honours it is saved, a speed of 1.0 is never stored, and a roster without
+  a speed round-trips unchanged.
+- A speed on `eleven_v3` or `eleven_v4`, out of range, or off the 0.05 step is a `400`.
+- A preview at 1.0 sends no speed and keeps the cache key previews had before speeds. A changed
+  speed makes a new preview. A speed in the body on a model that ignores it is refused before any
+  call, and a stored speed is dropped when the body names such a model.
+
+Trap: older versions read a roster with any key they do not know as empty. Keeping `speed` out of
+a roster nobody changed is what lets a rollback still read it.
+
+### `test_segment_voices.py`
+
+Covers a voice per segment on the API
+([A segment's voice](../05-http-api.md#a-segments-voice)).
+
+- `segment_voices` gives a segment a voice, gives it back with `""` or the video's voice, and keeps
+  the spoken words and the beat. A body with other keys, an unknown segment or an unknown voice is
+  a `400`. Any status but `SCRIPT_READY` is a `409`.
+- A voice that cannot speak the segment's markup is a `409`, and a script written between the read
+  and the write is not overwritten.
+- `segment_voice_conflicts` lists, per segment, the voices that cannot speak it, at `SCRIPT_READY`
+  only. A change of the video's voice ignores segments with their own voice.
+- Approval to `VOICING` refuses a segment voice whose model was edited or that left the roster, with
+  or without a voice in the body. A two-voice script whose markup fits each voice approves, as the
+  negative control.
+
+### `test_review_voices.py`
+
+Covers the review prompt's note on a narration in more than one voice
+([The prompt's guard clauses](../21-ai-review.md#the-prompts-guard-clauses)).
+
+- One voice adds nothing, so a one-voice prompt is unchanged. Two voices are named and called
+  intended.
+- `render_results.py::_narration_voices` lists the video's voice, then each other voice its segments
+  name, and a voice off the roster by its id.
+
 ### `test_mascots_api.py`
 
 Covers the mascot library over HTTP ([Mascots](../05-http-api.md#mascots)), the install and domain
