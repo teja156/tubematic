@@ -97,7 +97,7 @@ CUSTOM = {"maxMoves": 6, "minFrames": 15, "maxFrames": 240, "maxText": 40}
 # drawn runs into the next band.
 GRID_LINE = 1.3              # a grid row is size x 1.3 tall
 TYPE_OUT_LINE = SIZES["s"] * 1.2
-BRACKET = {"gap": 14, "label": 32}
+BRACKET = {"gap": 22, "label": 32}  # moves.tsx BRACKET; pinned by test_terminal_doc.py
 # A number may count up from 0 only over this many frames.
 COUNT_FRAMES = (15, 240)
 
@@ -742,6 +742,8 @@ def _event_problem(e: dict, t: str, custom: dict) -> str:
             return f"reveal must be one of {', '.join(REVEALS)}."
         if "accent" in e and (not _str(e["accent"]) or e["accent"] not in e["text"]):
             return "accent must be part of the text."
+        if "^" in e["text"]:
+            return "a word draws ^ as a caret; show a power such as 26^8 with a number, which raises the exponent."
     elif t in ("rearrange", "encode"):
         if not _str(e.get("text")) or not isinstance(e.get("from"), str):
             return "it needs from (the element whose letters move) and text (what they become)."

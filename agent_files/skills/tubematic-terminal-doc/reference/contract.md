@@ -66,7 +66,7 @@ Frames per move are how long it plays; anything acting on its element (a `rearra
 
 | `type` | Fields | Frames |
 |---|---|---|
-| `word` | `id`, `slot` (not `stage`), `text`; optional `size`, `tone`, `reveal` (`scramble`, `type`, `cut`), `accent` (a part of `text` drawn in red) | 9 to scramble, 1 to cut, the text's length ÷ 1.6 to type |
+| `word` | `id`, `slot` (not `stage`), `text`; optional `size`, `tone`, `reveal` (`scramble`, `type`, `cut`), `accent` (a part of `text` drawn in red). No `^`: a power is a `number` | 9 to scramble, 1 to cut, the text's length ÷ 1.6 to type |
 | `rearrange` | `id`, `from` (an element on stage), `text`; optional `slot` (default: the source's), `size`, `tone` | 16 + 3 per letter after the first (letters of the longer string) |
 | `encode` | `id`, `from` (in slot `a` or `c`), `text`, `slot` (the other of `a` and `c`), `label` (1 to 12 characters); optional `sub` (1 to 12), `size`, `tone` | 36 + 3 per letter of the source after the first. Slot `b` must be empty when it starts and stays taken by the box until it ends |
 | `number` | `id`, `slot` (not `stage`), `value`; optional `size`, `tone`, `count` (15 to 240 frames, a whole number with commas or none, counted up from 0) | 7 + 1.4 per character after the first (spaces and `^` do not count); `count` when set |

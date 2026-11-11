@@ -711,3 +711,27 @@ def test_a_bracketed_element_cannot_be_transformed():
          "label": "HASH"},
     ))
     assert any("has a bracket" in p for p in problems), problems
+
+
+# ── live test ────────────────────────────────────────────────────────────────
+
+def test_the_bracket_geometry_matches_the_renderer():
+    src = (REPO / "renderer/remotion/src/scenes/installed/terminalDoc/moves.tsx").read_text()
+    m = re.search(r"export const BRACKET = \{ gap: (\d+), label: (\d+),", src)
+    assert (int(m.group(1)), int(m.group(2))) == (td.BRACKET["gap"], td.BRACKET["label"])
+
+
+def test_a_bracket_label_clears_the_font_box_of_the_string_above():
+    """The text audit measures glyph font boxes (ascent plus descent, about
+    0.65 of the size below the centre); a label inside that box is reported
+    as an overlap on every bracketed string, seen live."""
+    label_box = 42                               # the label's font box at 32 px, as the audit measured it
+    for size in td.SIZES.values():
+        label_top = size * 0.62 + td.BRACKET["gap"] - label_box / 2
+        font_bottom = 0.64 * size                    # measured: 61 px under the centre at 96, 82 at 128
+        assert (font_bottom - label_top) / label_box < 0.15, size   # text_audit's overlap threshold
+
+
+def test_a_word_cannot_carry_an_exponent():
+    problems = _check(_with(_set(1, 1, text="26 ^ 8")))
+    assert any("show a power" in p for p in problems), problems

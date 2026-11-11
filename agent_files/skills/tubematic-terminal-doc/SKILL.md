@@ -140,7 +140,7 @@ The captions sit below the note slot, and the bottom of the frame stays empty.
   the box takes slot `b` between them, so `b` must be empty while it plays.
 - An anagram, a transposition, a word built up from another: `rearrange`.
 - A count, a keyspace, a time to crack, a date as the punchline: `number`. Use `^` for an exponent
-  (`"1.3 × 10^31"`).
+  (`"1.3 × 10^31"`, `"26^8"`); a `word` with a `^` is refused, because it would draw the caret.
 - An alphabet, a cipher table, a substitution key: `grid`, then `glow` with `row` or `span` on the row
   or letters that matter.
 - A brute-force attack, a search: `stream`.

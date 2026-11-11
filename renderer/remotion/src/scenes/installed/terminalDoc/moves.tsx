@@ -413,7 +413,11 @@ export function extentOf(el: ElState): { x0: number; x1: number; bottom: number 
   return { x0: W / 2 - (cells * size * CELL) / 2, x1: W / 2 + (cells * size * CELL) / 2, bottom: y + size * 0.62 };
 }
 
-export const BRACKET = { gap: 14, label: 32, tick: 16, pad: 12 } as const;
+// The gap keeps the label almost clear of the font box of the string above
+// (ascent plus descent, about 0.64 of its size below the centre line), not only
+// of its ink: the text audit measures font boxes and reports a label inside one
+// as an overlap. Wider pushes a large string's label into the next band.
+export const BRACKET = { gap: 22, label: 32, tick: 16, pad: 12 } as const;
 
 const BracketView: React.FC<{ el: ElState; ctx: MoveContext; opacity: number }> = ({ el, ctx, opacity }) => {
   const b = el.bracket;

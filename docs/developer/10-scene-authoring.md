@@ -663,7 +663,8 @@ under a mask gradient cost about 1.6 CPU-seconds a frame. The measured costs are
   `totalFrames`, or another style uses `TerminalDoc`.
 - A beat after the first does not start within 2 frames of a word, or lasts under 2 seconds.
 - A move names an unknown slot, size, tone or skin, a string does not fit the frame at its size, a
-  note wraps past 2 lines of 36 characters, or a value is out of its range.
+  note wraps past 2 lines of 36 characters, a word holds a `^` (a power is a `number`), or a value is
+  out of its range.
 - Two elements share a slot, more than 4 elements are on screen at once, or a bracket reaches into a
   taken slot below it. An `encode`'s box holds slot `b` while it plays and a bracket's note holds the
   note slot to the cut, a bracket that reaches below its slot holds the slot below, and a `rearrange`
