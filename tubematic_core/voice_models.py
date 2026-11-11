@@ -322,10 +322,12 @@ def segment_voice_error(segments, roster: list[dict]) -> str | None:
 
 def normalize_segment_voices(segments: list, video_voice_id: str) -> list:
     """Segments as stored: a voice_id that is blank or equal to the video's
-    own voice is dropped, so a stored voice_id always means "a voice other
-    than the video's", and a later change of the video's voice moves every
-    segment without one. Both write paths call this: MCP update_video and the
-    API's segment_voices PATCH."""
+    own voice is dropped when the segments are written, so a later change of
+    the video's voice moves every segment without one. A change of the video's
+    voice alone does not rewrite the segments, so a segment can then name the
+    video's own voice; every reader treats that as the video's voice. Both
+    write paths call this: MCP update_video and the API's segment_voices
+    PATCH."""
     out = []
     for seg in segments:
         seg = dict(seg)

@@ -189,8 +189,15 @@ def test_re_entering_a_voice_keeps_the_speed_set_on_the_dashboard(monkeypatch):
     assert out == [{"name": "A", "voice_id": "a", "model_id": "eleven_multilingual_v2", "speed": 1.15}]
 
 
-def test_moving_a_voice_to_a_model_that_ignores_speed_drops_it(monkeypatch):
+def test_moving_a_voice_to_a_model_that_ignores_speed_drops_it_and_says_so(monkeypatch):
+    import onboard.prompt as prompt
+    said = []
     current = json.dumps([{"name": "A", "voice_id": "a", "model_id": "eleven_multilingual_v2",
                            "speed": 1.15}])
-    out = _drive_ask_voices(monkeypatch, ["A", "a", "eleven_v4", ""], current)
+    queue = ["A", "a", "eleven_v4", ""]
+    monkeypatch.setattr(prompt.questionary, "text", lambda *a, **k: _Answer(queue.pop(0)))
+    monkeypatch.setattr(prompt.questionary, "select", lambda *a, **k: _Answer(queue.pop(0)))
+    monkeypatch.setattr(prompt, "rail", lambda text, **k: said.append(text))
+    out = json.loads(prompt._ask_voices(current))
     assert out == [{"name": "A", "voice_id": "a", "model_id": "eleven_v4"}]
+    assert any("ignores speed" in line for line in said)

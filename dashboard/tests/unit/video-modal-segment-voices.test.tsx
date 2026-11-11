@@ -93,6 +93,17 @@ describe("VideoModal — a voice per segment", () => {
       .toMatch(/can't speak this segment/));
   });
 
+  it("a segment voice that left the roster is shown, not hidden behind the video voice", async () => {
+    const video = makeVideo("SCRIPT_READY", { script_segments: [
+      { id: "s1", voice: "Hi.", visual: "", voice_id: "gone" }] });
+    mockFetch(video);
+    render(<VideoModal video={video} voices={VOICES} defaultVoiceId="t1" onClose={() => {}} onAction={() => {}} />);
+    const s1 = await screen.findByTestId("segment-voice-s1") as HTMLSelectElement;
+    expect(s1.value).toBe("gone");
+    expect(s1.selectedOptions[0].textContent).toBe("gone (not in roster)");
+    expect(s1.selectedOptions[0].disabled).toBe(true);
+  });
+
   it("no picker with one voice on the roster", async () => {
     const video = makeVideo("SCRIPT_READY");
     mockFetch(video);

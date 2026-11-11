@@ -50,7 +50,9 @@ export interface ScriptSegment {
   /** The formula beat this segment belongs to, when the writer labelled it. */
   beat?: string;
   /** A roster voice that speaks this segment instead of the video's voice
-   *  (TMDEV-216). Absent means the video's voice; never equal to it. */
+   *  (TMDEV-216). Absent means the video's voice. Dropped on write when equal
+   *  to the video's voice, but a later change of the video's voice can make
+   *  it equal, which reads the same as absent. */
   voice_id?: string;
 }
 

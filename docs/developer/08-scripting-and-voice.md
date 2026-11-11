@@ -244,7 +244,9 @@ its voice's model, and its speed suits that model. A script with more than one r
 `ffmpeg` on the MCP container's `PATH`. Any failure returns an error and spends nothing.
 
 Each request carries `previous_text` and `next_text`, up to 200 characters of the neighbouring runs'
-spoken words, so the intonation carries across the change of voice. `eleven_v3` answers these fields
+authored words, so the intonation carries across the change of voice. The authored words are sent
+because a run's own text holds respellings and, on `eleven_v3` and `eleven_v4`, IPA between
+slashes, which another model would read as text. `eleven_v3` answers these fields
 with a 400 (`voice_models.py::CONTEXT_REFUSED_MODELS`), so a run on that model goes without them.
 
 `_join_voice_audio` decodes each run to WAV, measures its length from the WAV's frame count, joins
@@ -261,9 +263,11 @@ voice in `raw_usage`, so the video window's Voice model row reports the video vo
 `videos.tts_text` holds every run's text joined with a space. The AI review is told the names of the
 voices when there are two or more (see [AI Review](21-ai-review.md#the-prompts-guard-clauses)).
 
-The `voice_id` of a segment always names a voice other than the video's. A `voice_id` equal to the
-video's voice is dropped when the segments are written (`voice_models.py::normalize_segment_voices`),
-so a later change of the video's voice moves every segment that has no voice of its own.
+A `voice_id` equal to the video's voice is dropped when the segments are written
+(`voice_models.py::normalize_segment_voices`), so a later change of the video's voice moves every
+segment that has no voice of its own. A change of the video's voice alone does not rewrite the
+segments, so a segment can then name the video's own voice, and every reader treats it as the
+video's voice.
 
 ### Voice previews
 
@@ -488,7 +492,8 @@ spends.
 A speed of 1.0 is never stored (`voice_models.py::normalize_roster_entry`). A roster in which no voice
 has a speed keeps the shape older versions read, and older versions read a roster with any other key
 as empty. On `eleven_multilingual_v2`, 1.15 brings a technical script from about 155 to about 185
-words a minute. Onboarding does not ask for a speed and keeps one set on the dashboard.
+words a minute. Onboarding does not ask for a speed. It keeps one set on the dashboard, and says so
+when it drops one because the voice moved to a model that ignores speed.
 
 A fresh install starts with two voices, `tubematic_core/voice_models.py::DEFAULT_VOICES`: Teja on
 `eleven_v4` as the install default, and Adam on `eleven_v3`. Onboarding offers them as the default

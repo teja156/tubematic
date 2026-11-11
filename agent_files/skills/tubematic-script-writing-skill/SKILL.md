@@ -132,7 +132,7 @@ word**. Changing it afterwards is a rewrite.
 6. On a script revision keep the stored `formula_id`, unless the human's comment asks for a
    different structure, the structure was what failed, or the video's style or topic changed since
    that script was written (a comment says so). Then choose again from the top of this list.
-7. A formula that needs a second voice (its reference file says so) is chosen only when
+7. A formula whose beats give lines to a second speaker is chosen only when
    `get_pipeline_status()`'s `elevenlabs_voices` has a voice besides this video's. Without one,
    take the next formula that fits.
 

@@ -322,6 +322,9 @@ def _ask_voices(current_value: str) -> str | None:
                       if ev["voice_id"] == voice_id and "speed" in ev), None)
         if speed is not None and not _voice_models.speed_error(speed, model_id):
             entry["speed"] = speed
+        elif speed is not None:
+            rail(f"  {model_id} ignores speed, so this voice's speed {speed} is reset to 1.0.",
+                 style="#ebcb8b")
         voices.append(entry)
     if not voices:
         return current_value if existing else None

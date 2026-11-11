@@ -5280,7 +5280,8 @@ def get_pipeline_status() -> dict:
     before drafting, so a term already registered doesn't also get an
     unnecessary inline <respell> tag.
     elevenlabs_voices is the named voice roster (list of {name, voice_id,
-    model_id, pronunciation_mode}), elevenlabs_voice_id is the install default
+    model_id, pronunciation_mode}, plus speed on a voice whose speed is not
+    1.0), elevenlabs_voice_id is the install default
     ("" when unset) — list the roster (marking the default, with each voice's
     model) whenever a human needs to pick a voice (job creation, script
     approval). A voice's pronunciation_mode is the one get_video would report
