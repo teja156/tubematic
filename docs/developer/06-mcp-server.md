@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 50 tools
+## The 51 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -133,6 +133,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`generate_image`](#generate_image) | Generate a scene image |
 | [`generate_character`](#generate_character) | Generate a transparent character cut-out |
 | [`read_image`](#read_image) | Return a stored image as a picture |
+| [`preview_doodles`](#preview_doodles) | Draw a Whiteboard video's own doodles as a picture |
 
 ### Scene and render tools
 
@@ -576,7 +577,20 @@ the catalog rejects it.
 `read_image(video_id, image_name, grid=True)` returns the image itself after a text block. With
 `grid`, it overlays a labelled grid in normalised `[u, v]` coordinates (0 to 1 across and down the
 image), so the agent can read off an anchor point for an overlay. The grid is drawn on a copy in
-memory. `cartoon_still`, `cartoon_read_still` and `render_mascot_sheets` also return pictures.
+memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets` and `preview_doodles` also
+return pictures.
+
+### `preview_doodles`
+
+`preview_doodles(doodles)` takes the doodles a Whiteboard video defines for itself (`{name:
+strokes}`, the format of `props.whiteboard.doodles`), checks each one with the per-doodle rules
+`write_scene_config` applies (`whiteboard.check_doodles`), and returns the names and a picture: each
+doodle in a labelled cell over a faint 0-100 grid, beside the shipped `coin` and `car` in grey for
+scale. It needs no video and writes nothing. `mcp/doodle_preview.py` draws the sheet with Pillow
+from the same expanded geometry the renderer uses, without the hand wobble, so a call takes
+milliseconds. It exists because no check can tell whether a drawing reads as the object it is meant
+to be ([Whiteboard](10-scene-authoring.md#whiteboard)). The board-level rules (every defined doodle drawn by an item,
+every item's doodle defined) apply only at `write_scene_config`.
 
 ---
 
@@ -677,6 +691,11 @@ It checks:
   connected graph, events in a drawable order, no still stretch over 3.5 seconds). No other style may
   use `SystemFlow`. Its `subtitles` are filled from the style pack when the config has none. The
   rules are in [System Flow](10-scene-authoring.md#system-flow).
+- A `whiteboard` video holds the one installed `Whiteboard` scene, and its board passes
+  `mcp/whiteboard.py` (regions and items on word starts, slots and fit, doodle names, arrows that
+  cross nothing, a marker that can keep up, no still stretch over 3.5 seconds, a recap long enough
+  for every region's number and at most 8 seconds). No other style may use `Whiteboard`. Its `subtitles` are filled from the style pack when
+  the config has none. The rules are in [Whiteboard](10-scene-authoring.md#whiteboard).
 - A `bean_explainer` video holds the one installed `BeanExplainer` scene, and its sections and shots
   pass `mcp/bean_explainer.py` (cuts and poses on word starts, the prop library, the video's own
   props and their files, the other catalogues, a layout with no label over a prop or a bean, labels that do not repeat the narration,

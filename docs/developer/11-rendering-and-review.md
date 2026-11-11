@@ -229,7 +229,7 @@ wait, and a stop from the gateway ends it.
 
 | `outcome` | Sent when | The gateway |
 |---|---|---|
-| `success` | Remotion exited 0 and the upload landed | Records `video_path` and `render_uploaded_at`, adds a `render_timings` row (frames, seconds, GPU or CPU) and releases the claim. The [AI review](21-ai-review.md) finishes the video |
+| `success` | Remotion exited 0 and the upload landed | Records `video_path` and `render_uploaded_at`, adds a `render_timings` row (frames, seconds, GPU or CPU), writes the video's `last_render_*` record and releases the claim. The [AI review](21-ai-review.md) finishes the video |
 | `failed` | Remotion exited non-zero | `REVISION_REQUESTED` |
 | `stalled`, `timeout` | The render stopped advancing, or ran past the ceiling | `RENDER_QUEUED` |
 | `error` | Anything else: no bundle, a failed upload, an exception in the renderer | `RENDER_QUEUED` |
@@ -412,7 +412,8 @@ counts as settled, the 150/170/60/60 safe zone, and a 180-second timeout.
 
 A System Flow video's one scene changes its diagram at every board, so the audit samples each board
 as if it were a scene, with the same allowance at each board's start. A Bean Explainer video's one
-scene is sampled the same way, shot by shot.
+scene is sampled the same way, shot by shot, and a Whiteboard video's region by region and once
+more for the closing pull-back.
 
 A Cartoon 3D video skips the audit. Its one scene is a painted canvas with no text rectangles, and
 the composition draws its captions. Its checks are the typecheck and the beat gate in

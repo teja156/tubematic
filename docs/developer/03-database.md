@@ -88,7 +88,7 @@ One row per video, from proposed topic to published file.
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
 | `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
-| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer` or `cartoon_3d`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
+| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer`, `cartoon_3d` or `whiteboard`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
 | `resolved_visual_style` | TEXT NOT NULL | `''` | The canvas `auto` settled on: `dark` or `light`. Written once by the agent |
 | `resolved_renderer` | TEXT NOT NULL | `''` | The renderer an `auto` video uses: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
 | `style_pick` | TEXT NOT NULL | `''` | What Auto picked before the script: a style pack id (then also `visual_style`), `scenes` for the mixed scene system, or `''` when Auto has not decided or a person chose the style |
@@ -115,6 +115,10 @@ One row per video, from proposed topic to published file.
 | `render_started_at` | TEXT NOT NULL | `''` | When the current render was claimed. The scheduler's "time spent so far" for a busy renderer |
 | `render_uploaded_at` | TEXT NOT NULL | `''` | When the render's mp4 arrived. A `RENDERING` row with this set is waiting for the worker's AI review and is not re-queued |
 | `render_claim_id` | TEXT NOT NULL | `''` | The current claim's id: random, new on every claim. See [Render lease columns](#render-lease-columns) |
+| `last_render_renderer_id` | TEXT NOT NULL | `''` | The renderer that made the video's last successful render. `''` means no render is recorded, which is true of every video rendered before 2.2.0. `renderer_id` is the lease and is cleared by the success result, so this is the lasting record |
+| `last_render_renderer_name` | TEXT NOT NULL | `''` | That renderer's name at the time of the render, so a later rename or removal leaves it unchanged |
+| `last_render_on_gpu` | INTEGER NOT NULL | `0` | `1` when that render ran on the GPU |
+| `last_render_seconds` | REAL NOT NULL | `0` | The Remotion run as the renderer measured it, the figure `render_timings` keeps. It excludes fetching the bundle and uploading the mp4. `0` means not reported |
 | `publish_title` | TEXT NOT NULL | `''` | The title the video is posted with, written by the agent with the script. Separate from `title` |
 | `publish_description` | TEXT NOT NULL | `''` | The post's description, written by the agent with the script |
 | `scheduled_at` | TEXT NOT NULL | `''` | When a scheduled post goes out, UTC. `''` means not scheduled. The worker moves a `SCHEDULED` video to `PUBLISHING` once it has passed. See [Scheduling a post](14-publishing.md#scheduling-a-post) |
@@ -139,7 +143,8 @@ first. Any write to the column changes render order.
 
 `motion_graphics`, `stick` and `illustrated` are permission sets: each names which scene
 vocabularies the video may draw from. `system_flow` makes the whole video one diagram scene written
-as data, and `bean_explainer` one cartoon-bean scene written as data. `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
+as data, `bean_explainer` one cartoon-bean scene written as data, and `whiteboard` one board
+scene written as data. `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
 video) and needs a working GPU. `auto` leaves the choice to the agent. The values are checked in
 code against the style packs, and the column has no CHECK constraint, so a new style needs no
 migration.
@@ -712,6 +717,7 @@ only in the pre-migration backup.
 | `0018_mascots.sql` | Creates `mascots` and `mascot_versions`, adds `projects.default_mascot_id`, `videos.mascot_id` and `videos.mascot_version`, and inserts the built-in mascot Tubi | No |
 | `0019_renderers.sql` | Creates `renderers`, `renderer_enrollments`, `render_timings` and `idx_render_timings_renderer`, adds the five lease columns to `videos`, and inserts the built-in renderer's row | No |
 | `0020_style_pick.sql` | Adds `videos.style_pick`, `style_runner_up` and `style_reason`, `''` on every existing video | No |
+| `0021_last_render.sql` | Adds `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu` and `last_render_seconds`, empty on every existing video | No |
 | `0022_domain_agent.sql` | Adds `projects.default_agent_id`, `default_agent_model` and `default_agent_effort`, `''` on every existing domain | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file

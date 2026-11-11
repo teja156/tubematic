@@ -63,6 +63,16 @@ export function lastSeen(iso: string | null | undefined, now: number): string {
   return `${Math.floor(secs / 86400)} d ago`;
 }
 
+/** A render's length: "48s", "3m 12s", "1h 04m"; "—" when it was not
+ *  reported (0, or anything that is not a positive number). */
+export function formatRenderDuration(secs: number | null | undefined): string {
+  if (typeof secs !== "number" || !Number.isFinite(secs) || secs <= 0) return "—";
+  const total = Math.max(1, Math.round(secs));
+  if (total < 60) return `${total}s`;
+  if (total < 3600) return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, "0")}s`;
+  return `${Math.floor(total / 3600)}h ${String(Math.floor((total % 3600) / 60)).padStart(2, "0")}m`;
+}
+
 /** "8 CPUs · 15.6 GB RAM", or "" before the renderer has reported. */
 export function computeLine(r: Renderer): string {
   const parts: string[] = [];

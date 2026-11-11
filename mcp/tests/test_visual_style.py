@@ -104,7 +104,7 @@ def test_visual_style_is_frozen_after_the_topic_checkpoint(db):
 
 def test_an_unknown_visual_style_is_refused(db):
     _video("vid_c")
-    result = server.update_video("vid_c", visual_style="whiteboard")
+    result = server.update_video("vid_c", visual_style="watercolour")
     assert "Invalid visual_style" in result["error"]
     assert _read("vid_c", "visual_style") == "auto"
 
@@ -281,7 +281,7 @@ def test_a_domain_with_no_default_leaves_curriculum_videos_on_auto(db):
 def test_a_corrupt_stored_default_falls_back_to_auto(db):
     """A hand-edited or downgraded row must not be able to make create_video
     write a style nothing understands."""
-    _project("proj_bad", default_style="whiteboard")
+    _project("proj_bad", default_style="watercolour")
     result = server.create_video("proj_bad", "A topic", "curriculum", 7)
     assert result["visual_style"] == "auto"
 
@@ -712,6 +712,14 @@ def test_get_video_names_the_skill_that_authors_the_style(db):
     style = server.get_video(vid)["style"]
     assert style["authoring_skill"] == "tubematic-system-flow"
     assert style["canvas"] == "dark" and style["allows"]["figures"] is False
+
+
+def test_get_video_names_the_whiteboard_skill(db):
+    vid = _video()
+    assert server.update_video(vid, visual_style="whiteboard").get("error") is None
+    style = server.get_video(vid)["style"]
+    assert style["authoring_skill"] == "tubematic-whiteboard"
+    assert style["canvas"] == "light" and style["allows"]["figures"] is False
 
 
 def test_the_pipeline_status_lists_every_style(db):

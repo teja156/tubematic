@@ -123,6 +123,15 @@ export interface Video {
   style_runner_up?: string;
   /** Auto's one-sentence reason for the pick. */
   style_reason?: string;
+  /** The video's last successful render (TMDEV-206): the renderer's id and
+   *  its name at the time ('' = no render recorded, which every video
+   *  rendered before 2.2.0 reads as), whether it rendered on the GPU (1/0),
+   *  and the Remotion run in seconds as the renderer measured it (0 = not
+   *  reported). Optional for the same reason as tts_text. */
+  last_render_renderer_id?: string;
+  last_render_renderer_name?: string;
+  last_render_on_gpu?: number;
+  last_render_seconds?: number;
   /** Scheduled agent sessions in a row that left this video at the status
    *  they found it at (TMDEV-129). Reset by any progress. Optional for the
    *  same reason as tts_text above. */

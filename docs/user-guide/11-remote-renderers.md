@@ -32,6 +32,10 @@ whose GPU test passed. How main estimates this is in
 The built-in renderer keeps taking work. Disable it on the dashboard if you want main to render
 nothing.
 
+To see which renderer made a video, open the video. Its Details list **Rendered by** (the
+renderer's name, then GPU or CPU) and **Render time** for its last successful render. Videos
+rendered before version 2.2.0 show neither.
+
 ---
 
 ## How it works

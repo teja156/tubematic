@@ -10,10 +10,6 @@
 -- before. '' on the model = that agent's own default; '' on the effort = that
 -- agent's own level. No backfill: '' is the right value for every existing
 -- domain, so no domain changes behaviour by upgrading.
---
--- 0021 belongs to another change that was in progress when this was written;
--- migrate() applies whatever schema_migrations lacks, so the order the two
--- arrive in does not matter.
 ALTER TABLE projects ADD COLUMN default_agent_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE projects ADD COLUMN default_agent_model TEXT NOT NULL DEFAULT '';
 ALTER TABLE projects ADD COLUMN default_agent_effort TEXT NOT NULL DEFAULT '';

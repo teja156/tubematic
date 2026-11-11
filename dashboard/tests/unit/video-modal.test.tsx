@@ -850,6 +850,44 @@ describe("VideoModal — read-only voice and voice model", () => {
   });
 });
 
+// ── the last successful render (TMDEV-206) ──────────────────────────────────
+// Which renderer made the video, on the GPU or the CPU, and how long the
+// Remotion run took. A video rendered before the record existed has no
+// renderer id, and the rows hide.
+
+describe("VideoModal — rendered by and render time", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows the renderer, GPU or CPU, and the render time", async () => {
+    const video = { ...makeVideo("VIDEO_READY"), last_render_renderer_id: "r_abc",
+      last_render_renderer_name: "laptop-5070", last_render_on_gpu: 1, last_render_seconds: 192.4 };
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    expect(await screen.findByText("Rendered by")).toBeInTheDocument();
+    expect(screen.getByTestId("rendered-by")).toHaveTextContent("laptop-5070 · GPU");
+    expect(screen.getByTestId("render-time")).toHaveTextContent("3m 12s");
+  });
+
+  it("says CPU, falls back to the id with no name, and shows a dash with no time", async () => {
+    const video = { ...makeVideo("PUBLISHED"), last_render_renderer_id: "r_abc",
+      last_render_renderer_name: "", last_render_on_gpu: 0, last_render_seconds: 0 };
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    expect(await screen.findByTestId("rendered-by")).toHaveTextContent("r_abc · CPU");
+    expect(screen.getByTestId("render-time")).toHaveTextContent("—");
+  });
+
+  it("is hidden on a video with no render recorded", async () => {
+    const video = { ...makeVideo("VIDEO_READY"), last_render_renderer_id: "",
+      last_render_renderer_name: "", last_render_on_gpu: 0, last_render_seconds: 0 };
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    await screen.findByText("Created");
+    expect(screen.queryByText("Rendered by")).toBeNull();
+    expect(screen.queryByText("Render time")).toBeNull();
+  });
+});
+
 // ── the title/topic split ────────────────────────────────────────────────────
 // The header shows the short display name; the full descriptive brief moved to
 // its own Topic tab, since it is far too long for either the header or the

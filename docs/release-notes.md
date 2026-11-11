@@ -11,9 +11,10 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds two visual styles: System Flow, which turns a video into a diagram that builds itself
-while the narrator explains a system, and Bean Explainer, a cartoon character that reacts to the
-narration among everyday props. Auto now picks a video's style before its script is written.
+2.2.0 adds three visual styles: System Flow, which turns a video into a diagram that builds itself
+while the narrator explains a system; Bean Explainer, a cartoon character that reacts to the
+narration among everyday props; and Whiteboard, which works an idea out on one big board, written
+and drawn as the narrator speaks. Auto now picks a video's style before its script is written.
 
 ### Upgrade notes
 
@@ -23,8 +24,8 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs new skills for System Flow, Bean Explainer and Auto's style choice, and a session
-   started before it does not have them.
+   installs new skills for System Flow, Bean Explainer, Whiteboard and Auto's style choice, and a
+   session started before it does not have them.
 2. Reload any dashboard tab that was open during the upgrade. A **Topics** page loaded before it
    sets a domain's agent, model and effort back to **Automatic** when it saves another change to
    that domain.
@@ -44,9 +45,9 @@ sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow or Bean Explainer cannot render on 2.1.x. Finish it, or switch it to
-  another style while it waits at its topic, before you go back.
-- A domain whose default style is System Flow or Bean Explainer starts its new videos on Auto under
+- A video set to System Flow, Bean Explainer or Whiteboard cannot render on 2.1.x. Finish it, or
+  switch it to another style while it waits at its topic, before you go back.
+- A domain whose default style is System Flow, Bean Explainer or Whiteboard starts its new videos on Auto under
   2.1.x.
 
 ### Added
@@ -68,11 +69,25 @@ If you go back to 2.1.x later:
   generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's default;
   Auto can pick it for a topic that fits. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Whiteboard visual style. The video is one big white board: the camera rests on one part of it
+  at a time, a floating marker writes and draws each step a moment after the narrator says it, in
+  three inks, and the camera glides on to the next part as the narration moves on. The video ends by
+  pulling back to the whole board with each part numbered. The drawings come from a library of
+  simple doodles, and the agent draws its own in the same style when the library has none for an
+  object the video needs. It suits step-by-step reasoning,
+  formulas and money arithmetic built up line by line, and a chain of causes that ends in one
+  picture. It needs no image generation and no GPU. Choose it for a topic, on the **New Video**
+  page, or as a domain's default; Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
 - A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
   agent writes a new script for it, which is voiced when you approve it. See
   [What Auto does](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does).
+- **Rendered by** and **Render time** rows in a video's window: which renderer made the video, on
+  its GPU or its CPU, and how long the render took. They describe the last successful render. Videos
+  rendered before this version show neither. See
+  [Remote Renderers](https://docs.tubematic.ai/user-guide/remote-renderers).
 - A domain can have its own agent, model and effort. Every new video in the domain then starts on
   that agent, whichever research mode found the topic, and the shares on **Settings → Agents** apply
   to the domains left on **Automatic**. You can still change the agent on each video at a
@@ -85,7 +100,7 @@ If you go back to 2.1.x later:
 
 - Auto picks the style when the agent picks up an approved topic, before it writes the script, and
   can pick any style this install can make: Motion Graphics, Stick Explainer, Illustrated, System
-  Flow, Bean Explainer, Cartoon 3D and every style added later. The script is then written for that style. Before,
+  Flow, Bean Explainer, Whiteboard, Cartoon 3D and every style added later. The script is then written for that style. Before,
   Auto decided after the voice was made, could only choose between a dark canvas, a white canvas and
   Cartoon 3D, and never chose a named style. When no style clearly fits, Auto keeps that mixed
   approach. A video's card and window show the picked style after the word Auto.

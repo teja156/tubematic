@@ -389,6 +389,12 @@ comes with the single-video fetch only, so the two rows appear once that fetch a
 [`GET /videos/<id>`](05-http-api.md#get-videosvideo_id) for why the model comes from the usage
 ledger.
 
+Once a video has rendered, Details also shows **Rendered by** (the renderer's name at render time,
+then GPU or CPU) and **Render time** (`lib/renderers.ts::formatRenderDuration`, a dash when the
+renderer reported no time). Both come from the video's `last_render_*` columns and describe the
+last successful render. A video with no render recorded, including every video rendered before
+2.2.0, shows neither row.
+
 ### Visual-style picker
 
 The style list comes from [`GET /visual-styles`](05-http-api.md#get-visual-styles), fetched once by
