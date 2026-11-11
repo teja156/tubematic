@@ -113,6 +113,9 @@ Covers [the pipeline board](../15-dashboard.md#the-pipeline-board) and
   included, and a System Flow pick is stored with the approval.
 - A status pill that hides a group keeps it hidden across a poll.
 - At 1280px the `TOPIC_PROPOSED` row's buttons stay on screen and the title keeps its width.
+- A `TOPIC_PROPOSED` row shows the topic's angle with its kind and score. At 1280px a long angle
+  stays on one line no wider than the title column, with the buttons on screen, and the row drops
+  the angle once the video is at `SCRIPT_READY`.
 
 Trap: assert a disabled `<option>` with `toHaveJSProperty("disabled", true)`. Playwright's
 `toBeDisabled()` reports a disabled option inside an enabled `<select>` as enabled.
@@ -153,6 +156,9 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
   agent's `choose_script_formula` and `update_video` write them.
 - A formula chosen in the window at `TOPIC_PROPOSED` is stored with the approval, from a picker
   that lists the real formulas with the experimental ones marked.
+- The Topic tab shows a topic's angle with the kind label the real `GET /angle-kinds` returns.
+  **Edit** stores a new sentence and kind and clears the score. After the topic is approved the
+  block has no Edit button and the API refuses the same write.
 
 Trap: the Voice and Voice model rows need the real API, because `voice_info` comes only from the
 single-video fetch and the list row the window opens on does not carry it.
@@ -250,7 +256,8 @@ Covers [the New Video page](../15-dashboard.md#the-new-video-page) against the r
 `POST /videos/manual`. A submission lands at `TOPIC_APPROVED` in the `manual` domain with a dash for
 its score, or at `TOPIC_PROPOSED` with auto-approve cleared. A formula picked on the form is stored
 as the video's formula choice. The stack installs no agents, so the spec runs the Automatic path
-only.
+only. A submission with no angle is stored with none, a typed angle needs its kind before the form
+submits, and a given angle is stored with score 0.
 
 ### `analytics.spec.ts`
 

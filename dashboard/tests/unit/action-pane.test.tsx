@@ -1256,6 +1256,43 @@ describe("ActionPane — mascot picker", () => {
     vi.useRealTimers();
   });
 
+  // ── The topic's angle (TMDEV-214) ─────────────────────────────────────────
+
+  it("shows a proposed topic's angle under its title, with its kind and score", () => {
+    const video = { ...makeVideo("TOPIC_PROPOSED"), angle: "The backup copied an empty folder for a year.",
+                    angle_kind: "broken_expectation", angle_score: 8 };
+    render(<ActionPane videos={[video]} {...base} />);
+    const line = screen.getByTestId(`angle-line-${video.id}`);
+    expect(line.textContent).toBe("The backup copied an empty folder for a year.");
+    // The full sentence is on hover: the line is clipped to one row.
+    expect(line.getAttribute("title")).toBe("The backup copied an empty folder for a year.");
+    const meta = screen.getByTestId(`angle-meta-${video.id}`).textContent;
+    expect(meta).toContain("broken expectation");
+    expect(meta).toContain("Angle 8/10");
+  });
+
+  it("says a proposed topic has no angle", () => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} {...base} />);
+    expect(screen.getByTestId(`angle-meta-${video.id}`).textContent).toContain("No angle");
+    expect(screen.queryByTestId(`angle-line-${video.id}`)).toBeNull();
+  });
+
+  it("shows a dash for an angle a person wrote, which has no score", () => {
+    const video = { ...makeVideo("TOPIC_PROPOSED"), angle: "A sentence.", angle_kind: "myth", angle_score: 0 };
+    render(<ActionPane videos={[video]} {...base} />);
+    expect(screen.getByTestId(`angle-meta-${video.id}`).textContent).toContain("Angle —");
+  });
+
+  it.each(["SCRIPT_READY", "VIDEO_READY"] as const)(
+    "leaves the angle off a %s row, where the topic is already decided", (status) => {
+      const video = { ...makeVideo(status), angle: "A sentence.", angle_kind: "myth", angle_score: 7 };
+      render(<ActionPane videos={[video]} {...base} />);
+      expect(screen.queryByTestId(`angle-line-${video.id}`)).toBeNull();
+      expect(screen.queryByTestId(`angle-meta-${video.id}`)).toBeNull();
+    },
+  );
+
   it("shows a held mascot that can no longer be picked as unavailable", () => {
     const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "moss" };
     render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} {...base} />);

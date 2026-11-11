@@ -77,3 +77,11 @@ def test_the_system_prompt_is_the_skill_the_agent_reads():
 def test_every_case_in_the_topic_set_builds_a_prompt():
     for case in json.loads(ev.CASES.read_text(encoding="utf-8"))["cases"]:
         assert case["title"] in ev.build_prompt(case)
+
+
+def test_a_topic_with_an_angle_carries_it_as_get_video_does_and_one_without_carries_none():
+    with_angle = _video({**CASE, "angle": "A card with no battery signs a payment.", "angle_kind": "process"})
+    assert (with_angle["angle"], with_angle["angle_kind"], with_angle["angle_formula"]) == \
+        ("A card with no battery signs a payment.", "process", "follow-the-flow")
+    without = _video(CASE)
+    assert (without["angle"], without["angle_kind"], without["angle_formula"]) == ("", "", "")

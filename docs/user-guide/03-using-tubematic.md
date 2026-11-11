@@ -21,8 +21,13 @@ failed, a video that failed.
 
 For each proposed topic, press **Approve**, **Reject** or **Revise**.
 
+A topic that research proposed carries an angle: one sentence saying what the video's opening will
+use. It shows under the topic's title, with its kind and a score. See [The angle](#the-angle).
+
 Before you approve, set the choices that are fixed from then on:
 
+- the **angle**, if you want the video to open on something else. Open the topic and press **Edit**
+  on its **Topic** tab,
 - the **script profile**, if you want a particular writing style,
 - the **formula**, in the video's window, if you want a particular script structure. Left on
   **Auto**, the agent picks one for the topic (see [Script formulas](#script-formulas)),
@@ -87,18 +92,56 @@ four ways.
 |---|---|---|
 | You | You type a title and a topic | The **New Video** page |
 | Curriculum | Research lists sub-topics of a domain you describe | The **Topics** page: add a domain as a curriculum seed |
-| Trending | Research looks for video angles on what is popular on GitHub Trending, Hacker News, Lobsters and Dev.to | **Settings → Research** chooses the sites. The first two are on by default |
+| Trending | Research looks for video topics in what is popular on GitHub Trending, Hacker News, Lobsters and Dev.to | **Settings → Research** chooses the sites. The first two are on by default |
 | Mining | Research hands YouTube videos you list to Gemini, which picks out ideas they mention in passing | The **Topics** page, under **Mining Sources**. Needs a Gemini key |
 
 Curriculum, trending and mining are the three research modes. Switch each on or off with the
 toggles at the top of the **Topics** page. With all three off, research does not run.
 
-Research scores each topic from 1 to 10 for how well it suits a short explainer video, and files
-only topics that score 5 or more. Each research run files at most 2 topics per mode, or 2 per
-curriculum seed. You can change those numbers on **Settings → Research**.
+Research gives each topic two scores. The topic score, from 1 to 10, says how well the pipeline can
+show the topic in a short explainer video. The angle score, from 0 to 10, says how strong a reason
+the topic gives a viewer to keep watching. Research files only topics that score 5 or more on both. Each research
+run files at most 2 topics per mode, or 2 per curriculum seed. You can change those numbers on
+**Settings → Research**.
 
 A video you create on the **New Video** page is not scored. It is filed under a domain called
 **Manual Videos**.
+
+### The angle
+
+An angle is one sentence, up to 300 characters, that says what a video's opening will use: the
+contradiction, the failure, the wrong belief or the incident that makes the topic worth watching.
+Research takes it from what it already read for the topic and files it with the topic. A subject
+that offers no angle is left out. The agent ends each research run with a summary that lists the
+subjects it left out, with the reason for each, before the topics it filed. The **Logs** page shows
+it with the agent's output.
+
+Every angle has a kind. The kind tells the script writer which [script formula](#script-formulas)
+to start from.
+
+| Kind | The topic has | The script starts from |
+|---|---|---|
+| Paradox | Something you own or use that works in a way that seems impossible | Paradox, Mechanism, Reframe |
+| Broken expectation | A tool that did something that looks wrong | Broken Expectation |
+| Process | A process with a natural order and an end you have not seen | Follow the Flow |
+| Myth | A belief most people hold that is wrong | Myth, Break, Model |
+| Design question | A design decision that looks stupid from outside | Why Don't They Just |
+| Incident | A real outage, loss or bug with a timeline | Incident File |
+| Scheme | A scam, fraud or loophole that works as a loop | Scheme Machine |
+| Anomaly | Evidence that looked wrong | Anomaly File |
+| Scene | One person inside one moment | Scene Story |
+| Measure | Something with a natural measure, such as size, cost or speed | Escalating Ladder |
+
+You can change the sentence and its kind while the topic waits at Topic Proposed, on the **Topic**
+tab of the video window. An angle you write has no score, and editing an angle clears the score the
+agent gave it. You can edit the angle only until you approve the topic. A revision you request
+after that can still ask the agent for a different one.
+
+A topic of your own can come without an angle. The **New Video** page has an optional **Angle**
+field. When you leave it empty, the agent looks for an angle in your topic before it writes the
+script and records it on the video. When your topic offers none, the agent says so in a comment
+and writes the script from the topic alone. The same happens to a topic that was proposed before
+angles existed.
 
 ![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button and its Edit defaults button. The first domain is open and shows its style, voice, agent and topic cap](../images/topics.png)
 

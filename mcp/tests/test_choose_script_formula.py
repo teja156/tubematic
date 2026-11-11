@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import pytest
 
 import server
+from sample_angle import ANGLE
 from tubematic_core import formulas as tf
 
 REASON = "A request moves through fixed stages, each handing on to the next."
@@ -424,20 +425,20 @@ def test_a_guarded_return_to_the_topic_drops_the_pick_too(db):
 def test_the_domains_default_formula_seeds_every_new_video(db, strategy):
     out = server.upsert_project("dom", "A domain", default_formula_id="scene-story")
     assert out["default_formula_id"] == "scene-story"
-    made = server.create_video("dom", "a topic", strategy, 7)
+    made = server.create_video("dom", "a topic", strategy, 7, **ANGLE)
     assert made["formula_choice"] == "scene-story"
     assert _row(made["video_id"])["formula_choice"] == "scene-story"
 
 
 def test_a_domain_on_auto_seeds_nothing(db):
-    made = server.create_video("dom", "a topic", "trending", 7)
+    made = server.create_video("dom", "a topic", "trending", 7, **ANGLE)
     assert made["formula_choice"] == "" and _row(made["video_id"])["formula_choice"] == ""
 
 
 def test_a_default_that_is_no_formula_any_more_seeds_nothing(db):
     with server._conn() as con:
         con.execute("UPDATE projects SET default_formula_id = 'retired-formula' WHERE id = 'dom'")
-    assert server.create_video("dom", "a topic", "trending", 7)["formula_choice"] == ""
+    assert server.create_video("dom", "a topic", "trending", 7, **ANGLE)["formula_choice"] == ""
 
 
 def test_a_default_formula_must_be_a_formula(db):

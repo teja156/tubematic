@@ -7,7 +7,9 @@ skill) and the same candidate list it reads (get_video's
 formula_routing.candidates), using the Claude Code CLI. Then it scores each
 pick against the topic's expected formulas and writes a Markdown report.
 
-A topic marked experimental is routed with the setting
+A topic with an angle is routed with it, as get_video returns it (angle,
+angle_kind and the derived angle_formula); a topic without one is routed
+from the topic alone. A topic marked experimental is routed with the setting
 auto_experimental_formulas on; every other topic with it off, as a fresh
 install runs. A topic with a style is routed as a video in that style; one
 without as a video Auto gave the mixed scene system.
@@ -39,6 +41,7 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 
 from eval_style_routing import ask, verdict  # noqa: E402
+from tubematic_core import angles as tangles  # noqa: E402
 from tubematic_core import formulas as tformulas  # noqa: E402
 from tubematic_core import visual_styles as tvs  # noqa: E402
 
@@ -71,6 +74,10 @@ def build_prompt(case: dict) -> str:
         "title": case["title"],
         "topic": case["brief"],
         "comments": [],
+        # As get_video returns it: all three empty for a topic with no angle.
+        "angle": case.get("angle", ""),
+        "angle_kind": case.get("angle_kind", ""),
+        "angle_formula": tangles.formula_for(case.get("angle_kind", "")),
         "visual_style": style or tvs.AUTO,
         "style": tvs.agent_view(style),
         "style_routing": {"decided": True, "pick": style or tvs.SCENES},

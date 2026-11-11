@@ -16,6 +16,7 @@ import json
 import pytest
 
 import server
+from sample_angle import ANGLE, mined
 
 T0 = "2026-01-01T00:00:00Z"
 
@@ -52,7 +53,7 @@ def _defaults(row):
 
 def _file(strategy="trending", pid="dom"):
     result = server.create_video(project_id=pid, topic="t", strategy=strategy,
-                                 producibility_score=7)
+                                 producibility_score=7, **ANGLE)
     assert "error" not in result, result
     return result
 
@@ -219,8 +220,7 @@ class _Gemini:
 
     def post(self, url, headers=None, json=None):
         import json as _json
-        topics = [{"topic": "How a write-ahead log survives a crash",
-                   "producibility_score": 8}]
+        topics = [mined("How a write-ahead log survives a crash")]
 
         class _Resp:
             status_code = 200

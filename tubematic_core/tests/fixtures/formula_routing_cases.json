@@ -1,5 +1,5 @@
 {
- "_about": "The fixed topic set formula routing is checked against. Topics no install owns. expect: the right formula(s), best first; ok: also acceptable; style: the video's visual style, when the case has one; experimental: true = the case is routed with the setting auto_experimental_formulas on, and may expect an experimental formula. A new formula's change adds its topics here. Read by tubematic_core/tests/test_formula_routing.py and scripts/eval_formula_routing.py.",
+ "_about": "The fixed topic set formula routing is checked against. Topics no install owns. expect: the right formula(s), best first; ok: also acceptable; style: the video's visual style, when the case has one; angle, angle_kind: the topic's angle, as research files it; a case without them is a topic with no angle. experimental: true = the case is routed with the setting auto_experimental_formulas on, and may expect an experimental formula. A new formula's change adds its topics here. Read by tubematic_core/tests/test_formula_routing.py and scripts/eval_formula_routing.py.",
  "cases": [
   {
    "title": "How noise-cancelling headphones make quiet by adding sound",
@@ -20,7 +20,9 @@
    "ok": [
     "follow-the-flow"
    ],
-   "style": "under_the_hood"
+   "style": "under_the_hood",
+   "angle": "A screen that ignores a pen pressed hard reacts to the lightest touch of a finger.",
+   "angle_kind": "paradox"
   },
   {
    "title": "Why airlines sell more tickets than the plane has seats",
@@ -41,7 +43,9 @@
    "ok": [
     "why-dont-they-just"
    ],
-   "style": "terminal_doc"
+   "style": "terminal_doc",
+   "angle": "Typing 0.1 + 0.2 into almost any language gives 0.30000000000000004.",
+   "angle_kind": "broken_expectation"
   },
   {
    "title": "You emptied the bin and the file is still there",
@@ -74,7 +78,9 @@
    "ok": [
     "paradox-mechanism-reframe"
    ],
-   "style": "system_flow"
+   "style": "system_flow",
+   "angle": "A card with no battery wakes, answers and signs a payment in under half a second.",
+   "angle_kind": "process"
   },
   {
    "title": "What happens between pressing Enter and a web page appearing",
@@ -103,7 +109,9 @@
    ],
    "ok": [
     "broken-expectation"
-   ]
+   ],
+   "angle": "Most people think an incognito window makes them anonymous; it only forgets the history on that device.",
+   "angle_kind": "myth"
   },
   {
    "title": "You do not use only ten percent of your brain",
@@ -133,7 +141,9 @@
     "follow-the-flow",
     "paradox-mechanism-reframe"
    ],
-   "note": "A site that checks a password it cannot read is also a paradox the viewer has met."
+   "note": "A site that checks a password it cannot read is also a paradox the viewer has met.",
+   "angle": "A site that cannot tell you your password is doing it right, and deliberately slows itself down.",
+   "angle_kind": "design_question"
   },
   {
    "title": "Why the calendar needs a leap day",
@@ -164,7 +174,9 @@
    ],
    "ok": [
     "scene-story"
-   ]
+   ],
+   "angle": "One mistyped argument in a routine command took S3 down for four hours, status page included.",
+   "angle_kind": "incident"
   },
   {
    "title": "The update that crashed 8.5 million computers in one morning",
@@ -196,7 +208,9 @@
    ],
    "ok": [
     "scene-story"
-   ]
+   ],
+   "angle": "Cups of pudding at 25 cents each turned into 1,253,000 airline miles, through a charity that peeled the barcodes.",
+   "angle_kind": "scheme"
   },
   {
    "title": "The scheme that gave Ponzi his name",
@@ -229,7 +243,9 @@
    ],
    "ok": [
     "scene-story"
-   ]
+   ],
+   "angle": "A telescope recorded 72 seconds of a narrow signal at hydrogen's frequency, and the same spot has been silent since.",
+   "angle_kind": "anomaly"
   },
   {
    "title": "The star that dimmed in a way no planet could explain",
@@ -259,7 +275,9 @@
    "ok": [
     "incident-file",
     "anomaly-file"
-   ]
+   ],
+   "angle": "One duty officer had minutes to report five incoming missiles, and judged them a false alarm.",
+   "angle_kind": "scene"
   },
   {
    "title": "The flight attendant who fell ten kilometres and lived",
@@ -289,7 +307,9 @@
     "escalating-ladder"
    ],
    "ok": [],
-   "style": "whiteboard"
+   "style": "whiteboard",
+   "angle": "Every step from a kilobyte up is a thousand times the last, until the world's data passes a zettabyte.",
+   "angle_kind": "measure"
   },
   {
    "title": "How long a password lasts, one character at a time",

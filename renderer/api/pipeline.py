@@ -47,6 +47,7 @@ import transcripts
 # we do not have to is the cheapest way to keep that question closed.
 try:
     from tubematic_core import logging as tlog
+    from tubematic_core import angles as tangles
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
@@ -62,6 +63,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
     from tubematic_core import logging as tlog
+    from tubematic_core import angles as tangles
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
@@ -1583,6 +1585,21 @@ ACTIONABLE_STATUSES = {"TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY"}
 # Keep in sync: mcp/server.py's TOPIC_ONLY_FIELDS, AGENT_CHECKPOINT_FIELDS and
 # HUMAN_CHECKPOINT_STATUSES.
 TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id", "formula_choice")
+
+
+def _body_angle(body: dict, *, with_score: bool):
+    """The angle a request body carries (TMDEV-214) as ((angle, kind, score),
+    None), or (None, error). Absent and null both mean none; the sentence and
+    its kind go together. with_score is for POST /videos, which a tool may
+    send the agent's score to; a person's request never carries one."""
+    angle = body.get("angle")
+    kind = body.get("angle_kind")
+    angle = "" if angle is None else tangles.clean(angle)
+    kind = "" if kind is None else tangles.clean_kind(kind)
+    score = body.get("angle_score") if with_score else 0
+    score = 0 if score is None else score
+    err = tangles.angle_error(angle, kind, score)
+    return (None, err) if err else ((angle, kind, score), None)
 AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
 # VIDEO_APPROVED is deliberately absent (TMDEV-83): publishing is never agent
 # work — a human does it from the dashboard, or Auto Pilot's worker pass does
@@ -2862,7 +2879,7 @@ def create_pipeline_blueprint() -> Blueprint:
             "status", "title", "script", "video_version", "youtube_url",
             "gemini_feedback", "voice_id", "agent_id", "agent_model", "agent_effort",
             "script_profile_id", "visual_style", "publish_title", "publish_description",
-            "mascot_id", "formula_choice",
+            "mascot_id", "formula_choice", "angle", "angle_kind",
         }
         fields = {k: v for k, v in body.items() if k in allowed}
         # The formula a person chooses for the video, or "" for Auto
@@ -2879,6 +2896,22 @@ def create_pipeline_blueprint() -> Blueprint:
                              f"{list(tformulas.FORMULAS)}, or \"\" for Auto"
                 }), 400
             fields["formula_choice"] = fc
+        # A topic's angle (TMDEV-214): the sentence and its kind, edited by a
+        # person at the topic. Both keys or neither; null is refused here, where
+        # a key was sent on purpose. The score is the agent's and is not
+        # writable; a changed angle resets it in the UPDATE below.
+        angle_edit = "angle" in fields or "angle_kind" in fields
+        if angle_edit:
+            if not ("angle" in fields and "angle_kind" in fields):
+                return jsonify({"error": "angle and angle_kind are written together: send the "
+                                         "sentence and its kind, or an empty string for both"}), 400
+            for key in ("angle", "angle_kind"):
+                if not isinstance(fields[key], str):
+                    return jsonify({"error": f"{key} must be a string"}), 400
+            picked, err = _body_angle(fields, with_score=False)
+            if err:
+                return jsonify({"error": err}), 400
+            fields["angle"], fields["angle_kind"], _ = picked
         if "mascot_id" in fields:
             if not isinstance(fields["mascot_id"], str):
                 return jsonify({"error": "mascot_id must be a string"}), 400
@@ -2965,7 +2998,11 @@ def create_pipeline_blueprint() -> Blueprint:
                 "error": f"Invalid status '{fields['status']}'. Must be one of: {sorted(VALID_VIDEO_STATUSES)}"
             }), 400
 
-        fields["updated_at"] = _now()
+        # A PATCH that only edits the angle does not move the video: its
+        # updated_at stays, or the worker would read the edit as the topic
+        # arriving again and announce it a second time.
+        if set(fields) - {"angle", "angle_kind"}:
+            fields["updated_at"] = _now()
 
         with _conn() as con:
             row = con.execute(
@@ -3103,6 +3140,13 @@ def create_pipeline_blueprint() -> Blueprint:
                     "error": f"{', '.join(sorted(topic_locked))} can only be set while the "
                              f"video is at TOPIC_PROPOSED (this one is {row['status']})"
                 }), 409
+            # The angle is read by the script writer from the moment the topic
+            # is approved, so a person edits it at the topic and nowhere else.
+            if angle_edit and row["status"] != "TOPIC_PROPOSED":
+                return jsonify({
+                    "error": "angle can only be changed while the video is at TOPIC_PROPOSED "
+                             f"(this one is {row['status']})"
+                }), 409
             # The agent group decides who does the *next* piece of work, so a
             # human may change it at every checkpoint (TMDEV-110). In between,
             # an agent or the renderer holds the video, and switching under it
@@ -3132,6 +3176,14 @@ def create_pipeline_blueprint() -> Blueprint:
             # (or none) starts unpinned, or it would inherit the old version number.
             if takes_no_mascot or ("mascot_id" in fields and fields["mascot_id"] != stored_mascot):
                 set_sql.append("mascot_version = 0")
+            if angle_edit:
+                # The score described the words it was given for. SET reads the
+                # old row, so the same angle saved again keeps its score. Added
+                # after the mascot block above, which rebuilds set_params from
+                # `fields` and would drop these two.
+                set_sql.append("angle_score = CASE WHEN angle IS ? AND angle_kind IS ? "
+                               "THEN angle_score ELSE 0 END")
+                set_params += [fields["angle"], fields["angle_kind"]]
             # Any human status change is a human acting on the video, so it
             # releases a stuck flag and starts the no-progress count afresh
             # (TMDEV-129). Only a status change: renaming a stuck video is not
@@ -3169,7 +3221,7 @@ def create_pipeline_blueprint() -> Blueprint:
             # statements, and a status change landing between them would let
             # a frozen field through at a status where it is frozen — after
             # the poller may already have handed the video to its agent.
-            frozen_bound = bool(topic_locked or agent_locked or voice_exempt)
+            frozen_bound = bool(topic_locked or agent_locked or voice_exempt or angle_edit)
             if frozen_bound:
                 where_sql, where_params = " AND status = ?", [row["status"]]
             # The checks above and this UPDATE are two statements, so the
@@ -3673,6 +3725,13 @@ def create_pipeline_blueprint() -> Blueprint:
         formula_choice, formula_err = _formula_choice_arg(body.get("formula_choice"))
         if formula_err:
             return jsonify({"error": formula_err}), 400
+        # Stored when sent and checked for shape only, like the score: research
+        # files through the MCP server's create_video, which is where a proposal
+        # without an angle is refused (TMDEV-214).
+        picked_angle, angle_err = _body_angle(body, with_score=True)
+        if angle_err:
+            return jsonify({"error": angle_err}), 400
+        angle, angle_kind, angle_score = picked_angle
 
         # The id names the video's job directory, so a caller-chosen one must
         # be a plain path segment (TMDEV-158). This route only ever creates.
@@ -3765,14 +3824,15 @@ def create_pipeline_blueprint() -> Blueprint:
                 f"""INSERT INTO videos
                    (id, project_id, title, topic, strategy, producibility_score,
                     status, video_version, voice_id, agent_id, agent_model, agent_effort,
-                    visual_style, script_profile_id, mascot_id, formula_choice, created_at,
-                    updated_at)
-                   SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    visual_style, script_profile_id, mascot_id, formula_choice, angle, angle_kind,
+                    angle_score, created_at, updated_at)
+                   SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                    WHERE {_DOMAIN_OPEN_GUARD}""",
                 (vid, body.get("project_id"), title,
                  body["topic"], body["strategy"], body["producibility_score"], voice_id,
                  agent_id, agent_model, agent_effort, visual_style, script_profile_id,
-                 mascot_id, formula_choice, now, now, body["strategy"], body.get("project_id")),
+                 mascot_id, formula_choice, angle, angle_kind, angle_score, now, now,
+                 body["strategy"], body.get("project_id")),
             )
             if cur.rowcount == 0:
                 return jsonify({"error": _closed_domain_error(con, body["project_id"])
@@ -3813,6 +3873,17 @@ def create_pipeline_blueprint() -> Blueprint:
         if not isinstance(topic, str) or not topic.strip():
             return jsonify({"error": "topic is required"}), 400
         topic = topic.strip()
+
+        # Optional: a person's topic may come with the angle its opening should
+        # use, or without one, and is never refused for lacking it (TMDEV-214).
+        # Unscored either way; with none, the agent adds one when it picks the
+        # video up.
+        if tangles.sent_no_angle(body.get("angle"), body.get("angle_kind")):
+            body = {**body, "angle": "", "angle_kind": ""}
+        picked_angle, angle_err = _body_angle(body, with_score=False)
+        if angle_err:
+            return jsonify({"error": angle_err}), 400
+        angle, angle_kind, _ = picked_angle
 
         approve = body.get("approve", True)
         if not isinstance(approve, bool):
@@ -3916,12 +3987,12 @@ def create_pipeline_blueprint() -> Blueprint:
                 """INSERT INTO videos
                    (id, project_id, title, topic, strategy, producibility_score, status,
                     video_version, voice_id, agent_id, agent_model, agent_effort,
-                    script_profile_id, visual_style, mascot_id, formula_choice,
-                    created_at, updated_at)
-                   VALUES (?, ?, ?, ?, 'manual', 0, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    script_profile_id, visual_style, mascot_id, formula_choice, angle,
+                    angle_kind, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 'manual', 0, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (vid, MANUAL_PROJECT_ID, title, topic, status, voice_id, agent_id,
                  agent_model, agent_effort, profile_id, visual_style, mascot_id,
-                 formula_choice, now, now),
+                 formula_choice, angle, angle_kind, now, now),
             )
             video = _video_with_comments(con, vid)
         return jsonify(video), 201
@@ -5338,6 +5409,13 @@ def create_pipeline_blueprint() -> Blueprint:
         formula files. The dashboard uses it to name what a video's script
         recorded (formula_id, hook_type)."""
         return jsonify(tformulas.public_list())
+
+    @bp.get("/angle-kinds")
+    def list_angle_kinds():
+        """The kinds a topic's angle can be, each with its label and what a
+        topic must hold for it, from tubematic_core.angles. The dashboard uses
+        it to label a video's angle and to fill the kind picker."""
+        return jsonify(tangles.public_list())
 
     @bp.post("/render/gpu/test")
     def request_gpu_test():

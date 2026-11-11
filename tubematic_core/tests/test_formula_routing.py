@@ -161,3 +161,18 @@ def test_the_topics_name_no_install():
     # in it would turn one person's data into everyone's fixture.
     text = CASES_PATH.read_text(encoding="utf-8")
     assert "TMDEV-" not in text and "http" not in text
+
+
+def test_cases_with_an_angle_use_real_kinds_and_some_cases_have_none():
+    # The eval routes both: a topic that arrives with an angle, and one with
+    # none (a person's own topic, or one filed before topics had angles).
+    from tubematic_core import angles as tangles
+    with_angle = [c for c in CASES if c.get("angle_kind")]
+    assert with_angle and len(with_angle) < len(CASES)
+    for case in CASES:
+        assert bool(case.get("angle")) == bool(case.get("angle_kind")), case["title"]
+    for case in with_angle:
+        assert case["angle_kind"] in tangles.ANGLE_KINDS, case["title"]
+        # The angle's formula is the expected one, so the eval measures
+        # whether the router takes the angle's lead.
+        assert tangles.formula_for(case["angle_kind"]) == case["expect"][0], case["title"]

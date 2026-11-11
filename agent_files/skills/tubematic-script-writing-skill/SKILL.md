@@ -12,7 +12,11 @@ needs its script written.
 
 ## Step 1 — Read the video, its script profile and the preferences
 
-1. Call `get_video(video_id)` — read the topic, the title, and any human comments. On a revision
+1. Call `get_video(video_id)` — read the topic, the title, and any human comments. Read the
+   topic's angle too: `angle` is one sentence saying what the opening will use, `angle_kind` is
+   its kind, and `angle_formula` is the formula that kind points to (tubematic-formula-routing
+   starts from it when it picks the formula). All three are empty
+   when the topic has no angle; that is a normal state. On a revision
    also read `formula_id`, `hook_alternatives` and `script_warnings`: what the last draft was built
    on and what it was flagged for.
 2. Read the video's `script_profile_id`.
@@ -222,7 +226,15 @@ a flat list: items of equal weight with nothing joining one to the next.
 ### Three openings, then one
 
 Before writing the script, draft three openings for the chosen formula, **each from a different
-shape** in its reference file. Three shapes, not one opening worded three ways. Then:
+shape** in its reference file. Three shapes, not one opening worded three ways.
+
+**When the video has an angle, all three are built on it.** Each shape puts that same thing (the
+contradiction, the failure, the belief, the incident) to the viewer its own way. The `angle`
+sentence is a note to you, never a line of the script: do not reuse its wording. If the topic's
+facts do not support the angle, treat it as an opening that overclaims (item 1): open on what the
+facts do support and say so in the hand-off comment.
+
+Then:
 
 1. Mark any opening that claims more than the script will deliver, or that this topic cannot fill
    with real facts. It is out; give it a `note` saying why.

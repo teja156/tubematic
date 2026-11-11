@@ -125,6 +125,7 @@ How the parts fit together is in [Architecture](../developer/01-architecture.md)
 | Research mode | A way research finds topics: curriculum, trending or mining. See [Using Tubematic](03-using-tubematic.md#where-topics-come-from) |
 | Revision | A request for changes, with a comment saying what to change |
 | Score | How well a topic suits a short explainer video, from 1 to 10. Research files only topics that score 5 or more |
+| Angle | One sentence saying what a video's opening will use, with a kind and a score from 0 to 10. Research files only topics whose angle scores 5 or more. See [The angle](03-using-tubematic.md#the-angle) |
 | Script profile | A writing style learned from YouTube videos you choose |
 | Session | One run of the agent on one video and one stage |
 | Visual style | How a video looks. See [Visual Styles and Mascots](13-visual-styles-and-mascots.md) |

@@ -7,6 +7,7 @@ import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
 import { formatDateShort } from "@/lib/datetime";
 import { scoreLabel } from "@/lib/utils";
+import { angleKindLabel, angleScoreLabel, hasAngle } from "@/lib/angles";
 import {
   AGENT_EFFORTS, type AgentPicks, agentChanged, agentLabel, agentOptions, agentPicksPayload,
   effectiveAgent, effortLabel, effortOptionLabel, initialEffort, isUsable, modelLabel,
@@ -89,6 +90,15 @@ function ActionMeta({ video, scriptProfiles = [], agents = [], formulaNames = nu
       <span style={{ whiteSpace: "nowrap" }}>{label}</span>
       <span style={{ color: "var(--faint)" }}>·</span>
       <span style={{ color: "var(--ink-2)", whiteSpace: "nowrap" }}>Score {scoreLabel(score)} · {updatedStr}</span>
+      {/* The angle is judged with the topic, so its kind and score sit on the
+          topic rows only. The kind reads from its id: the row loads no list. */}
+      {video.status === "TOPIC_PROPOSED" && (
+        <span data-testid={`angle-meta-${video.id}`} style={{ whiteSpace: "nowrap" }}>
+          {hasAngle(video)
+            ? <>· <span style={{ color: "var(--amber)" }}>{angleKindLabel(video.angle_kind ?? "", null)}</span> · Angle {angleScoreLabel(video.angle_score)}</>
+            : <>· No angle</>}
+        </span>
+      )}
       {/* Read-only wherever a choice has no picker on this row — without
           this they would vanish from view entirely at exactly the checkpoints
           where knowing them matters. The topic group is live only at
@@ -844,6 +854,17 @@ export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = []
                   >
                     {video.title || video.topic}
                   </div>
+                  {/* What the opening will use, on the rows where the topic is
+                      being decided. One clipped line; the window has the rest. */}
+                  {video.status === "TOPIC_PROPOSED" && hasAngle(video) && (
+                    <div
+                      data-testid={`angle-line-${video.id}`}
+                      title={video.angle}
+                      style={{ fontFamily: "var(--sans)", fontSize: 12, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    >
+                      {video.angle}
+                    </div>
+                  )}
                   <ActionMeta video={video} scriptProfiles={scriptProfiles} agents={agents} formulaNames={formulaNames} />
                 </div>
 

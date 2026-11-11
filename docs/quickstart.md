@@ -72,8 +72,8 @@ agent's default.
 
 1. Open `http://localhost:3000` and sign in with the password you set.
 2. Open **New Video**.
-3. Enter a **Title** of up to 70 characters, and a **Topic**: what the video is about, the angle,
-   and anything it must cover.
+3. Enter a **Title** of up to 70 characters, and a **Topic**: what the video is about and
+   anything it must cover. **Angle** is optional; the agent finds one when you leave it empty.
 4. Leave **Automatically approve topic** ticked and press **Submit video**.
 
 ![The New Video page with a title and a topic filled in, and Automatically approve topic ticked](images/new-video.png)

@@ -58,10 +58,13 @@ can switch to. Never pass the person's choice just because it is theirs.
 ## Step 1: Describe the topic
 
 Read the video's `title`, its `topic` (the brief) and the comments: a person may have asked for a
-structure when approving or revising the topic. When `get_video` carries an `angle` (one sentence
-on what the opening will use) read it too. Then write down:
+structure when approving or revising the topic. Read the topic's angle too: `angle` is one
+sentence on what the opening will use, `angle_kind` is its kind and `angle_formula` is the formula
+that kind is the first choice for. All three are `""` when the topic has no angle, which is a
+normal state: then work the shape out from the topic alone. Then write down:
 
-1. **The shape, in one line.** What kind of thing the topic is: a thing the viewer owns that
+1. **The shape, in one line.** When the topic has an angle, `angle_kind` already names it: take
+   it, unless the brief's facts plainly contradict it. Otherwise, what kind of thing the topic is: a thing the viewer owns that
    behaves strangely, a tool that did something wrong-looking, a process with an order, a belief,
    a design that looks stupid, an incident with a timeline, a scheme, evidence that looked wrong,
    one person in one moment, something with a measure, a set of separate items, a rule system, a

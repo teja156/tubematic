@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import pytest
 
 import server
+from sample_angle import ANGLE
 import text_audit
 from builtin_gpu import store_builtin_probe
 from tubematic_core import mascots as tmascots
@@ -68,7 +69,7 @@ def _col(col, vid=VID):
 
 
 def _create(project="p1", strategy="curriculum"):
-    out = server.create_video(project, "topic", strategy, 8)
+    out = server.create_video(project, "topic", strategy, 8, **ANGLE)
     assert "error" not in out, out
     return out
 

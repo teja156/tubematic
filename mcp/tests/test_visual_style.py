@@ -25,6 +25,7 @@ import json
 import pytest
 
 import server
+from sample_angle import ANGLE
 from builtin_gpu import store_builtin_probe
 
 
@@ -258,7 +259,7 @@ def test_only_a_forced_motion_graphics_excludes_figures(db):
 
 def test_a_curriculum_video_inherits_its_domains_default(db):
     _project("proj_seed", default_style="stick")
-    result = server.create_video("proj_seed", "A topic", "curriculum", 7)
+    result = server.create_video("proj_seed", "A topic", "curriculum", 7, **ANGLE)
     assert result["visual_style"] == "stick"
     assert _read(result["video_id"], "visual_style") == "stick"
 
@@ -268,13 +269,13 @@ def test_a_trending_video_in_the_same_domain_does_not_inherit(db):
     strategy that produces a series. A one-off filed into the same domain
     starts at auto like any other."""
     _project("proj_seed2", default_style="stick")
-    result = server.create_video("proj_seed2", "A topic", "trending", 7)
+    result = server.create_video("proj_seed2", "A topic", "trending", 7, **ANGLE)
     assert result["visual_style"] == "auto"
 
 
 def test_a_domain_with_no_default_leaves_curriculum_videos_on_auto(db):
     _project("proj_plain", default_style="")
-    result = server.create_video("proj_plain", "A topic", "curriculum", 7)
+    result = server.create_video("proj_plain", "A topic", "curriculum", 7, **ANGLE)
     assert result["visual_style"] == "auto"
 
 
@@ -282,7 +283,7 @@ def test_a_corrupt_stored_default_falls_back_to_auto(db):
     """A hand-edited or downgraded row must not be able to make create_video
     write a style nothing understands."""
     _project("proj_bad", default_style="watercolour")
-    result = server.create_video("proj_bad", "A topic", "curriculum", 7)
+    result = server.create_video("proj_bad", "A topic", "curriculum", 7, **ANGLE)
     assert result["visual_style"] == "auto"
 
 

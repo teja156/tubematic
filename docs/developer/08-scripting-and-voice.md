@@ -199,6 +199,26 @@ a session that runs the current skills. Both switches refuse a video still on `a
 and scores the picks. You run it by hand; see
 [Formula routing tests](test-suites/formula-routing.md).
 
+### The topic's angle
+
+A video can arrive at the script writer with an [angle](02-pipeline.md#topic-angle): one sentence
+saying what the opening will use, and its kind. `get_video` returns them with `angle_formula`, the
+formula the kind is the first choice for (`tubematic_core/angles.py::ANGLE_KINDS`). The angle is
+used in two places:
+
+- Picking the formula ([How a formula is picked](#how-a-formula-is-picked)). With an angle,
+  `tubematic-formula-routing` takes `angle_kind` as the topic's shape and gives `angle_formula`
+  the points of a squarely matched kind of topic. Its other rules still apply: a formula ruled out
+  by its `avoid_for`, one the topic cannot fill with real facts, and rotation can pass it over, and
+  a person's choice outranks it. With no angle the router works the shape out from the topic. An
+  angle rewritten in a script revision sends the video through the router again.
+- Drafting the openings, in the script-writing skill. All three openings are built on the angle, each from a different shape of
+  the formula. The angle sentence is a note to the agent and is not spoken.
+
+A video has no angle when its topic came without one and the agent found none at pickup, or when
+its script was already written before topics carried angles. The script is then written from the
+topic alone.
+
 ### What outranks a formula
 
 The script-writing skill ranks the four things that shape a script. Where two disagree, the earlier

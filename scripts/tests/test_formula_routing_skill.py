@@ -99,7 +99,7 @@ def test_the_skill_handles_every_refusal_the_tool_makes():
 def test_the_angle_is_used_when_there_is_one_and_never_required():
     text = _text()
     assert "`angle_formula`" in text
-    assert "When `get_video` carries an `angle`" in text
+    assert "All three are `\"\"` when the topic has no angle" in text
 
 
 def test_the_operator_runs_it_after_the_style_and_before_the_script():
