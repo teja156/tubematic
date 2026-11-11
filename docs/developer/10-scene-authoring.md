@@ -662,14 +662,19 @@ under a mask gradient cost about 1.6 CPU-seconds a frame. The measured costs are
 - A beat after the first does not start within 2 frames of a word, or lasts under 2 seconds.
 - A move names an unknown slot, size, tone or skin, a string does not fit the frame at its size, a
   note wraps past 2 lines of 36 characters, or a value is out of its range.
-- Two elements share a slot, more than 4 elements are on screen at once, an `encode` plays while
-  slot `b` is taken, or a bracket reaches into a taken slot below it.
+- Two elements share a slot, more than 4 elements are on screen at once, or a bracket reaches into a
+  taken slot below it. An `encode`'s box holds slot `b` while it plays and a bracket's note holds the
+  note slot to the cut, against elements before and after them.
 - A move acts on an element that is not on stage or has not finished its own move, or finishes less
-  than 15 frames before its beat's cut.
+  than 15 frames before its beat's cut. A typed command or a custom move is given a glow, which
+  neither draws.
+- A beat's push would scale a string past the frame's edges, or the beat also has a custom move,
+  which draws in fixed frame pixels and cannot follow the push.
 - Stage text repeats 4 or more narration words in a row.
 - A custom move has more than 6 per video, a shipped move's name, a `src` that is not this video's
-  `move-<name>` file, or a source that breaks Bean Explainer's rules or reads the frame itself
-  (`terminal_doc.py::FORBIDDEN_SOURCE`).
+  `move-<name>` file, or a source that breaks Bean Explainer's rules, uses a CSS gradient, backdrop
+  filter or blend mode, a dynamic import, `performance.now`, Remotion's media or render-control parts,
+  or reads the frame itself (`terminal_doc.py::FORBIDDEN_SOURCE`).
 - Nothing changes on stage for more than 3 seconds.
 
 `mcp/tests/test_terminal_doc.py` pins `terminal_doc.py` to `contract.ts` and to the pack. The pack's

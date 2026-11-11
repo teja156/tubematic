@@ -112,6 +112,18 @@ _COUNTABLE = re.compile(r"^\d{1,3}(,\d{3})*$|^\d{1,12}$")
 # of it in one picture.
 FORBIDDEN_SOURCE = _BEAN_FORBIDDEN + (
     (re.compile(r"\buse(CurrentFrame|VideoConfig)\b"), "useCurrentFrame or useVideoConfig: a move draws from the t it is given"),
+    # A move is DOM, so its gradients and filters are CSS strings Bean's
+    # SVG-shaped patterns do not see; each one is full-area work per frame.
+    (re.compile(r"(?i)-gradient\s*\(|backdrop-?filter|mix-?blend-?mode"),
+     "a CSS gradient, backdrop filter or blend mode: it multiplies the render time; use flat colours"),
+    (re.compile(r"\bimport\s*\(|\bperformance\s*\.\s*now\b"),
+     "a dynamic import or performance.now(): a move imports statically and draws the same frames every render"),
+    # Remotion's media and render-control parts reach outside the drawing or
+    # hold the render.
+    (re.compile(r"\b(Img|Audio|Video|OffthreadVideo|IFrame|Html5Audio|Html5Video|staticFile|delayRender|continueRender|"
+                r"cancelRender|prefetch)\b"),
+     "a Remotion media or render-control part (Img, Audio, Video, staticFile, delayRender...): a move draws "
+     "glyphs and shapes only"),
 )
 _ALLOWED_IMPORT = re.compile(r"^(react|remotion|\.\./\.\./installed/terminalDoc/(kit|contract))$")
 MAX_ERRORS = 12
@@ -164,7 +176,8 @@ def move_frames(e: dict, custom: dict | None = None, from_text: str = "") -> int
     if t == "number":
         if e.get("count"):
             return e["count"]
-        n = len(re.sub(r"[^0-9A-Za-z]", "", e["value"]))
+        # Every glyph but a space and the "^" marker locks, punctuation included.
+        n = len(re.sub(r"[ ^]", "", e["value"]))
         return math.ceil(TIMING["lockStart"] + TIMING["lockStep"] * (n - 1)) + 1
     if t == "grid":
         return TIMING["rowStep"] * (len(e["rows"]) - 1) + TIMING["reveal"]
@@ -437,16 +450,26 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
     els: dict[str, _El] = {}
     pushes = 0
     note_until = -math.inf
+    # Slots held by something that is not an element: an encode's box holds b
+    # while it plays, a bracket's note holds the note slot to the cut.
+    holds: list[tuple[tuple, int, float, str]] = []
+    push = next((e for e in events if e.get("type") == "push"), None)
+    scale = push.get("scale") if isinstance(push, dict) and _num(push.get("scale")) else 1
+    if push and any(e.get("type") == "custom" for e in events):
+        err(f"{where}: a push and a move of your own cannot share a beat; the push scales the shipped moves only.")
 
     def on_stage(frame: int) -> list[_El]:
         return [el for el in els.values() if el.present(frame)]
 
-    def slot_taken(slots: tuple, frame: int, until: int, ignore: tuple = ()) -> str:
+    def slot_taken(slots: tuple, frame: int, until: float, ignore: tuple = ()) -> str:
         for el in els.values():
             if el.ev.get("id") in ignore or el.gone <= frame or el.since >= until:
                 continue
             if set(el.slots) & set(slots):
                 return el.ev["id"]
+        for held, since, upto, name in holds:
+            if since < until and frame < upto and set(held) & set(slots):
+                return name
         return ""
 
     for k, e in enumerate(events):
@@ -487,6 +510,10 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                 slots = STAGE_BANDS
             elif t == "rearrange":
                 slots = (e.get("slot") or src_el.slots[0],) if len(src_el.slots) == 1 else src_el.slots
+                if len(slots) == 1 and size not in SLOTS[slots[0]]["sizes"]:
+                    err(f"{what}: it lands in slot {slots[0]}, which takes the sizes "
+                        f"{', '.join(SLOTS[slots[0]]['sizes'])}; give it a size or another slot.")
+                    continue
             elif e["slot"] == "stage":
                 slots = STAGE_BANDS
             else:
@@ -500,11 +527,15 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                 if busy:
                     err(f"{what}: slot b must be empty while the box is on screen, but {busy!r} is there.")
                     continue
-            if t == "stream" and slots[0] not in STAGE_BANDS:
+            if t == "stream" and e["slot"] not in STAGE_BANDS:
                 err(f"{what}: a stream races in slot a, b or c.")
                 continue
-            if t == "type" and slots[0] not in STAGE_BANDS:
+            if t == "type" and e["slot"] not in STAGE_BANDS:
                 err(f"{what}: a typed command goes in slot a, b or c.")
+                continue
+            if scale > 1 and not _fits_under_push(e, size, scale):
+                err(f"{what}: the beat's push scales it by {scale}, and then it is wider than the frame; "
+                    "use a smaller size or a smaller push.")
                 continue
             busy = slot_taken(slots, at, end, ignore=(e.get("from"),))
             if busy:
@@ -513,6 +544,8 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                 continue
             if src_el:
                 src_el.gone = at
+            if t == "encode":
+                holds.append((("b",), at, at + dur + TIMING["collapse"], f"the {e['label']} box"))
             el = _El(e, slots, _final_text(e), size, at, at + dur)
             els[eid] = el
             texts = [e.get("text"), e.get("label"), e.get("sub"), e.get("target"), *(e.get("output") or []),
@@ -556,6 +589,10 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                     err(f"{what}: the note slot holds {busy!r}; a bracket's note goes there.")
                     continue
                 note_until = end
+                holds.append((("note",), at, end, "a bracket's note"))
+            if scale > 1 and BRACKET["label"] * CELL * len(e["label"]) * scale > GEOMETRY["safeRight"] - GEOMETRY["safeLeft"]:
+                err(f"{what}: the beat's push makes the label wider than the frame.")
+                continue
             el.bracket = e
             dur = move_frames(e)
             if at + dur + TIMING["readMargin"] > end:
@@ -568,6 +605,12 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                 continue
             if at < el.ends:
                 err(f"{what}: {e['target']!r} is still playing its move until frame {el.ends}; glow it after.")
+                continue
+            if el.ev["type"] in ("type", "custom"):
+                err(f"{what}: a typed command or a move of your own cannot glow; glow a word, number or string.")
+                continue
+            if "span" in e and el.ev["type"] == "number" and "^" in el.ev["value"]:
+                err(f"{what}: span cannot pick out part of a number with an exponent; glow the whole number.")
                 continue
             if "row" in e and (el.ev["type"] != "grid" or not _int(e["row"]) or not 0 <= e["row"] < len(el.ev["rows"])):
                 err(f"{what}: row names a row of a grid, from 0.")
@@ -607,6 +650,25 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
 
 def _fits(text: str, size: str, cells: float | None = None) -> bool:
     return (cells if cells is not None else len(text)) <= max_chars(size)
+
+
+def _fits_under_push(e: dict, size: str, scale: float) -> bool:
+    """Whether every line an element draws still fits the safe width once the
+    beat's push has scaled it about the frame's centre."""
+    width = GEOMETRY["safeRight"] - GEOMETRY["safeLeft"]
+    rows: list[tuple[float, str]] = []
+    t = e["type"]
+    if t == "number":
+        rows.append((number_cells(e["value"]), size))
+    elif t == "grid":
+        rows += [(len(r), size) for r in e["rows"]]
+    elif t == "stream":
+        rows += [(len(x), size) for x in [*e["guesses"], e["target"]]]
+    elif t == "type":
+        rows += [(len(e["text"]) + 2, size), *[(len(o), "s") for o in e.get("output") or []]]
+    elif t != "custom":
+        rows.append((len(e["text"]), size))
+    return all(cells * CELL * SIZES[sz] * scale <= width for cells, sz in rows)
 
 
 def _event_problem(e: dict, t: str, custom: dict) -> str:

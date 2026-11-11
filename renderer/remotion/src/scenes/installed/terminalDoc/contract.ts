@@ -173,7 +173,9 @@ export function numberCells(value: string): number {
   return i < 0 ? value.length : i + (value.length - i - 1) / 2;
 }
 
-/** Greedy word wrap of a note at LIMITS.noteChars; same rule as the Python side. */
+/** Greedy word wrap of a note at LIMITS.noteChars; same rule as the Python side.
+ *  A citation is wrapped with its note (`${note} [${cite}]`), so both sides
+ *  agree on where it lands. */
 export function wrapNote(text: string): string[] {
   const lines: string[] = [];
   for (const word of text.split(/\s+/).filter(Boolean)) {
@@ -200,7 +202,8 @@ export function moveFrames(e: TDEvent, custom: Record<string, TDCustomMove> = {}
       return TIMING.stagger * (n - 1) + TIMING.arc + TIMING.encodeHold + TIMING.encodeOut;
     }
     case "number":
-      return e.count ? e.count : Math.ceil(TIMING.lockStart + TIMING.lockStep * (e.value.replace(/[^0-9A-Za-z]/g, "").length - 1)) + 1;
+      // Every glyph but a space and the "^" marker locks, punctuation included.
+      return e.count ? e.count : Math.ceil(TIMING.lockStart + TIMING.lockStep * (e.value.replace(/[ ^]/g, "").length - 1)) + 1;
     case "grid":
       return TIMING.rowStep * (e.rows.length - 1) + TIMING.reveal;
     case "stream":

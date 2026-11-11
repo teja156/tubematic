@@ -68,15 +68,15 @@ Frames per move are how long it plays; anything acting on its element (a `rearra
 |---|---|---|
 | `word` | `id`, `slot` (not `stage`), `text`; optional `size`, `tone`, `reveal` (`scramble`, `type`, `cut`), `accent` (a part of `text` drawn in red) | 9 to scramble, 1 to cut, the text's length ÷ 1.6 to type |
 | `rearrange` | `id`, `from` (an element on stage), `text`; optional `slot` (default: the source's), `size`, `tone` | 16 + 3 per letter after the first (letters of the longer string) |
-| `encode` | `id`, `from` (in slot `a` or `c`), `text`, `slot` (the other of `a` and `c`), `label` (1 to 12 characters); optional `sub` (1 to 12), `size`, `tone` | 36 + 3 per letter of the source after the first. Slot `b` must be empty while it plays |
-| `number` | `id`, `slot` (not `stage`), `value`; optional `size`, `tone`, `count` (15 to 240 frames, a whole number with commas or none, counted up from 0) | 7 + 1.4 per digit or letter after the first; `count` when set |
+| `encode` | `id`, `from` (in slot `a` or `c`), `text`, `slot` (the other of `a` and `c`), `label` (1 to 12 characters); optional `sub` (1 to 12), `size`, `tone` | 36 + 3 per letter of the source after the first. Slot `b` must be empty when it starts and stays taken by the box until it ends |
+| `number` | `id`, `slot` (not `stage`), `value`; optional `size`, `tone`, `count` (15 to 240 frames, a whole number with commas or none, counted up from 0) | 7 + 1.4 per character after the first (spaces and `^` do not count); `count` when set |
 | `wall` | `level`: 0, 1 or 2 | 9 (the fade). The level holds across beats until the next `wall` |
 | `grid` | `id`, `rows` (1 to 8 strings); optional `size` (`s`, `m`), `tone` | 9 + 4 per row after the first. Takes the whole stage; the rows must fit its height |
 | `stream` | `id`, `slot` (`a`, `b`, `c`), `guesses` (1 to 40 strings), `target`, `frames` (30 to 150); optional `size` (`m`, `l`) | `frames`. Locks the target in red |
-| `bracket` | `target`, `label` (1 to 16 characters); optional `tone` (default `red`), `note`, `cite` (1 to 99, with a note) | 23. The note and `[cite]` type into the `note` slot; the note wraps to at most 2 lines of 36 characters |
-| `glow` | `target`, `tone` (`red`, `blue`); optional `row` (a grid row, from 0), `span` (`[first, last + 1]` character positions) | 10. A later glow fades this one out |
+| `bracket` | `target`, `label` (1 to 16 characters); optional `tone` (default `red`), `note`, `cite` (1 to 99, with a note) | 23. The note and `[cite]` type into the `note` slot and hold it to the cut; the note and its citation wrap to at most 2 lines of 36 characters |
+| `glow` | `target`, `tone` (`red`, `blue`); optional `row` (a grid row, from 0), `span` (`[first, last + 1]` character positions) | 10. A later glow fades this one out. Not on a `type` or `custom` element; no `span` on a number with an exponent |
 | `type` | `id`, `slot` (`a`, `b`, `c`), `text` (the command; the `$ ` prompt counts in the fit); optional `output` (up to 3 lines, each fitting at `s`), `size` (`s`, `m`) | the text's length ÷ 1.6 + 2 per output line + 9. Command and output must fit the slot's height |
-| `push` | `frames` (45 to 450), `scale` (1.02 to 1.15) | `frames`. One per beat; the stage holds the push to the cut |
+| `push` | `frames` (45 to 450), `scale` (1.02 to 1.15) | `frames`. One per beat; the stage holds the push to the cut. Every string in the beat must fit at its size times `scale`, and the beat has no `custom` move |
 | `clear` | `targets` (ids on stage) | 8. Their slots are free after it |
 | `custom` | `id`, `move` (a `customMoves` id), `slot` (`a`, `b`, `c`, `stage`); optional `text` (within the move's `text`) | the move's `frames` |
 
@@ -107,5 +107,6 @@ The file default-exports a component taking `MoveProps` from `../../installed/te
 The kit also has `Glyph` (one glyph centred on a point), `Row` (a centred row of glyphs), `cellX`,
 `cellOf`, `scramble`, `typed`, `noiseGlyph`, `hash`, `ease`, `tween`, `clamp01`, `lerp`, `quad` and
 `glowShadow`. A move imports only `react`, `remotion` and `../../installed/terminalDoc/kit` (or
-`contract`), and uses no filter, gradient, pattern, dashed stroke, image, fetch, `Math.random`,
-`Date`, `useCurrentFrame` or `useVideoConfig`.
+`contract`) with a static `import`, and uses no filter, gradient (SVG or CSS), backdrop filter,
+blend mode, pattern, dashed stroke, image, audio or video, `staticFile`, `delayRender`, fetch,
+`import(...)`, `Math.random`, `Date`, `performance.now`, `useCurrentFrame` or `useVideoConfig`.

@@ -49,7 +49,8 @@ event is wrong. Fix every problem it lists, then write again.
 - **Events** in a beat are listed in frame order, at most 24, each inside its beat. A move must
   finish at least 15 frames before its beat's cut, or nobody sees it land.
 - **Slots:** one element per slot at a time. A slot is freed by a `clear`, or by a `rearrange` or
-  `encode` that takes the element's letters.
+  `encode` that takes the element's letters. An `encode`'s box holds slot `b` until it has played,
+  and a bracket's note holds the `note` slot until the cut.
 - **Restraint:** at most 4 elements on screen at once, the context line and a bracket's note
   included.
 - **Fit:** a string fits the frame at its size: at most 40 characters at `s`, 25 at `m`, 16 at `l`,
@@ -57,14 +58,17 @@ event is wrong. Fix every problem it lists, then write again.
 - **Stage text never repeats 4 or more narration words in a row.** The captions carry the sentence;
   the stage shows the thing the sentence is about.
 - **Order:** a `rearrange`, `encode`, `bracket` or `glow` acts on an element that is on stage and has
-  finished its own move.
+  finished its own move. A typed command and a move of your own do not glow.
+- **Push:** under a beat's `push`, every string must still fit at its size times the push's scale,
+  and a beat with a push has no move of your own.
 - **Never still:** something changes on stage at least every 3 seconds.
 - **Your own moves:** at most 6 per video, each a `move-<name>` file of this video that exists before
   the config is written, lasting 15 to 240 frames and given at most 40 characters of text. The file
   default-exports the move, imports only `react`, `remotion` and
-  `../../installed/terminalDoc/kit` (or `contract`) with `import` (never `require`), and uses no
-  filter, gradient, pattern, dashed stroke, image, fetch, randomness, clock, `useCurrentFrame` or
-  `useVideoConfig`.
+  `../../installed/terminalDoc/kit` (or `contract`) with a static `import` (never `require` or
+  `import(...)`), and uses no filter, gradient (SVG or CSS), backdrop filter, blend mode, pattern,
+  dashed stroke, image, audio or video, `staticFile`, `delayRender`, fetch, randomness, clock,
+  `performance.now`, `useCurrentFrame` or `useVideoConfig`.
 
 ## Step 0 — read
 
@@ -148,7 +152,7 @@ stored value. Glow the thing the narration is talking about at that moment, on i
 only with meaning. Write strings in capitals, except a command, code or a value whose case matters.
 
 **Timing.** Put each move's `at` on the word that names its thing. A move takes time to play (a word
-9 frames, an encode about 3 frames per letter plus 36, a number about 1.4 frames per digit plus 7;
+9 frames, an encode about 3 frames per letter plus 36, a number about 1.4 frames per character plus 7;
 `reference/contract.md` has every one), and anything acting on its element waits until it has
 finished.
 

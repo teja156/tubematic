@@ -360,11 +360,8 @@ CAESAR_SPEC = {"id": "caesar", "src": "vid_td1/move-caesar", "frames": 45, "text
 def _with_caesar(spec=None, text="ATTACK"):
     def add(d):
         d["customMoves"] = [dict(spec or CAESAR_SPEC)]
-        ev = d["beats"][5]["events"]
-        ev.append({"type": "custom", "at": 1124, "id": "shift", "move": "caesar", "slot": "a", "text": text})
-        ev.sort(key=lambda e: e["at"])
-        # make room: the context line is cleared first
-        ev.insert(1, {"type": "clear", "at": 1020, "targets": ["ctx3"]})
+        ev = d["beats"][2]["events"]                       # the stream beat leaves slot c free
+        ev.append({"type": "custom", "at": 520, "id": "shift", "move": "caesar", "slot": "c", "text": text})
         ev.sort(key=lambda e: e["at"])
     return _with(add)
 
@@ -462,7 +459,7 @@ def test_preview_terminal_moves_returns_the_picture(make_video, tmp_path, monkey
     result = server.preview_terminal_moves(vid)
     assert isinstance(result, list) and json.loads(result[0])["moves"] == ["caesar"]
     move = seen["spec"]["moves"][0]
-    assert (move["src"], move["slot"], move["text"], move["frames"]) == ("vid_td1/move-caesar", "a", "ATTACK", 45)
+    assert (move["src"], move["slot"], move["text"], move["frames"]) == ("vid_td1/move-caesar", "c", "ATTACK", 45)
     assert seen["spec"]["skin"] == "house"
 
 
@@ -488,3 +485,93 @@ def test_a_uuid_video_id_works_for_custom_moves_and_the_preview_script():
     script = (REPO / "renderer/remotion/terminal-tools/render-moves.mjs").read_text()
     pattern = re.search(r"const SRC = /(.*?)/;", script).group(1)
     assert re.match(pattern, spec["src"])
+
+
+# ── review round 1 ───────────────────────────────────────────────────────────
+
+def _beat0_with(*extra):
+    """Beat 1 of the example (the password and its hash) with events added."""
+    def add(d):
+        d["beats"][0]["events"] += list(extra)
+        d["beats"][0]["events"].sort(key=lambda e: e["at"])
+    return _with(add)
+
+
+def test_the_encode_box_holds_slot_b_against_later_elements():
+    # the encode runs 161 to 218; a word put in b while the box is up is drawn over by it
+    problems = _check(_beat0_with({"type": "word", "at": 180, "id": "salt", "slot": "b", "text": "SALT", "size": "m"}))
+    assert any("holds 'the HASH box'" in p for p in problems), problems
+
+
+def test_a_brackets_note_holds_the_note_slot_to_the_cut():
+    def add(d):
+        ev = d["beats"][3]["events"]                       # the "20.9 S" beat, whose bracket has a note
+        ev.append({"type": "word", "at": ev[-1]["at"] + 30, "id": "src", "slot": "note", "text": "SOURCE"})
+    problems = _check(_with(add))
+    assert any("holds \"a bracket's note\"" in p for p in problems), problems
+
+
+def test_a_typed_command_cannot_glow():
+    def add(d):
+        ev = d["beats"][4]["events"]                       # the passphrase beat ends with a typed command
+        ev.append({"type": "glow", "at": ev[-1]["at"] + 20, "target": "cmd", "tone": "red"})
+    problems = _check(_with(add))
+    assert any("cannot glow" in p for p in problems), problems
+
+
+def test_span_cannot_pick_out_part_of_a_number_with_an_exponent():
+    problems = _check(_with(_set(5, 3, span=[0, 3])))
+    assert any("number with an exponent" in p for p in problems), problems
+
+
+def test_a_stream_or_command_cannot_take_the_whole_stage():
+    problems = _check(_with(_set(2, 3, slot="stage")))
+    assert any("a stream races in slot a, b or c" in p for p in problems), problems
+
+
+def test_a_rearrange_checks_the_size_of_the_slot_it_inherits():
+    def add(d):
+        ev = d["beats"][1]["events"]                       # rearrange the context line without naming a slot
+        ev.append({"type": "rearrange", "at": ev[1]["at"] + 20, "id": "re", "from": "ctx2", "text": "8 PLACES"})
+        ev.sort(key=lambda e: e["at"])
+    problems = _check(_with(add))
+    assert any("lands in slot context" in p for p in problems), problems
+
+
+def test_the_push_counts_in_the_fit():
+    def add(d):
+        ev = d["beats"][5]["events"]
+        ev[1].update(scale=1.15)
+        ev.append({"type": "word", "at": ev[-1]["at"] + 4, "id": "wide", "slot": "a", "text": "A" * 16, "size": "l"})
+        ev.sort(key=lambda e: e["at"])
+    problems = _check(_with(add))
+    assert any("push scales it by 1.15" in p for p in problems), problems
+    # without the push the same word fits
+    def no_push(d):
+        add(d)
+        d["beats"][5]["events"] = [e for e in d["beats"][5]["events"] if e["type"] != "push"]
+    assert not any("wider than the frame" in p for p in _check(_with(no_push)))
+
+
+def test_a_push_and_a_move_of_your_own_cannot_share_a_beat():
+    cfg = _with_caesar()
+    problems = _check_custom(cfg)
+    assert problems == []
+    _data(cfg)["beats"][2]["events"].append({"type": "push", "at": 600, "frames": 45, "scale": 1.05})
+    _data(cfg)["beats"][2]["events"].sort(key=lambda e: e["at"])
+    assert any("a push and a move of your own" in p for p in _check_custom(cfg))
+
+
+@pytest.mark.parametrize("line, fragment", [
+    ('const s = { background: "linear-gradient(red, blue)" };', "a CSS gradient"),
+    ('const s = { backdropFilter: "blur(30px)" };', "backdrop filter"),
+    ('const s = { mixBlendMode: "screen" };', "blend mode"),
+    ('const m = import ("fs");', "a dynamic import"),
+    ('const n = performance.now();', "performance.now()"),
+    ('import { Img } from "remotion";', "a Remotion media or render-control part"),
+    ('import { staticFile } from "remotion";', "a Remotion media or render-control part"),
+    ('const h = delayRender("x");', "a Remotion media or render-control part"),
+])
+def test_a_move_that_reaches_past_glyphs_or_costs_renders_is_refused(line, fragment):
+    problems = _check_custom(_with_caesar(), {"vid_td1/move-caesar": line + "\n" + CAESAR})
+    assert any(fragment in p for p in problems), problems

@@ -45,7 +45,9 @@ export const Wall: React.FC<{ frame: number; opacity: number; skin: SkinTokens; 
   useLayoutEffect(() => {
     const cv = ref.current;
     const key = `${tick}:${skin.name}`;
-    if (!cv || !ready || drawn.current === key) return;
+    // A hidden wall is not drawn: most videos never turn it on. It is drawn
+    // on the frame it turns visible, with that frame's tick.
+    if (!cv || !ready || opacity <= 0.001 || drawn.current === key) return;
     const ctx = cv.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, W, H);
@@ -65,7 +67,7 @@ export const Wall: React.FC<{ frame: number; opacity: number; skin: SkinTokens; 
       }
     }
     drawn.current = key;
-  }, [tick, skin, ready]);
+  }, [tick, skin, ready, opacity]);
   // Hidden, never unmounted: a remounted canvas would be blank until the next tick.
   return <canvas ref={ref} width={W} height={H} style={{ position: "absolute", left: 0, top: 0, opacity, display: opacity <= 0.001 ? "none" : undefined }} />;
 };

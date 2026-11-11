@@ -10,6 +10,7 @@
   "wrap_note": [
     {"text": "HASHCAT BENCHMARK, SHA-256, ONE RTX 4090 [1]", "lines": ["HASHCAT BENCHMARK, SHA-256, ONE RTX", "4090 [1]"]},
     {"text": "THE NEW YORK TIMES, 1990", "lines": ["THE NEW YORK TIMES, 1990"]},
+    {"text": "A SOURCE NOTE OF THIRTY SIX LETTERSX [99]", "lines": ["A SOURCE NOTE OF THIRTY SIX LETTERSX", "[99]"]},
     {"text": "A SINGLE WORD LONGER THAN THIRTY SIX CHARACTERSXXXXXXXXXXXXXXXX", "lines": ["A SINGLE WORD LONGER THAN THIRTY SIX", "CHARACTERSXXXXXXXXXXXXXXXX"]}
   ],
   "move_frames": [
@@ -18,7 +19,8 @@
     {"event": {"type": "word", "at": 0, "id": "w", "slot": "a", "text": "SUNSHINE", "reveal": "cut"}, "frames": 1},
     {"event": {"type": "rearrange", "at": 0, "id": "r", "from": "w", "text": "SUNSHINE OVER COLD HARBOR"}, "from": "SUNSHINE", "frames": 79},
     {"event": {"type": "encode", "at": 0, "id": "e", "from": "w", "slot": "c", "text": "A941A4C4FD0C01CD", "label": "HASH"}, "from": "SUNSHINE", "frames": 57},
-    {"event": {"type": "number", "at": 0, "id": "n", "slot": "b", "value": "208,827,064,576"}, "frames": 23},
+    {"event": {"type": "number", "at": 0, "id": "n", "slot": "b", "value": "208,827,064,576"}, "frames": 27},
+    {"event": {"type": "number", "at": 0, "id": "n", "slot": "b", "value": "1.3 \u00d7 10^31"}, "frames": 17},
     {"event": {"type": "number", "at": 0, "id": "n", "slot": "b", "value": "1,000", "count": 60}, "frames": 60},
     {"event": {"type": "grid", "at": 0, "id": "g", "rows": ["ABC", "DEF", "GHI"]}, "frames": 17},
     {"event": {"type": "stream", "at": 0, "id": "s", "slot": "b", "guesses": ["A"], "target": "B", "frames": 45}, "frames": 45},

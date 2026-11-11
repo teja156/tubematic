@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
+import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
 import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
 import { loadFont as loadRoboto } from "@remotion/google-fonts/Roboto";
@@ -359,7 +359,9 @@ const LogStrip: React.FC<{
   chunk.forEach((w, i) => {
     if (frame >= w.startFrame) last = i;
   });
-  const secs = (frame / 30).toFixed(1).padStart(4, "0");
+  const { fps } = useVideoConfig();
+  const elapsed = frame / fps;
+  const clock = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${(elapsed % 60).toFixed(1).padStart(4, "0")}`;
   const lastWord = last >= 0 ? chunk[last] : null;
   const lastText = lastWord ? lastWord.word : "";
   const lastTyped = lastWord ? Math.min(lastText.length, Math.floor((frame - lastWord.startFrame) * LOG_TYPE_RATE) + 1) : 0;
@@ -368,7 +370,7 @@ const LogStrip: React.FC<{
     <AbsoluteFill style={{ pointerEvents: "none", fontFamily: family, fontSynthesis: "none" }}>
       <div style={{ position: "absolute", left: 66, right: 66, top: top - fontSize * 1.05 - meta * 1.3, display: "flex", justifyContent: "space-between", fontSize: meta, lineHeight: `${meta * 1.2}px`, color: ink, opacity: 0.32, letterSpacing: "0.08em" }}>
         <span>LOG</span>
-        <span>T+00:{secs}</span>
+        <span>T+{clock}</span>
       </div>
       <div style={{ position: "absolute", left: 66, right: 66, top: top - fontSize * 1.05, height: 2, background: ink, opacity: 0.16 }} />
       <div

@@ -427,7 +427,10 @@ const BracketView: React.FC<{ el: ElState; ctx: MoveContext; opacity: number }> 
   const tick = tween(t, TIMING.bracketDraw * 0.5, TIMING.bracketDraw);
   const tone = skin.tones[b.tone ?? "red"];
   const X = cam.X, Y = cam.Y;
-  const lines = b.note ? wrapNote(b.note) : [];
+  // The citation wraps with its note, as the validator wraps it. The note is
+  // an annotation under the stage and does not move with a push.
+  const cite = b.cite ? `[${b.cite}]` : "";
+  const lines = b.note ? wrapNote(cite ? `${b.note} ${cite}` : b.note) : [];
   const noteT = t - TIMING.bracketDraw;
   return (
     <>
@@ -438,13 +441,12 @@ const BracketView: React.FC<{ el: ElState; ctx: MoveContext; opacity: number }> 
         {tick > 0 && <line x1={X(x1)} y1={Y(y)} x2={X(x1)} y2={Y(y - BRACKET.tick * tick)} stroke={tone} strokeWidth={2} />}
       </svg>
       <Row text={scramble(b.label, t - 2, TIMING.reveal, seedOf(b.label))} cells={b.label.length} y={Y(y)} size={BRACKET.label * cam.s} cx={X(W / 2)} color={tone} skin={skin} opacity={opacity} />
-      {lines.map((ln, k) => {
+      {lines.map((text, k) => {
         const last = k === lines.length - 1;
-        const text = last && b.cite ? `${ln} [${b.cite}]` : ln;
         const ny = SLOTS.note.y + (k - (lines.length - 1) / 2) * SIZES.s * 1.2;
         const shown = noteT < 0 ? "" : typed(text, noteT, TIMING.typeRate * 2);
-        const citeFrom = last && b.cite ? ln.length + 1 : text.length;
-        return <Row key={k} text={shown} cells={text.length} y={Y(ny)} size={SIZES.s * cam.s} cx={X(W / 2)} color={skin.tones.grey} skin={skin} opacity={opacity} span={{ from: citeFrom, to: text.length, color: skin.tones.dim }} />;
+        const citeFrom = last && cite && text.endsWith(cite) ? text.length - cite.length : text.length;
+        return <Row key={k} text={shown} cells={text.length} y={ny} size={SIZES.s} cx={W / 2} color={skin.tones.grey} skin={skin} opacity={opacity} span={{ from: citeFrom, to: text.length, color: skin.tones.dim }} />;
       })}
     </>
   );
