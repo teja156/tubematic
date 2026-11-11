@@ -129,7 +129,11 @@ def ask_openrouter(prompt: str, system: str, model: str, timeout: int,
             while chunk := resp.read1(65536):  # read() would wait for the whole 64 KB
                 chunks.append(chunk)
                 if time.monotonic() > deadline:
-                    return None, f"timed out after {timeout} s", 0.0
+                    try:  # the chunk that ran past the deadline may have completed the reply
+                        json.loads(b"".join(chunks))
+                        break
+                    except ValueError:
+                        return None, f"timed out after {timeout} s", 0.0
             data = json.loads(b"".join(chunks))
     except urllib.error.HTTPError as e:
         return None, f"HTTP {e.code}: {e.read().decode(errors='replace')[-300:]}", 0.0

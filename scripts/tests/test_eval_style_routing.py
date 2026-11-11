@@ -181,3 +181,12 @@ def test_openrouter_survives_odd_bodies(monkeypatch):
         {"choices": [{"message": {"content": '{"style": "stick"}'}}], "usage": {"cost": "n/a"}}))
     answer, _, cost = ev.ask_openrouter("v", "s", "m", 5, "k")
     assert answer["style"] == "stick" and cost == 0.0
+
+
+def test_openrouter_keeps_a_reply_completed_just_past_the_deadline(monkeypatch):
+    clock = iter([0.0, 10.0])
+    monkeypatch.setattr(ev.time, "monotonic", lambda: next(clock))
+    body = {"choices": [{"message": {"content": '{"style": "stick"}'}}], "usage": {"cost": 0.001}}
+    monkeypatch.setattr(ev.urllib.request, "urlopen", lambda req, timeout: _Resp(body))
+    answer, err, cost = ev.ask_openrouter("v", "s", "m", 5, "k")
+    assert answer["style"] == "stick" and err == "" and cost == 0.001
