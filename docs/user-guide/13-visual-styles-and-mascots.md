@@ -21,6 +21,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Illustrated** | Generated cartoon or rendered characters that stay the same from scene to scene | An OpenAI key |
 | **System Flow** | A dark canvas with one diagram per subject. Components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors while the narration explains each step. No people and no images | Nothing |
 | **Bean Explainer (experimental)** | A bald cartoon character with a thick outline reacts pose by pose to the narration on a bright colour field, while props and short handwritten labels build up beside it. No images | Nothing |
+| **Under the Hood (experimental)** | A dark canvas and close-up photographs of one physical object. Short capital labels point at its parts, gold arcs show fields and flows, numbers tick, and a cartoon presenter reacts in the bottom corner | An OpenAI key. Up to 12 generated photographs per video |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 
 Motion Graphics, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
@@ -46,6 +47,11 @@ background would flash, and a viewer reads that as a broken render.
   how people behave, and "every X explained" lists, where each item gets its own section. The props
   come from a fixed library of everyday objects, so it suits subjects a phone, a coin, a clock or a
   sign can stand for better than specific real products or places. It is experimental.
+- Choose **Under the Hood** for how one physical thing works inside: a touchscreen, a battery, a
+  lock, an SSD, a fridge, or the price of a part. The script goes one layer deeper per scene and
+  quotes real numbers, which become labels, counters and charts. Each photograph is an OpenAI image
+  call, up to 12 per video, so it costs more per video than the styles without images. It is
+  experimental.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
 
 ### What Auto does
@@ -53,8 +59,8 @@ background would flash, and a viewer reads that as a broken render.
 When you approve a topic left on Auto, the agent picks a style before it writes the script, because
 the script is written for the style: a System Flow script walks through a system one step at a time,
 for example. It reads what each style is made for and avoids, compares that with the topic, and
-picks the style that clearly fits. It considers every style this install can make: Illustrated only
-while an OpenAI key is stored, Cartoon 3D only while a GPU is working and the video has no mascot.
+picks the style that clearly fits. It considers every style this install can make: Illustrated and
+Under the Hood only while an OpenAI key is stored, Cartoon 3D only while a GPU is working and the video has no mascot.
 It may pick a style that generates images, which costs more per video. It does not pick a style for
 variety: the same kind of topic gets the same style every time.
 
@@ -82,7 +88,10 @@ diagrams and times them to the narration, but it does not change the canvas or a
 Explainer video works the same way: the agent picks the background colour, the character's
 accessory and the props, and times every pose to the narration. When the library has nothing for an
 object the video needs, the agent draws that prop itself in the same style and checks the drawing
-before the video renders.
+before the video renders. An Under the Hood video is the same: the agent makes the photographs,
+looks at each one and makes it again if it shows the wrong thing, pins the labels to the parts, and
+times the labels, numbers and the presenter's poses to the narration. The presenter is the same
+character in every video.
 
 ### Where you choose
 
@@ -96,7 +105,8 @@ Once you approve the topic, the style is fixed.
 
 ### When a style is greyed out
 
-- **Illustrated (needs an OpenAI key)**: no OpenAI key is stored. Add one on **Settings → API Keys**.
+- **Illustrated (needs an OpenAI key)** or **Under the Hood (experimental) (needs an OpenAI key)**:
+  no OpenAI key is stored. Add one on **Settings → API Keys**.
 - **Cartoon 3D (experimental) (needs a working GPU)**: no renderer has passed its GPU test. See
   [GPU Rendering](10-gpu-rendering.md).
 - **Cartoon 3D (experimental) (GPU not tested yet)**: the renderer has not finished its first test.

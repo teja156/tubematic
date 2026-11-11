@@ -689,8 +689,9 @@ describe("ActionPane — visual style picker", () => {
     const illustrated = [...select.options].find((o) => o.value === "illustrated")!;
     expect(illustrated.disabled).toBe(true);
     expect(illustrated.textContent).toMatch(/needs an OpenAI key/);
+    // every style built on OpenAI images is greyed out with it (Under the Hood too)
     expect([...select.options].filter((o) => o.disabled).map((o) => o.value))
-      .toEqual(["illustrated"]);
+      .toEqual(PACK_STYLES.filter((s) => s.needs.openai_key).map((s) => s.id));
   });
 
   it("leaves Illustrated enabled when key state is not given", () => {

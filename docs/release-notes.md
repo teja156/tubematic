@@ -11,9 +11,10 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds two visual styles: System Flow, which turns a video into a diagram that builds itself
-while the narrator explains a system, and Bean Explainer, a cartoon character that reacts to the
-narration among everyday props. Auto now picks a video's style before its script is written.
+2.2.0 adds three visual styles: System Flow, which turns a video into a diagram that builds itself
+while the narrator explains a system, Bean Explainer, a cartoon character that reacts to the
+narration among everyday props, and Under the Hood, close-up photographs of one object with labels
+pinned to its parts. Auto now picks a video's style before its script is written.
 
 ### Upgrade notes
 
@@ -23,8 +24,8 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs new skills for System Flow, Bean Explainer and Auto's style choice, and a session
-   started before it does not have them.
+   installs new skills for System Flow, Bean Explainer, Under the Hood and Auto's style choice, and
+   a session started before it does not have them.
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did
 before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
@@ -41,10 +42,10 @@ sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow or Bean Explainer cannot render on 2.1.x. Finish it, or switch it to
-  another style while it waits at its topic, before you go back.
-- A domain whose default style is System Flow or Bean Explainer starts its new videos on Auto under
-  2.1.x.
+- A video set to System Flow, Bean Explainer or Under the Hood cannot render on 2.1.x. Finish it,
+  or switch it to another style while it waits at its topic, before you go back.
+- A domain whose default style is System Flow, Bean Explainer or Under the Hood starts its new videos
+  on Auto under 2.1.x.
 
 ### Added
 
@@ -65,7 +66,18 @@ If you go back to 2.1.x later:
   generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's default;
   Auto can pick it for a topic that fits. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Under the Hood visual style (experimental). A dark video that opens up one physical object:
+  close-up photographs of its parts push in slowly while short capital labels point at each part,
+  gold arcs show fields and flows, a fast zoom dives into a part and cuts to a closer
+  photograph, numbers tick and charts draw, and a cartoon presenter in the bottom corner reacts to
+  the narration. It suits how a device or a part works inside (a touchscreen, a battery, a lock, an
+  SSD) and the numbers behind one object, such as a part's price. It needs an OpenAI key and uses up
+  to 12 generated photographs per video; it needs no GPU. Choose it for a topic, on the **New Video**
+  page, or as a domain's default; Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
+- Captions can build word by word, with the word being spoken in bold, the earlier words in grey and
+  the key word in a blue selection box. Under the Hood videos use it.
 - A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
   agent writes a new script for it, which is voiced when you approve it. See
@@ -75,7 +87,7 @@ If you go back to 2.1.x later:
 
 - Auto picks the style when the agent picks up an approved topic, before it writes the script, and
   can pick any style this install can make: Motion Graphics, Stick Explainer, Illustrated, System
-  Flow, Bean Explainer, Cartoon 3D and every style added later. The script is then written for that style. Before,
+  Flow, Bean Explainer, Under the Hood, Cartoon 3D and every style added later. The script is then written for that style. Before,
   Auto decided after the voice was made, could only choose between a dark canvas, a white canvas and
   Cartoon 3D, and never chose a named style. When no style clearly fits, Auto keeps that mixed
   approach. A video's card and window show the picked style after the word Auto.

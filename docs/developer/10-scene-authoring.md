@@ -50,8 +50,8 @@ skill also call a style a **register**.
 style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
-does not decide any beat's treatment. `cartoon_3d`, `system_flow` and `bean_explainer` replace the
-scene system with one whole-video scene of their own.
+does not decide any beat's treatment. `cartoon_3d`, `system_flow`, `bean_explainer` and
+`under_the_hood` replace the scene system with one whole-video scene of their own.
 
 | `visual_style` | Canvas | Figures | Hand-drawn line art | Generated characters |
 |---|---|---|---|---|
@@ -61,6 +61,7 @@ scene system with one whole-video scene of their own.
 | `illustrated` | The agent chooses | Yes | No | Yes |
 | `system_flow` | `dark` | No | No | No |
 | `bean_explainer` | `light`, painted over by its own colour field | Its own cast | No | No |
+| `under_the_hood` | `dark` | Its own presenter | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
@@ -69,18 +70,22 @@ The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `ch
 into the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses), so the reviewer judges a video
 against the look it was meant to have. `cartoon_3d` replaces the scene system with one 3D world
 ([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)), and
-`bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)).
+`bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)), and
+`under_the_hood` with one scene of annotated close-up photographs ([Under the Hood](#under-the-hood)).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
-chosen. Two styles have a need:
+chosen. Three styles have a need:
 
 - `illustrated` needs a stored OpenAI key, because an OpenAI image model draws its characters
   (`ILLUSTRATED_NEEDS_OPENAI_KEY`).
+- `under_the_hood` needs a stored OpenAI key, because its plates are generated photographs. The
+  refusal text is its pack's `messages.openai_key`.
 - `cartoon_3d` needs a renderer whose [GPU test](20-gpu-and-remote-renderers.md#the-gpu-test) passed
   (`CARTOON3D_NEEDS_GPU`, `CARTOON3D_GPU_UNKNOWN`). Software WebGL can render the style, at about 50
   minutes for a 90-second Short, so the rule is a policy.
 
-`get_video` reports both conditions to the agent as `illustrated_available` and
+`get_video` reports the two conditions to the agent as `illustrated_available` (true when an
+OpenAI key is stored, which Under the Hood needs too) and
 `cartoon_3d_available`, and gives the video's own style as `style`: its label, canvas, permissions
 and `authoring_skill`.
 
@@ -601,6 +606,83 @@ prop files again as they are on disk (`server.py::_bean_custom_prop_errors`), be
 redraws a prop after the config is written. The text-layout audit samples each shot
 as if it were a scene, from the end of the badge carousel when the shot opens a list section. A Bean Explainer video can have a mascot; the skill keeps it small and to one
 side.
+
+---
+
+## Under the Hood
+
+An Under the Hood video is one installed scene, `UnderTheHood`, that spans the whole video: close-up
+photographs of one physical object (plates), each pushing in slowly, with short capital labels joined
+to its parts by leader lines, outlines, gold field arcs, ticking counters, a big stat, a line chart,
+tiny footnotes and a house presenter who swaps whole poses in the bottom right. The captions are the
+shared caption layer in its `selection` look near the top. The agent writes no code for it. Its props
+carry `underTheHood: {plates}`, written with the `tubematic-under-the-hood` skill, whose
+`reference/contract.md` documents every field and whose `reference/example-config.json` is the worked
+example.
+
+The frame has fixed zones, so nothing the agent places can land on another: captions centred at 19% of
+the height, the plate band from 460 to 1350 px, the counter row and the footnote bottom left, the
+presenter bottom right.
+
+| Event | What the scene draws |
+|---|---|
+| `callout` | A capital label in a dark chip, with a line to a point of the photograph |
+| `outline` | A box or corner brackets over a region of the photograph, drawn on in 8 frames |
+| `arcs` | A fan of gold arcs rising from one point and bending toward another, with sparks for 45 frames |
+| `counters` | Up to four monospace values ticking to new ones in 4-frame steps; changed ones turn bold white |
+| `stat` | A huge numeral counting up, with a capital label and an optional chip |
+| `chart` | A line drawing left to right on a plate with no photograph, its head value shown large |
+| `footnote` | Tiny grey text such as "Magnified illustration" |
+| `pose` | The presenter swaps to one of nine poses, with one 50/50 dissolve frame |
+
+A plate is a photograph from `generate_image` or, for a chart, a plain dark panel. Every point the agent
+pins is [u, v] in the photograph's own space, read off `read_image`'s grid, and the scene projects it
+through the plate's camera (`contract.ts::projectAt`, the same mapping as
+`ImageFX.project()`), so a label stays on its part as the plate pushes in about 1% a second. A plate
+can enter by a zoom-through: the previous photograph rushes from 1x to 4x into a point over 6 frames,
+and its labels fade with it.
+
+The renderer's side is `src/scenes/installed/UnderTheHood.tsx` with `underTheHood/`:
+
+- `contract.ts` holds the limits, timings, zones and the projection.
+- `stage.ts` works out the plate, the camera and its transitions, the presenter's pose, mouth and
+  blink at a frame.
+- `presenter.tsx` draws the presenter from a pose table, and `sprite.tsx` draws each distinct look
+  once as a bitmap, as Bean Explainer's bean is. The mouth moves only while a word is spoken; it does
+  not lip-sync.
+- `PresenterSheet.tsx` is the presenter's model sheet, the `PresenterSheet` composition.
+
+The scene follows System Flow's rules (no SVG filter, gradient, pattern or `stroke-dasharray`; an
+arc's glow is a wider translucent stroke and the band's fade into the canvas is a stack of flat
+strips), sizes every overlay layer to the plate band, and stops the arcs and sparks after 45 frames.
+Measured on the CPU renderer over the whole example video, it costs about 1.6 times System Flow's
+example, about the ratio Bean Explainer measured. About three quarters of that is the slow push itself:
+every frame is a new photograph to capture and encode, which the look requires.
+
+`mcp/under_the_hood.py` checks a config in `write_scene_config` and refuses it when:
+
+- An `under_the_hood` video has anything but the one `UnderTheHood` scene, from frame 0 for
+  `totalFrames`, or another style uses `UnderTheHood`.
+- A plate after the first does not start within 2 frames of a word, or lasts under 1.5 seconds, or the
+  video has more than 30 plates or more than 12 different photographs.
+- An image is not this video's `/public/<video_id>/images/` path, or a photograph at its `focus` and
+  `zoom` does not cover the plate band, so its edge would show.
+- A pinned point leaves the band before its plate ends, a chip leaves the band or the side margins,
+  sits within 40 px of its point, or overlaps another chip, the stat or the chart.
+- A plate holds more than 6 callouts, outlines, arc fans, stats and charts, or more than one counter
+  row, stat, chart or footnote; a callout, outline or arc is on a plate with no photograph, or a chart
+  on one with a photograph.
+- A pose is off a word or within 8 frames of the last; a text event starts less than 20 frames before
+  its plate ends (6 frames earlier on a plate a zoom-through ends); a chart is still drawing at the
+  cut.
+- Nothing new happens for more than 3.5 seconds.
+
+`write_scene_config` reads each photograph's height over width from its file into the plate's
+`aspect`, because every pinned-point check depends on it; the agent never writes it.
+`generate_image` refuses a 13th new image name on an Under the Hood video before the paid call, and
+allows regenerating an existing one. `mcp/tests/test_under_the_hood.py` pins `under_the_hood.py` to
+`contract.ts` and to the pack. The pack's `captions` fill every `subtitles` key the config leaves out.
+The text-layout audit samples each plate as if it were a scene, and stops before a zoom-through.
 
 ---
 

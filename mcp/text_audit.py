@@ -50,6 +50,7 @@ from tubematic_core import mascots as tmascots
 
 import system_flow  # board windows for the whole-video System Flow scene (TMDEV-196)
 import bean_explainer  # shot windows for the whole-video Bean Explainer scene (TMDEV-198)
+import under_the_hood  # plate windows for the whole-video Under the Hood scene (TMDEV-201)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
 
@@ -211,6 +212,23 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
                 last = s_end - 1 - bean_explainer.TIMING["endMargin"]
                 if first > last:
                     first = last = s_start + max(0, (s_end - s_start) // 2)
+                span = last - first
+                count = min(SAMPLES_PER_SCENE, span + 1)
+                step = max(1, span // max(1, count - 1))
+                passes.append({"scene": index, "first": first, "step": step,
+                               "count": min(count, span // step + 1)})
+            continue
+        # An Under the Hood scene spans the whole video too; each plate is a cut,
+        # sampled like a scene once its chips are in, and never inside the zoom
+        # that can end it (the pinned labels leave during it).
+        plates = under_the_hood.plate_windows(scene_config) if under_the_hood.is_uth_scene(scene) else []
+        if plates:
+            for p_start, p_end in plates:
+                first = min(p_start + ENTRANCE_ALLOWANCE_FRAMES, p_end - 1)
+                last = (p_end - 1 - under_the_hood.TIMING["endMargin"]
+                        - under_the_hood.TIMING["zoomOut"])
+                if first > last:
+                    first = last = p_start + max(0, (p_end - p_start) // 2)
                 span = last - first
                 count = min(SAMPLES_PER_SCENE, span + 1)
                 step = max(1, span // max(1, count - 1))

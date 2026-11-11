@@ -22,6 +22,7 @@ know about.)
 
 import base64
 import contextvars
+import copy
 import io
 import logging
 import json
@@ -95,6 +96,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
 import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
 import system_flow  # the System Flow checks (TMDEV-196); a sibling module like cartoon
 import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
+import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 
@@ -315,7 +317,11 @@ SUBTITLE_NUMERIC_RANGES = {
     "position": (0.05, 0.95),
 }
 SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
-                 "background", "position", "uppercase", "emphasis")
+                 "background", "position", "uppercase", "emphasis", "look")
+# look: "selection" builds the line word by word with the key words in a blue
+# text-selection box (the Under the Hood style); "plain", or absent, is the
+# look every other style has.
+SUBTITLE_LOOKS = ("plain", "selection")
 # emphasis: indexes into the narration's words drawn on a red box (the key word
 # of a line). One in SUBTITLE_EMPHASIS_EVERY words at most: emphasis on every
 # other word is no emphasis. write_scene_config checks the indexes against the
@@ -360,6 +366,8 @@ def _validate_subtitles(sub) -> str:
     if "color" in sub and sub["color"] is not None:
         if not (isinstance(sub["color"], str) and sub["color"].strip()):
             return "config.subtitles.color must be a CSS colour string, or null to follow the canvas"
+    if "look" in sub and sub["look"] not in SUBTITLE_LOOKS:
+        return (f"config.subtitles.look must be one of {list(SUBTITLE_LOOKS)}, got {sub['look']!r}")
     if "emphasis" in sub:
         emph = sub["emphasis"]
         if (not isinstance(emph, list)
@@ -2322,14 +2330,16 @@ def update_video(
     illustrated assets; you pick both the drawing style and the canvas from the
     topic), "system_flow" (the whole video is one diagram scene written as
     data), "bean_explainer" (the whole video is one cartoon-bean scene written
-    as data, props from a fixed library) or "cartoon_3d" (one 3D world; needs
+    as data, props from a fixed library), "under_the_hood" (the whole video
+    is one scene of close-up photographs with labels pinned to them, written
+    as data; needs an OpenAI key) or "cartoon_3d" (one 3D world; needs
     a working GPU).
     get_pipeline_status's visual_styles lists every style and whether this
     install can make it. The scene styles are permissions, not looks. Like script_profile_id, a human
     picks it at the topic checkpoint and it is frozen afterwards; set it here
     only from a slash command that creates a video, before flipping it to
-    TOPIC_APPROVED. "illustrated" is refused while no OpenAI key is stored
-    (get_pipeline_status's illustrated_available is false) — offer the other
+    TOPIC_APPROVED. "illustrated" and "under_the_hood" are refused while no
+    OpenAI key is stored (get_pipeline_status's illustrated_available is false) — offer the other
     styles instead. Under "auto", Auto picks the style itself at
     TOPIC_APPROVED with choose_visual_style, never with this field. A changed
     value here clears Auto's earlier pick.
@@ -2339,7 +2349,7 @@ def update_video(
     and never again: a revision round must render on the canvas the video
     already uses. Writable only when the style does not already fix a canvas —
     that is "auto" and "illustrated"; "motion_graphics", "stick",
-    "system_flow", "bean_explainer" and "cartoon_3d" fix theirs.
+    "system_flow", "bean_explainer", "under_the_hood" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer the video uses — "dom"
     (the scene components). Auto reaches Cartoon 3D by picking the cartoon_3d
@@ -3041,7 +3051,7 @@ def upsert_project(
     default_visual_style: which visual register this domain's *curriculum*
         videos start in — "auto" or any style in get_pipeline_status's
         visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
-        "bean_explainer", "cartoon_3d").
+        "bean_explainer", "under_the_hood", "cartoon_3d").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -5574,6 +5584,31 @@ def _redact_keys(text: str) -> str:
     return text
 
 
+def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
+    """The refusal for one generated photograph too many, or "".
+
+    A style whose pack caps its photographs (Under the Hood: routing.images)
+    is refused a NEW image name once the video's images folder holds that many
+    pictures; regenerating an existing name stays allowed, because a bad still
+    must be replaceable. Checked before the paid call, since the cap is about
+    spend."""
+    with _conn() as con:
+        vrow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    style = ((vrow["visual_style"] if vrow else "") or "").strip()
+    if style != under_the_hood.STYLE_ID:
+        return ""
+    cap = tvs.pack(style)["routing"].get("images", 0)
+    try:
+        names = {f.stem for f in images_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS}
+    except OSError:
+        names = set()
+    if image_name in names or len(names) < cap:
+        return ""
+    return (f"This Under the Hood video already has {len(names)} photographs, the most a video may "
+            f"use ({cap}). Reuse one of them on another plate with a different focus or zoom, or "
+            "regenerate one under its own name to replace it.")
+
+
 @mcp.tool
 def generate_image(video_id: str, image_name: str, prompt: str,
                    aspect_ratio: str = "9:16") -> dict:
@@ -5613,6 +5648,10 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     `width`/`height` are the file's REAL pixel dimensions, not the aspect_ratio
     that was asked for — a provider answers with its own nearest bucket. Use
     them to size any frame the picture sits in, so it is not cropped to fit.
+
+    An under_the_hood video may have at most 12 photographs: a 13th new
+    image_name is refused before the paid call; regenerating an existing name
+    is allowed.
     """
     err = _video_id_error(video_id)
     if err:
@@ -5657,9 +5696,12 @@ def generate_image(video_id: str, image_name: str, prompt: str,
         return guard_err
     # Before the paid call: a symlink on the way to images/ is refused.
     try:
-        tjobs.images_dir(JOBS_DIR, video_id)
+        images_dir = tjobs.images_dir(JOBS_DIR, video_id)
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
+    cap_err = _image_cap_error(video_id, image_name, images_dir)
+    if cap_err:
+        return {"error": cap_err}
 
     import httpx
 
@@ -6403,6 +6445,38 @@ def _bean_custom_list(config) -> list:
     return custom if isinstance(custom, list) else []
 
 
+def _uth_with_aspects(video_id: str, config: dict) -> dict:
+    """The config with each Under the Hood plate's `aspect` (height over width)
+    read from its photograph's file. A plate whose file is missing or unreadable
+    keeps what it had: validate_job reports a missing image by name."""
+    try:
+        data = config["scenes"][0]["props"][under_the_hood.PROPS_KEY]
+        plates = data["plates"]
+    except (KeyError, IndexError, TypeError):
+        return config
+    if not isinstance(plates, list):
+        return config
+    from PIL import Image as PILImage
+    prefix = f"/public/{video_id}/images/"
+    filled = []
+    for plate in plates:
+        image = plate.get("image") if isinstance(plate, dict) else None
+        if isinstance(image, str) and image.startswith(prefix):
+            try:
+                images = tjobs.images_dir(JOBS_DIR, video_id)
+                target = tjobs.join_below(images, image[len(prefix):])
+                if tids.inside(images, target) and target.is_file():
+                    with PILImage.open(target) as im:
+                        w, h = im.size
+                    plate = {**plate, "aspect": round(h / w, 4)}
+            except (tjobs.UnsafePath, OSError, ValueError):
+                pass
+        filled.append(plate)
+    config = copy.deepcopy(config)
+    config["scenes"][0]["props"][under_the_hood.PROPS_KEY]["plates"] = filled
+    return config
+
+
 def _bean_custom_sources(video_id: str, config) -> dict[str, str]:
     """The text of every prop file a Bean Explainer config's customProps names,
     by src, for the validator's source checks. A file that cannot be read is
@@ -6596,6 +6670,25 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         given = config.get("subtitles")
         if given is None or isinstance(given, dict):
             config["subtitles"] = {**tvs.pack(bean_explainer.STYLE_ID)["captions"], **(given or {})}
+
+    # ── Under the Hood (TMDEV-201) ───────────────────────────────────────────
+    # The same shape again: one installed UnderTheHood scene whose props hold
+    # plates (generated photographs) and the events pinned to them. Each
+    # photograph's aspect is read from its file here, because every check of a
+    # point pinned to it depends on its height; the agent never writes it.
+    uth_err = under_the_hood.check_scene_use(row["visual_style"], scenes)
+    if uth_err:
+        return {"error": uth_err}
+    if (row["visual_style"] or "") == under_the_hood.STYLE_ID:
+        config = _uth_with_aspects(video_id, config)
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = under_the_hood.check(config, fps, word_starts,
+                                        tvs.pack(under_the_hood.STYLE_ID)["extra"], video_id)
+        if problems:
+            return {"error": "The Under the Hood video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(under_the_hood.STYLE_ID)["captions"], **(given or {})}
 
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the

@@ -2,8 +2,9 @@
 
 The suite covers the pure TypeScript helpers of the Remotion project's
 [Cartoon 3D kit](../09-remotion-project.md#the-cartoon-3d-kit) and of the
-[`SystemFlow`](../09-remotion-project.md#systemflow) and
-[`BeanExplainer`](../09-remotion-project.md#beanexplainer) scenes. Each test file sits beside the code
+[`SystemFlow`](../09-remotion-project.md#systemflow),
+[`BeanExplainer`](../09-remotion-project.md#beanexplainer) and
+[`UnderTheHood`](../09-remotion-project.md#underthehood) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -41,6 +42,22 @@ Covers `contract.ts`, `stage.ts`, the rig in `bean.tsx` and the prop library
 
 Trap: a remainder matters for render time. A spring that only approaches its rest repaints its
 layer on every frame, which on the CPU renderer cost more than drawing the bean.
+
+## Under the Hood
+
+### `src/scenes/installed/underTheHood/underTheHood.test.ts`
+
+Covers `contract.ts`, `stage.ts` and the presenter's pose table
+([Under the Hood](../10-scene-authoring.md#under-the-hood)).
+
+- Points, the photograph's box, the push, chip and stat boxes, the stat's text, the leader's start
+  and overlap are computed as in the shared cases `mcp/tests/test_under_the_hood.py` runs.
+- Every pose the contract lists has a drawing. The presenter starts idle and swaps on a pose's frame
+  with one dissolve frame; its mouth moves only while a word is spoken; it blinks for two frames.
+- The plate on screen changes at its start; the push grows the scale and keeps a pinned point on its
+  spot; a zoom-through rushes the outgoing plate into its `through` point, which holds still, and the
+  new plate settles from 1.25x; a cut cross-fades over its fade frames.
+- Counters tick in steps and settle on their value; a stat counts up to its value and stays there.
 
 ## System Flow
 

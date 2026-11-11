@@ -335,8 +335,8 @@ Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility
   id names the video's job directory.
 - `project_id` names no domain, `title` is not a string, or `voice_id` is not on the roster.
 - `visual_style` is not `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
-- `visual_style` is `illustrated` and no OpenAI key is stored (the settings row or
-  `OPENAI_API_KEY`).
+- `visual_style` is `illustrated` or `under_the_hood` and no OpenAI key is stored (the settings row
+  or `OPENAI_API_KEY`).
 - `visual_style` is `cartoon_3d` and the install-wide GPU `status` is not `working` (see
   [GPU rendering](#gpu-rendering)).
 
@@ -442,7 +442,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   `effort`). The levels are the same for every agent.
 - `script_profile_id` must be a `READY` profile that is not archived, or `""` for none.
 - `visual_style` must be `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
-  `illustrated` needs a stored OpenAI key and `cartoon_3d` needs a working GPU.
+  `illustrated` and `under_the_hood` need a stored OpenAI key and `cartoon_3d` needs a working GPU.
 - `mascot_id` must be a string. A changed value must be a pickable mascot, needs a GPU `status` of
   `working`, and is refused on a video that will be `cartoon_3d`. `""` clears the mascot.
 
@@ -647,8 +647,8 @@ Five checks run only when the value changes, because the dashboard re-sends the 
 every edit and a value that became invalid later must not block other edits:
 
 - The `description` length.
-- `default_visual_style`: `illustrated` needs a stored OpenAI key and `cartoon_3d` needs a working
-  GPU.
+- `default_visual_style`: `illustrated` and `under_the_hood` need a stored OpenAI key and
+  `cartoon_3d` needs a working GPU.
 - `default_voice_id` on the roster.
 - `default_script_profile_id` being `READY`.
 - `default_mascot_id` being pickable, with a working GPU.

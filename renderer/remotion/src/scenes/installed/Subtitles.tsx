@@ -121,6 +121,14 @@ export interface SubtitleConfig {
    * Explainer style uses it.
    */
   emphasis?: number[];
+  /**
+   * "selection": words appear one by one as they are spoken, the latest in
+   * bold, the earlier ones of the line in grey regular, and each `emphasis`
+   * word gets a thin blue text-selection box with two round handles instead
+   * of the red box. The Under the Hood style uses it. Absent means the plain
+   * look every other style has.
+   */
+  look?: "plain" | "selection";
 }
 
 /** The key-word box: white text on red, scaling in with a little overshoot. */
@@ -223,6 +231,75 @@ export function visibleChunkIndex(
   return frame >= tail ? null : index;
 }
 
+/** Frames a word is shown before its audio starts: the eye reads ahead of the ear. */
+export const SELECTION_LEAD = 2;
+const SELECTION_BLUE = "#3D6FBC";
+const SELECTION_HANDLE = "#518ED5";
+const SELECTION_PAST = "#8C8B8D";
+
+/**
+ * The "selection" look: the line builds word by word and re-centres at once
+ * (no tween); a word's first frame is blurred; the key word keeps its bold
+ * white and gets a selection box whose handles pop two frames after it lands
+ * and whose top and bottom edges grow from its centre over the next three.
+ * The last frame before the next line is drawn at 60%.
+ */
+const SelectionLine: React.FC<{
+  chunks: TimelineWord[][]; emphasised: Set<TimelineWord>; frame: number; family: string; fontSize: number;
+  color: string; position: number; uppercase: boolean;
+}> = ({ chunks, emphasised, frame, family, fontSize, color, position, uppercase }) => {
+  const at = frame + SELECTION_LEAD;
+  const index = visibleChunkIndex(chunks, at);
+  if (index === null) return null;
+  const chunk = chunks[index];
+  const shown = chunk.filter((w) => w.startFrame <= at);
+  const next = chunks[index + 1];
+  const leaving = next !== undefined && at === next[0].startFrame - 1;
+  const line = Math.max(2, Math.round(fontSize * 0.045));
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none" }}>
+      <div style={{
+        position: "absolute", left: 60, right: 60, top: `${position * 100}%`, transform: "translateY(-50%)",
+        display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.3em 0.28em",
+        fontFamily: family, fontSize, lineHeight: 1.15, textAlign: "center", letterSpacing: "-0.01em",
+        textTransform: uppercase ? "uppercase" : "none", opacity: leaving ? 0.6 : undefined,
+      }}>
+        {shown.map((w, i) => {
+          const latest = i === shown.length - 1;
+          const key = emphasised.has(w);
+          const bright = latest || key;
+          const age = at - w.startFrame;
+          const k = Math.max(0, Math.min(1, (age - 2) / 3));
+          const handle = Math.max(0, Math.min(1, (age - 2) / 2));
+          return (
+            <span key={`${i}-${w.word}`} style={{
+              position: "relative", display: "inline-block", fontWeight: bright ? 700 : 400,
+              color: bright ? color : SELECTION_PAST, filter: age === 0 ? "blur(5px)" : undefined, opacity: age === 0 ? 0.7 : undefined,
+            }}>
+              {w.word}
+              {key && age >= 2 && (
+                <span style={{ position: "absolute", left: "-0.22em", right: "-0.22em", top: "-0.12em", bottom: "-0.08em" }}>
+                  {k >= 1 && <span style={{ position: "absolute", inset: 0, background: "rgba(61,111,188,0.16)" }} />}
+                  <span style={{ position: "absolute", top: 0, left: `${50 - k * 50}%`, width: `${k * 100}%`, height: line, background: SELECTION_BLUE }} />
+                  <span style={{ position: "absolute", bottom: 0, left: `${50 - k * 50}%`, width: `${k * 100}%`, height: line, background: SELECTION_BLUE }} />
+                  {k >= 1 && <span style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: line, background: SELECTION_BLUE }} />}
+                  {k >= 1 && <span style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: line, background: SELECTION_BLUE }} />}
+                  {[{ left: -fontSize * 0.13, top: -fontSize * 0.13 }, { right: -fontSize * 0.13, bottom: -fontSize * 0.13 }].map((pos, j) => (
+                    <span key={j} style={{
+                      position: "absolute", ...pos, width: fontSize * 0.26, height: fontSize * 0.26, borderRadius: "50%",
+                      background: SELECTION_HANDLE, transform: handle >= 1 ? undefined : `scale(${0.45 + 0.55 * handle})`,
+                    }} />
+                  ))}
+                </span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 export default function Subtitles({
   words,
   canvas = "dark",
@@ -235,6 +312,7 @@ export default function Subtitles({
   position = 0.78,
   uppercase = false,
   emphasis = [],
+  look = "plain",
 }: Props) {
   const frame = useCurrentFrame();
   const webfont = FONTS[fontFamily];
@@ -244,6 +322,10 @@ export default function Subtitles({
   const chunks = React.useMemo(() => chunkWords(words ?? [], maxWords), [words, maxWords]);
   const emphasised = React.useMemo(() => new Set((emphasis ?? []).map((i) => (words ?? [])[i]).filter(Boolean)), [emphasis, words]);
   if (!enabled || chunks.length === 0) return null;
+  if (look === "selection") {
+    return <SelectionLine chunks={chunks} emphasised={emphasised} frame={frame} family={family} fontSize={fontSize}
+      color={color ?? (canvas === "light" ? "#0f0f0f" : "#F7F7F7")} position={position} uppercase={uppercase} />;
+  }
 
   const index = visibleChunkIndex(chunks, frame);
   if (index === null) return null;

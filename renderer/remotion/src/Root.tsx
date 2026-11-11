@@ -5,6 +5,7 @@ import { PlaceholderComposition } from "./Composition";
 import { TextLayoutProbe } from "./audit/TextLayoutProbe";
 import { MascotSheetComposition } from "./mascot/MascotSheet";
 import { BeanPropSheet, SHEET_PAGES } from "./scenes/installed/beanExplainer/BeanPropSheet";
+import { PresenterSheet } from "./scenes/installed/underTheHood/PresenterSheet";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
 // renders, plus a measurement probe. A separate composition rather than a prop
@@ -95,6 +96,18 @@ export const RemotionRoot: React.FC = () => {
         id="BeanPropSheet"
         component={BeanPropSheet}
         durationInFrames={SHEET_PAGES}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Under the Hood presenter's model sheet: every pose, mouth and
+          blink, for a person to approve the fixed presenter. No video uses it. */}
+      <Composition
+        id="PresenterSheet"
+        component={PresenterSheet}
+        durationInFrames={1}
         fps={30}
         width={1080}
         height={1920}

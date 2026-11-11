@@ -483,6 +483,40 @@ Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean E
   other scenes on a Bean Explainer video. `emphasis` beyond the narration's last word, on more than
   one word in 5, repeated, or not a list of numbers is refused, on any style.
 
+### `test_under_the_hood.py`
+
+Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under the Hood config, the
+`subtitles.look` check, the text audit's per-plate sampling, and the cap on photographs in
+`generate_image` ([Under the Hood](../10-scene-authoring.md#under-the-hood)).
+
+- The limits, timings, geometry, camera, event types, poses, tones, shapes, entrances and stat slots
+  equal the ones in the renderer's `contract.ts`, read from the TypeScript source, and the pack's
+  poses, events, tones and photograph cap equal them too. Both sides answer the shared cases in
+  `fixtures/under_the_hood_contract.json` (the projection, the photograph's box, the push, chip and
+  stat boxes, the stat's text with JavaScript's rounding, the leader's start, overlap).
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its plate or event and cause: a plate or a pose off the words, a plate too
+  short, another video's or a container image path, a photograph that does not cover the band, a
+  zoom out of range, photograph fields on a plain plate, a zoom entrance with no photograph before it
+  or no `through`, a callout too long, a pinned point that leaves the band before its plate ends, a
+  chip outside the band or on its point or over another, a bad region, arc count, counter values,
+  stat affix, label, slot or width, a bad chart, a chart on a photograph or a callout on a plain
+  plate, a second footnote, text too late to read, events out of order, too many elements, poses too
+  close together, and a still stretch over 3.5 seconds. More than 12 different photographs is
+  refused and a reused one is free. A zoom-through counts the plate's text as leaving 6 frames early.
+  A value of the wrong type gets a sentence back and raises nothing.
+- The text audit samples each plate and stops before a zoom-through.
+- `write_scene_config` writes a sound config with the style's captions, fills each plate's `aspect`
+  from its file, keeps an `emphasis` it was given, refuses a photograph too wide to cover the band
+  before writing anything, refuses `UnderTheHood` on another style and other scenes on an Under the
+  Hood video. `subtitles.look` accepts `plain` and `selection` only.
+- `generate_image` refuses a 13th new photograph on an Under the Hood video before any request goes
+  out, and allows regenerating an existing one; other styles are not capped.
+
+Trap: a plate whose own fields are bad is skipped for every check that projects through its camera,
+including the next plate's zoom-through, or a malformed `focus` raised instead of being reported.
+
 ### `test_choose_visual_style.py`
 
 Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back

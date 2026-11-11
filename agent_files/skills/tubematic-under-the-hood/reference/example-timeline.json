@@ -1,0 +1,322 @@
+{
+ "totalFrames": 858,
+ "fps": 30,
+ "audioDurationSeconds": 28.6,
+ "words": [
+  {
+   "word": "Your",
+   "startFrame": 6,
+   "endFrame": 16
+  },
+  {
+   "word": "phone",
+   "startFrame": 17,
+   "endFrame": 29
+  },
+  {
+   "word": "feels",
+   "startFrame": 30,
+   "endFrame": 42
+  },
+  {
+   "word": "your",
+   "startFrame": 43,
+   "endFrame": 53
+  },
+  {
+   "word": "finger",
+   "startFrame": 54,
+   "endFrame": 68
+  },
+  {
+   "word": "without",
+   "startFrame": 69,
+   "endFrame": 84
+  },
+  {
+   "word": "being",
+   "startFrame": 85,
+   "endFrame": 97
+  },
+  {
+   "word": "pressed.",
+   "startFrame": 98,
+   "endFrame": 113
+  },
+  {
+   "word": "Under",
+   "startFrame": 123,
+   "endFrame": 135
+  },
+  {
+   "word": "the",
+   "startFrame": 136,
+   "endFrame": 145
+  },
+  {
+   "word": "glass",
+   "startFrame": 146,
+   "endFrame": 158
+  },
+  {
+   "word": "sits",
+   "startFrame": 159,
+   "endFrame": 169
+  },
+  {
+   "word": "a",
+   "startFrame": 170,
+   "endFrame": 177
+  },
+  {
+   "word": "grid",
+   "startFrame": 178,
+   "endFrame": 188
+  },
+  {
+   "word": "of",
+   "startFrame": 189,
+   "endFrame": 196
+  },
+  {
+   "word": "electrodes,",
+   "startFrame": 197,
+   "endFrame": 217
+  },
+  {
+   "word": "each",
+   "startFrame": 222,
+   "endFrame": 232
+  },
+  {
+   "word": "line",
+   "startFrame": 233,
+   "endFrame": 243
+  },
+  {
+   "word": "thinner",
+   "startFrame": 244,
+   "endFrame": 259
+  },
+  {
+   "word": "than",
+   "startFrame": 260,
+   "endFrame": 270
+  },
+  {
+   "word": "a",
+   "startFrame": 271,
+   "endFrame": 278
+  },
+  {
+   "word": "hair.",
+   "startFrame": 279,
+   "endFrame": 289
+  },
+  {
+   "word": "The",
+   "startFrame": 299,
+   "endFrame": 308
+  },
+  {
+   "word": "grid",
+   "startFrame": 309,
+   "endFrame": 319
+  },
+  {
+   "word": "holds",
+   "startFrame": 320,
+   "endFrame": 332
+  },
+  {
+   "word": "a",
+   "startFrame": 333,
+   "endFrame": 340
+  },
+  {
+   "word": "tiny",
+   "startFrame": 341,
+   "endFrame": 351
+  },
+  {
+   "word": "electric",
+   "startFrame": 352,
+   "endFrame": 369
+  },
+  {
+   "word": "field.",
+   "startFrame": 370,
+   "endFrame": 382
+  },
+  {
+   "word": "Your",
+   "startFrame": 392,
+   "endFrame": 402
+  },
+  {
+   "word": "finger",
+   "startFrame": 403,
+   "endFrame": 417
+  },
+  {
+   "word": "conducts,",
+   "startFrame": 418,
+   "endFrame": 435
+  },
+  {
+   "word": "so",
+   "startFrame": 440,
+   "endFrame": 447
+  },
+  {
+   "word": "it",
+   "startFrame": 448,
+   "endFrame": 455
+  },
+  {
+   "word": "pulls",
+   "startFrame": 456,
+   "endFrame": 468
+  },
+  {
+   "word": "some",
+   "startFrame": 469,
+   "endFrame": 479
+  },
+  {
+   "word": "charge",
+   "startFrame": 480,
+   "endFrame": 494
+  },
+  {
+   "word": "away.",
+   "startFrame": 495,
+   "endFrame": 505
+  },
+  {
+   "word": "The",
+   "startFrame": 515,
+   "endFrame": 524
+  },
+  {
+   "word": "chip",
+   "startFrame": 525,
+   "endFrame": 535
+  },
+  {
+   "word": "scans",
+   "startFrame": 536,
+   "endFrame": 548
+  },
+  {
+   "word": "every",
+   "startFrame": 549,
+   "endFrame": 561
+  },
+  {
+   "word": "crossing",
+   "startFrame": 562,
+   "endFrame": 579
+  },
+  {
+   "word": "120",
+   "startFrame": 580,
+   "endFrame": 589
+  },
+  {
+   "word": "times",
+   "startFrame": 590,
+   "endFrame": 602
+  },
+  {
+   "word": "a",
+   "startFrame": 603,
+   "endFrame": 610
+  },
+  {
+   "word": "second",
+   "startFrame": 611,
+   "endFrame": 625
+  },
+  {
+   "word": "and",
+   "startFrame": 626,
+   "endFrame": 635
+  },
+  {
+   "word": "finds",
+   "startFrame": 636,
+   "endFrame": 648
+  },
+  {
+   "word": "the",
+   "startFrame": 649,
+   "endFrame": 658
+  },
+  {
+   "word": "one",
+   "startFrame": 659,
+   "endFrame": 668
+  },
+  {
+   "word": "that",
+   "startFrame": 669,
+   "endFrame": 679
+  },
+  {
+   "word": "lost",
+   "startFrame": 680,
+   "endFrame": 690
+  },
+  {
+   "word": "the",
+   "startFrame": 691,
+   "endFrame": 700
+  },
+  {
+   "word": "most.",
+   "startFrame": 701,
+   "endFrame": 711
+  },
+  {
+   "word": "That",
+   "startFrame": 721,
+   "endFrame": 731
+  },
+  {
+   "word": "drop,",
+   "startFrame": 732,
+   "endFrame": 742
+  },
+  {
+   "word": "about",
+   "startFrame": 747,
+   "endFrame": 759
+  },
+  {
+   "word": "2",
+   "startFrame": 760,
+   "endFrame": 767
+  },
+  {
+   "word": "picofarads,",
+   "startFrame": 768,
+   "endFrame": 788
+  },
+  {
+   "word": "is",
+   "startFrame": 793,
+   "endFrame": 800
+  },
+  {
+   "word": "your",
+   "startFrame": 801,
+   "endFrame": 811
+  },
+  {
+   "word": "touch.",
+   "startFrame": 812,
+   "endFrame": 824
+  }
+ ]
+}

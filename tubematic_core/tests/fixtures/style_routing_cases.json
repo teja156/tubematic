@@ -77,12 +77,13 @@
       "title": "How a pin tumbler lock works",
       "brief": "Why the right key lines up the pins at the shear line, why the wrong one does not, and how lock picking exploits tiny manufacturing gaps.",
       "expect": [
-        "stick"
+        "under_the_hood"
       ],
       "ok": [
+        "stick",
         "scenes"
       ],
-      "future": "Under the Hood (TMDEV-201)",
+      "future": "",
       "note": ""
     },
     {
@@ -127,25 +128,27 @@
       "title": "How a fridge pushes heat out",
       "brief": "The refrigerant loop: compressor, condenser, expansion valve and evaporator, and why the back of the fridge is warm.",
       "expect": [
-        "stick"
+        "under_the_hood"
       ],
       "ok": [
+        "stick",
         "scenes",
         "system_flow"
       ],
-      "future": "Under the Hood (TMDEV-201)",
+      "future": "",
       "note": ""
     },
     {
       "title": "How a touchscreen feels your finger",
       "brief": "How a capacitive screen's grid of electrodes notices the charge your finger draws and works out where you touched.",
       "expect": [
-        "stick"
+        "under_the_hood"
       ],
       "ok": [
+        "stick",
         "scenes"
       ],
-      "future": "Under the Hood (TMDEV-201)",
+      "future": "",
       "note": ""
     },
     {
@@ -213,13 +216,14 @@
       "title": "Inside the Vision Pro: what Apple put in it",
       "brief": "The named parts of Apple's headset (the M2 and R1 chips, the micro-OLED panels, the EyeSight screen) and what each does.",
       "expect": [
-        "motion_graphics"
+        "under_the_hood"
       ],
       "ok": [
+        "motion_graphics",
         "scenes"
       ],
-      "future": "Under the Hood (TMDEV-201)",
-      "note": ""
+      "future": "",
+      "note": "Named parts of one device, opened up layer by layer: Under the Hood over a tour of whole-product pictures."
     },
     {
       "title": "The feud between Tesla and Edison",
@@ -392,6 +396,69 @@
       ],
       "future": "",
       "note": ""
+    },
+    {
+      "title": "Why your phone battery wears out",
+      "brief": "What happens inside a lithium-ion cell every time it charges: lithium ions shuttling into the graphite, a crust growing on it, and why capacity falls to about 80 percent after 500 cycles.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How an SSD stores a single bit",
+      "brief": "Inside a flash memory cell: electrons trapped behind a thin oxide layer, how the controller reads the charge, and why a cell wears out after a few thousand writes.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Why RAM prices tripled this year",
+      "brief": "How a 32 GB stick of DDR5 went from 90 to 270 dollars in twelve months: what is on the chip, the three companies that make it, and how AI servers took the supply.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A price story tied to one physical part: a magnified chip, a price chart and the numbers on it."
+    },
+    {
+      "title": "How Bluetooth pairs your headphones",
+      "brief": "What your phone and your headphones say to each other when they pair: discovery, the pairing request, the shared key, and how they find each other again next time.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "A near miss for Under the Hood: the headphones are physical, but the subject is messages between two devices."
+    },
+    {
+      "title": "The most expensive phones ever sold",
+      "brief": "From a gold-plated iPhone to the Vertu Signature Cobra: the five priciest phones, what each sold for and what made it so expensive.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": "A near miss for Under the Hood: products shown whole as a ranking, with no inside to open."
     }
   ]
 }

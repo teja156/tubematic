@@ -58,7 +58,7 @@ def test_each_candidate_carries_its_routing_block_and_cost():
 
 @pytest.mark.parametrize("key, gpu, mascot, unavailable", [
     (True, "working", False, {}),
-    (False, "working", False, {"illustrated": "needs an OpenAI key"}),
+    (False, "working", False, {"illustrated": "needs an OpenAI key", "under_the_hood": "needs an OpenAI key"}),
     (True, "unknown", False, {"cartoon_3d": "GPU not tested yet"}),
     (True, "not_usable", False, {"cartoon_3d": "needs a working GPU"}),
     (True, "working", True, {"cartoon_3d": tvs.MASCOT_EXCLUDES_3D}),
