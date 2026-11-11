@@ -843,10 +843,11 @@ def _fill_video_durations() -> None:
     """Store the length of published videos that have none (TMDEV-212).
 
     Analytics divides Instagram's watched seconds by it, and the only other
-    record is timeline.json, which the retention sweep deletes. So this runs
-    with the hourly metrics pass and again right before a sweep archives
-    anything. Never raises: a missing length costs one blank figure, and must
-    not cost the pass it rides on.
+    record is timeline.json, which goes when the video is archived. This runs
+    with the hourly metrics pass so the share shows while the video is still
+    on disk; pipeline.archive_video stores the length itself when the files
+    go. Never raises: a missing length costs one blank figure, and must not
+    cost the pass it rides on.
     """
     try:
         stored = pipeline.fill_video_durations(DB_PATH)
@@ -938,8 +939,6 @@ def _sweep_retention_once() -> None:
 
 
 def _sweep_published(days: int) -> None:
-    # Before anything is archived: archiving deletes the file a length is read from.
-    _fill_video_durations()
     cutoff = _cutoff(days)
     with db.conn(DB_PATH) as con:
         # Keyed on when the video was published, not created_at or updated_at.

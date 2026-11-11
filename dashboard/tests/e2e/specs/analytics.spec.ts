@@ -111,7 +111,7 @@ test.describe("Analytics", () => {
       await expect(page.getByTestId("watch-small-whiteboard")).toHaveText("TOO FEW");
       await expect(page.getByTestId("watch-small-system_flow")).toHaveCount(0);
       // A figure only some of the group's videos report says how many.
-      await expect(page.getByTestId("watch-watched_pct-long")).toContainText("(7 of 20)");
+      await expect(page.getByTestId("watch-watched_pct-long")).toContainText("(7 of 20, too few)");
       expect(await pageScrollsSideways(page)).toBe(false);
 
       await page.getByTestId("watch-group-by").selectOption("script_length");

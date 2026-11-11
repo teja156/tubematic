@@ -513,15 +513,20 @@ _RETENTION_FIELDS = {
     "tiktok":    {},
 }
 
-RETENTION_KEYS = ("avg_watch_secs", "watched_pct", "stayed_pct", "reach", "saves")
+RETENTION_KEYS = ("avg_watch_secs", "watched_pct", "stayed_pct", "engaged_views", "reach", "saves")
+
+# No platform counts this many of anything. Past it a value is damage, and an
+# integer that large cannot be divided into a float at all.
+_MAX_READING = 1e15
 
 
 def _number(value):
-    """A reported figure, or None. A bool is a number to Python and a negative
-    count is not a reading, so neither passes."""
+    """A reported figure, or None. A bool is a number to Python, a negative
+    count is not a reading and neither is an absurdly large one, so none of
+    them passes."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    if value != value or value in (float("inf"), float("-inf")) or value < 0:
+    if value != value or value < 0 or value > _MAX_READING:
         return None
     return value
 
@@ -529,15 +534,20 @@ def _number(value):
 def extract_retention(platform: str, metrics: dict | None, duration_secs=None) -> dict:
     """Watch figures from one platform payload: seconds watched, the share of
     the video watched (percent), the share of views that stayed to watch
-    (percent), reach and saves.
+    (percent), engaged views, reach and saves.
 
     Same contract as extract_metrics: an absent figure is None, never 0, and
-    an unknown platform is all None.
+    an unknown platform is all None. Never raises, whatever the payload holds.
 
-    `duration_secs` is the video's own length. It is used only where the
-    platform reports seconds and neither a share nor a length (Instagram);
-    without it that share is None. A share above 100 is kept as it is, since a
-    looping Short is watched more than once.
+    An average of 0 seconds is None as well, and so is a 0 share. Nobody
+    watches for no time: a platform sends 0 for a post it has not measured
+    yet, and a 0 would count in a group's median as a video nobody stayed on.
+    Counts are different, since nobody saving a video is a reading.
+
+    `duration_secs` is the video's own length. It is used where the payload
+    has seconds and neither a share nor a length of its own, which is always
+    the case on Instagram; without it that share is None. A share above 100
+    is kept as it is, since a looping Short is watched more than once.
     """
     fields = _RETENTION_FIELDS.get(platform, {})
     metrics = metrics if isinstance(metrics, dict) else {}
@@ -548,25 +558,25 @@ def extract_retention(platform: str, metrics: dict | None, duration_secs=None) -
         return None if value is None else value / divisor
 
     out = dict.fromkeys(RETENTION_KEYS)
-    out["avg_watch_secs"] = read("avg_watch_secs")
+    out["avg_watch_secs"] = read("avg_watch_secs") or None
+    out["engaged_views"] = read("engaged_views")
     out["reach"] = read("reach")
     out["saves"] = read("saves")
 
-    out["watched_pct"] = read("watched_pct")
+    out["watched_pct"] = read("watched_pct") or None
     if out["watched_pct"] is None and out["avg_watch_secs"] is not None:
         length = read("length_secs") or _number(duration_secs)
         if length:
             out["watched_pct"] = out["avg_watch_secs"] / length * 100
 
-    engaged = read("engaged_views")
     views = _number(extract_metrics(platform, metrics)["views"])
-    if engaged is not None and views:
-        out["stayed_pct"] = engaged / views * 100
+    if out["engaged_views"] is not None and views:
+        out["stayed_pct"] = out["engaged_views"] / views * 100
 
     for key in ("avg_watch_secs", "watched_pct", "stayed_pct"):
         if out[key] is not None:
             out[key] = round(out[key], 1)
-    for key in ("reach", "saves"):
+    for key in ("engaged_views", "reach", "saves"):
         if out[key] is not None:
             out[key] = int(out[key])
     return out

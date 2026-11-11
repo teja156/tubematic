@@ -49,7 +49,7 @@ def test_youtube_reports_seconds_share_and_stayed_to_watch():
     views over views, which YouTube alone reports. No reach, no saves."""
     assert postforme.extract_retention("youtube", YOUTUBE) == {
         "avg_watch_secs": 31, "watched_pct": 41.5, "stayed_pct": 60.0,
-        "reach": None, "saves": None}
+        "engaged_views": 120, "reach": None, "saves": None}
 
 
 def test_instagram_reports_milliseconds_and_no_share_of_its_own():
@@ -57,7 +57,7 @@ def test_instagram_reports_milliseconds_and_no_share_of_its_own():
     and no video length, so without the video's own length the share is blank."""
     assert postforme.extract_retention("instagram", INSTAGRAM) == {
         "avg_watch_secs": 23.5, "watched_pct": None, "stayed_pct": None,
-        "reach": 410, "saves": 12}
+        "engaged_views": None, "reach": 410, "saves": 12}
 
 
 def test_instagram_share_is_seconds_over_the_videos_own_length():
@@ -69,7 +69,7 @@ def test_facebook_carries_its_own_video_length():
     """Both figures are milliseconds, and the share needs nothing from us."""
     assert postforme.extract_retention("facebook", FACEBOOK) == {
         "avg_watch_secs": 12, "watched_pct": 20.0, "stayed_pct": None,
-        "reach": 130, "saves": None}
+        "engaged_views": None, "reach": 130, "saves": None}
 
 
 def test_a_platforms_own_share_wins_over_one_worked_out_from_the_length():
@@ -96,10 +96,45 @@ def test_no_views_means_no_stayed_figure_rather_than_zero():
     assert postforme.extract_retention("youtube", {"engagedViews": 5})["stayed_pct"] is None
 
 
-def test_a_reported_zero_stays_a_zero():
+def test_a_reported_zero_count_stays_a_zero():
     """Nobody saved it is a reading; "not reported" is not."""
     out = postforme.extract_retention("instagram", dict(INSTAGRAM, saved=0, reach=0))
     assert out["saves"] == 0 and out["reach"] == 0
+    assert postforme.extract_retention("youtube", dict(YOUTUBE, engagedViews=0))["engaged_views"] == 0
+
+
+@pytest.mark.parametrize("platform, raw", [
+    ("youtube", dict(YOUTUBE, views=0, engagedViews=0, averageViewDuration=0, averageViewPercentage=0)),
+    ("youtube", dict(YOUTUBE, averageViewDuration=0, averageViewPercentage=0.0)),
+    ("instagram", dict(INSTAGRAM, ig_reels_avg_watch_time=0)),
+    ("facebook", dict(FACEBOOK, video_avg_time_watched=0)),
+])
+def test_an_average_of_no_seconds_is_not_a_reading(platform, raw):
+    """A platform sends 0 for a post it has not measured yet. Nobody watches
+    for no time, and a 0 would enter a group's median as a video that held
+    nobody. So an average of 0 seconds, and a 0 share, are not reported."""
+    out = postforme.extract_retention(platform, raw, duration_secs=60)
+    assert (out["avg_watch_secs"], out["watched_pct"]) == (None, None)
+
+
+@pytest.mark.parametrize("key, blank", [
+    ("averageViewDuration", "avg_watch_secs"), ("averageViewPercentage", "watched_pct"),
+    ("engagedViews", "stayed_pct"), ("views", "stayed_pct")])
+def test_an_absurdly_large_value_is_not_a_reading_and_does_not_raise(key, blank):
+    """An integer too large for a float cannot be divided. One damaged
+    snapshot must not take the Analytics page down with it."""
+    out = postforme.extract_retention("youtube", dict(YOUTUBE, **{key: 10 ** 400}))
+    assert out[blank] is None
+    assert postforme.extract_retention("instagram", dict(INSTAGRAM, reach=1e308))["reach"] is None
+
+
+def test_the_stored_length_stands_in_wherever_a_payload_has_seconds_and_no_share():
+    """Always the case on Instagram. Also a YouTube or Facebook payload that
+    came without its own share or length."""
+    raw = {k: v for k, v in YOUTUBE.items() if k != "averageViewPercentage"}
+    assert postforme.extract_retention("youtube", raw, duration_secs=62)["watched_pct"] == 50.0
+    raw = {k: v for k, v in FACEBOOK.items() if k != "video_length"}
+    assert postforme.extract_retention("facebook", raw, duration_secs=48)["watched_pct"] == 25.0
 
 
 def test_a_share_above_one_hundred_is_kept():
@@ -492,8 +527,23 @@ def test_a_stored_length_is_never_overwritten(env):
     assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_a'") == 94.0
 
 
-def test_the_retention_sweep_stores_the_length_before_it_deletes_the_files(env, monkeypatch):
-    """The trap this guards: the sweep deletes timeline.json, the only other
+def test_one_unreadable_timeline_does_not_stop_the_others(env):
+    """A timeline whose fps is not a number raises inside the reader. That
+    video stays unknown; the ones after it still get their length."""
+    for vid in ("vid_a", "vid_b"):
+        _video(env, vid)
+        _post(env, vid, "instagram", "spc_ig")
+    job = env.jobs / "vid_a"
+    job.mkdir()
+    (job / "timeline.json").write_text(json.dumps({"totalFrames": 2700, "fps": "thirty"}))
+    _timeline(env, "vid_b", 60)
+    assert pipeline.fill_video_durations(env.db) == 1
+    assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_a'") is None
+    assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_b'") == 60
+
+
+def test_the_retention_sweep_stores_the_length_as_it_deletes_the_files(env, monkeypatch):
+    """The trap this guards: archiving deletes timeline.json, the only other
     record of the length, and the analytics go on for as long as the post does."""
     _video(env, "vid_a")
     _post(env, "vid_a", "instagram", "spc_ig", published_at=_ago(30))
@@ -502,6 +552,33 @@ def test_the_retention_sweep_stores_the_length_before_it_deletes_the_files(env, 
     assert _one(env, "SELECT archived_at FROM videos WHERE id = 'vid_a'") is not None
     assert not (env.jobs / "vid_a").exists()
     assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_a'") == 94.0
+
+
+def test_deleting_a_video_from_the_dashboard_stores_its_length_too(client, env):
+    """A person can delete a published video minutes after it went out, before
+    any hourly pass, and with publishing switched off. The length is stored by
+    the archive itself, so no route to deleting the files skips it."""
+    _video(env, "vid_a")
+    _post(env, "vid_a", "instagram", "spc_ig", INSTAGRAM)
+    _timeline(env, "vid_a", 94.0)
+    assert client.delete("/videos/vid_a").status_code == 200
+    assert not (env.jobs / "vid_a").exists()
+    assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_a'") == 94.0
+    row = json.loads(client.get("/analytics").data)["publications"][0]
+    assert row["watched_pct"] == 25.0
+
+
+def test_archiving_keeps_a_length_already_stored_and_survives_a_bad_timeline(env):
+    _video(env, "vid_a", duration=94.0)
+    _timeline(env, "vid_a", 12)
+    _video(env, "vid_b")
+    job = env.jobs / "vid_b"
+    job.mkdir()
+    (job / "timeline.json").write_text(json.dumps({"totalFrames": 2700, "fps": [30]}))
+    for vid in ("vid_a", "vid_b"):
+        assert pipeline.archive_video(env.db, vid, {"PUBLISHED"}, "human", "x")["result"] == "archived"
+    assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_a'") == 94.0
+    assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_b'") is None
 
 
 def test_the_hourly_metrics_pass_stores_lengths_too(env, monkeypatch):
@@ -516,8 +593,16 @@ def test_the_hourly_metrics_pass_stores_lengths_too(env, monkeypatch):
     assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_a'") == 94.0
 
 
-def test_a_failure_storing_lengths_does_not_stop_the_pass_it_rides_on(env, monkeypatch):
+def test_a_failure_storing_lengths_does_not_stop_the_metrics_pass(env, monkeypatch):
+    """The snapshots are a time series: a pass that is skipped is a reading
+    lost. Storing lengths rides on that pass and must never cost it."""
     def boom(_db):
         raise sqlite3.OperationalError("database is locked")
+    polled = []
     monkeypatch.setattr(pipeline, "fill_video_durations", boom)
-    worker._fill_video_durations()
+    monkeypatch.setattr(worker, "_publishing_key", lambda: "key")
+    monkeypatch.setattr(worker, "_metrics_due", lambda: True)
+    monkeypatch.setattr(worker.metrics, "poll", lambda *_a, **_k: polled.append(1) or
+                        {"accounts": 0, "snapshots": 0, "errors": 0})
+    worker._poll_video_metrics()
+    assert polled == [1]

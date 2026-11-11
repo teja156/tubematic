@@ -127,7 +127,9 @@ describe("WatchTimePanel", () => {
     render(<WatchTimePanel names={{}} />);
     await screen.findByTestId("watch-group-system_flow");
     expect(screen.getByTestId("watch-avg_watch_secs-system_flow")).toHaveTextContent("23.5 s (38 of 40)");
-    expect(screen.getByTestId("watch-watched_pct-system_flow")).toHaveTextContent("25% (9 of 40)");
+    // Nine videos are as hard to read as a nine-video group, and it says so.
+    expect(screen.getByTestId("watch-watched_pct-system_flow"))
+      .toHaveTextContent("25% (9 of 40, too few)");
     const stayed = screen.getByTestId("watch-stayed_pct-system_flow");
     expect(stayed).toHaveTextContent("—");
     expect(stayed).not.toHaveTextContent("0");
@@ -165,7 +167,29 @@ describe("WatchTimePanel", () => {
     expect(await screen.findByTestId("watch-time-empty")).toHaveTextContent("Nothing published yet");
   });
 
-  it("surfaces an API error, and an answer that is not the expected shape", async () => {
+  it("never shows one account's figures under another account's name", async () => {
+    // The pick fails. The last answer is YouTube's, and the select now names
+    // Instagram, so the table must go and not stay up under the wrong name.
+    const fetchMock = vi.fn().mockImplementation((url: string) =>
+      String(url).includes("spc_ig")
+        ? Promise.resolve({ ok: false, json: async () => ({ error: "API restarting" }) })
+        : Promise.resolve({ ok: true, json: async () => YOUTUBE }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<WatchTimePanel names={{}} />);
+    await screen.findByTestId("watch-group-system_flow");
+    fireEvent.change(screen.getByTestId("watch-account"), { target: { value: "spc_ig" } });
+    // Gone at once, while the request is still out.
+    expect(screen.queryByTestId("watch-group-system_flow")).toBeNull();
+    expect(await screen.findByTestId("watch-time-error")).toHaveTextContent("API restarting");
+    expect((screen.getByTestId("watch-account") as HTMLSelectElement).value).toBe("spc_ig");
+    expect(screen.queryByTestId("watch-group-system_flow")).toBeNull();
+    // Picking the first account again brings its figures back.
+    fireEvent.change(screen.getByTestId("watch-account"), { target: { value: "spc_yt" } });
+    expect(await screen.findByTestId("watch-group-system_flow")).toBeInTheDocument();
+    expect(screen.queryByTestId("watch-time-error")).toBeNull();
+  });
+
+  it("surfaces an API error", async () => {
     stub({ "": { error: "boom" } }, false);
     render(<WatchTimePanel names={{}} />);
     expect(await screen.findByTestId("watch-time-error")).toHaveTextContent("boom");

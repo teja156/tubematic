@@ -10,5 +10,6 @@
 -- NULL = not known. No backfill here: a migration sees the database and not
 -- the jobs folder. The worker fills the column from timeline.json for every
 -- published video whose files still exist (pipeline.fill_video_durations),
--- and a video whose files are already gone stays NULL and shows no share.
+-- archive_video stores it as it deletes the files, and a video whose files
+-- are already gone stays NULL and shows no share.
 ALTER TABLE videos ADD COLUMN duration_secs REAL;

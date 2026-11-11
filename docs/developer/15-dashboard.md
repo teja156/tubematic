@@ -554,7 +554,10 @@ The **Watch time** tab is `WatchTimePanel.tsx`, mounted while the tab is open:
   account select re-reads for the account picked.
 - One response holds every grouping, so **Group by** changes the table without a request.
 - A group with fewer videos than the response's `min_group` is tagged `TOO FEW`. A figure reported
-  by only some of the group's videos shows `(n of videos)`.
+  by only some of the group's videos shows `(n of videos)`, with `too few` added when `n` is under
+  `min_group`.
+- The table is drawn only while the response's account is the account the select names. A pick
+  that is still loading, or that failed, shows no table.
 - A measure no video reports shows a dash. When no measure is reported at all, a line names the
   platform.
 
@@ -888,7 +891,7 @@ suite can test them without React.
 | `renderers.ts` | The renderer status chip, the GPU verdict, the device description and the **Nothing can render** condition |
 | `costs.ts` | The cost disclaimer, and money, credit, service, operation and stage labels |
 | `datetime.ts` | Timestamp formatting with an explicit timezone |
-| `format.ts` | `formatBytes`, in binary units so a figure matches `du -h` on the host |
+| `format.ts` | `formatBytes`, in binary units so a figure matches `du -h` on the host. `formatWatchSeconds` and `formatShare`, which render an unreported watch figure as a dash |
 | `platforms.ts` | Platform display names and the account label |
 | `utils.ts` | `cn`, `codePoints`, the stream URLs, and `isScored` and `scoreLabel` (a score of 0 means unscored) |
 | `session.ts`, `sessionCookie.ts`, `requestGuard.ts` | The session, the cookie name and lifetime with the post-login redirect rule, and the same-origin JSON check. `sessionCookie.ts` is separate because `middleware.ts` imports it and cannot read the secret files |

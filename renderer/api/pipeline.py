@@ -1063,15 +1063,28 @@ def _video_duration_secs(video_id: str):
     return None
 
 
+def _readable_duration_secs(video_id: str):
+    """_video_duration_secs, or None for a timeline it cannot make sense of
+    (an fps that is not a number, say). For callers that must carry on."""
+    try:
+        return _video_duration_secs(video_id)
+    except Exception:  # noqa: BLE001 - any shape of bad file means "not known"
+        log.warning("could not read the length of %s from its timeline", video_id,
+                    extra={"video_id": video_id})
+        return None
+
+
 def fill_video_durations(db_path: str) -> int:
     """Store the length of every published video that has none yet and still
     has its files (TMDEV-212). Returns how many were stored.
 
-    Analytics needs the length long after the retention sweep has deleted
-    timeline.json, so the worker calls this hourly and again before a sweep
-    archives anything. Archived videos are skipped: their files are gone, and
-    asking again every hour would only fail again. A video with no readable
-    timeline stays NULL and is asked again on the next pass.
+    Analytics needs the length for as long as the post exists, and shows it
+    from the first reading, so the worker calls this hourly. archive_video
+    stores it too, at the moment the files go, for a video this never reached.
+    Archived videos are skipped: their files are gone, and asking again every
+    hour would only fail again. A video with no readable timeline stays NULL
+    and is asked again on the next pass, and one bad file does not stop the
+    others.
     """
     with _db(db_path) as con:
         ids = [r["id"] for r in con.execute(
@@ -1079,7 +1092,7 @@ def fill_video_durations(db_path: str) -> int:
             " AND EXISTS (SELECT 1 FROM video_publications p WHERE p.video_id = v.id)")]
     stored = 0
     for video_id in ids:
-        duration = _video_duration_secs(video_id)
+        duration = _readable_duration_secs(video_id)
         if duration is None:
             continue
         with _db(db_path) as con:
@@ -1741,12 +1754,19 @@ def archive_video(db_path: str, video_id: str, allowed_statuses, author: str,
             return {"result": "not_found"}
         mp4 = _output_path(row["project_id"], video_id)
         job_dir = JOBS_DIR / video_id
+        # Read before the files go and stored with the archive itself: this is
+        # the last moment the video's length exists anywhere, and Analytics
+        # divides by it for as long as the post does (TMDEV-212). COALESCE
+        # keeps a length already stored.
+        duration = _readable_duration_secs(video_id)
         age_sql, age_args = (" AND updated_at < ?", [updated_before]) if updated_before else ("", [])
         cur = con.execute(
-            "UPDATE videos SET archived_at = ?, video_path = '', updated_at = ?"
+            "UPDATE videos SET archived_at = ?, video_path = '', updated_at = ?,"
+            " duration_secs = COALESCE(duration_secs, ?)"
             " WHERE id = ? AND archived_at IS NULL"
             f" AND status IN ({','.join('?' * len(allowed))}){age_sql}",
-            [now, now, video_id, *allowed, *age_args])
+            [now, now, None if duration is None else round(duration, 3),
+             video_id, *allowed, *age_args])
         if cur.rowcount == 0:
             con.rollback()
             fresh = con.execute(

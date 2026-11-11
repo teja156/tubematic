@@ -184,7 +184,7 @@ Instagram reports seconds only, so Tubematic divides them by the video's length.
 length while the video's files exist. An Instagram post of a video whose files were deleted before
 its length was stored shows a dash under **% watched**.
 
-Instagram can take up to 48 hours to report a new post's figures.
+postforme states that Instagram can take up to 48 hours to report some figures of a new post.
 
 ### Comparing groups of videos
 
@@ -199,7 +199,7 @@ How to read the table:
 - Each figure is the median of the group's videos, so one video with an unusual audience does not
   set it.
 - **Videos** is the number of posts in the group. A figure that only some of them report says how
-  many, for example `25% (9 of 40)`.
+  many, for example `25% (30 of 40)`. It adds `too few` when fewer than 20 report it.
 - A group with fewer than 20 videos is marked `TOO FEW`. One unusual video can move its figure, so
   treat it as a hint.
 - Compare groups inside one account. Platforms count views and watch time differently, and every

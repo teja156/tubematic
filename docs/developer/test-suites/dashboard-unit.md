@@ -245,9 +245,11 @@ Covers `components/WatchTimePanel.tsx`, the Analytics page's **Watch time** tab.
   Picking an account sends its id.
 - Changing **Group by** redraws the table from the same response.
 - A group under the response's `min_group` is tagged `TOO FEW` and still listed.
-- A figure only some of a group's videos report shows how many, and a figure none reports is a
-  dash.
+- A figure only some of a group's videos report shows how many, with `too few` under the
+  threshold, and a figure none reports is a dash.
 - An error answer, and an answer of another shape, show an error line.
+- After a pick that fails, the table of the account shown before is gone, and it returns when that
+  account is picked again.
 
 Trap: a measure with `n` of 0 has a null median. Formatting it as a number would show 0, which says
 that nobody watched.

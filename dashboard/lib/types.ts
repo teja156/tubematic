@@ -383,6 +383,7 @@ export interface VideoPublication {
   avg_watch_secs?: number | null;
   watched_pct?: number | null;
   stayed_pct?: number | null;
+  engaged_views?: number | null;
   reach?: number | null;
   saves?: number | null;
 }

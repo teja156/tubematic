@@ -410,19 +410,22 @@ publication rows of `GET /analytics` and `GET /videos/<id>/publications`,
 
 - Each platform's keys and units: YouTube's seconds, percentage and engaged views, Instagram's and
   Facebook's milliseconds, Facebook's own video length, and TikTok reporting nothing.
-- An absent figure is null and a reported zero stays zero. Zero views gives no stayed figure, a
-  share above 100 is kept, and a value that is not a number is not reported.
+- An absent figure is null and a reported zero count stays zero. Zero views gives no stayed
+  figure, a share above 100 is kept, and a value that is not a number, or is too large to divide, is
+  not reported.
+- An average of 0 seconds and a 0 share are not reported, on every platform.
 - The routes read the latest snapshot, including snapshots stored by an earlier version. A payload
   that does not parse reports nothing, and watch figures are added to no total.
 - The grouped route answers for one account, the largest when none is named. A group's figure is
   the median, `videos` counts every post and `n` counts the posts that report the measure.
 - Script length bands come back shortest first, and markup in a script is not counted as words.
 - The length is stored for published, unarchived videos with a readable `timeline.json`, and a
-  stored length is not overwritten.
+  stored length is not overwritten. One unreadable timeline leaves the other videos' lengths stored.
+- A failure while storing lengths leaves the metrics poll running.
 
-Trap: the retention sweep deletes `timeline.json`, the only other record of a video's length, while
-its analytics continue. The test runs `_sweep_published` on a video with no stored length and
-checks that the length is there after the files are gone.
+Trap: archiving deletes `timeline.json`, the only other record of a video's length, while its
+analytics continue. The tests archive a video with no stored length through the retention sweep and
+through `DELETE /videos/<id>`, and check that the length is there after the files are gone.
 
 ### `test_auto_pilot.py`
 

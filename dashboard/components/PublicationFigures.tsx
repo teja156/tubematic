@@ -1,7 +1,8 @@
 "use client";
 
 // How one post is doing, from its latest snapshot (TMDEV-212): the four
-// counts and the watch figures. Shown in the video window's Analytics tab.
+// counts and the watch figures. Shown in the video window's Publishing
+// Results tab.
 //
 // A figure the platform did not report reads "not reported", never 0. TikTok
 // reports counts only, Instagram no stayed-to-watch, YouTube no reach or

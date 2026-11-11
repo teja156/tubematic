@@ -936,8 +936,8 @@ one does internally is in [Publishing internals](14-publishing.md#http-routes).
 
 The routes that reach postforme, and `POST /publishing/accounts`, answer `503` when
 `publishing_enabled` is false or no `postforme_api_key` is stored. The check runs before any
-outbound call. `GET /videos/<video_id>/publications`, `publish-prefill`, `GET /analytics` and the
-two `/autopilot` routes have no such check.
+outbound call. `GET /videos/<video_id>/publications`, `publish-prefill`, `GET /analytics`,
+`GET /analytics/watch-time` and the two `/autopilot` routes have no such check.
 
 ### Accounts
 
@@ -968,7 +968,7 @@ any outbound call. `502` when postforme fails (the body carries its message) or 
 `GET /videos/<video_id>/publications` returns the video's publication rows, ordered by platform:
 `id`, `video_id`, `platform`, `social_account_id`, `status`, `post_url`, `error`, `published_at`,
 `created_at`, `updated_at`. Each row also carries its latest snapshot: `views`, `likes`,
-`comments`, `shares`, the five [watch figures](14-publishing.md#watch-figures) and `fetched_at`.
+`comments`, `shares`, the six [watch figures](14-publishing.md#watch-figures) and `fetched_at`.
 They are all null for a row with no snapshot.
 
 `POST /videos/<video_id>/publish-prefill` is a read that calls no model. It returns
@@ -1025,7 +1025,7 @@ parameters `platform` and `social_account_id` filter every part of the response.
 |---|---|
 | `totals` | `views`, `likes`, `comments`, `shares`, `publications`, `videos` |
 | `by_platform` | The four metrics summed per platform. An unreported metric adds 0 |
-| `publications` | Each published row with its latest `views`, `likes`, `comments`, `shares` (null when unreported), `fetched_at`, the video's `title` and the watch figures `avg_watch_secs`, `watched_pct`, `stayed_pct`, `reach` and `saves` (null when unreported, see [Watch figures](14-publishing.md#watch-figures)) |
+| `publications` | Each published row with its latest `views`, `likes`, `comments`, `shares` (null when unreported), `fetched_at`, the video's `title` and the watch figures `avg_watch_secs`, `watched_pct`, `stayed_pct`, `engaged_views`, `reach` and `saves` (null when unreported, see [Watch figures](14-publishing.md#watch-figures)) |
 | `by_month` | `[{month: "YYYY-MM", views}]`: views gained in each of the last 12 months, oldest first. Months before any snapshot are left out. A figure can be negative |
 | `timezone` | The zone the months were cut in (the host's, or `UTC`) |
 

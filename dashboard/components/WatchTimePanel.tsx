@@ -35,14 +35,17 @@ function Figure({ measure, format, videos, minGroup, testId }: {
   minGroup: number; testId: string;
 }) {
   // Fewer reporting videos than the group has: say how many, since the
-  // figure speaks for those alone.
+  // figure speaks for those alone. Under the threshold it is as hard to read
+  // as a small group, and says so in words, since colour alone is easy to miss.
   const partial = measure.n > 0 && measure.n !== videos;
-  const thin = measure.n > 0 && measure.n < minGroup;
+  const thin = partial && measure.n < minGroup;
   return (
     <td data-testid={testId} style={{ ...cell, color: thin ? "var(--dim)" : "var(--ink)" }}>
       {format(measure.median)}
       {partial && (
-        <span style={{ color: "var(--mute)", fontSize: 10 }}> ({measure.n} of {videos})</span>
+        <span style={{ color: "var(--mute)", fontSize: 10 }}>
+          {" "}({measure.n} of {videos}{thin ? ", too few" : ""})
+        </span>
       )}
     </td>
   );
@@ -72,9 +75,13 @@ export function WatchTimePanel({ names }: { names: Record<string, AccountName> }
     return () => { stale = true; };
   }, [account]);
 
+  // The table shows an account's figures only while it is the account the
+  // select names. Between a pick and its answer, and after a pick that failed,
+  // the last answer belongs to another account and is not drawn.
+  const shown = data && (!account || data.social_account_id === account) ? data : null;
   const minGroup = data?.min_group ?? 20;
   const groups: WatchGroup[] =
-    data?.dimensions.find((d) => d.id === dimension)?.groups ?? [];
+    shown?.dimensions.find((d) => d.id === dimension)?.groups ?? [];
   const nothingReported = groups.length > 0
     && groups.every((g) => MEASURES.every((m) => g[m.key].n === 0));
 
@@ -95,7 +102,7 @@ export function WatchTimePanel({ names }: { names: Record<string, AccountName> }
                         gap: 8, alignItems: "center" }}>
           <span>ACCOUNT</span>
           <select data-testid="watch-account" value={account || data?.social_account_id || ""}
-                  onChange={(e) => setAccount(e.target.value)} style={control}>
+                  onChange={(e) => { setError(""); setAccount(e.target.value); }} style={control}>
             {(data?.accounts ?? []).map((a) => (
               <option key={a.id} value={a.id}>
                 {accountLabel(a.id, a.platform, names)}, {a.videos} video{a.videos === 1 ? "" : "s"}
@@ -168,10 +175,10 @@ export function WatchTimePanel({ names }: { names: Record<string, AccountName> }
         </div>
       )}
 
-      {nothingReported && data && (
+      {nothingReported && shown && (
         <p data-testid="watch-time-unreported"
            style={{ ...mono, fontSize: 11, color: "var(--dim)", marginTop: 16, maxWidth: 640 }}>
-          {platformLabel(data.platform)} has reported no watch figures for these posts.
+          {platformLabel(shown.platform)} has reported no watch figures for these posts.
         </p>
       )}
 
