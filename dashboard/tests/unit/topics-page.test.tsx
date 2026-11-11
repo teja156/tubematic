@@ -131,9 +131,15 @@ describe("TopicsPage — removing a mining URL", () => {
     expect(screen.queryByTestId("mining-url-item")).toBeNull();
     expect(screen.getByTestId("mining-save-status").textContent).toBe("✓ Saved");
 
-    fireEvent.click(screen.getByTestId("toast-action"));
+    // A URL added after the removal stays when the removal is undone.
+    const later = "https://www.youtube.com/watch?v=abcdefghijk";
+    fireEvent.change(screen.getByTestId("mining-url-input"), { target: { value: later } });
+    fireEvent.click(screen.getByTestId("mining-url-add"));
     await waitFor(() => expect(screen.getAllByTestId("mining-url-item")).toHaveLength(1));
-    expect(posts).toEqual([[], [MINING_URL]]);
+
+    fireEvent.click(screen.getByTestId("toast-action"));
+    await waitFor(() => expect(screen.getAllByTestId("mining-url-item")).toHaveLength(2));
+    expect(posts).toEqual([[], [later], [MINING_URL, later]]);
   });
 });
 

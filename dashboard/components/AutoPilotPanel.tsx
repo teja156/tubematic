@@ -26,6 +26,8 @@ function apiFetch(path: string, init?: RequestInit) {
 }
 
 const mono = { fontFamily: "var(--mono)" } as const;
+// Long enough for the API; a hung request would hold every later change.
+const SAVE_TIMEOUT_MS = 30_000;
 const note: CSSProperties = { ...mono, fontSize: 10, color: "var(--mute)", letterSpacing: "0.02em" };
 const row: CSSProperties = {
   display: "flex", alignItems: "center", gap: 16, padding: "10px 0",
@@ -84,7 +86,14 @@ function NumberCell({ testId, value, max, inputStyle, onCommit, onInvalid }: {
   onInvalid: (message: string) => void;
 }) {
   const [text, setText] = useState(String(value));
-  useEffect(() => { setText(String(value)); }, [value]);
+  // Follows the stored value only when it changes. Run on mount as well, a
+  // late effect would put the stored number back over one just typed.
+  const shown = useRef(value);
+  useEffect(() => {
+    if (shown.current === value) return;
+    shown.current = value;
+    setText(String(value));
+  }, [value]);
   function commit() {
     const n = Number(text.trim());
     if (!/^\d+$/.test(text.trim()) || n > max) {
@@ -126,6 +135,10 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   // on screen whole; an earlier answer would undo the edits made after it.
   const inFlight = useRef(0);
   const savedRef = useRef<AutoPilotState | null>(null);
+  // The newest document sent and not yet answered, and the fields whose save
+  // failed since the panel last matched what is stored.
+  const sentRef = useRef<AutoPilotConfig | null>(null);
+  const failed = useRef(new Set<string>());
 
   function showGap(mins: number) {
     const gap = splitGap(mins);
@@ -201,31 +214,47 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   function apply(partial: Partial<AutoPilotConfig>, key: string) {
     const next = { ...draft!, ...partial };
     setDraft(next);
-    if (needsConfirmation(saved!, next)) setConfirming({ next, key });
+    // Judged against the newest document sent, not the stored one: a change
+    // made while a confirmed "on" is still on its way widens nothing.
+    const base = sentRef.current ? { ...saved!, ...sentRef.current } : saved!;
+    if (needsConfirmation(base, next)) setConfirming({ next, key });
     else void save(next, key);
   }
 
   function save(next: AutoPilotConfig, key: string) {
     inFlight.current += 1;
+    sentRef.current = next;
     return statuses.run(key, () => enqueue(async () => {
       const r = await apiFetch("/autopilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
+        signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
       }).catch(() => null);
       inFlight.current -= 1;
       const refused = !r?.ok ? await responseError(r) : null;
       const body = refused === null ? await r!.json().catch(() => null) : null;
       if (refused !== null || !isState(body)) {
-        // What is stored stays in force, and the panel shows it again.
-        if (savedRef.current) {
-          setDraft(configOf(savedRef.current));
-          showGap(savedRef.current.gap_mins);
+        failed.current.add(key);
+        // With nothing after it, what is stored stays in force and the panel
+        // shows it again. A later save carries this change too and decides.
+        if (inFlight.current === 0) {
+          sentRef.current = null;
+          if (savedRef.current) {
+            setDraft(configOf(savedRef.current));
+            showGap(savedRef.current.gap_mins);
+          }
         }
         return refused ?? "the API sent back something that is not a configuration";
       }
-      if (inFlight.current === 0) adopt(body);
-      else {
+      if (inFlight.current === 0) {
+        sentRef.current = null;
+        adopt(body);
+        // Every earlier change rode in this document, so an earlier failure
+        // no longer stands.
+        failed.current.forEach((k) => { if (k !== key) statuses.clear(k); });
+        failed.current.clear();
+      } else {
         setSaved(body);
         savedRef.current = body;
       }
@@ -243,17 +272,31 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   }
 
   function commitGap(text: string, unit: GapUnit) {
-    const value = parseInt(text, 10);
-    const mins = gapMins(value, unit);
-    if (!/^\d+$/.test(text.trim()) || mins > MAX_AUTO_PILOT_GAP_MINS) {
+    const t = text.trim();
+    // Hours may carry a fraction (1.5 hours is 90 minutes); minutes are whole.
+    const ok = unit === "hours" ? /^\d+(\.\d+)?$/.test(t) : /^\d+$/.test(t);
+    const mins = Math.round(gapMins(Number(t), unit));
+    if (!ok || mins > MAX_AUTO_PILOT_GAP_MINS) {
       statuses.fail("gap", `must be from 0 minutes to ${MAX_AUTO_PILOT_GAP_MINS / 60 / 24} days`);
       return;
     }
     if (mins === draft!.gap_mins) {
-      statuses.clear("gap");
+      // Typed back to what is set: a refusal no longer applies. An Enter
+      // followed by a blur lands here too, and must leave the save on its
+      // way, and its outcome, alone.
+      if (statuses.get("gap")?.state === "error") statuses.clear("gap");
       return;
     }
     apply({ gap_mins: mins }, "gap");
+  }
+
+  /** Shows the same gap in the other unit. Saves nothing: the number has not
+   *  changed, only how it reads. */
+  function changeGapUnit(unit: GapUnit) {
+    const mins = draft!.gap_mins;
+    setGapUnit(unit);
+    setGapText(unit === "hours" ? String(Math.round((mins / 60) * 100) / 100) : String(mins));
+    if (statuses.get("gap")?.state === "error") statuses.clear("gap");
   }
 
   function toggleProject(pid: string) {
@@ -316,6 +359,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
           data-testid="input-auto-pilot-gap"
           type="number"
           min={0}
+          step="any"
           value={gapText}
           onChange={(e) => setGapText(e.target.value)}
           onBlur={() => commitGap(gapText, gapUnit)}
@@ -325,11 +369,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
         <select
           data-testid="select-auto-pilot-gap-unit"
           value={gapUnit}
-          onChange={(e) => {
-            const unit = e.target.value as GapUnit;
-            setGapUnit(unit);
-            commitGap(gapText, unit);
-          }}
+          onChange={(e) => changeGapUnit(e.target.value as GapUnit)}
           style={{ ...inputStyle, width: 110 }}
         >
           <option value="minutes">minutes</option>

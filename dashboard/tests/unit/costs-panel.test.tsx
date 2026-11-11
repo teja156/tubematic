@@ -109,6 +109,17 @@ describe("CostsPanel", () => {
 
   it("resets a manual price at once and offers an Undo that sets the same rates again", async () => {
     const fn = stub();
+    // After the reset the table lists the model's synced price again.
+    const base = fn.getMockImplementation()!;
+    let reset = false;
+    fn.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/prices/override") && init?.method === "DELETE") reset = true;
+      if (url.endsWith("/prices") && reset) {
+        return Promise.resolve({ ok: true, json: async () => ({ ...TABLE, models: TABLE.models.map((m) =>
+          m.model === "gpt-5.6-sol" ? { ...m, source: "openrouter" } : m) }) });
+      }
+      return base(url, init);
+    });
     const notify = vi.fn();
     render(<CostsPanel inputStyle={{}} notify={notify} />);
     fireEvent.click(await screen.findByTestId("price-reset-gpt-5.6-sol"));

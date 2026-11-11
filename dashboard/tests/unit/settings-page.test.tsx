@@ -484,8 +484,57 @@ describe("SettingsPage", () => {
     );
   });
 
+  it("Undo puts back only the removed voice, keeping a voice added since", async () => {
+    const fetchMock = vi.mocked(fetch);
+    let stored: Settings = MOCK_SETTINGS;
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(((url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/settings") && init?.method === "POST") {
+        stored = { ...stored, ...JSON.parse(String(init.body)) };
+        return Promise.resolve({ ok: true, json: async () => stored } as Response);
+      }
+      if (String(url).endsWith("/settings")) {
+        return Promise.resolve({ ok: true, json: async () => stored } as Response);
+      }
+      return base(url, init);
+    }) as typeof fetch);
+    render(<SettingsPage />);
+    await waitFor(() => screen.getByTestId("tab-voice"));
+    await openTab("voice");
+    await act(async () => { fireEvent.click(await screen.findByTestId("voice-remove-0")); });
+    await flushSaves();
+    fireEvent.change(screen.getByTestId("voice-add-name"), { target: { value: "Second" } });
+    fireEvent.change(screen.getByTestId("voice-add-id"), { target: { value: "xyz789" } });
+    await act(async () => { fireEvent.click(screen.getByTestId("voice-add")); });
+    await flushSaves();
+
+    await act(async () => { fireEvent.click(screen.getByTestId("toast-action")); });
+    await flushSaves();
+    const bodies = postedBodies(fetchMock);
+    expect(bodies[bodies.length - 1]).toEqual({
+      elevenlabs_voices: [
+        MOCK_SETTINGS.elevenlabs_voices[0],
+        { name: "Second", voice_id: "xyz789", model_id: "eleven_multilingual_v2" },
+      ],
+      elevenlabs_voice_id: "abc123",
+    });
+  });
+
   it("removing a voice offers an Undo that saves the roster and default back", async () => {
     const fetchMock = vi.mocked(fetch);
+    // The API answers a save with what it stored.
+    let stored: Settings = MOCK_SETTINGS;
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(((url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/settings") && init?.method === "POST") {
+        stored = { ...stored, ...JSON.parse(String(init.body)) };
+        return Promise.resolve({ ok: true, json: async () => stored } as Response);
+      }
+      if (String(url).endsWith("/settings")) {
+        return Promise.resolve({ ok: true, json: async () => stored } as Response);
+      }
+      return base(url, init);
+    }) as typeof fetch);
     render(<SettingsPage />);
     await waitFor(() => screen.getByTestId("tab-voice"));
     await openTab("voice");
@@ -1270,6 +1319,7 @@ describe("SettingsPage — agents tab", () => {
     await act(async () => { fireEvent.keyDown(input, { key: "Enter" }); });
     expect(mutations(fn)).toHaveLength(0);
     expect(screen.getByTestId("agent-error-claude").textContent).toMatch(/0 to 100/);
+    expect(screen.getByTestId("saves-summary").textContent).toContain("1 change not saved");
     // What was typed stays, so it can be corrected.
     expect((input as HTMLInputElement).value).toBe("101");
   });
@@ -1541,6 +1591,37 @@ describe("SettingsPage — save behaviour", () => {
     await held.answer(1, okAnswer({ ...MOCK_SETTINGS, max_render_retries: 5, render_timeout_secs: 5400 }));
     expect((screen.getByTestId("input-max-render-retries") as HTMLInputElement).value).toBe("5");
     expect((screen.getByTestId("input-render-timeout-mins") as HTMLInputElement).value).toBe("90");
+  });
+
+  it("Enter then blur sends one save, and its outcome still shows", async () => {
+    const fetchMock = vi.mocked(fetch);
+    await renderTab("rendering");
+    const held = holdPosts();
+    const input = screen.getByTestId("input-max-render-retries");
+    fireEvent.change(input, { target: { value: "5" } });
+    await act(async () => { fireEvent.keyDown(input, { key: "Enter" }); });
+    await act(async () => { fireEvent.blur(input); });
+    expect(held.count()).toBe(1);
+    expect(screen.getByTestId("saves-summary").textContent).toContain("Saving…");
+    await held.answer(0, okAnswer({ ...MOCK_SETTINGS, max_render_retries: 5 }));
+    expect(screen.getByTestId("status-input-max-render-retries").textContent).toBe("✓ Saved");
+    expect(postedBodies(fetchMock)).toEqual([{ max_render_retries: 5 }]);
+  });
+
+  it("a field typed back to its stored value while a save is on its way is still sent", async () => {
+    const fetchMock = vi.mocked(fetch);
+    await renderTab("rendering");
+    const held = holdPosts();
+    const input = screen.getByTestId("input-max-render-retries");
+    fireEvent.change(input, { target: { value: "5" } });
+    await act(async () => { fireEvent.keyDown(input, { key: "Enter" }); });
+    // Stored is still 1; the 5 is on its way. Back to 1 must be sent too.
+    fireEvent.change(input, { target: { value: "1" } });
+    await act(async () => { fireEvent.blur(input); });
+    await held.answer(0, okAnswer({ ...MOCK_SETTINGS, max_render_retries: 5 }));
+    await held.answer(1, okAnswer({ ...MOCK_SETTINGS, max_render_retries: 1 }));
+    expect(postedBodies(fetchMock)).toEqual([{ max_render_retries: 5 }, { max_render_retries: 1 }]);
+    expect((input as HTMLInputElement).value).toBe("1");
   });
 
   it("a switch shows its new value at once and goes back when the API refuses it", async () => {
@@ -1968,6 +2049,38 @@ describe("SettingsPage — user preferences (TMDEV-117)", () => {
     await waitFor(() => expect(savedBody(fetchMock)).toEqual({
       user_preferences: "Research: Linux.\nScripts: calm.",
     }), { timeout: 2500 });
+  });
+
+  it("keeps a trailing space or line break when the API answers with the text trimmed", async () => {
+    stubFetch();
+    const fetchMock = vi.mocked(fetch);
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(((url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/settings") && init?.method === "POST") {
+        const sent = JSON.parse(String(init.body)).user_preferences as string;
+        return Promise.resolve({ ok: true, json: async () => ({ ...MOCK_SETTINGS, user_preferences: sent.trim() }) } as Response);
+      }
+      return base(url, init);
+    }) as typeof fetch);
+    await renderTab("preferences");
+    const box = screen.getByTestId("input-user-preferences") as HTMLTextAreaElement;
+    await act(async () => { fireEvent.change(box, { target: { value: "Scripts: calm\n" } }); });
+    await act(async () => { fireEvent.blur(box); });
+    await flushSaves();
+    expect(postedBodies(fetchMock)).toEqual([{ user_preferences: "Scripts: calm\n" }]);
+    expect(box.value).toBe("Scripts: calm\n");
+  });
+
+  it("switching tab before the second is up still sends the text", async () => {
+    stubFetch();
+    const fetchMock = vi.mocked(fetch);
+    await renderTab("preferences");
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("input-user-preferences"), { target: { value: "UK spelling." } });
+    });
+    await openTab("voice");
+    await flushSaves();
+    expect(postedBodies(fetchMock)).toEqual([{ user_preferences: "UK spelling." }]);
   });
 
   it("leaving the box sends the text at once", async () => {

@@ -273,7 +273,7 @@ Covers [the settings page](../15-dashboard.md#the-settings-page) against the rea
 - A voice's model is stored on that voice only, and the preview endpoint refuses an unknown model
   before any ElevenLabs call.
 - Auto Pilot: the stored switch stays off until the confirmation dialog is confirmed, and each
-  change after it saves on its own.
+  change after it saves on its own. Switching the gap's unit shows the same gap in minutes.
 - The Renderers panel shows the built-in renderer's startup probe as CPU rendering with a
   SwiftShader renderer string.
 

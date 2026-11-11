@@ -144,13 +144,18 @@ function RendererCard({ r, now, timeZone, busy, error, status, onPatch, onRemove
             <input data-testid="renderer-rename-input" aria-label="Renderer name" value={draft}
                    maxLength={NAME_MAX_CHARS + 20} autoFocus style={input}
                    onChange={(e) => setDraft(e.target.value)}
-                   onBlur={() => { if (!busy) void saveName(); }}
+                   onBlur={(e) => {
+                     // Moving to Cancel, by mouse or by Tab, must not save the
+                     // name Cancel is about to drop.
+                     if ((e.relatedTarget as HTMLElement | null)?.dataset?.testid === "renderer-rename-cancel") return;
+                     if (!busy) void saveName();
+                   }}
                    onKeyDown={(e) => {
                      if (e.key === "Enter") void saveName();
                      if (e.key === "Escape") cancelRename();
                    }} />
-            {/* mousedown is stopped so the field never loses focus to this
-                button, which would save the name Cancel is meant to drop. */}
+            {/* mousedown is stopped so a click does not take focus from the
+                field at all; Tab onto it is caught in the field's onBlur. */}
             <button type="button" data-testid="renderer-rename-cancel"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={cancelRename}

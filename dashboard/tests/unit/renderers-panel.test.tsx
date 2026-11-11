@@ -208,6 +208,11 @@ describe("RenderersPanel", () => {
     const cancel = g.getByTestId("renderer-rename-cancel");
     expect(fireEvent.mouseDown(cancel)).toBe(false);
     fireEvent.click(cancel);
+    // Tab onto Cancel blurs the field towards it, which must not save either.
+    fireEvent.click(g.getByTestId("renderer-rename"));
+    fireEvent.change(g.getByTestId("renderer-rename-input"), { target: { value: "Tabbed away" } });
+    fireEvent.blur(g.getByTestId("renderer-rename-input"), { relatedTarget: g.getByTestId("renderer-rename-cancel") });
+    fireEvent.click(g.getByTestId("renderer-rename-cancel"));
     expect(callsTo(fn, "PATCH", "/renderers/r2")).toHaveLength(0);
 
     fireEvent.click(g.getByTestId("renderer-rename"));

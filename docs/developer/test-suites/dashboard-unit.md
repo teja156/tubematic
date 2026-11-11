@@ -92,7 +92,8 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
 - A save that cannot reach the API, or that the API refuses, is reported on the domain's line with
   no browser alert, and leaves the row as it was. The next save still goes out, as it does after a
   write that threw. A refused topic cap is put back in its field.
-- Removing a mining URL saves at once and offers an **Undo** that saves the previous list.
+- Removing a mining URL saves at once and offers an **Undo** that puts that URL back and keeps a
+  URL added since.
 - The agent picker offers Automatic and the live agents. The model is disabled under Automatic, and
   the blank effort names the agent's own level. Changing the agent sends `default_agent_model: ""`
   in the same save. An uninstalled agent and a dropped model stay selected, disabled, and are
@@ -169,16 +170,21 @@ Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-setti
   sent. A switch shows its new value at once and goes back when the API refuses it.
 - Saves wait for the one before (a mutation that sends them side by side fails this), the browser
   asks before closing only while one is on its way, and switching tabs never asks.
+- Enter followed by blur sends one save and keeps its outcome. A field typed back to its stored
+  value while another save is on its way is still sent.
 - Turning Publishing on asks first, and Cancel saves nothing; turning it off does not ask.
-  Removing a voice offers an **Undo** that saves the previous roster and default.
-- The Preferences text saves a second after typing stops, and at once on blur.
+  Removing a voice offers an **Undo** that puts that voice back and keeps a voice added since.
+- The Preferences text saves a second after typing stops, at once on blur, and on a tab switch
+  made before the second is up. A trailing space or line break stays in the box when the API
+  answers with the text trimmed.
 - Each field saves only its own key, with its bounds and units (timeouts shown in minutes and
   stored in seconds).
 - An API key renders as the mask the server returned. Clearing the field posts an empty string.
 - Voice: each roster row picks its own model, and a save carries the roster with no
   `elevenlabs_model_id` or `pronunciation_mode` key.
 - Agents: the default, default model and effort each `PATCH` at once, the weight on blur or Enter,
-  and a weight outside 0 to 100 is never sent. The tab issues no `DELETE`.
+  and a weight outside 0 to 100 is never sent and counts as not saved on the page line. The tab
+  issues no `DELETE`.
 - The Rendering tab's default-mascot picker lists only pickable mascots and saves
   `default_mascot_id` alone. Mascots are disabled with the reason while the GPU is not working, and
   "No mascot" and a held value stay selectable. The same tab shows the Renderers panel.
@@ -198,8 +204,8 @@ Covers `components/RenderersPanel.tsx` ([Renderers](../15-dashboard.md#renderers
 - One card per renderer, the built-in one first, with its status chip, GPU verdict and the device
   Chromium got.
 - Each button sends its request, and an API refusal shows on that renderer's card.
-- A new name saves on Enter or blur and says so. Escape and **Cancel** drop it, and **Cancel**
-  stops the `mousedown` that would blur the field and save the name first.
+- A new name saves on Enter or blur and says so. Escape and **Cancel** drop it, whether **Cancel**
+  is clicked or reached by Tab.
 - The panel polls every 3 seconds while a GPU test is outstanding and every 20 seconds otherwise.
 - **Add renderer** shows the token and the host command once and forgets both on close.
 - A response of the wrong shape is not drawn as a renderer list.
@@ -226,6 +232,8 @@ Covers `components/AutoPilotPanel.tsx` and `lib/autoPilot.ts`
   Cancel puts the switch back.
 - A refused change shows its reason and puts the panel back to what is stored.
 - An edit made while an earlier save is on its way survives that save's answer.
+- Enter followed by blur on the gap sends one save and keeps its outcome. Switching the gap's unit
+  only changes how it reads, and a fraction of an hour is accepted.
 - Only accounts that are allowed and connected are offered.
 - The gap shows in hours and is sent in minutes. At the in-progress limit the tab says why nothing
   new starts.

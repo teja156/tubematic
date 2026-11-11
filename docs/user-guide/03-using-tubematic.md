@@ -125,7 +125,7 @@ Leave it on **Automatic** to share the domain's videos between your agents
 Add YouTube video links under **Mining Sources** on the **Topics** page, up to 50. A link to a video,
 a Short or a live video is accepted, in the `youtube.com/watch?v=…` or `youtu.be/…` form. A link to
 a channel or a playlist is not. Removing a link takes effect at once and offers **Undo** for a few
-seconds.
+seconds, which puts that link back.
 
 While no Gemini key is stored, the **Mining** toggle is greyed out. It works again once you add a
 key on **Settings → API Keys**.

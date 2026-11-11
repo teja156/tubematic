@@ -177,9 +177,12 @@ describe("AutoPilotPanel", () => {
     const limit = screen.getByTestId("auto-pilot-limit-spc_yt");
     fireEvent.change(limit, { target: { value: "3" } });
     fireEvent.blur(limit);
+    // Switching the unit shows 240 minutes and saves nothing.
+    fireEvent.change(screen.getByTestId("select-auto-pilot-gap-unit"), { target: { value: "minutes" } });
+    expect(screen.getByTestId("input-auto-pilot-gap")).toHaveValue(240);
     const gap = screen.getByTestId("input-auto-pilot-gap");
     fireEvent.change(gap, { target: { value: "90" } });
-    fireEvent.change(screen.getByTestId("select-auto-pilot-gap-unit"), { target: { value: "minutes" } });
+    fireEvent.blur(gap);
     // Each change sent the whole document; the last one carries all three.
     await waitFor(() => expect(posts(fn)).toHaveLength(3));
     expect(posted(fn)).toEqual({
@@ -201,6 +204,34 @@ describe("AutoPilotPanel", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(posted(fn)).not.toBeNull());
     expect(posted(fn).max_in_flight).toBe(12);
+  });
+
+  it("Enter then blur on the gap sends one save and keeps its outcome", async () => {
+    const fn = stub();
+    render(<AutoPilotPanel inputStyle={{}} />);
+    const gap = await screen.findByTestId("input-auto-pilot-gap");
+    fireEvent.change(gap, { target: { value: "2" } });
+    fireEvent.keyDown(gap, { key: "Enter" });
+    fireEvent.blur(gap);
+    await waitFor(() => expect(screen.getByTestId("auto-pilot-status-gap")).toHaveTextContent("✓ Saved"));
+    expect(posts(fn)).toHaveLength(1);
+    expect(posted(fn).gap_mins).toBe(120);
+  });
+
+  it("switching the gap's unit only changes how it reads", async () => {
+    const fn = stub();
+    render(<AutoPilotPanel inputStyle={{}} />);
+    const unit = await screen.findByTestId("select-auto-pilot-gap-unit");
+    fireEvent.change(unit, { target: { value: "minutes" } });
+    expect(screen.getByTestId("input-auto-pilot-gap")).toHaveValue(240);
+    fireEvent.change(unit, { target: { value: "hours" } });
+    expect(screen.getByTestId("input-auto-pilot-gap")).toHaveValue(4);
+    expect(posts(fn)).toHaveLength(0);
+    // A fraction of an hour is fine.
+    const gap = screen.getByTestId("input-auto-pilot-gap");
+    fireEvent.change(gap, { target: { value: "1.5" } });
+    fireEvent.blur(gap);
+    await waitFor(() => expect(posted(fn)?.gap_mins).toBe(90));
   });
 
   it("an edit made while a save is on its way survives that save's answer", async () => {

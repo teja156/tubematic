@@ -34,7 +34,7 @@ Open **Settings → Auto Pilot**. Each change on the tab is saved as you make it
 | Setting | What it does | Default |
 |---|---|---|
 | **Auto Pilot** on or off | Off stops all of it and keeps the rest of the tab as you set it | Off |
-| **Gap between publishes** | The shortest time between two posts on one account. Enter minutes or hours, up to a week | 4 hours |
+| **Gap between publishes** | The shortest time between two posts on one account. Enter minutes or hours, up to a week. Switching between minutes and hours shows the same gap in the other unit | 4 hours |
 | **Most videos in progress** | How many videos may be between voicing and publishing at once. See [The in-progress limit](#the-in-progress-limit) | 0, which means no limit |
 | **Projects** | Which domains are on Auto Pilot. Each one has its own list of accounts, chosen from the accounts ticked on the Socials page | None |
 | A number for each account, under **Accounts** | How many videos Auto Pilot posts to the account in one day. 0 means it does not post there | 1 |

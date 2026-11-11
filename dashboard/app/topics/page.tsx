@@ -857,6 +857,9 @@ export default function TopicsPage() {
   const [miningError, setMiningError] = useState<string | null>(null);
   const statuses = useSaveStatus();
   const { toasts, push, dismiss } = useToasts();
+  // The newest list, for an Undo clicked after later changes.
+  const miningUrlsRef = useRef<string[]>([]);
+  miningUrlsRef.current = miningUrls;
   // Illustrated is disabled as a domain default when no OpenAI key is stored.
   // Fetched apart from loadAll so a failed settings read changes nothing but
   // this: the API refuses the style itself, so true is the safe fallback.
@@ -1023,7 +1026,8 @@ export default function TopicsPage() {
   }
 
   async function handleMiningUrlsChange(next: string[]) {
-    const prev = miningUrls;
+    // From the ref: an Undo runs this from an older render.
+    const prev = miningUrlsRef.current;
     const removed = prev.filter((u) => !next.includes(u));
     setMiningUrls(next);
     setSavingMining(true);
@@ -1051,11 +1055,20 @@ export default function TopicsPage() {
       return null;
     });
     setSavingMining(false);
-    // A removal applies at once; Undo puts the list back as it was.
+    // A removal applies at once. Undo puts that one URL back into the list as
+    // it is then, so a change made after the removal is kept.
     if (ok && removed.length === 1 && next.length === prev.length - 1) {
-      push("success", `Removed ${removed[0]}.`, {
+      const url = removed[0];
+      const index = prev.indexOf(url);
+      push("success", `Removed ${url}.`, {
         label: "Undo",
-        onClick: () => { void handleMiningUrlsChange(prev); },
+        onClick: () => {
+          const current = miningUrlsRef.current;
+          if (current.includes(url)) return;
+          const restored = [...current];
+          restored.splice(Math.min(index, restored.length), 0, url);
+          void handleMiningUrlsChange(restored);
+        },
       });
     }
   }

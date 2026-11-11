@@ -720,9 +720,10 @@ The pause switch sits above the tabs and applies at once through its own endpoin
 
 Every change on every tab saves itself, and the page has no Save button and no draft. A switch, a
 picker or a tick box saves on change. A number or a text field saves on blur or Enter. The
-Preferences text saves one second after the last keystroke, and again on blur and when the tab
-closes. The tab row wraps onto a second line on a narrow window, because the page body clips
-horizontal overflow.
+Preferences text saves one second after the last keystroke, and at once on blur, on a tab switch
+or when you go to another dashboard page. Closing the browser tab with text still waiting gets the
+browser's leave-page prompt. The tab row wraps onto a second line on a narrow window, because the
+page body clips horizontal overflow.
 
 - `lib/saveStatus.tsx::useSaveStatus` holds each field's state: saving, saved, or refused with the
   API's reason. `components/SaveStatus.tsx` draws it beside the field, and "✓ Saved" clears after
@@ -732,14 +733,18 @@ horizontal overflow.
   and adds a `beforeunload` prompt while a save is in flight or a Preferences save is waiting.
 - Settings saves run through one queue (`useSerialQueue`). `POST /settings` answers with the whole
   settings object, so an answer that arrived after a newer one would put older values back on
-  screen.
+  screen. Each request gives up after 30 seconds, or one hung request would hold every later change.
+- A field compares an edit with the value on its way to the API, or else the stored one
+  (`useBaseline`). Comparing with the stored value alone would drop an edit back to it made while
+  another save was on its way, and would send an Enter followed by a blur twice.
 - A switch or a picker shows its new value while the save is on its way, and goes back to the
   stored value if the API refuses it. A typed field keeps what was typed, red, with the reason
   beside it, so the entry can be corrected while the stored value stays in force. An out-of-range
   number is refused in the page and never sent.
 - The voice roster and the default voice are saved in one request, because the API reads a default
-  that is not in the roster as empty. Removing a voice offers **Undo**, which saves the previous
-  roster and default.
+  that is not in the roster as empty. Removing a voice offers **Undo**, which puts that one voice
+  back into the roster as it is then, so a voice added since stays. It is the default again only if
+  no other voice became the default meanwhile.
 - Turning Publishing on opens a confirmation: with Auto Pilot on, it starts scheduling posts that
   nobody approves one by one. Turning it off saves at once.
 - Switching tabs never asks, because nothing is ever left unsaved. It clears the refusal messages,
@@ -750,7 +755,9 @@ horizontal overflow.
 
 - On Voice, each roster row has its own model picker and preview button.
 - Preferences is one textbox (`PreferencesEditor`) with a live count against the 6000-character
-  cap. It keeps its own text, so the answer to an earlier save never replaces what is being typed. See
+  cap. It keeps its own text, so the answer to an earlier save never replaces what is being typed.
+  The API stores the text trimmed, and an answer that is only the box's text trimmed leaves the box
+  alone, or a trailing space or line break would vanish under the cursor. See
   [User preferences](07-agent-layer.md#user-preferences).
 - API keys render through `SecretInput`, a password field that unmasks only while focused. It shows
   what the server returned: a mask or an empty string. Sending an unchanged mask changes nothing on
@@ -776,8 +783,8 @@ See [HTTP API](05-http-api.md#agents).
 `RenderersPanel.tsx` reads `GET /renderers`, and each button (Enable or Disable, Rename, Remove for
 a remote renderer, Test GPU) writes at once through the [renderers routes](05-http-api.md#renderers).
 Its rules are pure functions in `lib/renderers.ts`. A new name saves on Enter or blur, and Escape
-or **Cancel** drops it. **Cancel** stops its `mousedown`, so the field does not blur and save the
-name first.
+or **Cancel** drops it. **Cancel** stops its `mousedown`, and a blur towards **Cancel** (by Tab) is
+skipped, so the field does not save the name **Cancel** is about to drop.
 
 - One card per renderer, the built-in one first.
 - `rendererStatus` picks the status chip: the first of *disabled*, *credential expired*, *needs
@@ -802,7 +809,7 @@ name first.
 Model prices are rows in their own table. See [Costs](../user-guide/05-settings.md#costs) and
 [HTTP API](05-http-api.md#costs). A price is set from a small form with **Set price**, because
 several rates make one price. **Reset** applies at once and offers **Undo**, which sets the same
-rates again.
+rates again unless a price was set by hand since.
 
 ### Auto Pilot
 
@@ -812,7 +819,13 @@ status beside the field that changed. What the settings mean is in
 
 - Changes run through one queue, and only the answer to the last one is applied to the whole
   panel. An earlier answer would undo a change made while it was on its way.
-- A refused change puts the panel back to the stored configuration and shows the reason.
+- A refused change shows the reason. With no save after it, the panel goes back to the stored
+  configuration. A later save carries the change too and decides, and once one succeeds an earlier
+  failure is cleared, because its change was stored with it.
+- Whether a change needs confirming is judged against the newest document sent, so a change made
+  while a confirmed "on" is still on its way does not ask again.
+- Switching the gap between minutes and hours shows the same gap in the other unit and saves
+  nothing. Hours may carry a fraction.
 
 - The warning stays on screen above the switch and is repeated in the confirmation. Its wording is
   `lib/autoPilot.ts::AUTO_PILOT_DISCLAIMER`.

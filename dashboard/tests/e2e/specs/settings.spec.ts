@@ -474,8 +474,11 @@ test.describe("Settings page", () => {
 
     await page.getByTestId("auto-pilot-confirm-ok").click();
     await expect(page.getByTestId("auto-pilot-status-enabled")).toHaveText("✓ Saved");
-    await page.getByTestId("input-auto-pilot-gap").fill("90");
+    // Switching the unit only changes how the gap reads; the number then saves.
     await page.getByTestId("select-auto-pilot-gap-unit").selectOption("minutes");
+    await expect(page.getByTestId("input-auto-pilot-gap")).toHaveValue("240");
+    await page.getByTestId("input-auto-pilot-gap").fill("90");
+    await page.getByTestId("input-auto-pilot-gap").press("Enter");
     await expect(page.getByTestId("auto-pilot-status-gap")).toHaveText("✓ Saved");
     await page.getByTestId("input-auto-pilot-max-in-flight").fill("3");
     await page.getByTestId("input-auto-pilot-max-in-flight").press("Enter");

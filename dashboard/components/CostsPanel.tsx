@@ -8,7 +8,7 @@
 // reset applies at once and can be undone. Rates are shown and typed per
 // million tokens (what every pricing page quotes) and stored per token.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ModelPrice, PriceTable } from "@/lib/types";
 import { SectionLabel } from "@/components/SectionLabel";
@@ -138,6 +138,9 @@ export function CostsPanel({ inputStyle, notify }: {
                                            rates: Record<string, number> } | null>(null);
   const [busy, setBusy] = useState(false);
   const statuses = useSaveStatus();
+  // The newest table, for an Undo clicked after later changes.
+  const tableRef = useRef<PriceTable | null>(null);
+  tableRef.current = table;
 
   async function load() {
     try {
@@ -220,7 +223,12 @@ export function CostsPanel({ inputStyle, notify }: {
     // The manual rates are gone from the table now; Undo sets them again.
     if (ok) notify?.(`Reset the manual price of ${m.model}.`, {
       label: "Undo",
-      onClick: () => { void setPrice(m.service, m.model, m.rates); },
+      onClick: () => {
+        // A price set by hand again since the reset stays as it is.
+        const now = tableRef.current?.models.find((x) => x.service === m.service && x.model === m.model);
+        if (now?.source === "manual") return;
+        void setPrice(m.service, m.model, m.rates);
+      },
     });
   }
 

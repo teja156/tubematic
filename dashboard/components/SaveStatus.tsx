@@ -16,7 +16,8 @@ const mono: React.CSSProperties = {
 
 /** The status beside one field: "Saving…", "✓ Saved" or "Not saved: <reason>".
  *  Renders an empty live region when there is nothing to say, so a screen
- *  reader still hears the outcome. */
+ *  reader still hears the outcome. Its id is `testId`, for the field's
+ *  aria-describedby. */
 export function SaveStatus({ status, testId }: { status?: SaveState; testId?: string }) {
   let text = "";
   let color = "var(--mute)";
@@ -30,6 +31,7 @@ export function SaveStatus({ status, testId }: { status?: SaveState; testId?: st
   }
   return (
     <span
+      id={testId}
       data-testid={testId}
       data-state={status?.state ?? "idle"}
       role="status"
@@ -54,10 +56,10 @@ export function SavesSummaryLine() {
     dot = "var(--red)";
   }
   return (
+    // Not a live region: each field's own status is, and a second one here
+    // would announce every save twice.
     <span
       data-testid="saves-summary"
-      role="status"
-      aria-live="polite"
       style={{
         ...mono, fontSize: 11, color: "var(--dim)", display: "inline-flex", alignItems: "center", gap: 8,
         border: "1px solid var(--border)", padding: "4px 10px", whiteSpace: "nowrap",

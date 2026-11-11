@@ -22,6 +22,8 @@ import { codePoints } from "@/lib/utils";
 import { formatBytes } from "@/lib/format";
 
 const STATUS_POLL_MS = 30_000;
+// Longer than the Discord webhook check a save can include (5 s).
+const SAVE_TIMEOUT_MS = 30_000;
 
 // Max named voices in the roster (TMDEV-51). Keep in sync with
 // renderer/api/pipeline.py, mcp/server.py and onboard/config.py.
@@ -153,6 +155,20 @@ function fieldBorder(status: SaveState | undefined): string {
   return status?.state === "error" ? "var(--red)" : "var(--border)";
 }
 
+/** What a field compares an edit with: the value on its way to the API, or
+ *  else the stored one. Comparing with the stored value alone would drop an
+ *  edit back to it made while another save was on its way, and would send an
+ *  Enter followed by a blur twice. */
+function useBaseline<T>(value: T, status?: SaveState) {
+  const sent = useRef<{ v: T } | null>(null);
+  useEffect(() => { sent.current = null; }, [value]);
+  useEffect(() => { if (status?.state !== "saving") sent.current = null; }, [status?.state]);
+  return {
+    current: () => (sent.current ? sent.current.v : value),
+    mark: (v: T) => { sent.current = { v }; },
+  };
+}
+
 function NumInput({
   value,
   min,
@@ -173,6 +189,7 @@ function NumInput({
   onSame?: () => void;
 }) {
   const [local, setLocal] = useState(String(value));
+  const baseline = useBaseline(value, status);
 
   // keep in sync when the stored value changes
   useEffect(() => { setLocal(String(value)); }, [value]);
@@ -185,10 +202,11 @@ function NumInput({
       else setLocal(String(value)); // revert invalid
       return;
     }
-    if (n === value) {
+    if (n === baseline.current()) {
       onSame?.();
       return;
     }
+    baseline.mark(n);
     onCommit(n);
   }
 
@@ -202,6 +220,7 @@ function NumInput({
         max={max}
         value={local}
         aria-invalid={status?.state === "error"}
+        aria-describedby={`status-${testId}`}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
@@ -239,12 +258,15 @@ function SecretInput({
 }) {
   const [local, setLocal] = useState(value);
   const [focused, setFocused] = useState(false);
+  const baseline = useBaseline(value, status);
 
   useEffect(() => { setLocal(value); }, [value]);
 
   function commit() {
     setFocused(false);
-    if (local.trim() !== value) onCommit(local.trim());
+    if (local.trim() === baseline.current()) return;
+    baseline.mark(local.trim());
+    onCommit(local.trim());
   }
 
   return (
@@ -261,6 +283,7 @@ function SecretInput({
         autoComplete="off"
         spellCheck={false}
         aria-invalid={status?.state === "error"}
+        aria-describedby={`status-${testId}`}
         onFocus={() => setFocused(true)}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={commit}
@@ -294,11 +317,14 @@ function TextInput({
   onCommit: (v: string) => void;
 }) {
   const [local, setLocal] = useState(value);
+  const baseline = useBaseline(value, status);
 
   useEffect(() => { setLocal(value); }, [value]);
 
   function commit() {
-    if (local.trim() !== value) onCommit(local.trim());
+    if (local.trim() === baseline.current()) return;
+    baseline.mark(local.trim());
+    onCommit(local.trim());
   }
 
   return (
@@ -312,6 +338,7 @@ function TextInput({
         autoComplete="off"
         spellCheck={false}
         aria-invalid={status?.state === "error"}
+        aria-describedby={`status-${testId}`}
         onChange={(e) => setLocal(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
@@ -357,9 +384,13 @@ function PreferencesEditor({
   const latest = useRef(value);
   const save = useRef(onSave);
   save.current = onSave;
+  const baseline = useBaseline(value, status);
 
+  // The API stores the text trimmed. An answer that is only the box's text
+  // trimmed leaves the box alone, or a trailing space or line break you just
+  // typed would vanish under the cursor.
   useEffect(() => {
-    if (!unsent.current) {
+    if (!unsent.current && value !== latest.current.trim()) {
       setLocal(value);
       latest.current = value;
     }
@@ -372,6 +403,7 @@ function PreferencesEditor({
     }
     if (!unsent.current) return;
     unsent.current = false;
+    baseline.mark(latest.current);
     save.current(latest.current);
   }
 
@@ -387,6 +419,7 @@ function PreferencesEditor({
         placeholder={"e.g.\nTopics: favour Linux internals; skip crypto.\nScripts: calm tone, no jokes, UK spelling.\nVisuals: prefer diagrams over stock-style photos."}
         spellCheck={false}
         aria-invalid={status?.state === "error"}
+        aria-describedby="status-input-user-preferences"
         onChange={(e) => {
           const chars = codePoints(e.target.value);
           const next = chars.length > MAX_USER_PREFERENCES_CHARS
@@ -394,7 +427,7 @@ function PreferencesEditor({
             : e.target.value;
           setLocal(next);
           latest.current = next;
-          unsent.current = next !== value;
+          unsent.current = next !== baseline.current();
           if (timer.current) clearTimeout(timer.current);
           timer.current = null;
           if (unsent.current) {
@@ -579,10 +612,12 @@ function SettingsBody() {
       return next;
     });
     return statuses.run(statusKey, () => enqueue(async () => {
+      // A hung request would hold every later change behind it in the queue.
       const r = await apiFetch("/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(partial),
+        signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
       }).catch(() => null);
       if (!r?.ok) {
         settle();
@@ -596,6 +631,10 @@ function SettingsBody() {
     }), opts.label);
   }
 
+  // The newest `val`, for an Undo clicked after later changes.
+  const valRef = useRef(val);
+  valRef.current = val;
+
   /** Props for a NumInput bound to one settings key. */
   function numField<K extends keyof Settings>(
     key: K,
@@ -605,7 +644,9 @@ function SettingsBody() {
       status: statuses.get(key),
       onCommit: (n: number) => { void save({ [key]: toStored(n) } as Partial<Settings>, key); },
       onInvalid: (message: string) => statuses.fail(key, message),
-      onSame: () => statuses.clear(key),
+      // Typed back to what is stored: a refusal no longer applies. A save
+      // still on its way keeps its status.
+      onSame: () => { if (statuses.get(key)?.state === "error") statuses.clear(key); },
     };
   }
 
@@ -621,8 +662,7 @@ function SettingsBody() {
     else setConfirmPublishing(true);
   }
 
-  function saveVoices(voices: Voice[], defaultVoiceId: string, removed?: string) {
-    const before = { voices: val("elevenlabs_voices"), defaultVoiceId: val("elevenlabs_voice_id") };
+  function saveVoices(voices: Voice[], defaultVoiceId: string, removed?: RemovedVoice) {
     // The roster and the default go together: a default that is not in the
     // roster reads back as "" (TMDEV-51), so splitting them could blank it.
     void save(
@@ -631,11 +671,27 @@ function SettingsBody() {
       { optimistic: true },
     ).then((ok) => {
       if (!ok || removed === undefined) return;
-      push("success", `Removed voice "${removed}".`, {
+      push("success", `Removed voice "${removed.voice.name}".`, {
         label: "Undo",
-        onClick: () => saveVoices(before.voices, before.defaultVoiceId),
+        onClick: () => restoreVoice(removed),
       });
     });
+  }
+
+  /** Puts one removed voice back into the roster as it is now, so a change
+   *  made after the removal is kept. It is the default again only if nothing
+   *  else became the default meanwhile. */
+  function restoreVoice(removed: RemovedVoice) {
+    const roster = valRef.current("elevenlabs_voices");
+    if (roster.some((v) => v.voice_id === removed.voice.voice_id)) return;
+    if (roster.length >= MAX_VOICES) {
+      push("error", `No room to put "${removed.voice.name}" back: the roster holds ${MAX_VOICES} voices.`);
+      return;
+    }
+    const next = [...roster];
+    next.splice(Math.min(removed.index, next.length), 0, removed.voice);
+    const current = valRef.current("elevenlabs_voice_id");
+    saveVoices(next, removed.wasDefault && !current ? removed.voice.voice_id : current);
   }
 
   function changeTab(next: string) {
@@ -1375,6 +1431,13 @@ function SettingsBody() {
 
 // ── Voices roster editor (TMDEV-51) ───────────────────────────────────────────
 
+/** A voice just removed, with what Undo needs to put it back. */
+interface RemovedVoice {
+  voice: Voice;
+  index: number;
+  wasDefault: boolean;
+}
+
 // What a model adds on top of the lexicon and <respell>, which every model takes.
 function modelNote(model: string): string {
   if (IPA_COMPATIBLE_MODELS.includes(model)) return "Supports exact IPA via <ipa> tags.";
@@ -1471,7 +1534,7 @@ function VoicesEditor({
 }: {
   voices: Voice[];
   defaultVoiceId: string;
-  onSave: (voices: Voice[], defaultVoiceId: string, removed?: string) => void;
+  onSave: (voices: Voice[], defaultVoiceId: string, removed?: RemovedVoice) => void;
   saving: boolean;
   inputStyle: React.CSSProperties;
 }) {
@@ -1488,7 +1551,7 @@ function VoicesEditor({
     onSave(
       voices.filter((_, i) => i !== index),
       defaultVoiceId === removedId ? "" : defaultVoiceId,
-      voices[index].name,
+      { voice: voices[index], index, wasDefault: defaultVoiceId === removedId },
     );
   }
 
@@ -1804,7 +1867,9 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
                     inputStyle={inputStyle}
                     onSave={(n) => patch(a.id, { weight: n })}
                     onInvalid={(message) => {
-                      statuses.clear(a.id);
+                      // Counted as not saved on the page line; the reason
+                      // shows in the row's own error line.
+                      statuses.fail(a.id, message);
                       setErrors((e) => ({ ...e, [a.id]: message }));
                     }}
                   />

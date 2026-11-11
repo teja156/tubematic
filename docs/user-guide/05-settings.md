@@ -12,7 +12,7 @@ A change applies to the next piece of work. You do not restart anything.
 The switch at the top, **Pipeline state**, pauses and resumes the pipeline. It applies when you
 click it. See [Pausing everything](03-using-tubematic.md#pausing-everything).
 
-Below it are fifteen tabs. Every change is saved as you make it, and there is no Save button:
+Below it are fifteen tabs. Every change is saved as you make it, and no tab has a Save button:
 
 - A switch, a list or a tick box saves when you change it.
 - A number or a text field saves when you press Enter or click elsewhere.
@@ -289,9 +289,9 @@ update.
 | Button | What it does |
 |---|---|
 | **Sync now** | Updates the prices now |
-| **Override** | Sets a price for a model yourself |
+| **Override** | Opens a small form for your own price. **Set price** stores it |
 | **Reset** | Removes your price and goes back to the synced one. **Undo** puts your price back |
-| **Add price** | Sets a price for a model that has calls and no price. Those calls are then counted in every total |
+| **Add price** | Opens the same form for a model that has calls and no price. Those calls are then counted in every total |
 
 A call with no price is counted separately beside each total until you add a price.
 
