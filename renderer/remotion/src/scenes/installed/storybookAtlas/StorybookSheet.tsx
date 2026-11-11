@@ -6,11 +6,15 @@
  *   2  one person in every pose
  *   3  the knobs: hats, hair and faces
  *   4+ each backdrop as a whole chapter frame (plaque, guide, a person, the caption label)
+ *   then the prop library, every state of each prop in its box, with a check
+ *      that the drawing fits the box (red when it overflows)
  * Render a page with `npx remotion still src/index.ts StorybookSheet out.png --frame=<page>`.
  * With `--props='{"hold":<page>,"frames":<n>}'` every one of n frames shows that
  * page, with a chapter page's plaque arriving as the frames run: a render-cost
  * probe. `"drop":["backdrop","plaque","person","guide","caption"]` leaves layers
  * out, to measure what each one costs.
+ * `{"group":"<prop group>"}` shows only that group's props, from frame 0;
+ * `{"chapter":"<backdrop>"}` shows only that backdrop's chapter frame.
  * Not used by any video.
  */
 import React from "react";
@@ -21,10 +25,15 @@ import { FACES, HATS, HAIRS, PERSON_BOX, PERSON_POSES, personDrawing, type Perso
 import { NUMERALS, Plaque } from "./frame";
 import { useStorybookFonts } from "./fonts";
 import { GUIDE_BOX, GUIDE_POSES, guideDrawing } from "./guide";
+import { PROPS, PROP_GROUPS } from "./props";
+import { BoxCheck, libraryDrawing } from "./props/draw";
 import { BANDS, INK, IVORY, SERIF, TEXT, W } from "./palette";
 
 const FIRST_BACKDROP_PAGE = 4;
-export const SHEET_PAGES = FIRST_BACKDROP_PAGE + BACKDROPS.length;
+const FIRST_PROP_PAGE = FIRST_BACKDROP_PAGE + BACKDROPS.length;
+const PROP_IDS = Object.keys(PROPS);
+const PROPS_PER_PAGE = 9;
+export const SHEET_PAGES = FIRST_PROP_PAGE + Math.ceil(PROP_IDS.length / PROPS_PER_PAGE);
 
 /** A figure drawing with its feet at (x, y), scaled and optionally mirrored. */
 export const Placed: React.FC<{ d: Drawing; box: { footX: number; footY: number }; x: number; y: number; s?: number; flip?: boolean }> = ({
@@ -149,14 +158,15 @@ function KnobsPage() {
   );
 }
 
-const SAMPLE_CHAPTERS: Record<Backdrop, { title: string; byline: string; caption: string; person: number; pose: "point" | "hold" | "think" }> = {
+type SampleChapter = { title: string; byline: string; caption: string; person: number; pose: "point" | "hold" | "think" };
+const SAMPLE_CHAPTERS: Partial<Record<Backdrop, SampleChapter>> = {
   study: { title: "The Notes", byline: "London, 1843", caption: "Ada wrote what no one else could see.", person: 0, pose: "hold" },
   workshop: { title: "The Workshop", byline: "Menlo Park, 1879", caption: "Edison tried a thousand filaments.", person: 2, pose: "think" },
   nightsky: { title: "The Spark", byline: "Colorado Springs, 1899", caption: "Tesla listened to the night sky.", person: 3, pose: "point" },
 };
 
 function ChapterPage({ b, n, t, drop = [] }: { b: Backdrop; n: number; t: number; drop?: string[] }) {
-  const c = SAMPLE_CHAPTERS[b];
+  const c: SampleChapter = SAMPLE_CHAPTERS[b] ?? { title: "A Chapter", byline: "Somewhere, 1900", caption: "The story went on from here.", person: 4, pose: "point" };
   const on = (k: string) => !drop.includes(k);
   return (
     <>
@@ -169,18 +179,73 @@ function ChapterPage({ b, n, t, drop = [] }: { b: Backdrop; n: number; t: number
   );
 }
 
-export const StorybookSheet: React.FC<{ hold?: number; frames?: number; drop?: string[] }> = ({ hold, drop }) => {
+/** Nine props a page, in a 3 x 3 grid; each state side by side, fitted to its cell, the box outlined. */
+function PropsPage({ page, group }: { page: number; group?: string }) {
+  const all = group ? Object.keys(PROP_GROUPS[group] ?? {}) : PROP_IDS;
+  const ids = all.slice(page * PROPS_PER_PAGE, (page + 1) * PROPS_PER_PAGE);
+  return (
+    <>
+      {ids.map((id, i) => {
+        const e = PROPS[id];
+        const cellW = 360, cellH = 600;
+        const cx = (i % 3) * cellW + cellW / 2, base = 120 + Math.floor(i / 3) * cellH + 420;
+        const [w, h] = e.box;
+        const s = Math.min(1, 320 / (w * e.states + 20 * (e.states - 1)), 400 / h);
+        const total = (w * e.states + 20 * (e.states - 1)) * s;
+        return (
+          <React.Fragment key={id}>
+            {Array.from({ length: e.states }, (_, st) => {
+              const left = cx - total / 2 + st * (w + 20) * s;
+              return (
+                <React.Fragment key={st}>
+                  <div style={{ position: "absolute", left, top: base - h * s, width: w * s, height: h * s, outline: "1px dashed rgba(47,34,24,0.35)" }} />
+                  <Bitmap d={libraryDrawing(id, st)} left={left} top={base - h * s}
+                    transform={s === 1 ? undefined : `scale(${s})`} origin={[0, 0]} />
+                </React.Fragment>
+              );
+            })}
+            <Label x={cx} y={base + 10} text={`${id} (${e.place})`} size={28} />
+            <div style={{ position: "absolute", left: cx - 170, top: base + 50, width: 340, textAlign: "center", fontFamily: SERIF, fontSize: 22, color: TEXT }}>
+              {e.acts.join(", ")}{e.portal ? ", portal" : ""}
+            </div>
+            <BoxCheck entry={e} x={cx} y={base + 80} />
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
+}
+
+export const StorybookSheet: React.FC<{ hold?: number; frames?: number; drop?: string[]; group?: string; chapter?: Backdrop }> = ({
+  hold, drop, group, chapter,
+}) => {
   useStorybookFonts("StorybookSheet");
   const frame = useCurrentFrame();
+  if (group) {
+    return (
+      <AbsoluteFill>
+        <CanvasBitmap d={PAPER} />
+        <PropsPage page={frame} group={group} />
+      </AbsoluteFill>
+    );
+  }
+  if (chapter) {
+    return (
+      <AbsoluteFill>
+        <ChapterPage b={chapter} n={Math.max(0, BACKDROPS.indexOf(chapter)) % 5} t={60} />
+      </AbsoluteFill>
+    );
+  }
   const page = hold ?? frame;
   return (
     <AbsoluteFill>
-      {page < FIRST_BACKDROP_PAGE && <CanvasBitmap d={PAPER} />}
+      {(page < FIRST_BACKDROP_PAGE || page >= FIRST_PROP_PAGE) && <CanvasBitmap d={PAPER} />}
       {page === 0 && <GuidePage />}
       {page === 1 && <CastPage />}
       {page === 2 && <PosesPage />}
       {page === 3 && <KnobsPage />}
-      {page >= FIRST_BACKDROP_PAGE && <ChapterPage b={BACKDROPS[page - FIRST_BACKDROP_PAGE]} n={page - FIRST_BACKDROP_PAGE} t={hold === undefined ? 60 : frame} drop={drop} />}
+      {page >= FIRST_PROP_PAGE && <PropsPage page={page - FIRST_PROP_PAGE} />}
+      {page >= FIRST_BACKDROP_PAGE && page < FIRST_PROP_PAGE && <ChapterPage b={BACKDROPS[page - FIRST_BACKDROP_PAGE]} n={page - FIRST_BACKDROP_PAGE} t={hold === undefined ? 60 : frame} drop={drop} />}
     </AbsoluteFill>
   );
 };
