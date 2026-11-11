@@ -47,7 +47,7 @@ import { MONO, SANS, useUthFonts } from "./underTheHood/fonts";
 import { PresenterSprite } from "./underTheHood/sprite";
 import {
   blinkAt, camAt, clamp01, counterValue, easeOut, eventsUp, mouthAt, plateIndexAt, pointAt, poseAt,
-  poseTrack, statValue, type Cam, type Word,
+  poseTrack, statValue, underPlateAt, type Cam, type Word,
 } from "./underTheHood/stage";
 
 const BG = "#0E0F12";
@@ -400,7 +400,7 @@ export default function UnderTheHood({ underTheHood, words = [] }: { underTheHoo
   const i = plateIndexAt(data, frame);
   const plate = data.plates[i];
   const cam = camAt(data, i, frame, fps);
-  const under = cam.opacity < 1 && i > 0 && plate.enter !== "zoom" ? i - 1 : -1;
+  const under = underPlateAt(data, i, frame);
   const camUnder = under >= 0 ? camAt(data, under, frame, fps) : null;
   const up = eventsUp(plate, frame);
   // a zoom-through rushes the camera into the next photograph: what is pinned

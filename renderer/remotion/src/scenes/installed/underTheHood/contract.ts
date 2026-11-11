@@ -130,7 +130,8 @@ export const GEOMETRY = {
   presenterWidth: 440,
   presenterHeight: 620,
   // A point pinned to the photograph must sit this far inside the band.
-  anchorMargin: 20,
+  // Half the band's faded edge: a point nearer the band's top or bottom sits in the dark.
+  anchorMargin: 45,
   // A pinned point within this much of a chip or the stat is hidden by it.
   pointClearPx: 10,
   overlapTolerance: 4,
@@ -186,6 +187,9 @@ export interface UnderTheHoodData { plates: UTHPlate[] }
 
 export type Box = [number, number, number, number];
 
+/** A text's length in characters (code points), as the validator counts it; JS .length counts UTF-16 units. */
+export const chars = (text: string): number => Array.from(text).length;
+
 /** The camera scale of a plate `t` frames after it starts, before any transition. */
 export function plateScale(plate: UTHPlate, t: number, fps: number): number {
   return (plate.zoom ?? 1) * (1 + (CAMERA.push * Math.max(0, t)) / fps);
@@ -207,7 +211,7 @@ export function imageBox(plate: UTHPlate, s: number): Box {
 
 /** A callout chip's box, centred on its chip point (frame fractions). */
 export function chipBox(text: string, chip: UV): Box {
-  const w = text.length * GEOMETRY.chipCharPx + 2 * GEOMETRY.chipPadPx;
+  const w = chars(text) * GEOMETRY.chipCharPx + 2 * GEOMETRY.chipPadPx;
   const cx = chip[0] * W, cy = chip[1] * H;
   return [cx - w / 2, cy - GEOMETRY.chipHeight / 2, cx + w / 2, cy + GEOMETRY.chipHeight / 2];
 }
@@ -220,9 +224,9 @@ export function statText(value: number, decimals = 0, prefix = "", suffix = ""):
 /** A stat block's box: the numeral (at its wider end of the count) and its label, right-aligned. */
 export function statBox(e: Pick<UTHStat, "value" | "from" | "decimals" | "prefix" | "suffix" | "label" | "place">): Box {
   const numeral = Math.max(
-    ...[e.from ?? 0, e.value].map((v) => statText(v, e.decimals ?? 0, e.prefix ?? "", e.suffix ?? "").length),
+    ...[e.from ?? 0, e.value].map((v) => chars(statText(v, e.decimals ?? 0, e.prefix ?? "", e.suffix ?? ""))),
   ) * GEOMETRY.statCharPx;
-  const label = e.label.length * GEOMETRY.statLabelCharPx;
+  const label = chars(e.label) * GEOMETRY.statLabelCharPx;
   const w = Math.max(numeral, label);
   const top = e.place === "upper" ? GEOMETRY.statUpperTop : GEOMETRY.statLowerTop;
   return [GEOMETRY.statRight - w, top, GEOMETRY.statRight, top + GEOMETRY.statHeight];
@@ -230,7 +234,7 @@ export function statBox(e: Pick<UTHStat, "value" | "from" | "decimals" | "prefix
 
 /** The widest the value above a chart gets, over its points. */
 export function chartTextWidth(e: Pick<UTHChart, "points" | "decimals" | "prefix" | "suffix">): number {
-  return Math.max(...e.points.map((v) => statText(v, e.decimals ?? 0, e.prefix ?? "", e.suffix ?? "").length)) * GEOMETRY.chartCharPx;
+  return Math.max(...e.points.map((v) => chars(statText(v, e.decimals ?? 0, e.prefix ?? "", e.suffix ?? "")))) * GEOMETRY.chartCharPx;
 }
 
 /** Whether a counter row's widest value fits its column. */

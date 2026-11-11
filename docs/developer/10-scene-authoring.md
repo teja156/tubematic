@@ -670,8 +670,8 @@ every frame is a new photograph to capture and encode, which the look requires.
   video has more than 30 plates or more than 12 different photographs.
 - An image is not this video's `/public/<video_id>/images/` path, or a photograph at its `focus` and
   `zoom` does not cover the plate band, so its edge would show.
-- A pinned point leaves the band before its plate ends (or, on a plate that zooms in, during its
-  settle), or sits under a chip or the stat; a chip leaves the band or the side margins, sits within
+- A pinned point comes within 45 px of the band's edge (half its darkened fade) before its plate ends
+  (or, on a plate that zooms in, during its settle), or sits under a chip or the stat; a chip leaves the band or the side margins, sits within
   40 px of its point, or overlaps another chip, the stat or the chart.
 - A plate holds more than 6 callouts, outlines, arc fans, stats and charts, or more than one counter
   row, stat, chart or footnote; a callout, outline or arc is on a plate with no photograph, or a chart
@@ -680,8 +680,9 @@ every frame is a new photograph to capture and encode, which the look requires.
   before its plate ends (20 frames for text, plus the count of a stat or counters and the draw of a
   chart; 6 frames earlier on a plate a zoom-through ends).
 - A stat or chart number is beyond 9999999 either way, a stat or a chart's value is too wide for the
-  frame, or a counter row's digits do not fit their columns. Character widths are measured from the
-  bundled fonts.
+  frame, or a counter row's digits do not fit their columns. The widths are estimates from the bundled
+  fonts' typical characters, not their widest: a label of all M or W can still run past its chip, which
+  the text-layout audit then reports.
 - Nothing new happens for more than 3.5 seconds.
 
 `write_scene_config` reads each photograph's height over width from its file into the plate's

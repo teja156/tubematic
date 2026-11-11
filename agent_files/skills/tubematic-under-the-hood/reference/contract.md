@@ -61,7 +61,7 @@ Every event has `type` and `frame`, inside its plate and at least 6 frames befor
 | Field | Rule |
 |---|---|
 | `text` | 1 to 18 characters, shown in capitals |
-| `at` | [u, v] on the photograph, inside the band (with a 20 px margin) when it appears and at the plate's end |
+| `at` | [u, v] on the photograph, at least 45 px inside the band when it appears and at the plate's end (the band's top and bottom 90 px fade into the dark) |
 | `chip` | [x, y], the chip's centre as fractions of the frame. The chip is (characters x 27 + 44) px wide and 60 px tall, inside the band and the side margins, at least 40 px from `at` |
 | `tone` | `white` (default), `blue` or `gold` |
 

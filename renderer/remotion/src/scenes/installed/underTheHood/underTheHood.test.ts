@@ -9,7 +9,7 @@ import {
   type UnderTheHoodData,
 } from "./contract";
 import { POSE_TABLE } from "./presenter";
-import { blinkAt, camAt, counterValue, mouthAt, plateIndexAt, pointAt, poseAt, poseTrack, statValue } from "./stage";
+import { blinkAt, camAt, counterValue, mouthAt, plateIndexAt, pointAt, poseAt, poseTrack, statValue, underPlateAt } from "./stage";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
 const CASES = JSON.parse(fs.readFileSync(path.join(ROOT, "mcp/tests/fixtures/under_the_hood_contract.json"), "utf8"));
@@ -90,6 +90,24 @@ describe("the camera", () => {
     const settle = camAt(DATA, 1, next.start, fps);
     expect(settle.extra).toBeCloseTo(CAMERA.enterFrom, 6);
     expect(camAt(DATA, 1, next.start + TIMING.zoomIn, fps).extra).toBe(1);
+  });
+
+  it("draws the previous photograph under a plate only while a cut fades it in", () => {
+    // a zoom-through out of a plate that itself came in by a cut must dip to black,
+    // never flash the photograph two plates back
+    const d: UnderTheHoodData = {
+      plates: [
+        { start: 0, image: "/a.png", events: [] },
+        { start: 60, image: "/b.png", events: [] },
+        { start: 120, image: "/c.png", enter: "zoom", through: [0.5, 0.5], events: [] },
+      ],
+    };
+    expect(underPlateAt(d, 1, 60)).toBe(0);
+    expect(underPlateAt(d, 1, 60 + TIMING.fade)).toBe(-1);
+    expect(camAt(d, 1, 119, 30).opacity).toBeLessThan(1);   // the zoom's dip
+    expect(underPlateAt(d, 1, 118)).toBe(-1);
+    expect(underPlateAt(d, 1, 119)).toBe(-1);
+    expect(underPlateAt(d, 2, 120)).toBe(-1);                // a zoom entrance has nothing under it
   });
 
   it("cross-fades a cut in over the fade frames", () => {

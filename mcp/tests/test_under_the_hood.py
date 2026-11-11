@@ -213,13 +213,13 @@ def test_a_refused_plates_events_still_count_against_the_stillness_rule():
 
 
 def test_a_point_pushed_out_by_a_zoom_entrances_settle_is_refused():
-    # v 0.83 on plate 2 stays inside the band through the whole push, but not at the 1.25x
+    # v 0.8 on plate 2 stays inside the band through the whole push, but not at the 1.25x
     # the plate enters at: a callout timed on the plate's first frame would point outside it
     def at_entry(p):
-        p[1]["events"][0].update(frame=123, at=[0.5, 0.83], chip=[0.2, 0.31])
+        p[1]["events"][0].update(frame=123, at=[0.5, 0.8], chip=[0.2, 0.31])
     assert any("outside the visible part of the photograph when it appears" in x for x in _check(_with(at_entry)))
     def later(p):
-        p[1]["events"][0].update(frame=146, at=[0.5, 0.83], chip=[0.2, 0.31])
+        p[1]["events"][0].update(frame=146, at=[0.5, 0.8], chip=[0.2, 0.31])
     assert not any("outside the visible part" in x for x in _check(_with(later)))
 
 

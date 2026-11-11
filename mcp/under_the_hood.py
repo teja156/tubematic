@@ -108,7 +108,7 @@ GEOMETRY = {
     "presenterTop": 1380,
     "presenterWidth": 440,
     "presenterHeight": 620,
-    "anchorMargin": 20,
+    "anchorMargin": 45,
     "pointClearPx": 10,
     "overlapTolerance": 4,
 }
@@ -176,9 +176,10 @@ def _to_fixed(value, decimals: int) -> str:
     # JavaScript's toFixed rounds the exact binary value half up (9.95 is
     # 9.9499... and gives "9.9"); Python's format rounds half to even. Match the
     # renderer. Values are bounded by maxAbsValue, far below toFixed's 1e21.
-    d = Decimal(value).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
-    text = f"{abs(d):.{decimals}f}"
-    return f"-{text}" if d < 0 else text
+    d = Decimal(abs(value)).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
+    text = f"{d:.{decimals}f}"
+    # JS takes the sign from the value, so -0.4 with no decimals is "-0"
+    return f"-{text}" if value < 0 else text
 
 
 def stat_box(e: dict) -> tuple[float, float, float, float]:

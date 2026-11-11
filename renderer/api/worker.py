@@ -42,6 +42,7 @@ import postforme
 import render_results
 from tubematic_core import logging as tlog
 from tubematic_core import mascots as tmascots
+from tubematic_core import visual_styles as tvs
 from tubematic_core import prices as tprices
 from tubematic_core import renderers
 
@@ -581,9 +582,9 @@ def _auto_pilot_block_reason(con, video: dict, settings: dict) -> str:
     """
     if video["status"] == "TOPIC_PROPOSED":
         if pipeline._illustrated_needs_key(con, video["visual_style"] or ""):
-            return ("its visual style is illustrated, which needs an OpenAI API key and "
-                    "none is stored. Add the key in Settings, or change the style and "
-                    "approve the topic yourself.")
+            return (f"its visual style is {tvs.route_label(video['visual_style'] or '')}, which needs "
+                    "an OpenAI API key and none is stored. Add the key in Settings, or change the "
+                    "style and approve the topic yourself.")
         style = ("cartoon_3d" if video.get("resolved_renderer") == "cartoon_3d"
                  else (video["visual_style"] or ""))
         no_mascot = bool(tmascots.no_mascot_error(style))

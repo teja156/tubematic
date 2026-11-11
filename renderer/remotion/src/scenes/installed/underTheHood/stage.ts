@@ -60,6 +60,16 @@ export function camAt(data: UnderTheHoodData, i: number, frame: number, fps: num
   return { scale, extra: 1, about: centre, opacity: 1 };
 }
 
+/**
+ * The plate drawn under plate `i` at `frame`, or -1: the previous one, only
+ * while plate `i` cross-fades in after a cut. A zoom-through's own dip (the
+ * outgoing plate at half opacity) goes to black, never to an older photograph.
+ */
+export function underPlateAt(data: UnderTheHoodData, i: number, frame: number): number {
+  const p = data.plates[i];
+  return i > 0 && (p.enter ?? "cut") === "cut" && frame < p.start + TIMING.fade ? i - 1 : -1;
+}
+
 /** A point of the photograph in the frame, through the plate's camera (push and transition). */
 export function pointAt(p: UTHPlate, cam: Cam, u: number, v: number): [number, number] {
   const [x, y] = projectAt(p, cam.scale, u, v);

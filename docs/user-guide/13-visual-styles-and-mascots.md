@@ -59,9 +59,9 @@ background would flash, and a viewer reads that as a broken render.
 When you approve a topic left on Auto, the agent picks a style before it writes the script, because
 the script is written for the style: a System Flow script walks through a system one step at a time,
 for example. It reads what each style is made for and avoids, compares that with the topic, and
-picks the style that clearly fits. It considers every style this install can make: Illustrated and
-Under the Hood only while an OpenAI key is stored and the video has no mascot, Cartoon 3D only while
-a GPU is working and the video has no mascot.
+picks the style that clearly fits. It considers every style this install can make: Illustrated only
+while an OpenAI key is stored, Under the Hood only while an OpenAI key is stored and the video has no
+mascot, Cartoon 3D only while a GPU is working and the video has no mascot.
 It may pick a style that generates images, which costs more per video. It does not pick a style for
 variety: the same kind of topic gets the same style every time.
 
