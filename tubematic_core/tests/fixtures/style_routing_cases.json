@@ -776,6 +776,393 @@
       ],
       "future": "",
       "note": "Real banks and people, a mechanism and a chart in one video: no single style carries every beat."
+    },
+    {
+      "title": "Three famous inventions found by accident",
+      "brief": "Penicillin, the microwave oven and Post-it notes: what each inventor was really trying to do, and the lucky mistake that gave us the thing instead.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Bean Explainer vs Storybook Atlas: history, but three items one section each, not one story through time."
+    },
+    {
+      "title": "How penicillin was discovered by accident",
+      "brief": "London, 1928: Alexander Fleming comes back from holiday to a mouldy dish, notices the bacteria have died around the mould, and the decade it took others to turn it into a medicine.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Storybook Atlas vs Bean Explainer: one discovery told as a story through time, opening on a date and a place."
+    },
+    {
+      "title": "Why we feel nostalgic",
+      "brief": "Why old songs and smells pull you back, what nostalgia does to your mood, and why you remember the past as better than it was.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Bean Explainer vs Storybook Atlas: a feeling, not a history; the word nostalgic is a mood Storybook lists, not its subject."
+    },
+    {
+      "title": "How a SIM-swap attack takes over your bank account",
+      "brief": "The attacker's path: talking the phone carrier into moving your number to their SIM, receiving your bank's one-time codes, resetting your password and logging in.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick",
+        "case_file_story"
+      ],
+      "future": "",
+      "note": "Pair probe, System Flow vs Case File Story: a crime, but walked through as a path between systems (carrier, phone, bank), with no one inside a story."
+    },
+    {
+      "title": "Your boss asks you to backdate one invoice",
+      "brief": "You are the bookkeeper, the quarter closes tonight, and your boss wants one invoice dated last month. What it hides, who would notice, and what you choose.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Case File Story vs System Flow and Illustrated: a money dilemma in the second person that ends on a choice."
+    },
+    {
+      "title": "How your card payment reaches the shop's bank",
+      "brief": "Tap your card: the terminal, the shop's payment processor, the card network, your bank approving it, and the money settling a day or two later.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick",
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Pair probe, System Flow vs Case File Story: money, but no scheme and no one at risk; a path between components."
+    },
+    {
+      "title": "How bike gears make hills easier",
+      "brief": "Why a small front ring and a big back sprocket let you climb: the gear ratio, how far one pedal turn moves the bike, and the force on the pedal worked out with real numbers.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "under_the_hood",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe, Whiteboard vs Under the Hood: a physical object, but the video is a ratio and a force worked out step by step."
+    },
+    {
+      "title": "What is inside a smartphone camera",
+      "brief": "The lens stack, the image stabiliser's tiny magnets, the sensor's millions of pixels, and how a periscope lens fits a zoom inside a thin phone.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Under the Hood vs Whiteboard and Motion Graphics: one device opened up part by part, magnified."
+    },
+    {
+      "title": "How much energy is in a AA battery",
+      "brief": "Worked out step by step: 1.5 volts times about 2.5 amp-hours, turned into joules, then compared with a phone battery, a bar of chocolate and a car's fuel tank.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "under_the_hood",
+        "terminal_doc"
+      ],
+      "future": "",
+      "note": "Pair probe, Whiteboard vs Under the Hood: the numbers of one object, but the video is the arithmetic, not the inside of the battery."
+    },
+    {
+      "title": "How a microwave oven heats your food",
+      "brief": "Inside the box: the magnetron, the waveguide, the metal walls that keep the waves in, and why water molecules spinning back and forth make the heat.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "whiteboard",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Under the Hood vs Whiteboard: one appliance and its parts, shown inside."
+    },
+    {
+      "title": "Grandma Rosa teaches Leo to bake bread",
+      "brief": "A Sunday in Rosa's kitchen: Leo kneads too hard, the dough will not rise, and Rosa shows him the trick her own mother taught her.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Illustrated vs Storybook Atlas and Case File Story: invented recurring characters, warm, no history and no money at stake."
+    },
+    {
+      "title": "Marie Curie and the discovery of radium",
+      "brief": "Paris, 1898: Marie and Pierre Curie grind tonnes of pitchblende in a leaking shed, find two new elements, and the glow that would later make Marie ill.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "illustrated",
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Storybook Atlas vs Illustrated: a real person from history and what she found, told through time; she is named, not drawn as a recurring character."
+    },
+    {
+      "title": "Your coworker offers you a cut of the missing stock",
+      "brief": "You run the warehouse night shift. Boxes keep going missing, and tonight your coworker offers you a share to look the other way. The audit is on Monday.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Case File Story vs Illustrated: invented people, but a crime and money at stake, told in the second person."
+    },
+    {
+      "title": "Pip the fox opens a bakery",
+      "brief": "Pip saves up, rents a tiny shop, burns the first batch, and wins the town over with one recipe. A story about starting small.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "bean_explainer",
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Illustrated vs Case File Story: money at stake, but no crime and no dilemma; an invented hero the viewer follows."
+    },
+    {
+      "title": "Five body-language signs someone is lying",
+      "brief": "Five signs people read as lying, from touching the face to too much eye contact, and which of them actually mean anything.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Bean Explainer vs Stick: a list of behaviours, one section each, one everyman acting them out."
+    },
+    {
+      "title": "How a restaurant kitchen gets your order out",
+      "brief": "The waiter sends the ticket, the expeditor calls it, the grill and the line cooks fire their parts on timing, and the pass checks every plate before it leaves.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "system_flow",
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Stick vs Bean Explainer and System Flow: a process acted out step by step by generic people in roles."
+    },
+    {
+      "title": "How CPR keeps someone alive",
+      "brief": "What chest compressions do for a heart that has stopped, how fast and how deep to push, when to give breaths, and why you keep going until help arrives.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "bean_explainer",
+        "under_the_hood",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Stick vs Bean Explainer: a procedure acted out by a generic rescuer, with the mechanism inside the chest."
+    },
+    {
+      "title": "Why you can't stop checking your phone",
+      "brief": "The little rewards your brain gets from each notification, the habit loop they build, and three small changes that break it.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Bean Explainer vs Stick: a habit and its effect on the mind, told to you."
+    },
+    {
+      "title": "Inside a jet engine",
+      "brief": "Air drawn in by the fan, squeezed by the compressor, burned with fuel, spinning the turbine, and the blades that run hotter than the metal they are made of melts.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "motion_graphics",
+        "stick",
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Pair probe, Under the Hood vs Motion Graphics: one machine opened up stage by stage."
+    },
+    {
+      "title": "The biggest ships ever built",
+      "brief": "From the largest oil tanker to today's biggest cruise ship and container ship: how long, how heavy, and what each one carries.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Motion Graphics vs Under the Hood: real things the viewer came to see whole, ranked, with no inside to open."
+    },
+    {
+      "title": "How a 911 call reaches the right dispatcher",
+      "brief": "Your call goes from the phone tower to a routing database that finds your location, to the nearest call centre, and on to the dispatcher who sends help.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe, System Flow vs Stick: a call's path through systems, not people acting a scene."
+    },
+    {
+      "title": "How an airport gets your bag onto the right plane",
+      "brief": "The tag scanned at check-in, the conveyors and sorting machines under the terminal, the security scan, and the cart that takes it to the plane's hold.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick",
+        "cartoon_3d"
+      ],
+      "future": "",
+      "note": "Pair probe, System Flow vs Stick: a physical thing travelling a path through machines."
+    },
+    {
+      "title": "Why you should switch doors in the Monty Hall problem",
+      "brief": "Three doors, one car: why switching after the host opens a door wins two times out of three, worked out case by case.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick",
+        "bean_explainer"
+      ],
+      "future": "",
+      "note": "Pair probe, Whiteboard vs Stick: reasoning worked out case by case, with a host and a player who are props, not the subject."
+    },
+    {
+      "title": "How a bill becomes a law in the US",
+      "brief": "A member of Congress writes the bill, a committee changes it, both chambers vote, the President signs or vetoes it, and Congress can override the veto.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "system_flow",
+        "whiteboard",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Stick vs System Flow: a process carried by people in roles, not data moving between components."
+    },
+    {
+      "title": "How honeybees choose a new home",
+      "brief": "Scout bees fly out, come back and dance for the spots they found, the best site wins more dancers, and the swarm moves when enough agree.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "scenes",
+        "bean_explainer"
+      ],
+      "future": "",
+      "note": "Old-style probe, Stick vs System Flow and Bean Explainer: a process acted out by generic roles (scouts and the swarm)."
+    },
+    {
+      "title": "A day inside 1969 mission control",
+      "brief": "Walk the rows of consoles in Houston during the Apollo 11 landing: the flight director, the controllers at their screens, and the room going quiet as the lander comes down.",
+      "expect": [
+        "cartoon_3d"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Cartoon 3D vs Storybook Atlas: history, but one place and the people moving through it."
+    },
+    {
+      "title": "What happens to your body in space",
+      "brief": "Real astronauts on the space station, bones and muscles losing strength, fluid moving to the head, eyesight changing, and the exercise that fights it.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "bean_explainer",
+        "motion_graphics",
+        "stick"
+      ],
+      "future": "",
+      "note": "Mixed-scenes probe: real photographs of people and places next to a mechanism inside the body; no single style carries every beat."
+    },
+    {
+      "title": "How the Apollo 11 landing almost failed",
+      "brief": "The real crew and footage, the computer alarms 1202 and 1201, the boulder field Armstrong flew over, and the fuel counter running down to seconds.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "storybook_atlas",
+        "terminal_doc"
+      ],
+      "future": "",
+      "note": "Mixed-scenes probe: real footage, a computer error, a place and a countdown in one video."
+    },
+    {
+      "title": "How a Caesar cipher works",
+      "brief": "Shift every letter three places: a message encrypted letter by letter, decrypted back, and broken in seconds by trying all 25 shifts.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "whiteboard",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe, Terminal Doc vs Whiteboard: text transformed letter by letter is the subject."
     }
   ]
 }
