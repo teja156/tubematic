@@ -250,20 +250,24 @@ def actor_at(moves: list[dict], frame: int, start: float | None) -> dict:
 
 
 def walk_ends(moves: list[dict], start: float | None) -> list[int]:
-    """The frames each walk in `moves` arrives (or would have, had nothing cut it short). Each move is
-    read against where the actor is just before it: an entry with no `x` walks to the middle."""
+    """The frames walks in `moves` arrive. Each move is read against where the actor is just before it:
+    an entry with no `x` walks to the middle. A walk the next move cuts short never arrives, so it adds
+    nothing (the next move's own frame is a checkpoint already)."""
     out = []
     for k, m in enumerate(moves):
         before = actor_at(moves[:k], m["at"], start)
         here = before["x"] if before["visible"] else None
         if m.get("exit"):
-            if here is not None:
-                out.append(m["at"] + walk_frames(here, nearer_edge(here)))
+            arrival = m["at"] + walk_frames(here, nearer_edge(here)) if here is not None else None
         elif here is None:
             target = m.get("x", W / 2)
-            out.append(m["at"] + walk_frames(nearer_edge(target), target))
+            arrival = m["at"] + walk_frames(nearer_edge(target), target)
         elif m.get("x") is not None and m["x"] != here:
-            out.append(m["at"] + walk_frames(here, m["x"]))
+            arrival = m["at"] + walk_frames(here, m["x"])
+        else:
+            arrival = None
+        if arrival is not None and (k + 1 == len(moves) or moves[k + 1]["at"] >= arrival):
+            out.append(arrival)
     return out
 
 

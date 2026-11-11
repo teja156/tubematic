@@ -267,6 +267,19 @@ def test_an_entry_with_no_x_walks_to_the_middle_and_is_checked_there():
     assert any("grace needs the floor" in p for p in problems), problems
 
 
+def test_a_walk_cut_short_never_counts_as_an_arrival():
+    assert sa.walk_ends([{"at": 0, "x": 900}, {"at": 10, "pose": "think"}], 210) == []
+
+    def cut(d):
+        # the guide sets off for the cabinet's far side and is stopped by a pose ten frames later;
+        # the walk's arrival never happens, so the stretch until the next event is still
+        evs = [e for e in d["chapters"][2]["events"] if e["at"] < 1100 or e["type"] == "constellation"]
+        evs += [{"type": "guide", "at": 1109, "x": 900}, {"type": "guide", "at": 1119, "pose": "think"}]
+        d["chapters"][2]["events"] = evs
+    problems = _check(_with(cut))
+    assert any("nothing changes on stage" in p for p in problems), problems
+
+
 def test_a_person_walking_past_the_guide_is_fine():
     """Grace walks in from the left past the guide at 210: only where people
     stand still is checked, so the example passes."""
