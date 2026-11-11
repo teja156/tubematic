@@ -2,6 +2,7 @@
   "id": "escalating-ladder",
   "order": 100,
   "family": "ladder",
+  "experimental": false,
   "label": "Escalating Ladder",
   "line": "Name a measure and both ends, then climb: each step is a label, a number and a picture the viewer knows, joined to the last by a comparison, with the strangest step last.",
   "best_for": [
@@ -15,6 +16,17 @@
   "avoid_for": [
     "steps that are only bigger numbers with nothing to compare them to",
     "a measure so subjective the steps could be reordered"
+  ],
+  "signals": [
+    "one measure orders everything in it",
+    "each step can be compared with something the viewer knows",
+    "the last step is far beyond the first",
+    "the steps could not be reordered"
+  ],
+  "styles": [
+    "system_flow",
+    "whiteboard",
+    "bean_explainer"
   ],
   "words": [
     110,

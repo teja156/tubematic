@@ -4,9 +4,15 @@ import type { Video } from "@/lib/types";
  *  type with its label. The lists come from the API's formula files, so the
  *  dashboard holds no copy of either. */
 export interface ScriptFormulaNames {
-  formulas: { id: string; label: string }[];
+  /** experimental: shipped as data and off for Auto until the setting allows
+   *  it; a person can still choose one. Optional: an older API does not send it. */
+  formulas: { id: string; label: string; experimental?: boolean }[];
   hook_types: { id: string; label: string }[];
 }
+
+/** What a formula picker shows for "no choice": a formula is picked for the
+ *  video from its topic, before its script. */
+export const AUTO_FORMULA_LABEL = "Auto";
 
 /** A formula's label, or the id itself when the list has not loaded or does
  *  not know it (a video written under a formula a later version dropped). */
@@ -26,4 +32,42 @@ export function hasScriptRecord(video: Pick<Video, "formula_id" | "hook_alternat
   return (video.formula_id ?? "") !== ""
     || (video.hook_alternatives?.length ?? 0) > 0
     || (video.script_warnings?.length ?? 0) > 0;
+}
+
+/** The options of a formula picker: Auto first, then every formula, an
+ *  experimental one marked. A held value the list does not know (a formula a
+ *  later version dropped, or the list not loaded yet) stays selectable as
+ *  itself, so the picker never shows Auto while holding something else. */
+export function formulaOptions(names: ScriptFormulaNames | null, held = ""): { value: string; label: string }[] {
+  const options = [{ value: "", label: AUTO_FORMULA_LABEL }];
+  for (const f of names?.formulas ?? []) {
+    options.push({ value: f.id, label: f.experimental ? `${f.label} (experimental)` : f.label });
+  }
+  if (held !== "" && !options.some((o) => o.value === held)) options.push({ value: held, label: held });
+  return options;
+}
+
+/** The formula a video is written in, as one label. The pick made before the
+ *  script wins over the formula recorded with a stored script, because after
+ *  a switch the stored script is the one about to be replaced. "Auto — X"
+ *  when Auto picked it, X alone when a person chose it or when the script was
+ *  written before formulas were picked ahead of it. */
+export function videoFormulaLabel(
+  video: Pick<Video, "formula_choice" | "formula_pick" | "formula_id">,
+  names: ScriptFormulaNames | null,
+): string {
+  const choice = video.formula_choice ?? "";
+  const pick = video.formula_pick ?? "";
+  if (pick !== "") {
+    return choice === "" ? `${AUTO_FORMULA_LABEL} — ${formulaLabel(pick, names)}` : formulaLabel(pick, names);
+  }
+  if ((video.formula_id ?? "") !== "") return formulaLabel(video.formula_id ?? "", names);
+  return choice !== "" ? formulaLabel(choice, names) : `${AUTO_FORMULA_LABEL} (not yet chosen)`;
+}
+
+/** Whether anything about a video needs the formula names: a formula chosen,
+ *  picked or recorded. */
+export function hasFormula(video: Pick<Video, "formula_choice" | "formula_pick" | "formula_id">): boolean {
+  return (video.formula_choice ?? "") !== "" || (video.formula_pick ?? "") !== ""
+    || (video.formula_id ?? "") !== "";
 }

@@ -40,6 +40,8 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `POST` | [`/videos/<video_id>/agent-outcome`](#post-videosvideo_idagent-outcome) | Report a finished agent session |
 | `POST` | [`/videos/<video_id>/agent-retry`](#post-videosvideo_idagent-retry) | Release a stuck video |
 | `POST` | [`/videos/<video_id>/switch-style`](#post-videosvideo_idswitch-style) | Take Auto's runner-up style at `SCRIPT_READY` |
+| `POST` | [`/videos/<video_id>/switch-formula`](#post-videosvideo_idswitch-formula) | Take the runner-up formula at `SCRIPT_READY` |
+| `POST` | [`/videos/<video_id>/switch-opening`](#post-videosvideo_idswitch-opening) | Have the script rewritten from another drafted opening at `SCRIPT_READY` |
 | `POST` | [`/videos/<video_id>/comments`](#post-videosvideo_idcomments) | Add a comment |
 | `DELETE` | [`/videos/<video_id>`](#delete-videosvideo_id) | Delete files, archive the row |
 | `GET` | [`/retention/backlog`](#get-retentionbacklog) | Size of unpublished leftovers |
@@ -324,7 +326,7 @@ row.
 ### `POST /videos`
 
 Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility_score`. Optional:
-`id`, `project_id`, `title`, `voice_id`, `visual_style`.
+`id`, `project_id`, `title`, `voice_id`, `visual_style`, `formula_choice`.
 
 | Status | Cause |
 |---|---|
@@ -344,6 +346,8 @@ Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility
   or `OPENAI_API_KEY`).
 - `visual_style` is `cartoon_3d` and the install-wide GPU `status` is not `working` (see
   [GPU rendering](#gpu-rendering)).
+- `formula_choice` is not a string, or is not `""` or a [formula](08-scripting-and-voice.md#formulas)
+  id.
 
 What the route fills in:
 
@@ -362,6 +366,9 @@ What the route fills in:
 - `mascot_id` is seeded from the domain's or the install's default mascot, whatever the `strategy`,
   while the GPU `status` is `working` and the style is not `cartoon_3d`
   (`pipeline.py::_seed_mascot`).
+- With no `formula_choice`, the video takes its domain's `default_formula_id` while that is a
+  formula, whatever its `strategy` (`pipeline.py::_project_default_formula`). Otherwise
+  `formula_choice` is `""`, and a formula is picked for the video before its script.
 
 The route does not validate `strategy` or `producibility_score`. The MCP server's `create_video`
 does.
@@ -370,7 +377,7 @@ does.
 
 The dashboard's **New Video** page. Required: `title` (at most 70 characters) and `topic`, both
 non-blank. Optional: `approve` (boolean, default `true`), `agent_id`, `agent_model`,
-`agent_effort`, `script_profile_id`, `visual_style`, `voice_id`.
+`agent_effort`, `script_profile_id`, `visual_style`, `voice_id`, `formula_choice`.
 
 `201` returns the row: `strategy` `manual`, `producibility_score` 0, in the domain `manual`, at
 `TOPIC_APPROVED`, or at `TOPIC_PROPOSED` with `"approve": false`.
@@ -382,7 +389,7 @@ non-blank. Optional: `approve` (boolean, default `true`), `agent_id`, `agent_mod
 - A pick is not a string. Only an absent or `null` pick means its default, so `false` and `0` are
   refused.
 - A pick fails the rule the same field has on [`PATCH`](#field-rules): the agent, its model and
-  effort, the script profile, the voice or the visual style.
+  effort, the script profile, the voice, the visual style or the formula.
 
 How it differs from `POST /videos`:
 
@@ -395,13 +402,14 @@ How it differs from `POST /videos`:
 The first request creates the domain `manual`, named **Manual Videos**, with `INSERT OR IGNORE`,
 so a rename on the Projects page is kept. Nothing is written until every field has passed. With no
 `voice_id`, the video takes the `manual` domain's `default_voice_id` when it has one on the roster.
+With no `formula_choice`, it takes the `manual` domain's `default_formula_id` in the same way.
 
 ### `PATCH /videos/<video_id>`
 
 The main write path. The body may hold any of `status`, `title`, `script`, `video_version`,
 `youtube_url`, `gemini_feedback`, `voice_id`, `agent_id`, `agent_model`, `agent_effort`,
-`script_profile_id`, `visual_style`, `publish_title`, `publish_description` and `mascot_id`, plus
-the optional guard `onlyIfCurrentStatus`.
+`script_profile_id`, `visual_style`, `publish_title`, `publish_description`, `mascot_id` and
+`formula_choice`, plus the optional guard `onlyIfCurrentStatus`.
 
 ```json
 {"status": "TOPIC_APPROVED", "onlyIfCurrentStatus": "TOPIC_PROPOSED", "visual_style": "auto"}
@@ -418,7 +426,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 | `400` | A field fails its rule below, a job-path column is present, or the body has no updatable field (`No updatable fields provided`) |
 | `404` | Video not found |
 | `409` | The video is archived |
-| `409` | `script_profile_id`, `visual_style` or `mascot_id` sent while the video is past `TOPIC_PROPOSED` |
+| `409` | `script_profile_id`, `visual_style`, `mascot_id` or `formula_choice` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | `agent_id`, `agent_model` or `agent_effort` sent while the video is not at a human checkpoint |
 | `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D or Under the Hood video keeps a mascot |
 | `409` | `{"error": "Status precondition failed", "current", "expected"}` |
@@ -439,6 +447,11 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   `formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, because they describe the
   script it replaces. Only MCP `update_video` writes them.
 - `voice_id` must be on the roster, or `""` for the install default.
+- `formula_choice` must be a [formula](08-scripting-and-voice.md#formulas) id, or `""` for Auto. An
+  experimental formula is accepted whatever the `auto_experimental_formulas` setting says, because
+  the setting covers what Auto may pick. A `status` of `TOPIC_PROPOSED` empties `formula_pick`,
+  `formula_runner_up` and `formula_reason` and keeps `formula_choice`
+  (`tubematic_core/formulas.py::PICK_RESET_SET`, which `set_video_status` also uses).
 - `agent_id` must name a live agent. The video's current agent is accepted even when uninstalled.
   A change sets `agent_model` to `""` in the same `UPDATE`, unless the body also sets
   `agent_model`. `agent_effort` is kept, and the assignment deck is not touched.
@@ -505,13 +518,52 @@ and sets `visual_style` to the runner-up (`auto`
 for `scenes`), swaps `style_pick` and `style_runner_up`, sets `style_reason` to say a person
 switched it, and moves the video to `TOPIC_APPROVED`. It adds a `human` comment asking the agent to
 rewrite the script for the new style. The agent's next session writes a new script, which replaces
-the old one. A second switch goes back.
+the old one. A second switch goes back. The route also empties `formula_pick`, `formula_runner_up`
+and `formula_reason`, so the formula is picked again for the new style.
 
 | Status | When |
 |---|---|
 | `200` | The switch landed. The body is the video |
 | `404` | No such video |
 | `409` | The video is archived, not at `SCRIPT_READY`, has no Auto pick or no runner-up, the runner-up is not a style any more or this install cannot make it (with the reason), or the video changed while the request was in flight |
+
+### `POST /videos/<video_id>/switch-formula`
+
+Takes the runner-up of the formula picked for the video
+([How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked)). No body. The video
+must be at `SCRIPT_READY` and hold a `formula_pick` and a `formula_runner_up`.
+
+The route runs as one write transaction. It swaps `formula_pick` and `formula_runner_up`, sets
+`formula_choice` to the new pick (the formula is now a person's choice, so the agent cannot replace
+it), sets `formula_reason` to say a person switched it, and moves the video to `TOPIC_APPROVED`. It
+adds a `human` comment asking the agent to rewrite the script in the new formula. The stored script
+is left as it is until the agent's next session replaces it, because the route has no way to
+rewrite a script. A second switch goes back. An experimental runner-up needs no setting.
+
+| Status | When |
+|---|---|
+| `200` | The switch landed. The body is the video |
+| `404` | No such video |
+| `409` | The video is archived, not at `SCRIPT_READY`, has no pick or no runner-up, the runner-up is not a formula any more, or the video changed while the request was in flight |
+
+### `POST /videos/<video_id>/switch-opening`
+
+Has the script rewritten from another of the openings the agent drafted
+([What a script records](08-scripting-and-voice.md#what-a-script-records)). Body `{"index": n}`,
+the opening's place in `hook_alternatives`, from 0. The video must be at `SCRIPT_READY`.
+
+The route runs as one write transaction. It marks that opening `kept` in `hook_alternatives`,
+clears its `note`, sets `hook_type` to its type and moves the video to `TOPIC_APPROVED`. It adds a
+`human` comment that quotes the opening and asks the agent to rewrite the script from it, word for
+word, in the same formula. The stored script and `formula_pick` are left as they are. A video
+scripted before formulas were picked can use the route, because it reads only the stored openings.
+
+| Status | When |
+|---|---|
+| `200` | The switch landed. The body is the video |
+| `400` | `index` is not a whole number, or is outside the stored openings |
+| `404` | No such video |
+| `409` | The video is archived, not at `SCRIPT_READY`, has no stored openings, the opening is the one already in use, or the video changed while the request was in flight |
 
 ### `POST /videos/<video_id>/agent-outcome`
 
@@ -649,9 +701,10 @@ back, or they are reset. An omitted `status` is written as `active`, so clearing
 | `default_voice_id` | A roster voice, or `''` for the install default |
 | `default_script_profile_id` | A `READY` profile that is not archived, or `''` or `null` for none. Any other non-string, such as `false` or `0`, is refused |
 | `default_mascot_id` | `''` (inherit the install default), `none` (no mascot), or a pickable mascot id |
+| `default_formula_id` | A [formula](08-scripting-and-voice.md#formulas) id, or `''` or `null` for Auto. An experimental formula is accepted whatever the `auto_experimental_formulas` setting says |
 | `topic_cap` | A whole number from 25 to 750. `true`, `"100"` and `100.5` are refused. Absent or `null` means 100 |
 
-Five checks run only when the value changes, because the dashboard re-sends the whole domain on
+Six checks run only when the value changes, because the dashboard re-sends the whole domain on
 every edit and a value that became invalid later must not block other edits:
 
 - The `description` length.
@@ -660,6 +713,7 @@ every edit and a value that became invalid later must not block other edits:
 - `default_voice_id` on the roster.
 - `default_script_profile_id` being `READY`.
 - `default_mascot_id` being pickable, with a working GPU.
+- `default_formula_id` being a formula.
 
 The id of an existing domain is not checked, so a domain filed under an older id stays editable.
 The id names the domain's output directory. A `topic_cap` below the domain's count is accepted and
@@ -728,9 +782,9 @@ style pickers from it. The write routes still refuse an unavailable style themse
 ### `GET /script-formulas`
 
 Returns `{"formulas": [...], "hook_types": [...]}` from the
-[formula files](08-scripting-and-voice.md#formulas). Each formula has `id`, `label`, `family`, `line`
-and `words` (`[min, max]`), in formula order. Each hook type has `id` and `label`. The dashboard uses
-it to label a video's `formula_id` and `hook_type`.
+[formula files](08-scripting-and-voice.md#formulas). Each formula has `id`, `label`, `family`, `line`,
+`words` (`[min, max]`) and `experimental`, in formula order. Each hook type has `id` and `label`. The
+dashboard uses it to label a video's formula and `hook_type` and to build its formula pickers.
 
 ## Research
 

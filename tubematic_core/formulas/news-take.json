@@ -1,0 +1,94 @@
+{
+  "id": "news-take",
+  "order": 140,
+  "family": "explain",
+  "experimental": true,
+  "label": "News Take",
+  "line": "The event with its actor and its irony in the first sentence, why it matters to the viewer, the biggest claim, the evidence for it, the catch, and a take.",
+  "best_for": [
+    "something that happened in the last few weeks, with one actor and one surprising act",
+    "a release or an announcement whose main claim can be checked"
+  ],
+  "also_for": [
+    "a finding or a leak that changes what the viewer thought about something they own"
+  ],
+  "avoid_for": [
+    "a story the audience has already seen covered",
+    "an event with no claim that can be checked",
+    "a rumour: the event and the catch each need a source"
+  ],
+  "signals": [
+    "it happened within the last few weeks",
+    "one named actor did one surprising thing",
+    "there is a claim that can be checked",
+    "a source confirms a catch"
+  ],
+  "styles": [
+    "terminal_doc"
+  ],
+  "words": [
+    170,
+    240
+  ],
+  "beats": [
+    {
+      "name": "What happened",
+      "from": 0,
+      "to": 12,
+      "job": "The event, with the actor and the irony or the opponent."
+    },
+    {
+      "name": "Why it matters to you",
+      "from": 12,
+      "to": 25,
+      "job": "What it changes for the viewer."
+    },
+    {
+      "name": "The biggest claim",
+      "from": 25,
+      "to": 35,
+      "job": "In plain terms."
+    },
+    {
+      "name": "On the surface, yes",
+      "from": 35,
+      "to": 55,
+      "job": "The evidence that the claim holds."
+    },
+    {
+      "name": "The catch",
+      "from": 55,
+      "to": 80,
+      "job": "One detail from a source that limits it."
+    },
+    {
+      "name": "The take",
+      "from": 80,
+      "to": 100,
+      "job": "Who gains, who loses, or the honest limits."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "scene",
+      "shape": "Last [week], [actor] got so tired of [practice] that [surprising act]."
+    },
+    {
+      "type": "claim",
+      "shape": "[Actor] just showed that your [thing you own] [surprising fact]."
+    },
+    {
+      "type": "paradox",
+      "shape": "[Actor] spent [years] building [X]. Last week it [did the opposite]."
+    }
+  ],
+  "holds": "The event is in the first sentence, so nothing is spent on backstory. The viewer stays to learn whether the claim is true, and the catch re-opens it once the evidence seems to settle it.",
+  "ending": "The take, or the honest limits of the news. No forecast stated as fact.",
+  "pitfalls": [
+    "Opening on the backstory",
+    "Leaving the event after promising it",
+    "A claim or a catch with no source",
+    "News the audience has already seen: it dates within days"
+  ],
+  "template": "[When], [actor] [did surprising thing], with [one irony]. This matters to you because [what it changes]. In plain terms, [the biggest claim]. Is it true? On the surface, yes: [evidence]. But [the catch, from a source]. [The take]."
+}

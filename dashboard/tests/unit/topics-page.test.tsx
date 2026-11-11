@@ -278,7 +278,7 @@ describe("TopicsPage — default voice", () => {
     await waitFor(() => expect(postedProject(spy)).toEqual({
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "r1",
-      default_script_profile_id: "", default_mascot_id: "", topic_cap: 300 }));
+      default_script_profile_id: "", default_formula_id: "", default_mascot_id: "", topic_cap: 300 }));
   });
 
   it("changing the style keeps the default voice", async () => {
@@ -386,7 +386,7 @@ describe("TopicsPage — default script profile", () => {
     await waitFor(() => expect(postedProject(spy)).toEqual({
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "",
-      default_script_profile_id: "", default_mascot_id: "", topic_cap: 300 }));
+      default_script_profile_id: "", default_formula_id: "", default_mascot_id: "", topic_cap: 300 }));
   });
 
   it("changing the style keeps the default profile", async () => {
@@ -494,7 +494,7 @@ describe("TopicsPage — default mascot", () => {
     await waitFor(() => expect(postedProject(spy)).toEqual({
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "",
-      default_script_profile_id: "", default_mascot_id: "none", topic_cap: 300 }));
+      default_script_profile_id: "", default_formula_id: "", default_mascot_id: "none", topic_cap: 300 }));
   });
 
   it("another edit re-sends the stored default mascot (POST /projects is a full replace)", async () => {
@@ -647,7 +647,7 @@ describe("TopicsPage — topic cap", () => {
     await waitFor(() => expect(projectPosts(spy)).toEqual([{
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "", default_voice_id: "",
-      default_script_profile_id: "", default_mascot_id: "", topic_cap: 250 }]));
+      default_script_profile_id: "", default_formula_id: "", default_mascot_id: "", topic_cap: 250 }]));
   });
 
   it.each(["24", "751", "abc", "100.5", ""])("reverts %j without saving", async (bad) => {
@@ -827,5 +827,97 @@ describe("TopicsPage — add-domain description", () => {
     fireEvent.change(field, { target: { value: "🐘".repeat(2000) } });
     expect(field.value).toBe("🐘".repeat(2000));
     expect(screen.getByTestId("domain-description-count").textContent).toBe("2000 / 2000");
+  });
+});
+
+// A domain's default formula: the script structure every new video in the
+// domain is written in, or Auto. It rides the same full-replace POST
+// /projects as the other defaults, so every other edit must re-send it.
+describe("TopicsPage — default formula", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const NAMES = {
+    formulas: [{ id: "scene-story", label: "Scene Story", experimental: false },
+               { id: "news-take", label: "News Take", experimental: true }],
+    hook_types: [],
+  };
+  const DOMAIN = {
+    id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: 1,
+    status: "active", default_visual_style: "", default_voice_id: "",
+    default_script_profile_id: "", default_formula_id: "scene-story", topic_cap: 300,
+    topic_count: 12, expired: false, created_at: "2026-01-01T00:00:00Z",
+  };
+
+  function mockDomains(domain: object = DOMAIN, names: object = NAMES) {
+    return vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      const ok = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+      if (urlStr.endsWith("/projects") && !init?.method) return ok([domain]);
+      if (urlStr.endsWith("/projects")) return ok({ ...domain, ...JSON.parse(String(init!.body)) });
+      if (urlStr.endsWith("/script-formulas")) return ok(names);
+      if (urlStr.includes("/settings")) return ok({ elevenlabs_voices: [], elevenlabs_voice_id: "", openai_api_key: "" });
+      if (urlStr.includes("/research/strategies")) return ok({ strategies: [] });
+      if (urlStr.includes("/research/mining-sources")) return ok({ youtube_urls: [] });
+      return ok([]);
+    });
+  }
+
+  function postedProject(spy: ReturnType<typeof mockDomains>) {
+    const call = spy.mock.calls.find(([u, i]) => u.toString().endsWith("/projects")
+      && (i as RequestInit | undefined)?.method === "POST");
+    return JSON.parse(String((call![1] as RequestInit).body));
+  }
+
+  it("shows the domain's formula among Auto and every formula", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-formula-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect([...select.options].map((o) => o.textContent)).toEqual(
+      ["Auto", "Scene Story", "News Take (experimental)"]));
+    expect(select.value).toBe("scene-story");
+    expect(screen.getAllByLabelText("Formula")).toContain(select);
+  });
+
+  it("changing the formula re-sends every other field", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-formula-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect(select.options).toHaveLength(3));
+    fireEvent.change(select, { target: { value: "" } });
+    await waitFor(() => expect(postedProject(spy)).toEqual({
+      id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
+      status: "active", default_visual_style: "", default_voice_id: "",
+      default_script_profile_id: "", default_formula_id: "", default_mascot_id: "", topic_cap: 300 }));
+  });
+
+  it("another edit keeps the domain's formula", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
+    fireEvent.change(select, { target: { value: "auto" } });
+    await waitFor(() => expect(postedProject(spy).default_formula_id).toBe("scene-story"));
+  });
+
+  it("keeps a formula the list does not know visible, so it is not read as Auto", async () => {
+    mockDomains({ ...DOMAIN, default_formula_id: "retired-formula" });
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-formula-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect(select.options).toHaveLength(4));
+    expect(select.value).toBe("retired-formula");
+  });
+
+  it("a new domain is created with the formula picked for it", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-formula-select") as HTMLSelectElement);
+    await waitFor(() => expect(select.options).toHaveLength(3));
+    expect(select.value).toBe("");
+    fireEvent.change(select, { target: { value: "news-take" } });
+    fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
+    fireEvent.click(screen.getByTestId("add-domain-submit"));
+    await waitFor(() => expect(postedProject(spy).default_formula_id).toBe("news-take"));
   });
 });

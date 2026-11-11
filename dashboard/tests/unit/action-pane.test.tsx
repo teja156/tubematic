@@ -623,6 +623,30 @@ describe("ActionPane — frozen choices stay visible", () => {
     render(<ActionPane videos={[video]} scriptProfiles={PROFILES} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
     expect(screen.queryByTestId(`choices-${video.id}`)).toBeNull();
   });
+
+  it("names the formula beside the profile, by its label once the names load", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({
+      formulas: [{ id: "scene-story", label: "Scene Story" }], hook_types: [] }) }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    const video = { ...makeVideo("SCRIPT_READY"), script_profile_id: "p1", formula_pick: "scene-story" };
+    render(<ActionPane videos={[video]} scriptProfiles={PROFILES} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
+    const meta = screen.getByTestId(`choices-${video.id}`);
+    expect(meta.textContent).toContain("Auto — scene-story");   // the id until the names answer
+    await act(async () => {});
+    expect(meta.textContent).toContain("Corpus A · Auto — Scene Story");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("says nothing about a formula, and asks for no names, when no video has one", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const video = makeVideo("VIDEO_READY");
+    render(<ActionPane videos={[video]} agents={[makeAgent()]} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
+    expect(screen.getByTestId(`choices-${video.id}`).textContent).not.toContain("Auto —");
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("ActionPane — visual style picker", () => {

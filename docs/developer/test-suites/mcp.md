@@ -190,7 +190,11 @@ Covers what `update_video` records with a script: `formula_id`, `hooks` and the 
   A rewrite with a new record replaces it.
 - A fault inside the checks does not stop the write.
 - The closing sentence is compared with the 30 newest other scripts of the same domain, and with
-  none when the video has no domain.
+  none when the video has no domain. The opening is compared with the same scripts, and the kept
+  opening's type with the domain's previous two videos.
+- On a video with a `formula_pick`, a script recorded under another formula is refused and nothing
+  is written. With no pick any formula id is taken, a script with no record is still written, and
+  a pronunciation fix is not checked against the pick.
 - A `beat` label on a segment must be a short non-empty string.
 
 Trap: a warning must never refuse a write, and a script with no record must be accepted. An agent
@@ -611,6 +615,44 @@ Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under
 
 Trap: a plate whose own fields are bad is skipped for every check that projects through its camera,
 including the next plate's zoom-through, or a malformed `focus` raised instead of being reported.
+
+### `test_choose_script_formula.py`
+
+Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's default formula in
+`create_video` and `upsert_project`, and the write that gives a pick back
+([How a formula is picked](../08-scripting-and-voice.md#how-a-formula-is-picked)).
+
+- A pick is recorded with its runner-up and its reason on one line. A bad formula, runner-up or
+  reason is refused and nothing is written.
+- The style is decided first: a video still on `auto` with no style pick is refused, and a video
+  Auto gave mixed scenes is accepted.
+- The pick is made once at `TOPIC_APPROVED` and is refused at every status but `TOPIC_APPROVED` and
+  `REVISION_REQUESTED`. In a revision the agent may pick again on a video with no person's choice.
+- A status change between the row read and the `UPDATE` leaves the video untouched. While the tool
+  reads the setting and the domain's history, another writer is locked out.
+- An experimental formula or runner-up is refused while the setting is off and accepted once it is
+  on. The candidates carry `available`, `suits_style` and `recent`, and are left out once the pick
+  cannot change.
+- `recent` is the domain's previous two videos, newest first, counting a video by its recorded
+  formula or else its pick. A formula among them is refused without `repeat_reason` and accepted
+  with it, and the reason is stored. Another domain's videos and a video with no domain have no
+  history.
+- A person's choice becomes the pick, with the agent's formula as the runner-up and "Auto would
+  have picked" in the reason. It holds for an experimental formula with the setting off, is exempt
+  from rotation and is not replaced in a revision. A choice of a formula that the installed
+  version does not have reads as Auto.
+- A move back to `TOPIC_PROPOSED`, guarded or not, empties the pick and keeps the person's choice.
+  A script revision keeps the pick.
+- The domain's default formula seeds every new video whatever its strategy. A default that is no
+  formula seeds nothing, a new default must be a formula, an omitted one is left alone, and a
+  stored one that was dropped does not block another edit.
+
+Trap: the `formula` argument is the agent's own best formula on every call. A tool that took the
+person's choice as the argument would lose what Auto would have picked, which the dashboard offers
+as the switch.
+
+Trap: rotation is enforced by the tool. Left to the skill's prose, a model that skipped the step
+would give a domain the same structure every time, with nothing recording that it did.
 
 ### `test_choose_visual_style.py`
 

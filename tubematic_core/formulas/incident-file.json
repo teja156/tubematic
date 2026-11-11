@@ -2,6 +2,7 @@
   "id": "incident-file",
   "order": 60,
   "family": "story",
+  "experimental": false,
   "label": "Incident File",
   "line": "Start on the moment of failure or its price. Rewind to an ordinary person making a reasonable wrong call, raise an alarm at every beat with one sentence of mechanism each, then the cause and the cost.",
   "best_for": [
@@ -15,6 +16,17 @@
   "avoid_for": [
     "an incident with no decision by a person",
     "a cause that needs a tutorial before the story can go on"
+  ],
+  "signals": [
+    "it happened on a known date",
+    "a public account gives times and numbers",
+    "a person made a decision in it",
+    "the cause was found"
+  ],
+  "styles": [
+    "terminal_doc",
+    "system_flow",
+    "bean_explainer"
   ],
   "words": [
     190,

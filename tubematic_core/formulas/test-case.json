@@ -1,0 +1,95 @@
+{
+  "id": "test-case",
+  "order": 170,
+  "family": "explain",
+  "experimental": true,
+  "label": "Test Case, Answered Last",
+  "line": "Pose one famous concrete case in the first sentence, walk the rules from easiest to hardest, and answer the case in the last sentence.",
+  "best_for": [
+    "a system of rules: address ranges, permissions, licences, types, the rules of a story's world",
+    "a 'would this count as that' question"
+  ],
+  "also_for": [
+    "a classification with no order, followed through one example"
+  ],
+  "avoid_for": [
+    "a case with no definite answer",
+    "rules that are guesses: each needs a source",
+    "a case the audience does not know"
+  ],
+  "signals": [
+    "the topic is a system of rules",
+    "one famous concrete case tests the rules",
+    "the rules can be walked from easy to hard",
+    "the case has a definite answer"
+  ],
+  "styles": [
+    "whiteboard",
+    "system_flow"
+  ],
+  "words": [
+    150,
+    300
+  ],
+  "beats": [
+    {
+      "name": "The case",
+      "from": 0,
+      "to": 10,
+      "job": "Would this famous concrete case count? Asked in the first sentence."
+    },
+    {
+      "name": "Fair question",
+      "from": 10,
+      "to": 14,
+      "job": "Why the question is a reasonable one."
+    },
+    {
+      "name": "Rules, easiest first",
+      "from": 14,
+      "to": 45,
+      "job": "One rule per sentence, with one 'you would think so, but' among them."
+    },
+    {
+      "name": "Where the rules run out",
+      "from": 45,
+      "to": 80,
+      "job": "The official list is incomplete: who wrote it and why."
+    },
+    {
+      "name": "Precedent",
+      "from": 80,
+      "to": 92,
+      "job": "A known case the rules did settle."
+    },
+    {
+      "name": "The case answered",
+      "from": 92,
+      "to": 100,
+      "job": "The last sentence."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "question",
+      "shape": "Would [famous concrete case] count as [category]?"
+    },
+    {
+      "type": "what_if",
+      "shape": "What if [famous case] had to follow the rules of [system]?"
+    },
+    {
+      "type": "myth",
+      "shape": "Everyone says [famous case] is [category]. The rules say something else."
+    }
+  ],
+  "holds": "The case is on screen from the first second and is not answered until the last, so every rule is heard as evidence for or against it.",
+  "ending": "The case's answer. Nothing after it.",
+  "pitfalls": [
+    "Answering the case early",
+    "Rules listed with no case to test them on",
+    "A rule with no source",
+    "A hedge where the answer belongs"
+  ],
+  "template": "Would [concrete case] count as [category]? Fair question. [Category 1] is easy: [rule]. You would think [category 2] means [naive reading], but [real rule]. Then there is [the official list], which is incomplete because [who wrote it]. Proof: [a known case]. Which makes [concrete case] [answer]."
+}

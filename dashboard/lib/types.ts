@@ -151,6 +151,18 @@ export interface Video {
   hook_type?: string;
   hook_alternatives?: ScriptHook[] | null;
   script_warnings?: ScriptWarning[] | null;
+  /** The formula decision made before the script. formula_choice: the
+   *  formula a person chose for the video ('' = Auto), settable at the topic.
+   *  formula_pick: the formula the script is written in ('' = not decided
+   *  yet, which every video scripted before 2.2.0 also reads as); the
+   *  person's choice when there is one, else Auto's. formula_runner_up: the
+   *  one that came second, offered as a switch at Script Ready.
+   *  formula_reason: one sentence on why. Optional for the same reason as
+   *  tts_text. */
+  formula_choice?: string;
+  formula_pick?: string;
+  formula_runner_up?: string;
+  formula_reason?: string;
   /** The video's last successful render (TMDEV-206): the renderer's id and
    *  its name at the time ('' = no render recorded, which every video
    *  rendered before 2.2.0 reads as), whether it rendered on the GPU (1/0),
@@ -234,6 +246,10 @@ export interface Project {
   /** The mascot new videos here start with: '' = the install default,
    *  "none" = no mascot even if the install has a default. */
   default_mascot_id?: string;
+  /** The script formula every new video filed into this domain is written
+   *  in, whatever its sourcing mode; '' = Auto. Changing it never touches
+   *  videos already filed. */
+  default_formula_id?: string;
   /** How many topics the domain may ever hold, 25–750 (100 by default). */
   topic_cap?: number;
   /** Every video ever filed into the domain, archived and rejected included —
@@ -330,6 +346,9 @@ export interface Settings {
   /** Burn the "Made with tubematic.ai" mark into every render. Human-only:
    *  nothing in scene-config.json can switch it. */
   watermark_enabled: boolean;
+  /** Whether Auto may pick a script formula marked experimental. Off by
+   *  default. Optional: an older API does not send it. */
+  auto_experimental_formulas?: boolean;
   /** The mascot new videos start with unless their domain says otherwise;
    *  '' = none. Optional: an older API does not send it. */
   default_mascot_id?: string;

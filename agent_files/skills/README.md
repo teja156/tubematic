@@ -18,7 +18,8 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 | `tubematic-operator/` | Runs the pipeline: moves each video to its next status with the MCP tools and stops at the human checkpoints |
 | `tubematic-topic-research/` | Researches and proposes topics in the curriculum, trending and mining research modes |
 | `tubematic-style-routing/` | Picks a video's visual style before its script is written, when the person left it on Auto: describes the topic, scores the candidate styles from their style packs and records the choice |
-| `tubematic-script-writing-skill/` | Writes a video's script as an ordered list of segments: chooses a formula for the topic, writes to it, in the voice of the video's script profile |
+| `tubematic-formula-routing/` | Picks a video's script formula before its script is written, once its visual style is decided: describes the topic's shape, scores the candidate formulas from the formula files, rotates away from the domain's recent formulas and records the choice |
+| `tubematic-script-writing-skill/` | Writes a video's script as an ordered list of segments, in the formula picked for the video and in the voice of the video's script profile |
 | `tubematic-create-script-writing-skill/` | Builds a script profile: extracts a creator's style from YouTube transcripts and stores it as profile Markdown |
 | `tubematic-scene-config/` | Writes `scene-config.json` and the scene TSX files for a voiced video |
 | `tubematic-cartoon3d/` | Writes a Cartoon 3D video as TypeScript against the renderer's kit, takes it through the beat gate and submits it |
@@ -32,9 +33,10 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 | `tubematic-troubleshooting/` | Diagnoses a broken install with a person, collects redacted evidence and drafts a bug report. A person must ask for it by name |
 
 `tubematic-script-writing-skill/` owns the scripting rules. Its `formulas/` folder holds one
-reference file per script formula. Those files and the table in its `SKILL.md` are generated from
+reference file per script formula. Those files are generated from
 `tubematic_core/formulas/` by `scripts/gen_formula_references.py` in the source repository: edit the
-data, then run the script. The style it writes in comes from a
+data, then run the script. `tubematic-formula-routing/` chooses among the same formulas from the
+candidate list `get_video` returns. The style it writes in comes from a
 script profile, a database row the agent fetches with `get_script_profile`.
 `tubematic-create-script-writing-skill/` builds that row when the poller finds a profile queued
 from the dashboard. See

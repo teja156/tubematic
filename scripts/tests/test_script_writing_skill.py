@@ -1,9 +1,10 @@
-"""The script-writing skill and its formulas (TMDEV-211).
+"""The script-writing skill and its formulas (TMDEV-211, TMDEV-213).
 
-The skill's formula files and its table for choosing a formula are generated
-from tubematic_core/formulas/. The first tests keep the generated text equal
-to the data, so the skill cannot name a formula, a hook type or a word band
-the server would refuse or measure differently.
+The skill's formula files are generated from tubematic_core/formulas/. The
+first tests keep the generated text equal to the data, so the skill cannot
+name a formula, a hook type or a word band the server would refuse or measure
+differently. The skill no longer chooses the formula: it writes in the one
+picked for the video, and a test keeps a table for choosing out of it.
 
 The rest pin what the rewrite removed and what it must keep. The fixed
 five-beat sequence and its call to action are gone; if a later edit brings a
@@ -46,8 +47,6 @@ def test_every_formula_has_a_reference_file_and_there_are_no_others():
 def test_the_check_notices_an_edited_file_and_a_stray_one(tmp_path, monkeypatch):
     fake = tmp_path / "skill"
     (fake / "formulas").mkdir(parents=True)
-    (fake / "SKILL.md").write_text(_text(), encoding="utf-8")
-    monkeypatch.setattr(gen, "SKILL", fake / "SKILL.md")
     monkeypatch.setattr(gen, "REFERENCE_DIR", fake / "formulas")
     monkeypatch.setattr(gen, "REPO", tmp_path)
     assert gen.main([]) == 0 and gen.stale() == []
@@ -60,11 +59,13 @@ def test_the_check_notices_an_edited_file_and_a_stray_one(tmp_path, monkeypatch)
     assert gen.stale() == [] and not (fake / "formulas" / "retired.md").exists()
 
 
-def test_the_table_sits_between_its_markers_once():
+def test_the_skill_holds_no_table_for_choosing_a_formula():
+    # The formula is picked before this skill runs, from data. A table here
+    # would be a second place to choose from, and it would go stale.
     text = _text()
-    assert text.count(gen.TABLE_START) == 1 and text.count(gen.TABLE_END) == 1
+    assert "formula-table" not in text
     for fid in tformulas.FORMULAS:
-        assert f"(`{fid}`)" in text
+        assert f"(`{fid}`)" not in text, fid
 
 
 # --- what the skill tells the writer to do ---------------------------------
@@ -126,12 +127,35 @@ def test_the_formula_and_the_style_say_how_the_payoff_rules_are_met():
     assert "`style.script` says how such a video ends" in part
 
 
-def test_a_changed_style_or_topic_means_choosing_the_formula_again():
-    # A style switch at Script Ready sends the video back with its old script
-    # and record still stored. The stored formula was chosen for another style.
+def test_the_skill_writes_in_the_picked_formula_and_never_chooses_one():
     part = _section("## Step 3", "### Length")
-    assert "the video's style or topic changed" in part
-    assert "a story told in chapters" in part
+    assert "`formula_routing.pick`" in part
+    assert "`update_video` refuses any other" in part
+    assert "you never change the\n   formula yourself" in part
+    assert "tubematic-formula-routing" in part
+
+
+def test_step_3_covers_a_video_with_no_pick():
+    # Three cases reach the writer with no pick: the router has not run, the
+    # video was scripted before picks existed, and an older tool server.
+    part = _section("## Step 3", "### Length")
+    assert "Go back to the operator skill" in part
+    assert "Keep the stored `formula_id`" in part
+    assert "older than this skill" in part
+
+
+def test_a_changed_style_or_topic_is_handled_by_the_pick_being_dropped():
+    # A style switch or a return to the topic clears the pick in code, so the
+    # router runs again; the writer is told it has nothing to decide.
+    part = _section("## Step 3", "### Length")
+    assert "the pick is dropped when\n   either changes" in part
+
+
+def test_the_openings_vary_and_a_persons_switch_is_honoured():
+    part = _section("### Three openings, then one", "### Segments")
+    assert "`formula_routing.recent.hook_types`" in part and "`hook_type_repeat`" in part
+    assert '"Opening switched to"' in part
+    assert "word for word" in part and "Do not draft new openings" in part
 
 
 def test_a_style_that_names_people_may_name_them():

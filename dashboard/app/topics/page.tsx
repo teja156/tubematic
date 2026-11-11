@@ -9,6 +9,8 @@ import { codePoints } from "@/lib/utils";
 import { SectionLabel } from "@/components/SectionLabel";
 import { MiningSources } from "@/components/MiningSources";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
+import { formulaOptions, type ScriptFormulaNames } from "@/lib/scriptFormulas";
+import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 
 const ALL_MODES: Array<{ key: string; label: string; accent: string; desc: string }> = [
   { key: "curriculum", label: "Curriculum",  accent: "var(--indigo)", desc: "Enumerate sub-topics from seed domains" },
@@ -128,6 +130,33 @@ function DomainProfileSelect({ testId, value, profiles, onChange }: {
   );
 }
 
+// ── Default formula picker ──────────────────────────────────────────────────
+
+function DomainFormulaSelect({ testId, value, names, onChange }: {
+  testId: string; value: string; names: ScriptFormulaNames | null; onChange: (next: string) => void;
+}) {
+  return (
+    <select
+      data-testid={testId}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      title="The script formula every new video in this domain is written in. Auto picks one for each video from its topic."
+      style={{
+        fontFamily: "var(--mono)",
+        fontSize: 10.5,
+        padding: "5px 6px",
+        background: "var(--bg)",
+        color: "var(--ink-2)",
+        border: "1px solid var(--border-2)",
+        flexShrink: 0,
+        maxWidth: 220,
+      }}
+    >
+      {formulaOptions(names, value).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
+
 // ── Topic cap ───────────────────────────────────────────────────────────────
 
 // Bounds on a domain's topic_cap (TMDEV-153). Keep in sync with
@@ -214,13 +243,13 @@ function DomainRow({
   onToggle,
   onStyleChange,
   onVoiceChange,
-  onProfileChange,
+  onProfileChange, onFormulaChange,
   onMascotChange,
   onCapChange,
   canIllustrate,
   gpu,
   voices,
-  profiles,
+  profiles, formulaNames,
   mascots,
 }: {
   project: Project;
@@ -229,12 +258,14 @@ function DomainRow({
   onStyleChange: (id: string, next: string) => void;
   onVoiceChange: (id: string, next: string) => void;
   onProfileChange: (id: string, next: string) => void;
+  onFormulaChange: (id: string, next: string) => void;
   onMascotChange: (id: string, next: string) => void;
   onCapChange: (id: string, next: number) => void;
   canIllustrate: boolean;
   gpu: GpuStatus | null;
   voices: Voice[];
   profiles: ScriptProfile[];
+  formulaNames: ScriptFormulaNames | null;
   mascots: Mascot[];
 }) {
   const visualStyles = useVisualStyles();
@@ -250,9 +281,10 @@ function DomainRow({
         display: "flex",
         alignItems: "center",
         // Wraps rather than overlaps on a narrow screen: a seed row carries
-        // four pickers, a count, a badge and the pause button, and without
+        // five pickers, a count, a badge and the pause button, and without
         // wrapping the name shrank to nothing under them at 1024px. The 10px
-        // gap (was 16) is part of what keeps it on one line at 1280px.
+        // gap (was 16) and the pickers' 94px width are what keep it on one
+        // line at 1280px: the row has about 24px to spare there.
         flexWrap: "wrap",
         gap: 10,
         padding: "12px 16px",
@@ -290,7 +322,7 @@ function DomainRow({
           dashboard, so without this a domain created before the register
           existed could never be pinned to one. POST /projects is the upsert
           path, so this needs no new endpoint. */}
-      <DomainField label="Visual style" width={120}>
+      <DomainField label="Visual style" width={94}>
         <select
           data-testid={`domain-style-${project.id}`}
           value={project.default_visual_style ?? ""}
@@ -317,7 +349,7 @@ function DomainRow({
           whatever its sourcing mode, starts with it. A voice since removed
           from the roster stays visible as "(removed)" rather than silently
           reading as the install default — the API seeds nothing for it. */}
-      <DomainField label="Default voice" width={120}>
+      <DomainField label="Default voice" width={94}>
         <DomainVoiceSelect
           testId={`domain-voice-${project.id}`}
           value={project.default_voice_id ?? ""}
@@ -328,7 +360,7 @@ function DomainRow({
 
       {/* Default script profile: seeds this domain's curriculum videos only,
           like the visual style. A human can still pick another at the topic. */}
-      <DomainField label="Script profile" width={120}>
+      <DomainField label="Script profile" width={94}>
         <DomainProfileSelect
           testId={`domain-profile-${project.id}`}
           value={project.default_script_profile_id ?? ""}
@@ -337,7 +369,18 @@ function DomainRow({
         />
       </DomainField>
 
-      <DomainField label="Mascot (exp.)" width={120}>
+      {/* Default formula: seeds every new video in the domain, like the
+          voice. Auto picks a formula for each video from its topic. */}
+      <DomainField label="Formula" width={94}>
+        <DomainFormulaSelect
+          testId={`domain-formula-${project.id}`}
+          value={project.default_formula_id ?? ""}
+          names={formulaNames}
+          onChange={(next) => onFormulaChange(project.id, next)}
+        />
+      </DomainField>
+
+      <DomainField label="Mascot (exp.)" width={94}>
         <DomainMascotSelect
           testId={`domain-mascot-${project.id}`}
           value={project.default_mascot_id ?? ""}
@@ -449,8 +492,8 @@ function DomainRow({
 
 // ── Add domain form ───────────────────────────────────────────────────────────
 
-function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots }: {
-  onAdded: () => void; canIllustrate: boolean; gpu: GpuStatus | null; voices: Voice[]; profiles: ScriptProfile[]; mascots: Mascot[];
+function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, formulaNames, mascots }: {
+  onAdded: () => void; canIllustrate: boolean; gpu: GpuStatus | null; voices: Voice[]; profiles: ScriptProfile[]; formulaNames: ScriptFormulaNames | null; mascots: Mascot[];
 }) {
   const visualStyles = useVisualStyles();
   const [name, setName] = useState("");
@@ -461,6 +504,7 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots 
   const [defaultStyle, setDefaultStyle] = useState("");
   const [defaultVoice, setDefaultVoice] = useState("");
   const [defaultProfile, setDefaultProfile] = useState("");
+  const [defaultFormula, setDefaultFormula] = useState("");
   const [defaultMascot, setDefaultMascot] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -475,7 +519,7 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots 
       const r = await apiFetch("/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: slug, name: name.trim(), description: description.trim(), is_curriculum_seed: isSeed, status: "active", default_visual_style: defaultStyle, default_voice_id: defaultVoice, default_script_profile_id: defaultProfile, default_mascot_id: defaultMascot }),
+        body: JSON.stringify({ id: slug, name: name.trim(), description: description.trim(), is_curriculum_seed: isSeed, status: "active", default_visual_style: defaultStyle, default_voice_id: defaultVoice, default_script_profile_id: defaultProfile, default_formula_id: defaultFormula, default_mascot_id: defaultMascot }),
       });
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
@@ -633,6 +677,15 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots 
         </label>
 
         <label
+          data-testid="domain-formula-label"
+          style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.06em", color: "var(--ink-2)" }}
+        >
+          Formula
+          <DomainFormulaSelect testId="domain-formula-select" value={defaultFormula}
+                               names={formulaNames} onChange={setDefaultFormula} />
+        </label>
+
+        <label
           data-testid="domain-mascot-label"
           style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.06em", color: "var(--ink-2)" }}
         >
@@ -760,6 +813,7 @@ export default function TopicsPage() {
   const [gpu, setGpu] = useState<GpuStatus | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [profiles, setProfiles] = useState<ScriptProfile[]>([]);
+  const formulaNames = useScriptFormulaNames(true);
   const [mascots, setMascots] = useState<Mascot[]>([]);
 
   async function loadAll() {
@@ -860,6 +914,8 @@ export default function TopicsPage() {
         default_visual_style: next.default_visual_style ?? "",
         default_voice_id: next.default_voice_id ?? "",
         default_script_profile_id: next.default_script_profile_id ?? "",
+        // A full replace too: left out, the domain would go back to Auto.
+        default_formula_id: next.default_formula_id ?? "",
         // A full replace: an omitted default_mascot_id would reset to
         // "use the install default".
         default_mascot_id: next.default_mascot_id ?? "",
@@ -890,6 +946,10 @@ export default function TopicsPage() {
 
   function handleDomainProfile(id: string, next: string) {
     return saveDomain(id, { default_script_profile_id: next }, "script profile");
+  }
+
+  function handleDomainFormula(id: string, next: string) {
+    return saveDomain(id, { default_formula_id: next }, "formula");
   }
 
   function handleDomainMascot(id: string, next: string) {
@@ -988,7 +1048,7 @@ export default function TopicsPage() {
         <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: "var(--mute)", marginBottom: 10 }}>
           Curriculum Seed Domains
         </div>
-        <AddDomainForm onAdded={loadAll} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} mascots={mascots} />
+        <AddDomainForm onAdded={loadAll} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} formulaNames={formulaNames} mascots={mascots} />
       </section>
 
       {/* Seed domains list */}
@@ -1006,7 +1066,7 @@ export default function TopicsPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 24 }}>
           {seedDomains.map((p) => (
-            <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onMascotChange={handleDomainMascot} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} mascots={mascots} />
+            <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onFormulaChange={handleDomainFormula} onMascotChange={handleDomainMascot} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} formulaNames={formulaNames} mascots={mascots} />
           ))}
         </div>
       )}
@@ -1019,7 +1079,7 @@ export default function TopicsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {otherDomains.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onMascotChange={handleDomainMascot} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} mascots={mascots} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onFormulaChange={handleDomainFormula} onMascotChange={handleDomainMascot} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} formulaNames={formulaNames} mascots={mascots} />
             ))}
           </div>
         </section>

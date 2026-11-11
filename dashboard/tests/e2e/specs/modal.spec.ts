@@ -318,6 +318,106 @@ test.describe("VideoModal", () => {
     expect(after.style_runner_up).toBe("system_flow");
   });
 
+  // The script formula (TMDEV-213). Only the agent's choose_script_formula
+  // writes a pick, so the row is seeded in the API container like the style
+  // pick above. What only a real browser against the real API shows: the
+  // labels from GET /script-formulas, and each switch landing in the database.
+  function seedFormula(videoId: string, sql: string, params: string) {
+    const repoRoot = path.resolve(__dirname, "../../../..");
+    execSync(
+      `docker compose -f "${path.join(repoRoot, "docker-compose.test.yml")}" exec -T tubematic-api-test python3 -`,
+      {
+        cwd: repoRoot,
+        input: [
+          "import json, sqlite3",
+          "hooks = [{'type': 'problem', 'text': 'You renamed one file.', 'kept': True, 'note': ''},",
+          "         {'type': 'question', 'text': 'Why does the log stop?', 'kept': False, 'note': ''},",
+          "         {'type': 'myth', 'text': 'A rename is recorded.', 'kept': False, 'note': 'overclaims'}]",
+          "con = sqlite3.connect('/data/tubematic.db')",
+          `con.execute("UPDATE videos SET ${sql} WHERE id = '${videoId}'", ${params})`,
+          "con.commit()",
+        ].join("\n"),
+        stdio: ["pipe", "inherit", "inherit"],
+      },
+    );
+  }
+
+  test("Switch to the runner-up formula sends the video back to scripting in that formula", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Switch formula` });
+    await patchVideo(video.id, { status: "SCRIPT_READY", script: "# Hello world" });
+    seedFormula(video.id,
+      "formula_pick = 'follow-the-flow', formula_runner_up = 'scene-story', "
+        + "formula_reason = 'A request moves through fixed stages.', formula_id = 'follow-the-flow'",
+      "()");
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    await expect(modal.getByTestId("video-formula")).toHaveText("Auto — Follow the Flow");
+    await expect(modal.getByTestId("formula-pick-reason")).toContainText("A request moves through fixed stages.");
+    await expect(modal.getByTestId("formula-pick-reason")).toContainText("Runner-up: Scene Story");
+
+    page.once("dialog", (d) => d.accept());
+    await modal.getByRole("button", { name: "Switch to Scene Story" }).click();
+    await expect.poll(async () => (await getVideo(video.id)).status, { timeout: 10_000 }).toBe("TOPIC_APPROVED");
+    const after = await getVideo(video.id) as unknown as Record<string, unknown>;
+    expect(after.formula_pick).toBe("scene-story");
+    expect(after.formula_runner_up).toBe("follow-the-flow");
+    expect(after.formula_choice).toBe("scene-story");
+  });
+
+  test("Use this opening sends the video back to scripting with that opening in use", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Switch opening` });
+    await patchVideo(video.id, { status: "SCRIPT_READY", script: "You renamed one file. It stops." });
+    seedFormula(video.id,
+      "formula_id = 'broken-expectation', formula_pick = 'broken-expectation', hook_type = 'problem', "
+        + "hook_alternatives = ?",
+      "(json.dumps(hooks),)");
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    await expect(modal.getByTestId("script-hook-0")).toHaveAttribute("data-kept", "true");
+    await expect(modal.getByTestId("use-opening-0")).toHaveCount(0);
+
+    page.once("dialog", (d) => d.accept());
+    await modal.getByTestId("use-opening-1").click();
+    await expect.poll(async () => (await getVideo(video.id)).status, { timeout: 10_000 }).toBe("TOPIC_APPROVED");
+    const after = await getVideo(video.id) as unknown as {
+      hook_type: string; hook_alternatives: { kept: boolean }[]; formula_pick: string;
+      comments: { author: string; content: string }[];
+    };
+    expect(after.hook_type).toBe("question");
+    expect(after.hook_alternatives.map((h) => h.kept)).toEqual([false, true, false]);
+    expect(after.formula_pick).toBe("broken-expectation");
+    expect(after.comments.at(-1)?.content).toContain("Opening switched to the Question one");
+  });
+
+  test("a formula chosen at the topic goes with the approval", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Choose formula` });
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    const select = modal.getByTestId("video-modal-formula-select");
+    await expect(select).toHaveValue("");
+    // The list is the real one: the core formulas, then the experimental ones marked.
+    await expect(select.locator("option", { hasText: "Scene Story" })).toHaveCount(1);
+    await expect(select.locator("option", { hasText: "News Take (experimental)" })).toHaveCount(1);
+    await select.selectOption("news-take");
+    await modal.getByRole("button", { name: "Approve Topic" }).click();
+    await expect.poll(async () => (await getVideo(video.id)).status, { timeout: 10_000 }).toBe("TOPIC_APPROVED");
+    const after = await getVideo(video.id) as unknown as Record<string, unknown>;
+    expect(after.formula_choice).toBe("news-take");
+    expect(after.formula_pick).toBe("");    // the agent makes the pick; the test stack has none
+  });
+
   // What the agent records with a script (TMDEV-211). Only update_video
   // writes it, and the test stack runs no agent, so the row is seeded in the
   // API container like the style pick above. The labels come from the real

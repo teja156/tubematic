@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 53 tools
+## The 54 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -103,6 +103,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`set_video_status`](#set_video_status) | Guarded status write |
 | [`update_video`](#update_video) | Partial update: script, publish text, voice, agent, style |
 | [`choose_visual_style`](#choose_visual_style) | Record the style `auto` picks, before the script |
+| [`choose_script_formula`](#choose_script_formula) | Record the script formula, after the style and before the script |
 | [`add_comment`](#add_comment) | Add an agent comment |
 
 ### Domain tools
@@ -194,25 +195,28 @@ The calls one video takes when it has no mascot and is not Cartoon 3D:
    and the `script_profile_id`.
 2. `choose_visual_style(video_id, style, reason, runner_up)` records the style `auto` picks, when
    `style_routing.decided` is `false`. The script is then written for that style.
-3. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
-4. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…,
-   formula_id=…, hooks=[…])` stores the script, the text the video is posted with, and the formula
-   and openings the script was built on. It returns `warnings`, which the agent reads before it
+3. `choose_script_formula(video_id, formula, reason, runner_up)` records the script formula,
+   when `formula_routing.decided` is `false`. The script is then written in the returned
+   `formula_pick`.
+4. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
+5. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…,
+   formula_id=…, hooks=[…])` stores the script, the text the video is posted with, the picked formula
+   and the openings the script was built on. It returns `warnings`, which the agent reads before it
    moves on.
-5. `upsert_pronunciation_lexicon(entries=[…])` registers recurring terms, if the script has any.
-6. `add_comment(video_id, "agent", …)` says what was written.
-7. `set_video_status(video_id, "SCRIPT_READY", only_if_current_status="TOPIC_APPROVED")` stops at
+6. `upsert_pronunciation_lexicon(entries=[…])` registers recurring terms, if the script has any.
+7. `add_comment(video_id, "agent", …)` says what was written.
+8. `set_video_status(video_id, "SCRIPT_READY", only_if_current_status="TOPIC_APPROVED")` stops at
    the script checkpoint. A human approves, which moves the video to `VOICING`.
-8. `generate_voice(video_id, script)` writes the audio and the timeline and moves the video to
+9. `generate_voice(video_id, script)` writes the audio and the timeline and moves the video to
    `VOICE_READY`.
-9. `get_timeline(video_id)` returns each segment's frame span.
-10. `list_scene_files(source="installed")` lists the reusable scene library.
-11. `generate_image(video_id, image_name, prompt)` creates each image and returns its `public_path`.
-12. `read_image(video_id, image_name)` shows the image, so a bad one is replaced before a render.
-13. `write_scene_file(video_id, scene_name, tsx_content)` writes each new scene and returns its `src`.
-14. `write_scene_config(video_id, config)` writes `scene-config.json`.
-15. `validate_job(video_id)` returns `errors` to fix and `warnings` to judge.
-16. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
+10. `get_timeline(video_id)` returns each segment's frame span.
+11. `list_scene_files(source="installed")` lists the reusable scene library.
+12. `generate_image(video_id, image_name, prompt)` creates each image and returns its `public_path`.
+13. `read_image(video_id, image_name)` shows the image, so a bad one is replaced before a render.
+14. `write_scene_file(video_id, scene_name, tsx_content)` writes each new scene and returns its `src`.
+15. `write_scene_config(video_id, config)` writes `scene-config.json`.
+16. `validate_job(video_id)` returns `errors` to fix and `warnings` to judge.
+17. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
 
 ---
 
@@ -243,6 +247,7 @@ videos.
 | `mascot` | `{id, name, version}` or `null` |
 | `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config` and `script` is `""` |
 | `style_routing` | The style decision `auto` makes before the script: `{decided, pick, runner_up, reason, candidates, domain}`. See [How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style) |
+| `formula_routing` | The formula decision made before the script: `{decided, pick, runner_up, reason, choice, candidates, recent}`. See [How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked) |
 
 At `VOICE_READY` the operator skill invokes the skill named in `style.authoring_skill`.
 
@@ -262,6 +267,12 @@ mixed scene system) and whenever a person chose the style. `candidates` is
 this video can have it (`available`, `unavailable_reason`). `domain` is the `{name, description}`
 of the video's domain.
 
+`formula_routing.decided` is `true` once a formula is picked. `pick` is the formula the script is
+written in, and `choice` is the formula a person chose for the video (`""` for Auto). `candidates`
+is `tubematic_core/formulas.py::routing_candidates` while the pick can still be made, and `[]`
+after it. `recent` is `{formulas, hook_types}`: the formulas and the kept opening types of the
+domain's previous two videos, newest first.
+
 ### `create_video`
 
 `create_video(project_id, topic, strategy, producibility_score, title="", voice_id="")` files a
@@ -280,9 +291,11 @@ What a new video starts with:
 - `mascot_id`: the domain's `default_mascot_id`, else the install's, whatever the `strategy`. It is
   set only while some renderer's GPU test passed, and not on a `cartoon_3d` video. Seeding does not
   refuse a video.
+- `formula_choice`: the domain's `default_formula_id` while that is a formula, whatever the
+  `strategy`. `""` means a formula is picked for the video before its script.
 - `agent_id`: the agent the video is pinned to (see [Assignment](07-agent-layer.md#assignment)).
 
-The result carries those five fields. A `title` over 70 characters is clipped and the result
+The result carries those six fields. A `title` over 70 characters is clipped and the result
 carries a `warning` (see [Video titles](#video-titles)).
 
 ### `set_video_status`
@@ -304,7 +317,9 @@ It refuses:
 A move to `TOPIC_PROPOSED` (a topic revision) gives a style `auto` picked back to `auto`, in the
 same `UPDATE`: `visual_style` returns to `auto` and the three `style_*` columns are cleared, so the
 revised topic is routed again after its next approval. On every `auto` video the two `resolved_*`
-columns are cleared too. A style a person chose is kept, with its recorded canvas.
+columns are cleared too. A style a person chose is kept, with its recorded canvas. The same
+`UPDATE` empties `formula_pick`, `formula_runner_up` and `formula_reason`, so the formula is picked
+again for the revised topic. A person's `formula_choice` is kept.
 
 ### `update_video`
 
@@ -327,7 +342,8 @@ Script and voice:
   `voice_id=""`.
 - `formula_id` and `hooks` are passed together, with `script_segments`. They record the formula the
   script follows and the three openings the agent drafted. A malformed record is refused, and a
-  script with no record is accepted. See
+  script with no record is accepted. On a video with a `formula_pick`, a `formula_id` that differs
+  from the pick is refused, because the pick is what the person sees at `SCRIPT_READY`. See
   [What a script records](08-scripting-and-voice.md#what-a-script-records).
 - A call that changes a script's spoken words, or carries a record, returns `warnings` beside
   `updated_fields`: the [script warnings](08-scripting-and-voice.md#script-warnings) for the stored
@@ -411,6 +427,33 @@ reads what the install can make after taking the write lock (`BEGIN IMMEDIATE`),
 Settings or a GPU probe result cannot commit between that check and the write. The result carries
 the new `visual_style` and `style`, so the agent writes the script for it in the same session.
 
+### `choose_script_formula`
+
+`choose_script_formula(video_id, formula, reason, runner_up="", repeat_reason="")` records the
+script formula for a video, at `TOPIC_APPROVED`, after the style is decided and before the script
+is written. The [tubematic-formula-routing skill](08-scripting-and-voice.md#how-a-formula-is-picked)
+calls it.
+
+- `formula` is the candidate the agent judges best, from `formula_routing.candidates`. On a video
+  with a `formula_choice`, the tool writes the person's choice as `formula_pick` and stores
+  `formula` as the runner-up when the two differ.
+- `reason` is one sentence of at most 300 characters (`formulas.py::REASON_MAX_CHARS`). The
+  dashboard shows it beside the choice.
+- `runner_up` is another candidate, or `""`. The dashboard offers it as a switch at `SCRIPT_READY`
+  ([`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula)).
+- `repeat_reason` is one sentence, passed only for a formula marked `recent`.
+
+It refuses an unknown or unavailable `formula` or `runner_up`, a video whose style is not decided,
+a `recent` formula with no `repeat_reason`, a second pick at `TOPIC_APPROVED`, and any status other
+than `TOPIC_APPROVED` and `REVISION_REQUESTED`. At `REVISION_REQUESTED` it replaces the pick on a
+video with no `formula_choice` and refuses one that has a choice. The values it read from the row
+are repeated in the `UPDATE`'s `WHERE`, and the setting and the domain's recent formulas are read
+after the write lock is taken (`BEGIN IMMEDIATE`).
+
+The result carries `formula_pick`, `formula_runner_up`, `formula_reason`, `chosen_by` (`auto` or
+`person`), the formula's `label` and `words`, and `reference`, the file the script-writing skill
+reads.
+
 ### `add_comment`
 
 `add_comment(video_id, author, text)` accepts `author="agent"` and refuses any other value. A
@@ -444,10 +487,10 @@ domain to one readable call. The skill compares briefs. An unknown `project_id` 
 
 `upsert_project(project_id, name, description=None, is_curriculum_seed=None, status=None,
 default_visual_style=None, default_voice_id=None, default_script_profile_id=None, topic_cap=None,
-default_mascot_id=None)` is a partial update. An omitted field is left alone on a domain that
+default_mascot_id=None, default_formula_id=None)` is a partial update. An omitted field is left alone on a domain that
 exists, and takes the creation default (`""`, `False`, `"active"`, a cap of 100) on a new one. Pass
-`""` to clear `description`, `default_visual_style`, `default_voice_id` or
-`default_script_profile_id`. Each caller names one or two fields (one command converts a domain
+`""` to clear `description`, `default_visual_style`, `default_voice_id`,
+`default_script_profile_id` or `default_formula_id`. Each caller names one or two fields (one command converts a domain
 into a curriculum seed, another files a video into it), so a full replace would blank the rest. The
 HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
 
@@ -463,8 +506,10 @@ HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
 - `default_mascot_id` is `""` (inherit the install's default mascot), `"none"` (no mascot even if
   the install has a default) or an approved mascot that is not archived. A new id also needs a
   renderer whose GPU is `working`.
+- `default_formula_id` is a [formula](08-scripting-and-voice.md#formulas) id, or `""` for Auto. It
+  is a person's choice for the domain, so an agent sets it only when a person asked for it.
 
-The description limit and the four defaults are checked only when the value changes. Re-sending a
+The description limit and the five defaults are checked only when the value changes. Re-sending a
 stored value that has since become invalid is not refused.
 
 ### `set_project_status`

@@ -41,6 +41,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-terminal-doc",
     "tubematic-under-the-hood",
     "tubematic-style-routing",
+    "tubematic-formula-routing",
     "tubematic-mascot-builder",
 ]
 

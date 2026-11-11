@@ -285,6 +285,39 @@ Covers `POST /videos/<id>/switch-style` and the `PATCH` rules for a style Auto p
 
 Trap: the dashboard re-sends the style picker's value on every approval, so a rule that cleared the
 pick on any `visual_style` write would erase every Auto pick at its first approval.
+### `test_formula_pick.py`
+
+Covers `POST /videos/<id>/switch-formula`, `POST /videos/<id>/switch-opening`, `formula_choice` on
+`PATCH` and on the two creation routes, `default_formula_id` on `POST /projects`, and the
+`auto_experimental_formulas` setting
+([How a formula is picked](../08-scripting-and-voice.md#how-a-formula-is-picked)).
+
+- The formula switch moves the video to `TOPIC_APPROVED`, swaps the pick and the runner-up, makes
+  the new pick the person's choice and adds a human comment. A second switch goes back, and an
+  experimental runner-up needs no setting.
+- The opening switch marks the chosen opening as the one in use, clears its note, sets `hook_type`,
+  moves the video to `TOPIC_APPROVED` and adds a human comment that quotes the opening. A video
+  scripted before formulas were picked can use it.
+- Each switch is refused away from `SCRIPT_READY` and for an archived or unknown video. The formula
+  switch is refused with no pick, no runner-up or a runner-up that the installed version does not
+  have. The
+  opening switch is refused for the opening already in use, an index outside the stored openings
+  or of the wrong type, and a script with no stored openings. A refusal changes nothing.
+- A move back to `TOPIC_PROPOSED` empties the pick and keeps the person's choice. A script revision
+  keeps the pick. A style switch empties the pick.
+- `formula_choice` is writable at `TOPIC_PROPOSED` only, takes `""` for Auto and an experimental
+  formula with the setting off, and refuses a value that is no formula.
+- `default_formula_id` is stored, is reset by an edit that leaves it out, must be a formula when it
+  changes, and a stored one that was dropped does not block another edit. It seeds every new video
+  whatever its strategy, a formula sent with the video wins over it, and a default that is no
+  formula seeds nothing. A New Video submission takes its own pick, or the Manual Videos domain's
+  default.
+- The setting defaults to off and takes a boolean. `GET /script-formulas` says which formulas are
+  experimental.
+
+Trap: neither switch edits the stored script. A new formula or a new first sentence over the old
+body would be a script nobody wrote, so both send the video back to be rewritten.
+
 ### `test_script_record.py`
 
 Covers a script's record over HTTP

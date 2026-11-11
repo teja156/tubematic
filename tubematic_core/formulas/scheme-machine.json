@@ -2,6 +2,7 @@
   "id": "scheme-machine",
   "order": 70,
   "family": "story",
+  "experimental": false,
   "label": "Scheme Machine",
   "line": "A true scheme told in the third person: the result first, the scheme as a loop, the one number or one sentence that makes it work, the tell, and a second layer in the last line.",
   "best_for": [
@@ -14,6 +15,16 @@
   "avoid_for": [
     "a mechanism that needs more than four steps",
     "an opinion dressed as a scheme"
+  ],
+  "signals": [
+    "someone gained from it on purpose",
+    "the trick repeats as a loop",
+    "the loop has four steps or fewer",
+    "it was caught, closed or named a crime"
+  ],
+  "styles": [
+    "system_flow",
+    "bean_explainer"
   ],
   "words": [
     150,

@@ -7,9 +7,10 @@
  *     one) shows the segments and nothing else, and asks the API for nothing.
  *  3. The labels come from GET /script-formulas; until it answers, or for an
  *     id it does not know, the id itself is shown.
- *  4. It is read-only: no control in it.
+ *  4. At Script Ready each opening not in use can be chosen: the script is
+ *     rewritten from it. Everywhere else the record has no control in it.
  */
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { VideoModal } from "@/components/VideoModal";
 import { formulaLabel, hasScriptRecord, hookTypeLabel } from "@/lib/scriptFormulas";
@@ -58,9 +59,10 @@ function makeVideo(extra: Partial<Video> = {}): Video {
   };
 }
 
-function renderModal(video: Video, names: object | null = NAMES) {
-  const fetchMock = vi.fn(async (url: unknown) => {
+function renderModal(video: Video, names: object | null = NAMES, sw = { ok: true, body: {} as object }) {
+  const fetchMock = vi.fn(async (url: unknown, _init?: RequestInit) => {
     const u = String(url);
+    if (u.endsWith("/switch-opening")) return { ok: sw.ok, json: async () => sw.body } as Response;
     if (u.endsWith("/script-formulas")) {
       return { ok: names !== null, json: async () => names ?? {} } as Response;
     }
@@ -157,12 +159,54 @@ describe("VideoModal — the script's record", () => {
     expect(screen.queryByTestId("script-beat-seg-2")).toBeNull();
   });
 
-  it("has no control in it", async () => {
-    renderModal(makeVideo(RECORD));
+  it("has no control in it once the script is approved", async () => {
+    renderModal(makeVideo({ ...RECORD, status: "VOICE_READY" }));
     await settle();
     const record = await screen.findByTestId("script-record");
     expect(within(record).queryAllByRole("button")).toHaveLength(0);
     expect(record.querySelectorAll("input, select, textarea")).toHaveLength(0);
+  });
+
+  it("offers each opening not in use at Script Ready, and only there", async () => {
+    renderModal(makeVideo(RECORD));
+    await settle();
+    await screen.findByTestId("script-record");
+    expect(screen.queryByTestId("use-opening-0")).not.toBeInTheDocument();   // the one in use
+    expect(screen.getByTestId("use-opening-1")).toHaveTextContent("Use this opening");
+    expect(screen.getByTestId("use-opening-2")).toBeInTheDocument();
+  });
+
+  it("posts the chosen opening after a confirm and refetches the video", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetchMock = renderModal(makeVideo(RECORD));
+    fireEvent.click(await screen.findByTestId("use-opening-1"));
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/videos/vid-1/switch-opening"));
+      expect(call).toBeDefined();
+      expect((call![1] as RequestInit).method).toBe("POST");
+      expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ index: 1 });
+    });
+  });
+
+  it("does nothing when the confirm is declined", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const fetchMock = renderModal(makeVideo(RECORD));
+    fireEvent.click(await screen.findByTestId("use-opening-1"));
+    await act(async () => {});
+    expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith("/switch-opening"))).toBe(false);
+  });
+
+  it("shows the server's refusal of an opening switch", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderModal(makeVideo(RECORD), NAMES, { ok: false, body: { error: "The video changed while the request was in flight" } });
+    fireEvent.click(await screen.findByTestId("use-opening-2"));
+    expect(await screen.findByTestId("switch-opening-error")).toHaveTextContent("changed while");
+  });
+
+  it("offers no opening switch on an archived video", async () => {
+    renderModal(makeVideo({ ...RECORD, archived_at: "2026-02-01T00:00:00Z" }));
+    await settle();
+    expect(screen.queryByTestId("use-opening-1")).not.toBeInTheDocument();
   });
 });
 

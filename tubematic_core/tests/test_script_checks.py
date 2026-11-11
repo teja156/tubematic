@@ -1,4 +1,4 @@
-"""The script warnings (TMDEV-211): each check fires on the script it is for
+"""The script warnings (TMDEV-211, TMDEV-213): each check fires on the script it is for
 and stays quiet on a clean one.
 
 The quiet half matters as much as the firing half. The warnings are shown to
@@ -392,3 +392,54 @@ def test_a_turn_near_either_end_does_not(position):
     tokens[int(200 * position)] = "but"
     assert "no_turn" in ids(" ".join(tokens) + ".", formula_id="", kept_hook="",
                             publish_title="")
+
+
+# --- openings that repeat across a domain -----------------------------------
+
+def test_an_opening_that_starts_like_the_domains_recent_scripts_is_flagged():
+    recent = ["You renamed one branch by mistake. Then the remote disagreed.",
+              "A different start entirely. And an ending."]
+    out = sc.check(CLEAN, publish_title=TITLE, formula_id=FORMULA, kept_hook=HOOK,
+                   recent_scripts=recent)
+    assert [w["id"] for w in out] == ["opening_repeat"]
+    assert '"you renamed one"' in out[0]["message"] and "like 1 of" in out[0]["message"]
+
+
+def test_a_different_opening_is_not_a_repeat():
+    assert "opening_repeat" not in ids(recent_scripts=["Your renamed file is gone. Or so it looks."])
+
+
+def test_only_the_newest_thirty_openings_are_compared():
+    filler = [f"Filler number {i} starts here. And ends." for i in range(sc.RECENT_SCRIPTS)]
+    old = ["You renamed one thing. Long ago."]
+    assert "opening_repeat" not in ids(recent_scripts=filler + old)
+    assert "opening_repeat" in ids(recent_scripts=filler[:-1] + old)
+
+
+def test_a_two_word_first_sentence_is_never_a_repeat():
+    script = "It vanished. " + " ".join(sc.sentences(CLEAN)[1:])
+    assert "opening_repeat" not in ids(script, kept_hook="It vanished.",
+                                       recent_scripts=["It vanished. Then it came back."])
+
+
+@pytest.mark.parametrize("recent, flagged", [
+    (["problem"], True),
+    (["myth", "problem"], True),
+    (["myth", "question"], False),
+    (["myth", "question", "problem"], False),   # the third video back is outside the window
+    ([], False),
+])
+def test_an_opening_type_the_domain_just_used_is_flagged(recent, flagged):
+    out = ids(hook_type="problem", recent_hook_types=recent)
+    assert ("hook_type_repeat" in out) == flagged
+
+
+def test_the_opening_type_warning_names_the_type_by_its_label():
+    out = sc.check(CLEAN, publish_title=TITLE, formula_id=FORMULA, kept_hook=HOOK,
+                   hook_type="problem", recent_hook_types=["problem"])
+    assert [w["id"] for w in out] == ["hook_type_repeat"]
+    assert "The viewer's problem" in out[0]["message"]
+
+
+def test_no_recorded_opening_type_is_never_a_repeat():
+    assert "hook_type_repeat" not in ids(hook_type="", recent_hook_types=["", "problem"])

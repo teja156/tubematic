@@ -146,6 +146,13 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
 - A video with a script record shows the formula and the opening type by the labels the real
   `GET /script-formulas` returns, the openings and the warnings. A script written over HTTP then
   clears the record. The record is seeded the same way, because only `update_video` writes one.
+- A video with a picked formula shows it after the word Auto, with its reason and runner-up, and
+  **Switch to …** moves it to `TOPIC_APPROVED` with the runner-up as its pick and as the person's
+  choice. **Use this opening** moves a video to `TOPIC_APPROVED` with that opening marked as the one
+  in use and a comment that names it. Both are seeded in the API container, because only the
+  agent's `choose_script_formula` and `update_video` write them.
+- A formula chosen in the window at `TOPIC_PROPOSED` is stored with the approval, from a picker
+  that lists the real formulas with the experimental ones marked.
 
 Trap: the Voice and Voice model rows need the real API, because `voice_info` comes only from the
 single-video fetch and the list row the window opens on does not carry it.
@@ -222,7 +229,7 @@ Covers [the Topics page](../15-dashboard.md#the-topics-page).
   with it.
 - A domain at its topic cap shows EXPIRED and refuses a curriculum video with `409`. Raising the cap
   on the row reopens it.
-- A seed row's four pickers and its cap field each carry a caption. At 1280px the row is one line
+- A seed row's five pickers and its cap field each carry a caption. At 1280px the row is one line
   and the domain name keeps its width. At 1024px the row wraps.
 - A mining source added or removed survives a reload.
 
@@ -237,8 +244,9 @@ the suite. The cap case fills the domain with manual videos, which are exempt fr
 
 Covers [the New Video page](../15-dashboard.md#the-new-video-page) against the real
 `POST /videos/manual`. A submission lands at `TOPIC_APPROVED` in the `manual` domain with a dash for
-its score, or at `TOPIC_PROPOSED` with auto-approve cleared. The stack installs no agents, so the
-spec runs the Automatic path only.
+its score, or at `TOPIC_PROPOSED` with auto-approve cleared. A formula picked on the form is stored
+as the video's formula choice. The stack installs no agents, so the spec runs the Automatic path
+only.
 
 ### `analytics.spec.ts`
 

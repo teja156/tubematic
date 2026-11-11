@@ -18,7 +18,7 @@ and drawn as the narrator speaks; Storybook Atlas, a picture book that tells the
 invention or an idea in chapters; Terminal Doc, a dark typographic documentary for codes, passwords
 and computing; and Under the Hood, close-up photographs of one object with labels pinned to its
 parts. Auto now picks a video's style before its script is written. Scripts are built on a
-formula chosen for each topic and end on their payoff.
+formula picked for each topic before the script is written, and end on their payoff.
 
 ### Upgrade notes
 
@@ -29,8 +29,8 @@ After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
    installs new skills for System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc,
-   Under the Hood and Auto's style choice, and a session started before it does not have them.
-   The script-writing skill is new too.
+   Under the Hood, Auto's style choice and the choice of a script formula, and a session started
+   before it does not have them. The script-writing skill is new too.
 2. Read your text in **Settings → Preferences**. A script now ends on its payoff unless that text
    asks for a closing line. A sentence there that asks for one, such as a line asking viewers to
    follow, still applies to every script, and the **Script** tab can list it under **Script
@@ -42,6 +42,10 @@ A video on Auto whose script was already written when you upgraded keeps working
 before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
 that is approved but not yet scripted gets a style picked before its script, like every video
 approved after the upgrade.
+
+A video whose script was already written when you upgraded has no formula, and its window shows no
+**Formula** row. A video that is approved but not yet scripted gets a formula picked before its
+script.
 
 If you upgrade from 2.1.0 or 2.1.1, `upgrade.py` can stop and list generated scenes it cannot read.
 Those versions saved every new scene so that only the root user could read it. Make them readable,
@@ -129,15 +133,27 @@ If you go back to 2.1.x later:
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
   agent writes a new script for it, which is voiced when you approve it. See
   [What Auto does](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does).
-- Script formulas. The agent picks one of ten structures for each script from the kind of topic it
-  is: an outage is told as an incident, a process is followed step by step, a wrong belief is
-  stated and then broken. The **Script** tab shows the formula. See
+- Script formulas. Before it writes a script, the agent picks one of ten structures from the kind
+  of topic it is: an outage is told as an incident, a process is followed step by step, a wrong
+  belief is stated and then broken. It avoids the formula of the domain's previous two videos when
+  another one fits, so a domain's videos do not all share one structure. The video's window shows
+  the formula, and a **Why this formula** row gives the agent's reason and the runner-up. See
   [Script formulas](https://docs.tubematic.ai/user-guide/using-tubematic#script-formulas).
+- You can choose the formula yourself: for one video with the **Formula** picker in its window at
+  Topic Proposed or on the **New Video** page, and for every new video of a domain with the
+  **Formula** picker on its row on the **Topics** page. Left on **Auto**, the agent picks.
+- **Switch to …** at Script Ready takes the runner-up formula, and the agent writes a new script
+  in it. On a video whose formula you chose, the runner-up is the one Auto would have picked.
+- Eight experimental formulas, among them a list that opens on what is at stake, a news take and a
+  rise-and-fall story told from its end. Auto picks them only while **Experimental formulas** is on
+  in **Settings → Preferences**, and you can choose one yourself at any time. See
+  [The formulas](https://docs.tubematic.ai/user-guide/using-tubematic#the-formulas).
 - The agent drafts three different openings for a script and uses one. The **Script** tab lists
-  all three, so you can ask for another with **Revise**.
+  all three, and **Use this opening** at Script Ready has the script rewritten from another one.
 - **Script warnings** on the **Script** tab: automatic checks on a script's words, such as an
-  ending that asks for a follow, a recap at the end, a first sentence that repeats the title, or a
-  length outside the formula's range. They are advice and do not stop you approving. See
+  ending that asks for a follow, a recap at the end, a first sentence that repeats the title, an
+  opening like the domain's recent ones, or a length outside the formula's range. They are advice
+  and do not stop you approving. See
   [Read and approve scripts](https://docs.tubematic.ai/user-guide/using-tubematic#3-read-and-approve-scripts).
 - **Rendered by** and **Render time** rows in a video's window: which renderer made the video, on
   its GPU or its CPU, and how long the render took. They describe the last successful render. Videos
@@ -154,7 +170,7 @@ If you go back to 2.1.x later:
   approach. A video's card and window show the picked style after the word Auto.
 - A topic sent back for revision returns to Auto if Auto had picked its style, so the agent picks
   again for the revised topic.
-- Scripts follow the formula chosen for the topic. Before, every script had the same five parts
+- Scripts follow the formula picked for the topic. Before, every script had the same five parts
   (hook, context, core content, takeaway, call to action) and aimed at about 235 words. A script
   now ends on its payoff with no recap and no closing line, and its length follows its formula,
   from under a minute to the three-minute limit. Scripts already written are not changed.

@@ -252,6 +252,10 @@ Visuals: prefer diagrams over stock-style photos.
 The agent receives the text on every run and applies the parts that fit what it is doing. A
 preference cannot make the agent skip one of your approvals.
 
+**Experimental formulas**, below the text box, lets Auto pick the
+[script formulas](03-using-tubematic.md#the-formulas) marked experimental. It is off by default.
+While it is off, an experimental formula is used only where you chose it yourself.
+
 A script ends on its payoff. To have scripts end with a closing line, ask for one here:
 
 ```

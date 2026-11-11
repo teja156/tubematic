@@ -14,6 +14,8 @@ import {
 } from "@/lib/agents";
 import { styleOptions, videoStyleLabel } from "@/lib/visualStyles";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
+import { hasFormula, videoFormulaLabel, type ScriptFormulaNames } from "@/lib/scriptFormulas";
+import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 import { MascotPicker } from "@/components/MascotPicker";
 import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
 
@@ -64,10 +66,11 @@ interface ActionPaneProps {
   onOpenModal: (video: Video, tab?: string, opts?: { revise?: boolean; picks?: AgentPicks }) => void;
 }
 
-function ActionMeta({ video, scriptProfiles = [], agents = [] }: {
+function ActionMeta({ video, scriptProfiles = [], agents = [], formulaNames = null }: {
   video: Video;
   scriptProfiles?: ScriptProfile[];
   agents?: Agent[];
+  formulaNames?: ScriptFormulaNames | null;
 }) {
   const visualStyles = useVisualStyles();
   const agent = effectiveAgent(video, agents);
@@ -96,6 +99,9 @@ function ActionMeta({ video, scriptProfiles = [], agents = [] }: {
               ? (scriptProfiles.find((p) => p.id === video.script_profile_id)?.name
                  ?? video.script_profile_id)
               : "generic style"}
+          {/* The formula sits beside the profile. Left out for a video that
+              has none anywhere (scripted before formulas existed). */}
+          {hasFormula(video) && <>{" · "}{videoFormulaLabel(video, formulaNames)}</>}
           {video.status !== "SCRIPT_READY" && (
             <>
               {" · "}
@@ -686,6 +692,8 @@ export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = []
   // Statuses the human switched off. Stored as the excluded set, so every
   // status starts shown — including one this list has not seen yet.
   const [filteredOut, setFilteredOut] = useState<Set<string>>(new Set());
+  // One request for the whole list, and none while no row has a formula.
+  const formulaNames = useScriptFormulaNames(videos.some(hasFormula));
 
   function handleAction(videoId: string, action: string, video: Video, extra?: Record<string, unknown>) {
     const kind = action.includes("reject") ? "reject" : "approve";
@@ -836,7 +844,7 @@ export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = []
                   >
                     {video.title || video.topic}
                   </div>
-                  <ActionMeta video={video} scriptProfiles={scriptProfiles} agents={agents} />
+                  <ActionMeta video={video} scriptProfiles={scriptProfiles} agents={agents} formulaNames={formulaNames} />
                 </div>
 
                 {/* Buttons */}

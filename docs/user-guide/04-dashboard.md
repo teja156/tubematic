@@ -156,7 +156,7 @@ Creates a video from a topic you type.
 | **Title** | Required. Up to 70 characters. It is the name shown on cards |
 | **Topic** | Required. The full brief the agent writes the script from |
 | **Agent**, **Model**, **Effort** | Optional. **Automatic** lets Tubematic choose the agent by share |
-| **Script profile**, **Visual style**, **Voice** | Optional |
+| **Script profile**, **Formula**, **Visual style**, **Voice** | Optional. **Formula** on **Auto** lets the agent pick the script's structure for the topic |
 | **Automatically approve topic** | Ticked by default, so the agent starts on the script. Untick it to review the topic on the Pipeline page first |
 
 The video is filed under a domain called **Manual Videos** and has no score. After you submit, the
@@ -176,7 +176,7 @@ and post links. An archived video cannot be played or restored.
 ### Topics
 
 Holds the research mode toggles, the mining sources, and a row for each domain. Each row sets the
-domain's default visual style, voice, script profile and mascot, and its topic cap. A curriculum
+domain's default visual style, voice, script profile, formula and mascot, and its topic cap. A curriculum
 seed also has a **Pause topic generation** button.
 
 [Using Tubematic](03-using-tubematic.md#where-topics-come-from) explains each of these.
@@ -249,11 +249,13 @@ Pickers beside the buttons set how the next stage is done.
 
 | Status | Pickers |
 |---|---|
-| Topic Proposed | Script profile, visual style, mascot, voice, agent, model, effort |
+| Topic Proposed | Script profile, visual style, mascot, voice, agent, model, effort. The video's window also has the formula |
 | Script Ready | Voice, agent, model, effort |
 | Video Ready | Agent, model, effort. These apply when you request a revision |
 
-- The script profile, visual style and mascot are fixed once you approve the topic.
+- The script profile, visual style, mascot and formula are fixed once you approve the topic. At
+  Script Ready you can still switch to the runner-up style or formula, which has the script
+  rewritten (see [Script formulas](03-using-tubematic.md#changing-the-formula-at-script-ready)).
 - You can change the voice at Topic Proposed and at Script Ready. At Script Ready, a voice whose
   model cannot speak the script is greyed out. Each voice is labelled with its model. The **▶**
   button beside the picker plays a sample.

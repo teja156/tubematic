@@ -88,6 +88,10 @@ One row per video, from proposed topic to published file.
 | `hook_type` | TEXT NOT NULL | `''` | The hook type of the opening the script uses, or `''` |
 | `hook_alternatives` | TEXT NOT NULL | `''` | JSON array of the three openings the agent drafted, `{type, text, kept, note}`, or `''` |
 | `script_warnings` | TEXT NOT NULL | `''` | JSON array of the [script warnings](08-scripting-and-voice.md#script-warnings) for the stored script, `{id, message}`. `''` when no script write has run the checks |
+| `formula_choice` | TEXT NOT NULL | `''` | The formula a person chose for the video, or `''` for Auto. Seeded from the domain's `default_formula_id`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for a formula switch at `SCRIPT_READY` |
+| `formula_pick` | TEXT NOT NULL | `''` | The formula the script is written in, decided before the script. `''` means not decided. See [How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked) |
+| `formula_runner_up` | TEXT NOT NULL | `''` | The formula that came second, offered as a switch at `SCRIPT_READY`, or `''` |
+| `formula_reason` | TEXT NOT NULL | `''` | One sentence on why the formula was picked |
 | `tts_text` | TEXT NOT NULL | `''` | The text sent to ElevenLabs, after pronunciation substitution |
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
@@ -265,6 +269,7 @@ A domain. Every video files into one, whatever its research mode.
 | `default_voice_id` | TEXT NOT NULL | `''` | The voice every new video in the domain starts with, whatever its `strategy`. `''` means the install default |
 | `default_script_profile_id` | TEXT NOT NULL | `''` | The [script profile](08-scripting-and-voice.md#script-profiles) the domain's `curriculum` videos start with. `''` means none |
 | `default_mascot_id` | TEXT NOT NULL | `''` | The mascot new videos start with, whatever their `strategy`. `''` inherits the install's `default_mascot_id` setting. `none` means no mascot |
+| `default_formula_id` | TEXT NOT NULL | `''` | The [formula](08-scripting-and-voice.md#formulas) every new video in the domain is written in, whatever its `strategy`. `''` means Auto: a formula is picked for each video |
 | `topic_cap` | INTEGER NOT NULL | `100` | How many topics the domain may ever hold, 25 to 750. See [Topic cap](02-pipeline.md#topic-cap) |
 | `created_at` | TEXT NOT NULL | | |
 
@@ -272,8 +277,8 @@ The API and the MCP server check `description` only when it changes, so a longer
 stored is kept. The limit is low because `list_projects` returns every domain's description on
 every research run.
 
-The four defaults are copied into the video's own column (`videos.voice_id`,
-`videos.script_profile_id` and so on) when the video is created. Changing one does not reach videos
+The five defaults are copied into the video's own column (`videos.voice_id`,
+`videos.script_profile_id`, `videos.formula_choice` and so on) when the video is created. Changing one does not reach videos
 already filed.
 
 - `default_visual_style` and `default_script_profile_id` apply to `curriculum` videos only, because
@@ -284,6 +289,9 @@ already filed.
 - `default_script_profile_id` is skipped if the profile is deleted or not `READY`, because the
   approving `PATCH` would refuse it.
 - A `default_mascot_id` that names an archived or unapproved mascot reads as none.
+- `default_formula_id` applies to every new video, like the voice. One that is no formula in the
+  installed version seeds nothing. An experimental formula is allowed here whatever the
+  `auto_experimental_formulas` setting says, because the setting covers what Auto may pick.
 
 The API and the MCP server check `topic_cap`, because SQLite cannot add a `CHECK` to an existing
 table. Every video ever filed counts, archived and rejected included. At the cap the domain is
@@ -716,6 +724,7 @@ only in the pre-migration backup.
 | `0020_style_pick.sql` | Adds `videos.style_pick`, `style_runner_up` and `style_reason`, `''` on every existing video | No |
 | `0021_last_render.sql` | Adds `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu` and `last_render_seconds`, empty on every existing video | No |
 | `0023_script_record.sql` | Adds `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, `''` on every existing video | No |
+| `0025_formula_pick.sql` | Adds `videos.formula_choice`, `formula_pick`, `formula_runner_up` and `formula_reason` and `projects.default_formula_id`, `''` on every existing row | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so

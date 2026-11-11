@@ -1,0 +1,84 @@
+{
+  "id": "stake-first-list",
+  "order": 130,
+  "family": "ladder",
+  "experimental": true,
+  "label": "Stake-First List",
+  "line": "The stake first, then the question and the count, then three items with one concrete tool or number each, the least expected one last.",
+  "best_for": [
+    "practical advice or a set of checks",
+    "the separate reasons one thing is fast, safe or cheap"
+  ],
+  "also_for": [
+    "the causes of one problem, when they do not form a chain"
+  ],
+  "avoid_for": [
+    "items that form a sequence: that is a flow",
+    "more than four items",
+    "a list with no stake: nothing makes the viewer need it"
+  ],
+  "signals": [
+    "the topic is a set of separate items",
+    "a pain or a figure makes the list worth having",
+    "each item has one concrete tool, number or example",
+    "one item is less expected than the rest"
+  ],
+  "styles": [
+    "whiteboard",
+    "system_flow",
+    "terminal_doc"
+  ],
+  "words": [
+    130,
+    200
+  ],
+  "beats": [
+    {
+      "name": "Stake",
+      "from": 0,
+      "to": 20,
+      "job": "The pain or the figure that makes the list necessary."
+    },
+    {
+      "name": "Question and count",
+      "from": 20,
+      "to": 28,
+      "job": "How to reverse it, and how many things there are. Say the last one is the odd one."
+    },
+    {
+      "name": "Items",
+      "from": 28,
+      "to": 90,
+      "job": "One vivid name and one concrete tool or number each, the least expected last."
+    },
+    {
+      "name": "The odd one, explained",
+      "from": 90,
+      "to": 100,
+      "job": "Why the last item holds. Stop there."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "problem",
+      "shape": "You will not [goal] while [pain]. So how do you [reverse it]? There are three things."
+    },
+    {
+      "type": "number",
+      "shape": "[N] things make [X] [quality]. The last one sounds wrong."
+    },
+    {
+      "type": "question",
+      "shape": "Why is [X] so [quality] when [similar thing] is not?"
+    }
+  ],
+  "holds": "The stake makes the list worth sitting through, the count tells the viewer how far along they are, and the promise about the last item holds them to the end.",
+  "ending": "The last item and why it holds, then stop.",
+  "pitfalls": [
+    "The bare list label as the opening",
+    "Items of equal weight with nothing saved for last",
+    "A summary or an ask after the last item",
+    "An item with no tool, number or example"
+  ],
+  "template": "[Pain or figure]. So how do you [reverse it]? There are three things. One: [vivid name]. [Concrete tool or number]. Two: [vivid name]. [Concrete]. And the odd one: [vivid name]. [Concrete]. It sounds wrong, but [why it holds]."
+}
