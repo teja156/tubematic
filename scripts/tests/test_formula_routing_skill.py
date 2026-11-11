@@ -133,3 +133,9 @@ def test_the_operator_names_the_routing_skill_on_a_script_revision():
     operator = (SKILLS / "tubematic-operator" / "SKILL.md").read_text(encoding="utf-8")
     row = next(line for line in operator.splitlines() if "**Script revision**" in line)
     assert "tubematic-formula-routing" in row and "formula_routing.choice" in row
+
+
+def test_a_pick_in_a_revision_always_goes_back_to_a_person():
+    part = _text()[_text().index("## A revision"):_text().index("## Worked example")]
+    assert "only for a script revision" in part
+    assert "never take a video on to voicing or scenes after a pick in a revision" in part

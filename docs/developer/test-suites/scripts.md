@@ -725,8 +725,9 @@ Covers the `tubematic-formula-routing` skill
   when there is one.
 - The operator runs it after style routing and before the script-writing skill at
   `TOPIC_APPROVED`, and names it on a script revision. A revision runs it for a video with no
-  formula, and a person's choice is kept with a comment saying so. Rotation is skipped beside a
-  person's choice. The uninstaller and the skills README know it.
+  formula, and a person's choice is kept with a comment saying so. A pick in a revision is for a
+  script revision only and always goes back to a person. Rotation is skipped beside a person's
+  choice. The uninstaller and the skills README know it.
 
 Trap: a skill that named formulas would prefer the ones it knew about, and a new formula would need
 an edit to be picked. The candidates are data for that reason.

@@ -116,8 +116,8 @@ script. The `tubematic-formula-routing` skill makes the choice from data and
 [`choose_script_formula`](06-mcp-server.md#choose_script_formula) records it. The script-writing
 skill then writes in the pick. On a video whose formula is decided (a pick, or with no pick a
 person's `formula_choice`), `update_video` refuses a `formula_id` that differs from it and a write
-of new words with no record at all. `set_video_status` refuses `SCRIPT_READY` and `VOICE_READY`
-while the stored script's `formula_id` is not the pick: a formula switch leaves another formula
+of new words with no record at all. `set_video_status` refuses `SCRIPT_READY`, `VOICING` and
+`VOICE_READY` while the stored script's `formula_id` is not the pick: a formula switch leaves another formula
 there and an opening switch clears it, so the video moves on only after a rewrite records it.
 
 ```mermaid
@@ -186,7 +186,8 @@ These events change a pick:
 | [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula) | The pick and the runner-up swap, `formula_choice` becomes the new pick, and the video returns to `TOPIC_APPROVED` to be rewritten |
 | [`POST /videos/<id>/switch-opening`](05-http-api.md#post-videosvideo_idswitch-opening) | The pick stays, or becomes the script's `formula_id` on a video with no pick. Another stored opening is marked as the one in use, `formula_id` is cleared, and the video returns to `TOPIC_APPROVED` to be rewritten from it |
 
-A video scripted before picks existed has an empty `formula_pick`. A script revision keeps its
+A pick or a choice that names a formula the installed version does not have counts as none, so
+the video is picked for again. A video scripted before picks existed has an empty `formula_pick`. A script revision keeps its
 stored `formula_id`, and one with no stored `formula_id` runs the routing skill first. An agent
 running an older skill against the current server writes its own formula, or none, which is
 accepted unless a person chose a formula for the video; then it is refused and the video waits for

@@ -143,7 +143,8 @@ If you go back to 2.1.x later:
   Topic Proposed or on the **New Video** page, and for every new video of a domain with the
   **Formula** picker on its row on the **Topics** page. Left on **Auto**, the agent picks.
 - **Switch to …** at Script Ready takes the runner-up formula, and the agent writes a new script
-  in it. On a video whose formula you chose, the runner-up is the one Auto would have picked.
+  in it. On a video whose formula you chose, the runner-up is the one Auto would have picked, or
+  Auto's second choice when it agreed with you.
 - Eight experimental formulas, among them a list that opens on what is at stake, a news take and a
   rise-and-fall story told from its end. Auto picks them only while **Experimental formulas** is on
   in **Settings → Preferences**, and you can choose one yourself at any time. See

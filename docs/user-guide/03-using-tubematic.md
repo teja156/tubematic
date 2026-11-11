@@ -256,7 +256,8 @@ In the video's window, **Formula** names the formula and **Why this formula** gi
 the runner-up. The formula's name follows the word Auto when the agent picked it.
 
 - **Switch to <runner-up>** has the script rewritten in the runner-up formula. On a video whose
-  formula you chose, the runner-up is the formula Auto would have picked.
+  formula you chose, the runner-up is the formula Auto would have picked, or Auto's second choice
+  when Auto picked the same formula as you.
 - **Use this opening**, on the **Script** tab, has the script rewritten from another of the three
   openings.
 

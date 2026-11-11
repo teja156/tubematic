@@ -446,7 +446,8 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   non-blank string within its cap (100 and 2000 characters). MCP `update_video` applies the same
   rule (see [Publishing](14-publishing.md#schema)). A `script` written here clears the video's
   `formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, because they describe the
-  script it replaces. Only MCP `update_video` writes them.
+  script it replaces, and the formula pick (`formula_pick`, `formula_runner_up`,
+  `formula_reason`), because a script written by hand follows no formula. `formula_choice` stays. Only MCP `update_video` writes them.
 - `voice_id` must be on the roster, or `""` for the install default.
 - `formula_choice` must be a [formula](08-scripting-and-voice.md#formulas) id, or `""` for Auto. An
   experimental formula is accepted whatever the `auto_experimental_formulas` setting says, because

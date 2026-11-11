@@ -172,7 +172,10 @@ If the call refuses:
 
 A script revision keeps the formula: rewrite in `formula_routing.pick`.
 
-Run this skill at `REVISION_REQUESTED` in two cases. The candidates are in `get_video` then.
+Run this skill at `REVISION_REQUESTED` only for a script revision (the operator skill decides
+which kind of revision it is), and only in two cases. The candidates are in `get_video` then.
+A new formula always means a new script that goes back to `SCRIPT_READY` for a person to approve;
+never take a video on to voicing or scenes after a pick in a revision.
 
 - **The person's comment asks for a different structure** ("tell it as a story", "make it a
   list") and `formula_routing.choice` is `""`. Decide as above, with the comment as the strongest

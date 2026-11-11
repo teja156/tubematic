@@ -321,8 +321,9 @@ columns are cleared too. A style a person chose is kept, with its recorded canva
 `UPDATE` empties `formula_pick`, `formula_runner_up` and `formula_reason`, so the formula is picked
 again for the revised topic. A person's `formula_choice` is kept.
 
-A move to `SCRIPT_READY` or `VOICE_READY` is refused while a `formula_pick` is set and the stored
-script's `formula_id` is not it. A formula switch leaves another formula there and an opening
+A move to `SCRIPT_READY`, `VOICING` or `VOICE_READY` is refused while a `formula_pick` is set and
+the stored script's `formula_id` is not it. The refusal for `VOICING` and `VOICE_READY` tells the
+agent that a new formula means a new script for a person to approve. A formula switch leaves another formula there and an opening
 switch clears it, until the agent rewrites the script; handing the video on first would show one
 formula over a script in another. The check is repeated in the `UPDATE`'s `WHERE`.
 

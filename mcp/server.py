@@ -1406,18 +1406,35 @@ _STALE_SCRIPT_SQL = ("COALESCE(formula_pick, '') != '' "
 
 
 # Statuses a video reaches only with a script settled in its formula: the
-# script checkpoint, and the scene stage a revision returns to (a re-pick in a
-# revision is followed by a rewrite, never by scenes over the old script).
-_SETTLED_SCRIPT_STATUSES = ("SCRIPT_READY", "VOICE_READY")
+# script checkpoint, the paid voicing (a pronunciation revision goes there
+# straight from REVISION_REQUESTED), and the scene stage a revision returns to.
+_SETTLED_SCRIPT_STATUSES = ("SCRIPT_READY", "VOICING", "VOICE_READY")
 
 
-def _stale_script_error(con, video_id: str) -> dict:
+def _stale_script_error(con, video_id: str, new_status: str) -> dict:
     row = con.execute("SELECT formula_pick FROM videos WHERE id = ?", (video_id,)).fetchone()
-    return {"error": f"The stored script is not recorded as written in {row['formula_pick']!r}, "
-                     "the formula picked for this video (a person switched the formula or the "
-                     "opening, or the script was never recorded). Rewrite the script with "
-                     f"update_video, formula_id={row['formula_pick']!r} and the hooks, before "
-                     "moving the video on."}
+    pick = row["formula_pick"]
+    if new_status != "SCRIPT_READY":
+        # A new formula is a new script: it goes to a person and is voiced
+        # again. Rewriting and going straight on would put the new words over
+        # the old voice, or voice a script nobody approved.
+        return {"error": f"The stored script is not recorded as written in {pick!r}, the formula "
+                         f"picked for this video, so it cannot go to {new_status}. A new formula "
+                         "is a new script: rewrite it with update_video, "
+                         f"formula_id={pick!r} and the hooks, then move the video to "
+                         "SCRIPT_READY for a person to approve."}
+    return {"error": f"The stored script is not recorded as written in {pick!r}, the formula "
+                     "picked for this video (a person switched the formula or the opening, or "
+                     "the script was never recorded). Rewrite the script with update_video, "
+                     f"formula_id={pick!r} and the hooks, before moving the video on."}
+
+
+def _live_formula(formula_id) -> str:
+    """formula_id when this version has that formula, else "". A pick or a
+    choice of a formula a later version dropped is treated as none, so the
+    video is picked for again rather than bound to a formula no tool accepts."""
+    formula_id = (formula_id or "").strip()
+    return formula_id if formula_id in tformulas.FORMULAS else ""
 
 
 def _person_formula_choice(row) -> str:
@@ -1430,7 +1447,7 @@ def _person_formula_choice(row) -> str:
 def _formula_routing(video: dict) -> dict:
     """get_video's formula_routing: the formula decision so far and, while it
     can still be made, the candidates."""
-    pick = video.get("formula_pick") or ""
+    pick = _live_formula(video.get("formula_pick"))
     choice = _person_formula_choice(video)
     recent = _recent_domain_formulas(video.get("project_id"), video["id"])
     candidates = []
@@ -1977,7 +1994,7 @@ def set_video_status(
         if new_status in _SETTLED_SCRIPT_STATUSES:
             if con.execute(f"SELECT 1 FROM videos WHERE id = ? AND {_STALE_SCRIPT_SQL}",
                            (video_id,)).fetchone():
-                return _stale_script_error(con, video_id)
+                return _stale_script_error(con, video_id, new_status)
             mascot_sql += f" AND NOT ({_STALE_SCRIPT_SQL})"
         # The only_if guard is enforced in the UPDATE's own WHERE clause (not
         # a separate SELECT-then-compare) so the check-and-set is atomic —
@@ -2016,7 +2033,7 @@ def set_video_status(
                 if new_status in _SETTLED_SCRIPT_STATUSES and con.execute(
                         f"SELECT 1 FROM videos WHERE id = ? AND {_STALE_SCRIPT_SQL}",
                         (video_id,)).fetchone():
-                    return _stale_script_error(con, video_id)
+                    return _stale_script_error(con, video_id, new_status)
                 if fresh and not fresh["archived_at"]:
                     mascot_err = _approval_mascot_error(con, video_id)
                     if mascot_err:
@@ -2796,7 +2813,7 @@ def update_video(
         # return to the topic, and both send the video back to be rewritten.
         # With no pick on record, a person's choice still binds: a writer
         # that skipped the pick (an older skill) must not replace it.
-        bound = vrow["formula_pick"] or _person_formula_choice(vrow)
+        bound = _live_formula(vrow["formula_pick"]) or _person_formula_choice(vrow)
         if formula_id is not None and bound and formula_id != bound:
             return {"error": f"formula_id {formula_id!r} is not this video's formula. The script "
                              f"is to be written in {bound!r} (get_video's formula_routing: the "
@@ -3374,7 +3391,8 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
                          "(get_video().style_routing.decided is false). Pick the style first "
                          "with choose_visual_style: the formula is chosen for the style."}
     choice = _person_formula_choice(row)
-    held = row["formula_pick"] or ""
+    held_raw = row["formula_pick"] or ""
+    held = _live_formula(held_raw)
     if row["status"] == "TOPIC_APPROVED":
         if held:
             return {"error": f"The formula {held!r} is already picked for this video; the choice "
@@ -3423,7 +3441,7 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
             "AND COALESCE(formula_choice, '') = ? AND COALESCE(formula_pick, '') = ? "
             "AND COALESCE(visual_style, '') = ? AND COALESCE(style_pick, '') = ?",
             (pick, runner, stored, _now(), video_id, row["status"], row["formula_choice"] or "",
-             held, row["visual_style"] or "", row["style_pick"] or ""))
+             held_raw, row["visual_style"] or "", row["style_pick"] or ""))
         if cur.rowcount == 0:
             return {"error": "The video changed while the call was in flight (its status, style "
                              "or formula) — check get_video before deciding again"}

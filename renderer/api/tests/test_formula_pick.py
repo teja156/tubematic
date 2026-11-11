@@ -260,6 +260,18 @@ def test_a_script_revision_keeps_the_pick(client, db_path):
     assert _row(db_path)["formula_pick"] == "follow-the-flow"
 
 
+def test_a_script_written_by_hand_drops_the_pick_and_keeps_the_choice(client, db_path):
+    # A flat script follows no formula; a pick left beside it would name one
+    # the words do not follow.
+    _video(db_path, choice="follow-the-flow")
+    resp = client.patch("/videos/vid_1", json={"script": "New words.", "publish_title": "t",
+                                               "publish_description": "d"})
+    assert resp.status_code == 200
+    row = _row(db_path, cols=("formula_pick", "formula_runner_up", "formula_choice", "formula_id"))
+    assert row == {"formula_pick": "", "formula_runner_up": "", "formula_choice": "follow-the-flow",
+                   "formula_id": ""}
+
+
 def test_a_style_switch_drops_the_formula_pick_so_it_is_made_for_the_new_style(client, db_path):
     _video(db_path, choice="")
     con = sqlite3.connect(db_path)

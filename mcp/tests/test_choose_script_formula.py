@@ -499,7 +499,7 @@ def test_a_re_pick_in_a_revision_cannot_go_on_to_scenes_unrewritten(db):
     _video(status="REVISION_REQUESTED", formula_id="follow-the-flow", pick="scene-story")
     out = server.set_video_status("vid_1", "VOICE_READY",
                                   only_if_current_status="REVISION_REQUESTED")
-    assert "Rewrite the script" in out["error"] and _row()["status"] == "REVISION_REQUESTED"
+    assert "cannot go to VOICE_READY" in out["error"] and _row()["status"] == "REVISION_REQUESTED"
 
 
 def test_a_repeat_reason_is_not_stored_for_a_formula_that_is_not_recent(db):
@@ -524,3 +524,39 @@ def test_a_topic_sent_back_or_rejected_does_not_count_as_recent(db, status):
     _video()
     assert server.get_video("vid_1")["formula_routing"]["recent"] == {"formulas": [],
                                                                      "hook_types": []}
+
+
+
+# ── a formula a later version dropped ────────────────────────────────────────
+
+def test_a_pick_of_a_dropped_formula_is_picked_again(db):
+    # Bound to a formula no tool accepts, the video could never be scripted.
+    _video(pick="retired-formula")
+    routing = server.get_video("vid_1")["formula_routing"]
+    assert routing["decided"] is False and routing["pick"] == ""
+    assert len(routing["candidates"]) == len(tf.FORMULAS)
+    out = server.choose_script_formula("vid_1", "scene-story", REASON)
+    assert out["formula_pick"] == "scene-story"
+
+
+def test_a_pick_of_a_dropped_formula_does_not_bind_the_script(db):
+    _video(pick="retired-formula")
+    out = server.update_video(
+        "vid_1", script_segments=[{"id": "seg-1", "voice": "One. Two.", "visual": "x"}],
+        publish_title="t", publish_description="d")
+    assert "error" not in out
+
+
+# ── voicing and scenes need a settled script ─────────────────────────────────
+
+def test_a_re_pick_in_a_revision_cannot_be_voiced_unrewritten(db):
+    _video(status="REVISION_REQUESTED", formula_id="follow-the-flow", pick="scene-story")
+    out = server.set_video_status("vid_1", "VOICING", only_if_current_status="REVISION_REQUESTED")
+    assert "cannot go to VOICING" in out["error"] and "SCRIPT_READY" in out["error"]
+    assert _row()["status"] == "REVISION_REQUESTED"
+
+
+def test_the_voice_ready_refusal_sends_a_new_script_to_a_person(db):
+    _video(status="REVISION_REQUESTED", formula_id="follow-the-flow", pick="scene-story")
+    out = server.set_video_status("vid_1", "VOICE_READY")
+    assert "move the video to SCRIPT_READY for a person to approve" in out["error"]

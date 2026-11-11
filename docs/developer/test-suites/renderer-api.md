@@ -305,7 +305,7 @@ Covers `POST /videos/<id>/switch-formula`, `POST /videos/<id>/switch-opening`, `
   opening switch is refused for the opening already in use, an index outside the stored openings
   or of the wrong type, and a script with no stored openings. A refusal changes nothing.
 - A move back to `TOPIC_PROPOSED` empties the pick and keeps the person's choice. A script revision
-  keeps the pick. A style switch empties the pick.
+  keeps the pick. A style switch empties the pick, and so does a script written through `PATCH`.
 - `formula_choice` is writable at `TOPIC_PROPOSED` only, takes `""` for Auto and an experimental
   formula with the setting off, and refuses a value that is no formula.
 - `default_formula_id` is stored, is reset by an edit that leaves it out, must be a formula when it

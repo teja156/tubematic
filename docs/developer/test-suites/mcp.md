@@ -649,8 +649,10 @@ Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's de
 - A move back to `TOPIC_PROPOSED`, guarded or not, empties the pick and keeps the person's choice.
   A script revision keeps the pick.
 - A move to `SCRIPT_READY`, guarded or not, is refused while the stored script's formula is not
-  the pick, including a pick with no record. A move to `VOICE_READY` after a re-pick in a revision
-  is refused the same way. A rewritten script and a script from before picks pass.
+  the pick, including a pick with no record. A move to `VOICING` or `VOICE_READY` after a re-pick
+  in a revision is refused the same way, with a refusal that sends the new script to a person.
+- A pick of a formula the installed version lacks counts as none: the video is offered the
+  candidates and picked for again, and a script write is not bound to it. A rewritten script and a script from before picks pass.
 - Only a formula marked recent stores the repeat note. Recent counts the pick ahead of a switched
   script's record, and leaves out a topic sent back or rejected.
 - The domain's default formula seeds every new video whatever its strategy. A default that is no

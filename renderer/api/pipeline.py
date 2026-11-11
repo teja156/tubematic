@@ -3102,8 +3102,12 @@ def create_pipeline_blueprint() -> Blueprint:
             # A script written here is a flat one with no formula and no
             # openings, and nothing has checked it: the record update_video
             # stored for the script it replaces would describe other words.
+            # The pick goes too: a script written by hand follows no formula,
+            # and a pick left beside it would name one the words do not
+            # follow. A person's formula_choice stays for the next rewrite.
             if "script" in fields:
                 set_sql.append(tformulas.RECORD_CLEAR_SET)
+                set_sql.append(tformulas.PICK_RESET_SET)
             where_sql, where_params = "", []
             # Bind the write to the status the freeze was checked against.
             # Without onlyIfCurrentStatus, that check and this UPDATE are two
