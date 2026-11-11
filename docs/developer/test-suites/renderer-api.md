@@ -331,7 +331,9 @@ the audio was not made with. The ledger is ignored from `TOPIC_PROPOSED` through
 revision may have switched the voice, and the old row would pair the new voice with the old model.
 
 A video spoken in two voices reports the model of the video's own voice, read from the ledger rows
-tagged with it, and lists the other voices of its segments in `other_voices`.
+tagged with it, and lists the other voices of its segments in `other_voices`. A changed install
+default still reports the voiced model, and a video whose own voice spoke no line reports the
+current setting.
 
 ### `test_voice_speed.py`
 

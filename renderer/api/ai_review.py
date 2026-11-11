@@ -578,8 +578,8 @@ def run_ai_review(video_path: str, scene_config: dict, *,
         api_key: Gemini credential. Passed in for the same reason as `model`
             — the key now lives in the settings table (TMDEV-73) and this
             module must stay DB-free. Empty falls back to env.
-        voices: the names of the voices the narration is spoken in, the
-            video's own first. Two or more add the note that a change of
+        voices: the names of the voices the narration is spoken in, in the
+            order they first speak. Two or more add the note that a change of
             speaker is intended (TMDEV-216); fewer add nothing.
 
     Returns:

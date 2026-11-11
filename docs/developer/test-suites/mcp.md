@@ -261,6 +261,8 @@ Covers a voice per segment and a voice's speed in `generate_voice` and `update_v
   at `VOICING`.
 - `update_video` keeps a segment's voice, drops one equal to the video's, refuses one off the roster,
   and checks each segment's markup against its own voice. The roster reader keeps a valid speed.
+- A pronunciation fix that resends the same words without any `voice_id` keeps the stored voices,
+  and a rewrite with new words and no `voice_id` gives every line to the video's voice.
 - The real join, when an `ffmpeg` is found on the host, measures each run and keeps the total
   length. It is skipped otherwise; the MCP image has `ffmpeg`.
 

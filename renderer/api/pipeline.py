@@ -1392,9 +1392,6 @@ def _voice_info(con, video: dict, settings: dict) -> dict:
     """
     voice_id = video.get("voice_id") or settings["elevenlabs_voice_id"] or ""
     entry = next((v for v in settings["elevenlabs_voices"] if v["voice_id"] == voice_id), None)
-    voiced = None
-    if video.get("status") not in _PRE_VOICE_STATUSES:
-        voiced = tusage.last_voice_model(con, video["id"], voice_id)
     # The other voices its segments name (TMDEV-216), in script order, by
     # their roster entry; a voice that has left the roster reads as its id.
     roster = {v["voice_id"]: v for v in settings["elevenlabs_voices"]}
@@ -1403,6 +1400,9 @@ def _voice_info(con, video: dict, settings: dict) -> dict:
         vid = tvoice.segment_voice_id(seg)
         if vid and vid != voice_id and vid not in other_ids:
             other_ids.append(vid)
+    voiced = None
+    if video.get("status") not in _PRE_VOICE_STATUSES:
+        voiced = tusage.last_voice_model(con, video["id"], voice_id, other_ids)
     others = [{"voice_id": vid,
                "name": roster[vid]["name"] if vid in roster else "",
                "model_id": roster[vid]["model_id"] if vid in roster else ""}

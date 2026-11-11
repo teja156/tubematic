@@ -2656,6 +2656,24 @@ def update_video(
         if script_segments is not None or script is not None:
             target = _resolve_voice(voice_id if voice_id is not None else stored_voice)
             if script_segments is not None:
+                # A pronunciation fix resends the same words. One that leaves
+                # out every segment's voice_id keeps the voices stored by
+                # segment id, so a second voice's lines are not moved to the
+                # video's voice on the paid re-voice that follows (TMDEV-216).
+                stored_segs = (json.loads(vrow["script_segments"])
+                               if vrow["script_segments"] else [])
+
+                def _words(segs):
+                    return " ".join(_strip_non_spoken(_join_segment_voice(segs)).split())
+
+                if (stored_segs
+                        and not any(isinstance(s, dict) and "voice_id" in s for s in script_segments)
+                        and any(tvoice.segment_voice_id(s) for s in stored_segs)
+                        and _words(script_segments) == _words(stored_segs)):
+                    kept = {str(s.get("id")): tvoice.segment_voice_id(s) for s in stored_segs}
+                    script_segments = [{**s, "voice_id": kept[str(s.get("id"))]}
+                                       if kept.get(str(s.get("id"))) else s
+                                       for s in script_segments]
                 # A segment may name its own voice (TMDEV-216). One equal to
                 # the video's voice is dropped, so a stored voice_id always
                 # means another voice; then every segment's markup is checked

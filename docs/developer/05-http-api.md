@@ -324,7 +324,8 @@ row.
   current roster model and `model_voiced` is `false`. The same applies when the ledger has no
   voicing row. `model_id` is `""` when neither is known.
 - A video spoken in more than one voice has one voicing row per run, each tagged with its voice.
-  `model_id` is read from the rows of the video's own voice.
+  `model_id` is read from the rows of the video's own voice. When the video's own voice spoke no
+  line, `model_id` is the current setting with `model_voiced` `false`.
 - `other_voices` lists the other voices the video's segments name, in script order. `name` and
   `model_id` are `""` for one that has left the roster.
 

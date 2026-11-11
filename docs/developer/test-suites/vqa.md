@@ -111,6 +111,9 @@ because `server.py` imports its sibling modules when it loads.
 A script with a second voice is staged run by run, through `mcp/server.py::_plan_voice_runs`, the
 planning `generate_voice` uses.
 
+`test_review_video.py` also checks that a two-voice video is reviewed with its voices' names, the
+list the render worker passes, so a second voice is not reported as a defect.
+
 ### `test_host_side_imports.py`
 
 Covers the import fallback at the top of `renderer/api/pipeline.py` and `mcp/server.py`.

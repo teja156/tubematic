@@ -1052,7 +1052,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                                   );
                                 })}
                               </select>
-                            ) : seg.voice_id ? (
+                            ) : seg.voice_id && seg.voice_id !== videoVoiceId ? (
                               <div
                                 data-testid={`segment-voice-name-${seg.id}`}
                                 style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", marginBottom: 6 }}

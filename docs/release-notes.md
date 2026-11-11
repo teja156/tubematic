@@ -60,7 +60,8 @@ If you go back to 2.1.x later:
   Doc or Under the Hood starts its new videos on Auto under 2.1.x.
 - If any voice in **Settings → Voice** has a speed other than 1.00x, 2.1.x reads the whole voice
   list as empty and stops voicing. Set every speed back to 1.00x before you go back. A script that
-  gives lines to a second voice is voiced entirely in the video's voice on 2.1.x.
+  gives lines to a second voice is voiced entirely in the video's voice on 2.1.x, or refused before
+  voicing when a line's pause or pronunciation markup does not suit that voice.
 
 ### Added
 

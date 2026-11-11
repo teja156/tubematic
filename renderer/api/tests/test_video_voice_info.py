@@ -189,3 +189,19 @@ def test_an_old_untagged_voicing_does_not_answer_once_other_voices_spoke(client,
                         operation="voice", units={"credits": 100}, videos=["vid-1"],
                         raw={"voice_id": "r1"})
     assert _info(client)["model_id"] == "eleven_multilingual_v2"
+
+
+def test_a_video_whose_own_voice_spoke_nothing_reports_no_voiced_model(client, db_path):
+    """Every segment had another voice: that voice's model is not the video
+    voice's, so the Voice model row falls back to the current setting."""
+    _video(db_path)
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET script_segments = ? WHERE id = 'vid-1'", (json.dumps([
+        {"id": "s1", "voice": "Hi.", "visual": "", "voice_id": "r1"}]),))
+    con.commit()
+    con.close()
+    tusage.record_usage(db_path, service="elevenlabs", model="eleven_multilingual_v2",
+                        operation="voice", units={"credits": 100}, videos=["vid-1"],
+                        raw={"voice_id": "r1"})
+    info = _info(client)
+    assert info["model_id"] == "eleven_v3" and info["model_voiced"] is False

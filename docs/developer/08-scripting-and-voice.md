@@ -269,6 +269,11 @@ segment that has no voice of its own. A change of the video's voice alone does n
 segments, so a segment can then name the video's own voice, and every reader treats it as the
 video's voice.
 
+A pronunciation fix resends the segments with the same spoken words and a tag added. When such a
+write carries no `voice_id` on any segment, `update_video` keeps each segment's stored voice by
+segment id, because the re-voice that follows is paid and would otherwise speak a second voice's
+lines in the video's voice.
+
 ### Voice previews
 
 `POST /voices/<voice_id>/preview` generates or replays a cached sample of a roster voice, spoken

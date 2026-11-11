@@ -331,3 +331,32 @@ def test_the_roster_reader_keeps_a_speed_and_drops_a_roster_with_a_bad_one(job_d
     assert server._get_voices()[1]["speed"] == 1.15
     _roster(TEJA, {**RACHEL, "speed": 1.33})
     assert server._get_voices() == []
+
+
+def _stored_segments(video_id):
+    with server._conn() as con:
+        return json.loads(con.execute("SELECT script_segments FROM videos WHERE id = ?",
+                                      (video_id,)).fetchone()[0])
+
+
+def test_a_pronunciation_fix_without_voice_ids_keeps_the_second_voice(job_db, voice_env):
+    """The fix resends the same words, with a tag added. A resend that leaves
+    out every voice_id must not move the second voice's lines to the video's
+    voice on the paid re-voice that follows."""
+    _roster(TEJA, RACHEL)
+    job_db("v1", status="REVISION_REQUESTED", voice_id="t1", script="Meet Vhagar. Wait what.",
+           script_segments=[_seg("s1", "Meet Vhagar."), _seg("s2", "Wait what.", voice_id="r1")])
+    r = server.update_video("v1", script_segments=[
+        _seg("s1", '<respell as="Vaygar">Vhagar</respell>'.join(["Meet ", "."])),
+        _seg("s2", "Wait what.")], **PUBLISH)
+    assert "error" not in r
+    assert _stored_segments("v1")[1]["voice_id"] == "r1"
+
+
+def test_a_rewrite_without_voice_ids_gives_every_line_to_the_video_voice(job_db, voice_env):
+    _roster(TEJA, RACHEL)
+    job_db("v1", status="TOPIC_APPROVED", voice_id="t1", script="Meet Vhagar. Wait what.",
+           script_segments=[_seg("s1", "Meet Vhagar."), _seg("s2", "Wait what.", voice_id="r1")])
+    server.update_video("v1", script_segments=[
+        _seg("s1", "New words here."), _seg("s2", "And more.")], **PUBLISH)
+    assert all("voice_id" not in s for s in _stored_segments("v1"))
