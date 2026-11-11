@@ -367,8 +367,9 @@ child process. A remote renderer has no `/jobs` volume and runs none.
 - It writes each still to the path the request names, so the renderer mounts `/jobs` read-write.
   Its port takes requests with no credential, so `cartoon-tools/out-path.mjs::planRequest` checks
   every file a request would write before it bundles or opens a browser, and the server answers 400
-  to a path outside `/jobs/<video_id>/cartoon/` (symlinks resolved) or to frames that are not
-  non-negative integers. The server then writes only the files that were checked.
+  to a path outside `/jobs/<video_id>/cartoon/`, a path through any symlink, or frames that are not
+  non-negative integers. It checks again once the request's turn comes, since renders are
+  serialised, and then writes only the files that were checked.
 - It listens on `TUBEMATIC_STILLS_PORT` (4455) on the Compose network only. The MCP container
   reaches it as `TUBEMATIC_STILLS_SERVER`, and renders its stills locally when it does not answer.
 - It renders one still at a time and shares the GPU with renders.

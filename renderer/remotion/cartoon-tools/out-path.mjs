@@ -4,32 +4,33 @@
 import fs from "node:fs";
 import path from "node:path";
 
-/** `p` with every symlink in its existing part resolved: the nearest ancestor that exists goes through realpath and
- *  the part not yet created is appended, so a planted link cannot carry a write out of the public directory */
-const real = (p) => {
-  let head = path.resolve(p);
-  const tail = [];
-  for (;;) {
+/** the first part of `rel` below `publicDir` that is a symlink (dangling or not), or null: a planted link could
+ *  carry a write out of the public directory, so none is followed (the rule mcp/cartoon.py::_below keeps too) */
+const linkIn = (publicDir, rel) => {
+  let at = path.resolve(publicDir);
+  for (const part of rel.split(path.sep)) {
+    at = path.join(at, part);
+    let st;
     try {
-      return path.join(fs.realpathSync(head), ...tail);
+      st = fs.lstatSync(at);
     } catch {
-      const up = path.dirname(head);
-      if (up === head) return path.join(head, ...tail);
-      tail.unshift(path.basename(head));
-      head = up;
+      return null;           // not created yet, so nothing below it exists either
     }
+    if (st.isSymbolicLink()) return at;
   }
+  return null;
 };
 
 /** why `p` may not be written (null when it may); `dir` checks a directory that PNGs will be written into */
 export const outPathError = (publicDir, p, { dir = false } = {}) => {
   if (typeof p !== "string" || !p) return "no output path was given";
-  const rel = path.relative(real(publicDir), real(p));
+  const rel = path.relative(path.resolve(publicDir), path.resolve(p));
   const parts = rel.split(path.sep);
   const inCartoon = !path.isAbsolute(rel) && parts[0] !== ".." && parts[0] !== "" && parts[1] === "cartoon";
   if (!inCartoon || parts.length < (dir ? 2 : 3)) return `${p} is not under ${path.join(publicDir, "<video>", "cartoon")}`;
   if (!dir && !p.endsWith(".png")) return `${p} is not a .png file`;
-  return null;
+  const link = linkIn(publicDir, rel);
+  return link ? `${p} goes through the symlink ${link}` : null;
 };
 
 const isFrame = (f) => Number.isInteger(f) && f >= 0;

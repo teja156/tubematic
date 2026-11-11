@@ -187,9 +187,13 @@ const server = http.createServer(async (req, res) => {
           if (!serveUrl || !browser) throw Object.assign(e instanceof Error ? e : new Error(String(e)), { startFailed: true });
           throw e;
         }
+        // again now that the request has had its turn: renders are serialised, and a link planted while it waited
+        // would otherwise go unchecked
+        const again = planRequest(PUBLIC, req.url, b);
+        if (again.error) throw Object.assign(new Error(again.error), { refused: true });
         const outs = [];
         const logs = [];
-        for (const { frame, out } of plan.targets) {
+        for (const { frame, out } of again.targets) {
           fs.mkdirSync(path.dirname(out), { recursive: true });
           logs.push(...(await one(comp, props, frame, out, scale)));
           outs.push(out);
@@ -204,6 +208,7 @@ const server = http.createServer(async (req, res) => {
       try {
         return json(res, 200, await p);
       } catch (e) {
+        if (e?.refused) return json(res, 400, { ok: false, error: e.message });
         if (!e?.startFailed) throw e;
         startFailed = String(e?.message ?? e);
         console.log(`[stills] could not start (${startFailed}); exiting so the renderer starts it again`);

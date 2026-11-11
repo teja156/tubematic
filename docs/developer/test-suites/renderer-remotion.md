@@ -82,8 +82,9 @@ write, before it bundles or opens a browser.
   pass, and an output directory under a video's `cartoon/` folder passes.
 - A path elsewhere in `/jobs`, outside it, relative, or escaping with `..` is refused, as is a file that
   is not a PNG and a missing path.
-- A path that goes through a planted symlink out of the public directory is refused. A folder not
-  yet created passes.
+- A path through any symlink is refused, a dangling one and one pointing back inside included,
+  because a dangling link at the end of the path looks like a file not yet created. A folder not yet
+  created passes.
 - `planRequest` returns the exact frame and file pairs the server writes. Frames that are not a list
   of non-negative integers are refused, because a string iterates character by character and would
   skip the per-file check. A `/stills` prefix that climbs out of the folder is refused.

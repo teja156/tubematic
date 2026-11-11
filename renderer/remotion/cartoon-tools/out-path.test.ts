@@ -46,19 +46,25 @@ describe("outPathError with symlinks", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "out-path-"));
   const pub = path.join(root, "jobs");
   const outside = path.join(root, "elsewhere");
-  fs.mkdirSync(path.join(pub, "vid_a", "cartoon"), { recursive: true });
+  fs.mkdirSync(path.join(pub, "vid_a", "cartoon", "beatgate"), { recursive: true });
   fs.mkdirSync(outside);
   fs.symlinkSync(outside, path.join(pub, "vid_a", "cartoon", "stills"));
   fs.symlinkSync(outside, path.join(pub, "vid_b"));
+  // a dangling link: its target does not exist yet, so a realpath check would read it as "not created"
+  fs.symlinkSync(path.join(outside, "new.png"), path.join(pub, "vid_a", "cartoon", "beatgate", "beat00-f0001.png"));
+  fs.symlinkSync(path.join(pub, "vid_a", "cartoon", "beatgate"), path.join(pub, "vid_a", "cartoon", "inside"));
   afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
 
-  it("follows a planted link out of the public directory and refuses it", () => {
-    expect(outPathError(pub, path.join(pub, "vid_a", "cartoon", "stills", "f0001.png"))).toMatch(/is not under/);
-    expect(outPathError(pub, path.join(pub, "vid_b", "cartoon", "f0001.png"))).toMatch(/is not under/);
+  it("refuses any path through a symlink, dangling or not, even one pointing back inside", () => {
+    expect(outPathError(pub, path.join(pub, "vid_a", "cartoon", "stills", "f0001.png"))).toMatch(/goes through the symlink/);
+    expect(outPathError(pub, path.join(pub, "vid_b", "cartoon", "f0001.png"))).toMatch(/goes through the symlink/);
+    expect(outPathError(pub, path.join(pub, "vid_a", "cartoon", "beatgate", "beat00-f0001.png"))).toMatch(/goes through the symlink/);
+    expect(outPathError(pub, path.join(pub, "vid_a", "cartoon", "inside", "x.png"))).toMatch(/goes through the symlink/);
+    expect(fs.existsSync(path.join(outside, "new.png"))).toBe(false);
   });
 
   it("allows a real folder, including parts not yet created", () => {
-    expect(outPathError(pub, path.join(pub, "vid_a", "cartoon", "beatgate", "beat00-f0001.png"))).toBeNull();
+    expect(outPathError(pub, path.join(pub, "vid_a", "cartoon", "beatgate", "beat01-f0002.png"))).toBeNull();
     expect(outPathError(pub, path.join(pub, "vid_new", "cartoon", "stills", "f0001.png"))).toBeNull();
   });
 });
