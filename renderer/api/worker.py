@@ -835,10 +835,30 @@ def _poll_video_metrics() -> None:
             " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (_METRICS_STAMP_KEY, db._now()))
 
+    _fill_video_durations()
     result = metrics.poll(DB_PATH, api_key)
     if result["snapshots"] or result["errors"]:
         log.info(f"metrics: {result['snapshots']} snapshot(s) across "
                  f"{result['accounts']} account(s), {result['errors']} error(s)")
+
+
+def _fill_video_durations() -> None:
+    """Store the length of published videos that have none (TMDEV-212).
+
+    Analytics divides Instagram's watched seconds by it, and the only other
+    record is timeline.json, which goes when the video is archived. This runs
+    with the hourly metrics pass so the share shows while the video is still
+    on disk; pipeline.archive_video stores the length itself when the files
+    go. Never raises: a missing length costs one blank figure, and must not
+    cost the pass it rides on.
+    """
+    try:
+        stored = pipeline.fill_video_durations(DB_PATH)
+    except Exception:  # noqa: BLE001 - see the docstring
+        log.exception("storing video lengths failed")
+        return
+    if stored:
+        log.info(f"stored the length of {stored} published video(s)")
 
 
 # ── Retention (TMDEV-84) ────────────────────────────────────────────────────

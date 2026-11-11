@@ -492,6 +492,111 @@ def extract_metrics(platform: str, metrics: dict | None) -> dict:
     return out
 
 
+# How long people watched (TMDEV-212). Read from a snapshot's stored payload
+# when a page asks, never copied into columns: the payload is already kept
+# whole, so every snapshot ever taken is covered and a corrected mapping
+# applies to all of them.
+#
+# Each entry is (payload key, divisor that turns it into the unit named).
+# A measure a platform does not report has no entry and reads None. TikTok's
+# consumer connection reports counts only, so it has none at all. Facebook's
+# names are from postforme's API reference.
+_RETENTION_FIELDS = {
+    "youtube":   {"avg_watch_secs": ("averageViewDuration", 1),
+                  "watched_pct": ("averageViewPercentage", 1),
+                  "engaged_views": ("engagedViews", 1)},
+    "instagram": {"avg_watch_secs": ("ig_reels_avg_watch_time", 1000),
+                  "reach": ("reach", 1), "saves": ("saved", 1)},
+    "facebook":  {"avg_watch_secs": ("video_avg_time_watched", 1000),
+                  "length_secs": ("video_length", 1000),
+                  "reach": ("reach", 1)},
+    "tiktok":    {},
+}
+
+RETENTION_KEYS = ("avg_watch_secs", "watched_pct", "stayed_pct", "engaged_views", "reach", "saves")
+
+# No platform counts this many of anything. Past it a value is damage, and an
+# integer that large cannot be divided into a float at all.
+_MAX_READING = 1e15
+
+
+def _number(value):
+    """A reported figure, or None. A bool is a number to Python, a negative
+    count is not a reading and neither is an absurdly large one, so none of
+    them passes."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value != value or value < 0 or value > _MAX_READING:
+        return None
+    return value
+
+
+def extract_retention(platform: str, metrics: dict | None, duration_secs=None) -> dict:
+    """Watch figures from one platform payload: seconds watched, the share of
+    the video watched (percent), the share of views that stayed to watch
+    (percent), engaged views, reach and saves.
+
+    Same contract as extract_metrics: an absent figure is None, never 0, and
+    an unknown platform is all None. Never raises, whatever the payload holds.
+
+    A 0 share is None as well, and so is an average of 0 seconds that comes
+    with no share of the platform's own. Nobody watches for no time: a
+    platform sends 0 for a post it has not measured yet, and a 0 would count
+    in a group's median as a video nobody stayed on. Both are judged as the
+    page shows them, to one decimal, so 30 ms is no seconds whatever the
+    video's length. YouTube reports whole seconds, so 0 seconds beside a real
+    share is a view of under a second and is kept. Counts are
+    different, since nobody saving a video is a reading, and so is stayed to
+    watch: YouTube's views and engaged views come from one report, so 0
+    engaged of some views was measured.
+
+    `duration_secs` is the video's own length. It is used where the payload
+    has seconds and neither a share (a 0 share counts as none) nor a length
+    of its own, which is always the case on Instagram; without it that share
+    is None. A share above 100
+    is kept as it is, since a looping Short is watched more than once.
+    """
+    fields = _RETENTION_FIELDS.get(platform, {})
+    metrics = metrics if isinstance(metrics, dict) else {}
+
+    def read(name):
+        key, divisor = fields.get(name, (None, 1))
+        value = _number(metrics.get(key)) if key else None
+        return None if value is None else value / divisor
+
+    def shown(value):
+        """A figure as the page shows it: one decimal, or None for one that
+        is not a figure at all (a division by a vanishing number)."""
+        return None if value is None or value > _MAX_READING else round(value, 1)
+
+    out = dict.fromkeys(RETENTION_KEYS)
+    out["engaged_views"] = read("engaged_views")
+    out["reach"] = read("reach")
+    out["saves"] = read("saves")
+
+    seconds = read("avg_watch_secs")
+    out["avg_watch_secs"] = shown(seconds)
+    # The platform's own share, when it sent one that is not 0.
+    out["watched_pct"] = shown(read("watched_pct")) or None
+    if out["watched_pct"] is None:
+        if not out["avg_watch_secs"]:
+            # No share and no seconds once rounded: nothing was measured.
+            out["avg_watch_secs"] = None
+        else:
+            length = read("length_secs") or _number(duration_secs)
+            if length:
+                out["watched_pct"] = shown(seconds / length * 100) or None
+
+    views = _number(extract_metrics(platform, metrics)["views"])
+    if out["engaged_views"] is not None and views:
+        out["stayed_pct"] = shown(out["engaged_views"] / views * 100)
+
+    for key in ("engaged_views", "reach", "saves"):
+        if out[key] is not None:
+            out[key] = int(out[key])
+    return out
+
+
 # ── content mapping ──────────────────────────────────────────────────────────
 
 def compose_caption(title: str, description: str) -> str:
