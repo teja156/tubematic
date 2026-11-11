@@ -50,7 +50,7 @@ def test_the_list_starts_with_auto_and_holds_every_pack():
     assert tvs.VISUAL_STYLES[0] == "auto"
     assert set(tvs.VISUAL_STYLES[1:]) == {p.stem for p in tvs.PACKS_DIR.glob("*.json")}
     assert {"motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow",
-            "bean_explainer", "whiteboard", "terminal_doc"} <= set(tvs.VISUAL_STYLES)
+            "bean_explainer", "whiteboard", "storybook_atlas", "terminal_doc"} <= set(tvs.VISUAL_STYLES)
 
 
 def test_effective_canvas():
@@ -107,6 +107,22 @@ def test_bean_explainer():
     assert "review" in p and "captions" in p
     assert len(p["extra"]["props"]) >= 40
     assert tvs.effective_canvas("bean_explainer", "dark") == "light"
+
+
+def test_storybook_atlas():
+    p = tvs.pack("storybook_atlas")
+    assert p["renderer"] == "dom" and p["canvas"] == "light"
+    assert p["authoring_skill"] == "tubematic-storybook-atlas"
+    assert p["experimental"] is True
+    # its guide and people are figures of its own, neither line art nor generated characters
+    assert tvs.figures_allowed("storybook_atlas") is True
+    assert tvs.line_art_allowed("storybook_atlas") is False
+    assert tvs.characters_allowed("storybook_atlas") is False
+    assert not any(p["needs"].values())
+    assert "review" in p and "captions" in p and "script" in p
+    assert p["captions"]["background"] == "label"
+    assert len(p["extra"]["props"]) >= 40 and len(p["extra"]["backdrops"]) >= 10
+    assert tvs.effective_canvas("storybook_atlas", "dark") == "light"
 
 
 def test_terminal_doc():

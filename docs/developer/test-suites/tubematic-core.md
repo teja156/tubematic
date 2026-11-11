@@ -94,9 +94,10 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   as the table in the test says.
 - The refusal messages come from the packs, and the GPU gate passes only `working`.
 - `public_list` explains an unavailable style, and `agent_view` names the authoring skill.
-- System Flow, Bean Explainer and Terminal Doc each have their renderer, canvas, skill and permissions
-  pinned; Bean Explainer's bean counts as a figure but neither line art nor a generated character.
-  Terminal Doc's captions are the `log` look, and each skin changes only caption keys.
+- System Flow, Bean Explainer, Storybook Atlas and Terminal Doc each have their renderer, canvas,
+  skill and permissions pinned; Bean Explainer's bean and Storybook Atlas's people count as figures
+  but neither line art nor generated characters. Storybook Atlas's captions use the `label`
+  background, Terminal Doc's are the `log` look, and each Terminal Doc skin changes only caption keys.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
   routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
   apart from.

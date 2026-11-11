@@ -22,6 +22,26 @@ does not run `npm test`, so run the suite yourself after you change either modul
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).
 
+## Storybook Atlas
+
+### `src/scenes/installed/storybookAtlas/storybookAtlas.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the glyphs, the plates' gauge and the prop library
+([Storybook Atlas](../10-scene-authoring.md#storybook-atlas)).
+
+- The constants, title wrapping and walks agree with the shared cases `mcp/tests/test_storybook_atlas.py`
+  runs.
+- The style pack lists the coats, backdrops, poses and knobs the renderer draws, and no others, and its
+  `extra.props` equals the catalogue the library declares beside its drawings; its captions use the
+  `label` background and the bundled serif.
+- Every library prop has a box, a place, at least one act, a second state when it can `switch` or
+  `cycle`, and a portal inside its box; the door and the porthole have portals. Every glyph the
+  contract allows can be lettered, and a nine-letter word fits its plate.
+- A `switch` shows the second drawing and stays there; a transform act runs for its length and stops;
+  the gauge needle overshoots and settles on its value with no remainder; a plate opens, holds and closes; the
+  example pushes out of its first chapter and wipes into its third; its events stay inside their
+  chapters.
+
 ## Bean Explainer
 
 ### `src/scenes/installed/beanExplainer/beanExplainer.test.ts`

@@ -356,8 +356,10 @@ for generic roles only. `system_flow` is the exception: it has no photographs, s
 place there is a labelled component (`"Alice's laptop"` as a `user` or `phone` node), and the
 narration names it. `bean_explainer` has none either: a named thing there is a prop with its name
 on it (a `sign`, a `note`, an address in a `browser` bar). Neither has `whiteboard`: a named person
-or place there is written on the board or drawn as a simple doodle with a label. `terminal_doc` has
-none: a named thing there is its name, a string, number or quoted source on a dark screen.
+or place there is written on the board or drawn as a simple doodle with a label. `storybook_atlas` has
+none either: a named person there is a picture-book figure with a name tag, and a named object is a
+library prop or one drawn for the video. `terminal_doc` has none: a named thing there is its name, a
+string, number or quoted source on a dark screen.
 
 ### The treatment follows the beat's subject, not the writer's habit
 

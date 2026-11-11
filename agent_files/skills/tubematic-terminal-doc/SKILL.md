@@ -72,8 +72,8 @@ event is wrong. Fix every problem it lists, then write again.
   `../../installed/terminalDoc/kit` (or `contract`) with a static `import` (never `require` or
   `import(...)`), and uses no filter, gradient (SVG or CSS), backdrop filter, blend mode, pattern,
   dashed stroke, image, audio or video, `staticFile`, `delayRender`, fetch, randomness, clock,
-  `performance.now`, state, effects or timers (`useState`, `useRef`, `useEffect`, `setTimeout`),
-  `useCurrentFrame` or `useVideoConfig`: it is a pure function of `t`. The check reads comments too,
+  `performance.now`, state, effects or timers (`useState`, `useRef`, `useEffect`, `setTimeout`), the
+  page (`window`, `document`), `eval`, `useCurrentFrame` or `useVideoConfig`: it is a pure function of `t`. The check reads comments too,
   so do not name any of these in a comment either.
 
 ## Step 0 — read

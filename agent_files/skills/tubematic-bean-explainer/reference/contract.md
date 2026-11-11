@@ -64,8 +64,12 @@ A bean stands on the floor line (y 0.68) and is about 0.27 of the frame wide and
 
 At most 8 per video. The file default-exports one component taking `PropDrawProps` from
 `../../installed/beanExplainer/props/common`, imports nothing else but `react`, `remotion` and that
-folder's `bean` and `contract`, and uses no filter, gradient, pattern, dashed stroke, image, embedded
-HTML, fetch, randomness or clock. `example-prop-rocket.tsx` is a worked example; `render_bean_props`
+folder's `bean` and `contract` with a static `import`, and uses no filter, gradient (SVG or CSS),
+backdrop filter, blend mode, pattern, dashed stroke, image, embedded HTML, audio or video, `staticFile`,
+`delayRender`, fetch, `import(...)`, randomness, clock, `performance.now`, `crypto`, timers
+(`setTimeout`, `requestAnimationFrame`), the page (`window`, `document`, `globalThis`), `eval` or a
+`Function` constructor. The check reads the whole file, so do not name any of these in a comment either.
+`example-prop-rocket.tsx` is a worked example; `render_bean_props`
 shows yours.
 
 ## The prop library
