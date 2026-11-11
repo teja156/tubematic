@@ -119,7 +119,7 @@ One row per video, from proposed topic to published file.
 | `last_render_renderer_name` | TEXT NOT NULL | `''` | That renderer's name at the time of the render, so a later rename or removal leaves it unchanged |
 | `last_render_on_gpu` | INTEGER NOT NULL | `0` | `1` when that render ran on the GPU |
 | `last_render_seconds` | REAL NOT NULL | `0` | The Remotion run as the renderer measured it, the figure `render_timings` keeps. It excludes fetching the bundle and uploading the mp4. `0` means not reported |
-| `duration_secs` | REAL | NULL | The published video's length in seconds, stored from `timeline.json` by the worker's hourly pass and by `archive_video` as it deletes the files. NULL means not known. Analytics divides Instagram's watched seconds by it. See [Watch figures](14-publishing.md#watch-figures) |
+| `duration_secs` | REAL | NULL | The video's length in seconds, stored from `timeline.json` by the worker's hourly pass and by `archive_video` as it deletes the files. NULL means not known. Analytics divides Instagram's watched seconds by it. See [Watch figures](14-publishing.md#watch-figures) |
 | `publish_title` | TEXT NOT NULL | `''` | The title the video is posted with, written by the agent with the script. Separate from `title` |
 | `publish_description` | TEXT NOT NULL | `''` | The post's description, written by the agent with the script |
 | `scheduled_at` | TEXT NOT NULL | `''` | When a scheduled post goes out, UTC. `''` means not scheduled. The worker moves a `SCHEDULED` video to `PUBLISHING` once it has passed. See [Scheduling a post](14-publishing.md#scheduling-a-post) |

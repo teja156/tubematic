@@ -540,17 +540,20 @@ def extract_retention(platform: str, metrics: dict | None, duration_secs=None) -
     an unknown platform is all None. Never raises, whatever the payload holds.
 
     A 0 share is None as well, and so is an average of 0 seconds that comes
-    with no share. Nobody watches for no time: a platform sends 0 for a post
-    it has not measured yet, and a 0 would count in a group's median as a
-    video nobody stayed on. YouTube reports whole seconds, so 0 seconds beside
-    a real share is a view of under a second and is kept. Counts are
+    with no share of the platform's own. Nobody watches for no time: a
+    platform sends 0 for a post it has not measured yet, and a 0 would count
+    in a group's median as a video nobody stayed on. Both are judged as the
+    page shows them, to one decimal, so 30 ms is no seconds whatever the
+    video's length. YouTube reports whole seconds, so 0 seconds beside a real
+    share is a view of under a second and is kept. Counts are
     different, since nobody saving a video is a reading, and so is stayed to
     watch: YouTube's views and engaged views come from one report, so 0
     engaged of some views was measured.
 
     `duration_secs` is the video's own length. It is used where the payload
-    has seconds and neither a share nor a length of its own, which is always
-    the case on Instagram; without it that share is None. A share above 100
+    has seconds and neither a share (a 0 share counts as none) nor a length
+    of its own, which is always the case on Instagram; without it that share
+    is None. A share above 100
     is kept as it is, since a looping Short is watched more than once.
     """
     fields = _RETENTION_FIELDS.get(platform, {})
@@ -561,31 +564,33 @@ def extract_retention(platform: str, metrics: dict | None, duration_secs=None) -
         value = _number(metrics.get(key)) if key else None
         return None if value is None else value / divisor
 
+    def shown(value):
+        """A figure as the page shows it: one decimal, or None for one that
+        is not a figure at all (a division by a vanishing number)."""
+        return None if value is None or value > _MAX_READING else round(value, 1)
+
     out = dict.fromkeys(RETENTION_KEYS)
-    out["avg_watch_secs"] = read("avg_watch_secs")
     out["engaged_views"] = read("engaged_views")
     out["reach"] = read("reach")
     out["saves"] = read("saves")
 
-    out["watched_pct"] = read("watched_pct")
-    if out["watched_pct"] is None and out["avg_watch_secs"]:
-        length = read("length_secs") or _number(duration_secs)
-        if length:
-            out["watched_pct"] = out["avg_watch_secs"] / length * 100
+    seconds = read("avg_watch_secs")
+    out["avg_watch_secs"] = shown(seconds)
+    # The platform's own share, when it sent one that is not 0.
+    out["watched_pct"] = shown(read("watched_pct")) or None
+    if out["watched_pct"] is None:
+        if not out["avg_watch_secs"]:
+            # No share and no seconds once rounded: nothing was measured.
+            out["avg_watch_secs"] = None
+        else:
+            length = read("length_secs") or _number(duration_secs)
+            if length:
+                out["watched_pct"] = shown(seconds / length * 100) or None
 
     views = _number(extract_metrics(platform, metrics)["views"])
     if out["engaged_views"] is not None and views:
-        out["stayed_pct"] = out["engaged_views"] / views * 100
+        out["stayed_pct"] = shown(out["engaged_views"] / views * 100)
 
-    # Checked on what will be shown: a division by a vanishing length or view
-    # count is not a figure, and 30 ms is 0 seconds once rounded.
-    for key in ("avg_watch_secs", "watched_pct", "stayed_pct"):
-        if out[key] is not None:
-            out[key] = round(out[key], 1) if out[key] <= _MAX_READING else None
-    if not out["watched_pct"]:
-        out["watched_pct"] = None
-        if not out["avg_watch_secs"]:
-            out["avg_watch_secs"] = None
     for key in ("engaged_views", "reach", "saves"):
         if out[key] is not None:
             out[key] = int(out[key])

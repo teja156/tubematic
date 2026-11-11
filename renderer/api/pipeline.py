@@ -1063,15 +1063,24 @@ def _video_duration_secs(video_id: str):
     return None
 
 
+# No video here is a day long. A length past this is a damaged timeline.
+MAX_STORED_DURATION_SECS = 86400
+
+
 def _readable_duration_secs(video_id: str):
     """_video_duration_secs, or None for a timeline it cannot make sense of
     (an fps that is not a number, say). For callers that must carry on."""
     try:
-        return _video_duration_secs(video_id)
+        duration = _video_duration_secs(video_id)
     except Exception:  # noqa: BLE001 - any shape of bad file means "not known"
         log.warning("could not read the length of %s from its timeline", video_id,
                     extra={"video_id": video_id})
         return None
+    # The value is stored once and returned with every video. 1e999 in a
+    # damaged file parses to infinity, which no browser can read back as JSON.
+    if duration is None or not 0 < duration <= MAX_STORED_DURATION_SECS:
+        return None
+    return duration
 
 
 def fill_video_durations(db_path: str) -> int:
@@ -2022,12 +2031,14 @@ def _watch_group_of(dimension: str, row) -> tuple:
     larger group comes first."""
     if dimension == "visual_style":
         style = row["visual_style"] or ""
-        if tvs.pack(style):
-            return style, tvs.route_label(style), 0
-        # "auto" that never became a pack is the mixed scene system.
         if style in ("", tvs.AUTO):
+            # "auto" that never became a pack is the mixed scene system,
+            # unless Auto took the video to the Cartoon 3D renderer, which
+            # some videos record in resolved_renderer alone.
+            if row["resolved_renderer"] == "cartoon_3d" and tvs.pack("cartoon_3d"):
+                return "cartoon_3d", tvs.route_label("cartoon_3d"), 0
             return tvs.SCENES, tvs.SCENES_LABEL, 0
-        return style, style, 0
+        return style, tvs.route_label(style), 0
     if dimension == "script_profile":
         profile = row["script_profile_id"] or ""
         if not profile:
@@ -4721,8 +4732,9 @@ def create_pipeline_blueprint() -> Blueprint:
             if not account_id and accounts:
                 account_id = accounts[0]["id"]
             fetched = con.execute(
-                "SELECT vp.platform, v.visual_style, v.script_profile_id, v.project_id,"
-                " v.script, v.duration_secs, sp.name AS profile_name, p.name AS project_name,"
+                "SELECT vp.platform, v.visual_style, v.resolved_renderer, v.script_profile_id,"
+                " v.project_id, v.script, v.duration_secs, sp.name AS profile_name,"
+                " p.name AS project_name,"
                 " m.raw_json" + _LATEST_METRIC_FROM
                 + " LEFT JOIN script_profiles sp ON sp.id = v.script_profile_id"
                   " LEFT JOIN projects p ON p.id = v.project_id"
@@ -5094,6 +5106,12 @@ def create_pipeline_blueprint() -> Blueprint:
         _settings, api_key, err = _publishing_context()
         if err:
             return err
+        # As the worker's hourly pass does: a post first read from here would
+        # otherwise show Instagram's seconds with no share until that pass.
+        try:
+            fill_video_durations(db_path)
+        except Exception:  # noqa: BLE001 - a missing length must not fail the refresh
+            log.exception("storing video lengths failed")
         return jsonify(metrics_poll.poll(db_path, api_key))
 
     # ── /script-profiles ──────────────────────────────────────────────────────

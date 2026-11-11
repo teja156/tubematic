@@ -603,17 +603,17 @@ host's timezone.
 | `saves` | None | `saved` | None | None |
 
 - A figure a platform does not report is null. Zero views gives a null `stayed_pct`.
-- A `watched_pct` of 0 is null, and so is an `avg_watch_secs` of 0 that comes with no share. A
-  platform sends 0 for a post it has not measured yet, and a 0 would enter a group's median as a
-  video nobody watched. The rule applies to the rounded figures. YouTube reports whole seconds, so
-  0 seconds beside a share above 0 is kept.
+- A `watched_pct` of 0 is null, and so is an `avg_watch_secs` of 0 that comes with no share of the
+  platform's own. A platform sends 0 for a post it has not measured yet, and a 0 would enter a
+  group's median as a video nobody watched. Both are judged after rounding to one decimal. YouTube
+  reports whole seconds, so 0 seconds beside a share above 0 is kept.
 - A count of 0 (`reach`, `saves`, `engaged_views`) is kept, and so is a `stayed_pct` of 0 when the
   post has views.
 - A value that is not a number, is negative or is above `_MAX_READING` is null, and so is a
   computed figure above it. No payload makes the function raise.
 - A `watched_pct` above 100 is kept, because a looping Short is watched more than once.
 - A payload with seconds and no share or length of its own takes `videos.duration_secs` as the
-  length. Instagram's payloads are always in that case.
+  length. A share of 0 counts as no share. Instagram's payloads are always in that case.
 - TikTok's metrics hold four counts and no watch figure. postforme reports more for a TikTok
   Business connection, which Tubematic does not support.
 - Facebook's key names come from postforme's API reference.
@@ -629,14 +629,15 @@ parses a payload for them.
 Instagram reports no share and no video length, so its `watched_pct` needs `videos.duration_secs`.
 Two places store it from the video's `timeline.json`:
 
-- `pipeline.py::fill_video_durations`, called by the worker with the hourly analytics poll, covers
-  every video that has a publication, is not archived and has no length yet. The share then shows
-  while the video is still on disk.
+- `pipeline.py::fill_video_durations`, called by the worker with the hourly analytics poll and by
+  `POST /analytics/refresh`, covers every video that has a publication, is not archived and has no
+  length yet. The share then shows while the video is still on disk.
 - `pipeline.py::archive_video` stores it in the statement that archives the video, because
   archiving deletes `timeline.json`. This covers the retention sweep and a delete from the
   dashboard.
 
-A timeline that cannot be read leaves the length null. A video archived by a version that did not
+A timeline that cannot be read, or that gives a length above `MAX_STORED_DURATION_SECS`, leaves the
+length null. A video archived by a version that did not
 store lengths keeps a null length, and its Instagram posts report no `watched_pct`.
 
 ### `GET /analytics/watch-time`
@@ -650,7 +651,7 @@ a time because each platform counts a view and a watched second in its own way.
   those posts. `videos` counts every post in the group.
 - `min_group` is `pipeline.py::WATCH_MIN_GROUP` (20). The dashboard marks a group with fewer videos.
 - `pipeline.py::_watch_group_of` places a post in a group. A `visual_style` of `auto` or `''` reads
-  as "Mixed scenes". Script length is the word count of `videos.script` without its markup
+  as "Mixed scenes", or as Cartoon 3D when `resolved_renderer` is `cartoon_3d`. Script length is the word count of `videos.script` without its markup
   (`_script_words`), in the bands of `SCRIPT_LENGTH_BANDS`.
 - Groups come largest first. Script length bands come shortest first.
 

@@ -117,14 +117,29 @@ def test_an_average_of_no_seconds_is_not_a_reading(platform, raw):
     assert (out["avg_watch_secs"], out["watched_pct"]) == (None, None)
 
 
-def test_an_average_that_rounds_to_no_seconds_is_not_a_reading_either():
-    """30 ms is 0.0 s and 0.1% once rounded. The rule is applied to what is
-    shown, so the page never shows 0 s for a post nobody measured."""
-    out = postforme.extract_retention("instagram", dict(INSTAGRAM, ig_reels_avg_watch_time=30))
-    assert (out["avg_watch_secs"], out["watched_pct"]) == (None, None)
+@pytest.mark.parametrize("length", [None, 20, 60, 90])
+def test_an_average_that_rounds_to_no_seconds_is_not_a_reading_either(length):
+    """30 ms is 0.0 s to one decimal. The rule is applied to what the page
+    shows, so it never shows 0 s for a post nobody measured, and the answer
+    does not depend on how long the video happens to be."""
     out = postforme.extract_retention("instagram", dict(INSTAGRAM, ig_reels_avg_watch_time=30),
-                                      duration_secs=60)
-    assert (out["avg_watch_secs"], out["watched_pct"]) == (0.0, 0.1)
+                                      duration_secs=length)
+    assert (out["avg_watch_secs"], out["watched_pct"]) == (None, None)
+
+
+def test_a_reported_share_of_zero_counts_as_no_share():
+    """So it gets the same stand-in an absent share gets. Otherwise the same
+    video would show a share or a dash depending on whether the platform sent
+    a 0 or left the key out."""
+    raw = dict(YOUTUBE, averageViewDuration=12, averageViewPercentage=0)
+    assert postforme.extract_retention("youtube", raw, duration_secs=30)["watched_pct"] == 40.0
+    assert postforme.extract_retention("youtube", raw)["watched_pct"] is None
+
+
+def test_real_seconds_whose_share_rounds_to_nothing_keep_the_seconds():
+    out = postforme.extract_retention("instagram", dict(INSTAGRAM, ig_reels_avg_watch_time=200),
+                                      duration_secs=4000)
+    assert (out["avg_watch_secs"], out["watched_pct"]) == (0.2, None)
 
 
 def test_whole_seconds_that_come_to_zero_beside_a_real_share_are_kept():
@@ -467,6 +482,22 @@ def test_grouping_by_visual_style_uses_the_packs_label(client, env):
     assert groups["a_style_since_removed"]["videos"] == 1
 
 
+def test_a_video_auto_took_to_the_cartoon_3d_renderer_is_grouped_as_cartoon_3d(client, env):
+    """Such a video keeps visual_style "auto" and records the renderer alone.
+    It is a 3D video, and the tab exists to compare looks, so it must not sit
+    with the mixed scenes."""
+    _video(env, "vid_auto3d", style="auto")
+    _video(env, "vid_forced3d", style="cartoon_3d")
+    _video(env, "vid_mixed", style="auto")
+    _sql(env, "UPDATE videos SET resolved_renderer = 'cartoon_3d' WHERE id = 'vid_auto3d'")
+    _sql(env, "UPDATE videos SET resolved_renderer = 'dom' WHERE id = 'vid_mixed'")
+    for vid in ("vid_auto3d", "vid_forced3d", "vid_mixed"):
+        _post(env, vid, "youtube", "spc_yt", YOUTUBE)
+    groups = _dimension(_watch(client), "visual_style")
+    assert groups[pipeline.tvs.route_label("cartoon_3d")]["videos"] == 2
+    assert groups["Mixed scenes"]["videos"] == 1
+
+
 def test_grouping_by_script_profile_names_the_profile(client, env):
     _sql(env, "INSERT INTO script_profiles (id, name, status, created_at, updated_at)"
               " VALUES ('prof_1', 'Calm teacher', 'READY', 'now', 'now')")
@@ -579,6 +610,42 @@ def test_one_unreadable_timeline_does_not_stop_the_others(env):
     assert pipeline.fill_video_durations(env.db) == 1
     assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_a'") is None
     assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_b'") == 60
+
+
+@pytest.mark.parametrize("timeline", [
+    '{"audioDurationSeconds": 1e999}', '{"totalFrames": 2700, "fps": 1e-320}',
+    '{"audioDurationSeconds": 90000}'])
+def test_a_length_that_is_not_a_length_is_never_stored(env, timeline):
+    """1e999 parses to infinity. Stored, it would come back with every video
+    as a value no browser can read, on every page that lists videos, until
+    someone fixed the row by hand."""
+    _video(env, "vid_a")
+    _post(env, "vid_a", "instagram", "spc_ig")
+    job = env.jobs / "vid_a"
+    job.mkdir()
+    (job / "timeline.json").write_text(timeline)
+    assert pipeline.fill_video_durations(env.db) == 0
+    assert pipeline.archive_video(env.db, "vid_a", {"PUBLISHED"}, "human", "x")["result"] == "archived"
+    assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_a'") is None
+
+
+def test_refreshing_metrics_stores_lengths_like_the_hourly_pass(client, env, monkeypatch):
+    """A post first read by the Refresh button would otherwise show
+    Instagram's seconds with no share until the worker's next pass."""
+    _sql(env, "INSERT OR REPLACE INTO settings VALUES ('publishing_enabled', 'true')")
+    _sql(env, "INSERT OR REPLACE INTO settings VALUES ('postforme_api_key', 'pfm-key')")
+    monkeypatch.setattr(pipeline.metrics_poll, "poll",
+                        lambda *_a, **_k: {"accounts": 1, "snapshots": 1, "errors": 0})
+    _video(env, "vid_a")
+    _post(env, "vid_a", "instagram", "spc_ig", INSTAGRAM)
+    _timeline(env, "vid_a", 94.0)
+    assert client.post("/analytics/refresh").status_code == 200
+    assert _one(env, "SELECT duration_secs FROM videos WHERE id = 'vid_a'") == 94.0
+
+    def boom(_db):
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(pipeline, "fill_video_durations", boom)
+    assert json.loads(client.post("/analytics/refresh").data)["snapshots"] == 1
 
 
 def test_the_retention_sweep_stores_the_length_as_it_deletes_the_files(env, monkeypatch):

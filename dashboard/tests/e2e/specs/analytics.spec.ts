@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-// The Analytics page's two tabs against the real API. The browser runs in
+// The Analytics page's tabs against the real API. The browser runs in
 // Asia/Tokyo and the test API in America/New_York (playwright.config.ts), so
 // "today" only matches New York's day if the preset was resolved in the host
 // zone rather than the browser's own.

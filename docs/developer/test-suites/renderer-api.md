@@ -414,8 +414,9 @@ publication rows of `GET /analytics` and `GET /videos/<id>/publications`,
   figure, a share above 100 is kept, and a value that is not a number, or is too large to divide, is
   not reported.
 - An average of 0 seconds with no share, and a 0 share, are not reported, on every platform. An
-  average that rounds to 0 follows the same rule, and YouTube's 0 whole seconds beside a real share
-  is kept.
+  average that rounds to 0 follows the same rule whatever the video's length, and YouTube's 0 whole
+  seconds beside a real share is kept. A reported share of 0 gets the stored length like an absent
+  one.
 - A division by a vanishing length or view count gives no figure, so the answer stays valid JSON.
 - The routes read the latest snapshot, including snapshots stored by an earlier version. A payload
   that does not parse reports nothing, and watch figures are added to no total.
@@ -424,6 +425,8 @@ publication rows of `GET /analytics` and `GET /videos/<id>/publications`,
 - Script length bands come back shortest first, and markup in a script is not counted as words.
 - The length is stored for published, unarchived videos with a readable `timeline.json`, and a
   stored length is not overwritten. One unreadable timeline leaves the other videos' lengths stored.
+  An infinite or day-long length is not stored. `POST /analytics/refresh` stores lengths too.
+- A video on `auto` whose `resolved_renderer` is `cartoon_3d` is grouped as Cartoon 3D.
 - A failure while storing lengths leaves the metrics poll running.
 
 Trap: archiving deletes `timeline.json`, the only other record of a video's length, while its
