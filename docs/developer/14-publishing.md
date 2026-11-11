@@ -376,7 +376,7 @@ who acted first wins.
 
 - Auto Pilot does not make an approval the dashboard would refuse
   (`worker.py::_auto_pilot_block_reason`): an `illustrated` topic with no OpenAI key stored, a topic
-  whose mascot was archived or withdrawn, a Cartoon 3D or Under the Hood topic that holds a mascot, and a script its
+  whose mascot was archived or withdrawn, a Cartoon 3D, Under the Hood or Case File Story topic that holds a mascot, and a script its
   voice's model cannot speak. The video stays where it is with one comment.
 - `videos.auto_pilot_blocked` records `<status>@<updated_at>` for the arrival that was commented on,
   so the comment is written once per arrival. The check itself runs on every tick, so the video is

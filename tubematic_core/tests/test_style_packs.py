@@ -51,7 +51,7 @@ def test_the_list_starts_with_auto_and_holds_every_pack():
     assert set(tvs.VISUAL_STYLES[1:]) == {p.stem for p in tvs.PACKS_DIR.glob("*.json")}
     assert {"motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow",
             "bean_explainer", "whiteboard", "storybook_atlas", "terminal_doc",
-            "under_the_hood"} <= set(tvs.VISUAL_STYLES)
+            "under_the_hood", "case_file_story"} <= set(tvs.VISUAL_STYLES)
 
 
 def test_effective_canvas():
@@ -159,10 +159,50 @@ def test_under_the_hood():
     assert tvs.effective_canvas("under_the_hood", "light") == "dark"
     # its own presenter stands where a mascot would: no mascot, like Cartoon 3D
     assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
-    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood"}
+    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story"}
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
     assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
     assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
+
+
+def test_case_file_story():
+    p = tvs.pack("case_file_story")
+    assert p["renderer"] == "dom" and p["canvas"] == "dark"
+    assert p["authoring_skill"] == "tubematic-case-file-story"
+    assert p["experimental"] is True and p["order"] == 100
+    # its lead is painted into generated stills, never a cut-out from generate_character
+    assert tvs.figures_allowed("case_file_story") is True
+    assert tvs.line_art_allowed("case_file_story") is False
+    assert tvs.characters_allowed("case_file_story") is False
+    # built on generated stills: refused without an OpenAI key, like Illustrated
+    assert tvs.needs_openai_key("case_file_story") is True and tvs.needs_gpu("case_file_story") is False
+    assert "OpenAI" in tvs.openai_key_error("case_file_story")
+    # sixteen stills and the lead sheet
+    assert p["routing"]["images"] == 17
+    assert p["captions"]["look"] == "fill"
+    assert tvs.effective_canvas("case_file_story", "light") == "dark"
+    # the story has its own lead: no mascot
+    assert p["mascot"] is False and "lead" in p["messages"]["mascot"]
+    rows = {r["id"]: r for r in tvs.public_list(openai_key_set=False, gpu_status="working")}
+    assert rows["case_file_story"]["mascot"] is False
+    assert rows["case_file_story"]["unavailable_reason"] == "needs an OpenAI key"
+    # what generate_image adds to this style's prompts
+    for key in ("sheet_lead", "sheet_style", "still_lead", "still_style"):
+        assert p["extra"][key].strip()
+    # the script text carries the ending and the subject line the user set
+    script = p["script"]
+    for phrase in ("second person", "the last sentence is only the two options", "invented",
+                   "Never write it as instructions", "No violence", "at most sixteen pictures",
+                   # the cards' limits, so the script names things the cards can show
+                   "at most 26 characters", "at most 16 characters", "at most 10 characters"):
+        assert phrase in script, phrase
+    assert "comes before the ending" in script
+    # what is real and what belongs to the invented situation
+    assert "Every law, limit, threshold, penalty and term in it is real" in script
+    assert "belong to the invented situation" in script
+    # the choice question varies from video to video, and a closing line the preferences ask for follows it
+    assert "starts with the first option" in script and "a closing line the preferences ask for" in script
+    assert "close-ups and the closing choice" in p["review"]
 
 
 def test_a_pack_that_takes_no_mascot_must_say_why():

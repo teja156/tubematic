@@ -83,9 +83,19 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
 - Mining sources: a refused save shows the API's message, and a successful save lists what the API
   stored. The Mining toggle is disabled while the API reports `mining_available: false`.
 - The pause control appears on a curriculum seed only, labelled "Pause topic generation".
-- The default pickers on a domain row and in the add form (visual style, voice, script profile,
+- A closed domain row renders no picker. It shows a chip for each default the domain sets, or
+  "Install defaults for everything", and the topic count against the cap. **Edit defaults** opens
+  one row's panel and leaves the others closed.
+- The default pickers in a row's panel and in the add form (visual style, voice, script profile,
   formula, mascot) are found by their captions. A default that has left the roster or the profile list stays
   visible as removed or unavailable.
+- A save that cannot reach the API is reported and leaves the row as it was, and the next save
+  still goes out, as it does after a write that threw. A refused topic cap is put back in its
+  field.
+- The agent picker offers Automatic and the live agents. The model is disabled under Automatic, and
+  the blank effort names the agent's own level. Changing the agent sends `default_agent_model: ""`
+  in the same save. An uninstalled agent and a dropped model stay selected, disabled, and are
+  re-sent untouched by another edit.
 - The mascot default offers "Use install default", "None" and each pickable mascot. Mascots are
   disabled with the reason unless the GPU is working, and while the GPU status has not loaded.
 - The topic cap field saves on blur and reverts an invalid entry. EXPIRED shows on any domain at
@@ -97,7 +107,16 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
 
 Trap: [`POST /projects`](../05-http-api.md#post-projects) replaces the whole row, so every edit
 re-sends every field. A field left out is reset by that edit: an omitted `default_mascot_id` returns
-the domain to the install default, and an omitted `topic_cap` resets the cap to 100.
+the domain to the install default, an omitted `default_agent_id` returns it to Automatic, and an
+omitted `topic_cap` resets the cap to 100.
+
+Trap: a second change made before the first is answered must carry the first, and must leave out
+a first one that was refused. `saveDomain` queues the writes to one domain for that reason, a
+pause included. Sent side by side, the second save sends the first change back blank and the pick
+is lost with no error.
+
+Trap: a row's pickers exist only while its panel is open, so every case that reads or changes one
+calls `openDefaults` first. A lookup that runs before it fails on a missing element.
 
 Trap: after a cap edit, the count and the expired state come from the row the API returns. The count
 the page loaded can be stale, because research may have filed a topic in between.
@@ -109,6 +128,11 @@ Covers the request body of [the New Video page](../15-dashboard.md#the-new-video
 - Untouched pickers send no `agent_id` and `""` for `agent_model` and `agent_effort`. A picked
   agent pins its default model.
 - The voice picker's **Default** names the voice the API will give the video.
+- The blank agent, model and effort choices name the Manual Videos domain's agent, model and effort
+  while that agent is live, and the request for them is unchanged. An uninstalled domain agent
+  reads as Automatic. A picked agent shows its own effort level and never the domain's model. With
+  no agent list, the blank agent choice reads **Domain default** without a name, and so does the
+  blank model choice when the domain names a model.
 - The formula picker offers Auto and every formula, and sends the one picked as `formula_choice`.
 - Submit is blocked with a title over 70 code points, and a refusal keeps the input.
 
@@ -679,6 +703,20 @@ older line comes first in the list.
 
 Trap: a prerelease is recognised by its tag as well as by GitHub's flag, because a release can be
 published without the flag.
+
+### `domains-lib.test.ts`
+
+Covers `lib/domains.ts`, the Topics page's helpers for a domain's defaults
+([The Topics page](../15-dashboard.md#the-topics-page)).
+
+- `domainChips` returns a chip for each default the domain sets and none for one it leaves blank.
+  An effort with no agent reads as Automatic with that effort.
+- `domainAgentOptions` offers Automatic and the live agents. `domainModelOptions` names the model a
+  blank choice resolves to.
+
+Trap: a stored value the lists do not offer keeps its chip and its option, labelled removed,
+unavailable, uninstalled or not installed, and the option is disabled. Dropping it would show a
+domain as using the install defaults while the API still holds the value.
 
 ### `agents-lib.test.ts`
 

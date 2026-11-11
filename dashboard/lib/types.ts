@@ -246,6 +246,14 @@ export interface Project {
   /** The mascot new videos here start with: '' = the install default,
    *  "none" = no mascot even if the install has a default. */
   default_mascot_id?: string;
+  /** The agent every new video filed into this domain starts on, whatever its
+   *  sourcing mode; '' means Automatic (the video is dealt an agent by
+   *  weight). A video can still be moved at a checkpoint. */
+  default_agent_id?: string;
+  /** One of that agent's models; '' means the agent's own default. */
+  default_agent_model?: string;
+  /** One of AGENT_EFFORTS; '' means the agent's own level. Needs no agent. */
+  default_agent_effort?: string;
   /** The script formula every new video filed into this domain is written
    *  in, whatever its sourcing mode; '' = Auto. Changing it never touches
    *  videos already filed. */

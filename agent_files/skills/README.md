@@ -29,6 +29,7 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 | `tubematic-storybook-atlas/` | Writes a Storybook Atlas video as data (chapters, backdrops, the guide's and people's walks, props from the hatched library, plates, timed to the narration) for the one `StorybookAtlas` scene, validates and submits it |
 | `tubematic-terminal-doc/` | Writes a Terminal Doc video as data (beats and typographic moves timed to the narration, plus any move written for the video) for the one `TerminalDoc` scene, validates and submits it |
 | `tubematic-under-the-hood/` | Writes an Under the Hood video as data (close-up photographs it generates and checks, with labels, arcs, counters and the presenter's poses timed to the narration) for the one `UnderTheHood` scene, validates and submits it |
+| `tubematic-case-file-story/` | Writes a Case File Story video as data (painted stills it generates from the video's lead sheet and checks, with meters, punch-ins, count, bars and term cards and the closing choice timed to the narration) for the one `CaseFileStory` scene, validates and submits it |
 | `tubematic-mascot-builder/` | Writes or revises one mascot's p5.js drawing code, renders its three model sheets and submits it for human review |
 | `tubematic-troubleshooting/` | Diagnoses a broken install with a person, collects redacted evidence and drafts a bug report. A person must ask for it by name |
 

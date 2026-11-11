@@ -11,14 +11,16 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds six visual styles: System Flow, which turns a video into a diagram that builds itself
+2.2.0 adds seven visual styles: System Flow, which turns a video into a diagram that builds itself
 while the narrator explains a system; Bean Explainer, a cartoon character that reacts to the
 narration among everyday props; Whiteboard, which works an idea out on one big board, written
 and drawn as the narrator speaks; Storybook Atlas, a picture book that tells the story of an
 invention or an idea in chapters; Terminal Doc, a dark typographic documentary for codes, passwords
-and computing; and Under the Hood, close-up photographs of one object with labels pinned to its
-parts. Auto now picks a video's style before its script is written. Scripts are built on a
-formula picked for each topic before the script is written, and end on their payoff.
+and computing; Under the Hood, close-up photographs of one object with labels pinned to its
+parts; and Case File Story, a suspense story in painted pictures that puts the viewer inside a
+scheme or a money dilemma. Auto now picks a video's style before its script is written. Scripts
+are built on a formula picked for each topic before the script is written, and end on their
+payoff.
 
 ### Upgrade notes
 
@@ -29,14 +31,17 @@ After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
    installs new skills for System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc,
-   Under the Hood, Auto's style choice and the choice of a script formula, and a session started
-   before it does not have them. The script-writing skill is new too.
+   Under the Hood, Case File Story, Auto's style choice and the choice of a script formula, and a
+   session started before it does not have them. The script-writing skill is new too.
 2. Read your text in **Settings → Preferences**. A script now ends on its payoff unless that text
    asks for a closing line. A sentence there that asks for one, such as a line asking viewers to
    follow, still applies to every script, and the **Script** tab can list it under **Script
    warnings**. Remove the sentence to stop it. If you want a closing line and have no such
    sentence, add one: a script profile's sign-off does not put one there. See
    [Preferences](https://docs.tubematic.ai/user-guide/settings#preferences).
+3. Reload any dashboard tab that was open during the upgrade. A **Topics** page loaded before it
+   sets a domain's agent, model and effort back to **Automatic** when it saves another change to
+   that domain.
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did
 before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
@@ -57,11 +62,11 @@ sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc or Under the
-  Hood cannot render on 2.1.x. Finish it, or switch it to another style while it waits at its topic,
+- A video set to System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc, Under the
+  Hood or Case File Story cannot render on 2.1.x. Finish it, or switch it to another style while it waits at its topic,
   before you go back.
 - A domain whose default style is System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal
-  Doc or Under the Hood starts its new videos on Auto under 2.1.x.
+  Doc, Under the Hood or Case File Story starts its new videos on Auto under 2.1.x.
 
 ### Added
 
@@ -124,11 +129,27 @@ If you go back to 2.1.x later:
   takes the mascot's place. Choose it for a topic, on the **New Video**
   page, or as a domain's default; Auto can pick it for a topic that fits. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Case File Story visual style (experimental). A suspense story told to the viewer: "you" are
+  inside a fraud, a scam, a heist or a money dilemma. Painted pictures fill the frame and push in
+  slowly, cutting closer on a word that lands. The person in them is one blank-faced character who
+  stands in for the viewer and stays the same in every picture. A row of meters near the top (cash,
+  money banked, suspicion) changes as the plot moves. Cards between the pictures make the numbers
+  physical: a grid of icons that fills as a counter climbs, bars appearing one by one under a
+  dashed limit, and the name of what happened with its definition and a stamp. The video ends on a
+  choice, with two buttons for the options the narrator asks about. The people in the story are
+  invented, the laws, limits and terms are real, a scheme is explained the way a news report would and
+  always ends found out or named as a crime, and there is no violence. It needs an OpenAI key and
+  uses up to 16 generated pictures per video, plus one reference picture of the character; it needs
+  no GPU. Its videos have no mascot. Choose it for a topic, on the **New Video** page, or as a
+  domain's default; Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
 - Captions can be a small printed label: an ivory plate hugging one short phrase, with a diamond each
   side. Storybook Atlas videos use it.
 - Captions can build word by word, with the word being spoken in bold, the earlier words in grey and
   the key word in a blue selection box. Under the Hood videos use it.
+- Captions can show a whole phrase at once, with the words still to come in grey and each word
+  turning white as it is spoken. Case File Story videos use it.
 - A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
   agent writes a new script for it, which is voiced when you approve it. See
@@ -141,7 +162,8 @@ If you go back to 2.1.x later:
   [Script formulas](https://docs.tubematic.ai/user-guide/using-tubematic#script-formulas).
 - You can choose the formula yourself: for one video with the **Formula** picker in its window at
   Topic Proposed or on the **New Video** page, and for every new video of a domain with the
-  **Formula** picker on its row on the **Topics** page. Left on **Auto**, the agent picks.
+  **Formula** picker under **Edit defaults** on its row on the **Topics** page. Left on **Auto**,
+  the agent picks.
 - **Switch to …** at Script Ready takes the runner-up formula, and the agent writes a new script
   in it. On a video whose formula you chose, the runner-up is the one Auto would have picked, or
   Auto's second choice when it agreed with you.
@@ -175,12 +197,19 @@ If you go back to 2.1.x later:
   too small to read. A video whose script was written before the upgrade has no formula or opening
   on record and is grouped under **Not recorded**. See
   [Comparing groups of videos](https://docs.tubematic.ai/user-guide/publishing#comparing-groups-of-videos).
+- A domain can have its own agent, model and effort. Every new video in the domain then starts on
+  that agent, whichever research mode found the topic, and the shares on **Settings → Agents** apply
+  to the domains left on **Automatic**. You can still change the agent on each video at a
+  checkpoint. Set it under **Edit defaults** on the domain's row on the **Topics** page, or in
+  **Add Domain**. On the **New Video** page, **Automatic** uses the Manual Videos domain's agent
+  when it has one. See
+  [Choose which agent makes a video](https://docs.tubematic.ai/user-guide/agents#choose-which-agent-makes-a-video).
 
 ### Changed
 
 - Auto picks the style when the agent picks up an approved topic, before it writes the script, and
   can pick any style this install can make: Motion Graphics, Stick Explainer, Illustrated, System
-  Flow, Bean Explainer, Whiteboard, Under the Hood, Cartoon 3D and every style added later. The script is then written for that style. Before,
+  Flow, Bean Explainer, Whiteboard, Under the Hood, Case File Story, Cartoon 3D and every style added later. The script is then written for that style. Before,
   Auto decided after the voice was made, could only choose between a dark canvas, a white canvas and
   Cartoon 3D, and never chose a named style. When no style clearly fits, Auto keeps that mixed
   approach. A video's card and window show the picked style after the word Auto.
@@ -193,6 +222,10 @@ If you go back to 2.1.x later:
 - A script profile sets how a script sounds, and the formula sets its structure. Before, a
   profile could also set the order of a script's parts and its sign-off. The agent now uses a
   profile's signature phrases in some scripts and no single one in every script.
+- A domain's row on the **Topics** page is one line: its name, the defaults it has set, its topic
+  and video counts, its status and the pause button. **Edit defaults** opens the visual style,
+  mascot, voice, script profile and topic cap under the row. Before, those pickers sat on the row
+  itself.
 
 ### Fixed
 

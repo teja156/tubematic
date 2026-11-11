@@ -119,6 +119,85 @@ describe("NewVideoPage", () => {
     await waitFor(() => expect(screen.getByRole("option", { name: "Default (Narrator)" })).toBeTruthy());
   });
 
+  // TMDEV-207: Automatic on this page is the manual domain's agent when it has
+  // a live one. The page only names it; the API does the seeding, so the
+  // request for an untouched picker stays what it was.
+  const MANUAL = {
+    id: "manual", name: "Manual Videos", default_agent_id: "codex",
+    default_agent_model: "gpt-5", default_agent_effort: "max",
+  };
+
+  function blank(testId: string) {
+    return (screen.getByTestId(testId) as HTMLSelectElement).options[0].textContent;
+  }
+
+  it("names the manual domain's agent, model and effort as what Automatic means", async () => {
+    const spy = mockApi({ projects: [MANUAL] });
+    await ready();
+    await waitFor(() => expect(blank("new-video-agent")).toBe("Domain default (Codex)"));
+    expect(blank("new-video-model")).toBe("gpt-5 (domain default)");
+    expect(blank("new-video-effort")).toBe("max (domain default)");
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy)).toMatchObject({ agent_model: "", agent_effort: "" }));
+    expect(posted(spy)).not.toHaveProperty("agent_id");
+  });
+
+  it("reads as the weighted deal when the manual domain names no agent", async () => {
+    mockApi({ projects: [{ id: "manual", name: "Manual Videos" }] });
+    await ready();
+    await waitFor(() => screen.getByRole("option", { name: "Codex" }));
+    expect(blank("new-video-agent")).toBe("Automatic (dealt by weight)");
+    expect(blank("new-video-model")).toBe("Agent default");
+    expect(blank("new-video-effort")).toBe("Agent default");
+  });
+
+  it("ignores a manual-domain agent that is uninstalled, as the API does, but keeps its effort", async () => {
+    mockApi({ projects: [{ ...MANUAL, default_agent_id: "old", default_agent_model: "sonnet" }] });
+    await ready();
+    await waitFor(() => expect(blank("new-video-effort")).toBe("max (domain default)"));
+    expect(blank("new-video-agent")).toBe("Automatic (dealt by weight)");
+    expect(blank("new-video-model")).toBe("Agent default");
+  });
+
+  it("names the domain agent's own model and effort when the domain sets neither", async () => {
+    mockApi({ projects: [{ ...MANUAL, default_agent_model: "", default_agent_effort: "" }] });
+    await ready();
+    await waitFor(() => expect(blank("new-video-agent")).toBe("Domain default (Codex)"));
+    expect(blank("new-video-model")).toBe("Agent default");
+    expect(blank("new-video-effort")).toBe("medium (agent default)");
+  });
+
+  it("says only that the domain has an agent when the agent list cannot be loaded", async () => {
+    // Whether that agent is live is unknown here, and the API decides either
+    // way, so the page must not claim the weighted deal.
+    mockApi({ agents: "fail", projects: [MANUAL] });
+    render(<NewVideoPage />);
+    await waitFor(() => expect(blank("new-video-agent")).toBe("Domain default"));
+    expect(blank("new-video-model")).toBe("Domain default");
+    expect(blank("new-video-effort")).toBe("max (domain default)");
+  });
+
+  it("a picked agent with no usable model list does not show the domain's model", async () => {
+    mockApi({
+      agents: [...AGENTS, agent({ id: "bare", name: "Bare", models: [], is_default: false })],
+      projects: [MANUAL],
+    });
+    await ready();
+    await waitFor(() => expect(blank("new-video-model")).toBe("gpt-5 (domain default)"));
+    fireEvent.change(screen.getByTestId("new-video-agent"), { target: { value: "bare" } });
+    expect(blank("new-video-model")).toBe("Agent default");
+  });
+
+  it("a picked agent takes nothing from the manual domain", async () => {
+    mockApi({ projects: [MANUAL] });
+    await ready();
+    await waitFor(() => expect(blank("new-video-agent")).toBe("Domain default (Codex)"));
+    fireEvent.change(screen.getByTestId("new-video-agent"), { target: { value: "claude" } });
+    expect(blank("new-video-effort")).toBe("high (agent default)");
+    expect((screen.getByTestId("new-video-model") as HTMLSelectElement).value).toBe("sonnet");
+  });
+
   it("sends the defaults for untouched pickers, approved", async () => {
     const spy = mockApi();
     await ready();
