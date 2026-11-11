@@ -152,7 +152,7 @@ the Publish dialog opens. Pick the accounts and privacy again.
 Tubematic reads each published post's figures once an hour. **Refresh metrics** on the
 **Analytics** page reads them now.
 
-![The Videos tab of Analytics: totals for views, likes, comments and shares, a row per post, and bar charts by platform, by account and by month](../images/analytics-videos.png)
+![The Videos tab of Analytics: totals for views, likes, comments and shares, a row per post with its counts and watch figures, and bar charts by platform, by account and by month](../images/analytics-videos.png)
 
 A figure the platform did not report shows as a dash. Figures are kept after a video's files are
 deleted, so an archived video still shows its numbers.
@@ -189,6 +189,8 @@ postforme states that Instagram can take up to 48 hours to report some figures o
 ### Comparing groups of videos
 
 The **Watch time** tab groups one account's posts and shows the three figures for each group.
+
+![The Watch time tab for a YouTube account, grouped by visual style: a row per style with its number of videos and the three watch figures, and a TOO FEW tag on the two groups under 20 videos](../images/analytics-watch-time.png)
 
 1. Choose the account. The tab opens on the account with the most posts.
 2. Choose **Group by**: visual style, script profile, domain, script length, formula or opening.
