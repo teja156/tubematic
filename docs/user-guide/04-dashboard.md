@@ -83,7 +83,7 @@ Pipeline, Library, Projects and Profiles refresh every 5 seconds, so you can lea
 
 The page has three parts.
 
-![The Pipeline page: the Overview counts, then Quick Actions with four topics, two scripts and one video waiting for a decision](../images/pipeline-quick-actions.png)
+![The Pipeline page: the Overview counts, then Quick Actions with four topics, each showing its angle, two scripts and one video waiting for a decision](../images/pipeline-quick-actions.png)
 
 **Overview** shows six counts: topics awaiting you, scripts ready, videos ready, videos in the
 pipeline, published and failed.
