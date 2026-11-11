@@ -167,7 +167,7 @@ video arrives at one of five statuses, each with its own setting:
 
 | Status | Setting | Message |
 |---|---|---|
-| `TOPIC_PROPOSED` | `notify_topic_proposed` | One message for all the topics waiting, sent once the newest has been still for `TOPIC_SETTLE_SECS` (120) |
+| `TOPIC_PROPOSED` | `notify_topic_proposed` | One message for all the topics waiting, sent once the newest has been still for `TOPIC_SETTLE_SECS` (120). A topic that has an angle shows the sentence before its brief, and the angle score beside the topic's score |
 | `SCRIPT_READY` | `notify_script_ready` | One per video, naming its voice |
 | `VIDEO_READY` | `notify_video_ready` | One per video, with its duration and the first line of the stored AI review |
 | `PARTIALLY_PUBLISHED` | `notify_partially_published` | One per video, naming each account that failed with its error, and linking the posts that went out |

@@ -62,6 +62,7 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `POST` | [`/voices/<voice_id>/preview`](#post-voicesvoice_idpreview) | Generate or replay a sample |
 | `GET` | [`/visual-styles`](#get-visual-styles) | Every visual style, and whether this install can make it |
 | `GET` | [`/script-formulas`](#get-script-formulas) | Every script formula and hook type, with its label |
+| `GET` | [`/angle-kinds`](#get-angle-kinds) | Every kind a topic's angle can be, with its label |
 
 ### Research routes
 
@@ -324,7 +325,8 @@ row.
 ### `POST /videos`
 
 Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility_score`. Optional:
-`id`, `project_id`, `title`, `voice_id`, `visual_style`.
+`id`, `project_id`, `title`, `voice_id`, `visual_style`, and the topic's angle as `angle`,
+`angle_kind` and `angle_score`.
 
 | Status | Cause |
 |---|---|
@@ -344,6 +346,9 @@ Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility
   or `OPENAI_API_KEY`).
 - `visual_style` is `cartoon_3d` and the install-wide GPU `status` is not `working` (see
   [GPU rendering](#gpu-rendering)).
+- The angle fails `tubematic_core.angles.angle_error`: `angle` or `angle_kind` is sent without the
+  other, either is not a string, `angle_kind` is not a kind, `angle` is over 300 characters, or
+  `angle_score` is not a whole number from 0 to 10.
 
 What the route fills in:
 
@@ -363,17 +368,18 @@ What the route fills in:
   while the GPU `status` is `working` and the style is not `cartoon_3d`
   (`pipeline.py::_seed_mascot`).
 
-The route does not validate `strategy` or `producibility_score`. The MCP server's `create_video`
-does.
+The route does not validate `strategy` or `producibility_score`, and it does not require an angle.
+The MCP server's `create_video` does all three (see [Topic angle](02-pipeline.md#topic-angle)).
 
 ### `POST /videos/manual`
 
 The dashboard's **New Video** page. Required: `title` (at most 70 characters) and `topic`, both
 non-blank. Optional: `approve` (boolean, default `true`), `agent_id`, `agent_model`,
-`agent_effort`, `script_profile_id`, `visual_style`, `voice_id`.
+`agent_effort`, `script_profile_id`, `visual_style`, `voice_id`, and the topic's angle as `angle`
+with `angle_kind`.
 
-`201` returns the row: `strategy` `manual`, `producibility_score` 0, in the domain `manual`, at
-`TOPIC_APPROVED`, or at `TOPIC_PROPOSED` with `"approve": false`.
+`201` returns the row: `strategy` `manual`, `producibility_score` 0, `angle_score` 0, in the domain
+`manual`, at `TOPIC_APPROVED`, or at `TOPIC_PROPOSED` with `"approve": false`.
 
 `400` causes:
 
@@ -383,6 +389,9 @@ non-blank. Optional: `approve` (boolean, default `true`), `agent_id`, `agent_mod
   refused.
 - A pick fails the rule the same field has on [`PATCH`](#field-rules): the agent, its model and
   effort, the script profile, the voice or the visual style.
+- The angle fails the rule it has on [`POST /videos`](#post-videos). An absent, `null` or blank
+  `angle` with no `angle_kind` means no angle, which is accepted: the agent looks for one when it
+  picks the video up. An `angle_score` in the body is ignored.
 
 How it differs from `POST /videos`:
 
@@ -400,8 +409,8 @@ so a rename on the Projects page is kept. Nothing is written until every field h
 
 The main write path. The body may hold any of `status`, `title`, `script`, `video_version`,
 `youtube_url`, `gemini_feedback`, `voice_id`, `agent_id`, `agent_model`, `agent_effort`,
-`script_profile_id`, `visual_style`, `publish_title`, `publish_description` and `mascot_id`, plus
-the optional guard `onlyIfCurrentStatus`.
+`script_profile_id`, `visual_style`, `publish_title`, `publish_description`, `mascot_id`, `angle`
+and `angle_kind`, plus the optional guard `onlyIfCurrentStatus`.
 
 ```json
 {"status": "TOPIC_APPROVED", "onlyIfCurrentStatus": "TOPIC_PROPOSED", "visual_style": "auto"}
@@ -420,6 +429,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 | `409` | The video is archived |
 | `409` | `script_profile_id`, `visual_style` or `mascot_id` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | `agent_id`, `agent_model` or `agent_effort` sent while the video is not at a human checkpoint |
+| `409` | `angle` and `angle_kind` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D or Under the Hood video keeps a mascot |
 | `409` | `{"error": "Status precondition failed", "current", "expected"}` |
 | `409` | `{"error", "voice_conflict": true}`: the voice's model cannot speak the stored script |
@@ -453,14 +463,19 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 - `mascot_id` must be a string. A changed value must be a pickable mascot, needs a GPU `status` of
   `working`, and is refused on a video that will be `cartoon_3d` or `under_the_hood`. `""` clears
   the mascot.
+- `angle` and `angle_kind` are sent together, both strings. `angle` is at most 300 characters and
+  `angle_kind` is a kind from [`GET /angle-kinds`](#get-angle-kinds). `""` for both removes the
+  angle. A changed sentence or kind sets `angle_score` to 0 in the same `UPDATE`, because the score
+  was the agent's judgement of the words it replaced; the same angle sent again keeps its score.
+  `angle_score` itself is not writable here.
 
 #### Guards
 
 - `onlyIfCurrentStatus` is part of the `UPDATE … WHERE id = ? AND status = ?` statement, so the
   check and the write are atomic. On a mismatch the route reads the row again and reports the
   current status. Use it for every status change. The dashboard does.
-- `script_profile_id`, `visual_style` and `mascot_id` can be written at `TOPIC_PROPOSED` only. The
-  three agent fields can be written at a status in `ACTIONABLE_STATUSES` only. Both checks read
+- `script_profile_id`, `visual_style`, `mascot_id` and the angle can be written at `TOPIC_PROPOSED`
+  only. The three agent fields can be written at a status in `ACTIONABLE_STATUSES` only. Both checks read
   the status before the update, so the `PATCH` that approves a video can carry them. The reasons
   are in [Frozen choices](02-pipeline.md#frozen-choices).
 - A write that carries a frozen field is bound to the status the check read, even without
@@ -731,6 +746,12 @@ Returns `{"formulas": [...], "hook_types": [...]}` from the
 [formula files](08-scripting-and-voice.md#formulas). Each formula has `id`, `label`, `family`, `line`
 and `words` (`[min, max]`), in formula order. Each hook type has `id` and `label`. The dashboard uses
 it to label a video's `formula_id` and `hook_type`.
+
+### `GET /angle-kinds`
+
+Returns the kinds a [topic's angle](02-pipeline.md#topic-angle) can be, as a list in
+`ANGLE_KINDS` order. Each entry has `id`, `label` and `means`: what a topic must hold for an angle
+of that kind. The dashboard uses it to label a video's `angle_kind` and to fill the kind pickers.
 
 ## Research
 

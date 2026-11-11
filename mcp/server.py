@@ -70,6 +70,7 @@ DATA_ROOT = Path.home() / ".tubematic-data"
 # avoids putting /app (and therefore /app/mcp) on sys.path.
 try:
     from tubematic_core import logging as tlog
+    from tubematic_core import angles as tangles
     from tubematic_core import db as tdb
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
@@ -83,6 +84,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.py
     sys.path.insert(0, str(REPO_ROOT))
     from tubematic_core import logging as tlog
+    from tubematic_core import angles as tangles
     from tubematic_core import db as tdb
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
@@ -312,6 +314,11 @@ DEFAULT_AGENT_EFFORT = "high"
 HUMAN_CHECKPOINT_STATUSES = ("TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY")
 TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id")
 AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
+# Where update_video may write a topic's angle (TMDEV-214): at the topic, on a
+# revision, and at TOPIC_APPROVED only while the video has none (the fill the
+# agent makes when it picks a video up). A person edits the angle through
+# PATCH /videos, at TOPIC_PROPOSED only.
+ANGLE_WRITE_STATUSES = ("TOPIC_PROPOSED", "TOPIC_APPROVED", "REVISION_REQUESTED")
 
 # ── Subtitles (TMDEV-101) ────────────────────────────────────────────────────
 # Burned-in captions, drawn from the narration's own word timings. They exist
@@ -1290,6 +1297,12 @@ def get_video(video_id: str) -> dict:
     null there until it does. script is the style's own guidance for writing
     the narration and each segment's visual brief ("" when it has none).
 
+    angle, angle_kind, angle_score: what this topic gives the video's opening
+    (see create_video): the sentence, its kind and its score. "" and 0 when the
+    video has no angle: a person's own topic, or one filed before angles
+    existed. angle_formula is the formula that kind is the first choice for
+    ("" with no angle); the script-writing skill starts from it.
+
     style_routing: Auto's style decision, made at TOPIC_APPROVED before the
     script by the tubematic-style-routing skill: {decided, pick, runner_up,
     reason, candidates, domain}. decided is true once Auto has picked (pick
@@ -1321,6 +1334,7 @@ def get_video(video_id: str) -> dict:
     video["mascots_available"] = _gpu_probe_status() == "working"
     video["style"] = tvs.agent_view(video.get("visual_style") or "")
     video["style_routing"] = _style_routing(video)
+    video["angle_formula"] = tangles.formula_for(video.get("angle_kind"))
     return video
 
 
@@ -1639,8 +1653,24 @@ def create_video(
     producibility_score: int,
     title: str = "",
     voice_id: str = "",
+    angle: str = "",
+    angle_kind: str = "",
+    angle_score: int = 0,
 ) -> dict:
     """Propose a new video topic. Creates a TOPIC_PROPOSED record for human review.
+
+    angle, angle_kind, angle_score: what this topic gives the video's opening.
+    angle is one sentence, at most 300 characters, saying what the hook will
+    use: the contradiction, the failure, the belief, the incident. angle_kind
+    is its kind, one of 'paradox', 'broken_expectation', 'process', 'myth',
+    'design_question', 'incident', 'scheme', 'anomaly', 'scene', 'measure' (the
+    topic-research skill says what each needs). angle_score is how strong the
+    angle is, 0 to 10, by that skill's rubric. The sentence and the kind are
+    passed together. REQUIRED for 'curriculum', 'trending' and 'mining', with
+    an angle_score of 5 or more: a subject with no honest angle is not
+    proposed, so leave it out and name it in your run summary; never invent an
+    angle to pass. For 'manual' all three are optional: a person's own topic
+    is never refused for lacking an angle.
 
     topic: the full descriptive brief — what the video covers, at whatever
     length the idea needs. This is the text the producibility score is about.
@@ -1670,6 +1700,14 @@ def create_video(
         return {"error": f"producibility_score {producibility_score} < {PRODUCIBILITY_MIN_SCORE} — topic not worth proposing"}
     if strategy not in VALID_STRATEGIES:
         return {"error": f"Invalid strategy '{strategy}'. Must be one of: {sorted(VALID_STRATEGIES)}"}
+    # A research proposal needs an angle; a person's own topic does not
+    # (TMDEV-214). After the producibility floor, so a topic the pipeline
+    # cannot draw is refused for that, whatever its angle.
+    angle = tangles.clean(angle)
+    angle_kind = angle_kind.strip() if isinstance(angle_kind, str) else angle_kind
+    angle_err = tangles.angle_error(angle, angle_kind, angle_score, required=strategy != "manual")
+    if angle_err:
+        return {"error": angle_err}
     # Before _get_voices: a fresh process must have migrated the roster to its
     # current shape first, or the strict reader sees no voices at all.
     _init_db()
@@ -1734,18 +1772,20 @@ def create_video(
             f"""INSERT INTO videos
                (id, project_id, topic, strategy, producibility_score, title,
                 status, voice_id, agent_id, visual_style, script_profile_id,
-                mascot_id, created_at, updated_at)
-               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?
+                mascot_id, angle, angle_kind, angle_score, created_at, updated_at)
+               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                WHERE {_DOMAIN_OPEN_GUARD}""",
             (video_id, project_id, topic, strategy, producibility_score, title, voice_id,
-             agent_id, visual_style, script_profile_id, mascot_id, now, now, strategy, project_id),
+             agent_id, visual_style, script_profile_id, mascot_id, angle, angle_kind,
+             angle_score, now, now, strategy, project_id),
         )
         if cur.rowcount == 0:
             return {"error": _closed_domain_error(con, project_id)
                     or _paused_domain_error(project_id, row["name"])}
     result = {"video_id": video_id, "status": "TOPIC_PROPOSED", "topic": topic,
               "agent_id": agent_id, "visual_style": visual_style, "voice_id": voice_id,
-              "script_profile_id": script_profile_id, "mascot_id": mascot_id}
+              "script_profile_id": script_profile_id, "mascot_id": mascot_id,
+              "angle": angle, "angle_kind": angle_kind, "angle_score": angle_score}
     if title_warning:
         result["warning"] = title_warning
     return result
@@ -2418,8 +2458,20 @@ def update_video(
     mascot_id: str | None = None,
     formula_id: str | None = None,
     hooks: list[dict] | None = None,
+    angle: str | None = None,
+    angle_kind: str | None = None,
+    angle_score: int | None = None,
 ) -> dict:
     """Update one or more fields on a video record. Pass only fields to change.
+
+    angle, angle_kind, angle_score: the topic's angle (see create_video). Pass
+    the sentence and its kind together, with the score you gave it; left out,
+    the score is stored as 0 (unscored). Writable at TOPIC_PROPOSED, on a
+    REVISION_REQUESTED whose comment asks for another angle, and at
+    TOPIC_APPROVED only while the video has no angle: that is the fill you make
+    when you pick up a video whose topic came without one, before its style
+    and script. An angle a person approved is never replaced there. Pass ""
+    for both to clear it.
 
     formula_id, hooks: what the script was built on, recorded with it. Pass
     both together, in the call that writes script_segments, and only there.
@@ -2599,6 +2651,17 @@ def update_video(
         err = _validate_script_segments(script_segments)
         if err:
             return {"error": err}
+    # The angle is one write: the sentence and its kind together, the score
+    # with them or reset. Its status window is checked further down.
+    angle_write = angle is not None or angle_kind is not None or angle_score is not None
+    if angle_write:
+        angle = tangles.clean("" if angle is None else angle)
+        angle_kind = "" if angle_kind is None else angle_kind
+        angle_kind = angle_kind.strip() if isinstance(angle_kind, str) else angle_kind
+        angle_err = tangles.angle_error(angle, angle_kind,
+                                        0 if angle_score is None else angle_score)
+        if angle_err:
+            return {"error": angle_err}
     if formula_id is not None or hooks is not None:
         if script_segments is None:
             return {"error": "formula_id and hooks describe a script: pass them in the call "
@@ -2824,6 +2887,11 @@ def update_video(
         fields["formula_id"] = formula_id
         fields["hook_type"] = next(h["type"] for h in stored if h["kept"])
         fields["hook_alternatives"] = json.dumps(stored)
+    if angle_write:
+        fields["angle"] = angle
+        fields["angle_kind"] = angle_kind
+        if angle_score is not None:
+            fields["angle_score"] = angle_score
     if not fields:
         return {"error": "No fields to update"}
     # The per-video choices freeze in two groups (TMDEV-110). Keep in sync:
@@ -2906,12 +2974,37 @@ def update_video(
                 # a model the new agent does not have.
                 where_sql += " AND agent_id IS ?"
                 where_params.append(stored)
+    # The angle's window (ANGLE_WRITE_STATUSES), bound in the UPDATE like the
+    # freezes above. At TOPIC_APPROVED the write is the pickup fill: it lands
+    # only while the video still has no angle, so it can never replace one a
+    # person saw at the topic and approved.
+    angle_bound = False
+    if angle_write:
+        row = _angle_window_row(video_id)
+        if not row:
+            return {"error": f"Video not found: {video_id}"}
+        if row["archived_at"]:
+            return _archived_error(video_id, row["archived_at"])
+        if checked_status is not None and row["status"] != checked_status:
+            return {"error": f"The video moved from {checked_status} to {row['status']} while "
+                             "the call was in flight — check get_video"}
+        if row["status"] not in ANGLE_WRITE_STATUSES:
+            return {"error": "angle can only be set at the topic, on a revision, or when a "
+                             f"video is picked up with none (this one is {row['status']})"}
+        if row["status"] == "TOPIC_APPROVED":
+            if row["angle"]:
+                return {"error": _ANGLE_ALREADY_SET}
+            where_sql += " AND COALESCE(angle, '') = ''"
+            angle_bound = True
+        if checked_status is None:
+            checked_status = row["status"]
+            where_sql, where_params = " AND status = ?" + where_sql, [checked_status] + where_params
     # A voice let through without the script check because the video was at
     # TOPIC_PROPOSED must land only while it still is: once the script is
     # written, that voice may be unable to speak it, and it would be refused
     # only at the paid voicing step. Keep in sync: renderer/api/pipeline.py's
     # patch_video (voice_exempt).
-    bound_fields = topic_locked + agent_locked
+    bound_fields = topic_locked + agent_locked + (["angle"] if angle_write else [])
     if voice_exempt:
         if checked_status is None:
             checked_status = "TOPIC_PROPOSED"
@@ -2978,6 +3071,9 @@ def update_video(
     for sql, value in record_sets:
         set_sql.append(sql)
         set_params.append(value)
+    if angle_write and angle_score is None:
+        # No score came with the new words, and the stored one described the old.
+        set_sql.append("angle_score = 0")
     if pin_voice:
         # Decided in the UPDATE, so a voice set by another call meanwhile wins.
         set_sql.append("voice_id = CASE WHEN voice_id = '' THEN ? ELSE voice_id END")
@@ -3021,6 +3117,9 @@ def update_video(
             if row and "agent_id IS ?" in where_sql:
                 return {"error": "This video's agent changed while the call was in flight — "
                                  "check get_video and pick the model again"}
+            if row and angle_bound and con.execute(
+                    "SELECT angle FROM videos WHERE id = ?", (video_id,)).fetchone()["angle"]:
+                return {"error": _ANGLE_ALREADY_SET}
             if row and pair:
                 now = con.execute("SELECT visual_style, resolved_renderer FROM videos WHERE id = ?",
                                   (video_id,)).fetchone()
@@ -3033,6 +3132,18 @@ def update_video(
     if warnings is not None:
         return {"video_id": video_id, "updated_fields": updated, "warnings": warnings}
     return {"video_id": video_id, "updated_fields": updated}
+
+
+_ANGLE_ALREADY_SET = ("This video already has an angle, approved with its topic; at "
+                      "TOPIC_APPROVED an angle is written only when there is none. Use the one "
+                      "get_video returns.")
+
+
+def _angle_window_row(video_id: str):
+    """The row update_video checks before it writes a topic's angle."""
+    with _conn() as con:
+        return con.execute("SELECT status, angle, archived_at FROM videos WHERE id = ?",
+                           (video_id,)).fetchone()
 
 
 def _style_choice_row(video_id: str):
@@ -5353,17 +5464,48 @@ def _candidate_score(candidate: dict):
     return score if isinstance(score, (int, float)) and not isinstance(score, bool) else 0
 
 
+def _candidate_angle(candidate: dict) -> tuple:
+    """A mined candidate's (angle, angle_kind, angle_score), each brought to
+    the type create_video takes; anything unusable reads as empty or 0. The
+    kind is matched loosely ("Broken expectation" is broken_expectation): the
+    model's reply cannot be asked for again, so a spelling is not worth a
+    topic that was paid for."""
+    angle = candidate.get("angle")
+    kind = candidate.get("angle_kind")
+    score = candidate.get("angle_score", 0)
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or score != int(score):
+        score = 0
+    return (tangles.clean(angle) if isinstance(angle, str) else "",
+            re.sub(r"[\s-]+", "_", kind.strip().lower()) if isinstance(kind, str) else "",
+            min(max(int(score), 0), tangles.ANGLE_SCORE_MAX))
+
+
+def _mining_angle_reason(angle: str, kind: str, score: int) -> str:
+    """Why a mined candidate's angle keeps it from being filed, or ''."""
+    if not angle or not kind:
+        return "has no angle"
+    shape = tangles.angle_error(angle, kind, score)
+    if shape:
+        return shape
+    if score < tangles.ANGLE_MIN_SCORE:
+        return f"angle_score {score} is below {tangles.ANGLE_MIN_SCORE}"
+    return ""
+
+
 def _mining_prompt(limit: int, covered: list) -> str:
     """The Gemini prompt for one URL: at most `limit` candidates, none repeating `covered`.
 
     The rubric is kept in sync with the additive rubric in
     agent_files/skills/tubematic-topic-research/SKILL.md ("Producibility Scoring").
+    The angle's kinds and score come from tubematic_core.angles, the same text
+    that skill carries.
     """
     covered_block = "\n".join(f"- {topic}" for topic in covered) or "- (none yet)"
     return (
         f"Analyse this YouTube video and pick at most {limit} concepts that are mentioned "
         "briefly but not fully explained — moments where a viewer might wonder 'how does X "
-        f"actually work?'. Return only the {limit} most producible; do not list more.\n\n"
+        f"actually work?'. Return only the {limit} best, judged by producibility and angle "
+        "together; do not list more.\n\n"
         "These topics already exist. Do not propose any of them, or a close variant of one:\n"
         f"{covered_block}\n\n"
         "For each candidate, score producibility for a 60-90s vertical tech short. Sum these "
@@ -5378,8 +5520,10 @@ def _mining_prompt(limit: int, covered: list) -> str:
         "tracks -3; requires real archival footage or a screen recording that can't be "
         "generated as a still -2.\n"
         "5 = borderline, <5 = skip.\n\n"
+        f"{tangles.prompt_text()}\n\n"
         "Return ONLY a JSON array — no prose, no markdown:\n"
-        '[{"topic": "...", "producibility_score": 8}, ...]\n'
+        '[{"topic": "...", "producibility_score": 8, "angle": "...", "angle_kind": "...", '
+        '"angle_score": 7}, ...]\n'
         "Return [] if no good candidates exist."
     )
 
@@ -5394,7 +5538,9 @@ def mine_youtube_topics(project_id: str, youtube_urls: list[str]) -> dict:
     settings) via create_video(strategy='mining'). Gemini is asked for no more
     than what is left under the cap and is shown the topics that already exist,
     so it proposes nothing already covered; a candidate that still repeats one,
-    or scores below 5, is not filed. URLs are tried in turn, starting after the
+    scores below 5, or comes back with no angle or an angle that scores below
+    5, is not filed. Every filed topic carries its angle, as create_video
+    stores it. URLs are tried in turn, starting after the
     one the previous run ended on, until the cap is filled. A domain close to
     its topic cap takes only what it has room for, and the run stops early if
     the domain fills or is paused while it runs.
@@ -5410,8 +5556,10 @@ def mine_youtube_topics(project_id: str, youtube_urls: list[str]) -> dict:
     Every URL must be a YouTube video URL (the forms set_mining_sources
     accepts). If any is not, nothing is called and the error names it.
 
-    Returns {proposed, skipped, cap, topics: [{topic, producibility_score, source_url}],
-    not_filed: [{topic, reason}]}. `skipped` counts URLs whose Gemini call failed.
+    Returns {proposed, skipped, cap, topics: [{topic, producibility_score, angle,
+    angle_kind, angle_score, source_url}], not_filed: [{topic, reason}]}. Name
+    what not_filed holds, with each reason, in your run summary. `skipped`
+    counts URLs whose Gemini call failed.
     `source_url` is the URL in its canonical https://www.youtube.com/watch?v=ID form.
     A cap of 0 turns mining off and makes no Gemini call.
     If no Gemini API key is configured, returns an error — mining requires Gemini.
@@ -5534,11 +5682,14 @@ def _mine_youtube_topics(project_id: str, youtube_urls: list) -> dict:
 
         if not isinstance(candidates, list):
             candidates = []
+        # The cap goes to the candidates strongest on both numbers together.
         ranked = sorted((c for c in candidates if isinstance(c, dict)),
-                        key=_candidate_score, reverse=True)
+                        key=lambda c: _candidate_score(c) + _candidate_angle(c)[2],
+                        reverse=True)
         for c in ranked:
             topic = str(c.get("topic", "")).strip()
             score = _candidate_score(c)
+            angle, angle_kind, angle_score = _candidate_angle(c)
             if not topic:
                 continue
             if stopped:
@@ -5547,6 +5698,8 @@ def _mine_youtube_topics(project_id: str, youtube_urls: list) -> dict:
                 reason = over_target
             elif score < PRODUCIBILITY_MIN_SCORE:
                 reason = f"producibility_score {score} is below {PRODUCIBILITY_MIN_SCORE}"
+            elif (angle_reason := _mining_angle_reason(angle, angle_kind, angle_score)):
+                reason = angle_reason
             elif _is_near_duplicate(topic, covered_keys):
                 reason = "repeats an existing topic"
             else:
@@ -5555,11 +5708,17 @@ def _mine_youtube_topics(project_id: str, youtube_urls: list) -> dict:
                     topic=topic,
                     strategy="mining",
                     producibility_score=score,
+                    angle=angle,
+                    angle_kind=angle_kind,
+                    angle_score=angle_score,
                 )
                 if "video_id" in result:
                     all_topics.append({
                         "topic": topic,
                         "producibility_score": score,
+                        "angle": angle,
+                        "angle_kind": angle_kind,
+                        "angle_score": angle_score,
                         "source_url": url,
                     })
                     proposed += 1

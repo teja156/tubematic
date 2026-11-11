@@ -10,6 +10,10 @@ in its own `pytest` invocation
 python -m pytest mcp/tests
 ```
 
+`sample_angle.py` holds an angle a research proposal can be filed with, and `mined()`, one mining
+candidate as Gemini returns it. A test that files a `curriculum`, `trending` or `mining` topic for
+another reason passes it, because `create_video` refuses such a topic with no angle.
+
 `conftest.py` provides `through_mcp`, which calls a tool over a real in-memory FastMCP client. Use
 it when a test is about what the middleware sees or logs, because only that path wraps the return
 value as production does. [The MCP Server](../06-mcp-server.md) describes each tool.
@@ -153,6 +157,29 @@ Covers what `mine_youtube_topics` may hand Gemini, and `set_mining_sources`
 Trap: a mining URL becomes the `file_uri` of a paid Gemini call. The URL check, the call bound
 and the lock each stand between a bad setting and repeated spend, so the fake client counts the
 calls.
+
+### `test_topic_angle.py`
+
+Covers the [topic's angle](../02-pipeline.md#topic-angle) in `create_video`, `get_video`,
+`update_video` and `mine_youtube_topics`.
+
+- `create_video` stores a research proposal's angle, refuses one with no angle or with an angle
+  scoring under 5, and files nothing in either case. A `manual` topic is accepted with no angle,
+  and keeps an angle of any score. A malformed angle is refused on every strategy.
+- `get_video` returns the angle and `angle_formula`, the formula the kind points to. A video with
+  no angle reads as empty, and a topic filed before angles existed still approves.
+- `update_video` writes the angle at `TOPIC_PROPOSED` and `REVISION_REQUESTED`, and at
+  `TOPIC_APPROVED` only while the video has none. It refuses the write at every later status. A
+  rewrite sent with no score stores 0.
+- A mined candidate with no angle, an unknown kind or an angle scoring under 5 comes back in
+  `not_filed` with the reason. The prompt carries the kinds and the score from
+  `tubematic_core.angles`. The cap goes to the candidates with the highest two scores together. A
+  kind written as its label, or with a hyphen, files under its id.
+
+Trap: the write at `TOPIC_APPROVED` fills a missing angle when the agent picks a video up. Without
+`angle = ''` in the `UPDATE`'s `WHERE`, it could replace an angle a person read and approved. A test
+commits a change between the read and the `UPDATE` for that clause and for the status clause, and
+each was confirmed to fail with its clause removed.
 
 ## Script and voice
 

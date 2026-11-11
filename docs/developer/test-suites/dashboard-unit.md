@@ -107,6 +107,9 @@ Covers the request body of [the New Video page](../15-dashboard.md#the-new-video
   agent pins its default model.
 - The voice picker's **Default** names the voice the API will give the video.
 - Submit is blocked with a title over 70 code points, and a refusal keeps the input.
+- The optional angle: an empty field sends no angle, a sentence is sent with its kind, and a
+  sentence with no kind or over 300 characters blocks Submit. The field is not offered while the
+  kinds cannot be loaded, and the form still submits.
 
 ### `script-profiles-page.test.tsx`
 
@@ -284,6 +287,9 @@ pickers on its rows.
   loaded. `mascot_id` travels with `approve-topic` only when the picker shows. Choosing Cartoon 3D
   or Under the Hood clears and locks the picker and sends an empty mascot.
 - A refused approval (`onAction` resolving `false`) brings the row back so the pick can be changed.
+- A `TOPIC_PROPOSED` row shows the topic's angle on one line with the full sentence as its tooltip,
+  and the angle's kind and score in the meta line. A topic with none reads **No angle**, an unscored
+  angle shows a dash, and rows at later statuses show neither.
 - Every picker is found by its caption (`getByLabelText`), which proves the caption is the control's
   accessible name.
 
@@ -347,6 +353,21 @@ Covers `components/ScriptRecord.tsx` on the video window's Script tab and `lib/s
 - A script with no record shows the segments and nothing else, and makes no request for the names.
 - The ids are shown when the names cannot be loaded, and for an id the list does not know.
 - A segment shows its `beat` label only when it has one. The block holds no control.
+
+### `video-modal-topic-angle.test.tsx`
+
+Covers `components/TopicAngle.tsx` on the video window's Topic tab and `lib/angles.ts`
+([The video window](../15-dashboard.md#the-video-window)).
+
+- A topic with an angle shows the sentence, the kind's label and the score, and a dash for an angle
+  with no score. The details panel repeats the score.
+- At `TOPIC_PROPOSED` the angle can be edited or added. Save sends the sentence and the kind in one
+  `PATCH` and reads the video again. A sentence with no kind, or over 300 characters, cannot be
+  saved. An emptied sentence is saved as no angle.
+- A refused save shows the API's reason and keeps the draft. Cancel drops it.
+- Past `TOPIC_PROPOSED`, and on an archived video, there is no Edit button. An approved video with
+  no angle shows no block and makes no request for the kinds.
+- The kind's id is shown, with its underscores opened, when the kinds cannot be loaded.
 
 ### `video-modal-retry-agent.test.tsx`
 

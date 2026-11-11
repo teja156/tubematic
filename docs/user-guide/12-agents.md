@@ -149,9 +149,11 @@ Claude Code and OpenCode have these slash commands:
 Codex has no slash commands. Ask in plain words, for example "show the Tubematic pipeline status".
 It has the same tools and skills.
 
-`/tubematic-submit-new-job` differs from the New Video page in two ways. The agent scores the topic
-first and declines one that scores below 5, with advice on how to reframe it. It also files the
-video in a matching domain, where the New Video page files it under **Manual Videos**.
+`/tubematic-submit-new-job` differs from the New Video page in three ways. The agent scores the topic
+first and declines one that scores below 5, with advice on how to reframe it. It looks for the
+topic's [angle](03-using-tubematic.md#the-angle) and files it with the video; a topic with no angle
+is filed without one. It also files the video in a matching domain, where the New Video page files
+it under **Manual Videos**.
 
 ### Getting help from the agent
 

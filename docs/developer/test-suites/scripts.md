@@ -114,9 +114,15 @@ Covers `build_research_prompt`, `build_pipeline_prompt` and `build_mascot_prompt
 
 - The research prompt names a mining target only when mining is active. It tells the agent to
   deduplicate with `list_project_topics` and to skip a paused or expired domain.
+- The research prompt names the three angle arguments of `create_video`, says a subject with no
+  angle is not proposed, and asks for a summary of every candidate dropped. The prompt ships with
+  the install, so it says this even when a deployed skill is a version behind.
 - The pipeline prompt names one video and where its stage ends, for every workable status. A
   cross-copy check keeps the stage table equal to the API's `WORKABLE_STATUSES`, since a status with
   no stage would never be dispatched.
+- The pipeline prompt forbids researching new topics and then says that finding the angle of the
+  video's own topic is something else, since a scripting session reads the topic-research skill's
+  rules to fill a missing angle.
 - The mascot prompt names the builder skill, the mascot and the three build tools, and tells the
   agent not to advance any video.
 - The user preferences block names the stage of the run, limits itself to that stage and says it
@@ -367,6 +373,7 @@ Covers `scripts/collect_diagnostics.py`, whose report is meant to be pasted into
   a video's content.
 - An opening the agent drafted and did not use is content too. It is in no script column, so it
   is read from the video's recorded openings.
+- A topic's angle is content: a sentence about the video's subject that is in no other column.
 - Ids become the same short hash wherever they appear, so lines about one account still match up.
   Content stays out unless you pass `--include-content`. Content under 12 characters is replaced as
   a whole word, and content under four characters is left.
@@ -718,6 +725,25 @@ is called.
 - The prompt carries the video as `get_video` returns it at `TOPIC_APPROVED`, with every candidate.
 - The answer is the last JSON object in the reply that names a style.
 - A pick is scored best, acceptable or wrong, and the report counts each and lists the wrong ones.
+
+### `test_topic_angle_skills.py`
+
+Covers what the agent is told about a [topic's angle](../02-pipeline.md#topic-angle), and
+`scripts/gen_angle_reference.py`.
+
+- The kind table and score table in the topic-research skill equal what `tubematic_core/angles.py`
+  renders, and `--check` notices a hand edit.
+- The research skill passes `angle`, `angle_kind` and `angle_score` to `create_video`, drops a
+  subject with no angle, never invents one, and ends with a run summary that names what it
+  dropped. Its examples name no install's domains.
+- The operator skill fills a missing angle before the style and the script, leaves an approved
+  angle alone, and lets a topic revision rewrite it.
+- The script-writing skill reads the angle and `angle_formula`, and still works with no angle.
+- The Claude and OpenCode copies of `/tubematic-submit-new-job` are the same file. The command
+  passes an angle and does not refuse a topic for lacking one.
+
+Trap: `create_video` refuses a research topic with no angle. Skill text that stopped asking for one
+would make every research run file nothing while the run still ended normally.
 
 ### `test_script_writing_skill.py`
 

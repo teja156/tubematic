@@ -18,7 +18,8 @@ and drawn as the narrator speaks; Storybook Atlas, a picture book that tells the
 invention or an idea in chapters; Terminal Doc, a dark typographic documentary for codes, passwords
 and computing; and Under the Hood, close-up photographs of one object with labels pinned to its
 parts. Auto now picks a video's style before its script is written. Scripts are built on a
-formula chosen for each topic and end on their payoff.
+formula chosen for each topic and end on their payoff. Research proposes a topic only when it has
+an angle: one sentence saying what the video will open on.
 
 ### Upgrade notes
 
@@ -30,13 +31,22 @@ After you upgrade:
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
    installs new skills for System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc,
    Under the Hood and Auto's style choice, and a session started before it does not have them.
-   The script-writing skill is new too.
+   The script-writing skill is new too, and the topic-research skill now finds an angle for every
+   topic it proposes.
 2. Read your text in **Settings → Preferences**. A script now ends on its payoff unless that text
    asks for a closing line. A sentence there that asks for one, such as a line asking viewers to
    follow, still applies to every script, and the **Script** tab can list it under **Script
    warnings**. Remove the sentence to stop it. If you want a closing line and have no such
    sentence, add one: a script profile's sign-off does not put one there. See
    [Preferences](https://docs.tubematic.ai/user-guide/settings#preferences).
+
+3. If `upgrade.py` reported that an agent was not redeployed, run
+   `python3 onboard.py --install-agent <agent>` for that agent. Until its skills are current, its
+   research runs propose nothing, because a proposal with no angle is refused.
+
+Topics that were proposed before you upgraded have no angle. You can approve them as before, and
+the agent adds an angle when it picks the video up. To set one yourself, open the topic while it
+waits at Topic Proposed and press **Add angle** on its **Topic** tab.
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did
 before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
@@ -139,6 +149,14 @@ If you go back to 2.1.x later:
   ending that asks for a follow, a recap at the end, a first sentence that repeats the title, or a
   length outside the formula's range. They are advice and do not stop you approving. See
   [Read and approve scripts](https://docs.tubematic.ai/user-guide/using-tubematic#3-read-and-approve-scripts).
+- Topic angles. Every topic that research proposes carries an angle: one sentence saying what the
+  video's opening will use (a contradiction, a failure, a wrong belief, an incident), with its kind
+  and a score from 0 to 10. The angle shows under the topic's title in **Quick Actions** and on the
+  **Topic** tab of the video window, where you can edit it until you approve the topic. The script
+  writer starts from the formula that suits the angle's kind and builds its openings on the angle.
+  See [The angle](https://docs.tubematic.ai/user-guide/using-tubematic#the-angle).
+- An optional **Angle** field on the **New Video** page. Leave it empty and the agent finds an angle
+  in your topic before it writes the script. A topic of your own is not refused for having none.
 - **Rendered by** and **Render time** rows in a video's window: which renderer made the video, on
   its GPU or its CPU, and how long the render took. They describe the last successful render. Videos
   rendered before this version show neither. See
@@ -161,6 +179,15 @@ If you go back to 2.1.x later:
 - A script profile sets how a script sounds, and the formula sets its structure. Before, a
   profile could also set the order of a script's parts and its sign-off. The agent now uses a
   profile's signature phrases in some scripts and no single one in every script.
+
+- Research files a topic only when it has an angle and scores 5 or more twice: for how well the
+  pipeline can show it, and for how strong its angle is. Before, only the first score counted. A
+  research run can therefore file fewer topics than its limit. The agent ends each run with a
+  summary that names every subject it left out and why, which the **Logs** page shows.
+- Mining asks for an angle with each idea and files the ideas that are strongest on both scores
+  first. Before, it ranked ideas by the topic score alone.
+- `/tubematic-submit-new-job` finds the angle of the topic you give it and files it with the video.
+- The Discord message for new topics shows each topic's angle and angle score.
 
 ### Fixed
 

@@ -82,6 +82,9 @@ One row per video, from proposed topic to published file.
 | `status` | TEXT NOT NULL | `TOPIC_PROPOSED` | See [The Pipeline](02-pipeline.md) |
 | `strategy` | TEXT NOT NULL | `manual` | `curriculum`, `trending`, `mining` or `manual` |
 | `producibility_score` | INTEGER NOT NULL | `0` | 1 to 10. The MCP `create_video` tool rejects a score below 5. `POST /videos` does not check it. A video submitted from the dashboard stores `0`, meaning unscored |
+| `angle` | TEXT NOT NULL | `''` | One sentence saying what the video's opening will use, at most 300 characters. `''` means no angle. See [Topic angle](02-pipeline.md#topic-angle) |
+| `angle_kind` | TEXT NOT NULL | `''` | The angle's kind, a key of `tubematic_core.angles.ANGLE_KINDS`, or `''`. Written together with `angle` |
+| `angle_score` | INTEGER NOT NULL | `0` | 0 to 10. `0` means unscored. The MCP `create_video` tool rejects a research proposal whose angle scores below 5 |
 | `script` | TEXT NOT NULL | `''` | The flat script, derived from `script_segments` |
 | `script_segments` | TEXT | | JSON array of `{id, voice, visual}`, each optionally with `beat` |
 | `formula_id` | TEXT NOT NULL | `''` | The [formula](08-scripting-and-voice.md#formulas) the script follows. `''` means none on record |
@@ -716,6 +719,7 @@ only in the pre-migration backup.
 | `0020_style_pick.sql` | Adds `videos.style_pick`, `style_runner_up` and `style_reason`, `''` on every existing video | No |
 | `0021_last_render.sql` | Adds `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu` and `last_render_seconds`, empty on every existing video | No |
 | `0023_script_record.sql` | Adds `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, `''` on every existing video | No |
+| `0026_topic_angle.sql` | Adds `videos.angle`, `angle_kind` and `angle_score`, empty and 0 on every existing video | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so

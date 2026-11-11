@@ -412,6 +412,23 @@ def test_the_gpu_readout_comes_from_the_built_in_renderers_probe(install, monkey
     assert "1304d027" not in report
 
 
+def test_a_topics_angle_is_redacted(install):
+    """The angle is a sentence about the video's subject that sits in no other
+    column: the agent wrote it, or the person did, beside the topic."""
+    angle = "The backup reported success for a year while it copied an empty folder."
+    con = sqlite3.connect(install["db"])
+    con.execute("UPDATE videos SET angle = ?, angle_kind = 'anomaly', angle_score = 8 "
+                "WHERE id = 'vid_1'", (angle,))
+    con.commit()
+    con.close()
+    now = dt.datetime.now().astimezone()
+    cd.POLL_LOG.write_text(f"{now.strftime(POLL_TS)} INFO    [vid_1] filed with the angle "
+                           f"\"{angle}\"\n")
+    report = _collect(install)
+    assert "filed with the angle" in report
+    assert angle not in report
+
+
 def test_a_drafted_opening_the_script_does_not_use_is_redacted(install):
     """A script records three openings and uses one. The other two are in no
     script column, so they are content only this list knows about."""

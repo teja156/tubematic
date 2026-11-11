@@ -35,6 +35,8 @@ import { formatRenderDuration } from "@/lib/renderers";
 import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { ScriptRecord } from "@/components/ScriptRecord";
+import { TopicAngle } from "@/components/TopicAngle";
+import { angleScoreLabel } from "@/lib/angles";
 
 interface VideoModalProps {
   video: Video | null;
@@ -947,6 +949,14 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                 {/* Topic — the full descriptive brief. The header shows only the
                     short display name, so this is where the whole text lives. */}
                 <TabsContent value="topic" className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
+                  {/* Keyed by the video: the window stays mounted between
+                      videos, and an angle being typed must not follow it. */}
+                  <TopicAngle
+                    key={video.id}
+                    video={video}
+                    editable={!archived && video.status === "TOPIC_PROPOSED"}
+                    onSaved={() => refreshVideo(video.id)}
+                  />
                   <p
                     data-testid="video-topic-body"
                     style={{
@@ -1542,6 +1552,17 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                       </span>
                       {isScored(video.producibility_score) && (
                         <span style={{ color: "var(--dim)", fontSize: 12 }}> / 10</span>
+                      )}
+                    </span>
+                  }
+                />
+                <MetaRow
+                  label="Angle score"
+                  value={
+                    <span data-testid="angle-score-row" style={{ fontFamily: "var(--mono)", fontSize: 15, color: "var(--amber)" }}>
+                      {angleScoreLabel(video.angle_score).split("/")[0]}
+                      {(video.angle_score ?? 0) > 0 && (
+                        <span style={{ fontFamily: "var(--sans)", color: "var(--dim)", fontSize: 12 }}> / 10</span>
                       )}
                     </span>
                   }

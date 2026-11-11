@@ -91,6 +91,9 @@ pipeline, published and failed.
 **Quick Actions** lists the videos that need a decision, grouped as Topic Proposed, Script Ready and
 Video Ready, oldest first. Each row has the buttons and pickers for its decision. See
 [Making decisions](#making-decisions). The three pills above the list hide or show a group.
+A Topic Proposed row also shows the topic's [angle](03-using-tubematic.md#the-angle) under the
+title, cut to one line, with the angle's kind and score beside the topic's score. A row whose topic
+has no angle says **No angle**.
 
 The board below has a column for each status, in the order a video moves through them, followed by
 Rejected, Revision Requested and Failed. Click a card to open the video. A card shows:
@@ -122,7 +125,7 @@ Click a card or a row to open the video. The left side has tabs:
 
 | Tab | Shows |
 |---|---|
-| **Topic** | The full topic |
+| **Topic** | The topic's [angle](03-using-tubematic.md#the-angle) with its kind and score, then the full topic. At Topic Proposed, **Edit** changes the angle and **Add angle** gives one to a topic that has none |
 | **Script** | The script, segment by segment, with a note on what each segment shows. Above it are the script's formula, the openings the agent considered and any script warnings (see [Read and approve scripts](03-using-tubematic.md#3-read-and-approve-scripts)). Appears once a script exists |
 | **Video** | The player. Appears once the video is rendered |
 | **Publishing Results** | Each account the video was posted to, with its status, link and any error |
@@ -133,8 +136,8 @@ The panel on the right holds:
 
 - the buttons and pickers for the video's current status,
 - links to the live posts, under **Published to**,
-- the video's details: how the topic was found, its score, its script profile, visual style, voice
-  and agent,
+- the video's details: how the topic was found, its score, its angle score, its script profile,
+  visual style, voice and agent,
 - the **Cost** panel,
 - the AI review's findings, if AI review ran.
 
@@ -155,6 +158,7 @@ Creates a video from a topic you type.
 |---|---|
 | **Title** | Required. Up to 70 characters. It is the name shown on cards |
 | **Topic** | Required. The full brief the agent writes the script from |
+| **Angle** | Optional. One sentence, up to 300 characters, saying what the opening will use, and its kind. Leave it empty and the agent finds one. See [The angle](03-using-tubematic.md#the-angle) |
 | **Agent**, **Model**, **Effort** | Optional. **Automatic** lets Tubematic choose the agent by share |
 | **Script profile**, **Visual style**, **Voice** | Optional |
 | **Automatically approve topic** | Ticked by default, so the agent starts on the script. Untick it to review the topic on the Pipeline page first |

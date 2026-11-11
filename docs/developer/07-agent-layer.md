@@ -34,7 +34,7 @@ These skills ship in `agent_files/skills/`.
 | Skill | Runs when | What it does |
 |---|---|---|
 | `tubematic-operator` | Any pipeline session | Checks the setup, routes each workable video by status and stops at human checkpoints |
-| `tubematic-topic-research` | A scheduled research run | Proposes and scores topics for the three research modes |
+| `tubematic-topic-research` | A scheduled research run | Proposes topics for the three research modes, each with its [angle](02-pipeline.md#topic-angle) and two scores, and ends with a summary of what it dropped |
 | `tubematic-style-routing` | `TOPIC_APPROVED` on a video left on `auto`, before the script | Picks the video's style from the style packs' routing data and records it with `choose_visual_style` ([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)) |
 | `tubematic-script-writing-skill` | `TOPIC_APPROVED`, or a script revision | The scripting contract: the choice of a [formula](08-scripting-and-voice.md#formulas), the grammar rules, segments, length, pronunciation, pause markup and each beat's visual brief |
 | `tubematic-create-script-writing-skill` | A script profile is queued at `PENDING` | Extracts a creator's style from transcripts into profile markdown |
@@ -65,7 +65,7 @@ The skill then routes each video by status:
 
 | Status | Action |
 |---|---|
-| `TOPIC_APPROVED` | Invoke the scripting skill, write `script_segments`, upsert lexicon entries, comment, advance to `SCRIPT_READY` |
+| `TOPIC_APPROVED` | Give a video with no [angle](02-pipeline.md#topic-angle) one, or comment that its topic has none. Then invoke the scripting skill, write `script_segments`, upsert lexicon entries, comment, advance to `SCRIPT_READY` |
 | `VOICING` | Call `generate_voice`, which saves the paths and advances to `VOICE_READY`. The skill says the `SCRIPT_READY` approval authorizes the spend, because an agent that asks again leaves the video in `VOICING` |
 | `VOICE_READY` | Invoke the skill `get_video` names in `style.authoring_skill` (the scene-config skill for `auto` and the scene styles), check the image floor where the style has images, `validate_job`, `submit_render`. Queue the render and stop without polling |
 | `REVISION_REQUESTED` | Diagnose from the comment thread and route back, or escalate to `FAILED` |
@@ -139,7 +139,8 @@ filenames, that no copy names another agent's CLI, and that no copy tells an age
 its install denies.
 
 Read `/tubematic-submit-new-job` before you modify it. It scores the topic against the
-producibility rubric and stops below 5. It asks for a voice if the roster has two or more, and for
+producibility rubric and stops below 5. It looks for the topic's angle with the topic-research
+skill's rules, and files the topic without one when it finds none. It asks for a voice if the roster has two or more, and for
 a script profile if any is `READY`. It calls `create_video`, whose result names the agent the video
 was dealt, and asks for a model only if that agent has two or more (reading `agents` from
 `get_pipeline_status`, because only those names are accepted). It calls `update_video` for the

@@ -52,6 +52,7 @@ function mockApi({
   openaiKey = "",
   projects = [] as unknown[],
   post = { status: 201, body: { id: "v1", title: "T", status: "TOPIC_APPROVED" } as unknown },
+  angleKinds = null as unknown,
 } = {}) {
   return vi.spyOn(global, "fetch").mockImplementation((url, init) => {
     const u = url.toString();
@@ -65,6 +66,7 @@ function mockApi({
       });
     }
     if (u.endsWith("/projects")) return ok(projects);
+    if (u.endsWith("/angle-kinds")) return angleKinds === null ? ok({}, 500) : ok(angleKinds);
     if (u.endsWith("/script-profiles")) {
       return ok([profile({}), profile({ id: "p2", name: "Building", status: "GENERATING" })]);
     }
@@ -228,6 +230,76 @@ describe("NewVideoPage", () => {
     await waitFor(() =>
       expect(screen.getByTestId("new-video-error").textContent).toContain("not an installed agent"));
     expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("How DNS resolves a name");
+  });
+
+  // ── The angle (TMDEV-214): optional, and never a reason to refuse ─────────
+
+  const KINDS = [
+    { id: "paradox", label: "Paradox", means: "Something works in a way that seems impossible." },
+    { id: "incident", label: "Incident", means: "A real outage with a timeline." },
+  ];
+
+  it("sends no angle when the field is left empty", async () => {
+    const spy = mockApi({ angleKinds: KINDS });
+    await ready();
+    await screen.findByTestId("new-video-angle");
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy)).not.toHaveProperty("angle"));
+    expect(posted(spy)).not.toHaveProperty("angle_kind");
+  });
+
+  it("sends the sentence and its kind together", async () => {
+    const spy = mockApi({ angleKinds: KINDS });
+    await ready();
+    fill();
+    fireEvent.change(await screen.findByTestId("new-video-angle"),
+      { target: { value: "  The backup reported success for a year.  " } });
+    fireEvent.change(screen.getByTestId("new-video-angle-kind"), { target: { value: "incident" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy)).toMatchObject({
+      angle: "The backup reported success for a year.", angle_kind: "incident",
+    }));
+  });
+
+  it("will not submit a sentence without a kind, or one over the limit", async () => {
+    mockApi({ angleKinds: KINDS });
+    await ready();
+    fill();
+    const submit = screen.getByRole("button", { name: /submit/i }) as HTMLButtonElement;
+    const kind = await screen.findByTestId("new-video-angle-kind") as HTMLSelectElement;
+    // Nothing typed: the kind is not asked for.
+    expect(kind.disabled).toBe(true);
+    expect(submit.disabled).toBe(false);
+    fireEvent.change(screen.getByTestId("new-video-angle"), { target: { value: "A sentence." } });
+    expect(kind.disabled).toBe(false);
+    expect(submit.disabled).toBe(true);
+    fireEvent.change(kind, { target: { value: "paradox" } });
+    expect(submit.disabled).toBe(false);
+    fireEvent.change(screen.getByTestId("new-video-angle"), { target: { value: "x".repeat(301) } });
+    expect(screen.getByText(/^301\/300/)).toBeTruthy();
+    expect(submit.disabled).toBe(true);
+  });
+
+  it("does not offer the angle while the kinds cannot be loaded, and still submits", async () => {
+    const spy = mockApi();
+    await ready();
+    expect(screen.queryByTestId("new-video-angle")).toBeNull();
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy)).not.toHaveProperty("angle"));
+  });
+
+  it("clears the angle with the rest of the form after a submission", async () => {
+    mockApi({ angleKinds: KINDS });
+    await ready();
+    fill();
+    fireEvent.change(await screen.findByTestId("new-video-angle"), { target: { value: "A sentence." } });
+    fireEvent.change(screen.getByTestId("new-video-angle-kind"), { target: { value: "paradox" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(screen.getByTestId("new-video-success")).toBeTruthy());
+    expect((screen.getByTestId("new-video-angle") as HTMLTextAreaElement).value).toBe("");
+    expect((screen.getByTestId("new-video-angle-kind") as HTMLSelectElement).value).toBe("");
   });
 
   it("confirms the submission and clears the form", async () => {

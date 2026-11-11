@@ -28,6 +28,15 @@ a topic scores on whichever track fits, and scoring on both just means it is ric
 
 Step 2 — If score < 5: explain why the topic scores too low and suggest how to reframe it. Do NOT create a video.
 
+Step 2.5 — Find the topic's angle: one sentence saying what the video's opening will use, its kind,
+and its score. Invoke the tubematic-topic-research skill and follow its section "The angle": the
+kinds, how to write the sentence and the angle score are there. Take the angle from what the user
+wrote; do not research further for it and do not invent an incident, a person or a number.
+  - If the topic has an honest angle, remember ANGLE, ANGLE_KIND and ANGLE_SCORE for Step 4. The
+    score floor of 5 is for scheduled research and does not apply here: pass the score you gave.
+  - If it has none, file the topic without one (leave the three arguments out). Never refuse the
+    user's topic, or ask them to change it, for lacking an angle.
+
 Step 3 — If score ≥ 5: match or create a project domain.
   Call tubematic:list_projects() and find the best matching domain for this topic.
   - If a match exists and its status is 'active', use that project_id.
@@ -59,7 +68,8 @@ Step 4 — Create the video and immediately approve it.
   what dashboard cards show. Compose it, don't clip — TOPIC stays whole and is what the score and
   the script are about, so the title is a name for it, not the first 70 characters of it. If the
   user's topic is already 70 characters or fewer, use it as the title unchanged.
-  tubematic:create_video(topic=TOPIC, title=SHORT_TITLE, strategy="manual", producibility_score=SCORE, project_id=PROJECT_ID, voice_id=CHOSEN_VOICE_ID)
+  tubematic:create_video(topic=TOPIC, title=SHORT_TITLE, strategy="manual", producibility_score=SCORE, project_id=PROJECT_ID, voice_id=CHOSEN_VOICE_ID, angle=ANGLE, angle_kind=ANGLE_KIND, angle_score=ANGLE_SCORE)
+  (leave the three angle arguments out when Step 2.5 found none)
   The result carries the video's agent_id — the agent this video was dealt.
 
   If the user asked for a specific agent (e.g. "have Codex do it"), move the video to it: call
@@ -101,6 +111,7 @@ Then add a comment explaining the score:
 Step 5 — Tell the user:
 - The video ID that was created
 - The producibility score and what drove it
+- The angle the video will open on, its kind and its score (or that the topic was filed with none)
 - The domain/project it was filed under
 - Which script profile it will be written in (or that it uses the generic style)
 - Which agent, model and effort level it will run under (or that it uses the agent's own defaults)

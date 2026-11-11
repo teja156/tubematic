@@ -328,7 +328,7 @@ Three mechanisms guard a video against two writers:
 
 ```mermaid
 flowchart LR
-    A["topic, title,<br/>producibility_score"] --> B["script_segments<br/>→ script"]
+    A["topic, title, angle,<br/>producibility_score"] --> B["script_segments<br/>→ script"]
     B --> C["tts_text, audio.mp3,<br/>timeline.json"]
     C --> D["images/, scene TSX,<br/>scene-config.json"]
     D --> E["video.mp4,<br/>gemini_feedback"]
@@ -336,7 +336,7 @@ flowchart LR
 
 | Stage | Files written | Columns set |
 |---|---|---|
-| Research | none | `topic`, `title`, `strategy`, `producibility_score`, `project_id` |
+| Research | none | `topic`, `title`, `strategy`, `producibility_score`, `project_id`, `angle`, `angle_kind`, `angle_score` |
 | Scripting | none | `script_segments`, `script` |
 | Voicing | `<jobs>/<id>/audio.mp3`, `timeline.json` | `tts_text`, `voice_file_path`, `timeline_path` |
 | Scene authoring | `<jobs>/<id>/images/*`, `scenes/generated/<id>/*.tsx`, `scene-config.json` | `scene_config_path` |
@@ -372,6 +372,47 @@ Five controls limit how much they produce:
 
 The API reports the last two and `scripts/poll.py` enforces them
 ([The Poller](13-the-poller.md#research-caps)).
+
+### Topic angle
+
+A topic carries an angle: what it gives the video's opening. Three columns hold it.
+
+| Column | Holds |
+|---|---|
+| `videos.angle` | One sentence, at most 300 characters (`ANGLE_MAX_CHARS`), saying what the opening will use. `''` means no angle |
+| `videos.angle_kind` | The angle's kind, a key of `ANGLE_KINDS`, or `''`. Stored together with `angle`: both or neither |
+| `videos.angle_score` | How strong the angle is, 0 to 10. 0 means unscored |
+
+`tubematic_core/angles.py` owns the rules. `ANGLE_KINDS` lists the ten kinds, each with a label,
+what a topic must hold for it, and the script formula it is the first choice for. `ANGLE_RUBRIC`
+lists the signals of the score. `angle_error` is the validator that the MCP server and the API both
+call. The topic-research skill's kind table and score table are rendered from the same module by
+`scripts/gen_angle_reference.py`, and the mining prompt takes its text from `prompt_text`, so the
+agent, Gemini and the server read one definition.
+
+Who writes the angle:
+
+| Writer | Where | Rule |
+|---|---|---|
+| Research (curriculum, trending, mining) | `create_video` | Required. A proposal with no angle, or an angle scoring under 5 (`ANGLE_MIN_SCORE`), is refused |
+| A person's own topic | `create_video` with `strategy="manual"`, `POST /videos/manual` | Optional, and the score has no floor |
+| A person, on the dashboard | `PATCH /videos/<id>` | At `TOPIC_PROPOSED` only. A changed angle resets `angle_score` to 0 in the same statement |
+| The agent | `update_video` | At `TOPIC_PROPOSED`, at `REVISION_REQUESTED`, and at `TOPIC_APPROVED` while the stored angle is empty |
+
+The write at `TOPIC_APPROVED` is how a video with no angle gets one: the operator skill looks for
+an angle before the style and the script, and records it or comments that the topic has none. The
+`UPDATE` carries `angle = ''` in its `WHERE`, so that write cannot replace an angle a person
+approved with the topic.
+
+`POST /videos` stores the three fields when they are sent and checks their shape. It does not
+require them, for the same reason it enforces no score floor: the route seeds test and tool data,
+and research files through the MCP server.
+
+A research run reports the subjects it dropped in the summary the agent ends on, which
+`scripts/poll.py` writes to its log. `mine_youtube_topics` returns its own in `not_filed`.
+
+The script-writing skill reads the angle from `get_video`, which adds `angle_formula`: the formula
+the kind points to ([Scripting and Voice](08-scripting-and-voice.md#the-topics-angle)).
 
 ### Domain pause
 
@@ -436,11 +477,13 @@ on by default. With it cleared the video lands at `TOPIC_PROPOSED`.
 
 The two manual routes file differently:
 
-- `/tubematic-submit-new-job` runs inside an agent session, so the agent scores the topic and
-  matches it to a domain, as research does.
+- `/tubematic-submit-new-job` runs inside an agent session, so the agent scores the topic, looks
+  for its [angle](#topic-angle) and matches it to a domain, as research does. A topic with no angle
+  is filed without one.
 - The New Video page has no agent at submit time. Every video it creates goes into one fixed
   domain, **Manual Videos** (id `manual`), with `producibility_score` 0, which the dashboard shows
   as unscored. `create_video` refuses a score below 5, so 0 does not occur on a researched topic.
+  The form's optional angle is stored with `angle_score` 0.
   The domain is created the first time the form is used. It is not a curriculum seed, so it cannot
   be paused and research does not enumerate it, and its description tells the research agent not
   to file a researched topic there ([`POST /videos/manual`](05-http-api.md#post-videosmanual)).
