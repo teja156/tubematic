@@ -50,7 +50,7 @@ flowchart TB
     FLASK --- FILES
     MCP --- FILES
     WORKER --- FILES
-    RENDER ---|"scenes/generated, jobs (read-only)"| FILES
+    RENDER ---|"scenes/generated, jobs"| FILES
     RREND -->|"HTTPS :4443, published only after<br/>onboard.py --step renderers"| FLASK
 
     MCP --> EXT

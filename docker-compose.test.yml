@@ -100,7 +100,7 @@ services:
     image: tubematic-renderer-test-image
     command: python3 /app/api/render_agent.py
     volumes:
-      - test-jobs-data:/jobs:ro
+      - test-jobs-data:/jobs
     networks:
       - tubematic-test-net
     environment:

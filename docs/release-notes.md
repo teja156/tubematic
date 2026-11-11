@@ -88,6 +88,12 @@ If you go back to 2.1.x later:
   rendered as Cartoon 3D, or failed when no GPU was working.
 - Scenes the agent wrote were saved so that only the root user could read them, and `upgrade.py`
   then refused to upgrade. Its message now says why and prints the command that fixes them.
+- Cartoon 3D videos stopped before their render: every preview frame failed with
+  `EROFS: read-only file system`, the agent could not pass the beat gate, and the video was
+  flagged stuck. If you edited `docker-compose.yml` by hand to work around it, you do not need the
+  edit any more. A release-tarball upgrade replaces the file. On a source install, run
+  `git checkout -- docker-compose.yml` before you check out the new version, or Git refuses the
+  checkout.
 
 ---
 

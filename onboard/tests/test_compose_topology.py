@@ -210,12 +210,13 @@ def test_renderer_mounts(services):
     }
 
 
-def test_the_renderer_reads_the_jobs_tree_only(services):
-    """Read-only: the stills server reads job files, and a render works from
-    its downloaded bundle, so nothing in this container may write a job's
-    files — the API, MCP and the worker own them."""
+def test_the_renderer_can_write_the_stills_the_mcp_tools_ask_for(services):
+    """Read-write: the stills server writes the Cartoon 3D stills the MCP
+    container asks for into the video's job folder (it refuses any other
+    path, cartoon-tools/out-path.mjs). Read-only, every still failed with
+    EROFS and no Cartoon 3D video could pass its gate."""
     jobs = [v for v in services["tubematic-renderer"]["volumes"] if v.split(":")[1] == "/jobs"]
-    assert jobs == ["jobs-data:/jobs:ro"]
+    assert jobs == ["jobs-data:/jobs"]
 
 
 def test_worker_mounts(services):
@@ -321,7 +322,7 @@ def test_the_test_stack_renders_through_the_gateway_too():
     with a database mount would hide a renderer that still reads it."""
     test = yaml.safe_load((REPO_ROOT / "docker-compose.test.yml").read_text())
     renderer = test["services"]["tubematic-renderer-test"]
-    assert [v.split(":", 1)[1] for v in renderer["volumes"]] == ["/jobs:ro"]
+    assert [v.split(":", 1)[1] for v in renderer["volumes"]] == ["/jobs"]
     assert _env(renderer)["TUBEMATIC_GATEWAY_URL"] == "https://tubematic-api-test:4443"
     assert set(renderer["secrets"]) == {"builtin_renderer_token", "render_tls_cert"}
     assert {"builtin_renderer_token", "render_tls_key", "render_tls_cert"} <= set(

@@ -35,7 +35,7 @@ rebuilds all four.
 | Mount (container path) | api | mcp | worker | renderer | dashboard |
 |---|---|---|---|---|---|
 | `output-videos` (`/output_videos`) | read-write | | read-write | | read-only |
-| `jobs-data` (`/jobs`) | read-write | read-write | read-write | read-only | |
+| `jobs-data` (`/jobs`) | read-write | read-write | read-write | read-write | |
 | `db-data` (`/data`) | read-write | read-write | read-write | | |
 | `scenes-generated` (`/app/remotion/src/scenes/generated`) | read-write | read-write | | read-write | |
 | `logs-data` (`/logs`) | read-write | read-write | read-write | read-write | |
@@ -125,7 +125,7 @@ the upload into the library and the worker runs the AI review, so the renderer m
 | Mount, variable or secret | Purpose |
 |---|---|
 | `scenes-generated` | Renders compile the shared generated-scene tree. A remote renderer stages the bundle's copy |
-| `jobs-data`, read-only | The stills server reads a video's job files. Renders use the bundle |
+| `jobs-data` | The stills server reads a video's job files and writes Cartoon 3D stills under `<video_id>/cartoon/`. Renders use the bundle |
 | `logs-data` | Its own JSONL log for the dashboard's Logs page |
 | `/etc/localtime`, `/etc/timezone` | Log timestamps in the host zone |
 | `TUBEMATIC_GATEWAY_URL=https://tubematic-api:4443` | Where the gateway is |

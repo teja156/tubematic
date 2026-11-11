@@ -19,6 +19,8 @@
 // current bundle was made from, and re-bundles when it differs: an edit to a video's code is seen by its next still
 // (~20 s once), an unchanged tree costs a directory walk.
 //           GET  /health                   {ok, bundled, browser, public, gl, chromeMode}
+// An out or outDir must lie under <public>/<video>/cartoon/ (out-path.mjs), or the request is answered 400 with
+// nothing drawn: the port has no credential, and in production the public directory is the read-write /jobs volume.
 // Responses: JSON {ok, out | outs, ms, logs}. Browser console lines are collected per request and returned as
 // `logs` (what `npx remotion still` never shows).
 //
@@ -30,6 +32,7 @@
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
+import { planRequest } from "./out-path.mjs";
 import { bundle } from "@remotion/bundler";
 import { openBrowser, renderStill, selectComposition } from "@remotion/renderer";
 import { enableTailwind } from "@remotion/tailwind-v4";
@@ -166,6 +169,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/rebundle") { touch(); await (busy = busy.then(rebundle)); return json(res, 200, { ok: true }); }
     if (req.method === "POST" && (req.url === "/still" || req.url === "/stills")) {
       const b = await body(req);
+      // every file goes under <public>/<video>/cartoon/: checked before any bundle or browser, and the loop below
+      // writes exactly the targets checked here
+      const plan = planRequest(PUBLIC, req.url, b);
+      if (plan.error) return json(res, 400, { ok: false, error: plan.error });
       const t = Date.now();
       const scale = b.scale ?? 1;
       const comp = b.composition ?? "Composition";
@@ -180,19 +187,18 @@ const server = http.createServer(async (req, res) => {
           if (!serveUrl || !browser) throw Object.assign(e instanceof Error ? e : new Error(String(e)), { startFailed: true });
           throw e;
         }
-        if (req.url === "/still") {
-          fs.mkdirSync(path.dirname(b.out), { recursive: true });
-          const logs = await one(comp, props, b.frame ?? 0, b.out, scale);
-          return { ok: true, out: b.out, ms: Date.now() - t, logs };
-        }
-        fs.mkdirSync(b.outDir, { recursive: true });
+        // again now that the request has had its turn: renders are serialised, and a link planted while it waited
+        // would otherwise go unchecked
+        const again = planRequest(PUBLIC, req.url, b);
+        if (again.error) throw Object.assign(new Error(again.error), { refused: true });
         const outs = [];
         const logs = [];
-        for (const f of b.frames) {
-          const out = path.join(b.outDir, `${b.prefix ?? "f"}${String(f).padStart(4, "0")}.png`);
-          logs.push(...(await one(comp, props, f, out, scale)));
+        for (const { frame, out } of again.targets) {
+          fs.mkdirSync(path.dirname(out), { recursive: true });
+          logs.push(...(await one(comp, props, frame, out, scale)));
           outs.push(out);
         }
+        if (req.url === "/still") return { ok: true, out: outs[0], ms: Date.now() - t, logs };
         return { ok: true, outs, ms: Date.now() - t, logs };
       };
       // renders are serialised: one browser, one GPU
@@ -202,6 +208,7 @@ const server = http.createServer(async (req, res) => {
       try {
         return json(res, 200, await p);
       } catch (e) {
+        if (e?.refused) return json(res, 400, { ok: false, error: e.message });
         if (!e?.startFailed) throw e;
         startFailed = String(e?.message ?? e);
         console.log(`[stills] could not start (${startFailed}); exiting so the renderer starts it again`);
