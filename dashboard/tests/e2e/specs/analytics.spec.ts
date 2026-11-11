@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-// The Analytics page's two tabs against the real API. The browser runs in
+// The Analytics page's tabs against the real API. The browser runs in
 // Asia/Tokyo and the test API in America/New_York (playwright.config.ts), so
 // "today" only matches New York's day if the preset was resolved in the host
 // zone rather than the browser's own.
@@ -25,6 +25,9 @@ function manyPublications() {
     published_at: "2026-09-01T00:00:00Z", created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z", title: `Video ${i}`,
     views: 1000 - i, likes: 1, comments: 0, shares: 0, fetched_at: "2026-09-02T00:00:00Z",
+    // YouTube reports all three watch figures; Instagram seconds only here.
+    avg_watch_secs: 20 + (i % 30), watched_pct: i % 2 ? 40.5 + (i % 9) : null,
+    stayed_pct: i % 2 ? 61.2 : null, reach: i % 2 ? null : 400, saves: i % 2 ? null : 3,
   }));
   return {
     totals: { views: 1, likes: 1, comments: 0, shares: 0, videos: 120, publications: 120 },
@@ -40,7 +43,83 @@ async function withManyPublications(page: import("@playwright/test").Page) {
     route.fulfill({ json: manyPublications() }));
 }
 
+function watchGroup(key: string, label: string, videos: number, n = videos) {
+  return {
+    key, label, videos,
+    avg_watch_secs: { median: 31.5, n }, watched_pct: { median: 41.5, n },
+    stayed_pct: { median: 60.2, n },
+  };
+}
+
+/** One account's watch figures with a readable group, a small one and a long
+ *  label. Answered here for the same reason /analytics is. */
+async function withWatchTime(page: import("@playwright/test").Page) {
+  await page.route((url) => url.pathname === "/api/proxy/analytics/watch-time", (route) =>
+    route.fulfill({ json: {
+      accounts: [{ id: "spc_yt", platform: "youtube", videos: 60 },
+                 { id: "spc_ig", platform: "instagram", videos: 60 }],
+      social_account_id: "spc_yt", platform: "youtube", videos: 60, min_group: 20,
+      dimensions: [
+        { id: "visual_style", label: "Visual style", groups: [
+          watchGroup("system_flow", "System Flow", 34),
+          watchGroup("long", "A visual style whose label is much longer than the others", 20, 7),
+          watchGroup("whiteboard", "Whiteboard", 6),
+        ] },
+        { id: "script_profile", label: "Script profile", groups: [watchGroup("", "No profile", 60)] },
+        { id: "domain", label: "Domain", groups: [watchGroup("git", "Git", 60)] },
+        { id: "script_length", label: "Script length",
+          groups: [watchGroup("200", "200 to 249 words", 60)] },
+      ],
+    } }));
+}
+
+/** True when the page itself scrolls sideways: something is wider than the window. */
+async function pageScrollsSideways(page: import("@playwright/test").Page) {
+  return page.evaluate(() =>
+    document.documentElement.scrollWidth > document.documentElement.clientWidth);
+}
+
 test.describe("Analytics", () => {
+  test("the Watch time tab is answered by the real API, which has nothing published",
+    async ({ page }) => {
+      await page.goto("/analytics");
+      await page.getByTestId("tab-watch").click();
+      await expect(page.getByTestId("watch-time-empty")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId("watch-time-error")).toHaveCount(0);
+    });
+
+  for (const width of [1680, 1000]) {
+    test(`at ${width}px the watch columns and the Watch time tab fit the page`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await withManyPublications(page);
+      await withWatchTime(page);
+      await page.goto("/analytics");
+
+      // The list: ten columns. Where they do not fit, the table's own box
+      // scrolls and the page does not.
+      await expect(page.getByTestId("watched-pub1")).toHaveText("21 s", { timeout: 15_000 });
+      await expect(page.getByTestId("watched-pct-pub1")).toHaveText("41.5%");
+      await expect(page.getByTestId("watched-pct-pub0")).toHaveText("—");
+      expect(await pageScrollsSideways(page)).toBe(false);
+      if (width === 1680) {
+        const box = page.getByTestId("analytics-scroll");
+        expect(await box.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      }
+
+      await page.getByTestId("tab-watch").click();
+      await expect(page.getByTestId("watch-group-system_flow")).toBeVisible();
+      await expect(page.getByTestId("watch-small-whiteboard")).toHaveText("TOO FEW");
+      await expect(page.getByTestId("watch-small-system_flow")).toHaveCount(0);
+      // A figure only some of the group's videos report says how many.
+      await expect(page.getByTestId("watch-watched_pct-long")).toContainText("(7 of 20, too few)");
+      expect(await pageScrollsSideways(page)).toBe(false);
+
+      await page.getByTestId("watch-group-by").selectOption("script_length");
+      await expect(page.getByTestId("watch-group-200")).toContainText("200 to 249 words");
+    });
+  }
+
+
   test("graphs sit right of the table, which scrolls in its own box and loads as it goes",
     async ({ page }) => {
       await page.setViewportSize({ width: 1400, height: 900 });

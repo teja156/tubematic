@@ -16,6 +16,7 @@ import { isScored, videoStreamUrl } from "@/lib/utils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReviseDialog } from "@/components/ReviseDialog";
 import { PublishDialog } from "@/components/PublishDialog";
+import { PublicationFigures } from "@/components/PublicationFigures";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
@@ -1207,12 +1208,13 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                             {pub.error}
                           </p>
                         )}
+                        <PublicationFigures pub={pub} timeZone={timeZone} tzLabel={tzLabel} />
                       </div>
                     ))}
                     <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--mute)",
                                 marginTop: 14 }}>
-                      View counts and other figures live on the Analytics page — this tab is where
-                      the video went and whether it got there.
+                      Figures are each post&apos;s latest snapshot. The Analytics page compares
+                      them across videos.
                     </p>
                   </TabsContent>
                 )}

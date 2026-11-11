@@ -131,6 +131,9 @@ comment. The status stays as it was. The row, its comments, its publication link
 are kept, and the dashboard's Archive page lists them. The dashboard's Delete action
 (`DELETE /videos/<id>`, [HTTP API](05-http-api.md#videos)) calls the same function.
 
+`archive_video` also stores the video's length in `videos.duration_secs`, because Analytics needs
+it after `timeline.json` is gone. See [Watch figures](14-publishing.md#watch-figures).
+
 The sweep is in the worker because it needs the database and the filesystem, and the poller has no
 database access. It runs hourly, with the stamp row `last_retention_sweep_at` shared by both passes.
 

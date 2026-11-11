@@ -1111,6 +1111,57 @@ describe("VideoModal — publishing", () => {
     expect(await screen.findByTestId("publication-error-pubX")).toBeInTheDocument();
     expect(screen.queryByTestId("publication-url-pubX")).toBeNull();
   });
+
+  // TMDEV-212: each post's latest snapshot, read from the same request.
+  it("shows how a post is doing, with what the platform did not report said in words", async () => {
+    // Instagram: seconds and reach and saves, a share only because the video's
+    // length is stored, and never a stayed-to-watch figure.
+    const video = makeVideo("PUBLISHED");
+    mockFetchWithPublications(video, [{
+      ...LIVE_POST, platform: "instagram", views: 1500, likes: 30, comments: 0, shares: 6,
+      avg_watch_secs: 23.5, watched_pct: 25, stayed_pct: null, reach: 410, saves: 12,
+      fetched_at: "2026-09-02T00:00:00Z",
+    }]);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    fireEvent.click(await screen.findByText("Publishing Results"));
+    const figures = await screen.findByTestId("publication-figures-pub1");
+    expect(screen.getByTestId("figure-pub1-Views")).toHaveTextContent("1,500");
+    expect(screen.getByTestId("figure-pub1-Comments")).toHaveTextContent("0");
+    expect(screen.getByTestId("figure-pub1-Watched")).toHaveTextContent("23.5 s");
+    expect(screen.getByTestId("figure-pub1-% watched")).toHaveTextContent("25%");
+    expect(screen.getByTestId("figure-pub1-Stayed")).toHaveTextContent("not reported");
+    expect(screen.getByTestId("figure-pub1-Reach")).toHaveTextContent("410");
+    expect(screen.getByTestId("figure-pub1-Saves")).toHaveTextContent("12");
+    expect(figures).toHaveTextContent("Read ");
+  });
+
+  it("says a post has not been read yet instead of listing blanks", async () => {
+    const video = makeVideo("PUBLISHED");
+    mockFetchWithPublications(video, [{
+      ...LIVE_POST, views: null, likes: null, comments: null, shares: null,
+      avg_watch_secs: null, watched_pct: null, stayed_pct: null, reach: null, saves: null,
+      fetched_at: null,
+    }]);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    fireEvent.click(await screen.findByText("Publishing Results"));
+    expect(await screen.findByTestId("publication-figures-pub1"))
+      .toHaveTextContent("No figures read yet");
+    expect(screen.queryByTestId("figure-pub1-Views")).toBeNull();
+  });
+
+  it("shows no figures for a failed target, or from an API that sends none", async () => {
+    const video = makeVideo("PUBLISHED");
+    mockFetchWithPublications(video, [
+      LIVE_POST,
+      { ...LIVE_POST, id: "pub2", status: "FAILED", post_url: "", error: "nope",
+        views: null, fetched_at: null },
+    ]);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    fireEvent.click(await screen.findByText("Publishing Results"));
+    await screen.findByTestId("publication-pub1");
+    expect(screen.queryByTestId("publication-figures-pub1")).toBeNull();
+    expect(screen.queryByTestId("publication-figures-pub2")).toBeNull();
+  });
 });
 
 /**
