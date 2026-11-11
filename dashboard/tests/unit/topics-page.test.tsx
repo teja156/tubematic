@@ -1049,11 +1049,11 @@ describe("TopicsPage — domain summary and agent defaults", () => {
       default_agent_id: "claude", default_agent_model: "", default_agent_effort: "" });
   });
 
-  // POST /projects replaces the whole row. A save built from the row as the
-  // page last heard it would send a change still in flight back as blank, and
-  // the first pick would be lost with no error.
-  it("builds a second change on a first one that has not been answered yet", async () => {
-    const spy = mockDomains([PLAIN]);
+  // POST /projects replaces the whole row, so saves to one domain run one at
+  // a time, each built from the row as the save before it left it. Sent side
+  // by side, the second would carry the first field as it was before, and the
+  // first pick would be lost with no error.
+  function holdPosts(spy: ReturnType<typeof mockDomains>) {
     const answer = spy.getMockImplementation()!;
     let release: () => void = () => {};
     const held = new Promise<void>((resolve) => { release = resolve; });
@@ -1061,6 +1061,41 @@ describe("TopicsPage — domain summary and agent defaults", () => {
       if (url.toString().endsWith("/projects") && init?.method === "POST") await held;
       return answer(url, init);
     });
+    return () => release();
+  }
+
+  it("sends a second change after the first is answered, and with it", async () => {
+    const spy = mockDomains([PLAIN]);
+    const release = holdPosts(spy);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    await waitFor(() => expect(options("domain-agent-plain-1")).toHaveLength(3));
+    fireEvent.change(screen.getByTestId("domain-agent-plain-1"), { target: { value: "codex" } });
+    fireEvent.change(screen.getByTestId("domain-agent-effort-plain-1"), { target: { value: "low" } });
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    release();
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
+    expect(projectPosts(spy)[1]).toMatchObject({
+      default_agent_id: "codex", default_agent_effort: "low" });
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
+      .toBe("AgentCodex · low"));
+  });
+
+  it("a refused change does not ride on the change made after it", async () => {
+    // Only the agent change is refused; the effort change behind it must go
+    // out without it and be saved.
+    const spy = mockDomains([PLAIN]);
+    const answer = spy.getMockImplementation()!;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().endsWith("/projects") && init?.method === "POST"
+          && JSON.parse(String(init.body)).default_agent_id === "codex") {
+        return Promise.resolve({ ok: false, status: 400,
+          json: () => Promise.resolve({ error: "default_agent_id 'codex' is uninstalled" }) } as Response);
+      }
+      return answer(url, init);
+    });
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
     await openDefaults("plain-1");
@@ -1068,11 +1103,61 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     fireEvent.change(screen.getByTestId("domain-agent-plain-1"), { target: { value: "codex" } });
     fireEvent.change(screen.getByTestId("domain-agent-effort-plain-1"), { target: { value: "low" } });
     await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
-    expect(projectPosts(spy)[1]).toMatchObject({
-      default_agent_id: "codex", default_agent_effort: "low" });
-    release();
+    expect(projectPosts(spy)[1]).toMatchObject({ default_agent_id: "", default_agent_effort: "low" });
+    expect(alertSpy).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
-      .toBe("AgentCodex · low"));
+      .toBe("AgentAutomatic · low"));
+  });
+
+  it("reports a save that could not reach the API and keeps the row as it was", async () => {
+    const spy = mockDomains([PLAIN]);
+    const answer = spy.getMockImplementation()!;
+    let down = true;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (down && url.toString().endsWith("/projects") && init?.method === "POST") {
+        return Promise.reject(new TypeError("Failed to fetch"));
+      }
+      return answer(url, init);
+    });
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    const effort = await waitFor(() => screen.getByTestId("domain-agent-effort-plain-1") as HTMLSelectElement);
+    fireEvent.change(effort, { target: { value: "low" } });
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith("Could not change this domain's agent's effort"));
+    expect(effort.value).toBe("");
+    expect(screen.queryByTestId("domain-chip-agent-plain-1")).toBeNull();
+    // The next save is not stuck behind the failed one.
+    down = false;
+    fireEvent.change(effort, { target: { value: "max" } });
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
+      .toBe("AgentAutomatic · max"));
+  });
+
+  it("a pause and a change to the same domain do not cross", async () => {
+    // A change sent while a pause is unanswered would re-send status "active"
+    // on the full replace and undo the pause.
+    const spy = mockDomains([{ ...DOMAIN, default_agent_id: "", default_agent_model: "" }]);
+    const answer = spy.getMockImplementation()!;
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    spy.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().includes("/status")) {
+        await held;
+        return { ok: true, json: () => Promise.resolve({}) } as Response;
+      }
+      return answer(url, init);
+    });
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    fireEvent.click(screen.getByTestId("toggle-domain-seed-1"));
+    fireEvent.change(screen.getByTestId("domain-agent-effort-seed-1"), { target: { value: "low" } });
+    expect(projectPosts(spy)).toHaveLength(0);
+    release();
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    expect(projectPosts(spy)[0]).toMatchObject({ status: "paused", default_agent_effort: "low" });
   });
 
   it("an effort alone reads as Automatic with that effort", async () => {

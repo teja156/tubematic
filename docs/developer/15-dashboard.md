@@ -262,8 +262,11 @@ The Mascots page's create form uses the same agent, model and effort controls
   are controls in a panel under its row, opened by **Edit defaults**, and each change is saved at
   once. The route replaces the whole row, so every edit sends every field again.
   `lib/domains.ts::domainDefaults` is the list of defaults.
-- A change shows on the row before the API answers, so that a second change made in that gap is
-  sent with the first. A refused change is put back after its alert.
+- Writes to one domain run one at a time: each change on its row, and a pause or resume. Each is
+  built from the row as the write before it left it, because the route replaces the whole row. Two
+  changes sent side by side would each carry the other's field as it was, and one would be lost.
+  A refused change, or one that did not reach the API, is reported in an alert and the row keeps
+  what is stored.
 - A closed row is one line: the name, a chip for each default the domain sets
   (`lib/domains.ts::domainChips`), the topic and video counts, the status and the pause button. The
   panel is rendered only while its row is open.

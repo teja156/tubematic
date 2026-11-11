@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Agent, GpuStatus, Mascot, Project, ProjectStatus, ScriptProfile, Voice } from "@/lib/types";
 import { AGENT_EFFORTS, effortOptionLabel } from "@/lib/agents";
 import {
@@ -804,7 +804,26 @@ const SAVED_FIELD: Record<string, string> = {
 
 
 export default function TopicsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjectsState] = useState<Project[]>([]);
+  // The rows as of the last write, readable by a save the moment the one
+  // before it finishes. State alone is too late for that: it reaches a closure
+  // only on the next render. Every write to the list goes through setProjects.
+  const projectsRef = useRef<Project[]>([]);
+  function setProjects(next: (prev: Project[]) => Project[]) {
+    projectsRef.current = next(projectsRef.current);
+    setProjectsState(projectsRef.current);
+  }
+  // One chain of writes per domain. POST /projects replaces the whole row, so
+  // two writes to one domain sent side by side would each carry the other's
+  // field as it was before, and the later answer would win with the earlier
+  // change lost. Queued, each is built from the row as the one before left it,
+  // and a refused one is simply not there for the next. A pause goes through
+  // the same chain, or a change sent behind it would re-send "active".
+  const domainWrites = useRef<Record<string, Promise<void>>>({});
+  function queued(id: string, write: () => Promise<void>) {
+    const run = (domainWrites.current[id] ?? Promise.resolve()).then(write);
+    domainWrites.current[id] = run.catch(() => {});
+  }
   const [videoCounts, setVideoCounts] = useState<Record<string, number>>({});
   const [activeStrategies, setActiveStrategies] = useState<string[]>(["curriculum", "trending", "mining"]);
   const [miningUrls, setMiningUrls] = useState<string[]>([]);
@@ -839,7 +858,7 @@ export default function TopicsPage() {
     ]);
     if (projRes.ok) {
       const p: Project[] = await projRes.json();
-      setProjects(p);
+      setProjects(() => p);
     }
     if (vidRes.ok) {
       const vids: Array<{ project_id: string | null }> = await vidRes.json();
@@ -895,71 +914,64 @@ export default function TopicsPage() {
       .catch(() => {});
   }, []);
 
-  async function handleToggleDomain(id: string, next: ProjectStatus) {
-    const r = await apiFetch(`/projects/${id}/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: next }),
+  function handleToggleDomain(id: string, next: ProjectStatus) {
+    queued(id, async () => {
+      const r = await apiFetch(`/projects/${id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      }).catch(() => null);
+      // A refusal is reported, not shown as success: only a curriculum seed can
+      // be paused, and the row may have stopped being one since this page loaded.
+      if (!r?.ok) {
+        const body = r ? await r.json().catch(() => ({})) : {};
+        alert(body.error ?? "Could not change this domain's status");
+        return;
+      }
+      setProjects((prev) => prev.map((p) => p.id === id ? { ...p, status: next } : p));
     });
-    // A refusal is reported, not shown as success: only a curriculum seed can
-    // be paused, and the row may have stopped being one since this page loaded.
-    if (!r.ok) {
-      const body = await r.json().catch(() => ({}));
-      alert(body.error ?? "Could not change this domain's status");
-      return;
-    }
-    setProjects((prev) => prev.map((p) => p.id === id ? { ...p, status: next } : p));
   }
 
-  async function saveDomain(id: string, patch: Partial<Project>) {
-    const project = projects.find((p) => p.id === id);
-    if (!project) return;
-    const next = { ...project, ...patch };
-    // POST /projects is an upsert, and its ON CONFLICT clause overwrites every
-    // column it is given — so the unchanged fields have to be sent back or
-    // they are blanked. That is why this re-sends every editable field rather
-    // than posting the one that changed; a field missing here is a field any
-    // other edit silently clears. domainDefaults is the list of defaults: an
-    // omitted default_mascot_id would reset to "use the install default", an
-    // omitted default_agent_id to Automatic.
-    //
-    // The change shows at once, before the API answers. A second change made
-    // in that gap is then built on the first; built on the row as last heard
-    // from the API, this full replace would send the first one back blank.
-    setProjects((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p));
-    const r = await apiFetch("/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: next.id,
-        name: next.name,
-        description: next.description,
-        is_curriculum_seed: next.is_curriculum_seed === 1,
-        status: next.status,
-        ...domainDefaults(next),
-        topic_cap: next.topic_cap,
-      }),
+  function saveDomain(id: string, patch: Partial<Project>) {
+    queued(id, async () => {
+      const project = projectsRef.current.find((p) => p.id === id);
+      if (!project) return;
+      const next = { ...project, ...patch };
+      // POST /projects is an upsert, and its ON CONFLICT clause overwrites every
+      // column it is given — so the unchanged fields have to be sent back or
+      // they are blanked. That is why this re-sends every editable field rather
+      // than posting the one that changed; a field missing here is a field any
+      // other edit silently clears. domainDefaults is the list of defaults: an
+      // omitted default_mascot_id would reset to "use the install default", an
+      // omitted default_agent_id to Automatic.
+      const r = await apiFetch("/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: next.id,
+          name: next.name,
+          description: next.description,
+          is_curriculum_seed: next.is_curriculum_seed === 1,
+          status: next.status,
+          ...domainDefaults(next),
+          topic_cap: next.topic_cap,
+        }),
+      }).catch(() => null);
+      // A save that never reached the API is reported like a refused one, and
+      // the row keeps showing what is stored.
+      if (!r?.ok) {
+        const body = r ? await r.json().catch(() => ({})) : {};
+        alert(body.error ?? `Could not change this domain's ${SAVED_FIELD[Object.keys(patch)[0]] ?? "settings"}`);
+        return;
+      }
+      // The saved row carries the topic count and expiry as they are now. The
+      // count loaded with the page can be stale (research may have filed since),
+      // so expiry is never worked out here from the new cap. The id check keeps
+      // a response that is not a project row from being merged in.
+      const saved = await r.json().catch(() => null);
+      const fresh = saved && saved.id === id ? (saved as Project) : {};
+      setProjects((prev) => prev.map((p) => p.id === id ? { ...p, ...patch, ...fresh } : p));
     });
-    if (!r.ok) {
-      const body = await r.json().catch(() => ({}));
-      alert(body.error ?? `Could not change this domain's ${SAVED_FIELD[Object.keys(patch)[0]] ?? "settings"}`);
-      // Nothing was stored: put back what this save changed, and only that.
-      const undo = Object.fromEntries(
-        (Object.keys(patch) as (keyof Project)[]).map((k) => [k, project[k]]));
-      setProjects((prev) => prev.map((p) => p.id === id ? { ...p, ...undo } : p));
-      return;
-    }
-    // The saved row carries the topic count and expiry as they are now. The
-    // count loaded with the page can be stale (research may have filed since),
-    // so expiry is never worked out here from the new cap. Only those two are
-    // taken from it: the rest of the row is what was sent, and merging it
-    // would undo a later change that this answer does not know about. The id
-    // check keeps a response that is not a project row from being merged in.
-    const saved = await r.json().catch(() => null);
-    if (saved && saved.id === id) {
-      const { topic_count, expired } = saved as Project;
-      setProjects((prev) => prev.map((p) => p.id === id ? { ...p, topic_count, expired } : p));
-    }
   }
 
   async function handleModeChange(next: string[]) {
