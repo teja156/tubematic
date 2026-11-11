@@ -777,7 +777,7 @@
         "system_flow"
       ],
       "future": "",
-      "note": "Mixed-scenes probe: real banks as photographs, and a borrower, a banker and a ratings agent acting out the steps. Motion Graphics draws no figures; Stick shows no real photographs."
+      "note": "Mixed-scenes probe: real banks as full-frame pictures, and a borrower, a banker and a ratings agent doing each step. Motion Graphics draws no figures; Stick Explainer shows pictures only in small panels."
     },
     {
       "title": "Three famous inventions found by accident",
@@ -1168,7 +1168,7 @@
     },
     {
       "title": "How Silicon Valley Bank collapsed in 48 hours",
-      "brief": "The real bank and its headquarters, the bond losses on its books, then depositors acting out the run: one group chat, a queue of withdrawals, $42 billion gone in a day.",
+      "brief": "The real bank and its headquarters, the bond losses on its books, then the run: worried founders in one group chat pull their money, withdrawals pile up, and $42 billion leaves in a day.",
       "expect": [
         "scenes"
       ],
@@ -1178,11 +1178,11 @@
         "case_file_story"
       ],
       "future": "",
-      "note": "Mixed-scenes probe: a real, named bank shown in photographs, and generic depositors acting out the run."
+      "note": "Mixed-scenes probe: a real, named bank shown in pictures, and generic depositors whose run is the mechanism."
     },
     {
       "title": "How the 1929 stock market crash happened",
-      "brief": "Real photographs of Wall Street and the panicked crowds, and an ordinary investor and a broker acting out buying on margin, the margin call and the forced sale that turned the fall into a crash.",
+      "brief": "Real photographs of Wall Street and the crowds outside the exchange, and an ordinary investor who buys on margin through his broker, gets the margin call and is forced to sell as prices fall.",
       "expect": [
         "scenes"
       ],
@@ -1192,7 +1192,7 @@
         "whiteboard"
       ],
       "future": "",
-      "note": "Mixed-scenes probe: real photographs of a real event, and generic people acting out the mechanism. Motion Graphics draws no figures; Stick shows no real photographs."
+      "note": "Mixed-scenes probe: real photographs of a real event, and generic people whose steps are the mechanism. Motion Graphics draws no figures; Stick Explainer shows pictures only in small panels."
     }
   ]
 }

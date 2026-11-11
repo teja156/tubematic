@@ -58,7 +58,7 @@ class _Resp:
     def __init__(self, body):
         self._body = json.dumps(body).encode()
 
-    def read(self, n=-1):
+    def read1(self, n=-1):
         out, self._body = (self._body, b"") if n < 0 else (self._body[:n], self._body[n:])
         return out
 
@@ -110,14 +110,74 @@ def test_the_report_shows_the_cost_when_there_is_one():
     assert "Cost:" not in ev.render_report(rows, "sonnet", "2026-11-11 12:00")
 
 
+def _serve(handler_body):
+    """A one-shot HTTP server on loopback; returns its URL."""
+    import http.server
+    import threading
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            handler_body(self)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.handle_request, daemon=True).start()
+    return f"http://127.0.0.1:{srv.server_port}/", srv
+
+
 def test_openrouter_gives_up_on_a_reply_that_trickles_past_the_deadline(monkeypatch):
-    clock = iter([0.0, 3.0, 6.0, 9.0])
-    monkeypatch.setattr(ev.time, "monotonic", lambda: next(clock))
+    # OpenRouter keeps a slow request open with whitespace: the socket timeout
+    # never fires, so only the call's own deadline can stop it.
+    import time
 
-    class Trickle(_Resp):
-        def read(self, n=-1):
-            return b" "  # OpenRouter's keep-alive whitespace, forever
+    def trickle(h):
+        h.send_response(200)
+        h.send_header("Content-Type", "application/json")
+        h.end_headers()
+        for _ in range(40):
+            try:
+                h.wfile.write(b" ")
+                h.wfile.flush()
+            except OSError:
+                return
+            time.sleep(0.1)
 
-    monkeypatch.setattr(ev.urllib.request, "urlopen", lambda req, timeout: Trickle({}))
+    url, srv = _serve(trickle)
+    monkeypatch.setattr(ev, "OPENROUTER_URL", url)
+    started = time.monotonic()
+    answer, err, _ = ev.ask_openrouter("v", "s", "m", 1, "k")
+    srv.server_close()
+    assert answer is None and err == "timed out after 1 s"
+    assert time.monotonic() - started < 2.5
+
+
+def test_openrouter_reads_a_reply_that_arrives_in_pieces(monkeypatch):
+    import time
+    body = json.dumps({"choices": [{"message": {"content": '{"style": "stick"}'}}]}).encode()
+
+    def slow(h):
+        h.send_response(200)
+        h.send_header("Content-Length", str(len(body) + 3))
+        h.end_headers()
+        h.wfile.write(b"   ")
+        h.wfile.flush()
+        time.sleep(0.2)
+        h.wfile.write(body)
+
+    url, srv = _serve(slow)
+    monkeypatch.setattr(ev, "OPENROUTER_URL", url)
     answer, err, _ = ev.ask_openrouter("v", "s", "m", 5, "k")
-    assert answer is None and err == "timed out after 5 s"
+    srv.server_close()
+    assert answer["style"] == "stick" and err == ""
+
+
+def test_openrouter_survives_odd_bodies(monkeypatch):
+    monkeypatch.setattr(ev.urllib.request, "urlopen", lambda req, timeout: _Resp(["not", "an", "object"]))
+    assert ev.ask_openrouter("v", "s", "m", 5, "k")[0] is None
+    monkeypatch.setattr(ev.urllib.request, "urlopen", lambda req, timeout: _Resp(
+        {"choices": [{"message": {"content": '{"style": "stick"}'}}], "usage": {"cost": "n/a"}}))
+    answer, _, cost = ev.ask_openrouter("v", "s", "m", 5, "k")
+    assert answer["style"] == "stick" and cost == 0.0

@@ -25,6 +25,7 @@ to run. CI checks the topic set itself (tubematic_core/tests/test_style_routing.
 """
 import argparse
 import datetime
+import http.client
 import json
 import os
 import pathlib
@@ -125,16 +126,21 @@ def ask_openrouter(prompt: str, system: str, model: str, timeout: int,
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             chunks = []
-            while chunk := resp.read(65536):
+            while chunk := resp.read1(65536):  # read() would wait for the whole 64 KB
                 chunks.append(chunk)
                 if time.monotonic() > deadline:
                     return None, f"timed out after {timeout} s", 0.0
             data = json.loads(b"".join(chunks))
     except urllib.error.HTTPError as e:
         return None, f"HTTP {e.code}: {e.read().decode(errors='replace')[-300:]}", 0.0
-    except (urllib.error.URLError, OSError, ValueError) as e:
-        return None, f"request failed: {e}"[-300:], 0.0
-    cost = float((data.get("usage") or {}).get("cost") or 0)
+    except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as e:
+        return None, f"request failed: {e!r}"[-300:], 0.0
+    if not isinstance(data, dict):
+        return None, f"no answer: {json.dumps(data)[-300:]}", 0.0
+    try:
+        cost = float((data.get("usage") or {}).get("cost") or 0)
+    except (TypeError, ValueError):
+        cost = 0.0
     try:
         result = data["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError):

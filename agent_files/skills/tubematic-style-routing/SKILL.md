@@ -106,9 +106,11 @@ A candidate is a **clear fit** with at least 3 points.
 - When at least one candidate is a clear fit, pick the one with the most points.
 - When none is, pick `scenes`. Do not pick a style that half fits: a topic forced into a style made
   for something else is worse than the mixed scene system.
-- A style that carries only some of the beats (the pictures but not the people acting a step, or the
-  reverse) half fits, however many points those beats earn it. When `scenes`' `best_for` describes
-  the topic, `scenes` is the clear fit.
+- A style that carries only some of the beats half fits, however many points those beats earn it.
+  This applies only when the topic plainly needs two treatments no single candidate has, and the
+  first entry of `scenes`' `best_for` names that pair (for example full-frame pictures of real
+  things next to roles acted out by figures). Then `scenes` is the clear fit. Otherwise the most
+  points win.
 - When two clear fits are within 1 point of each other, break the tie (Step 5).
 
 ## Step 5: Break ties, in this order
@@ -126,9 +128,9 @@ The right style for this topic is right even if the last three videos used it.
 ## Step 6: Choose a runner-up
 
 The runner-up is the candidate a person is most likely to want instead: the next-highest available
-candidate with at least 1 point. When you picked a style, `scenes` is the runner-up if no other
-candidate scored. When you picked `scenes`, the runner-up is the best-scoring style, or `""` if none
-scored at all.
+candidate with at least 1 point, `scenes` included. When you picked a style and nothing else scored,
+the runner-up is `scenes`. When you picked `scenes`, the runner-up is the best-scoring style, or
+`""` if none scored at all.
 
 ## Step 7: Record it
 

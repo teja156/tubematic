@@ -747,6 +747,9 @@ is called.
 - `--openrouter` sends the skill as the system message and the video as the user message, with the
   key as a bearer token; a reply with no answer is an error, and a missing key stops the run before
   any call. The report shows the run's cost when OpenRouter reports one.
+- A reply that trickles whitespace past the deadline is given up on in time, and a reply that
+  arrives in pieces is still read whole, both against a server on loopback. OpenRouter holds a slow
+  request open with whitespace, which a socket timeout never catches.
 
 ### `test_topic_angle_skills.py`
 

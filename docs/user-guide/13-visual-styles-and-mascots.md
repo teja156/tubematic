@@ -90,7 +90,8 @@ It may pick a style that generates images, which costs more per video. It does n
 variety: the same kind of topic gets the same style every time.
 
 The agent keeps **mixed scenes** when the topic needs two things no single style has, such as
-photographs of a real bank next to people acting out the run on it, or when no style clearly fits.
+full-frame pictures of a real bank next to stick figures acting out the run on it, or when no style
+clearly fits.
 A real event told only through its pictures and diagrams goes to Motion Graphics. The agent then
 chooses a dark or a white canvas for the whole video once the voice exists (dark when images carry
 the video, white when roles, processes and diagrams do), and draws each part of the script in
