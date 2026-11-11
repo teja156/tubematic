@@ -62,6 +62,10 @@ const GRID = "#17181D";
 const TONE: Record<Tone, string> = { white: WHITE, blue: BLUE_HOT, gold: GOLD_HOT };
 
 const G = GEOMETRY;
+// The gap under a big numeral. A numeral drawn at line-height 1 still measures
+// about 1.28 em tall (the text-layout audit measured 217 px at 170 px), so a
+// smaller gap made the audit report every stat overlapping its own label.
+const STAT_GAP = 26;
 const BAND_H = G.plateBottom - G.plateTop;
 const inOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
 const f1 = (n: number) => n.toFixed(1);
@@ -295,7 +299,7 @@ const Stat: React.FC<{ e: UTHStat; frame: number }> = ({ e, frame }) => {
       <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: G.statFontPx, lineHeight: 1, color: WHITE, letterSpacing: -4 }}>
         {statText(v, e.decimals ?? 0, e.prefix ?? "", e.suffix ?? "")}
       </div>
-      <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 36, letterSpacing: 3, color: "#D8D8DA", textTransform: "uppercase", marginTop: 6, whiteSpace: "nowrap" }}>
+      <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 36, letterSpacing: 3, color: "#D8D8DA", textTransform: "uppercase", marginTop: STAT_GAP, whiteSpace: "nowrap" }}>
         {e.label}
       </div>
       {e.chip && chipIn > 0 && (
@@ -347,7 +351,7 @@ const ChartText: React.FC<{ e: UTHChart; frame: number }> = ({ e, frame }) => {
           {statText(v, e.decimals ?? 0, e.prefix ?? "", e.suffix ?? "")}
         </div>
         {e.chip && chipIn > 0 && (
-          <div style={{ display: "inline-block", marginTop: 10, padding: "6px 18px", background: BLUE, borderRadius: 8, fontFamily: MONO, fontWeight: 700, fontSize: 34, color: WHITE, opacity: chipIn >= 1 ? undefined : chipIn }}>
+          <div style={{ display: "inline-block", marginTop: STAT_GAP, padding: "6px 18px", background: BLUE, borderRadius: 8, fontFamily: MONO, fontWeight: 700, fontSize: 34, color: WHITE, opacity: chipIn >= 1 ? undefined : chipIn }}>
             {e.chip}
           </div>
         )}

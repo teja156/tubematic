@@ -103,10 +103,10 @@ export const GEOMETRY = {
   // The stat block, right-aligned; its top is one of two slots.
   statRight: 1010,
   statUpperTop: 500,
-  statLowerTop: 1050,
+  statLowerTop: 1030,
   // Sizes measured from the bundled fonts: a numeral is up to 106 px a
   // character (125 for %), a capital in the label about 26 on average.
-  statHeight: 300,
+  statHeight: 320,
   statFontPx: 170,
   statCharPx: 110,
   statLabelCharPx: 28,
