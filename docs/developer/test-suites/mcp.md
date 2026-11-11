@@ -483,6 +483,36 @@ Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean E
   other scenes on a Bean Explainer video. `emphasis` beyond the narration's last word, on more than
   one word in 5, repeated, or not a list of numbers is refused, on any style.
 
+### `test_storybook_atlas.py`
+
+Covers `mcp/storybook_atlas.py`, the checks `write_scene_config` and `validate_job` run on a Storybook
+Atlas config, the `label` caption background, `render_storybook_props`, and the text audit's
+per-stretch sampling ([Storybook Atlas](../10-scene-authoring.md#storybook-atlas)).
+
+- The limits, timings, stage, acts and other lists equal the renderer's, and titles wrap and walks are
+  timed as in `fixtures/storybook_atlas_contract.json`, whose cases the renderer's own `stage.ts`
+  produced (a walk in from the edge, a walk cut short by the next move, an exit). Regenerate them from
+  `stage.ts` when its rules change; never edit them by hand.
+- The pack carries the prop catalogue, and the caption band `mascots.caption_band` gives for the
+  pack's captions holds a two-line label, so a mascot stays out of it.
+- The skill's worked example passes. Each refusal names its chapter or event and cause: a bad coat,
+  knob or name, too many people, too few chapters, a chapter off the words or too short, a title or
+  byline too long, an unknown backdrop, entrance, prop, pose or act, an event off the words or in the
+  chapter's last frames, a prop off the stage, a wall prop at a bad height, an act before its prop
+  lands, a tag on nothing, the guide standing inside a prop or on a person, a plate too short,
+  overlapping another or with something else happening under it, constellation words that cannot be
+  lettered, gauge values out of range, a morph that is both or neither, a push with no portal, a still
+  stretch, three people on stage, and two name tags that touch. A person walking past the guide is
+  fine: only where people stand is checked.
+- A bad `customProps` entry and a prop file that breaks a rule (no default export, another import,
+  a filter, SVG text, a gradient, randomness) are refused; the example moth passes.
+- `write_scene_config` writes a sound config with the style's captions, refuses a missing prop file, a
+  broken config before writing anything, and `StorybookAtlas` on another style. `background: "label"`
+  is accepted on any style and an unknown background is refused. `validate_job`'s re-check finds a
+  prop redrawn with a filter. `render_storybook_props` refuses another style, a video with no config
+  and a config with no `customProps`, and returns the picture with the Storybook script (the renderer
+  stubbed).
+
 ### `test_choose_visual_style.py`
 
 Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back

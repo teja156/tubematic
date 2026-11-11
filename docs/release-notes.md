@@ -11,9 +11,10 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds two visual styles: System Flow, which turns a video into a diagram that builds itself
-while the narrator explains a system, and Bean Explainer, a cartoon character that reacts to the
-narration among everyday props. Auto now picks a video's style before its script is written.
+2.2.0 adds three visual styles: System Flow, which turns a video into a diagram that builds itself
+while the narrator explains a system; Bean Explainer, a cartoon character that reacts to the
+narration among everyday props; and Storybook Atlas, a picture book that tells the story of an
+invention or an idea in chapters. Auto now picks a video's style before its script is written.
 
 ### Upgrade notes
 
@@ -23,7 +24,7 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs new skills for System Flow, Bean Explainer and Auto's style choice, and a session
+   installs new skills for System Flow, Bean Explainer, Storybook Atlas and Auto's style choice, and a session
    started before it does not have them.
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did
@@ -41,10 +42,10 @@ sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow or Bean Explainer cannot render on 2.1.x. Finish it, or switch it to
-  another style while it waits at its topic, before you go back.
-- A domain whose default style is System Flow or Bean Explainer starts its new videos on Auto under
-  2.1.x.
+- A video set to System Flow, Bean Explainer or Storybook Atlas cannot render on 2.1.x. Finish it,
+  or switch it to another style while it waits at its topic, before you go back.
+- A domain whose default style is System Flow, Bean Explainer or Storybook Atlas starts its new
+  videos on Auto under 2.1.x.
 
 ### Added
 
@@ -65,7 +66,21 @@ If you go back to 2.1.x later:
   generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's default;
   Auto can pick it for a topic that fits. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Storybook Atlas visual style (experimental). The video is a vintage picture book on hatched
+  paper, told by a calm storyteller in three to five chapters. Each chapter opens with a plaque (a
+  numeral, a title, a place or a date, a wax seal) over a hand-drawn room or landscape. A small mouse
+  in a waistcoat walks beside the story without speaking, and the people of the story walk in as flat
+  picture-book figures named by printed tags, never drawn as a likeness. Objects from a library of
+  about 40 (a relay computer, a telegraph, a printing press, a lighthouse, and any the agent draws for
+  the video in the same style) arrive on the narrator's words. Star lettering, a brass gauge or a
+  swirl of ink dots that becomes a picture mark the high points, and chapters change by a push
+  through a door or porthole or a hatched wipe. It suits the history of an invention, a discovery or
+  an idea, and needs no image generation and no GPU. Choose it for a topic, on the **New Video**
+  page, or as a domain's default; Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
+- Captions can be a small printed label: an ivory plate hugging one short phrase, with a diamond each
+  side. Storybook Atlas videos use it.
 - A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
   agent writes a new script for it, which is voiced when you approve it. See

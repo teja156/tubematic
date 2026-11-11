@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 50 tools
+## The 51 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -143,6 +143,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`delete_scene_file`](#delete_scene_file) | Delete one generated scene or module |
 | [`list_scene_files`](#list_scene_files) | List generated and installed scenes |
 | [`render_bean_props`](#render_bean_props) | Render a Bean Explainer video's own props as a picture |
+| [`render_storybook_props`](#render_storybook_props) | Render a Storybook Atlas video's own props as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
 | [`get_timeline`](#get_timeline) | Read `timeline.json` |
@@ -593,8 +594,9 @@ while it renders.
 `read_scene_file(scene_name, video_id="", source="generated")` returns a scene's source.
 `scene_name` is the bare stem, or the composed `"<video_id>/<scene_name>"` that `list_scene_files`
 returns. `source="installed"` reads the installed library. An installed name may also be a path
-inside an installed scene's folder, up to three parts (`beanExplainer/props/lifeProps`), which is
-how a Bean Explainer agent reads the library props it models its own on. The path must match
+inside an installed scene's folder, up to three parts (`beanExplainer/props/lifeProps`,
+`storybookAtlas/props/things`), which is how a Bean Explainer or Storybook Atlas agent reads the
+library props it models its own on. The path must match
 `_INSTALLED_NESTED` and resolve inside the installed library.
 
 A Cartoon 3D module is named bare with its `video_id` (`sets/street.ts`) or composed as
@@ -630,6 +632,17 @@ outlined in red, so ink outside the box shows a box too small for the layout che
   error and renders nothing. The render's own timeout (`bean_preview.py::TIMEOUT_SECS`, 240 s) is
   shorter than that wait, so a `validate_job` queued behind a preview gets its turn. A preview killed
   on its timeout leaves its bundle folder in `bean-tools/.tmp/`, which the next preview removes.
+
+### `render_storybook_props`
+
+`render_storybook_props(video_id)` renders the props a Storybook Atlas video's agent drew for it (the
+config's `customProps`, so `write_scene_config` comes first) on the book's paper and returns the
+picture after a JSON block. Each prop is drawn in every state, with its declared box outlined in red, a
+line under it saying whether the drawing fits the box, and the guide beside it at the same scale
+([Storybook Atlas](10-scene-authoring.md#storybook-atlas)). It runs the same way as
+`render_bean_props`: `bean_preview.py::render_preview` with `script=STORYBOOK_SCRIPT` runs
+`renderer/remotion/storybook-tools/render-props.mjs` on software GL, under the same lock and
+timeouts, and a killed preview leaves its folder in `storybook-tools/.tmp/`.
 
 ### `list_scene_files`
 
@@ -673,6 +686,12 @@ It checks:
   no still stretch over 3 seconds). No other style may use `BeanExplainer`. The style pack's caption
   settings fill every `subtitles` key the config leaves out. The rules are in
   [Bean Explainer](10-scene-authoring.md#bean-explainer).
+- A `storybook_atlas` video holds the one installed `StorybookAtlas` scene, and its chapters pass
+  `mcp/storybook_atlas.py` (chapters and events on word starts, the catalogue, the video's own props
+  and their files, plates, people and tags that do not stand in one place, no still stretch over 4
+  seconds). No other style may use `StorybookAtlas`. The style pack's caption settings fill every
+  `subtitles` key the config leaves out. The rules are in
+  [Storybook Atlas](10-scene-authoring.md#storybook-atlas).
 - `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
 
 It records two things in the same transaction as the rename of the staged file into place:
@@ -723,9 +742,9 @@ because the array is large.
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
    and the [beat gate](#cartoon_beat_gate) has passed for the source on disk. An open gate is one
    error naming the tool that closes it. A symlink anywhere in the source tree fails the check.
-9. A Bean Explainer video's own props: each file its `customProps` names exists and still passes
-   the source rules `write_scene_config` applied, since the agent may have redrawn it since
-   (`server.py::_bean_custom_prop_errors`).
+9. A Bean Explainer or Storybook Atlas video's own props: each file its `customProps` names exists
+   and still passes the source rules `write_scene_config` applied, since the agent may have redrawn
+   it since (`server.py::_bean_custom_prop_errors`, `server.py::_storybook_custom_prop_errors`).
 10. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
    `write_scene_config` already checked the cues (see
    [the `mascot` key](10-scene-authoring.md#mascots)).

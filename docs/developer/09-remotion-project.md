@@ -300,6 +300,9 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - A Bean Explainer video has the one `BeanExplainer` scene and its sections and shots pass the Bean
   Explainer checks; no other video uses `BeanExplainer`
   ([Scene Authoring](10-scene-authoring.md#bean-explainer)).
+- A Storybook Atlas video has the one `StorybookAtlas` scene and its chapters pass the Storybook
+  Atlas checks; no other video uses `StorybookAtlas`
+  ([Scene Authoring](10-scene-authoring.md#storybook-atlas)).
 
 The tool refuses the write while another session holds the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
@@ -307,8 +310,8 @@ is queued or rendering (`status_mismatch`).
 
 `canvas` is the only default the tool writes into most files. A System Flow config with no
 `subtitles` also gets its style pack's caption settings, because its captions are part of the style's
-look. A Bean Explainer config gets them under whatever `subtitles` keys it sets, so a config that
-sets only `emphasis` keeps the look. The
+look. A Bean Explainer or Storybook Atlas config gets them under whatever `subtitles` keys it sets,
+so a config that sets only `emphasis` keeps the look. The
 components apply the other defaults at render time, so a changed default reaches every video whose
 config omits the key.
 
@@ -334,7 +337,7 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `fontFamily` | `system-ui, sans-serif` | A non-empty string. See [Fonts](#fonts) |
 | `fontSize` | `62` | 28 to 120 |
 | `color` | `null` | A CSS colour. `null` follows the canvas: white on dark, near-black on light |
-| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate) or `"none"` |
+| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label hugging the phrase, a diamond each side, every word at full strength, a 2-frame fade and no rise) or `"none"` |
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
 | `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
@@ -449,6 +452,24 @@ scene imports them under a `delayRender` handle, and one that fails to load fail
 `BeanPropPreview` composition, from a bundle entry it writes per call into `bean-tools/.tmp/`
 (ignored by git) that imports only that video's prop files. The contract and the reason the bean is drawn as a cached bitmap
 are in [Bean Explainer](10-scene-authoring.md#bean-explainer).
+
+### `StorybookAtlas`
+
+`StorybookAtlas` draws a whole Storybook Atlas video from `props.storybookAtlas`, with its own paper,
+frame, plaque, backdrops, guide, people, props and plates; its helpers and the prop library are in
+`storybookAtlas/`. It loads EB Garamond from `public/fonts/` before the first frame; the style's
+caption label uses it too, which this scene loads. The `StorybookSheet` composition renders the guide,
+the people and their knobs, every backdrop as a chapter frame and the prop library (each prop with a
+check that its drawing fits its box), one page per frame, for a person to check a drawing: `npx
+remotion still src/index.ts StorybookSheet out.png --frame=<page>`. `--props='{"group":"<file>"}'`
+shows one prop file's props and `--props='{"chapter":"<backdrop>"}'` one backdrop; `"hold"`,
+`"frames"` and `"drop"` make it a render-cost probe. No video uses it.
+
+A Storybook Atlas video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
+imported the same way as Bean Explainer's. `storybook-tools/render-props.mjs` renders them for the
+`render_storybook_props` tool on the `StorybookPropPreview` composition, from a bundle entry it writes
+per call into `storybook-tools/.tmp/` (ignored by git). The contract and the reason every drawing is a
+cached bitmap are in [Storybook Atlas](10-scene-authoring.md#storybook-atlas).
 
 ### Figure and panel components
 
@@ -598,3 +619,6 @@ uses [@dagrejs/dagre](https://github.com/dagrejs/dagre) (MIT License).
 `BeanExplainer`'s bean and props are original drawings. Its fonts in `public/fonts/` are Fredoka,
 Patrick Hand and Instrument Sans, each under the SIL Open Font License 1.1, with the license beside
 them.
+
+`StorybookAtlas`'s guide, people, props and backdrops are original drawings. Its font in
+`public/fonts/` is EB Garamond, under the SIL Open Font License 1.1, with the license beside it.

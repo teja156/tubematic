@@ -50,8 +50,8 @@ skill also call a style a **register**.
 style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
-does not decide any beat's treatment. `cartoon_3d`, `system_flow` and `bean_explainer` replace the
-scene system with one whole-video scene of their own.
+does not decide any beat's treatment. `cartoon_3d`, `system_flow`, `bean_explainer` and
+`storybook_atlas` replace the scene system with one whole-video scene of their own.
 
 | `visual_style` | Canvas | Figures | Hand-drawn line art | Generated characters |
 |---|---|---|---|---|
@@ -61,6 +61,7 @@ scene system with one whole-video scene of their own.
 | `illustrated` | The agent chooses | Yes | No | Yes |
 | `system_flow` | `dark` | No | No | No |
 | `bean_explainer` | `light`, painted over by its own colour field | Its own cast | No | No |
+| `storybook_atlas` | `light`, painted over by its own paper | Its own cast | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
@@ -68,8 +69,9 @@ The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `ch
 `characters_allowed` gates the `generate_character` tool. `figures_allowed` and `line_art_allowed` go
 into the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses), so the reviewer judges a video
 against the look it was meant to have. `cartoon_3d` replaces the scene system with one 3D world
-([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)), and
-`bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)).
+([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)),
+`bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)), and
+`storybook_atlas` with one picture-book scene ([Storybook Atlas](#storybook-atlas)).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
 chosen. Two styles have a need:
@@ -105,7 +107,7 @@ style.
 | `captions` | Optional. The `subtitles` settings `write_scene_config` fills in when a config has none |
 | `routing` | What Auto reads to pick a style: `best_for`, `avoid_for`, `signals`, and the optional `moods` and `images` (below) |
 | `script` | Optional. How to write the narration and each segment's `visual` brief for this style; `get_video` returns it as `style.script` and the script-writing skill follows it |
-| `extra` | Style-specific data, such as System Flow's icon list or Bean Explainer's cast and prop catalogue |
+| `extra` | Style-specific data, such as System Flow's icon list or Bean Explainer's and Storybook Atlas's cast and prop catalogues |
 
 The `routing` block lists what the style suits (`best_for`), what it must not get (`avoid_for`) and
 the signals in a topic or script that point to it (`signals`). Two fields are optional: `moods`, the
@@ -601,6 +603,101 @@ prop files again as they are on disk (`server.py::_bean_custom_prop_errors`), be
 redraws a prop after the config is written. The text-layout audit samples each shot
 as if it were a scene, from the end of the badge carousel when the shot opens a list section. A Bean Explainer video can have a mascot; the skill keeps it small and to one
 side.
+
+---
+
+## Storybook Atlas
+
+A Storybook Atlas video is one installed scene, `StorybookAtlas`, that spans the whole video: a vintage
+picture book told in 3 to 5 chapters. Each chapter opens with a plaque (a Roman numeral, a typed title,
+an italic byline, a wax seal) over a backdrop; a small mouse in a waistcoat, the guide, walks beside the
+story, and flat picture-book people and hatched props arrive on the narrator's words. The agent writes no
+scene code. Its props carry `storybookAtlas: {guide, cast, chapters, customProps}`, written with the
+`tubematic-storybook-atlas` skill, whose `reference/contract.md` documents every field, the backdrops,
+the people's knobs and the prop catalogue, and whose `reference/example-config.json` is the worked
+example.
+
+- A chapter has a `start` on a word, a `title`, a `byline`, a `backdrop` from a set of ten, and an
+  `enter`: `push` through a prop with a portal (a door, a porthole, the relay cabinet) into white, or a
+  hatched diagonal `wipe`.
+- The cast is at most four people, each made of knobs (build, skin, hair, face, hat, garment, colour)
+  on one rig and named by a tag printed under their feet. A person from history is shown by name and
+  costume, never by likeness. The guide is the same house character in every video; only its waistcoat
+  colour changes.
+
+| Event | What the scene draws |
+|---|---|
+| `guide`, `person` | The actor walks on twos to `x` at 9 px a frame, then holds a pose; a person's first event walks them in from the nearer edge, `exit` walks them off |
+| `prop` | A library prop, or one the agent drew, pops, drops, slides, rises or fades in, and stays for the chapter |
+| `act` | The prop moves once (wobble, bounce, shake, spin, swing, pulse), gets a halo (`glow`), switches to its second drawing (`switch`), or runs through its drawings (`cycle`) |
+| `tag` | A small printed label under a prop |
+| `constellation` | A plate: stars drift into letters and gold strokes join them, then optionally redraw a second set of words |
+| `gauge` | A plate: a brass dial whose needle springs to a value past it and settles |
+| `morph` | A plate: an ink-dot galaxy scatters and regroups as a prop's silhouette or a word, then the drawing fades in |
+
+A plate opens over the stage behind brass shutters and nothing else happens on stage while it is open.
+
+Most props come from a library of 43, drawn once in the book's ink and checked by a person on a model
+sheet (the `StorybookSheet` composition, which also shows the guide, the people and the backdrops). For
+an object the story is about that the library lacks, the agent draws its own as a TSX component in
+`generated/<video_id>/prop-<name>.tsx`, lists it in `customProps` with its box, place, states and acts,
+and looks at it with [`render_storybook_props`](06-mcp-server.md#render_storybook_props). A custom prop
+can be a morph target and, with a `portal`, a push's way into the next chapter.
+
+The renderer's side is `src/scenes/installed/StorybookAtlas.tsx` with `storybookAtlas/`:
+
+- `contract.ts` holds the limits, timings and stage; the prop catalogue is written beside each drawing in
+  `props/`, and the pack's `extra.props` is a copy the validator reads.
+- `stage.ts` works out what is on stage at a frame: walks, props and their states, plates and
+  transitions.
+- `bitmap.tsx` draws each picture once and reuses it: every backdrop, prop state and look of the guide
+  or a person is a bitmap, and a frame only moves, scales and fades bitmaps.
+- `plates.tsx` draws the three plates, `glyphs.ts` the constellation lettering (A to Z and 0 to 9 as
+  polylines on a 4 by 6 grid).
+- `StorybookPropPreview.tsx` is the picture `render_storybook_props` returns.
+
+On the CPU renderer a frame costs in proportion to how much fine detail the whole frame holds, because
+every frame is screenshotted and encoded, and each full-frame textured layer adds about 0.13
+CPU-seconds a frame however still it is. So the backdrop is the one full-frame picture: a canvas
+painted once, with the book's frame and vignette drawn into it, and there is no paper grain (noise over
+the hatching cost about 0.18 CPU-seconds a frame by itself). The live parts follow System Flow's
+rules: no SVG filter, gradient, pattern or `stroke-dasharray`. A plate repaints its canvas only while
+something on it moves. The whole worked example costs SA_COST CPU-seconds a frame; the measurements
+are in `StorybookAtlas.tsx`'s header comment.
+
+`mcp/storybook_atlas.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `storybook_atlas` video has anything but the one `StorybookAtlas` scene, from frame 0 for
+  `totalFrames`, or another style uses `StorybookAtlas`.
+- There are fewer than 3 or more than 5 chapters, the first does not start at frame 0, a later one does
+  not start within 2 frames of a word, or a chapter lasts under 8 seconds.
+- A title does not fit 2 lines of 18 characters, a byline runs past 28, or a backdrop, coat, knob, pose,
+  prop, entrance or act is not in the catalogue or the video's `customProps`.
+- An event is not on a word, or comes in its chapter's last 20 frames; an act starts before its prop has
+  landed; a tag goes on a prop not yet on stage; a push has no portal prop on stage in the chapter
+  before.
+- A plate lasts under 2.5 or over 8 seconds, overlaps another, or does not close before the chapter
+  ends, or anything else happens on stage while it is open; a constellation's words are not 1 or 2
+  words of letters and digits; a gauge's values are not between 0 and its maximum.
+- The cast is over four, more than two people are on stage at once, or a chapter holds more than six
+  props.
+- A prop reaches outside the stage, floor props or wall props overlap each other, two people or a
+  person and the guide stand in one place, someone stands inside a floor prop, or two name tags touch.
+  Only where people stand still is checked; walking past is free.
+- A custom prop breaks Bean Explainer's rules for one (its count, id, `src` and box) or its source
+  imports anything but `react` and the style's `ink` and `palette`, or uses an SVG filter, a gradient,
+  a pattern of its own, a dashed stroke, SVG text, an image, a fetch, randomness or the clock
+  (`storybook_atlas.py::FORBIDDEN_SOURCE`). SVG text is refused because a prop is drawn into a bitmap,
+  where the page's fonts do not reach.
+- Nothing new happens on stage for more than 4 seconds.
+
+`mcp/tests/test_storybook_atlas.py` pins `storybook_atlas.py` to `contract.ts` and `stage.ts` through
+the shared cases in `fixtures/storybook_atlas_contract.json`, which `stage.ts` itself generated. The
+pack's `captions` (the `label` caption background) fill every `subtitles` key the config leaves out.
+`validate_job` checks the custom prop files again as they are on disk
+(`server.py::_storybook_custom_prop_errors`). The text-layout audit samples each stretch between two
+events once things have arrived. A Storybook Atlas video can have a mascot; the skill keeps it small and
+to one side, away from the guide.
 
 ---
 

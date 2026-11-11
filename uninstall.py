@@ -36,6 +36,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-cartoon3d",
     "tubematic-system-flow",
     "tubematic-bean-explainer",
+    "tubematic-storybook-atlas",
     "tubematic-style-routing",
     "tubematic-mascot-builder",
 ]
