@@ -1,0 +1,99 @@
+{
+  "id": "terminal_doc",
+  "label": "Terminal Doc",
+  "order": 70,
+  "experimental": false,
+  "renderer": "dom",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-terminal-doc",
+  "allows": {
+    "figures": false,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "review": "- This video is a Terminal Doc, a dark typographic documentary where the text is the picture, and the following are its intended, approved look: a near-black canvas, mostly empty; sparse monospace capitals in white and grey; letters that lift out of a word and arc into a new order; a string flying into a corner-bracket box labelled with an operation (HASH, BASE64) and coming out as another string; numbers that resolve out of flickering glyph noise, right to left; a faint grey wall of ciphertext behind the stage; a typed command line with a block caret; a stream of guesses racing through one slot until one locks; thin bracket lines under a string with a short label, and a quoted source with a [n] citation below; at most one red or blue glowing element at a time; long held beats with something small changing every few seconds; hard cuts between beats, sometimes a CRT-off collapse to a line. A video may use the amber CRT skin instead: amber pixel lettering, scanlines, a dark vignette and a soft glow on every glyph. Captions are a terminal log strip: a LOG label and a running clock over a hairline, monospace capitals typed on word by word behind a prompt, the word being spoken in red (amber in the CRT skin) with a block caret. Do NOT report the on-screen text, the typing, the noise glyphs, the ciphertext wall, the empty frame or the lack of pictures as defects, and do not suggest adding images, icons, people, colour or texture: they are the style.\n- Do report: text cut off at the frame edge or running into other text, a bracket or label over a string, text too small to read on a phone, a glow on a string the narration is not talking about at that moment, a value shown wrong (a hash, a count, a number that does not match what is said), stage text that repeats the sentence being spoken instead of showing the thing it is about, and a stretch of more than about three seconds where nothing on screen changes.\n",
+  "captions": {
+    "background": "log",
+    "position": 0.75,
+    "color": "#f1f1f1",
+    "accent": "#ff2a2a",
+    "fontFamily": "'IBM Plex Mono', monospace",
+    "fontSize": 54,
+    "maxWords": 4,
+    "uppercase": true
+  },
+  "script": "Every beat's `visual` is a **text** brief: the one string, number or quoted source on stage and what happens to it (`\"SUNSHINE flies into a HASH box and comes out as a hex digest\"`, `\"the keyspace 208,827,064,576 resolves out of noise\"`). The video is typography throughout, so a role (\"an attacker\", \"the server\") is never drawn: it is named in the narration while the stage shows the string it acts on.\n\nThe narration is a sober documentary voice over a mostly empty dark frame. Name the exact string, key, hash, number or date the viewer should watch, because it becomes the picture: \"the word SUNSHINE\", \"two hundred and eight billion\", \"in 1990\". Give each sentence one transformation (a word is hashed, letters are swapped, a number is counted) and give a number its own sentence when it is the punchline. When a claim needs a source, say where it comes from (\"a 2023 benchmark\"), because it becomes a bracket note with a citation. Never write a beat that needs a person, a place or a photograph: this style has none.",
+  "routing": {
+    "best_for": [
+      "cryptography, ciphers and codes",
+      "passwords, hashes, keys and encodings",
+      "a string, key or number transformed step by step (encoded, encrypted, hashed, scrambled)",
+      "unsolved codes and famous ciphers",
+      "what a computer does with text and numbers under the hood",
+      "computing history told through one command, message or number"
+    ],
+    "avoid_for": [
+      "components passing requests, packets or messages between each other (System Flow draws those)",
+      "arithmetic or reasoning worked out step by step by hand (Whiteboard fits it)",
+      "real, named things the viewer came to see as pictures (Motion Graphics)",
+      "lists of everyday habits or behaviours one person reacts to (Bean Explainer)",
+      "places, journeys and geography",
+      "people's life stories and characters the viewer must recognise"
+    ],
+    "signals": [
+      "the script turns on one word, password, key, hash or string",
+      "something is encoded, encrypted or transformed letter by letter",
+      "one large number is the punchline (a keyspace, a count, a time to crack)",
+      "the script quotes a source, a message or a date as evidence",
+      "a command typed at a terminal and what it prints"
+    ],
+    "moods": [
+      "sober",
+      "mysterious",
+      "precise"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  },
+  "extra": {
+    "skins": {
+      "house": {
+        "label": "near-black, white and grey monospace, red and blue glow",
+        "captions": {}
+      },
+      "crt": {
+        "label": "amber CRT phosphor: pixel lettering, scanlines, vignette",
+        "captions": {
+          "color": "#ffb000",
+          "accent": "#ffe7a8",
+          "fontFamily": "VT323, monospace",
+          "fontSize": 62
+        }
+      }
+    },
+    "moves": {
+      "word": "a string appears in a slot (scramble, type or cut)",
+      "rearrange": "the letters of one string lift and arc into another string",
+      "encode": "a string flies into a labelled box and comes out as another string",
+      "number": "a number resolves out of glyph noise right to left, or counts up",
+      "wall": "the grey ciphertext wall behind the stage: level 0 off, 1 faint, 2 bright",
+      "grid": "an alphabet or table builds row by row across the whole stage",
+      "stream": "guesses race through a slot and lock on the target string",
+      "bracket": "a hairline bracket under an element with a short label, and an optional quoted note with a citation",
+      "glow": "one element (or one row or span of it) turns red or blue and blooms",
+      "type": "a command typed behind a $ prompt, with up to three output lines",
+      "push": "a slow push-in over a held beat",
+      "clear": "elements fade out",
+      "custom": "a move the agent wrote for this video"
+    },
+    "slots": ["context", "a", "b", "c", "note", "stage"],
+    "sizes": {"s": 40, "m": 64, "l": 96, "xl": 128},
+    "tones": ["white", "grey", "dim", "red", "blue"],
+    "reveals": ["scramble", "type", "cut"],
+    "cuts": ["hard", "collapse"]
+  }
+}

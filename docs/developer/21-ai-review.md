@@ -96,8 +96,8 @@ The style flags come from `pipeline.py::effective_canvas`, `figures_allowed` and
 
 A [style pack](10-scene-authoring.md#style-packs) may carry its own `review` text, which
 `render_results.py` passes as `style_block`. When it is present it replaces the canvas and figure
-blocks, which describe the scene system's styles. System Flow, Bean Explainer and Whiteboard carry
-one.
+blocks, which describe the scene system's styles. System Flow, Bean Explainer, Whiteboard and
+Terminal Doc carry one.
 
 ## The prompt's guard clauses
 
@@ -119,6 +119,7 @@ paid re-voice. Each clause below prevents one. Keep them.
 | System Flow (from its pack) | Dimmed parts, dotted connectors with travelling lights, a glow on the active box, a moving camera and no people or images are the style. It still lists what to report | The dimming and missing imagery read as defects against the dark-canvas contract |
 | Bean Explainer (from its pack) | A flat colour field, a thick-outlined bean that snaps between poses and holds still, props that build up until each cut, and no photographs are the style. It still lists what to report | The held poses and missing imagery read as broken animation and an unfinished video |
 | Whiteboard (from its pack) | A flat white board, three inks, a floating marker, glides with no cuts, writing that lands about half a second after its word, and small writing in the closing pull-back are the style. It still lists what to report | Every video is reported for lagging writing and an unreadable ending |
+| Terminal Doc (from its pack) | Sparse monospace text, typing, glyph noise, a ciphertext wall, an empty dark frame, the amber CRT skin and the typed log captions are the style. It still lists what to report, including stage text that repeats the sentence being spoken | On-screen text reads as duplicated narration and the empty frame as an unfinished video |
 | Two scripts | Where the written and spoken forms differ, audio matching the spoken form is correct. An IPA transcription between slashes is spoken as the sounds it spells | Every working respelling or IPA term is reported as a mispronunciation |
 | Decorative suggestions | A suggestion must critique something in the video. Adding a glow, an icon or a flourish does not count, and an empty list is acceptable | The model pads `suggestions`, and any suggestion costs a revision round |
 

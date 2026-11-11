@@ -21,6 +21,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Illustrated** | Generated cartoon or rendered characters that stay the same from scene to scene | An OpenAI key |
 | **System Flow** | A dark canvas with one diagram per subject. Components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors while the narration explains each step. No people and no images | Nothing |
 | **Bean Explainer (experimental)** | A bald cartoon character with a thick outline reacts pose by pose to the narration on a bright colour field, while props and short handwritten labels build up beside it. No images | Nothing |
+| **Terminal Doc** | A dark, mostly empty screen where the text is the picture: monospace capitals that scramble, rearrange and resolve out of noise, and quoted sources with citations. An amber CRT look suits retro computing topics. Captions are typed into a log strip. No images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 | **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
 
@@ -47,6 +48,9 @@ background would flash, and a viewer reads that as a broken render.
   how people behave, and "every X explained" lists, where each item gets its own section. The props
   come from a fixed library of everyday objects, so it suits subjects a phone, a coin, a clock or a
   sign can stand for better than specific real products or places. It is experimental.
+- Choose **Terminal Doc** for topics that turn on a word, a key or a number: ciphers and codes,
+  passwords and hashes, encodings, famous unsolved codes, what a computer does with text. It has no
+  pictures of real things or people, so it does not suit places or life stories.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
 - Choose **Whiteboard** for an idea worked out step by step: a formula built up, money arithmetic
   such as interest or a percentage, a chain of causes that ends in one picture, two ideas side by
@@ -91,6 +95,9 @@ before the video renders. A Whiteboard video is the same again: the agent picks 
 draw for each step from a fixed set of layouts and a library of simple drawings, times it to the
 narration, and draws a simple one of its own, checked before use, when the library has nothing for
 an object such as a bicycle.
+A Terminal Doc video too: the agent picks the house look or the amber CRT
+look and times every word, number and bracket to the narration, and for a transformation no shipped
+animation shows (a letter shift, two strings combined) it writes one and checks it first.
 
 ### Where you choose
 

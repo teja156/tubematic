@@ -51,6 +51,7 @@ from tubematic_core import mascots as tmascots
 import system_flow  # board windows for the whole-video System Flow scene (TMDEV-196)
 import whiteboard  # region windows for the whole-video Whiteboard scene (TMDEV-197)
 import bean_explainer  # shot windows for the whole-video Bean Explainer scene (TMDEV-198)
+import terminal_doc  # beat windows for the whole-video Terminal Doc scene (TMDEV-199)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
 
@@ -219,6 +220,21 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
                 last = s_end - 1 - bean_explainer.TIMING["endMargin"]
                 if first > last:
                     first = last = s_start + max(0, (s_end - s_start) // 2)
+                span = last - first
+                count = min(SAMPLES_PER_SCENE, span + 1)
+                step = max(1, span // max(1, count - 1))
+                passes.append({"scene": index, "first": first, "step": step,
+                               "count": min(count, span // step + 1)})
+            continue
+        # A Terminal Doc scene spans the whole video too; each beat is a cut and
+        # is sampled like a scene, up to where its last move must have finished.
+        beats = terminal_doc.beat_windows(scene_config) if terminal_doc.is_td_scene(scene) else []
+        if beats:
+            for b_start, b_end in beats:
+                first = min(b_start + ENTRANCE_ALLOWANCE_FRAMES, b_end - 1)
+                last = b_end - 1 - terminal_doc.TIMING["readMargin"]
+                if first > last:
+                    first = last = b_start + max(0, (b_end - b_start) // 2)
                 span = last - first
                 count = min(SAMPLES_PER_SCENE, span + 1)
                 step = max(1, span // max(1, count - 1))

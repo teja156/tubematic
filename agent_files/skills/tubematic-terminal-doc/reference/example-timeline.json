@@ -1,0 +1,422 @@
+{
+ "totalFrames": 1188,
+ "fps": 30,
+ "audioDurationSeconds": 39.6,
+ "words": [
+  {
+   "word": "Your",
+   "startFrame": 6,
+   "endFrame": 16
+  },
+  {
+   "word": "password",
+   "startFrame": 17,
+   "endFrame": 31
+  },
+  {
+   "word": "is",
+   "startFrame": 32,
+   "endFrame": 40
+  },
+  {
+   "word": "never",
+   "startFrame": 41,
+   "endFrame": 52
+  },
+  {
+   "word": "stored",
+   "startFrame": 53,
+   "endFrame": 65
+  },
+  {
+   "word": "the",
+   "startFrame": 66,
+   "endFrame": 75
+  },
+  {
+   "word": "way",
+   "startFrame": 76,
+   "endFrame": 85
+  },
+  {
+   "word": "you",
+   "startFrame": 86,
+   "endFrame": 95
+  },
+  {
+   "word": "typed",
+   "startFrame": 96,
+   "endFrame": 107
+  },
+  {
+   "word": "it.",
+   "startFrame": 108,
+   "endFrame": 116
+  },
+  {
+   "word": "The",
+   "startFrame": 138,
+   "endFrame": 147
+  },
+  {
+   "word": "server",
+   "startFrame": 148,
+   "endFrame": 160
+  },
+  {
+   "word": "runs",
+   "startFrame": 161,
+   "endFrame": 171
+  },
+  {
+   "word": "it",
+   "startFrame": 172,
+   "endFrame": 180
+  },
+  {
+   "word": "through",
+   "startFrame": 181,
+   "endFrame": 194
+  },
+  {
+   "word": "a",
+   "startFrame": 195,
+   "endFrame": 202
+  },
+  {
+   "word": "hash",
+   "startFrame": 203,
+   "endFrame": 213
+  },
+  {
+   "word": "and",
+   "startFrame": 214,
+   "endFrame": 223
+  },
+  {
+   "word": "keeps",
+   "startFrame": 224,
+   "endFrame": 235
+  },
+  {
+   "word": "only",
+   "startFrame": 236,
+   "endFrame": 246
+  },
+  {
+   "word": "the",
+   "startFrame": 247,
+   "endFrame": 256
+  },
+  {
+   "word": "result.",
+   "startFrame": 257,
+   "endFrame": 269
+  },
+  {
+   "word": "Eight",
+   "startFrame": 291,
+   "endFrame": 302
+  },
+  {
+   "word": "lowercase",
+   "startFrame": 303,
+   "endFrame": 319
+  },
+  {
+   "word": "letters",
+   "startFrame": 320,
+   "endFrame": 333
+  },
+  {
+   "word": "allow",
+   "startFrame": 334,
+   "endFrame": 345
+  },
+  {
+   "word": "about",
+   "startFrame": 346,
+   "endFrame": 357
+  },
+  {
+   "word": "two",
+   "startFrame": 358,
+   "endFrame": 367
+  },
+  {
+   "word": "hundred",
+   "startFrame": 368,
+   "endFrame": 381
+  },
+  {
+   "word": "and",
+   "startFrame": 382,
+   "endFrame": 391
+  },
+  {
+   "word": "eight",
+   "startFrame": 392,
+   "endFrame": 403
+  },
+  {
+   "word": "billion",
+   "startFrame": 404,
+   "endFrame": 417
+  },
+  {
+   "word": "combinations.",
+   "startFrame": 418,
+   "endFrame": 437
+  },
+  {
+   "word": "Nobody",
+   "startFrame": 459,
+   "endFrame": 471
+  },
+  {
+   "word": "reverses",
+   "startFrame": 472,
+   "endFrame": 486
+  },
+  {
+   "word": "the",
+   "startFrame": 487,
+   "endFrame": 496
+  },
+  {
+   "word": "hash.",
+   "startFrame": 497,
+   "endFrame": 507
+  },
+  {
+   "word": "A",
+   "startFrame": 517,
+   "endFrame": 524
+  },
+  {
+   "word": "graphics",
+   "startFrame": 525,
+   "endFrame": 539
+  },
+  {
+   "word": "card",
+   "startFrame": 540,
+   "endFrame": 550
+  },
+  {
+   "word": "just",
+   "startFrame": 551,
+   "endFrame": 561
+  },
+  {
+   "word": "guesses,",
+   "startFrame": 562,
+   "endFrame": 575
+  },
+  {
+   "word": "ten",
+   "startFrame": 585,
+   "endFrame": 594
+  },
+  {
+   "word": "billion",
+   "startFrame": 595,
+   "endFrame": 608
+  },
+  {
+   "word": "times",
+   "startFrame": 609,
+   "endFrame": 620
+  },
+  {
+   "word": "a",
+   "startFrame": 621,
+   "endFrame": 628
+  },
+  {
+   "word": "second.",
+   "startFrame": 629,
+   "endFrame": 641
+  },
+  {
+   "word": "At",
+   "startFrame": 663,
+   "endFrame": 671
+  },
+  {
+   "word": "that",
+   "startFrame": 672,
+   "endFrame": 682
+  },
+  {
+   "word": "speed",
+   "startFrame": 683,
+   "endFrame": 694
+  },
+  {
+   "word": "every",
+   "startFrame": 695,
+   "endFrame": 706
+  },
+  {
+   "word": "combination",
+   "startFrame": 707,
+   "endFrame": 725
+  },
+  {
+   "word": "is",
+   "startFrame": 726,
+   "endFrame": 734
+  },
+  {
+   "word": "tried",
+   "startFrame": 735,
+   "endFrame": 746
+  },
+  {
+   "word": "in",
+   "startFrame": 747,
+   "endFrame": 755
+  },
+  {
+   "word": "about",
+   "startFrame": 756,
+   "endFrame": 767
+  },
+  {
+   "word": "twenty",
+   "startFrame": 768,
+   "endFrame": 780
+  },
+  {
+   "word": "one",
+   "startFrame": 781,
+   "endFrame": 790
+  },
+  {
+   "word": "seconds.",
+   "startFrame": 791,
+   "endFrame": 804
+  },
+  {
+   "word": "Length",
+   "startFrame": 826,
+   "endFrame": 838
+  },
+  {
+   "word": "beats",
+   "startFrame": 839,
+   "endFrame": 850
+  },
+  {
+   "word": "complexity.",
+   "startFrame": 851,
+   "endFrame": 868
+  },
+  {
+   "word": "Add",
+   "startFrame": 878,
+   "endFrame": 887
+  },
+  {
+   "word": "words,",
+   "startFrame": 888,
+   "endFrame": 899
+  },
+  {
+   "word": "and",
+   "startFrame": 909,
+   "endFrame": 918
+  },
+  {
+   "word": "the",
+   "startFrame": 919,
+   "endFrame": 928
+  },
+  {
+   "word": "same",
+   "startFrame": 929,
+   "endFrame": 939
+  },
+  {
+   "word": "letters",
+   "startFrame": 940,
+   "endFrame": 953
+  },
+  {
+   "word": "become",
+   "startFrame": 954,
+   "endFrame": 966
+  },
+  {
+   "word": "a",
+   "startFrame": 967,
+   "endFrame": 974
+  },
+  {
+   "word": "passphrase.",
+   "startFrame": 975,
+   "endFrame": 992
+  },
+  {
+   "word": "Twenty",
+   "startFrame": 1014,
+   "endFrame": 1026
+  },
+  {
+   "word": "two",
+   "startFrame": 1027,
+   "endFrame": 1036
+  },
+  {
+   "word": "letters",
+   "startFrame": 1037,
+   "endFrame": 1050
+  },
+  {
+   "word": "push",
+   "startFrame": 1051,
+   "endFrame": 1061
+  },
+  {
+   "word": "the",
+   "startFrame": 1062,
+   "endFrame": 1071
+  },
+  {
+   "word": "count",
+   "startFrame": 1072,
+   "endFrame": 1083
+  },
+  {
+   "word": "past",
+   "startFrame": 1084,
+   "endFrame": 1094
+  },
+  {
+   "word": "ten",
+   "startFrame": 1095,
+   "endFrame": 1104
+  },
+  {
+   "word": "to",
+   "startFrame": 1105,
+   "endFrame": 1113
+  },
+  {
+   "word": "the",
+   "startFrame": 1114,
+   "endFrame": 1123
+  },
+  {
+   "word": "thirty",
+   "startFrame": 1124,
+   "endFrame": 1136
+  },
+  {
+   "word": "one.",
+   "startFrame": 1137,
+   "endFrame": 1146
+  }
+ ]
+}

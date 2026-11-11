@@ -209,12 +209,13 @@ renders. Reference the result the same way as a freshly-authored scene (`source`
 vocabularies you may draw from, and which canvas the video is painted on. It does *not* decide any
 beat's treatment — that still follows the beat's subject, exactly as it always has.
 
-Four styles are different in kind: they do not restrict the scene system, they **replace** it.
+Five styles are different in kind: they do not restrict the scene system, they **replace** it.
 `cartoon_3d` is one painted 3D world written as code for that video against the renderer's kit;
 `system_flow` is one diagram scene whose boards, nodes and packets are written as data;
 `bean_explainer` is one cartoon-bean scene whose sections, shots, poses and props are written as
-data; `whiteboard` is one board scene whose regions of writing and doodles are written as data.
-None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
+data; `whiteboard` is one board scene whose regions of writing and doodles are written as data;
+`terminal_doc` is one typographic scene whose beats and moves are written as data. None of them
+is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
 when it is not `tubematic-scene-config`, stop here and invoke that skill.
 
 Read `visual_style` from `get_video`:
@@ -228,10 +229,11 @@ Read `visual_style` from `get_video`:
 | `system_flow` | Dark | Nothing here: the whole video is the one `SystemFlow` diagram scene, written as data by the tubematic-system-flow skill. |
 | `bean_explainer` | Its own colour field | Nothing here: the whole video is the one `BeanExplainer` scene, written as data by the tubematic-bean-explainer skill. |
 | `whiteboard` | Light | Nothing here: the whole video is the one `Whiteboard` board scene, written as data by the tubematic-whiteboard skill. |
+| `terminal_doc` | Dark | Nothing here: the whole video is the one `TerminalDoc` scene, written as data by the tubematic-terminal-doc skill. |
 | `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery. This is the **mixed scene system**: the style-routing skill picked it before the script because no single style fit. |
 
-The three named scene styles are restrictions; `cartoon_3d`, `system_flow`, `bean_explainer` and
-`whiteboard` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
+The three named scene styles are restrictions; `cartoon_3d`, `system_flow`, `bean_explainer`,
+`whiteboard` and `terminal_doc` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
 than the mixed scene system (a style it picked is the video's `visual_style` by now), or when the
 video was scripted before Auto picked styles. It is the absence of a restriction: **you pick the
 register.**
