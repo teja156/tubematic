@@ -269,8 +269,8 @@ of the video's domain.
 
 `formula_routing.decided` is `true` once a formula is picked. `pick` is the formula the script is
 written in, and `choice` is the formula a person chose for the video (`""` for Auto). `candidates`
-is `tubematic_core/formulas.py::routing_candidates` while the pick can still be made, and `[]`
-after it. `recent` is `{formulas, hook_types}`: the formulas and the kept opening types of the
+is `tubematic_core/formulas.py::routing_candidates` at `TOPIC_APPROVED` before the pick and at
+`REVISION_REQUESTED`, and `[]` otherwise. `recent` is `{formulas, hook_types}`: the formulas and the kept opening types of the
 domain's previous two videos, newest first.
 
 ### `create_video`
@@ -321,6 +321,11 @@ columns are cleared too. A style a person chose is kept, with its recorded canva
 `UPDATE` empties `formula_pick`, `formula_runner_up` and `formula_reason`, so the formula is picked
 again for the revised topic. A person's `formula_choice` is kept.
 
+A move to `SCRIPT_READY` is refused while the stored script's `formula_id` differs from
+`formula_pick`. A formula switch at `SCRIPT_READY` leaves that state until the agent rewrites the
+script, and handing the video back first would show one formula over a script in another. The
+check is repeated in the `UPDATE`'s `WHERE`.
+
 ### `update_video`
 
 `update_video(video_id, title=…, script=…, script_segments=…, youtube_url=…, video_version=…,
@@ -343,7 +348,8 @@ Script and voice:
 - `formula_id` and `hooks` are passed together, with `script_segments`. They record the formula the
   script follows and the three openings the agent drafted. A malformed record is refused, and a
   script with no record is accepted. On a video with a `formula_pick`, a `formula_id` that differs
-  from the pick is refused, because the pick is what the person sees at `SCRIPT_READY`. See
+  from the pick is refused, because the pick is what the person sees at `SCRIPT_READY`. With no
+  pick, a person's `formula_choice` binds the same way. See
   [What a script records](08-scripting-and-voice.md#what-a-script-records).
 - A call that changes a script's spoken words, or carries a record, returns `warnings` beside
   `updated_fields`: the [script warnings](08-scripting-and-voice.md#script-warnings) for the stored
@@ -443,10 +449,11 @@ calls it.
   ([`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula)).
 - `repeat_reason` is one sentence, passed only for a formula marked `recent`.
 
-It refuses an unknown or unavailable `formula` or `runner_up`, a video whose style is not decided,
-a `recent` formula with no `repeat_reason`, a second pick at `TOPIC_APPROVED`, and any status other
-than `TOPIC_APPROVED` and `REVISION_REQUESTED`. At `REVISION_REQUESTED` it replaces the pick on a
-video with no `formula_choice` and refuses one that has a choice. The values it read from the row
+It refuses an unknown or unavailable `formula` or `runner_up`, a video at `TOPIC_APPROVED` whose
+style is not decided, a `recent` formula with no `repeat_reason` on a video with no
+`formula_choice`, a second pick at `TOPIC_APPROVED`, and any status other than `TOPIC_APPROVED` and
+`REVISION_REQUESTED`. At `REVISION_REQUESTED` it replaces the pick, or gives a video scripted
+before picks existed its first one, and refuses a video whose pick is a person's choice. The values it read from the row
 are repeated in the `UPDATE`'s `WHERE`, and the setting and the domain's recent formulas are read
 after the write lock is taken (`BEGIN IMMEDIATE`).
 

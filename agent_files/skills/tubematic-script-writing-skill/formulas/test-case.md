@@ -17,7 +17,7 @@ In this order. A share is the part of the script's words the beat covers; hold e
 | The case | 0 to 10% | Would this famous concrete case count? Asked in the first sentence. |
 | Fair question | 10 to 14% | Why the question is a reasonable one. |
 | Rules, easiest first | 14 to 45% | One rule per sentence, with one 'you would think so, but' among them. |
-| Where the rules run out | 45 to 80% | The official list is incomplete: who wrote it and why. |
+| Where the rules run out | 45 to 80% | The part of the rules that does not settle the case at first, and the source that does. |
 | Precedent | 80 to 92% | A known case the rules did settle. |
 | The case answered | 92 to 100% | The last sentence. |
 
@@ -50,4 +50,4 @@ The case's answer. Nothing after it.
 
 The shape of the whole script with the facts left out. Fill it with this topic's facts; never keep its wording.
 
-> Would [concrete case] count as [category]? Fair question. [Category 1] is easy: [rule]. You would think [category 2] means [naive reading], but [real rule]. Then there is [the official list], which is incomplete because [who wrote it]. Proof: [a known case]. Which makes [concrete case] [answer].
+> Would [concrete case] count as [category]? Fair question. [Category 1] is easy: [rule]. You would think [category 2] means [naive reading], but [real rule]. Then there is [the part the rules leave open], which [source] settles: [what it says]. Proof: [a known case]. Which makes [concrete case] [answer].

@@ -223,6 +223,12 @@ def test_the_candidates_are_marked_for_the_videos_style(db):
     assert cands["broken-expectation"]["suits_style"] and not cands["scene-story"]["suits_style"]
 
 
+@pytest.mark.parametrize("status", ["TOPIC_PROPOSED", "SCRIPT_READY", "VOICE_READY", "VIDEO_READY"])
+def test_a_video_with_no_pick_that_cannot_pick_now_gets_no_candidates(db, status):
+    _video(status=status)
+    assert server.get_video("vid_1")["formula_routing"]["candidates"] == []
+
+
 def test_the_candidates_are_left_out_once_the_pick_cannot_change(db):
     _video(pick="scene-story", status="SCRIPT_READY")
     assert server.get_video("vid_1")["formula_routing"]["candidates"] == []
@@ -330,6 +336,23 @@ def test_a_persons_choice_is_exempt_from_rotation(db):
     assert out["formula_pick"] == "scene-story"
 
 
+def test_the_agent_agreeing_with_a_recent_choice_is_not_refused(db):
+    # A domain default makes every video's choice the same formula, so it is
+    # always recent; the agent naming it too is not a repeat Auto made.
+    _history(db)
+    _video(choice="scene-story")
+    out = server.choose_script_formula("vid_1", "scene-story", REASON)
+    assert out["formula_pick"] == "scene-story"
+    assert _row()["formula_reason"] == REASON      # no "Repeats a recent formula" beside a person's choice
+
+
+def test_a_recent_runner_up_beside_a_choice_is_not_refused(db):
+    _history(db)
+    _video(choice="incident-file")
+    out = server.choose_script_formula("vid_1", "myth-break-model", REASON)
+    assert out["formula_pick"] == "incident-file" and out["formula_runner_up"] == "myth-break-model"
+
+
 def test_a_choice_of_a_formula_that_no_longer_exists_is_auto(db):
     _video(choice="retired-formula")
     assert server.get_video("vid_1")["formula_routing"]["choice"] == ""
@@ -351,6 +374,21 @@ def test_a_persons_choice_is_not_replaced_in_a_revision(db):
     _video(status="REVISION_REQUESTED", choice="scene-story", pick="scene-story")
     out = server.choose_script_formula("vid_1", "follow-the-flow", REASON)
     assert "A person chose" in out["error"] and _row()["formula_pick"] == "scene-story"
+
+
+def test_a_video_scripted_before_picks_gets_one_in_a_revision_whatever_its_style(db):
+    # A 2.1.x video: on "auto" with no style pick, no formula pick, no record.
+    # The style check is for TOPIC_APPROVED only, or such a video could never
+    # be given a formula.
+    _video(status="REVISION_REQUESTED", style="auto")
+    out = server.choose_script_formula("vid_1", "follow-the-flow", REASON)
+    assert out["formula_pick"] == "follow-the-flow"
+
+
+def test_a_choice_with_no_pick_yet_is_written_in_a_revision(db):
+    _video(status="REVISION_REQUESTED", choice="scene-story")
+    out = server.choose_script_formula("vid_1", "follow-the-flow", REASON)
+    assert out["formula_pick"] == "scene-story" and out["chosen_by"] == "person"
 
 
 # ── what gives a pick back ───────────────────────────────────────────────────
@@ -415,3 +453,30 @@ def test_a_stored_default_that_was_dropped_does_not_block_another_edit(db):
         con.execute("UPDATE projects SET default_formula_id = 'retired-formula' WHERE id = 'dom'")
     out = server.upsert_project("dom", "Renamed", default_formula_id="retired-formula")
     assert "error" not in out and out["name"] == "Renamed"
+
+
+def test_rows_filed_in_the_same_second_are_ordered_by_insertion(db):
+    for vid, formula in (("v_a", "incident-file"), ("v_b", "scene-story"), ("v_c", "anomaly-file")):
+        _video(vid, status="PUBLISHED", formula_id=formula, created="2026-06-01T00:00:00Z")
+    _video()
+    # vid_1 shares the second too; the two newest other rows are the last two inserted.
+    assert server.get_video("vid_1")["formula_routing"]["recent"]["formulas"] == ["anomaly-file", "scene-story"]
+
+
+# ── no Script Ready over a script in another formula ─────────────────────────
+
+def test_a_switched_video_cannot_reach_script_ready_before_its_rewrite(db):
+    _video(formula_id="follow-the-flow", pick="scene-story")
+    out = server.set_video_status("vid_1", "SCRIPT_READY", only_if_current_status="TOPIC_APPROVED")
+    assert "Rewrite the script" in out["error"] and _row()["status"] == "TOPIC_APPROVED"
+    out = server.set_video_status("vid_1", "SCRIPT_READY")
+    assert "Rewrite the script" in out["error"] and _row()["status"] == "TOPIC_APPROVED"
+
+
+def test_a_rewritten_or_pre_pick_script_reaches_script_ready(db):
+    _video(formula_id="scene-story", pick="scene-story")
+    assert "error" not in server.set_video_status("vid_1", "SCRIPT_READY")
+    _video("vid_2", formula_id="scene-story")          # scripted before picks existed
+    assert "error" not in server.set_video_status("vid_2", "SCRIPT_READY")
+    _video("vid_3", pick="scene-story")                # no record: an older writer
+    assert "error" not in server.set_video_status("vid_3", "SCRIPT_READY")

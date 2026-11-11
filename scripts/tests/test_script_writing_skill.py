@@ -142,6 +142,7 @@ def test_step_3_covers_a_video_with_no_pick():
     assert "Go back to the operator skill" in part
     assert "Keep the stored `formula_id`" in part
     assert "older than this skill" in part
+    assert "no stored `formula_id` either" in part
 
 
 def test_a_changed_style_or_topic_is_handled_by_the_pick_being_dropped():
@@ -155,6 +156,8 @@ def test_the_openings_vary_and_a_persons_switch_is_honoured():
     part = _section("### Three openings, then one", "### Segments")
     assert "`formula_routing.recent.hook_types`" in part and "`hook_type_repeat`" in part
     assert '"Opening switched to"' in part
+    # Scoped: the comment stays in the thread after the rewrite it asked for.
+    assert "newest human\ncomment, no script has been written since it" in part
     assert "word for word" in part and "Do not draft new openings" in part
 
 

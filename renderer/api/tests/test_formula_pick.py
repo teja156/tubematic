@@ -179,8 +179,32 @@ def test_choosing_an_opening_the_writer_ruled_out_clears_its_note(client, db_pat
 
 
 def test_a_video_scripted_before_formula_picks_can_switch_its_opening(client, db_path):
+    # Its script's formula becomes the pick, so the rewrite is not routed to a
+    # formula whose openings the stored ones do not match.
     _video(db_path, pick="", runner_up="")
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET formula_id = 'broken-expectation' WHERE id = 'vid_1'")
+    con.commit()
+    con.close()
     assert client.post("/videos/vid_1/switch-opening", json={"index": 1}).status_code == 200
+    assert _row(db_path)["formula_pick"] == "broken-expectation"
+
+
+def test_an_opening_switch_on_a_script_whose_formula_this_version_lacks_is_refused(client, db_path):
+    _video(db_path, pick="", runner_up="")
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET formula_id = 'retired-formula' WHERE id = 'vid_1'")
+    con.commit()
+    con.close()
+    resp = client.post("/videos/vid_1/switch-opening", json={"index": 1})
+    assert resp.status_code == 409 and "not one this version has" in resp.get_json()["error"]
+    assert _row(db_path)["status"] == "SCRIPT_READY"
+
+
+def test_an_opening_switch_keeps_a_held_pick(client, db_path):
+    _video(db_path)       # pick follow-the-flow, formula_id follow-the-flow
+    client.post("/videos/vid_1/switch-opening", json={"index": 1})
+    assert _row(db_path)["formula_pick"] == "follow-the-flow"
 
 
 @pytest.mark.parametrize("body, status, message", [

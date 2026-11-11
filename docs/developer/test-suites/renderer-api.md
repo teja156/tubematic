@@ -296,8 +296,9 @@ Covers `POST /videos/<id>/switch-formula`, `POST /videos/<id>/switch-opening`, `
   the new pick the person's choice and adds a human comment. A second switch goes back, and an
   experimental runner-up needs no setting.
 - The opening switch marks the chosen opening as the one in use, clears its note, sets `hook_type`,
-  moves the video to `TOPIC_APPROVED` and adds a human comment that quotes the opening. A video
-  scripted before formulas were picked can use it.
+  moves the video to `TOPIC_APPROVED` and adds a human comment that quotes the opening. It keeps a
+  held pick. A video scripted before formulas were picked can use it and gets its script's formula
+  as the pick, and one whose formula this version lacks is refused.
 - Each switch is refused away from `SCRIPT_READY` and for an archived or unknown video. The formula
   switch is refused with no pick, no runner-up or a runner-up that the installed version does not
   have. The

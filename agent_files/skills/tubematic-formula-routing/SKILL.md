@@ -10,9 +10,8 @@ description: Pick a video's script formula before its script is written, after i
 style is decided and before the script is written, then go back to the operator skill and write the
 script in the formula the tool returned.
 
-When `formula_routing.decided` is `true`, do not run this skill: the formula is picked. The one
-exception is a script revision whose human comment asks for a different structure (see "A
-revision" below).
+When `formula_routing.decided` is `true`, do not run this skill: the formula is picked. The
+exceptions are two kinds of script revision (see "A revision" below).
 
 ---
 
@@ -115,6 +114,8 @@ A candidate is a **clear fit** with at least 3 points.
    fit that is not `recent`: a domain whose videos all share one structure reads as templated.
    Only when no other candidate is a clear fit, keep the `recent` one and pass `repeat_reason`
    (Step 7): one sentence on why nothing else fits this topic.
+   When `formula_routing.choice` is set, skip this rotation step: the script is written in the
+   person's choice, and your formula is recorded only as what Auto would have picked.
 3. When no candidate is a clear fit: `follow-the-flow` for an explanation, `scene-story` for a
    true case about a person. If that one is `recent`, it still needs `repeat_reason`.
 
@@ -171,12 +172,17 @@ If the call refuses:
 
 A script revision keeps the formula: rewrite in `formula_routing.pick`.
 
-Run this skill again at `REVISION_REQUESTED` only when the person's comment asks for a different
-structure ("tell it as a story", "make it a list") and `formula_routing.choice` is `""`. The
-candidates are in `get_video` again. Decide as above, with the comment as the strongest hint, and
-call `choose_script_formula`: it replaces the pick. Pass the old pick as `runner_up` unless
-another candidate scored higher. When `formula_routing.choice` is set, a person chose the formula:
-the tool refuses, and the script is rewritten in that formula.
+Run this skill at `REVISION_REQUESTED` in two cases. The candidates are in `get_video` then.
+
+- **The person's comment asks for a different structure** ("tell it as a story", "make it a
+  list") and `formula_routing.choice` is `""`. Decide as above, with the comment as the strongest
+  hint, and call `choose_script_formula`: it replaces the pick. Pass the old pick as `runner_up`
+  unless another candidate scored higher. When `formula_routing.choice` is set, a person chose the
+  formula: the tool refuses, the script is rewritten in that formula, and your comment says the
+  chosen formula was kept and that the runner-up can be taken at Script Ready.
+- **The video has no formula at all:** `formula_routing.pick` and the stored `formula_id` are
+  both `""` (it was scripted before formulas were picked). Decide as above and record it. The
+  style is not checked here: the video keeps the style it has.
 
 ## Worked example
 

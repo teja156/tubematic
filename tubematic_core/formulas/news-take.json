@@ -35,7 +35,7 @@
       "name": "What happened",
       "from": 0,
       "to": 12,
-      "job": "The event, with the actor and the irony or the opponent."
+      "job": "The event with its date, its actor and the irony or the opponent. A date, never 'last week': the video may be posted later."
     },
     {
       "name": "Why it matters to you",
@@ -71,7 +71,7 @@
   "hooks": [
     {
       "type": "scene",
-      "shape": "Last [week], [actor] got so tired of [practice] that [surprising act]."
+      "shape": "On [date], [actor] got so tired of [practice] that [surprising act]."
     },
     {
       "type": "claim",
@@ -79,7 +79,7 @@
     },
     {
       "type": "paradox",
-      "shape": "[Actor] spent [years] building [X]. Last week it [did the opposite]."
+      "shape": "[Actor] spent [years] building [X]. On [date] it [did the opposite]."
     }
   ],
   "holds": "The event is in the first sentence, so nothing is spent on backstory. The viewer stays to learn whether the claim is true, and the catch re-opens it once the evidence seems to settle it.",
@@ -90,5 +90,5 @@
     "A claim or a catch with no source",
     "News the audience has already seen: it dates within days"
   ],
-  "template": "[When], [actor] [did surprising thing], with [one irony]. This matters to you because [what it changes]. In plain terms, [the biggest claim]. Is it true? On the surface, yes: [evidence]. But [the catch, from a source]. [The take]."
+  "template": "On [date], [actor] [did surprising thing], with [one irony]. This matters to you because [what it changes]. In plain terms, [the biggest claim]. Is it true? On the surface, yes: [evidence]. But [the catch, from a source]. [The take]."
 }

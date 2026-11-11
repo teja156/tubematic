@@ -352,7 +352,7 @@ Covers the video window's **Formula** picker, **Formula** and **Why this formula
   formulas existed shows no formula row.
 - A pick shows its reason and runner-up. The switch is offered only at `SCRIPT_READY` with a
   runner-up, posts to `/switch-formula` after a confirm, does nothing when the confirm is declined,
-  and shows the server's refusal.
+  and shows the server's refusal. The refusal is cleared when the window shows another video.
 - `videoFormulaLabel` reads the pick ahead of the stored script's formula, and `formulaOptions`
   keeps a held formula the list does not know selectable.
 

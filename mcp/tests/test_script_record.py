@@ -360,7 +360,7 @@ def _pick(video, formula):
 def test_a_script_in_another_formula_than_the_pick_is_refused(video):
     _pick(video, "scene-story")
     result = write(video, formula_id=FORMULA, hooks=hooks())
-    assert "scene-story" in result["error"] and "formula_routing.pick" in result["error"]
+    assert "scene-story" in result["error"] and "formula_routing" in result["error"]
     assert _row()["script"] in ("", None) and _row()["formula_id"] == ""
 
 
@@ -405,3 +405,18 @@ def test_an_opening_that_starts_like_the_domains_scripts_is_flagged(video):
     _insert("older", project_id="git", script="You renamed one branch. Then it broke.",
             created="2025-12-01T00:00:00Z")
     assert "opening_repeat" in warning_ids(write(video, formula_id=FORMULA, hooks=hooks()))
+
+
+def test_a_persons_choice_binds_when_no_pick_was_recorded(video):
+    # A writer that skipped the pick (an older skill) must not replace a
+    # formula a person chose.
+    with server._conn() as con:
+        con.execute("UPDATE videos SET formula_choice = 'scene-story' WHERE id = ?", (video,))
+    result = write(video, formula_id=FORMULA, hooks=hooks())
+    assert "scene-story" in result["error"] and _row()["formula_id"] == ""
+
+
+def test_a_choice_of_a_formula_this_version_lacks_does_not_bind(video):
+    with server._conn() as con:
+        con.execute("UPDATE videos SET formula_choice = 'retired-formula' WHERE id = ?", (video,))
+    assert "error" not in write(video, formula_id=FORMULA, hooks=hooks())

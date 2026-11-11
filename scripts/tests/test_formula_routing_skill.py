@@ -86,7 +86,7 @@ def test_a_persons_choice_is_routed_around_never_overridden():
     text = _text()
     assert "pass your own best formula" in text
     assert "Never pass the person's choice just because it is theirs" in text
-    assert "the tool refuses, and the script is rewritten in that formula" in text
+    assert "the tool refuses, the script is rewritten in that formula" in text
 
 
 def test_the_skill_handles_every_refusal_the_tool_makes():
@@ -117,3 +117,19 @@ def test_the_uninstaller_and_the_readme_know_the_skill():
 
 def test_the_skill_carries_no_ticket_id():
     assert not re.search(r"\b(TMDEV|VQA|EXQA)-\d+", _text())
+
+
+def test_a_revision_picks_for_a_video_with_no_formula_and_respects_a_choice():
+    part = _text()[_text().index("## A revision"):_text().index("## Worked example")]
+    assert "The video has no formula at all" in part
+    assert "your comment says the\n  chosen formula was kept" in part
+
+
+def test_rotation_is_skipped_beside_a_persons_choice():
+    assert "When `formula_routing.choice` is set, skip this rotation step" in _text()
+
+
+def test_the_operator_names_the_routing_skill_on_a_script_revision():
+    operator = (SKILLS / "tubematic-operator" / "SKILL.md").read_text(encoding="utf-8")
+    row = next(line for line in operator.splitlines() if "**Script revision**" in line)
+    assert "tubematic-formula-routing" in row and "formula_routing.choice" in row

@@ -123,6 +123,8 @@ tubematic-formula-routing skill, and recorded on the video. This skill writes in
      tubematic-formula-routing runs before this one.
    - **on a script revision with a stored `formula_id`:** the video was scripted before formulas
      were picked ahead of the script. Keep the stored `formula_id`.
+   - **on a script revision with no stored `formula_id` either:** the video has no formula yet.
+     Go back to the operator skill; tubematic-formula-routing gives it one before you rewrite.
    - **`get_video` has no `formula_routing` at all:** the tool server is older than this skill.
      Write in the formula tubematic-formula-routing's fallback named.
 3. `style.script` outranks the formula (Step 2). Where the style's text and the formula's
@@ -229,8 +231,9 @@ shape** in its reference file. Three shapes, not one opening worded three ways. 
 3. The kept opening is the start of the first segment's `voice`, word for word.
 
 **When a person switched the opening.** A human comment that begins "Opening switched to" means a
-person chose one of the stored openings at Script Ready. `hook_alternatives` already marks it
-`kept`. Do not draft new openings: start the script with that opening word for word, rewrite the
+person chose one of the stored openings at Script Ready. It applies when it is the newest human
+comment, no script has been written since it, and `formula_id` equals `formula_routing.pick`.
+Then `hook_alternatives` already marks the chosen opening `kept`. Do not draft new openings: start the script with that opening word for word, rewrite the
 rest from it in the same formula, and send the same three openings back as `hooks` with `kept` on
 the one the person chose.
 

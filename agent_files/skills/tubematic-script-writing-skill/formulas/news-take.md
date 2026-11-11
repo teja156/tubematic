@@ -14,7 +14,7 @@ In this order. A share is the part of the script's words the beat covers; hold e
 
 | Beat | Share of the script | Its job |
 |---|---|---|
-| What happened | 0 to 12% | The event, with the actor and the irony or the opponent. |
+| What happened | 0 to 12% | The event with its date, its actor and the irony or the opponent. A date, never 'last week': the video may be posted later. |
 | Why it matters to you | 12 to 25% | What it changes for the viewer. |
 | The biggest claim | 25 to 35% | In plain terms. |
 | On the surface, yes | 35 to 55% | The evidence that the claim holds. |
@@ -27,9 +27,9 @@ Draft one opening from each of three shapes. The type goes in `hooks[].type`.
 
 | Type (`type`) | Shape |
 |---|---|
-| Scene in motion (`scene`) | Last [week], [actor] got so tired of [practice] that [surprising act]. |
+| Scene in motion (`scene`) | On [date], [actor] got so tired of [practice] that [surprising act]. |
 | Flat claim (`claim`) | [Actor] just showed that your [thing you own] [surprising fact]. |
-| Paradox (`paradox`) | [Actor] spent [years] building [X]. Last week it [did the opposite]. |
+| Paradox (`paradox`) | [Actor] spent [years] building [X]. On [date] it [did the opposite]. |
 
 ## What holds the viewer
 
@@ -50,4 +50,4 @@ The take, or the honest limits of the news. No forecast stated as fact.
 
 The shape of the whole script with the facts left out. Fill it with this topic's facts; never keep its wording.
 
-> [When], [actor] [did surprising thing], with [one irony]. This matters to you because [what it changes]. In plain terms, [the biggest claim]. Is it true? On the surface, yes: [evidence]. But [the catch, from a source]. [The take].
+> On [date], [actor] [did surprising thing], with [one irony]. This matters to you because [what it changes]. In plain terms, [the biggest claim]. Is it true? On the surface, yes: [evidence]. But [the catch, from a source]. [The take].

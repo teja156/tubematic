@@ -56,8 +56,16 @@ function renderModal(video: Video, sw = { ok: true, body: {} as object }, onActi
     return { ok: true, json: async () => [] } as Response;
   });
   vi.stubGlobal("fetch", fetchMock);
-  render(<VideoModal video={video} onClose={vi.fn()} onAction={onAction} />);
+  const { rerender } = render(<VideoModal video={video} onClose={vi.fn()} onAction={onAction} />);
+  // Same mounted modal, another video: as the pages use it.
+  rerenderModal = (v: Video) => rerender(<VideoModal video={v} onClose={vi.fn()} onAction={onAction} />);
   return fetchMock;
+}
+
+let rerenderModal: ((v: Video) => void) | null = null;
+
+function cleanupAndRender(video: Video) {
+  rerenderModal!(video);
 }
 
 async function settle() {
@@ -177,6 +185,23 @@ describe("VideoModal — the formula pick", () => {
     renderModal(makeVideo("SCRIPT_READY"), { ok: false, body: { error: "The runner-up is no longer a formula" } });
     fireEvent.click((await screen.findByTestId("switch-formula")).querySelector("button")!);
     expect(await screen.findByTestId("switch-formula-error")).toHaveTextContent("no longer a formula");
+  });
+
+  it("clears a refusal when the window shows another video", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderModal(makeVideo("SCRIPT_READY"), { ok: false, body: { error: "The runner-up is no longer a formula" } });
+    fireEvent.click((await screen.findByTestId("switch-formula")).querySelector("button")!);
+    await screen.findByTestId("switch-formula-error");
+    const other = makeVideo("SCRIPT_READY", { id: "vid-2" });
+    vi.stubGlobal("fetch", vi.fn(async (url: unknown) => {
+      const u = String(url);
+      if (u.endsWith("/script-formulas")) return { ok: true, json: async () => NAMES } as Response;
+      if (u.endsWith("/videos/vid-2")) return { ok: true, json: async () => other } as Response;
+      return { ok: true, json: async () => [] } as Response;
+    }));
+    cleanupAndRender(other);
+    await settle();
+    expect(screen.queryByTestId("switch-formula-error")).not.toBeInTheDocument();
   });
 
   it.each<VideoStatus>(["TOPIC_APPROVED", "VOICING", "VOICE_READY", "VIDEO_READY"])(

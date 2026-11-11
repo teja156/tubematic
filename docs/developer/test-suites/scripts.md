@@ -724,7 +724,9 @@ Covers the `tubematic-formula-routing` skill
   agent's own best formula, covers every refusal the tool makes, and uses the topic's angle only
   when there is one.
 - The operator runs it after style routing and before the script-writing skill at
-  `TOPIC_APPROVED`, and the uninstaller and the skills README know it.
+  `TOPIC_APPROVED`, and names it on a script revision. A revision runs it for a video with no
+  formula, and a person's choice is kept with a comment saying so. Rotation is skipped beside a
+  person's choice. The uninstaller and the skills README know it.
 
 Trap: a skill that named formulas would prefer the ones it knew about, and a new formula would need
 an edit to be picked. The candidates are data for that reason.
@@ -771,10 +773,11 @@ Covers the `tubematic-script-writing-skill` skill and `scripts/gen_formula_refer
   The length starts from the lower half of the band, and a length the style's script text gives
   wins over the band.
 - The skill writes in `formula_routing.pick` and does not choose a formula. It covers a video with
-  no pick (the router has not run, a script from before picks existed, an older tool server) and
-  says a changed style or topic drops the pick.
+  no pick (the router has not run, a script from before picks existed, a revision with no formula
+  at all, an older tool server) and says a changed style or topic drops the pick.
 - The openings step prefers a type the domain's previous two videos did not use, and starts from
-  the opening a person switched to, word for word.
+  the opening a person switched to, word for word, only while that comment is the newest and no
+  script has been written since.
 - A style that asks for names may name its people.
 - The user guide's formula table names every formula.
 

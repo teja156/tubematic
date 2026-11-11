@@ -476,6 +476,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     setPickedVoice(null);
     setSelectedProfile(seed.script_profile_id ?? "");
     setSelectedFormula(seed.formula_choice ?? "");
+    setSwitchFormulaError("");
     setSelectedStyle(seed.visual_style ?? "auto");
     setSelectedMascot(seed.mascot_id ?? "");
     // Seeded from the inbox row's picks when its Revise opened this modal,
@@ -857,10 +858,14 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
         body: "{}",
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) setSwitchFormulaError(body.error ?? "Switching the formula failed.");
+      // The modal stays mounted between videos: an answer for one that is no
+      // longer on screen must not show under another video's button.
+      if (!res.ok && shownVideoId.current === video.id) {
+        setSwitchFormulaError(body.error ?? "Switching the formula failed.");
+      }
       refreshVideo(video.id);
     } catch {
-      setSwitchFormulaError("Switching the formula failed.");
+      if (shownVideoId.current === video.id) setSwitchFormulaError("Switching the formula failed.");
     } finally {
       setSwitchingFormula(false);
     }
@@ -1024,6 +1029,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                 {video.script && (
                   <TabsContent value="script" className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
                     <ScriptRecord
+                      key={video.id}
                       video={video}
                       names={formulaNames}
                       onSwitchOpening={!archived && video.status === "SCRIPT_READY" ? handleSwitchOpening : undefined}

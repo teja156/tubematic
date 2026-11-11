@@ -21,7 +21,8 @@
     "the topic is a system of rules",
     "one famous concrete case tests the rules",
     "the rules can be walked from easy to hard",
-    "the case has a definite answer"
+    "the case has a definite answer",
+    "a named source settles the part of the rules the case turns on"
   ],
   "styles": [
     "whiteboard",
@@ -54,7 +55,7 @@
       "name": "Where the rules run out",
       "from": 45,
       "to": 80,
-      "job": "The official list is incomplete: who wrote it and why."
+      "job": "The part of the rules that does not settle the case at first, and the source that does."
     },
     {
       "name": "Precedent",
@@ -91,5 +92,5 @@
     "A rule with no source",
     "A hedge where the answer belongs"
   ],
-  "template": "Would [concrete case] count as [category]? Fair question. [Category 1] is easy: [rule]. You would think [category 2] means [naive reading], but [real rule]. Then there is [the official list], which is incomplete because [who wrote it]. Proof: [a known case]. Which makes [concrete case] [answer]."
+  "template": "Would [concrete case] count as [category]? Fair question. [Category 1] is easy: [rule]. You would think [category 2] means [naive reading], but [real rule]. Then there is [the part the rules leave open], which [source] settles: [what it says]. Proof: [a known case]. Which makes [concrete case] [answer]."
 }

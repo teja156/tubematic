@@ -3248,7 +3248,9 @@ def create_pipeline_blueprint() -> Blueprint:
         use, the video goes back to TOPIC_APPROVED, and its agent rewrites
         the script from it in the same formula. Always a rewrite: the stored
         script is never edited here, since a new first sentence over the old
-        body would be a script nobody wrote.
+        body would be a script nobody wrote. A video scripted before formulas
+        were picked gets its script's formula as the pick, so the rewrite is
+        not routed to another formula whose openings differ.
         """
         body = request.get_json(force=True, silent=True) or {}
         index = body.get("index")
@@ -3258,8 +3260,8 @@ def create_pipeline_blueprint() -> Blueprint:
         with _conn() as con:
             con.execute("BEGIN IMMEDIATE")
             row = con.execute(
-                "SELECT status, hook_alternatives, archived_at FROM videos WHERE id = ?",
-                (video_id,)).fetchone()
+                "SELECT status, hook_alternatives, formula_id, formula_pick, archived_at "
+                "FROM videos WHERE id = ?", (video_id,)).fetchone()
             if not row:
                 return jsonify({"error": "Video not found"}), 404
             if row["archived_at"]:
@@ -3280,17 +3282,25 @@ def create_pipeline_blueprint() -> Blueprint:
                 return jsonify({"error": f"index must be from 0 to {len(hooks) - 1}"}), 400
             if hooks[index].get("kept"):
                 return jsonify({"error": "That opening is the one the script already uses"}), 409
+            pick = row["formula_pick"] or ""
+            if not pick:
+                pick = row["formula_id"] or ""
+                if pick not in tformulas.FORMULAS:
+                    return jsonify({"error": "The script's formula is not one this version has, "
+                                             "so it cannot be rewritten from another opening. "
+                                             "Request a revision instead."}), 409
             chosen = hooks[index]
             # A person's choice overrides the writer's reason for dropping it.
             new_hooks = [{**h, "kept": i == index, "note": "" if i == index else h.get("note", "")}
                          for i, h in enumerate(hooks)]
             now = _now()
             cur = con.execute(
-                "UPDATE videos SET hook_alternatives = ?, hook_type = ?, status = 'TOPIC_APPROVED', "
-                "agent_no_progress_count = 0, agent_stuck_at = NULL, updated_at = ? "
-                "WHERE id = ? AND archived_at IS NULL AND status = 'SCRIPT_READY' "
-                "AND hook_alternatives = ?",
-                (_json.dumps(new_hooks), chosen.get("type", ""), now, video_id, stored))
+                "UPDATE videos SET hook_alternatives = ?, hook_type = ?, formula_pick = ?, "
+                "status = 'TOPIC_APPROVED', agent_no_progress_count = 0, agent_stuck_at = NULL, "
+                "updated_at = ? WHERE id = ? AND archived_at IS NULL AND status = 'SCRIPT_READY' "
+                "AND hook_alternatives = ? AND COALESCE(formula_pick, '') = ?",
+                (_json.dumps(new_hooks), chosen.get("type", ""), pick, now, video_id, stored,
+                 row["formula_pick"] or ""))
             if cur.rowcount == 0:
                 return jsonify({"error": "The video changed while the request was in flight — "
                                          "reload"}), 409

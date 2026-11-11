@@ -1314,8 +1314,8 @@ def get_video(video_id: str) -> dict:
     video's visual style), recent (it is the formula of one of the domain's
     previous two videos) and available / unavailable_reason (an experimental
     formula is off for Auto until the setting auto_experimental_formulas is
-    on). candidates is [] once the pick is made and the video is not in
-    revision. recent is {formulas, hook_types}: the formulas and the kept
+    on). candidates is [] otherwise. Only a video at TOPIC_APPROVED with no pick, or at
+    REVISION_REQUESTED, gets the list. recent is {formulas, hook_types}: the formulas and the kept
     opening types of the domain's previous two videos, newest first. Record a
     decision with choose_script_formula.
     """
@@ -1371,7 +1371,8 @@ def _experimental_formulas_allowed() -> bool:
 
 
 def _recent_domain_formulas(project_id, video_id: str) -> dict:
-    """What the domain's previous videos were written in, newest first:
+    """What the domain's most recently filed other videos were written in,
+    newest first (by filing time, then insertion order for a tie):
     {"formulas": [...], "hook_types": [...]}, each at most
     tformulas.ROTATION_WINDOW long. A video counts once it has a formula (the
     one recorded with its script, else the one picked for it) or a kept
@@ -1384,13 +1385,28 @@ def _recent_domain_formulas(project_id, video_id: str) -> dict:
             "SELECT COALESCE(NULLIF(formula_id, ''), formula_pick) FROM videos "
             "WHERE project_id = ? AND id != ? "
             "AND COALESCE(NULLIF(formula_id, ''), formula_pick, '') != '' "
-            "ORDER BY created_at DESC LIMIT ?",
+            "ORDER BY created_at DESC, rowid DESC LIMIT ?",
             (project_id, video_id, tformulas.ROTATION_WINDOW))]
         out["hook_types"] = [r[0] for r in con.execute(
             "SELECT hook_type FROM videos WHERE project_id = ? AND id != ? "
-            "AND COALESCE(hook_type, '') != '' ORDER BY created_at DESC LIMIT ?",
+            "AND COALESCE(hook_type, '') != '' ORDER BY created_at DESC, rowid DESC LIMIT ?",
             (project_id, video_id, tformulas.ROTATION_WINDOW))]
     return out
+
+
+# A stored script recorded under another formula than the one picked: what a
+# formula switch leaves until the script is rewritten.
+_STALE_SCRIPT_SQL = ("COALESCE(formula_id, '') != '' AND COALESCE(formula_pick, '') != '' "
+                     "AND formula_id != formula_pick")
+
+
+def _stale_script_error(con, video_id: str) -> dict:
+    row = con.execute("SELECT formula_id, formula_pick FROM videos WHERE id = ?",
+                      (video_id,)).fetchone()
+    return {"error": f"The stored script is in {row['formula_id']!r} but the formula picked for "
+                     f"this video is {row['formula_pick']!r} (a person switched it). Rewrite the "
+                     "script in the picked formula with update_video before moving the video to "
+                     "SCRIPT_READY."}
 
 
 def _person_formula_choice(row) -> str:
@@ -1407,9 +1423,12 @@ def _formula_routing(video: dict) -> dict:
     choice = _person_formula_choice(video)
     recent = _recent_domain_formulas(video.get("project_id"), video["id"])
     candidates = []
-    # Eighteen formulas with their routing text are several thousand tokens;
-    # a session that cannot pick (the video is past its script) is not sent them.
-    if not pick or video.get("status") == "REVISION_REQUESTED":
+    # Eighteen formulas with their routing text are several thousand tokens,
+    # so only a session that can pick is sent them: at TOPIC_APPROVED before
+    # the pick, and in a revision (which may re-pick, or pick for a video
+    # scripted before picks existed).
+    status = video.get("status")
+    if (status == "TOPIC_APPROVED" and not pick) or status == "REVISION_REQUESTED":
         candidates = tformulas.routing_candidates(
             (video.get("visual_style") or "").strip(), _experimental_formulas_allowed(),
             recent["formulas"], choice)
@@ -1939,6 +1958,15 @@ def set_video_status(
         if approving:
             mascot_sql = (f" AND (status != 'TOPIC_PROPOSED' OR (NOT {tmascots.cartoon_mascot_clash_sql()}"
                           f" AND {tmascots.holds_pickable_sql()}))")
+        # A switch at Script Ready changes the pick and sends the video back
+        # with the old script still stored. Handing it to a person again
+        # before the rewrite would show one formula over a script in another,
+        # and approving it buys the voice. Repeated in the UPDATE's WHERE.
+        if new_status == "SCRIPT_READY":
+            if con.execute(f"SELECT 1 FROM videos WHERE id = ? AND {_STALE_SCRIPT_SQL}",
+                           (video_id,)).fetchone():
+                return _stale_script_error(con, video_id)
+            mascot_sql += f" AND NOT ({_STALE_SCRIPT_SQL})"
         # The only_if guard is enforced in the UPDATE's own WHERE clause (not
         # a separate SELECT-then-compare) so the check-and-set is atomic —
         # closes the TOCTOU window a double-invocation could otherwise race.
@@ -1973,6 +2001,10 @@ def set_video_status(
             if cur.rowcount == 0:
                 fresh = con.execute(
                     "SELECT archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
+                if new_status == "SCRIPT_READY" and con.execute(
+                        f"SELECT 1 FROM videos WHERE id = ? AND {_STALE_SCRIPT_SQL}",
+                        (video_id,)).fetchone():
+                    return _stale_script_error(con, video_id)
                 if fresh and not fresh["archived_at"]:
                     mascot_err = _approval_mascot_error(con, video_id)
                     if mascot_err:
@@ -2519,7 +2551,9 @@ def update_video(
     formula_id is the formula the script follows: get_video's
     formula_routing.pick. A formula_id other than a recorded pick is refused,
     since the pick is what the person sees at Script Ready; with no pick on
-    record (a video scripted before picks existed) any formula id is taken.
+    record, a formula a person chose (formula_routing.choice) binds the same
+    way, and a video with neither (scripted before picks existed) takes any
+    formula id.
     hooks is the three openings you drafted, as
     [{"type", "text", "kept", "note"}]: type is a hook type from the formula's
     reference file and the three must differ, text is the opening's spoken
@@ -2740,17 +2774,21 @@ def update_video(
     if script_segments is not None or script is not None or voice_id is not None:
         with _conn() as con:
             vrow = con.execute("SELECT status, voice_id, script, script_segments, project_id, "
-                               "formula_pick FROM videos WHERE id = ?", (video_id,)).fetchone()
+                               "formula_pick, formula_choice FROM videos WHERE id = ?",
+                               (video_id,)).fetchone()
         if vrow is None:
             return {"error": f"Video not found: {video_id}"}
         # The script follows the formula picked for it (TMDEV-213). Checked
         # here and not in the UPDATE: a pick changes only by a switch or a
         # return to the topic, and both send the video back to be rewritten.
-        if formula_id is not None and vrow["formula_pick"] and formula_id != vrow["formula_pick"]:
-            return {"error": f"formula_id {formula_id!r} is not this video's formula. The formula "
-                             f"picked for it is {vrow['formula_pick']!r} (get_video's "
-                             "formula_routing.pick): write the script in that formula and "
-                             "record it."}
+        # With no pick on record, a person's choice still binds: a writer
+        # that skipped the pick (an older skill) must not replace it.
+        bound = vrow["formula_pick"] or _person_formula_choice(vrow)
+        if formula_id is not None and bound and formula_id != bound:
+            return {"error": f"formula_id {formula_id!r} is not this video's formula. The script "
+                             f"is to be written in {bound!r} (get_video's formula_routing: the "
+                             "pick, or the formula a person chose): write it in that formula "
+                             "and record it."}
         stored_voice = vrow["voice_id"] or ""
         if script_segments is not None or script is not None:
             target = _resolve_voice(voice_id if voice_id is not None else stored_voice)
@@ -3267,10 +3305,12 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
 
     formula and runner_up must be available (candidates[].available): an
     experimental formula is refused while the setting
-    auto_experimental_formulas is off. At REVISION_REQUESTED the tool may be
-    called again, only when the person's comment asks for a different
-    structure and only on a video with no person's choice; it replaces the
-    pick. Returns formula_pick (the formula to write in), formula_runner_up,
+    auto_experimental_formulas is off. repeat_reason is not needed when a
+    person chose the formula. At REVISION_REQUESTED the tool may be called
+    again when the person's comment asks for a different structure, on a
+    video with no person's choice, and it replaces the pick; and on a video
+    scripted before formulas were picked (formula_routing.pick and the stored
+    formula_id both ""), to give it one. Returns formula_pick (the formula to write in), formula_runner_up,
     chosen_by ("auto" or "person"), the formula's label and word band, and
     reference: the file to read in the script-writing skill's directory.
     """
@@ -3302,7 +3342,12 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
     if row["archived_at"]:
         return _archived_error(video_id, row["archived_at"])
     style = (row["visual_style"] or "").strip() or DEFAULT_VISUAL_STYLE
-    if style == DEFAULT_VISUAL_STYLE and not row["style_pick"]:
+    # At TOPIC_APPROVED the style is picked first, in the same session. A
+    # revision is past that point: a video scripted before Auto picked styles
+    # can be on "auto" with no style pick, and its formula is picked for the
+    # style it has.
+    if (row["status"] == "TOPIC_APPROVED" and style == DEFAULT_VISUAL_STYLE
+            and not row["style_pick"]):
         return {"error": "This video's visual style is not decided yet "
                          "(get_video().style_routing.decided is false). Pick the style first "
                          "with choose_visual_style: the formula is chosen for the style."}
@@ -3313,9 +3358,10 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
             return {"error": f"The formula {held!r} is already picked for this video; the choice "
                              "is made once. Write the script in it."}
     elif row["status"] == "REVISION_REQUESTED":
-        if choice:
+        if choice and held:
             return {"error": f"A person chose the formula {choice!r} for this video, so it is "
-                             "not replaced in a revision. Rewrite the script in it."}
+                             "not replaced in a revision. Rewrite the script in it, and say in "
+                             "your comment that the person's formula was kept."}
     else:
         return {"error": "A formula is picked at TOPIC_APPROVED, before the script; this video "
                          f"is at {row['status']}"}
@@ -3331,7 +3377,9 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
             if fid and not candidates[fid]["available"]:
                 return {"error": f"{role} {fid!r} ({candidates[fid]['label']}) is not available: "
                                  f"{candidates[fid]['unavailable_reason']}. Pick another candidate."}
-        if candidates[formula]["recent"] and not repeat_reason:
+        # Rotation is about what Auto writes. With a person's choice the
+        # agent's formula is only a runner-up, so it is never refused here.
+        if not choice and candidates[formula]["recent"] and not repeat_reason:
             return {"error": f"{candidates[formula]['label']} is the formula of one of this "
                              f"domain's previous {tformulas.ROTATION_WINDOW} videos. Pick "
                              "another candidate, or, when no other candidate fits this topic, "
@@ -3345,7 +3393,7 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
                 runner, stored = runner_up, reason
         else:
             pick, runner, stored = formula, runner_up, reason
-        if repeat_reason:
+        if repeat_reason and not choice:
             stored = f"{stored} Repeats a recent formula: {repeat_reason}"
         cur = con.execute(
             "UPDATE videos SET formula_pick = ?, formula_runner_up = ?, formula_reason = ?, "

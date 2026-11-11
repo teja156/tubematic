@@ -555,15 +555,16 @@ the opening's place in `hook_alternatives`, from 0. The video must be at `SCRIPT
 The route runs as one write transaction. It marks that opening `kept` in `hook_alternatives`,
 clears its `note`, sets `hook_type` to its type and moves the video to `TOPIC_APPROVED`. It adds a
 `human` comment that quotes the opening and asks the agent to rewrite the script from it, word for
-word, in the same formula. The stored script and `formula_pick` are left as they are. A video
-scripted before formulas were picked can use the route, because it reads only the stored openings.
+word, in the same formula. The stored script is left as it is. `formula_pick` is kept, or set to
+the script's `formula_id` on a video scripted before formulas were picked, so the rewrite is not
+routed to another formula whose opening types differ.
 
 | Status | When |
 |---|---|
 | `200` | The switch landed. The body is the video |
 | `400` | `index` is not a whole number, or is outside the stored openings |
 | `404` | No such video |
-| `409` | The video is archived, not at `SCRIPT_READY`, has no stored openings, the opening is the one already in use, or the video changed while the request was in flight |
+| `409` | The video is archived, not at `SCRIPT_READY`, has no stored openings, the opening is the one already in use, the script has no pick and a `formula_id` this version does not have, or the video changed while the request was in flight |
 
 ### `POST /videos/<video_id>/agent-outcome`
 
