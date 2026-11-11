@@ -84,7 +84,8 @@ A bracket that reaches below its slot (a large string at the bottom of a band) n
 empty, and holds it until its element is cleared (its own note may go there). A `rearrange` or
 `encode` holds its source's slot until the last of the source's letters has left it, and its `from`
 is a `word`, a number without an exponent, or a string a `rearrange`, `encode` or `stream` made:
-never a `grid`, a `type` or a `custom` element. A `bracket` never goes under a `custom` element. Stage text (a word, a string a move makes, a label, a note, a grid row, a command or its
+never a `grid`, a `type`, a `custom` element or an element with a bracket. A `bracket` never goes
+under a `custom` element. Stage text (a word, a string a move makes, a label, a note, a grid row, a command or its
 output) may not repeat 4 or more narration words in a row.
 
 ## Moves of your own
@@ -113,4 +114,5 @@ The kit also has `Glyph` (one glyph centred on a point), `Row` (a centred row of
 `contract`) with a static `import`, and uses no filter, gradient (SVG or CSS), backdrop filter,
 blend mode, pattern, dashed stroke, image, audio or video, `staticFile`, `delayRender`, fetch,
 `import(...)`, `Math.random`, `Date`, `performance.now`, state, effects or timers (`useState`,
-`useRef`, `useEffect`, `setTimeout`, `requestAnimationFrame`), `useCurrentFrame` or `useVideoConfig`.
+`useRef`, `useEffect`, `setTimeout`, `requestAnimationFrame`), `useCurrentFrame` or `useVideoConfig`,
+not even in a comment: the check reads the whole file.

@@ -668,12 +668,10 @@ def test_a_custom_move_takes_no_bracket():
 
 
 @pytest.mark.parametrize("line", [
-    "// no useState here, filter: none",
-    "/* setTimeout is not used */",
     'const pick = (on: boolean, filter: string) => (on ? filter : null);',
     'const url = "http://example.com/a//b";',
 ])
-def test_comments_and_ordinary_code_are_not_refused(line):
+def test_ordinary_code_is_not_refused(line):
     assert _check_custom(_with_caesar(), {"vid_td1/move-caesar": line + "\n" + CAESAR}) == []
 
 
@@ -686,3 +684,30 @@ def test_comments_and_ordinary_code_are_not_refused(line):
 def test_a_filter_or_fetch_cannot_hide_behind_quotes_or_a_url(line):
     problems = _check_custom(_with_caesar(), {"vid_td1/move-caesar": line + "\n" + CAESAR})
     assert problems, line
+
+
+# ── review round 4 ───────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("line", [
+    'const ok = /^https?:\\/\\//.test("x"); const n = Date.now();',
+    's.replace(/^\\/*/, "");\nconst [k] = useState(0);\n/* draws the thing */',
+    'const a = /[/*]/; const [k] = useState(0); const b = /[*/]/;',
+    "const el = <div>it's {1}</div>; const src = 'https://x.y'; const [k] = useState(0);",
+    "const q = /'/g; const s = '//'; const r = Math.random();",
+    "// pure: no useState",
+])
+def test_the_source_rules_read_the_raw_source_so_nothing_hides_in_a_comment(line):
+    """A comment-stripper that misread a regex literal or a JSX apostrophe let
+    real code through; the checks read the raw text, comments included."""
+    problems = _check_custom(_with_caesar(), {"vid_td1/move-caesar": line + "\n" + CAESAR})
+    assert problems, line
+
+
+def test_a_bracketed_element_cannot_be_transformed():
+    problems = _check(_one_beat(
+        {"type": "word", "at": 17, "id": "w", "slot": "a", "text": "SUNSHINE", "size": "l"},
+        {"type": "bracket", "at": 53, "target": "w", "label": "PASSWORD"},
+        {"type": "encode", "at": 96, "id": "e", "from": "w", "slot": "c", "text": "A941A4C4", "size": "m",
+         "label": "HASH"},
+    ))
+    assert any("has a bracket" in p for p in problems), problems

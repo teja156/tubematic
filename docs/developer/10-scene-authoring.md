@@ -672,14 +672,17 @@ under a mask gradient cost about 1.6 CPU-seconds a frame. The measured costs are
 - A move acts on an element that is not on stage or has not finished its own move, or finishes less
   than 15 frames before its beat's cut. A typed command or a custom move is given a glow, which
   neither draws, or a custom move a bracket. A `rearrange` or `encode` takes its letters from a grid,
-  a typed command, a custom move or a number with an exponent, whose letters the scene cannot fly.
+  a typed command, a custom move or a number with an exponent, whose letters the scene cannot fly, or
+  from an element with a bracket, which would vanish in one frame.
 - A beat's push would scale a string past the frame's edges, or the beat also has a custom move,
   which draws in fixed frame pixels and cannot follow the push.
 - Stage text repeats 4 or more narration words in a row.
 - A custom move has more than 6 per video, a shipped move's name, a `src` that is not this video's
   `move-<name>` file, or a source that breaks Bean Explainer's rules, uses a CSS gradient, backdrop
   filter or blend mode, a dynamic import, `performance.now`, Remotion's media or render-control parts,
-  state, effects or timers, or reads the frame itself (`terminal_doc.py::FORBIDDEN_SOURCE`).
+  state, effects or timers, or reads the frame itself (`terminal_doc.py::FORBIDDEN_SOURCE`). The
+  patterns read the raw file, comments included: a comment stripper that misreads a regex literal
+  would blank real code.
 - Nothing changes on stage for more than 3 seconds.
 
 `mcp/tests/test_terminal_doc.py` pins `terminal_doc.py` to `contract.ts` and to the pack. The pack's

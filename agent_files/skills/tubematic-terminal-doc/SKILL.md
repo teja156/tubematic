@@ -61,7 +61,8 @@ event is wrong. Fix every problem it lists, then write again.
 - **Order:** a `rearrange`, `encode`, `bracket` or `glow` acts on an element that is on stage and has
   finished its own move. A typed command and a move of your own do not glow, and a move of your own
   takes no bracket. Only a word, a single-line number (no exponent) or a string another move made can
-  be the `from` of a `rearrange` or `encode`: a grid, a typed command and a move of your own cannot.
+  be the `from` of a `rearrange` or `encode`: a grid, a typed command and a move of your own cannot,
+  and neither can an element that already has a bracket (transform first, then bracket).
 - **Push:** under a beat's `push`, every string must still fit at its size times the push's scale,
   and a beat with a push has no move of your own.
 - **Never still:** something changes on stage at least every 3 seconds.
@@ -72,7 +73,8 @@ event is wrong. Fix every problem it lists, then write again.
   `import(...)`), and uses no filter, gradient (SVG or CSS), backdrop filter, blend mode, pattern,
   dashed stroke, image, audio or video, `staticFile`, `delayRender`, fetch, randomness, clock,
   `performance.now`, state, effects or timers (`useState`, `useRef`, `useEffect`, `setTimeout`),
-  `useCurrentFrame` or `useVideoConfig`: it is a pure function of `t`.
+  `useCurrentFrame` or `useVideoConfig`: it is a pure function of `t`. The check reads comments too,
+  so do not name any of these in a comment either.
 
 ## Step 0 — read
 

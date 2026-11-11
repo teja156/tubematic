@@ -138,39 +138,6 @@ _ALLOWED_IMPORT = re.compile(r"^(react|remotion|\.\./\.\./installed/terminalDoc/
 MAX_ERRORS = 12
 
 
-def strip_comments(src: str) -> str:
-    """The source with its // and /* */ comments blanked, string- and
-    template-aware, so a forbidden word in a comment is not refused and a URL
-    in a string does not hide what follows it."""
-    out, i, n, quote = [], 0, len(src), ""
-    while i < n:
-        c = src[i]
-        if quote:
-            out.append(c)
-            if c == "\\" and i + 1 < n:
-                out.append(src[i + 1])
-                i += 2
-                continue
-            if c == quote:
-                quote = ""
-        elif c in "\"'`":
-            quote = c
-            out.append(c)
-        elif src.startswith("//", i):
-            j = src.find("\n", i)
-            i = n if j < 0 else j
-            continue
-        elif src.startswith("/*", i):
-            j = src.find("*/", i + 2)
-            i = n if j < 0 else j + 2
-            out.append(" ")
-            continue
-        else:
-            out.append(c)
-        i += 1
-    return "".join(out)
-
-
 def is_td_scene(scene) -> bool:
     """Any scene naming TerminalDoc, whatever its type: the use rule must catch a
     mistyped one too."""
@@ -330,9 +297,11 @@ def custom_move_errors(custom, video_id: str, sources: dict | None) -> tuple[lis
             if body is None:
                 errs.append(f"{where} ({cid}): there is no {src}.tsx; write it with write_scene_file first.")
                 continue
-            code = strip_comments(body)
+            # The raw source, comments included: a comment-stripper that misreads
+            # a regex literal or a JSX apostrophe would blank real code, so a
+            # forbidden word in a comment is refused too and the agent rewords it.
             for pattern, why in FORBIDDEN_SOURCE:
-                if pattern.search(code):
+                if pattern.search(body):
                     errs.append(f"{where} ({cid}): the move uses {why}.")
             named = [next((g for g in groups if g), "") for groups in _IMPORT.findall(body)]
             bad = [m or '""' for m in named if not _ALLOWED_IMPORT.match(m)]
@@ -550,6 +519,10 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                     continue
                 if at < src_el.ends:
                     err(f"{what}: {e['from']!r} is still playing its own move until frame {src_el.ends}.")
+                    continue
+                if src_el.bracket:
+                    err(f"{what}: {e['from']!r} has a bracket, which would vanish in one frame when its letters fly; "
+                        "transform it before bracketing, or bracket what it becomes.")
                     continue
                 kind = src_el.ev["type"]
                 if kind in ("grid", "type", "custom") or (kind == "number" and "^" in src_el.ev["value"]):
