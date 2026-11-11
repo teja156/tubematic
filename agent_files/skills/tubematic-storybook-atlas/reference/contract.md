@@ -44,7 +44,7 @@ word's `startFrame`. Positions are frame pixels: x from 0 (left) to 1080, y from
 | `type` | Fields | Notes |
 |---|---|---|
 | `guide` | `at`, optional `x` (110 to 970), `pose`, `facing` (`left`, `right`) | Walks to `x` at 9 px a frame, then takes `pose` |
-| `person` | `at`, `who` (a cast id), optional `x` (110 to 970), `pose`, `facing`, `exit` | The first event walks them in from the nearer edge; `exit: true` walks them off |
+| `person` | `at`, `who` (a cast id), optional `x` (110 to 970), `pose`, `facing`, `exit` | The first event walks them in from the nearer edge, to `x`, or to the middle (540) without one; `exit: true` walks them off |
 | `prop` | `at`, `id`, `prop`, `x`, `y` (wall props, 620 to 1240), optional `scale` (0.6 to 1.4), `enter` | `x` is the middle of its base; `id` is your name for it in this chapter |
 | `act` | `at`, `id`, `act` | One of the prop's acts, 10 frames or more after it appeared |
 | `tag` | `at`, `on` (a prop's `id`), `text` (at most 24 characters) | Printed under the prop; a new tag on a prop replaces the one before |

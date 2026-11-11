@@ -129,7 +129,7 @@ dark-dressed people to the light chapters.
 | Event | When | Fields |
 |---|---|---|
 | `guide` | the guide moves or reacts | `at`, optional `x` (walks there first), `pose` (`stand`, `point`, `look`, `think`, `surprised`, `hop`), `facing` |
-| `person` | someone enters (their first event walks them in from the nearer edge), moves, reacts, or leaves | `at`, `who`, optional `x`, `pose` (`stand`, `point`, `hold`, `think`, `surprised`), `facing`, `exit: true` |
+| `person` | someone enters (their first event walks them in from the nearer edge, to `x`, or to the middle, x 540, without one), moves, reacts, or leaves | `at`, `who`, optional `x`, `pose` (`stand`, `point`, `hold`, `think`, `surprised`), `facing`, `exit: true` |
 | `prop` | the word that names the thing | `at`, `id` (your name for it), `prop`, `x`, `y` (wall props only), optional `scale`, `enter` |
 | `act` | the prop does its thing | `at`, `id`, `act` (one of that prop's acts) |
 | `tag` | a small printed label under a prop: a name, a date | `at`, `on` (a prop's `id`), `text` |

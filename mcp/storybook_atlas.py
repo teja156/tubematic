@@ -112,7 +112,9 @@ FORBIDDEN_SOURCE = (
 _IMPORT = re.compile(r"""\b(?:import|export)\b[^;"'`]*?\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']""")
 def _code(body: str) -> str:
     """The source with its comments blanked, so a comment that mentions an image or a fetch is not read
-    as code. String-aware: a // or /* inside a string, a template literal or its ${...} stays code."""
+    as code. String-aware: a // or /* inside a string, a template literal or its ${...} stays code.
+    Regex literals are not parsed, so one holding /* or a quote can hide code from the checks: they
+    catch an agent's ordinary mistakes and are not a sandbox, like every agent-written scene's checks."""
     out: list[str] = []
     i, n = 0, len(body)
     stack: list[str] = []  # "`" inside a template literal, "{" inside one of its ${...}
@@ -248,17 +250,19 @@ def actor_at(moves: list[dict], frame: int, start: float | None) -> dict:
 
 
 def walk_ends(moves: list[dict], start: float | None) -> list[int]:
-    """The frames each walk in `moves` arrives (or would have, had nothing cut it short)."""
+    """The frames each walk in `moves` arrives (or would have, had nothing cut it short). Each move is
+    read against where the actor is just before it: an entry with no `x` walks to the middle."""
     out = []
-    for m in moves:
-        state = actor_at(moves, m["at"], start)
-        here = state["x"] if state["visible"] else None
-        if m.get("exit") and here is not None:
-            out.append(m["at"] + walk_frames(here, nearer_edge(here)))
-        elif here is None and not m.get("exit"):
-            t = m.get("x", W / 2)
-            out.append(m["at"] + walk_frames(nearer_edge(t), t))
-        elif m.get("x") is not None and here is not None and m["x"] != here:
+    for k, m in enumerate(moves):
+        before = actor_at(moves[:k], m["at"], start)
+        here = before["x"] if before["visible"] else None
+        if m.get("exit"):
+            if here is not None:
+                out.append(m["at"] + walk_frames(here, nearer_edge(here)))
+        elif here is None:
+            target = m.get("x", W / 2)
+            out.append(m["at"] + walk_frames(nearer_edge(target), target))
+        elif m.get("x") is not None and m["x"] != here:
             out.append(m["at"] + walk_frames(here, m["x"]))
     return out
 

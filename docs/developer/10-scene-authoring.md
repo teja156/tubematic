@@ -627,7 +627,7 @@ example.
 
 | Event | What the scene draws |
 |---|---|
-| `guide`, `person` | The actor walks on twos to `x` at 9 px a frame, then holds a pose; a person's first event walks them in from the nearer edge, `exit` walks them off |
+| `guide`, `person` | The actor walks on twos to `x` at 9 px a frame, then holds a pose; a person's first event walks them in from the nearer edge (to x 540 when it gives none), `exit` walks them off |
 | `prop` | A library prop, or one the agent drew, pops, drops, slides, rises or fades in, and stays for the chapter |
 | `act` | The prop moves once (wobble, bounce, shake, spin, swing, pulse), gets a halo (`glow`), switches to its second drawing (`switch`), or runs through its drawings (`cycle`) |
 | `tag` | A small printed label under a prop |

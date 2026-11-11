@@ -254,6 +254,19 @@ def test_a_tag_off_the_frame_is_refused():
     assert any("runs off the frame" in p for p in problems), problems
 
 
+def test_an_entry_with_no_x_walks_to_the_middle_and_is_checked_there():
+    assert sa.walk_ends([{"at": 100}], None) == [100 + sa.walk_frames(-160, 540)]
+
+    def middle(d):
+        # the last event of chapter 2: Grace enters with no x and stops at x 540, inside the relays
+        _ev(d, 1, "prop").update(x=600, scale=0.85)
+        d["chapters"][1]["events"] = [e for e in d["chapters"][1]["events"] if e["type"] not in ("person", "morph")]
+        d["chapters"][1]["events"].append({"type": "guide", "at": 637, "pose": "think"})
+        d["chapters"][1]["events"].append({"type": "person", "at": 809, "who": "grace"})
+    problems = _check(_with(middle))
+    assert any("grace needs the floor" in p for p in problems), problems
+
+
 def test_a_person_walking_past_the_guide_is_fine():
     """Grace walks in from the left past the guide at 210: only where people
     stand still is checked, so the example passes."""
