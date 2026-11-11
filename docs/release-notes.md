@@ -37,6 +37,9 @@ After you upgrade:
    warnings**. Remove the sentence to stop it. If you want a closing line and have no such
    sentence, add one: a script profile's sign-off does not put one there. See
    [Preferences](https://docs.tubematic.ai/user-guide/settings#preferences).
+3. Reload any dashboard tab that was open during the upgrade. A **Topics** page loaded before it
+   sets a domain's agent, model and effort back to **Automatic** when it saves another change to
+   that domain.
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did
 before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
@@ -158,6 +161,13 @@ If you go back to 2.1.x later:
   too small to read. A video whose script was written before the upgrade has no formula or opening
   on record and is grouped under **Not recorded**. See
   [Comparing groups of videos](https://docs.tubematic.ai/user-guide/publishing#comparing-groups-of-videos).
+- A domain can have its own agent, model and effort. Every new video in the domain then starts on
+  that agent, whichever research mode found the topic, and the shares on **Settings → Agents** apply
+  to the domains left on **Automatic**. You can still change the agent on each video at a
+  checkpoint. Set it under **Edit defaults** on the domain's row on the **Topics** page, or in
+  **Add Domain**. On the **New Video** page, **Automatic** uses the Manual Videos domain's agent
+  when it has one. See
+  [Choose which agent makes a video](https://docs.tubematic.ai/user-guide/agents#choose-which-agent-makes-a-video).
 
 ### Changed
 
@@ -176,6 +186,10 @@ If you go back to 2.1.x later:
 - A script profile sets how a script sounds, and the formula sets its structure. Before, a
   profile could also set the order of a script's parts and its sign-off. The agent now uses a
   profile's signature phrases in some scripts and no single one in every script.
+- A domain's row on the **Topics** page is one line: its name, the defaults it has set, its topic
+  and video counts, its status and the pause button. **Edit defaults** opens the visual style,
+  mascot, voice, script profile and topic cap under the row. Before, those pickers sat on the row
+  itself.
 
 ### Fixed
 

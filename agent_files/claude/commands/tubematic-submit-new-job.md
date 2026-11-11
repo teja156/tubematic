@@ -60,31 +60,37 @@ Step 4 — Create the video and immediately approve it.
   the script are about, so the title is a name for it, not the first 70 characters of it. If the
   user's topic is already 70 characters or fewer, use it as the title unchanged.
   tubematic:create_video(topic=TOPIC, title=SHORT_TITLE, strategy="manual", producibility_score=SCORE, project_id=PROJECT_ID, voice_id=CHOSEN_VOICE_ID)
-  The result carries the video's agent_id — the agent this video was dealt.
+  The result carries the video's agent_id, agent_model and agent_effort. The agent and model
+  come from the domain when it names an agent of its own; otherwise the video was dealt an agent
+  by weight. The effort is the domain's whenever it has set one. A blank agent_model or
+  agent_effort means that agent's own.
 
   If the user asked for a specific agent (e.g. "have Codex do it"), move the video to it: call
   tubematic:get_pipeline_status(), find that agent in `agents` (only live agents are listed, and
   only those are accepted), and pass agent_id=<its id> in the update_video call below. From here
-  on "the video's agent" means that one. Do not ask about the agent otherwise — the deal already
-  picked one.
+  on "the video's agent" means that one, and the returned agent_model no longer applies (moving
+  a video clears its model). Do not ask about the agent otherwise — the video already has one.
 
   Then ask which model to use, if there's a real choice:
     Call tubematic:get_pipeline_status() and read `agents`. The video's agent is the entry whose
     id equals its agent_id — the returned one, or the one the user asked for above (if agent_id is
     null, the entry with is_default true).
-    - If that agent's `models` has 2 or more entries: list them, marking the first as the default,
-      and ask which to use. Only these are accepted — the list was validated when the agent was
-      installed, and any other name is rejected.
-    - If it has 0 or 1 entries, skip the question. Leaving the model unset means the agent's
-      default (its first model).
+    - If that agent's `models` has 2 or more entries: list them, marking as the default the
+      returned agent_model if it is not blank (the domain chose it), else the first, and ask which
+      to use. Only these are accepted — the list was validated when the agent was installed, and
+      any other name is rejected.
+    - If it has 0 or 1 entries, skip the question. Leaving the model unset keeps what the video
+      has: the domain's model, or the agent's default (its first model).
 
   Then ask which effort level to run at:
     The same `agents` entry carries that agent's own `effort`. Offer "low", "medium", "high",
-    "xhigh" and "max", marking that one as the default, and ask which to use. Higher levels
-    think harder, cost more and take longer. Ask this every time — unlike the model list, all
-    five are always available for every agent.
-    If the user picks the agent's own level, leave it unset rather than passing it: unset means
-    "follow the agent", so the video keeps tracking that agent's level if it is changed later.
+    "xhigh" and "max", marking as the default the returned agent_effort if it is not blank (the
+    domain chose it), else the agent's own, and ask which to use. Higher levels think harder,
+    cost more and take longer. Ask this every time — unlike the model list, all five are always
+    available for every agent.
+    If the user picks the default, leave it unset rather than passing it. On a video with a
+    blank agent_effort, unset means "follow the agent", so the video keeps tracking that agent's
+    level if it is changed later.
 
   If a script profile was chosen in Step 3.6, or an agent, a non-default model or effort just now
   (any of them), set them in one call — this must happen BEFORE the status flip below, since these

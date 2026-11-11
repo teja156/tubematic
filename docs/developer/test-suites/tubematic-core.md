@@ -377,6 +377,16 @@ and `last_render_seconds`.
 Trap: no earlier version kept which renderer made a video, so the migration has no backfill and the
 video window hides the rows on every video rendered before the upgrade.
 
+### `test_domain_agent_migration.py`
+
+Covers `0022`: `projects.default_agent_id`, `default_agent_model` and `default_agent_effort`.
+
+- An existing domain reads `''` in the three new columns.
+- Every other column of the domain keeps its value.
+
+Trap: `''` on `default_agent_id` means the weighted deal, which is how every domain's videos were
+assigned before the upgrade, so the migration has no backfill.
+
 ### `test_script_record_migration.py`
 
 Covers `0023`: `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`.

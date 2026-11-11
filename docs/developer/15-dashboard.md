@@ -240,9 +240,12 @@ it asks for is in [the user guide](../user-guide/04-dashboard.md#new-video). The
 route because an over-long title is refused where `POST /videos` clips it, and a picked `agent_id`
 is kept.
 
-- The agent picker defaults to **Automatic (dealt by weight)**, which sends no `agent_id`, so the
-  API deals the video by the same weights as every other new video. The model picker is disabled
-  under Automatic, because the agent is not known yet.
+- The agent picker's blank choice sends no `agent_id`, so the API picks the agent as it does for
+  every other new video ([Assignment](07-agent-layer.md#assignment)). The choice reads
+  **Automatic (dealt by weight)**, or **Domain default** with the agent's name while the Manual
+  Videos domain names a live agent. While the agent list has not loaded, it reads **Domain default**
+  with no name, because the page cannot tell whether that agent is live. The model picker is
+  disabled while no agent is picked.
 - Once an agent is picked, its default model is pinned, as approving a topic pins it.
 - The voice picker's **Default** names the voice the API will give the video: the Manual Videos
   domain's default voice while it is on the roster, otherwise the install default.
@@ -256,8 +259,24 @@ The Mascots page's create form uses the same agent, model and effort controls
 ### The Topics page
 
 - The dashboard has no edit form for a domain. `POST /projects` is an upsert, so a domain's defaults
-  (visual style, voice, script profile, mascot) are selects on its row. The route replaces the whole
-  row, so every row edit sends every field again.
+  are controls in a panel under its row, opened by **Edit defaults**, and each change is saved at
+  once. The route replaces the whole row, so every edit sends every field again.
+  `lib/domains.ts::domainDefaults` is the list of defaults.
+- Writes to one domain run one at a time: each change on its row, and a pause or resume. Each is
+  built from the row as the write before it left it, because the route replaces the whole row. Two
+  changes sent side by side would each carry the other's field as it was, and one would be lost.
+  A refused change, or one that did not reach the API within 30 seconds, is reported in an alert
+  and the row keeps what is stored.
+- A closed row is one line: the name, a chip for each default the domain sets
+  (`lib/domains.ts::domainChips`), the topic and video counts, the status and the pause button. The
+  panel is rendered only while its row is open.
+- The panel groups the controls as Look, Narration, Agent and Limits, each with a sentence that
+  says which videos it reaches. The add form renders the Look, Narration and Agent groups from the
+  same component, `DomainDefaults`.
+- The agent picker lists the live agents after **Automatic (dealt by weight)**. Changing the agent
+  clears the model in the same save, because the API refuses a model from another agent's list. A
+  blank model follows the agent's default at the time each video is filed. An agent that is
+  uninstalled, or a model the agent dropped, stays selected and cannot be picked again.
 - The add form's description is a textarea whose counter stops at the API's 2000-character limit
   and counts code points. On a domain row the description stays on one truncated line.
 - A deleted default profile shows as "Unavailable profile", because the profile list omits deleted
@@ -270,9 +289,10 @@ The Mascots page's create form uses the same agent, model and effort controls
   `topic_count`, which includes archived and rejected videos ([Topic cap](02-pipeline.md#topic-cap)).
 - An expired seed domain shows EXPIRED without ACTIVE. PAUSED still shows, because resuming alone
   would not reopen the domain.
-- Each picker on a row has a fixed width, because a select is as wide as its longest option, and
-  the row wraps on a narrow screen. `tests/e2e/specs/topics.spec.ts` ("a domain row labels its four
-  pickers and still fits at 1280px") fails if a picker pushes the name or the buttons out.
+- Each picker fills its field, because a select sized by its content is as wide as its longest
+  option. The row's line wraps on a narrow screen. `tests/e2e/specs/topics.spec.ts` ("a domain row
+  stays one line at 1280px and opens its labelled defaults under it") fails if the chips push the
+  name or the buttons out, or if a control leaves the panel.
 
 ---
 

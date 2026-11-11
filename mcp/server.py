@@ -1489,6 +1489,61 @@ def _agent_id_error(con, stored_agent_id, agent_id: str):
     return None
 
 
+def _domain_agent(con, project_id):
+    """The (agent_id, agent_model, agent_effort) a new video filed into this
+    domain starts with (TMDEV-207).
+
+    A domain can name an agent (projects.default_agent_id). While that agent is
+    live the video starts on it, with the domain's model if the agent still
+    offers it, and takes no card from the deck, like a human's override. With
+    no domain agent, or one uninstalled since, the video is dealt by weight as
+    before, and the domain's model is dropped: it belonged to the other agent's
+    list. The effort is a closed set that every agent takes, so it rides along
+    either way. Nothing here refuses: seeding never fails a video.
+
+    Call it where _pick_agent_id was called, inside the inserting transaction.
+    Keep in sync: renderer/api/pipeline.py's _domain_agent (agreement test).
+    """
+    row = con.execute(
+        "SELECT default_agent_id, default_agent_model, default_agent_effort "
+        "FROM projects WHERE id = ?", (project_id,)).fetchone() if project_id else None
+    wanted, model, effort = (row[0] or "", row[1] or "", row[2] or "") if row else ("", "", "")
+    if effort not in AGENT_EFFORTS:
+        effort = ""
+    if wanted:
+        agent = con.execute(
+            "SELECT models FROM agents WHERE id = ? AND archived_at IS NULL",
+            (wanted,)).fetchone()
+        if agent is not None:
+            return wanted, (model if model in _agent_models(agent[0]) else ""), effort
+    return _pick_agent_id(con), "", effort
+
+
+def _domain_agent_error(con, agent_id: str, model: str, stored_agent_id: str = ""):
+    """Why a domain cannot take this agent and model as its default, or None.
+
+    A new agent must be live, and a model must be one of the agent's own; a
+    model with no agent has no list to belong to. The domain's stored agent may
+    be named again even when it has since been uninstalled, as a video's may:
+    that is how a model it no longer offers gets cleared. Callers run this only
+    when the pair changes, so a stored pair that went stale never blocks
+    another edit to the domain.
+    Keep in sync: renderer/api/pipeline.py's _domain_agent_error (agreement test).
+    """
+    if not agent_id:
+        if model:
+            return ("default_agent_model needs a default_agent_id: a model belongs to one "
+                    "agent's list")
+        return None
+    err = (_agent_id_error(con, stored_agent_id, agent_id)
+           or _agent_model_error(con, agent_id, model))
+    if err:
+        return (err.replace("agent_model", "default_agent_model")
+                .replace("agent_id", "default_agent_id")
+                .replace("This video's agent", "The domain's agent"))
+    return None
+
+
 def _truncate_title(title: str) -> tuple[str, str]:
     """Clip an over-length display name to VIDEO_TITLE_MAX_LEN.
 
@@ -1661,6 +1716,13 @@ def create_video(
     which pronunciation and pause markup the script may use.
     The human will see TOPIC_PROPOSED cards in the dashboard and approve/reject.
 
+    The result carries the video's agent_id, agent_model and agent_effort. The
+    agent and model come from the project when it names an agent
+    (list_projects' default_agent_id and default_agent_model); otherwise the
+    video is dealt an agent by weight. The effort is the project's
+    default_agent_effort either way. A blank model or effort means that
+    agent's own.
+
     A paused or expired project_id is refused (expired: the domain already
     holds as many topics as its topic_cap allows — see list_projects). When
     that happens, skip the candidate — do not file it into another domain or
@@ -1726,25 +1788,30 @@ def create_video(
         if not tmascots.no_mascot_error(visual_style) and _gpu_probe_status() == "working":
             mascot_id = tmascots.resolve_default(
                 con, row["default_mascot_id"] or "", _get_setting("default_mascot_id", ""))
-        agent_id = _pick_agent_id(con)
+        # The domain's agent, model and effort seed EVERY video too, whatever
+        # the strategy (TMDEV-207); a domain on Automatic is dealt by weight.
+        # Keep in sync: renderer/api/pipeline.py's create_video.
+        agent_id, agent_model, agent_effort = _domain_agent(con, project_id)
         # The check above runs outside any transaction, so a pause or another
         # session's topic committed since then would be missed; the INSERT
         # re-checks both itself.
         cur = con.execute(
             f"""INSERT INTO videos
                (id, project_id, topic, strategy, producibility_score, title,
-                status, voice_id, agent_id, visual_style, script_profile_id,
-                mascot_id, created_at, updated_at)
-               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?
+                status, voice_id, agent_id, agent_model, agent_effort, visual_style,
+                script_profile_id, mascot_id, created_at, updated_at)
+               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?, ?, ?
                WHERE {_DOMAIN_OPEN_GUARD}""",
             (video_id, project_id, topic, strategy, producibility_score, title, voice_id,
-             agent_id, visual_style, script_profile_id, mascot_id, now, now, strategy, project_id),
+             agent_id, agent_model, agent_effort, visual_style, script_profile_id, mascot_id,
+             now, now, strategy, project_id),
         )
         if cur.rowcount == 0:
             return {"error": _closed_domain_error(con, project_id)
                     or _paused_domain_error(project_id, row["name"])}
     result = {"video_id": video_id, "status": "TOPIC_PROPOSED", "topic": topic,
-              "agent_id": agent_id, "visual_style": visual_style, "voice_id": voice_id,
+              "agent_id": agent_id, "agent_model": agent_model, "agent_effort": agent_effort,
+              "visual_style": visual_style, "voice_id": voice_id,
               "script_profile_id": script_profile_id, "mascot_id": mascot_id}
     if title_warning:
         result["warning"] = title_warning
@@ -3165,6 +3232,10 @@ def list_projects() -> list[dict]:
     it, archived and rejected ones included) and expired (topic_count has
     reached topic_cap). An expired domain takes no new research topics:
     create_video refuses it, exactly as it refuses a paused one.
+
+    default_agent_id, default_agent_model and default_agent_effort are what a
+    new video filed into the project starts on. A blank default_agent_id means
+    the video is dealt an agent by weight.
     """
     _init_db()
     with _conn() as con:
@@ -3242,6 +3313,9 @@ def upsert_project(
     default_script_profile_id: str | None = None,
     topic_cap: int | None = None,
     default_mascot_id: str | None = None,
+    default_agent_id: str | None = None,
+    default_agent_model: str | None = None,
+    default_agent_effort: str | None = None,
 ) -> dict:
     """Create or update a project (domain/series container).
 
@@ -3285,6 +3359,19 @@ def upsert_project(
         never touches videos already filed. A new id is refused if it cannot
         be chosen or no renderer's GPU is working (the error says which);
         re-sending the stored one is never refused.
+    default_agent_id: the agent every new video filed into this domain starts
+        on, whatever its sourcing mode: the id of a live agent from
+        get_pipeline_status's agents, or "" for Automatic (the video is dealt
+        an agent by weight). A video can still be moved to another agent at a
+        human checkpoint, and changing this never touches videos already filed.
+        Changing it without passing default_agent_model clears the stored
+        model, which belonged to the other agent's list.
+    default_agent_model: the model those videos start on: one of that agent's
+        models, or "" for the agent's own default. Refused without an agent.
+    default_agent_effort: the effort level those videos start on: "low",
+        "medium", "high", "xhigh" or "max", or "" for the agent's own. It
+        needs no agent: on an Automatic domain it applies to whichever agent
+        the video is dealt.
     topic_cap: how many topics the domain may ever hold, a whole number from
         25 to 750 (100 when the domain is created). Every video ever filed
         counts, archived and rejected ones included. Once the domain holds
@@ -3293,8 +3380,9 @@ def upsert_project(
 
     OMITTING A FIELD LEAVES IT ALONE on a project that already exists; it is
     only defaulted when the project is created. Pass "" explicitly to clear
-    description, default_visual_style, default_voice_id or
-    default_script_profile_id. This matters because the callers of
+    description, default_visual_style, default_voice_id,
+    default_script_profile_id, default_agent_id, default_agent_model or
+    default_agent_effort. This matters because the callers of
     this tool are partial by nature — one command converts an existing domain
     into a curriculum seed and names only that, another files a video into a
     domain and names only its slug — and a full-replace upsert would have let
@@ -3314,6 +3402,15 @@ def upsert_project(
         default_script_profile_id = default_script_profile_id.strip()
     if default_mascot_id is not None:
         default_mascot_id = default_mascot_id.strip()
+    if default_agent_id is not None:
+        default_agent_id = default_agent_id.strip()
+    if default_agent_model is not None:
+        default_agent_model = default_agent_model.strip()
+    if default_agent_effort is not None:
+        default_agent_effort = default_agent_effort.strip()
+        if default_agent_effort not in ("",) + AGENT_EFFORTS:
+            return {"error": f"default_agent_effort must be one of {list(AGENT_EFFORTS)}, or "
+                             f"blank for the agent's own effort, got {default_agent_effort!r}"}
     if topic_cap is not None and (cap_error := _topic_cap_error(topic_cap)):
         return {"error": cap_error}
     seed = None if is_curriculum_seed is None else int(is_curriculum_seed)
@@ -3326,7 +3423,8 @@ def upsert_project(
         # Keep in sync: renderer/api/pipeline.py's create_project.
         existing = con.execute(
             "SELECT description, is_curriculum_seed, status, default_visual_style, "
-            "default_voice_id, default_script_profile_id, default_mascot_id FROM projects WHERE id = ?",
+            "default_voice_id, default_script_profile_id, default_mascot_id, default_agent_id, "
+            "default_agent_model FROM projects WHERE id = ?",
             (project_id,)
         ).fetchone()
         # The id names the domain's output directory, so a NEW one must be a
@@ -3371,6 +3469,26 @@ def upsert_project(
             err = tmascots.mascot_gpu_error(_gpu_probe_status())
             if err:
                 return {"error": err}
+        # The default agent and its model are judged as a pair, on the row as it
+        # will be after this write, and only when the pair changes: an agent
+        # uninstalled since, or a model it dropped, never blocks another edit
+        # of the domain. Changing the agent without naming a model clears the
+        # stored model, which belonged to the other agent's list (the rule
+        # update_video follows for a video).
+        # Keep in sync: renderer/api/pipeline.py's create_project.
+        if default_agent_id is not None or default_agent_model is not None:
+            stored_agent = (existing["default_agent_id"] or "") if existing else ""
+            stored_model = (existing["default_agent_model"] or "") if existing else ""
+            new_agent = stored_agent if default_agent_id is None else default_agent_id
+            if default_agent_model is not None:
+                new_model = default_agent_model
+            else:
+                new_model = stored_model if new_agent == stored_agent else ""
+            if (new_agent, new_model) != (stored_agent, stored_model):
+                err = _domain_agent_error(con, new_agent, new_model, stored_agent)
+                if err:
+                    return {"error": err}
+            default_agent_id, default_agent_model = new_agent, new_model
         # Only a CHANGE to illustrated is refused without a key; re-sending a
         # stored default is left alone, as in pipeline.py's create_project.
         # Keep in sync: renderer/api/pipeline.py's create_project.
@@ -3396,7 +3514,9 @@ def upsert_project(
         con.execute(
             """INSERT INTO projects (id, name, description, is_curriculum_seed, status,
                                      default_visual_style, default_voice_id,
-                                     default_script_profile_id, topic_cap, default_mascot_id, created_at)
+                                     default_script_profile_id, topic_cap, default_mascot_id,
+                                     default_agent_id, default_agent_model,
+                                     default_agent_effort, created_at)
                VALUES (:id, :name,
                        COALESCE(:description, ''),
                        COALESCE(:seed, 0),
@@ -3406,6 +3526,9 @@ def upsert_project(
                        COALESCE(:profile, ''),
                        COALESCE(:cap, :default_cap),
                        COALESCE(:mascot, ''),
+                       COALESCE(:agent, ''),
+                       COALESCE(:agent_model, ''),
+                       COALESCE(:agent_effort, ''),
                        :now)
                ON CONFLICT(id) DO UPDATE SET
                  name                 = :name,
@@ -3417,10 +3540,16 @@ def upsert_project(
                  default_script_profile_id =
                      COALESCE(:profile, projects.default_script_profile_id),
                  topic_cap            = COALESCE(:cap, projects.topic_cap),
-                 default_mascot_id    = COALESCE(:mascot, projects.default_mascot_id)""",
+                 default_mascot_id    = COALESCE(:mascot, projects.default_mascot_id),
+                 default_agent_id     = COALESCE(:agent, projects.default_agent_id),
+                 default_agent_model  = COALESCE(:agent_model, projects.default_agent_model),
+                 default_agent_effort =
+                     COALESCE(:agent_effort, projects.default_agent_effort)""",
             {"id": project_id, "name": name, "description": description, "seed": seed,
              "status": status, "style": default_visual_style, "voice": default_voice_id,
              "profile": default_script_profile_id, "cap": topic_cap, "mascot": default_mascot_id,
+             "agent": default_agent_id, "agent_model": default_agent_model,
+             "agent_effort": default_agent_effort,
              "default_cap": TOPIC_CAP_DEFAULT, "now": now},
         )
         row = con.execute(f"{_PROJECT_SELECT} WHERE p.id = ?", (project_id,)).fetchone()
