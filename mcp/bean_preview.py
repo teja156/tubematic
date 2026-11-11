@@ -1,9 +1,11 @@
 """Renders the preview of the props an agent drew for one Bean Explainer video
-(TMDEV-198): the picture render_bean_props hands back so the agent sees its
-drawings before it submits.
+(TMDEV-198), or one Storybook Atlas video (`script=STORYBOOK_SCRIPT`): the
+picture render_bean_props and render_storybook_props hand back so the agent
+sees its drawings before it submits.
 
-The renderer is the Node script renderer/remotion/bean-tools/render-props.mjs,
-run as `node render-props.mjs <spec_json> <out_png>`. It runs on software GL
+The renderer is a Node script (renderer/remotion/bean-tools/render-props.mjs,
+or storybook-tools/render-props.mjs), run as
+`node render-props.mjs <spec_json> <out_png>`. It runs on software GL
 inside this server's container, so the GPU stays free for videos. Success is
 exit 0 AND the PNG existing.
 
@@ -20,6 +22,7 @@ import tempfile
 from pathlib import Path
 
 _SCRIPT = Path("bean-tools") / "render-props.mjs"
+STORYBOOK_SCRIPT = Path("storybook-tools") / "render-props.mjs"
 STDERR_TAIL_LINES = 8
 # Under server.py's HEAVY_CHECK_WAIT_SECS (300): the preview holds the heavy-check
 # lock, and a validate_job queued behind it must not give up first.
@@ -30,9 +33,9 @@ class BeanPreviewError(Exception):
     """The preview could not be rendered. The message is for the authoring agent."""
 
 
-def render_preview(remotion_dir, spec: dict, out_png, timeout: int = TIMEOUT_SECS) -> None:
+def render_preview(remotion_dir, spec: dict, out_png, timeout: int = TIMEOUT_SECS, script: Path = _SCRIPT) -> None:
     remotion_dir, out_png = Path(remotion_dir), Path(out_png)
-    script = remotion_dir / _SCRIPT
+    script = remotion_dir / script
     if not script.is_file():
         raise BeanPreviewError(f"the preview renderer is missing: {script}")
     node = shutil.which("node")

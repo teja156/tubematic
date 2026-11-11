@@ -50,6 +50,7 @@ from tubematic_core import mascots as tmascots
 
 import system_flow  # board windows for the whole-video System Flow scene (TMDEV-196)
 import bean_explainer  # shot windows for the whole-video Bean Explainer scene (TMDEV-198)
+import storybook_atlas  # chapter windows for the whole-video Storybook Atlas scene (TMDEV-200)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
 
@@ -216,6 +217,20 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
                 step = max(1, span // max(1, count - 1))
                 passes.append({"scene": index, "first": first, "step": step,
                                "count": min(count, span // step + 1)})
+            continue
+        # A Storybook Atlas scene spans the whole video too; it changes at every
+        # event, and the page between two events is what a viewer reads, so each
+        # stretch is sampled once things have arrived (twice when it is long).
+        # One or two samples a stretch, not five: a chapter has many stretches.
+        stretches = storybook_atlas.chapter_windows(scene_config) if storybook_atlas.is_storybook_scene(scene) else []
+        if stretches:
+            for s_start, s_end in stretches:
+                last = max(s_start, s_end - 1 - storybook_atlas.TIMING["propIn"])
+                first = min(s_start + ENTRANCE_ALLOWANCE_FRAMES, last)
+                span = last - first
+                count = 2 if span >= 90 else 1
+                step = max(1, span // max(1, count - 1)) if count > 1 else 1
+                passes.append({"scene": index, "first": last if count == 1 else first, "step": step, "count": count})
             continue
         window_start, window_end, degenerate = settled_window(scenes, index)
         span = window_end - window_start

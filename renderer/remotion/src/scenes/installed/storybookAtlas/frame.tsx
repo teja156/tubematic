@@ -85,7 +85,7 @@ export function plaqueSettledAt(title: string): number {
   return t.typeDelay + Math.ceil(title.length / t.typeRate) + t.sealDelay + t.sealPop;
 }
 
-/** The chapter plaque, `t` frames after its chapter began; `out` fades it (0..1 remaining). */
+/** The chapter plaque, `t` frames after its chapter began; `out` fades it (0..1 remaining). A two-line title is joined by a newline. */
 export const Plaque: React.FC<{ t: number; numeral: string; title: string; byline: string; out?: number }> = ({
   t, numeral, title, byline, out = 1,
 }) => {
@@ -111,7 +111,7 @@ export const Plaque: React.FC<{ t: number; numeral: string; title: string; bylin
         position: "absolute", left: x + 9 + numW, top: y + 12, width: w - 18 - numW, height: h - 24, display: "flex",
         flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: SERIF, color: TEXT, textAlign: "center",
       }}>
-        <div style={{ fontSize: 54, lineHeight: 1.02, fontWeight: 500 }}>{title.slice(0, typed) || " "}</div>
+        <div style={{ fontSize: title.includes("\n") ? 44 : 54, lineHeight: 1.02, fontWeight: 500, whiteSpace: "pre-line" }}>{title.slice(0, typed) || " "}</div>
         <div style={{ fontSize: 36, fontStyle: "italic", lineHeight: 1.15, opacity: bylineOp, color: "#4E4136" }}>{byline}</div>
       </div>
     </div>

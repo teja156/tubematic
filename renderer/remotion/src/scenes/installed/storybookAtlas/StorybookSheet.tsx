@@ -163,6 +163,13 @@ const SAMPLE_CHAPTERS: Partial<Record<Backdrop, SampleChapter>> = {
   study: { title: "The Notes", byline: "London, 1843", caption: "Ada wrote what no one else could see.", person: 0, pose: "hold" },
   workshop: { title: "The Workshop", byline: "Menlo Park, 1879", caption: "Edison tried a thousand filaments.", person: 2, pose: "think" },
   nightsky: { title: "The Spark", byline: "Colorado Springs, 1899", caption: "Tesla listened to the night sky.", person: 3, pose: "point" },
+  laboratory: { title: "The Laboratory", byline: "Paris, 1898", caption: "The flasks held a new kind of light.", person: 5, pose: "hold" },
+  street: { title: "The High Street", byline: "London, 1812", caption: "Gas lamps lit the street for the first time.", person: 1, pose: "point" },
+  countryside: { title: "The Fields", byline: "Berkshire, 1701", caption: "Jethro Tull sowed his seeds in rows.", person: 2, pose: "think" },
+  harbour: { title: "The Harbour", byline: "Bristol, 1838", caption: "The tall ships waited for the morning tide.", person: 7, pose: "point" },
+  blueprint: { title: "The Plan", byline: "Philadelphia, 1946", caption: "Every wire was drawn before it was built.", person: 4, pose: "think" },
+  factory: { title: "The Mill", byline: "Manchester, 1790", caption: "One engine turned a hundred spindles.", person: 6, pose: "point" },
+  maproom: { title: "The Chart Room", byline: "Lisbon, 1760", caption: "Every voyage began with a better map.", person: 3, pose: "point" },
 };
 
 function ChapterPage({ b, n, t, drop = [] }: { b: Backdrop; n: number; t: number; drop?: string[] }) {
@@ -245,7 +252,7 @@ export const StorybookSheet: React.FC<{ hold?: number; frames?: number; drop?: s
       {page === 2 && <PosesPage />}
       {page === 3 && <KnobsPage />}
       {page >= FIRST_PROP_PAGE && <PropsPage page={page - FIRST_PROP_PAGE} />}
-      {page >= FIRST_BACKDROP_PAGE && page < FIRST_PROP_PAGE && <ChapterPage b={BACKDROPS[page - FIRST_BACKDROP_PAGE]} n={page - FIRST_BACKDROP_PAGE} t={hold === undefined ? 60 : frame} drop={drop} />}
+      {page >= FIRST_BACKDROP_PAGE && page < FIRST_PROP_PAGE && <ChapterPage b={BACKDROPS[page - FIRST_BACKDROP_PAGE]} n={(page - FIRST_BACKDROP_PAGE) % 5} t={hold === undefined ? 60 : frame} drop={drop} />}
     </AbsoluteFill>
   );
 };

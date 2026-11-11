@@ -225,26 +225,28 @@
       "title": "The feud between Tesla and Edison",
       "brief": "How Nikola Tesla and Thomas Edison went from employer and employee to rivals in the war of the currents, scene by scene.",
       "expect": [
-        "illustrated"
+        "storybook_atlas"
       ],
       "ok": [
+        "illustrated",
         "motion_graphics",
         "scenes"
       ],
-      "future": "Storybook Atlas (TMDEV-200)",
+      "future": "",
       "note": ""
     },
     {
       "title": "Ada Lovelace and the first program",
       "brief": "Ada Lovelace's friendship with Charles Babbage and how her notes on the Analytical Engine described the first algorithm for a machine.",
       "expect": [
-        "illustrated"
+        "storybook_atlas"
       ],
       "ok": [
+        "illustrated",
         "motion_graphics",
         "scenes"
       ],
-      "future": "Storybook Atlas (TMDEV-200)",
+      "future": "",
       "note": ""
     },
     {
@@ -330,13 +332,14 @@
       "title": "The history of the QWERTY keyboard",
       "brief": "From Sholes's typewriter in the 1870s to today's phones: why the letters ended up in this order and why we never switched.",
       "expect": [
-        "scenes"
+        "storybook_atlas"
       ],
       "ok": [
+        "scenes",
         "motion_graphics",
         "illustrated"
       ],
-      "future": "Storybook Atlas (TMDEV-200)",
+      "future": "",
       "note": ""
     },
     {
@@ -392,6 +395,96 @@
       ],
       "future": "",
       "note": ""
+    },
+    {
+      "title": "The first computer bug was a real moth",
+      "brief": "In 1947 Grace Hopper's team at Harvard found a moth stuck in a relay of the Mark II computer, taped it into the logbook, and gave 'debugging' its most famous story.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "scenes",
+        "illustrated"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How the printing press spread across Europe",
+      "brief": "From Gutenberg's workshop in Mainz around 1450 to print shops in two hundred towns fifty years later: how one invention changed who could read.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "scenes",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Milo the robot learns to cook",
+      "brief": "A short story about Milo, a clumsy kitchen robot, who burns the toast, floods the sink and finally makes his family breakfast.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "An invented protagonist the viewer follows: Illustrated, not Storybook Atlas."
+    },
+    {
+      "title": "Two friends start a lemonade stand",
+      "brief": "Follow Priya and Tom as they set up a lemonade stand, argue about the price, lose customers and work out what people will pay.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "bean_explainer",
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Invented recurring characters, told in the present: Illustrated."
+    },
+    {
+      "title": "How one tweet wiped billions off a stock",
+      "brief": "The fake post from a verified account, the minutes of panic selling, the chart of the drop and the correction, and what changed afterwards.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": "Fast news with a real company and a chart: no single style fits."
+    },
+    {
+      "title": "Five inventions that failed before they worked",
+      "brief": "The light bulb, the airplane, the telephone, the camera and the vacuum cleaner: one quick idea each about the failures before the success.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": "History, but a list of named items: Bean Explainer, not Storybook Atlas."
+    },
+    {
+      "title": "What is inside a mechanical typewriter",
+      "brief": "How pressing a key swings a typebar up to the ribbon, moves the carriage one space, and rings the bell at the end of the line.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "Under the Hood (TMDEV-201)",
+      "note": "An old machine, but its insides part by part with no story: not Storybook Atlas."
     }
   ]
 }

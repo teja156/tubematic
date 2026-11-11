@@ -1,0 +1,368 @@
+{
+  "_about": "Shared by renderer/remotion/src/scenes/installed/storybookAtlas/storybookAtlas.test.ts and mcp/tests/test_storybook_atlas.py: the constants both sides use, and cases worked out by the renderer's own stage.ts. Regenerate the cases from stage.ts when its rules change; never edit them by hand.",
+  "constants": {
+    "LIMITS": {
+      "chapters": [
+        3,
+        5
+      ],
+      "chapterMinSeconds": 8,
+      "cast": 4,
+      "onStage": 2,
+      "propsOnStage": 6,
+      "title": 18,
+      "titleLines": 2,
+      "byline": 28,
+      "name": 24,
+      "tag": 24,
+      "words": 2,
+      "wordChars": 10,
+      "gaugeLabel": 24,
+      "quietSeconds": 4,
+      "plateSeconds": [
+        2.5,
+        8
+      ],
+      "propScale": [
+        0.6,
+        1.4
+      ]
+    },
+    "TIMING": {
+      "onWord": 2,
+      "walkSpeed": 9,
+      "walkHold": 2,
+      "propIn": 10,
+      "act": 48,
+      "cycleHold": 4,
+      "switchFade": 4,
+      "tagIn": 6,
+      "plateOpen": 10,
+      "pushFrames": 14,
+      "pushScale": 4,
+      "whiteHold": 2,
+      "dissolve": 5,
+      "wipeFrames": 14,
+      "endMargin": 20
+    },
+    "STAGE": {
+      "left": 60,
+      "right": 1020,
+      "top": 430,
+      "floor": 1344,
+      "wallBase": [
+        620,
+        1240
+      ],
+      "guideHome": 210,
+      "plate": {
+        "x": 90,
+        "y": 450,
+        "w": 900,
+        "h": 860
+      }
+    },
+    "ACTS": [
+      "wobble",
+      "bounce",
+      "shake",
+      "spin",
+      "swing",
+      "pulse",
+      "glow",
+      "switch",
+      "cycle"
+    ],
+    "ENTERS": [
+      "push",
+      "wipe"
+    ],
+    "FACINGS": [
+      "left",
+      "right"
+    ],
+    "GLYPHS": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    "PLATE_EVENTS": [
+      "constellation",
+      "gauge",
+      "morph"
+    ],
+    "PROP_ENTRANCES": [
+      "pop",
+      "drop",
+      "slide",
+      "rise",
+      "fade"
+    ]
+  },
+  "wrap_title": [
+    {
+      "title": "The Machine",
+      "lines": [
+        "The Machine"
+      ]
+    },
+    {
+      "title": "A Moth in Relay Seventy",
+      "lines": [
+        "A Moth in Relay",
+        "Seventy"
+      ]
+    },
+    {
+      "title": "The Logbook of Harvard Mark II",
+      "lines": [
+        "The Logbook of",
+        "Harvard Mark II"
+      ]
+    },
+    {
+      "title": "Supercalifragilistic word",
+      "lines": [
+        "Supercalifragilistic",
+        "word"
+      ]
+    }
+  ],
+  "walk_frames": [
+    {
+      "a": 210,
+      "b": 600,
+      "frames": 44
+    },
+    {
+      "a": -160,
+      "b": 300,
+      "frames": 52
+    },
+    {
+      "a": 900,
+      "b": 100,
+      "frames": 89
+    }
+  ],
+  "actor_at": [
+    {
+      "start": 210,
+      "moves": [
+        {
+          "at": 30,
+          "x": 600,
+          "pose": "point"
+        }
+      ],
+      "frames": [
+        0,
+        30,
+        40,
+        73,
+        74,
+        100
+      ],
+      "states": [
+        {
+          "x": 210,
+          "visible": true,
+          "walking": false
+        },
+        {
+          "x": 210,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 300,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 597,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 600,
+          "visible": true,
+          "walking": false
+        },
+        {
+          "x": 600,
+          "visible": true,
+          "walking": false
+        }
+      ]
+    },
+    {
+      "start": null,
+      "moves": [
+        {
+          "at": 10,
+          "x": 300
+        },
+        {
+          "at": 100,
+          "exit": true
+        }
+      ],
+      "frames": [
+        9,
+        10,
+        20,
+        40,
+        60,
+        100,
+        110,
+        160,
+        200
+      ],
+      "states": [
+        {
+          "x": 0,
+          "visible": false,
+          "walking": false
+        },
+        {
+          "x": -160,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": -70,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 110,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 290,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 300,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 210,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": -160,
+          "visible": false,
+          "walking": false
+        },
+        {
+          "x": -160,
+          "visible": false,
+          "walking": false
+        }
+      ]
+    },
+    {
+      "start": 500,
+      "moves": [
+        {
+          "at": 0,
+          "x": 900
+        },
+        {
+          "at": 20,
+          "x": 100
+        }
+      ],
+      "frames": [
+        10,
+        20,
+        30,
+        80,
+        120
+      ],
+      "states": [
+        {
+          "x": 590,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 680,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 590,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 140,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 100,
+          "visible": true,
+          "walking": false
+        }
+      ]
+    },
+    {
+      "start": null,
+      "moves": [
+        {
+          "at": 0,
+          "x": 800,
+          "pose": "hold"
+        },
+        {
+          "at": 50,
+          "pose": "think"
+        }
+      ],
+      "frames": [
+        0,
+        15,
+        29,
+        30,
+        50,
+        60
+      ],
+      "states": [
+        {
+          "x": 1240,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 1105,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 979,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 970,
+          "visible": true,
+          "walking": true
+        },
+        {
+          "x": 800,
+          "visible": true,
+          "walking": false
+        },
+        {
+          "x": 800,
+          "visible": true,
+          "walking": false
+        }
+      ]
+    }
+  ]
+}

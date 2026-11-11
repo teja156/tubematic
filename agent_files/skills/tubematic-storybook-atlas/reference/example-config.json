@@ -1,0 +1,233 @@
+{
+ "totalFrames": 1413,
+ "fps": 30,
+ "canvas": "light",
+ "sfx": [],
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "StorybookAtlas",
+   "startFrame": 0,
+   "durationInFrames": 1413,
+   "props": {
+    "storybookAtlas": {
+     "guide": {
+      "coat": "blue"
+     },
+     "cast": [
+      {
+       "id": "grace",
+       "name": "Grace Hopper",
+       "build": "short",
+       "skin": "light",
+       "hair": "curly",
+       "hairColor": "brown",
+       "face": "none",
+       "hat": "none",
+       "garment": "suit",
+       "color": "navy"
+      }
+     ],
+     "customProps": [
+      {
+       "id": "moth",
+       "src": "vid_example/prop-moth",
+       "box": [
+        300,
+        220
+       ],
+       "place": "wall",
+       "states": 1,
+       "acts": [
+        "wobble",
+        "glow"
+       ]
+      }
+     ],
+     "chapters": [
+      {
+       "start": 0,
+       "title": "The Machine",
+       "byline": "Harvard, 1947",
+       "backdrop": "laboratory",
+       "events": [
+        {
+         "type": "prop",
+         "at": 101,
+         "id": "cabinet",
+         "prop": "relaycabinet",
+         "x": 680,
+         "enter": "rise"
+        },
+        {
+         "type": "tag",
+         "at": 138,
+         "on": "cabinet",
+         "text": "Mark II"
+        },
+        {
+         "type": "guide",
+         "at": 159,
+         "x": 380,
+         "pose": "point",
+         "facing": "right"
+        },
+        {
+         "type": "act",
+         "at": 225,
+         "id": "cabinet",
+         "act": "cycle"
+        },
+        {
+         "type": "gauge",
+         "at": 290,
+         "until": 386,
+         "label": "clicks a minute",
+         "from": 0,
+         "to": 3000,
+         "max": 4000,
+         "danger": 3500
+        },
+        {
+         "type": "guide",
+         "at": 399,
+         "pose": "think"
+        }
+       ]
+      },
+      {
+       "start": 478,
+       "title": "The Moth",
+       "byline": "September 9, 1947",
+       "backdrop": "workshop",
+       "enter": "push",
+       "events": [
+        {
+         "type": "prop",
+         "at": 478,
+         "id": "relays",
+         "prop": "relaycabinet",
+         "x": 760,
+         "scale": 0.85,
+         "enter": "fade"
+        },
+        {
+         "type": "act",
+         "at": 566,
+         "id": "relays",
+         "act": "shake"
+        },
+        {
+         "type": "person",
+         "at": 592,
+         "who": "grace",
+         "x": 470
+        },
+        {
+         "type": "guide",
+         "at": 679,
+         "pose": "look",
+         "facing": "right"
+        },
+        {
+         "type": "person",
+         "at": 733,
+         "who": "grace",
+         "pose": "point",
+         "facing": "right"
+        },
+        {
+         "type": "morph",
+         "at": 809,
+         "until": 900,
+         "prop": "moth"
+        }
+       ]
+      },
+      {
+       "start": 923,
+       "title": "The Logbook",
+       "byline": "A page of history",
+       "backdrop": "study",
+       "enter": "wipe",
+       "events": [
+        {
+         "type": "prop",
+         "at": 923,
+         "id": "logbook",
+         "prop": "book",
+         "x": 620,
+         "enter": "drop"
+        },
+        {
+         "type": "prop",
+         "at": 956,
+         "id": "moth",
+         "prop": "moth",
+         "x": 620,
+         "y": 1010,
+         "scale": 0.8,
+         "enter": "pop"
+        },
+        {
+         "type": "guide",
+         "at": 967,
+         "x": 330,
+         "pose": "point",
+         "facing": "right"
+        },
+        {
+         "type": "act",
+         "at": 988,
+         "id": "logbook",
+         "act": "switch"
+        },
+        {
+         "type": "tag",
+         "at": 1018,
+         "on": "logbook",
+         "text": "Logbook, 1947"
+        },
+        {
+         "type": "tag",
+         "at": 1064,
+         "on": "moth",
+         "text": "the first bug"
+        },
+        {
+         "type": "act",
+         "at": 1109,
+         "id": "moth",
+         "act": "glow"
+        },
+        {
+         "type": "guide",
+         "at": 1155,
+         "pose": "think"
+        },
+        {
+         "type": "guide",
+         "at": 1210,
+         "pose": "hop"
+        },
+        {
+         "type": "constellation",
+         "at": 1242,
+         "until": 1390,
+         "words": [
+          "BUG"
+         ],
+         "then": [
+          "DEBUGGING"
+         ],
+         "thenAt": 1332
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

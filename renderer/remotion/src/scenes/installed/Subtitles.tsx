@@ -96,8 +96,10 @@ const DEFAULT_FONT = "system-ui, sans-serif";
 const DEFAULT_WEIGHT = 800;
 
 /** "outline": bold text with a thick dark stroke and no plate — the standard
- *  look of narrated cartoon Shorts, readable over any picture. */
-export type SubtitleBackground = "pill" | "shadow" | "outline" | "none";
+ *  look of narrated cartoon Shorts, readable over any picture.
+ *  "label": a printed ivory label hugging the phrase, a diamond each side,
+ *  every word at full strength and no rise: the Storybook Atlas caption. */
+export type SubtitleBackground = "pill" | "shadow" | "outline" | "label" | "none";
 
 export interface SubtitleConfig {
   enabled?: boolean;
@@ -122,6 +124,11 @@ export interface SubtitleConfig {
    */
   emphasis?: number[];
 }
+
+/** The "label" plate: ivory paper, ink rule and text, a flat offset shadow. */
+const LABEL_PAPER = "#EBE5D2";
+const LABEL_INK = "#2F2218";
+const LABEL_TEXT = "#2A2F33";
 
 /** The key-word box: white text on red, scaling in with a little overshoot. */
 const EMPHASIS_BG = "#D0201C";
@@ -249,14 +256,20 @@ export default function Subtitles({
   if (index === null) return null;
   const chunk = chunks[index];
 
-  const ink = color ?? (canvas === "light" ? "#0f0f0f" : "#ffffff");
+  const label = background === "label";
+  const ink = color ?? (label ? LABEL_TEXT : canvas === "light" ? "#0f0f0f" : "#ffffff");
   const paper = canvas === "light" ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.55)";
 
   // A short rise on entry. Deliberately small and over in 4 frames: at this
   // size anything larger reflows the line and makes fast captions unreadable.
   const age = frame - chunk[0].startFrame;
-  const rise = interpolate(age, [0, 4], [14, 0], { extrapolateRight: "clamp" });
-  const fade = interpolate(age, [0, 3], [0, 1], { extrapolateRight: "clamp" });
+  // A label cross-fades in 2 frames and does not move: it is printed, not spoken.
+  const rise = label ? 0 : interpolate(age, [0, 4], [14, 0], { extrapolateRight: "clamp" });
+  const fade = interpolate(age, [0, label ? 2 : 3], [0, 1], { extrapolateRight: "clamp" });
+
+  const diamond = (
+    <span style={{ flex: "none", width: fontSize * 0.2, height: fontSize * 0.2, background: ink, transform: "rotate(45deg)" }} />
+  );
 
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
@@ -283,6 +296,15 @@ export default function Subtitles({
           ...(background === "pill"
             ? { background: paper, padding: "14px 28px", borderRadius: 16 }
             : {}),
+          ...(label
+            ? {
+                left: "50%", right: "auto", width: "max-content", maxWidth: 900, flexWrap: "nowrap",
+                transform: `translate(-50%, calc(-50% + ${rise}px))`, gap: fontSize * 0.36,
+                background: LABEL_PAPER, border: `2px solid ${LABEL_INK}`, boxShadow: "5px 6px 0 rgba(47,34,24,0.22)",
+                padding: `${Math.round(fontSize * 0.22)}px ${Math.round(fontSize * 0.55)}px ${Math.round(fontSize * 0.3)}px`,
+                lineHeight: 1.12,
+              }
+            : {}),
           ...(background === "shadow"
             ? { textShadow: canvas === "light" ? "0 2px 10px rgba(255,255,255,0.9)" : "0 2px 12px rgba(0,0,0,0.85)" }
             : {}),
@@ -296,6 +318,10 @@ export default function Subtitles({
             : {}),
         }}
       >
+        {label && diamond}
+        <span style={label ? {
+          display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0 0.28em", minWidth: 0,
+        } : { display: "contents" }}>
         {chunk.map((w, i) => {
           // The word being spoken is full strength, its neighbours dimmed.
           // Nothing moves or resizes — the emphasis travels along a line that
@@ -318,12 +344,14 @@ export default function Subtitles({
               key={`${i}-${w.word}`}
               // outlined words have no plate behind them, so a dimmed word
               // reads as a muddy grey: keep them near full strength there
-              style={{ opacity: active ? 1 : background === "outline" ? (spoken ? 0.92 : 0.8) : spoken ? 0.62 : 0.42 }}
+              style={{ opacity: active || label ? 1 : background === "outline" ? (spoken ? 0.92 : 0.8) : spoken ? 0.62 : 0.42 }}
             >
               {w.word}
             </span>
           );
         })}
+        </span>
+        {label && diamond}
       </div>
     </AbsoluteFill>
   );
