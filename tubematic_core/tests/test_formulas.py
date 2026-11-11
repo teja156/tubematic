@@ -115,6 +115,14 @@ def test_the_valid_formula_passes_the_check():
     (lambda d: d["hooks"][0].update(type="shout"), "hooks[0].type"),
     (lambda d: d["hooks"][1].update(type=d["hooks"][0]["type"]), "different type"),
     (lambda d: d.update(hooks=d["hooks"][:2]), "at least 3"),
+    (lambda d: d.pop("first_frame"), "exactly the keys"),
+    (lambda d: d.update(first_frame=" "), "first_frame"),
+    (lambda d: d["beats"][0].update(extra=1), "optionally, role"),
+    (lambda d: d["beats"][0].update(role="climax"), "beats[0].role"),
+    (lambda d: d["beats"][0].update(role="turn"), "at most one beat may be the turn"),
+    (lambda d: [b.pop("role", None) for b in d["beats"] if b.get("role") == "payoff"],
+     "exactly one beat must be the payoff"),
+    (lambda d: d["beats"][0].update(role="payoff"), "exactly one beat must be the payoff"),
 ])
 def test_a_malformed_formula_is_refused_with_the_reason(mutate, message):
     data = _valid()
@@ -145,6 +153,44 @@ def test_a_reference_file_carries_every_part_of_its_formula():
         assert f"(`{hook['type']}`)" in text and hook["shape"] in text
     for part in (f["holds"], f["ending"], f["template"], *f["pitfalls"]):
         assert part in text
+
+
+def test_every_formula_marks_its_payoff_late_and_at_most_one_turn():
+    # The scene author puts the strongest picture on the payoff and a visible
+    # change on each turn and re-opening; a formula without them gives the
+    # picture checks nothing to look for.
+    for f in tf.FORMULAS.values():
+        roles = [b.get("role") for b in f["beats"]]
+        assert roles.count("payoff") == 1 and roles.count("turn") <= 1, f["id"]
+        payoff = next(b for b in f["beats"] if b.get("role") == "payoff")
+        assert payoff["from"] >= tf.PAYOFF_FROM_MIN, f["id"]
+        assert f["first_frame"].strip(), f["id"]
+
+
+def test_a_payoff_in_the_first_half_is_refused():
+    data = _valid()
+    for b in data["beats"]:
+        b.pop("role", None)
+    data["beats"][1]["role"] = "payoff"
+    with pytest.raises(tf.FormulaError) as err:
+        _check(data)
+    assert "50 percent or later" in str(err.value)
+
+
+def test_beat_roles_and_first_frame_answer_for_known_unknown_and_blank():
+    assert tf.beat_roles("broken-expectation") == {
+        "Wrong suspect 1": "reopen", "Wrong suspect 2": "reopen", "Turn": "turn",
+        "Root cause": "payoff"}
+    assert tf.beat_roles("") == {} and tf.beat_roles("retired-formula") == {}
+    assert tf.first_frame("broken-expectation").startswith("The failure happening")
+    assert tf.first_frame(None) == "" and tf.first_frame("retired-formula") == ""
+
+
+def test_a_reference_file_names_each_beat_duty_and_the_first_frame():
+    f = tf.FORMULAS["paradox-mechanism-reframe"]
+    text = tf.reference_markdown(f)
+    assert "| Turn | 55 to 65% |" in text and tf.BEAT_ROLES["turn"] + " |" in text
+    assert "## First frame" in text and f["first_frame"] in text
 
 
 def test_hook_types_of_a_formula():

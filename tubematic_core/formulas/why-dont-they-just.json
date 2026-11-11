@@ -36,25 +36,29 @@
       "name": "Re-ask",
       "from": 25,
       "to": 30,
-      "job": "The question again, shorter."
+      "job": "The question again, shorter.",
+      "role": "reopen"
     },
     {
       "name": "The rule",
       "from": 30,
       "to": 60,
-      "job": "The rule that blocks the fix, with its source and one concrete picture of it at work."
+      "job": "The rule that blocks the fix, with its source and one concrete picture of it at work.",
+      "role": "turn"
     },
     {
       "name": "Proof by exception",
       "from": 60,
       "to": 85,
-      "job": "Who or what managed it anyway, and what made that case different."
+      "job": "Who or what managed it anyway, and what made that case different.",
+      "role": "reopen"
     },
     {
       "name": "The rule as meaning",
       "from": 85,
       "to": 100,
-      "job": "What the rule says about the system, or one dry line that answers the first question again."
+      "job": "What the rule says about the system, or one dry line that answers the first question again.",
+      "role": "payoff"
     }
   ],
   "hooks": [
@@ -73,6 +77,7 @@
   ],
   "holds": "One question that gets sharper each time and is never merely repeated. A short answer may come at once if it stays incomplete. The re-ask and the exception re-open it; refusing the next obvious step ('surely then...? No.') is a third.",
   "ending": "The rule restated as meaning, or a dry one-sentence kicker with the present-day state.",
+  "first_frame": "The obvious fix being tried and failing on screen, never a picture of the problem standing still.",
   "pitfalls": [
     "Context before the question",
     "An open debate with no verdict",

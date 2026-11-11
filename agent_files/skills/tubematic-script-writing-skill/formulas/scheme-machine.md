@@ -12,14 +12,20 @@ A true scheme told in the third person: the result first, the scheme as a loop, 
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| The result | 0 to 15% | Who got what from whom, as a number. |
-| The offer at full strength | 15 to 30% | Why it looked legitimate, or the rule being used. |
-| The machine | 30 to 50% | The loop in one sentence, three or four steps, the last feeding the first. |
-| The trick and the tell | 50 to 68% | The one number or one mechanism sentence that makes it work, then one concrete detail anyone could have spotted. |
-| Scale | 68 to 85% | The total, as a number against something the viewer knows. |
-| Second layer | 85 to 100% | The motive, the multiplier or the outcome. The last line. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| The result | 0 to 15% | Who got what from whom, as a number. | - |
+| The offer at full strength | 15 to 30% | Why it looked legitimate, or the rule being used. | - |
+| The machine | 30 to 50% | The loop in one sentence, three or four steps, the last feeding the first. | - |
+| The trick and the tell | 50 to 68% | The one number or one mechanism sentence that makes it work, then one concrete detail anyone could have spotted. | the turn: a visible change on its first word |
+| Scale | 68 to 85% | The total, as a number against something the viewer knows. | a re-opening: a visible change on its first word |
+| Second layer | 85 to 100% | The motive, the multiplier or the outcome. The last line. | the payoff: the video's strongest picture |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The result as a counter climbing, with the loop that produced it beginning to draw. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

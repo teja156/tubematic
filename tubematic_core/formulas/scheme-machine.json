@@ -42,19 +42,22 @@
       "name": "The trick and the tell",
       "from": 50,
       "to": 68,
-      "job": "The one number or one mechanism sentence that makes it work, then one concrete detail anyone could have spotted."
+      "job": "The one number or one mechanism sentence that makes it work, then one concrete detail anyone could have spotted.",
+      "role": "turn"
     },
     {
       "name": "Scale",
       "from": 68,
       "to": 85,
-      "job": "The total, as a number against something the viewer knows."
+      "job": "The total, as a number against something the viewer knows.",
+      "role": "reopen"
     },
     {
       "name": "Second layer",
       "from": 85,
       "to": 100,
-      "job": "The motive, the multiplier or the outcome. The last line."
+      "job": "The motive, the multiplier or the outcome. The last line.",
+      "role": "payoff"
     }
   ],
   "hooks": [
@@ -73,6 +76,7 @@
   ],
   "holds": "The result is given and the method is held back. The method then arrives as a machine with one number at its heart, and the viewer asks 'would I have spotted it?'. The trick lands in the middle; what waits for the end is a second layer.",
   "ending": "The outcome, the motive or the multiplier. No list of ways to protect yourself.",
+  "first_frame": "The result as a counter climbing, with the loop that produced it beginning to draw.",
   "pitfalls": [
     "Invented first-person testimony",
     "Opening on the verdict",
