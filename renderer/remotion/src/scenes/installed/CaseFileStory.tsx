@@ -117,17 +117,23 @@ const Hud: React.FC<{ data: CaseFileData; frame: number; accent: string }> = ({ 
   );
 };
 
+// The gap under the panel's label. A numeral drawn at line-height 1 measures
+// about 1.28 em tall (159 px at 124 px), so it reaches 18 px above its line
+// box: a smaller gap made the text-layout audit report the number overlapping
+// its own label, and an agent then left the panel out.
+const PANEL_GAP = 30;
+
 /** The large panel for one meter, over a shot. */
 const Panel: React.FC<{ data: CaseFileData; shot: Shot; frame: number; accent: string }> = ({ data, shot, frame, accent }) => {
   const p = panelAt(data, shot, frame);
   if (!p) return null;
   return (
     <div style={{
-      position: "absolute", left: G.safeLeft, top: G.hudTop + G.hudHeight + 28, width: 690, height: 250, borderRadius: 18,
+      position: "absolute", left: G.safeLeft, top: G.hudTop + G.hudHeight + 28, width: 690, height: 280, borderRadius: 18,
       background: "rgba(26,23,20,0.82)", padding: "26px 34px", boxSizing: "border-box",
     }}>
       <div style={{ fontFamily: MONO, fontSize: 28, letterSpacing: "0.16em", color: HUD_LABEL, lineHeight: 1 }}>{p.label}</div>
-      <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 124, lineHeight: 1, color: accent, marginTop: 8, letterSpacing: "-0.02em" }}>{p.text}</div>
+      <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 124, lineHeight: 1, color: accent, marginTop: PANEL_GAP, letterSpacing: "-0.02em" }}>{p.text}</div>
       <div style={{ position: "absolute", left: 34, right: 34, bottom: 30, height: 14, borderRadius: 7, background: "#3A3431" }}>
         <div style={{ width: `${Math.max(2, p.fill * 100)}%`, height: "100%", borderRadius: 7, background: accent }} />
       </div>

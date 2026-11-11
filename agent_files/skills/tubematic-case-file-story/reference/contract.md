@@ -11,7 +11,7 @@ A 1080 x 1920 frame in fixed zones, so nothing you place can land on another zon
 |---|---|---|---|
 | Top margin | 0 | 232 | The painting only (the watermark is in its corner) |
 | Meter row | 232 | 338 | Two or three meter cells, x 60 to 1020 |
-| Panel | 366 | 616 | The large meter panel, when a shot has one |
+| Panel | 366 | 646 | The large meter panel, when a shot has one |
 | Picture | 338 | 1240 | The painting; on a card, its title, grid, bars, term and stamp |
 | Captions | 1290 | 1470 | The captions, centred at 1382 (72%) |
 | Buttons | 1500 | 1650 | The two choice buttons, on the last beat |
