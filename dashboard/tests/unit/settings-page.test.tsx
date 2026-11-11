@@ -129,8 +129,8 @@ function stubFetch(settings = MOCK_SETTINGS, status = MOCK_STATUS, agents: Agent
 
 
 // ── Tab helpers (settings are behind tabs since the Save-button rework) ──────
-// Each tab renders only its own fields, and edits are staged until Save, so a
-// test that touches a field has to open its tab first and then commit.
+// Each tab renders only its own fields, so a test that touches a field has to
+// open its tab first. Every change then saves itself (TMDEV-218).
 
 const TAB_OF: Record<string, string> = {
   "toggle-gemini-review": "ai-review",
@@ -172,9 +172,10 @@ async function openTab(key: string) {
   });
 }
 
-async function clickSave(key: string) {
+/** Every change saves itself (TMDEV-218): let the save it started settle. */
+async function flushSaves() {
   await act(async () => {
-    fireEvent.click(screen.getByTestId(`save-${key}`));
+    await new Promise((r) => setTimeout(r, 0));
   });
 }
 
@@ -194,6 +195,35 @@ function savedBody(fetchMock: ReturnType<typeof vi.mocked<typeof fetch>>) {
   );
   return post ? JSON.parse((post[1] as RequestInit).body as string) : null;
 }
+
+/** Makes POST /settings wait until the returned function is called with
+ *  the answer to give; every other route answers as stubFetch does. */
+function holdPosts() {
+  const base = vi.mocked(fetch).getMockImplementation()!;
+  const waiting: Array<(r: Partial<Response>) => void> = [];
+  vi.mocked(fetch).mockImplementation(((url: string, init?: RequestInit) => {
+    if (String(url).includes("/settings") && init?.method === "POST") {
+      return new Promise((resolve) => waiting.push(resolve as (r: Partial<Response>) => void));
+    }
+    return base(url, init);
+  }) as typeof fetch);
+  return {
+    count: () => waiting.length,
+    answer: async (i: number, r: Partial<Response>) => {
+      await act(async () => { waiting[i](r); await new Promise((x) => setTimeout(x, 0)); });
+    },
+  };
+}
+
+const okAnswer = (settings: Settings = MOCK_SETTINGS) =>
+  ({ ok: true, status: 200, json: async () => settings }) as Partial<Response>;
+
+function postedBodies(fetchMock: ReturnType<typeof vi.mocked<typeof fetch>>) {
+  return fetchMock.mock.calls
+    .filter(([url, init]) => String(url).includes("/settings") && (init as RequestInit | undefined)?.method === "POST")
+    .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+}
+
 
 describe("SettingsPage", () => {
   beforeEach(() => {
@@ -277,7 +307,7 @@ describe("SettingsPage", () => {
       fireEvent.blur(input);
     });
 
-    await clickSave("research");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -391,7 +421,7 @@ describe("SettingsPage", () => {
       fireEvent.click(screen.getByTestId("voice-add"));
     });
 
-    await clickSave("voice");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -420,7 +450,7 @@ describe("SettingsPage", () => {
       fireEvent.blur(nameInput);
     });
 
-    await clickSave("voice");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -444,7 +474,7 @@ describe("SettingsPage", () => {
       fireEvent.click(screen.getByTestId("voice-remove-0"));
     });
 
-    await clickSave("voice");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -452,6 +482,27 @@ describe("SettingsPage", () => {
         body: JSON.stringify({ elevenlabs_voices: [], elevenlabs_voice_id: "" }),
       }),
     );
+  });
+
+  it("removing a voice offers an Undo that saves the roster and default back", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<SettingsPage />);
+    await waitFor(() => screen.getByTestId("tab-voice"));
+    await openTab("voice");
+    await waitFor(() => screen.getByTestId("voice-remove-0"));
+
+    await act(async () => { fireEvent.click(screen.getByTestId("voice-remove-0")); });
+    await flushSaves();
+    const toast = screen.getByTestId("toast-success");
+    expect(toast.textContent).toContain('Removed voice "Narrator".');
+
+    await act(async () => { fireEvent.click(screen.getByTestId("toast-action")); });
+    await flushSaves();
+    expect(postedBodies(fetchMock)).toEqual([
+      { elevenlabs_voices: [], elevenlabs_voice_id: "" },
+      { elevenlabs_voices: MOCK_SETTINGS.elevenlabs_voices, elevenlabs_voice_id: "abc123" },
+    ]);
+    expect(screen.queryByTestId("toast-success")).toBeNull();
   });
 
   it("renders a preview button per voice row that POSTs /voices/<id>/preview", async () => {
@@ -525,7 +576,7 @@ describe("SettingsPage", () => {
     await act(async () => {
       fireEvent.change(screen.getByTestId("voice-model-0"), { target: { value: "eleven_v3" } });
     });
-    await clickSave("voice");
+    await flushSaves();
     const body = savedBody(fetchMock);
     expect(body.elevenlabs_voices).toEqual([
       { name: "Narrator", voice_id: "abc123", model_id: "eleven_v3" }]);
@@ -542,7 +593,7 @@ describe("SettingsPage", () => {
       fireEvent.change(screen.getByTestId("voice-add-model"), { target: { value: "eleven_v3" } });
       fireEvent.click(screen.getByTestId("voice-add"));
     });
-    await clickSave("voice");
+    await flushSaves();
     const posted = fetchMock.mock.calls.find(([url, init]) =>
       String(url).includes("/settings") && (init as RequestInit | undefined)?.method === "POST");
     expect(JSON.parse(String((posted![1] as RequestInit).body)).elevenlabs_voices[1])
@@ -572,7 +623,7 @@ describe("SettingsPage", () => {
     await act(async () => {
       fireEvent.change(modelSelect, { target: { value: "gpt-image-2.5-sunburst" } });
     });
-    await clickSave("images");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -606,7 +657,7 @@ describe("SettingsPage", () => {
         { target: { value: "gpt-image-2.5-sunburst" } });
     });
 
-    await clickSave("images");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -643,7 +694,7 @@ describe("SettingsPage", () => {
       fireEvent.click(screen.getByTestId("toggle-gemini-review"));
     });
 
-    await clickSave("ai-review");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({ method: "POST" }),
@@ -663,7 +714,7 @@ describe("SettingsPage", () => {
       fireEvent.blur(input);
     });
 
-    await clickSave("rendering");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({ method: "POST" }),
@@ -698,7 +749,7 @@ describe("SettingsPage", () => {
       });
     });
 
-    await clickSave("ai-review");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -733,7 +784,7 @@ describe("SettingsPage", () => {
       fireEvent.blur(input);
     });
 
-    await clickSave("ai-review");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -779,7 +830,7 @@ describe("SettingsPage", () => {
       fireEvent.blur(input);
     });
 
-    await clickSave("rendering");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -803,7 +854,7 @@ describe("SettingsPage", () => {
       fireEvent.blur(input);
     });
 
-    await clickSave("rendering");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -825,7 +876,7 @@ describe("SettingsPage", () => {
     fireEvent.click(toggle);
     expect(toggle.textContent).toBe("OFF");
 
-    await clickSave("rendering");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -848,7 +899,7 @@ describe("SettingsPage", () => {
     await waitFor(() => expect([...select.options].map((o) => o.value)).toEqual(["", "tubi"]));
     expect(select.value).toBe("");
     fireEvent.change(select, { target: { value: "tubi" } });
-    await clickSave("rendering");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({ method: "POST", body: JSON.stringify({ default_mascot_id: "tubi" }) }),
@@ -890,7 +941,7 @@ describe("SettingsPage", () => {
       fireEvent.blur(input);
     });
 
-    await clickSave("rendering");
+    await flushSaves();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/settings"),
       expect.objectContaining({
@@ -912,7 +963,7 @@ describe("SettingsPage", () => {
     expect(timeout.value).toBe("90"); // 5400s / 60
   });
 
-  it("saving the Scheduling tab patches only the agent-session keys, timeout in seconds", async () => {
+  it("each agent-session field saves its own key, the timeout in seconds", async () => {
     const fetchMock = vi.mocked(fetch);
     render(<SettingsPage />);
     await waitFor(() => screen.getByTestId("tab-scheduling"));
@@ -924,14 +975,11 @@ describe("SettingsPage", () => {
     fireEvent.change(timeout, { target: { value: "30" } });
     await act(async () => { fireEvent.blur(timeout); });
 
-    await clickSave("scheduling");
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/settings"),
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ max_concurrent_agent_sessions: 1, agent_session_timeout_secs: 1800 }),
-      }),
-    );
+    await flushSaves();
+    expect(postedBodies(fetchMock)).toEqual([
+      { max_concurrent_agent_sessions: 1 },
+      { agent_session_timeout_secs: 1800 },
+    ]);
   });
 
   it("shows loading state before data loads", () => {
@@ -1003,7 +1051,7 @@ describe("SettingsPage — API keys", () => {
     // Posting the untouched mask back would be harmless (the server no-ops it)
     // but pointless — and if that server guard ever regressed, this is what
     // would have overwritten every stored key with its own mask.
-    await clickSave("api-keys");
+    await flushSaves();
     expect(body(fetchMock)).toBeNull();
   });
 
@@ -1019,7 +1067,7 @@ describe("SettingsPage — API keys", () => {
     fireEvent.change(input, { target: { value: "sk-gemini-brand-new" } });
     await act(async () => { fireEvent.blur(input); });
 
-    await clickSave("api-keys");
+    await flushSaves();
     expect(body(fetchMock)).toEqual({ gemini_api_key: "sk-gemini-brand-new" });
   });
 
@@ -1035,7 +1083,7 @@ describe("SettingsPage — API keys", () => {
     fireEvent.change(input, { target: { value: "" } });
     await act(async () => { fireEvent.blur(input); });
 
-    await clickSave("api-keys");
+    await flushSaves();
     expect(body(fetchMock)).toEqual({ elevenlabs_api_key: "" });
   });
 
@@ -1051,7 +1099,7 @@ describe("SettingsPage — API keys", () => {
     fireEvent.change(input, { target: { value: "  sk-openai-pasted \n" } });
     await act(async () => { fireEvent.blur(input); });
 
-    await clickSave("api-keys");
+    await flushSaves();
     expect(body(fetchMock)).toEqual({ openai_api_key: "sk-openai-pasted" });
   });
 
@@ -1198,15 +1246,15 @@ describe("SettingsPage — agents tab", () => {
     });
   });
 
-  it("the weight save PATCHes {weight}", async () => {
+  it("the weight saves on blur as a PATCH of {weight}, and an untouched blur sends nothing", async () => {
     const fn = stubAgents([makeAgent()]);
     await renderTab("agents");
     const input = await screen.findByTestId("agent-weight-claude");
-    const saveBtn = screen.getByTestId("agent-weight-save-claude") as HTMLButtonElement;
-    expect(saveBtn.disabled).toBe(true); // unchanged
+    expect(screen.queryByTestId("agent-weight-save-claude")).toBeNull();
+    await act(async () => { fireEvent.blur(input); });
+    expect(mutations(fn)).toHaveLength(0);
     fireEvent.change(input, { target: { value: "40" } });
-    expect(saveBtn.disabled).toBe(false);
-    await act(async () => { fireEvent.click(saveBtn); });
+    await act(async () => { fireEvent.blur(input); });
 
     const [call] = mutations(fn);
     expect(String(call[0])).toContain("/agents/claude");
@@ -1214,12 +1262,16 @@ describe("SettingsPage — agents tab", () => {
     expect(JSON.parse((call[1] as RequestInit).body as string)).toEqual({ weight: 40 });
   });
 
-  it("refuses to save a weight outside 0..100", async () => {
-    stubAgents([makeAgent()]);
+  it("refuses to save a weight outside 0..100, and says why beside the row", async () => {
+    const fn = stubAgents([makeAgent()]);
     await renderTab("agents");
     const input = await screen.findByTestId("agent-weight-claude");
     fireEvent.change(input, { target: { value: "101" } });
-    expect((screen.getByTestId("agent-weight-save-claude") as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { fireEvent.keyDown(input, { key: "Enter" }); });
+    expect(mutations(fn)).toHaveLength(0);
+    expect(screen.getByTestId("agent-error-claude").textContent).toMatch(/0 to 100/);
+    // What was typed stays, so it can be corrected.
+    expect((input as HTMLInputElement).value).toBe("101");
   });
 
   it("the default-model select lists the agent's models with models[0] selected", async () => {
@@ -1292,7 +1344,6 @@ describe("SettingsPage — agents tab", () => {
     const radio = within(screen.getByTestId("agent-default-claude")).getByRole("radio") as HTMLInputElement;
     expect(radio.disabled).toBe(true);
     expect((screen.getByTestId("agent-weight-claude") as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByTestId("agent-weight-save-claude") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("agent-default-model-claude") as HTMLSelectElement).disabled).toBe(true);
     expect((screen.getByTestId("agent-effort-claude") as HTMLSelectElement).disabled).toBe(true);
   });
@@ -1401,134 +1452,147 @@ describe("SettingsPage — save behaviour", () => {
     }
   });
 
-  it("editing a field does not save on its own", async () => {
+  it("a committed field saves itself, sending only that key, with no Save button anywhere", async () => {
     const fetchMock = vi.mocked(fetch);
     await renderTab("rendering");
-    fetchMock.mockClear();
+    expect(screen.queryByTestId("save-rendering")).toBeNull();
 
     const input = screen.getByTestId("input-max-render-retries");
     fireEvent.change(input, { target: { value: "5" } });
     await act(async () => { fireEvent.blur(input); });
+    await flushSaves();
 
-    expect(savedBody(fetchMock)).toBeNull();
+    // render_timeout_secs is deliberately absent: resending an untouched value
+    // would make one save clobber a change made elsewhere in between.
+    expect(postedBodies(fetchMock)).toEqual([{ max_render_retries: 5 }]);
   });
 
-  it("Save is disabled until something changes, then enabled", async () => {
+  it("a blur with nothing changed sends nothing", async () => {
+    const fetchMock = vi.mocked(fetch);
     await renderTab("rendering");
-    expect((screen.getByTestId("save-rendering") as HTMLButtonElement).disabled).toBe(true);
+    const input = screen.getByTestId("input-max-render-retries");
+    await act(async () => { fireEvent.blur(input); });
+    await flushSaves();
+    expect(postedBodies(fetchMock)).toEqual([]);
+  });
 
+  it("shows Saving… beside the field and in the header, then ✓ Saved and all changes saved", async () => {
+    await renderTab("rendering");
+    const held = holdPosts();
     const input = screen.getByTestId("input-max-render-retries");
     fireEvent.change(input, { target: { value: "5" } });
     await act(async () => { fireEvent.blur(input); });
 
-    expect((screen.getByTestId("save-rendering") as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.getByTestId("dirty-rendering").textContent).toContain("1 unsaved change");
+    expect(screen.getByTestId("status-input-max-render-retries").textContent).toBe("Saving…");
+    expect(screen.getByTestId("saves-summary").textContent).toContain("Saving…");
+
+    await held.answer(0, okAnswer({ ...MOCK_SETTINGS, max_render_retries: 5 }));
+
+    expect(screen.getByTestId("status-input-max-render-retries").textContent).toBe("✓ Saved");
+    expect(screen.getByTestId("saves-summary").textContent).toContain("All changes saved");
+    expect((input as HTMLInputElement).value).toBe("5");
   });
 
-  it("Save sends only the edited field, not the whole tab", async () => {
+  it("a refused save shows the API's reason beside the field and keeps what was typed", async () => {
+    await renderTab("rendering");
+    const held = holdPosts();
+    const input = screen.getByTestId("input-max-render-retries");
+    fireEvent.change(input, { target: { value: "5" } });
+    await act(async () => { fireEvent.blur(input); });
+    await held.answer(0, {
+      ok: false, status: 400, json: async () => ({ error: "max_render_retries must be non-negative" }),
+    });
+
+    const status = screen.getByTestId("status-input-max-render-retries");
+    expect(status.textContent).toBe("Not saved: max_render_retries must be non-negative");
+    expect(screen.getByTestId("saves-summary").textContent).toContain("1 change not saved");
+    // Kept, so it can be corrected; the stored value stays in force meanwhile.
+    expect((input as HTMLInputElement).value).toBe("5");
+  });
+
+  it("an out-of-range number is not sent, and says so beside the field", async () => {
     const fetchMock = vi.mocked(fetch);
     await renderTab("rendering");
+    const input = screen.getByTestId("input-max-render-retries");
+    fireEvent.change(input, { target: { value: "99" } });
+    await act(async () => { fireEvent.blur(input); });
+    await flushSaves();
 
-    // The Rendering tab owns two settings; only one is touched.
+    expect(postedBodies(fetchMock)).toEqual([]);
+    expect(screen.getByTestId("status-input-max-render-retries").textContent)
+      .toBe("Not saved: must be a whole number from 0 to 10");
+    expect((input as HTMLInputElement).value).toBe("99");
+  });
+
+  it("saves wait for the one before: a late answer can never overwrite a newer one", async () => {
+    await renderTab("rendering");
+    const held = holdPosts();
     const retries = screen.getByTestId("input-max-render-retries");
     fireEvent.change(retries, { target: { value: "5" } });
     await act(async () => { fireEvent.blur(retries); });
+    const timeout = screen.getByTestId("input-render-timeout-mins");
+    fireEvent.change(timeout, { target: { value: "90" } });
+    await act(async () => { fireEvent.blur(timeout); });
 
-    fetchMock.mockClear();
-    await clickSave("rendering");
-
-    // render_timeout_secs is deliberately absent: resending an untouched value
-    // would make an unrelated save clobber a change made elsewhere in between.
-    expect(savedBody(fetchMock)).toEqual({ max_render_retries: 5 });
+    // The second is queued behind the first, not sent beside it.
+    expect(held.count()).toBe(1);
+    await held.answer(0, okAnswer({ ...MOCK_SETTINGS, max_render_retries: 5 }));
+    expect(held.count()).toBe(2);
+    await held.answer(1, okAnswer({ ...MOCK_SETTINGS, max_render_retries: 5, render_timeout_secs: 5400 }));
+    expect((screen.getByTestId("input-max-render-retries") as HTMLInputElement).value).toBe("5");
+    expect((screen.getByTestId("input-render-timeout-mins") as HTMLInputElement).value).toBe("90");
   });
 
-  it("marks the tab itself as dirty, not just the Save bar", async () => {
+  it("a switch shows its new value at once and goes back when the API refuses it", async () => {
     await renderTab("rendering");
-    expect(screen.queryByTestId("tab-dirty-rendering")).toBeNull();
+    const held = holdPosts();
+    const toggle = screen.getByTestId("toggle-watermark");
+    expect(toggle.textContent).toBe("ON");
+    await act(async () => { fireEvent.click(toggle); });
+    expect(toggle.textContent).toBe("OFF");
 
-    const input = screen.getByTestId("input-max-render-retries");
-    fireEvent.change(input, { target: { value: "5" } });
-    await act(async () => { fireEvent.blur(input); });
+    await held.answer(0, { ok: false, status: 500, json: async () => ({ error: "database is locked" }) });
 
-    // The dot lives on the tab trigger so unsaved work stays visible even
-    // when the Save bar has scrolled out of view.
-    expect(screen.getByTestId("tab-dirty-rendering")).toBeTruthy();
+    expect(toggle.textContent).toBe("ON");
+    expect(screen.getByTestId("status-toggle-watermark").textContent).toBe("Not saved: database is locked");
   });
 
-  it("switching tabs with unsaved edits asks before discarding", async () => {
+  it("switching tabs never asks, and a refused change's message does not follow you", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     await renderTab("rendering");
     const input = screen.getByTestId("input-max-render-retries");
-    fireEvent.change(input, { target: { value: "5" } });
+    fireEvent.change(input, { target: { value: "99" } });
     await act(async () => { fireEvent.blur(input); });
-
-    await openTab("ai-review");
-
-    expect(confirmSpy).toHaveBeenCalled();
-    // Declined — still on the rendering tab, edit intact.
-    expect(screen.getByTestId("save-rendering")).toBeTruthy();
-  });
-
-  it("confirming the discard drops the edit rather than leaving it staged", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    await renderTab("rendering");
-    const input = screen.getByTestId("input-max-render-retries");
-    fireEvent.change(input, { target: { value: "5" } });
-    await act(async () => { fireEvent.blur(input); });
+    expect(screen.getByTestId("saves-summary").textContent).toContain("not saved");
 
     await openTab("ai-review");
     await openTab("rendering");
 
-    // Back on the tab: the discarded edit must not still be pending, or it
-    // would be written by some later unrelated Save.
-    expect((screen.getByTestId("save-rendering") as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it("switching tabs with nothing staged does not prompt", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    await renderTab("rendering");
-    await openTab("ai-review");
     expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.getByTestId("saves-summary").textContent).toContain("All changes saved");
+    expect((screen.getByTestId("input-max-render-retries") as HTMLInputElement).value).toBe("1");
   });
 
-  it("a successful save shows a confirmation toast and clears the dirty state", async () => {
+  it("asks before the browser tab closes only while a save is on its way", async () => {
     await renderTab("rendering");
+    const held = holdPosts();
+    const unload = () => {
+      const e = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(unload()).toBe(false);
+
     const input = screen.getByTestId("input-max-render-retries");
     fireEvent.change(input, { target: { value: "5" } });
     await act(async () => { fireEvent.blur(input); });
+    expect(unload()).toBe(true);
 
-    await clickSave("rendering");
-
-    expect(screen.getByTestId("toast-success").textContent).toContain("Saved");
-    expect((screen.getByTestId("save-rendering") as HTMLButtonElement).disabled).toBe(true);
+    await held.answer(0, okAnswer({ ...MOCK_SETTINGS, max_render_retries: 5 }));
+    expect(unload()).toBe(false);
   });
 
-  it("a rejected save surfaces the API's reason instead of failing silently", async () => {
-    await renderTab("rendering");
-    const input = screen.getByTestId("input-max-render-retries");
-    fireEvent.change(input, { target: { value: "5" } });
-    await act(async () => { fireEvent.blur(input); });
-
-    vi.mocked(fetch).mockImplementation((async (url: string, init?: RequestInit) => {
-      if (String(url).includes("/settings") && init?.method === "POST") {
-        return {
-          ok: false, status: 400,
-          json: async () => ({ error: "max_render_retries must be non-negative" }),
-        } as Response;
-      }
-      return { ok: true, status: 200, json: async () => MOCK_SETTINGS } as Response;
-    }) as typeof fetch);
-
-    await clickSave("rendering");
-
-    const toast = screen.getByTestId("toast-error");
-    expect(toast.textContent).toContain("Save failed");
-    expect(toast.textContent).toContain("max_render_retries must be non-negative");
-    // The edit is still staged — a rejected save must not look like it applied.
-    expect((screen.getByTestId("save-rendering") as HTMLButtonElement).disabled).toBe(false);
-  });
-
-  it("pause stays immediate — it is an action, not a staged setting", async () => {
+  it("pause stays immediate, pinned above the tabs", async () => {
     const fetchMock = vi.mocked(fetch);
     render(<SettingsPage />);
     await waitFor(() => screen.getByTestId("toggle-pipeline-pause"));
@@ -1571,16 +1635,44 @@ describe("SettingsPage — publishing", () => {
     expect(screen.getByTestId("input-postforme-api-key")).toHaveValue("••••••••7ac1");
   });
 
-  it("saves the publishing toggle", async () => {
+  it("turning publishing on asks first, and Cancel saves nothing", async () => {
     stubFetch();
     const fetchMock = vi.mocked(fetch);
     await renderTab("publishing");
     await act(async () => {
       fireEvent.click(screen.getByTestId("toggle-publishing"));
     });
-    fetchMock.mockClear();
-    await clickSave("publishing");
+    expect(screen.getByTestId("publishing-confirm")).toBeTruthy();
+    expect(screen.queryByTestId("publishing-confirm-auto-pilot")).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByTestId("publishing-confirm-cancel")); });
+    await flushSaves();
+    expect(savedBody(fetchMock)).toBeNull();
+    expect(screen.getByTestId("toggle-publishing")).toHaveTextContent("OFF");
+  });
+
+  it("confirming turns publishing on; the dialog warns when Auto Pilot is on", async () => {
+    stubFetch({ ...MOCK_SETTINGS, auto_pilot_enabled: true });
+    const fetchMock = vi.mocked(fetch);
+    await renderTab("publishing");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("toggle-publishing"));
+    });
+    expect(screen.getByTestId("publishing-confirm-auto-pilot").textContent).toMatch(/without asking/);
+    await act(async () => { fireEvent.click(screen.getByTestId("publishing-confirm-ok")); });
+    await flushSaves();
     expect(savedBody(fetchMock)).toEqual({ publishing_enabled: true });
+  });
+
+  it("turning publishing off saves at once, without asking", async () => {
+    stubFetch({ ...MOCK_SETTINGS, publishing_enabled: true });
+    const fetchMock = vi.mocked(fetch);
+    await renderTab("publishing");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("toggle-publishing"));
+    });
+    expect(screen.queryByTestId("publishing-confirm")).toBeNull();
+    await flushSaves();
+    expect(savedBody(fetchMock)).toEqual({ publishing_enabled: false });
   });
 
   it("defaults to off", async () => {
@@ -1635,34 +1727,37 @@ describe("SettingsPage — Discord notifications (TMDEV-5)", () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId("toggle-notify-video-ready"));
     });
-    fetchMock.mockClear();
-    await clickSave("notifications");
+    await flushSaves();
     expect(savedBody(fetchMock)).toEqual({ notify_video_ready: true });
   });
 
-  it("saves the webhook URL and the base URL together", async () => {
+  it("saves the webhook URL and the base URL each on blur, saying the webhook is being checked", async () => {
     const fetchMock = vi.mocked(fetch);
     await renderTab("notifications");
+    const held = holdPosts();
     const hook = screen.getByTestId("input-discord-webhook-url");
     await act(async () => {
       fireEvent.change(hook, { target: { value: "https://discord.com/api/webhooks/1/t" } });
       fireEvent.blur(hook);
-      fireEvent.change(screen.getByTestId("input-dashboard-base-url"),
-                       { target: { value: "http://box:3000" } });
     });
-    fetchMock.mockClear();
-    await clickSave("notifications");
-    expect(savedBody(fetchMock)).toEqual({
-      discord_webhook_url: "https://discord.com/api/webhooks/1/t",
-      dashboard_base_url: "http://box:3000",
-    });
+    expect(screen.getByTestId("status-input-discord-webhook-url").textContent).toBe("Checking the webhook…");
+    await held.answer(0, okAnswer());
+    const base = screen.getByTestId("input-dashboard-base-url");
+    // Typing alone sends nothing: a half-typed address is not saved.
+    await act(async () => { fireEvent.change(base, { target: { value: "http://box:3000" } }); });
+    expect(held.count()).toBe(1);
+    await act(async () => { fireEvent.blur(base); });
+    await held.answer(1, okAnswer());
+    expect(postedBodies(fetchMock)).toEqual([
+      { discord_webhook_url: "https://discord.com/api/webhooks/1/t" },
+      { dashboard_base_url: "http://box:3000" },
+    ]);
   });
 
   it("sends nothing from this tab when nothing changed", async () => {
     const fetchMock = vi.mocked(fetch);
     await renderTab("notifications");
-    fetchMock.mockClear();
-    await clickSave("notifications");
+    await flushSaves();
     expect(savedBody(fetchMock)).toBeNull();
   });
 
@@ -1709,7 +1804,7 @@ describe("SettingsPage — log retention (TMDEV-86)", () => {
 
     fireEvent.change(input, { target: { value: "30" } });
     await act(async () => { fireEvent.blur(input); });
-    await clickSave("logs");
+    await flushSaves();
 
     expect(savedBody(fetchMock)).toEqual({ log_retention_days: 30 });
   });
@@ -1738,7 +1833,7 @@ describe("SettingsPage — log retention (TMDEV-86)", () => {
 
     fireEvent.change(input, { target: { value: "0" } });
     await act(async () => { fireEvent.blur(input); });
-    await clickSave("retention");
+    await flushSaves();
 
     expect(savedBody(fetchMock)).toEqual({ retention_days: 0 });
   });
@@ -1761,7 +1856,7 @@ describe("SettingsPage — log retention (TMDEV-86)", () => {
 
     fireEvent.change(input, { target: { value: "30" } });
     await act(async () => { fireEvent.blur(input); });
-    await clickSave("retention");
+    await flushSaves();
 
     expect(savedBody(fetchMock)).toEqual({ unpublished_retention_days: 30 });
   });
@@ -1851,7 +1946,7 @@ describe("SettingsPage — user preferences (TMDEV-117)", () => {
       .toHaveLength(6000);
   });
 
-  it("stages the edit and saves only the preferences, line breaks intact", async () => {
+  it("saves a second after typing stops, only the preferences, line breaks intact", async () => {
     stubFetch();
     const fetchMock = vi.mocked(fetch);
     await renderTab("preferences");
@@ -1859,18 +1954,31 @@ describe("SettingsPage — user preferences (TMDEV-117)", () => {
       fireEvent.change(screen.getByTestId("input-user-preferences"),
                        { target: { value: "Research: Linux.\nScripts: calm." } });
     });
-    expect(screen.getByTestId("tab-dirty-preferences")).toBeTruthy();
-    fetchMock.mockClear();
-    await clickSave("preferences");
-    expect(savedBody(fetchMock)).toEqual({ user_preferences: "Research: Linux.\nScripts: calm." });
+    // Waiting: shown as saving, and nothing sent yet.
+    expect(screen.getByTestId("status-input-user-preferences").textContent).toBe("Saving…");
+    await flushSaves();
+    expect(savedBody(fetchMock)).toBeNull();
+    await waitFor(() => expect(savedBody(fetchMock)).toEqual({
+      user_preferences: "Research: Linux.\nScripts: calm.",
+    }), { timeout: 2500 });
+  });
+
+  it("leaving the box sends the text at once", async () => {
+    stubFetch();
+    const fetchMock = vi.mocked(fetch);
+    await renderTab("preferences");
+    const box = screen.getByTestId("input-user-preferences");
+    await act(async () => { fireEvent.change(box, { target: { value: "UK spelling." } }); });
+    await act(async () => { fireEvent.blur(box); });
+    await flushSaves();
+    expect(postedBodies(fetchMock)).toEqual([{ user_preferences: "UK spelling." }]);
   });
 
   it("sends nothing from this tab when nothing changed", async () => {
     stubFetch();
     const fetchMock = vi.mocked(fetch);
     await renderTab("preferences");
-    fetchMock.mockClear();
-    await clickSave("preferences");
+    await flushSaves();
     expect(savedBody(fetchMock)).toBeNull();
   });
 });
