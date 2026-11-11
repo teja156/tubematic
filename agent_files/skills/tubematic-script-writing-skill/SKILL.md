@@ -257,8 +257,10 @@ optional `beat` (full shape in Step 5). The mapping from the formula's beats to 
   diagrammatic, or both — Step 7). A beat needing both a photographic moment and a separate
   standalone diagram is two segments, since each segment's `visual` drives one downstream scene.
 - **A long beat splits** into several segments, one per visual idea (the steps of a mechanism, the
-  rungs of a ladder). Two short beats that share one picture (a re-ask, a turn sentence) may share
-  a segment; label it with the first.
+  rungs of a ladder). Two short beats that share one picture may share a segment, labelled with
+  the first, unless the second has an on-screen duty in the formula's Beats table (a turn, a
+  re-opening, the payoff): that beat starts a segment of its own, so the picture can change on its
+  first word.
 - A beat's share of the script applies to its segments combined.
 - Most scripts come to five to nine segments.
 

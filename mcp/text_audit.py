@@ -529,8 +529,11 @@ def frame0_pass(scene_config: dict) -> dict | None:
 
 
 def _is_backdrop(v: dict) -> bool:
+    """A colour or gradient fill, or an SVG rect, covering the frame. A
+    full-frame image (an <img>, or a div whose background is a url) is a
+    subject, the most common good first frame."""
     share = (v.get("width", 0) * v.get("height", 0)) / _FRAME_AREA
-    return share >= FRAME0_BACKDROP_AREA and (v.get("kind") == "background" or v.get("tag") in ("rect", "div"))
+    return share >= FRAME0_BACKDROP_AREA and (v.get("kind") == "background" or v.get("tag") == "rect")
 
 
 def _subjects(visuals: list[dict]) -> list[dict]:
@@ -541,8 +544,11 @@ def _subjects(visuals: list[dict]) -> list[dict]:
 
 
 def _moved(a: dict, b: dict) -> bool:
+    # look carries what changes inside a box that stays put: a stroke drawing
+    # on (stroke-dashoffset), a colour, a background pan.
     return (any(abs(a.get(k, 0) - b.get(k, 0)) > FRAME0_MOVE_PX for k in ("x", "y", "width", "height"))
-            or abs(a.get("opacity", 0) - b.get("opacity", 0)) > FRAME0_MOVE_OPACITY)
+            or abs(a.get("opacity", 0) - b.get("opacity", 0)) > FRAME0_MOVE_OPACITY
+            or a.get("look") != b.get("look"))
 
 
 def frame0_findings(pass_result: dict, scene_config: dict) -> list[str]:

@@ -911,6 +911,20 @@ def test_something_arriving_or_fading_counts_as_moving():
     assert text_audit.summarise(frame0_output([box], [dict(box, opacity=0.9)]), MIXED_CONFIG) == []
 
 
+def test_a_line_drawing_on_or_a_colour_change_counts_as_moving():
+    # stroke-dashoffset and colour change the picture without moving its box
+    line = dict(vis("path", 100, 600, 800, 400), look="400px|rgb(255, 255, 255)|none")
+    drawn = dict(line, look="320px|rgb(255, 255, 255)|none")
+    assert text_audit.summarise(frame0_output([line], [drawn]), MIXED_CONFIG) == []
+    assert "nothing moves" in text_audit.summarise(frame0_output([line], [dict(line)]), MIXED_CONFIG)[0]
+
+
+def test_a_full_frame_css_photo_is_a_subject():
+    photo = vis("div", 0, 0, 1080, 1920, kind="picture")
+    out = text_audit.summarise(frame0_output([photo], [dict(photo, x=-3)]), MIXED_CONFIG)
+    assert out == []
+
+
 def test_a_canvas_is_assumed_to_move():
     # A 3D or a 2D canvas redraws its pixels without its box moving.
     canvas = vis("canvas", 0, 300, 1080, 1080)

@@ -25,6 +25,7 @@ lives in this file.
 import re
 
 import bean_explainer
+import cartoon
 import case_file_story
 import storybook_atlas
 import system_flow
@@ -96,7 +97,11 @@ def style_of(config: dict) -> str | None:
     for mod in _STYLES:
         if any(isinstance(s, dict) and s.get("src") == mod.SCENE_SRC for s in scenes):
             return mod.STYLE_ID
-    if any(isinstance(s, dict) and s.get("src") == "CartoonShort" for s in scenes):
+    # A Cartoon 3D scene is generated TSX named "<video_id>/CartoonShort", so
+    # it would otherwise read as mixed scenes.
+    if cartoon.is_cartoon(config) or any(
+            isinstance(s, dict) and str(s.get("src", "")).rsplit("/", 1)[-1] == "CartoonShort"
+            for s in scenes):
         return None
     return MIXED
 
@@ -128,11 +133,11 @@ def annotate_segments(timeline_segments: list, script_segments: list, roles: dic
     beats = {s.get("id"): (s.get("beat") or "") for s in script_segments or []
              if isinstance(s, dict)}
     out, previous = [], None
-    for i, seg in enumerate(timeline_segments or []):
+    for seg in timeline_segments or []:
         if not isinstance(seg, dict):
             continue
         beat = beats.get(seg.get("id"), "")
-        if i == 0:
+        if not out:
             role = OPENING
         elif beat and beat != previous:
             role = roles.get(beat, "")

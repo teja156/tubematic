@@ -186,6 +186,9 @@ interface MeasuredVisual {
   width: number;
   height: number;
   opacity: number;
+  /** What can change while the box stays put: a stroke drawing on, a
+   *  colour, a background pan. Python compares it between two frames. */
+  look: string;
 }
 
 const PICTURE_TAGS = new Set([
@@ -194,6 +197,8 @@ const PICTURE_TAGS = new Set([
 
 /** How long a picture frame must be quiet before its last measurement. */
 const VISUAL_SETTLE_MS = 300;
+/** The longest a picture frame is held open, however busy the page stays. */
+const VISUAL_SETTLE_MAX_MS = 8000;
 
 /** The largest pictures reported per frame, so a scene drawn from thousands
  *  of SVG paths still yields a short line. */
@@ -236,7 +241,9 @@ const measureVisuals = (): MeasuredVisual[] => {
         return;
       }
       const { opacity } = accumulateFromAncestors(el);
-      out.push({ tag, kind, x: rect.x, y: rect.y, width: rect.width, height: rect.height, opacity });
+      const st = window.getComputedStyle(el);
+      const look = [st.strokeDashoffset, st.stroke, st.fill, st.backgroundColor, st.backgroundPosition, st.backgroundSize].join("|");
+      out.push({ tag, kind, x: rect.x, y: rect.y, width: rect.width, height: rect.height, opacity, look });
     });
   });
   out.sort((a, b) => b.width * b.height - a.width * a.height);
@@ -326,18 +333,34 @@ export const TextLayoutProbe: React.FC<{ visualFrames?: number[] }> = ({ visualF
       return;
     }
     // A picture frame is measured again once the page has been quiet for
-    // VISUAL_SETTLE_MS, holding the frame open until then. The probe only
-    // re-renders with the frame, so a scene whose lazy import commits after
-    // the probe's last commit (always the case on the first frame rendered)
-    // would otherwise be measured as an empty layer. Each new commit restarts
-    // the wait; the last line for the frame is the one the driver keeps.
+    // VISUAL_SETTLE_MS, holding the frame open until then (VISUAL_SETTLE_MAX_MS
+    // at most). The probe is a sibling of the composition and only re-renders
+    // with the frame, so a scene config or a lazily imported scene that commits
+    // later (always the case on the first frame rendered) would otherwise be
+    // measured as an empty layer. Any change to the page restarts the wait; the
+    // last line for the frame is the one the driver keeps.
     const handle = delayRender(`Text audit: settling frame ${frame}`);
-    const timer = setTimeout(() => {
-      console.log(measure(frame, visualFrames));
-      continueRender(handle);
-    }, VISUAL_SETTLE_MS);
+    const started = Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = () => {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+      const wait = Math.max(0, Math.min(VISUAL_SETTLE_MS, VISUAL_SETTLE_MAX_MS - (Date.now() - started)));
+      timer = setTimeout(() => {
+        observer.disconnect();
+        console.log(measure(frame, visualFrames));
+        continueRender(handle);
+      }, wait);
+    };
+    const observer = new MutationObserver(settle);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+    settle();
     return () => {
-      clearTimeout(timer);
+      observer.disconnect();
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
       continueRender(handle);
     };
   });

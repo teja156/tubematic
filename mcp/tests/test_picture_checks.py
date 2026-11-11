@@ -47,6 +47,12 @@ def test_generated_scenes_are_mixed_and_a_cartoon_is_not_read():
     mixed = {"scenes": [{"type": "generated", "src": "vid/hero", "startFrame": 0}]}
     assert pc.style_of(mixed) == pc.MIXED
     assert pc.style_of({"scenes": [{"src": "CartoonShort"}]}) is None
+    # the real shape: generated TSX under the video's id, with the beats in its props
+    real = {"scenes": [{"type": "generated", "src": "vid_abc/CartoonShort", "startFrame": 0,
+                        "props": {"cartoon3d": {"beats": []}}}]}
+    assert pc.style_of(real) is None
+    tl, script = _segments(["Symptom", "Turn", "Root cause"])
+    assert pc.check(real, tl, script, {"Turn": "turn", "Root cause": "payoff"}, 30) == []
     assert pc.style_of({}) is None and pc.style_of({"scenes": []}) is None
 
 
@@ -136,6 +142,8 @@ def test_segments_without_beats_or_without_a_formula_owe_nothing_past_the_openin
     tl, script = _segments(["Symptom", "Turn", "Root cause"])
     assert [s["role"] for s in pc.annotate_segments(tl, script, {})] == ["opening", "", ""]
     assert pc.annotate_segments([], script, ROLES) == []
+    # a malformed first entry is skipped, and the first real segment is still the opening
+    assert [s["role"] for s in pc.annotate_segments(["bad"] + tl, script, {})] == ["opening", "", ""]
 
 
 # ── a visible change on each turn, re-opening and payoff ──────────────────────

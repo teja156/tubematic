@@ -47,7 +47,9 @@ publish title and description, which the agent writes while it has the whole scr
 - a `beat`, when present, that is a non-empty string of at most `SEGMENT_BEAT_MAX_LEN` characters
 
 Segments follow the beats of the script's formula, in order. Each segment is one visual idea, so a
-long beat splits into several segments and two short beats that share a picture can share one.
+long beat splits into several segments and two short beats that share a picture can share one,
+unless the second has a [role](#formulas): a turn, a re-opening or the payoff starts a segment of
+its own.
 Segments let `timeline.json` carry a frame span per segment, so a scene aligns to a beat.
 
 ## Length
