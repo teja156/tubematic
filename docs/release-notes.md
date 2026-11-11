@@ -203,6 +203,14 @@ If you go back to 2.1.x later:
 - A script profile sets how a script sounds, and the formula sets its structure. Before, a
   profile could also set the order of a script's parts and its sign-off. The agent now uses a
   profile's signature phrases in some scripts and no single one in every script.
+- A video opens on the subject of its first sentence, already moving, with no title card and no
+  empty first frame. The picture changes where the script turns or asks its question again, and
+  the answer gets the video's strongest picture. Each style does this its own way, and Case File
+  Story still ends on its choice and Whiteboard on its recap. Whiteboard and System Flow videos now
+  show their first drawing or component on the very first frame. Before a render, the agent is
+  warned about a first frame or a turn its pictures miss.
+- **Script warnings** also flag a publish title that copies a short first sentence, as well as a
+  first sentence that repeats the title.
 - A domain's row on the **Topics** page is one line: its name, the defaults it has set, its topic
   and video counts, its status and the pause button. **Edit defaults** opens the visual style,
   mascot, voice, script profile and topic cap under the row. Before, those pickers sat on the row

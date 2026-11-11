@@ -107,6 +107,9 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
   routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
   apart from.
+- Every pack says how it shows the opening, a turn, the payoff and the ending (`picture`), and
+  `agent_view` hands a copy of it to the agent, the mixed scenes' block under `auto`. Case File
+  Story's ending is its choice card and Whiteboard's its recap.
 - A malformed pack is refused with the field at fault, `auto` cannot be a pack, and every shipped
   pack passes. The optional `routing.images`, `routing.moods` and `script` are checked when
   present, and a pack without them still loads.
@@ -124,9 +127,12 @@ Covers `tubematic_core/formulas.py` and the files in `tubematic_core/formulas/`
   its word band sits inside the ceiling, and its beats cover the script from 0 to 100 percent.
 - A malformed file is refused with the reason: a wrong id, a missing or extra key, a bad band, a gap
   between beats, two beats of one name, a beat name longer than a segment's label may be, a `|` or
-  a line break in a text, an unknown hook type, two openings of one type.
+  a line break in a text, an unknown hook type, two openings of one type, an unknown beat role, two
+  turns, no payoff or two, a payoff in the first half, a blank `first_frame`.
+- Every formula has one payoff in its second half, at most one turn and a `first_frame`, and
+  `beat_roles` and `first_frame` answer for a known, an unknown and a blank id.
 - The decision table has one row per formula, and a rendered reference file carries every part of
-  its formula.
+  its formula, each beat's duty to the picture and its First frame section.
 - The files hold no ticket id and no link, because they are rendered into skill files that ship in
   the release archive.
 
@@ -139,7 +145,8 @@ Covers `tubematic_core/script_checks.py`
 ([Script warnings](../08-scripting-and-voice.md#script-warnings)).
 
 - A clean script raises nothing. Each check fires on the script it is for: a closing ask, a recap
-  ending, a greeting opener, a first sentence that repeats the title, a staged run-up, no turn in
+  ending, a greeting opener, a first sentence that repeats the title or a title that copies a short
+  first sentence, a staged run-up, no turn in
   the middle, a length outside the band or past the ceiling, a kept opening that is not the
   script's opening, a closing shared with the domain's recent scripts.
 - Each check stays quiet on text that only uses its words: "follow" and "subscribe" as ordinary

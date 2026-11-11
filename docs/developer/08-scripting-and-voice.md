@@ -87,12 +87,21 @@ malformed file stops the process at start. The MCP server and the API both impor
 | `line` | The formula in one sentence |
 | `best_for`, `also_for`, `avoid_for` | Kinds of topic it is the first choice for, also fits, and does not suit |
 | `words` | `[min, max]`, the word band. The maximum is at most `WORD_CEILING` |
-| `beats` | `[{name, from, to, job}]`. `from` and `to` are percentages of the script's words, and the beats cover 0 to 100 with no gap |
+| `beats` | `[{name, from, to, job, role?}]`. `from` and `to` are percentages of the script's words, and the beats cover 0 to 100 with no gap. `role` is the beat's duty to the picture (below) |
 | `hooks` | `[{type, shape}]`. At least three opening shapes, each of a different hook type |
 | `holds`, `ending`, `pitfalls`, `template` | What keeps a viewer, how the script ends, what goes wrong, and a fill-in shape of the whole script |
+| `first_frame` | What the video's first frame shows. Segment 1's `visual` brief asks for it, and `get_timeline` returns it to the scene author |
 
 Hook types are one closed list, `formulas.py::HOOK_TYPES`, shared by every formula. A shared list
 lets openings be compared across formulas.
+
+A beat's `role` is one of `formulas.py::BEAT_ROLES`: `turn`, `reopen` (a re-opening of the
+question) or `payoff`. A formula has one payoff and no second one, starting at `PAYOFF_FROM_MIN`
+percent or later, and at most one turn; other beats have no role. The roles reach the scene author as each
+segment's `role` in [`get_timeline`](06-mcp-server.md#get_timeline): a turn or a re-opening gets a
+visible change on its first word, and the payoff the video's strongest picture
+([The opening and the beats](10-scene-authoring.md#the-opening-and-the-beats)). The roles are data
+because a beat's name says what it is about, not whether the picture must change there.
 
 The agent reads formulas as text. `scripts/gen_formula_references.py` renders one reference file per
 formula into the skill's `formulas/` folder, and the table in the skill's `SKILL.md` that maps the
@@ -162,7 +171,7 @@ it on the Script tab. A fault inside a check is logged and the script is stored 
 | `no_formula` | The script has no formula on record |
 | `hook_mismatch` | The opening marked `kept` is not how the first segment begins |
 | `greeting_opener` | A greeting or an agenda line in the first two sentences |
-| `title_repeat` | The first sentence holds most of the publish title's words |
+| `title_repeat` | The first sentence holds most of the publish title's words, or the title holds most of a short first sentence's words |
 | `staged_runup` | A phrase that announces a turn ("Here's the thing") |
 | `no_turn` | No turn word in the middle of the script |
 | `over_ceiling` | More than `WORD_CEILING` words |

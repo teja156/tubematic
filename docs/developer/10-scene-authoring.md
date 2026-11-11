@@ -122,6 +122,7 @@ style.
 | `captions` | Optional. The `subtitles` settings `write_scene_config` fills in when a config has none |
 | `routing` | What Auto reads to pick a style: `best_for`, `avoid_for`, `signals`, and the optional `moods` and `images` (below) |
 | `script` | Optional. How to write the narration and each segment's `visual` brief for this style; `get_video` returns it as `style.script` and the script-writing skill follows it |
+| `picture` | `{opening, turn, payoff, ending}`: how the style shows the first frame, a turn or re-opening, the payoff, and how a video in it ends. `get_video` returns it as `style.picture`; [The opening and the beats](#the-opening-and-the-beats) says how it is used |
 | `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's and Storybook Atlas's cast and prop catalogues or Whiteboard's doodle library |
 
 The `routing` block lists what the style suits (`best_for`), what it must not get (`avoid_for`) and
@@ -341,7 +342,8 @@ The skill sets no target scene count and no target scene length. A cut marks a c
 
 The default is one script segment, one scene. The agent deviates only to:
 
-1. Merge a very short segment into an adjacent one, when their visual briefs compose.
+1. Merge a very short segment into an adjacent one, when their visual briefs compose and the merge
+   does not hide the start of a turn, a re-opening or the payoff inside a running scene.
 2. Split a segment whose brief names distinct sub-beats, or whose one visual idea cannot carry the
    span. Sub-scenes of one segment hard-cut (`transitionToNext` of 0).
 3. Reach the minimum of four `generated` entries. This is the only count-driven split. An installed
@@ -352,6 +354,36 @@ ends at `totalFrames`. Scenes leave no gaps, even where the timeline has a short
 segments.
 
 Nothing checks the four-scene minimum. Like the image floor, it is the skill's rule.
+
+## The opening and the beats
+
+The script's [formula](08-scripting-and-voice.md#formulas) marks which beats carry the video, and
+[`get_timeline`](06-mcp-server.md#get_timeline) hands them to the scene author per segment. Each
+segment carries its `beat` and a `role`, worked out by `picture_checks.py::annotate_segments`:
+
+| `role` | Given to | What the picture owes it |
+|---|---|---|
+| `opening` | The first segment | Frame 0 shows what the first sentence names, already moving. No title card, no empty or black frame, no abstract gradient |
+| `turn`, `reopen` | The first segment of a beat with that role | A visible change on its first word: a new scene, a new board, a cut, an event |
+| `payoff` | The first segment of the payoff beat | The video's strongest picture |
+| `""` | Every other segment | Its own `visual` brief only |
+
+A beat split over several segments owes its change once, where it starts. A video with no formula on
+record, or segments with no `beat`, has the opening role only. `get_timeline` also returns the
+formula's `first_frame` line, which says what the first frame shows for that structure.
+
+The video ends on the payoff picture, with no closing card after it, unless the style's pack says
+otherwise: every pack's `picture` block states its opening, turn, payoff and ending, and two packs
+end their own way. Case File Story ends on its choice card after the consequence, and Whiteboard on
+its recap pull-back. Mixed scenes take theirs from `visual_styles.py::SCENES_PICTURE`.
+
+The voice starts a few frames into the video, so a picture on frame 0 cannot sit on a word. The
+styles that time events to words accept an event at frame 0 for that reason: Bean Explainer and
+Storybook Atlas take any event there, and Whiteboard takes region 1's first item. Whiteboard draws
+that item from `TIMING.openLead` frames before frame 0 instead of `TIMING.lag` frames after its word,
+so the first frame shows ink being drawn, and System Flow draws a node whose event is at frame 0 half
+grown on the first frame. Both changes touch the opening frames only and cost no measurable render
+time (frames 0 to 149 of each skill's example, whole-tree CPU seconds, on software GL).
 
 ---
 
@@ -393,6 +425,7 @@ sampled frames in a browser. Its findings go to the `warnings` list of the resul
 | `Text outside the safe zone in scene` | Text crosses a safe-zone edge. The line names the edges, and says when the text runs past the frame |
 | `Mascot over text in scene` | Text sits under the mascot's box |
 | `Text-layout audit` | The audit was skipped, could not run, or could not measure part of a scene. The line says which |
+| `First frame (scene 0` | A mixed-scenes video's frame 0 shows nothing but text or a backdrop, or nothing moves between frame 0 and frame 6 |
 
 The audit compares text with text only (`text_audit.py::find_overlaps`), so an arrow tip outside the
 safe zone or an image under a label is not a finding. The captions are text in the same composition,
@@ -400,6 +433,44 @@ so scene text that collides with a caption is reported as an overlap.
 
 The audit does not run when `validate_job` already has errors, or when the
 `text_layout_audit_enabled` setting is off.
+
+For a mixed-scenes video the audit adds a frame-0 pass (`text_audit.py::frame0_pass`). The probe
+lists the pictures of the scene layer, the element `CompositionBuilder` marks
+`data-tm-layer="scene"`, at frames 0 and 6, measured again once the page is quiet so a lazily
+loaded scene is seen. `text_audit.py::frame0_findings` decides: an image, a canvas, an SVG shape or
+a filled box counts as a subject from `FRAME0_MIN_AREA` of the frame at `FRAME0_MIN_OPACITY`, and a
+fill covering `FRAME0_BACKDROP_AREA` of the frame is the backdrop. A canvas or a video counts as
+moving, because its pixels change inside a box that stays still. The text checks skip this pass,
+because text is mid-entrance on frame 0.
+
+### Picture warnings
+
+After the audit, `validate_job` adds the warnings of `picture_checks.py::check`, which reads the
+scene-config and the timeline only. It runs whether or not the audit ran, and an error inside it
+becomes one warning line.
+
+| Warning starts with | Means |
+|---|---|
+| `First frame:` | A data-driven style's opening has no subject in its data (the list below) |
+| `The turn`, `The re-opening`, `The payoff` | Nothing new starts on screen from `CHANGE_LEAD` frames before that segment's first word to `CHANGE_WINDOW` frames after it. The line names the segment, its time, its beat and its first words |
+
+What counts as an opening with no subject, by style (`picture_checks.py::_first_frame_problem`,
+with `FIRST_FRAME_WINDOW` as the early limit):
+
+- System Flow: board 1 has no node by frame 3, so the video opens on the headline alone.
+- Whiteboard: region 1 does not open on a doodle or an arrow at frame 0.
+- Bean Explainer: the first shot has no pose or prop by frame 3.
+- Terminal Doc: beat 1 has nothing on stage by frame 3.
+- Storybook Atlas: nothing moves in chapter 1 by frame 3.
+- Under the Hood: plate 1 has no photograph.
+
+Case File Story's validator already requires a shot first, and Cartoon 3D is not checked.
+
+A change is a scene start in a mixed-scenes video, and in a data-driven style a unit start or an
+event that changes the picture (`picture_checks.py::change_frames`). Events that change too little,
+such as a System Flow chip or a Bean label, do not count. A Cartoon 3D video is not checked: its
+cuts live in its own TypeScript. Both checks are advisory for the same reason as the audit: a
+picture is a judgement, and a warning that blocked a render would stop it on a false positive.
 
 ---
 
@@ -591,7 +662,7 @@ cannot be drawn fails the render, so no frame goes out without the bean.
   `totalFrames`, or another style uses `BeanExplainer`.
 - A shot or section after the first does not start within 2 frames of a word, a shot lasts under 1.5
   seconds or a section under 2, or a section does not start where a shot does.
-- A pose is not on a word, or comes less than 8 frames after the same bean's last pose, or names
+- A pose is not on a word or at frame 0, or comes less than 8 frames after the same bean's last pose, or names
   `at` on a pose whose arm does not reach (only `point`, `present` and `lean` do).
 - `list` is on with fewer than two sections.
 - An event in a list video's section starts during the badge carousel, or within 6 frames of the
@@ -747,7 +818,9 @@ lacks, at most 8 per video. Before it writes one, it looks at it with
 reads as the object it is meant to be, and a drawing an agent writes blind often does not. The
 validator checks only the geometry: the format, the limits, and every point inside the box.
 
-One floating marker draws the items in the order listed, starting each 12 frames after its word. An
+One floating marker draws the items in the order listed, starting each 12 frames after its word.
+Region 1's first item at frame 0 is the exception: the marker is already drawing it on the first
+frame ([The opening and the beats](#the-opening-and-the-beats)). An
 item gets its natural drawing time (about 16 characters a second for body text, a second for a
 doodle), cut short so it finishes before the next item starts, but never below a floor that keeps
 writing legible. The handwriting is the bundled Kalam font revealed left to right, with the marker
@@ -785,7 +858,7 @@ camera has left) is left out of the page, or the audit would report it as off-sc
 - A field holds the wrong type, such as a list where a name belongs or a `big` that is not `true` or
   `false`. Each is reported as a refusal, since JavaScript and Python read some wrong types
   differently.
-- An item's `at` is not on a word, comes before the previous item's, or comes before the camera has
+- An item's `at` is not on a word (region 1's first item may be at frame 0), comes before the previous item's, or comes before the camera has
   reached its region.
 - A slot does not exist in the layout or is used twice; text, a formula or a label does not fit its
   slot; text uses a character the bundled font lacks; or a doodle is not in the pack's list.
@@ -872,7 +945,7 @@ about 0.30. The measurements are in `StorybookAtlas.tsx`'s header comment.
   not start within 2 frames of a word, or a chapter lasts under 8 seconds.
 - A title does not fit 2 lines of 18 characters, a byline runs past 28, or a backdrop, coat, knob, pose,
   prop, entrance or act is not in the catalogue or the video's `customProps`.
-- An event is not on a word, or comes in its chapter's last 20 frames; an act starts before its prop has
+- An event is not on a word or at frame 0, or comes in its chapter's last 20 frames; an act starts before its prop has
   landed; a tag goes on a prop not yet on stage; a push has no portal prop on stage in the chapter
   before; the guide is told to exit. A prop shows its latest tag, and a tag is checked from its own
   frame. On one frame, a prop comes before an act or a tag that names it, in any listed order.

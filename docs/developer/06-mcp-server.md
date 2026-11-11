@@ -205,7 +205,7 @@ The calls one video takes when it has no mascot and is not Cartoon 3D:
    the script checkpoint. A human approves, which moves the video to `VOICING`.
 8. `generate_voice(video_id, script)` writes the audio and the timeline and moves the video to
    `VOICE_READY`.
-9. `get_timeline(video_id)` returns each segment's frame span.
+9. `get_timeline(video_id)` returns each segment's frame span, beat and role.
 10. `list_scene_files(source="installed")` lists the reusable scene library.
 11. `generate_image(video_id, image_name, prompt)` creates each image and returns its `public_path`.
 12. `read_image(video_id, image_name)` shows the image, so a bad one is replaced before a render.
@@ -241,7 +241,7 @@ videos.
 | `illustrated_available` | `true` when an OpenAI key is stored, which Illustrated, Under the Hood and Case File Story need. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
-| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config` and `script` is `""` |
+| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script, picture}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config`, `script` is `""` and `picture` is the mixed scenes' block |
 | `style_routing` | The style decision `auto` makes before the script: `{decided, pick, runner_up, reason, candidates, domain}`. See [How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style) |
 
 At `VOICE_READY` the operator skill invokes the skill named in `style.authoring_skill`.
@@ -818,7 +818,12 @@ rename puts the previous file back before the lock is released.
 ### `get_timeline`
 
 `get_timeline(video_id, include_words=False)` reads `timeline.json`. Word-level timings are opt-in,
-because the array is large.
+because the array is large. It returns `{video_id, total_frames, fps, first_frame, segments[,
+words]}`. Each segment is `{id, startFrame, endFrame, beat, role}`: `beat` is the formula beat the
+script gave the segment, and `role` is what the picture owes it (`opening`, `turn`, `reopen`,
+`payoff` or `""`). `first_frame` is the formula's line on what the first frame shows, `""` when the
+video has no formula on record. See
+[The opening and the beats](10-scene-authoring.md#the-opening-and-the-beats).
 
 ---
 
@@ -827,7 +832,7 @@ because the array is large.
 ### `validate_job`
 
 `validate_job(video_id)` returns `{passed, errors, warnings}`, and `passed` depends only on
-`errors`. The agent calls it before `submit_render`. It runs twelve checks in order:
+`errors`. The agent calls it before `submit_render`. It runs fourteen checks in order:
 
 1. `audio.mp3`, `timeline.json` and `scene-config.json` exist in `<jobs>/<video_id>/`. The location
    is derived from the id and is not read from the stored path columns. A column that is still empty
@@ -870,9 +875,14 @@ because the array is large.
     and the video is not Cartoon 3D (a painted canvas has no text rects to measure). Its findings
     go to `warnings`. For a mascot video it also
     reports measured text that may sit under the mascot's box at a sampled frame (the box is the
-    engine's whole canvas, emote headroom included).
+    engine's whole canvas, emote headroom included). For a mixed-scenes video it also measures the
+    pictures on frames 0 and 6.
+14. The [picture checks](10-scene-authoring.md#picture-warnings), which are advisory and read the
+    scene-config and the timeline only: a data-driven style's opening with no subject, and a turn,
+    re-opening or payoff with nothing new on screen near its first word. Their findings go to
+    `warnings` after the audit's, whether or not the audit ran.
 
-Checks 10 and 11 each start a Node process (`tsc`, or a webpack bundle and a browser), and several
+Checks 12 and 13 each start a Node process (`tsc`, or a webpack bundle and a browser), and several
 agent sessions can validate at once. The MCP server runs them for one `validate_job` call at a time
 (`_heavy_checks_lock`). A call that waits longer than 300 seconds (`HEAVY_CHECK_WAIT_SECS`) for the
 others returns an error that says nothing is wrong with the video and asks for another call.
