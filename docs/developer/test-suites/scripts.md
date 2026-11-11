@@ -671,6 +671,18 @@ Covers the `tubematic-terminal-doc` skill ([Terminal Doc](../10-scene-authoring.
   the skill.
 - The skill teaches moves of the agent's own within the validator's limits, and its worked move,
   `example-move-caesar.tsx`, passes the validator's source checks.
+### `test_under_the_hood_skill.py`
+
+Covers the `tubematic-under-the-hood` skill ([Under the Hood](../10-scene-authoring.md#under-the-hood)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The skill and `reference/contract.md` list every pose, event kind and tone in the pack, and state
+  the limits `mcp/under_the_hood.py` enforces.
+- The skill asks for square photographs with the no-text prompt recipe, checks each with
+  `read_image`, and never calls `generate_character`.
+- The worked example passes the validator and uses every kind of event, and the uninstaller removes
+  the skill.
 
 ### `test_system_flow_skill.py`
 

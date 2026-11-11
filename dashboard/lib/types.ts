@@ -32,6 +32,8 @@ export interface VisualStyleInfo {
   experimental: boolean;
   canvas: "dark" | "light" | null;
   needs: { openai_key: boolean; gpu: boolean };
+  /** False for a style whose videos take no mascot (Cartoon 3D, Under the Hood); absent means true. */
+  mascot?: boolean;
   available?: boolean;
   unavailable_reason?: string;
 }

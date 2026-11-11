@@ -526,6 +526,8 @@ or place there is written on the board or drawn as a simple doodle with a label.
 none either: a named person there is a picture-book figure with a name tag, and a named object is a
 library prop or one drawn for the video. `terminal_doc` has none: a named thing there is its name, a
 string, number or quoted source on a dark screen.
+`under_the_hood` shows only one physical object in close-up photographs: every brief names a part
+of that object and what is labelled on it.
 
 ### The treatment follows the beat's subject, not the writer's habit
 

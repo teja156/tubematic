@@ -150,6 +150,13 @@ def _check_pack(path: pathlib.Path, data) -> dict:
         fail("routing.images_per_video, when present, must be a string")
     if "script" in data and not (isinstance(data["script"], str) and data["script"].strip()):
         fail("script, when present, must be a non-empty string")
+    # Optional: false when a video of this style may not carry a mascot (Under
+    # the Hood has its own presenter). A 3D-world style never takes one either,
+    # by its renderer.
+    if "mascot" in data and not isinstance(data["mascot"], bool):
+        fail("mascot, when present, must be true or false")
+    if data.get("mascot") is False and not (isinstance(messages.get("mascot"), str) and messages["mascot"].strip()):
+        fail("mascot is false, so messages.mascot must say why and what to do instead")
     return data
 
 
@@ -176,6 +183,11 @@ VISUAL_STYLES = (AUTO,) + tuple(PACKS)
 # Styles that fix the canvas. A partial map on purpose: membership in it, never
 # equality with "auto", is the test for "has the canvas been settled".
 CANVAS_BY_STYLE = {sid: p["canvas"] for sid, p in PACKS.items() if p["canvas"]}
+
+# Styles whose videos may not carry a mascot: a 3D world (the mascot is a flat
+# overlay) and any pack that says "mascot": false.
+NO_MASCOT_STYLES = tuple(sid for sid, p in PACKS.items()
+                         if p["renderer"] == "cartoon_3d" or p.get("mascot") is False)
 
 
 def pack(visual_style: str) -> dict | None:
@@ -302,14 +314,15 @@ def _unavailable_reason(p: dict, openai_key_set: bool, gpu_status: str) -> str:
 def public_list(openai_key_set: bool, gpu_status: str) -> list[dict]:
     """Every style, "auto" first, as the dashboard shows them: id, label,
     experimental, the canvas a style fixes (None when it does not), what it
-    needs, and whether this install can produce it now, with the reason when
-    it cannot. The API is the authority on refusals; this only explains them."""
+    needs, whether a video of it may carry a mascot, and whether this install
+    can produce it now, with the reason when it cannot. The API is the
+    authority on refusals; this only explains them."""
     out = [{"id": AUTO, "label": "Auto", "experimental": False, "canvas": None,
-            "needs": {k: False for k in _NEEDS}, "available": True, "unavailable_reason": ""}]
+            "needs": {k: False for k in _NEEDS}, "mascot": True, "available": True, "unavailable_reason": ""}]
     for sid, p in PACKS.items():
         reason = _unavailable_reason(p, openai_key_set, gpu_status)
         out.append({"id": sid, "label": p["label"], "experimental": p["experimental"],
-                    "canvas": p["canvas"], "needs": dict(p["needs"]),
+                    "canvas": p["canvas"], "needs": dict(p["needs"]), "mascot": sid not in NO_MASCOT_STYLES,
                     "available": not reason, "unavailable_reason": reason})
     return out
 
@@ -336,6 +349,7 @@ def agent_view(visual_style: str) -> dict:
 ROUTE_CHOICES = tuple(PACKS) + (SCENES,)
 
 MASCOT_EXCLUDES_3D = "the video has a mascot, which has no place in a 3D world"
+MASCOT_EXCLUDED = "the video has a mascot, which this style does not take"
 
 
 def route_label(choice: str) -> str:
@@ -354,12 +368,13 @@ def routing_candidates(openai_key_set: bool, gpu_status: str, has_mascot: bool) 
 
     The list is read from the packs, never written out anywhere, so a new pack
     with a routing block is a candidate the moment it ships. A video with a
-    mascot cannot take a 3D-world style: the mascot is a flat overlay."""
+    mascot cannot take a 3D-world style (the mascot is a flat overlay), nor a
+    style whose pack takes no mascot."""
     out = []
     for sid, p in PACKS.items():
         reason = _unavailable_reason(p, openai_key_set, gpu_status)
-        if not reason and has_mascot and p["renderer"] == "cartoon_3d":
-            reason = MASCOT_EXCLUDES_3D
+        if not reason and has_mascot and sid in NO_MASCOT_STYLES:
+            reason = MASCOT_EXCLUDES_3D if p["renderer"] == "cartoon_3d" else MASCOT_EXCLUDED
         routing = {k: (list(v) if isinstance(v, list) else v) for k, v in p["routing"].items()}
         routing.setdefault("moods", [])
         routing.setdefault("images", 0)

@@ -94,10 +94,13 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   as the table in the test says.
 - The refusal messages come from the packs, and the GPU gate passes only `working`.
 - `public_list` explains an unavailable style, and `agent_view` names the authoring skill.
-- System Flow, Bean Explainer, Storybook Atlas and Terminal Doc each have their renderer, canvas,
-  skill and permissions pinned; Bean Explainer's bean and Storybook Atlas's people count as figures
-  but neither line art nor generated characters. Storybook Atlas's captions use the `label`
-  background, Terminal Doc's are the `log` look, and each Terminal Doc skin changes only caption keys.
+- System Flow, Bean Explainer, Storybook Atlas, Terminal Doc and Under the Hood each have their
+  renderer, canvas, skill and permissions pinned; Bean Explainer's bean, Storybook Atlas's people and
+  Under the Hood's presenter count as figures but neither line art nor generated characters.
+  Storybook Atlas's captions use the `label` background, Terminal Doc's are the `log` look, and each
+  Terminal Doc skin changes only caption keys. Under the Hood needs an OpenAI key, caps its
+  photographs at 12, takes no mascot and uses the `selection` caption look. A pack that takes no
+  mascot must say why.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
   routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
   apart from.
@@ -159,7 +162,8 @@ the fixed topic set in `tests/fixtures/style_routing_cases.json`
 - Each candidate carries its routing block and its image count, and the list shares no state with
   the packs.
 - A candidate is unavailable for the same reasons that refuse the choice: no OpenAI key, a GPU that
-  is not working or not tested, a mascot on a 3D-world style. `scenes` is always available.
+  is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood).
+  `scenes` is always available.
 - Every topic names only real outcomes, and every outcome is the first expectation of at least
   three topics.
 
@@ -490,8 +494,9 @@ Covers `mascots.py`, the mascot rules every process shares
   of violation.
 - `caption_band` derives a line count from `maxWords` and `fontSize`, so large captions that wrap to
   three or four lines still keep the mascot off them. A hidden caption band frees the space.
-- `holds_pickable_sql` agrees with `pickable`, and `cartoon_mascot_clash_sql` names a Cartoon 3D
-  style or resolved renderer with a non-empty mascot.
+- `holds_pickable_sql` agrees with `pickable`, and `cartoon_mascot_clash_sql` names a style that
+  takes no mascot (Cartoon 3D, Under the Hood) or a Cartoon 3D resolved renderer, with a non-empty
+  mascot.
 - `resolve_default` turns an archived or unapproved default into no mascot. `mascot_gpu_error` asks
   for a GPU test when the status is `unknown`. `code_for` reads a built-in's code from its versioned
   file.

@@ -520,6 +520,17 @@ def test_a_cartoon_video_holding_a_mascot_is_refused(env):
     assert tmascots.MASCOT_NOT_ON_CARTOON_3D in _comments(env)[-1] and "tubi" in _comments(env)[-1]
 
 
+def test_an_under_the_hood_video_holding_a_mascot_is_refused(env):
+    """The API and the MCP server never leave the pair; a row written another way is refused here."""
+    from tubematic_core import mascots as tmascots
+    _gpu(env)
+    _seed(env, visual_style="under_the_hood", mascot_id="tubi", mascot_version=1)
+    assert env.client.post("/v1/claim", json={}, headers=B).status_code == 204
+    v = _video(env)
+    assert v["status"] == "FAILED" and v["render_fail_count"] == 0
+    assert tmascots.no_mascot_error("under_the_hood") in _comments(env)[-1] and "tubi" in _comments(env)[-1]
+
+
 @pytest.mark.parametrize("version, code, why", [
     (0, "code", "no version of mascot 'm1' is pinned"),
     (2, None, "has no version 2"),

@@ -11,13 +11,14 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds five visual styles: System Flow, which turns a video into a diagram that builds itself
+2.2.0 adds six visual styles: System Flow, which turns a video into a diagram that builds itself
 while the narrator explains a system; Bean Explainer, a cartoon character that reacts to the
 narration among everyday props; Whiteboard, which works an idea out on one big board, written
 and drawn as the narrator speaks; Storybook Atlas, a picture book that tells the story of an
-invention or an idea in chapters; and Terminal Doc, a dark typographic documentary for codes,
-passwords and computing. Auto now picks a video's style before its script is written. Scripts are
-built on a formula chosen for each topic and end on their payoff.
+invention or an idea in chapters; Terminal Doc, a dark typographic documentary for codes, passwords
+and computing; and Under the Hood, close-up photographs of one object with labels pinned to its
+parts. Auto now picks a video's style before its script is written. Scripts are built on a
+formula chosen for each topic and end on their payoff.
 
 ### Upgrade notes
 
@@ -27,9 +28,9 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs new skills for System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc
-   and Auto's style choice, and a session started before it does not have them. The script-writing
-   skill is new too.
+   installs new skills for System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc,
+   Under the Hood and Auto's style choice, and a session started before it does not have them.
+   The script-writing skill is new too.
 2. Read your text in **Settings → Preferences**. A script now ends on its payoff unless that text
    asks for a closing line. A sentence there that asks for one, such as a line asking viewers to
    follow, still applies to every script, and the **Script** tab can list it under **Script
@@ -52,10 +53,11 @@ sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow, Bean Explainer, Whiteboard, Storybook Atlas or Terminal Doc cannot render
-  on 2.1.x. Finish it, or switch it to another style while it waits at its topic, before you go back.
-- A domain whose default style is System Flow, Bean Explainer, Whiteboard, Storybook Atlas or Terminal
-  Doc starts its new videos on Auto under 2.1.x.
+- A video set to System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc or Under the
+  Hood cannot render on 2.1.x. Finish it, or switch it to another style while it waits at its topic,
+  before you go back.
+- A domain whose default style is System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal
+  Doc or Under the Hood starts its new videos on Auto under 2.1.x.
 
 ### Added
 
@@ -108,9 +110,21 @@ If you go back to 2.1.x later:
   ciphers and codes, passwords and hashes, encodings and famous unsolved codes, needs no image
   generation and no GPU, and Auto can pick it. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Under the Hood visual style (experimental). A dark video that opens up one physical object:
+  close-up photographs of its parts push in slowly while short capital labels point at each part,
+  gold arcs show fields and flows, a fast zoom dives into a part and cuts to a closer
+  photograph, numbers tick and charts draw, and a cartoon presenter in the bottom corner reacts to
+  the narration. It suits how a device or a part works inside (a touchscreen, a battery, a lock, an
+  SSD) and the numbers behind one object, such as a part's price. It needs an OpenAI key and uses up
+  to 12 generated photographs per video; it needs no GPU. Its videos have no mascot: the presenter
+  takes the mascot's place. Choose it for a topic, on the **New Video**
+  page, or as a domain's default; Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
 - Captions can be a small printed label: an ivory plate hugging one short phrase, with a diamond each
   side. Storybook Atlas videos use it.
+- Captions can build word by word, with the word being spoken in bold, the earlier words in grey and
+  the key word in a blue selection box. Under the Hood videos use it.
 - A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
   agent writes a new script for it, which is voiced when you approve it. See
@@ -134,7 +148,7 @@ If you go back to 2.1.x later:
 
 - Auto picks the style when the agent picks up an approved topic, before it writes the script, and
   can pick any style this install can make: Motion Graphics, Stick Explainer, Illustrated, System
-  Flow, Bean Explainer, Whiteboard, Cartoon 3D and every style added later. The script is then written for that style. Before,
+  Flow, Bean Explainer, Whiteboard, Under the Hood, Cartoon 3D and every style added later. The script is then written for that style. Before,
   Auto decided after the voice was made, could only choose between a dark canvas, a white canvas and
   Cartoon 3D, and never chose a named style. When no style clearly fits, Auto keeps that mixed
   approach. A video's card and window show the picked style after the word Auto.

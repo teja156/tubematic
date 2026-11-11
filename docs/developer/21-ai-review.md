@@ -97,7 +97,7 @@ The style flags come from `pipeline.py::effective_canvas`, `figures_allowed` and
 A [style pack](10-scene-authoring.md#style-packs) may carry its own `review` text, which
 `render_results.py` passes as `style_block`. When it is present it replaces the canvas and figure
 blocks, which describe the scene system's styles. System Flow, Bean Explainer, Whiteboard,
-Storybook Atlas and Terminal Doc carry one.
+Storybook Atlas, Terminal Doc and Under the Hood carry one.
 
 ## The prompt's guard clauses
 
@@ -121,6 +121,7 @@ paid re-voice. Each clause below prevents one. Keep them.
 | Whiteboard (from its pack) | A flat white board, three inks, a floating marker, glides with no cuts, writing that lands about half a second after its word, and small writing in the closing pull-back are the style. It still lists what to report | Every video is reported for lagging writing and an unreadable ending |
 | Storybook Atlas (from its pack) | Hatched paper, a chapter plaque, stiff picture-book people known by their name tags and clothes, a mouse guide walking on twos, plates behind brass shutters and the small caption label are the style. It still lists what to report | The figures read as placeholder art, the small label as missing captions, and the held poses as broken animation |
 | Terminal Doc (from its pack) | Sparse monospace text, typing, glyph noise, a ciphertext wall, an empty dark frame, the amber CRT skin and the typed log captions are the style. It still lists what to report, including stage text that repeats the sentence being spoken | On-screen text reads as duplicated narration and the empty frame as an unfinished video |
+| Under the Hood (from its pack) | Word-by-word captions, a pushing close-up photograph, labels on leader lines, gold arcs, ticking counters and a presenter without lip sync are the style. It still lists what to report, a label on the wrong part first | The labels and the presenter read as clutter or broken animation |
 | Two scripts | Where the written and spoken forms differ, audio matching the spoken form is correct. An IPA transcription between slashes is spoken as the sounds it spells | Every working respelling or IPA term is reported as a mispronunciation |
 | Decorative suggestions | A suggestion must critique something in the video. Adding a glow, an icon or a flourish does not count, and an empty list is acceptable | The model pads `suggestions`, and any suggestion costs a revision round |
 

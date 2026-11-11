@@ -238,7 +238,7 @@ videos.
 | `claimed_by`, `claim_expires_in_secs` | The live scene-work claim, or `null` |
 | `voice` | `{voice_id, name, model_id, source}` or `null` |
 | `elevenlabs_model_id`, `pronunciation_mode` | What the script is written for. Both follow from `voice` |
-| `illustrated_available` | `true` when an OpenAI key is stored. The key is not returned |
+| `illustrated_available` | `true` when an OpenAI key is stored, which Illustrated and Under the Hood need. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
 | `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config` and `script` is `""` |
@@ -340,15 +340,16 @@ Script and voice:
 Fields writable only at `TOPIC_PROPOSED`:
 
 - `script_profile_id` must name a `READY` profile that is not deleted.
-- `visual_style="illustrated"` is refused while no OpenAI key is stored, with the HTTP route's
-  message. Only OpenAI draws its characters, and `generate_character`, the other place the key is
-  checked, runs after the style is frozen.
+- `visual_style="illustrated"` or `"under_the_hood"` is refused while no OpenAI key is stored, with
+  the style pack's message. Only OpenAI draws their characters and photographs, and the image tools,
+  the other place the key is checked, run after the style is frozen.
 - `visual_style="cartoon_3d"` is refused unless some renderer's GPU test passed. The message names
   the fix: the GPU step, or Test GPU when a renderer has not tested yet. Writing it clears the
   mascot in the same update.
 - A new `mascot_id` must exist, be approved and not archived, and some renderer's GPU test must
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
-  mascot is not refused. A mascot is refused on a `cartoon_3d` video.
+  mascot is not refused. A mascot is refused on a `cartoon_3d` or `under_the_hood` video
+  (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to either style clears the stored one.
 - A `visual_style` different from the stored one clears the record of a style `auto` picked
   (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
   scenes (`resolved_renderer`, `resolved_visual_style`). The same value again keeps them, because the
@@ -457,8 +458,8 @@ HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
 - `description` may run to several paragraphs and at most 2000 characters.
 - `default_voice_id` must be on the roster.
 - `default_script_profile_id` must name a `READY` profile that is not deleted.
-- `default_visual_style` set to `illustrated` needs a stored OpenAI key, and set to `cartoon_3d`
-  a renderer whose GPU test passed.
+- `default_visual_style` set to `illustrated` or `under_the_hood` needs a stored OpenAI key, and set
+  to `cartoon_3d` a renderer whose GPU test passed.
 - `default_mascot_id` is `""` (inherit the install's default mascot), `"none"` (no mascot even if
   the install has a default) or an approved mascot that is not archived. A new id also needs a
   renderer whose GPU is `working`.
@@ -561,7 +562,14 @@ OpenAI takes explicit sizes, so three aspect ratios exist: `9:16` is 1088×1920,
 and `16:9` is 1920×1088. Any other `aspect_ratio` is refused before the call. Both dimensions must
 divide by 16, so 1088×1920 stands in for the 1080×1920 frame and is cover-cropped a few pixels per
 side. The scene skill tells the agent to leave the default alone, because any other ratio is
-cropped hard to fit the frame.
+cropped hard to fit the frame. The Under the Hood skill asks for `1:1`, because its plates are drawn
+at their own shape in a band narrower than the frame.
+
+On an `under_the_hood` video the tool refuses a new `image_name` once the video's images folder and
+its calls in flight hold 12 pictures, the pack's `routing.images`, before any request; regenerating an
+existing name is allowed (`server.py::_image_cap_error`). A call reserves its name under a lock before
+the request and releases it when it ends, so parallel calls cannot each take the last slot and a
+failed call does not keep one.
 
 ### `generate_character`
 
@@ -745,7 +753,15 @@ It checks:
   narration, the video's own moves and their files, no still stretch over 3 seconds). No other style
   may use `TerminalDoc`. The style pack's caption settings, in the skin's colours, fill every
   `subtitles` key the config leaves out. The rules are in [Terminal Doc](10-scene-authoring.md#terminal-doc).
+- An `under_the_hood` video holds the one installed `UnderTheHood` scene, and its plates and events
+  pass `mcp/under_the_hood.py` (plates and poses on word starts, at most 12 different photographs,
+  each covering the plate band, pinned points that stay visible through the push, chips inside the
+  band with no overlaps, per-plate limits, no still stretch over 3 seconds). No other style may use
+  `UnderTheHood`. Each plate's `aspect` is read from its photograph, and the style pack's caption
+  settings fill every `subtitles` key the config leaves out. The rules are in
+  [Under the Hood](10-scene-authoring.md#under-the-hood).
 - `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
+  `subtitles.look` is `plain` or `selection`.
 
 It records two things in the same transaction as the rename of the staged file into place:
 
