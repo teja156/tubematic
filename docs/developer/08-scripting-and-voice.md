@@ -123,25 +123,26 @@ A closing line (a follow ask, a sign-off) is written only when the install's
 `update_video` takes two more arguments in the call that writes `script_segments`:
 
 - `formula_id`: the formula the script follows.
-- `hooks`: the three openings the agent drafted, as `[{type, text, kept, note}]`. `type` is a hook
-  type, `text` is the opening's spoken words, `kept` is true on the one the script uses, and `note`
-  (optional) says why another was dropped.
+- `hooks`: the three openings the agent drafted, as `[{type, text, kept, note}]`. `type` is one of
+  the formula's hook types, `text` is the opening's spoken words, `kept` is true on the one the
+  script uses, and `note` (optional) says why another was dropped.
 
 They are stored on the video as `formula_id`, `hook_type` (the kept opening's type) and
 `hook_alternatives` (see [`videos`](03-database.md#videos)). Empty columns mean the script has no
-record, which is the state of every script written before these columns existed. Nothing reads the
-record to decide what happens to a video.
+record. Nothing reads the record to decide what happens to a video.
 
-`mcp/server.py::_script_record_error` refuses a record that would say something untrue: an id that
-is not a formula, fewer or more than three openings, two openings of one type, no opening or more
-than one marked `kept`, or either argument without the other or without `script_segments`.
+`update_video` refuses a record that would say something untrue. It refuses either argument without
+the other, and both without `script_segments`. `mcp/server.py::_script_record_error` refuses an id
+that is not a formula, a hook type the formula does not offer, fewer or more than three openings,
+two openings of one type, an opening with no spoken words or longer than `HOOK_TEXT_MAX_LEN`, and
+no opening or more than one marked `kept`.
 
 The record follows the script:
 
 | The script write | What happens to the record |
 |---|---|
 | Carries `formula_id` and `hooks` | Stored |
-| Carries neither, and the spoken words are unchanged (a pronunciation fix) | Kept |
+| Carries neither, and the spoken words are unchanged (a pronunciation fix) | Kept. Nothing is checked and no `warnings` are returned, because that script is already approved |
 | Carries neither, and the spoken words changed | Cleared |
 | A flat `script` written through `PATCH /videos/<id>` | Cleared, with the stored warnings |
 
@@ -150,9 +151,10 @@ none, and refusing it would stop that agent's scripts.
 
 ## Script warnings
 
-Every script write through `update_video` runs `tubematic_core/script_checks.py::check` over the
-spoken words. The result is returned to the agent as `warnings`, a list of `{id, message}`, and
-stored in `videos.script_warnings`. The dashboard lists it on the Script tab.
+A script write through `update_video` that changes the spoken words, or that carries a record, runs
+`tubematic_core/script_checks.py::check` over the spoken words. The result is returned to the agent
+as `warnings`, a list of `{id, message}`, and stored in `videos.script_warnings`. The dashboard lists
+it on the Script tab. A fault inside a check is logged and the script is stored with no warnings.
 
 | `id` | Raised when |
 |---|---|
@@ -166,7 +168,7 @@ stored in `videos.script_warnings`. The dashboard lists it on the Script tab.
 | `length_band` | A word count outside the formula's band, beyond `BAND_SLACK` |
 | `recap_ending` | A recap in the last two sentences |
 | `closing_ask` | The last sentence asks the viewer to follow, subscribe, share or comment |
-| `closing_repeat` | The last sentence opens with the same three words as one of the same domain's 30 newest other scripts |
+| `closing_repeat` | The sentence the script closes on opens with the same three words as the closing sentence of one of the same domain's 30 newest other scripts. A closing ask is skipped on both sides, so the sentences compared are the ones before it |
 
 A warning never refuses a write and never changes a status. A check that blocked would stop every
 script on its first false positive. The agent reads the list, fixes what is a real problem, and
@@ -525,10 +527,11 @@ flowchart LR
 - The script's structure comes from its [formula](#formulas), and the profile supplies the voice.
   The script-writing skill applies a profile's Voice & Tone, Explanation Style, Vocabulary &
   Signature Phrasing and Anti-patterns sections. It uses Hook Patterns as wording for the opening
-  shape the formula fixes, and it does not use Structure Template or CTA Template.
-- The skill uses a profile's signature phrases in some scripts and never the same one in every
-  script. A phrase repeated as every video's opener or closer is what a returning viewer notices
-  first.
+  shape the formula fixes. It does not use Structure Template, and it uses CTA Template only to
+  word a closing line the preferences asked for.
+- The skill tells the agent to use a profile's signature phrases in some scripts and no single one
+  in every script. A phrase repeated as every video's opener or closer is what a returning viewer
+  notices first.
 - The mechanical contract stays in `tubematic-script-writing-skill`: segment shape, the length
   ceiling, pronunciation and pause rules, and the rule that decides each beat's visual brief from
   the beat's subject and the video's visual style. A profile cannot override it.

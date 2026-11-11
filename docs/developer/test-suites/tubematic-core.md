@@ -116,7 +116,8 @@ Covers `tubematic_core/formulas.py` and the files in `tubematic_core/formulas/`
 - Every formula file loads, in `order`. Each offers at least three openings of different hook types,
   its word band sits inside the ceiling, and its beats cover the script from 0 to 100 percent.
 - A malformed file is refused with the reason: a wrong id, a missing or extra key, a bad band, a gap
-  between beats, an unknown hook type, two openings of one type.
+  between beats, two beats of one name, a beat name longer than a segment's label may be, a `|` or
+  a line break in a text, an unknown hook type, two openings of one type.
 - The decision table has one row per formula, and a rendered reference file carries every part of
   its formula.
 - The files hold no ticket id and no link, because they are rendered into skill files that ship in
@@ -138,7 +139,9 @@ Covers `tubematic_core/script_checks.py`
   the middle of the script, a callback that explains the title.
 - The band allows `BAND_SLACK` and no more. A script with no formula, or with a formula this version
   does not know, is not measured against a band.
-- An ellipsis inside a sentence does not end it, and a closing quote stays with its sentence.
+- An ellipsis inside a sentence does not end it, a closing quote stays with its sentence, and a
+  title or an initial (`Dr.`, `U.S.`) does not end one. A long run of dots is read in linear time.
+- A closing line the preferences asked for is not a repeat: the sentence before it is compared.
 
 Trap: the quiet half matters as much as the firing half. The list is shown to a person and handed to
 the agent, so a check that fires on a sound script teaches both to ignore it.

@@ -48,6 +48,10 @@ HOOK_TYPES = {
 
 FAMILIES = ("explain", "story", "ladder")
 
+# The longest a beat's name may be. A script segment carries its beat's name
+# as a label, and the script write refuses a longer one.
+BEAT_NAME_MAX_LEN = 60
+
 # The SQL that empties a video's script record (migration 0023): the formula,
 # the kept opening's type, the drafted openings and the stored warnings. For a
 # write that replaces the script with words the record does not describe.
@@ -89,10 +93,20 @@ def _check_formula(path: pathlib.Path, data) -> dict:
     for key in _TEXT_KEYS:
         if not isinstance(data[key], str) or not data[key].strip():
             fail(f"{key} must be a non-empty string")
+
+    def one_line(value, where_):
+        # Every text is rendered into a Markdown table cell or a list item.
+        if "|" in value or "\n" in value:
+            fail(f"{where_} must be one line with no | character")
+
+    for key in _TEXT_KEYS:
+        one_line(data[key], key)
     for key in _LIST_KEYS:
         val = data[key]
         if not isinstance(val, list) or not all(isinstance(s, str) and s.strip() for s in val):
             fail(f"{key} must be a list of non-empty strings")
+        for item in val:
+            one_line(item, key)
     if not data["best_for"]:
         fail("best_for must name at least one kind of topic")
     words = data["words"]
@@ -108,6 +122,10 @@ def _check_formula(path: pathlib.Path, data) -> dict:
             fail(f"beats[{i}] must have exactly the keys name, from, to, job")
         if not all(isinstance(beat[k], str) and beat[k].strip() for k in ("name", "job")):
             fail(f"beats[{i}] name and job must be non-empty strings")
+        one_line(beat["name"], f"beats[{i}].name")
+        one_line(beat["job"], f"beats[{i}].job")
+        if len(beat["name"]) > BEAT_NAME_MAX_LEN:
+            fail(f"beats[{i}].name must be at most {BEAT_NAME_MAX_LEN} characters")
         if not (is_int(beat["from"]) and is_int(beat["to"])) or beat["from"] != at \
                 or beat["to"] <= beat["from"]:
             fail(f"beats[{i}] must start at {at} percent, where the beat before it ends, "
@@ -115,6 +133,9 @@ def _check_formula(path: pathlib.Path, data) -> dict:
         at = beat["to"]
     if at != 100:
         fail("the last beat must end at 100 percent")
+    names = [b["name"] for b in beats]
+    if len(set(names)) != len(names):
+        fail("two beats share a name")
     hooks = data["hooks"]
     if not isinstance(hooks, list):
         fail("hooks must be a list")
@@ -125,6 +146,7 @@ def _check_formula(path: pathlib.Path, data) -> dict:
             fail(f"hooks[{i}].type must be one of {sorted(HOOK_TYPES)}")
         if not isinstance(hook["shape"], str) or not hook["shape"].strip():
             fail(f"hooks[{i}].shape must be a non-empty string")
+        one_line(hook["shape"], f"hooks[{i}].shape")
     types = [h["type"] for h in hooks]
     # The writer drafts three openings of different types for the formula it
     # chose, so every formula has to offer three.
@@ -157,6 +179,12 @@ def word_band(formula_id: str):
     """(min, max) words for a formula, or None for no formula or an unknown one."""
     formula = FORMULAS.get(formula_id or "")
     return tuple(formula["words"]) if formula else None
+
+
+def hook_types(formula_id: str) -> tuple:
+    """The hook types a formula's opening shapes offer, in file order."""
+    formula = FORMULAS.get(formula_id or "")
+    return tuple(h["type"] for h in formula["hooks"]) if formula else ()
 
 
 def label(formula_id: str) -> str:

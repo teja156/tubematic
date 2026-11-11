@@ -118,6 +118,18 @@ def test_the_grammar_has_fourteen_rules():
     assert "End on the payoff" in part
 
 
+def test_the_formula_and_the_style_say_how_the_payoff_rules_are_met():
+    # Some formulas answer before they re-open, and some styles need a closing
+    # sentence. Ranked under the grammar with no such sentence, they would lose.
+    part = _section("## Step 2", "## Step 3")
+    assert "reference file says how those two are met" in part
+    assert "`style.script` says how such a video ends" in part
+
+
+def test_the_length_starts_from_the_lower_half_of_the_band():
+    assert "Start from the lower half\nof the band" in _section("### Length", "## Step 4")
+
+
 def test_a_closing_line_comes_only_from_the_preferences():
     part = _section("## Step 1", "## Step 2")
     assert "only when the preferences ask for one" in part
@@ -174,6 +186,9 @@ def test_the_operator_passes_the_record_and_handles_the_warnings():
     assert "formula_id=" in revision and "hooks=" in revision
     fix = next(line for line in operator.splitlines() if "| **Pronunciation revision** |" in line)
     assert "Leave `formula_id` and `hooks` out" in fix
+    # After the sentence about the blank publish pair: placed before it, "they"
+    # and "both" in that sentence read as the formula and the openings.
+    assert fix.index("If they are blank there") < fix.index("Leave `formula_id` and `hooks` out")
 
 
 def test_the_user_guide_lists_every_formula_by_its_label():

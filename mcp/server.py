@@ -214,7 +214,7 @@ PUBLISH_DESCRIPTION_MAX_LEN = 2000
 SCRIPT_HOOKS_COUNT     = 3
 HOOK_TEXT_MAX_LEN      = 400
 HOOK_NOTE_MAX_LEN      = 200
-SEGMENT_BEAT_MAX_LEN   = 60
+SEGMENT_BEAT_MAX_LEN   = tformulas.BEAT_NAME_MAX_LEN
 
 FPS       = 30
 # SAFE_ZONE used to live here. Its only reader was the TextReveal-gated safe-zone
@@ -2301,8 +2301,9 @@ def _script_record_error(formula_id, hooks) -> str | None:
     """Why formula_id and hooks cannot be recorded with a script, or None.
 
     These are the shape of the record, checked like markup: a formula the
-    install does not have, or openings that are not three different ones,
-    would make the record say something untrue about the script.
+    install does not have, an opening of a type the formula does not offer, or
+    openings that are not three different ones, would make the record say
+    something untrue about the script.
     """
     if formula_id is None or hooks is None:
         return ("formula_id and hooks are recorded together: pass both, or neither")
@@ -2317,9 +2318,10 @@ def _script_record_error(formula_id, hooks) -> str | None:
                 or not set(hook) <= {"type", "text", "kept", "note"}:
             return (f"hooks[{i}] must be an object with 'type' and 'text', and optionally "
                     "'kept' and 'note'")
-        if hook["type"] not in tformulas.HOOK_TYPES:
-            return (f"hooks[{i}].type {hook['type']!r} is not a hook type. Must be one of: "
-                    f"{list(tformulas.HOOK_TYPES)}")
+        allowed = tformulas.hook_types(formula_id)
+        if not isinstance(hook["type"], str) or hook["type"] not in allowed:
+            return (f"hooks[{i}].type {hook['type']!r} is not one of the opening types of "
+                    f"{formula_id}. Must be one of: {list(allowed)}")
         text = hook["text"]
         if not isinstance(text, str) or not _strip_non_spoken(text):
             return f"hooks[{i}].text must be the opening's spoken words"
@@ -2350,6 +2352,24 @@ def _stored_hooks(hooks: list) -> list:
 
 def _kept_hook_text(hooks) -> str:
     return next((h.get("text", "") for h in hooks or [] if h.get("kept")), "")
+
+
+def _script_warnings(script: str, publish_title: str, formula_id: str, hooks: list,
+                     project_id, video_id: str) -> list:
+    """The advisory checks' findings for a script about to be stored.
+
+    Never raises: the checks are advice, so a fault in one must not stop the
+    script it was reading from being written.
+    """
+    try:
+        return tchecks.check(
+            script, publish_title=publish_title, formula_id=formula_id,
+            kept_hook=_kept_hook_text(hooks),
+            recent_scripts=_recent_domain_scripts(project_id, video_id))
+    except Exception:  # noqa: BLE001 - advisory path, see the docstring
+        log.exception("script checks failed for %s; the script is stored without warnings",
+                      video_id)
+        return []
 
 
 def _recent_domain_scripts(project_id, video_id: str) -> list[str]:
@@ -2402,11 +2422,13 @@ def update_video(
     changes the script's words, the record is cleared, since it no longer
     describes the script.
 
-    Every call that writes a script also returns "warnings": advisory checks
-    on its words, as [{"id", "message"}], and stores the same list on the
+    A call that writes a script's words also returns "warnings": advisory
+    checks on them, as [{"id", "message"}], and stores the same list on the
     video (get_video's script_warnings) for the person at Script Ready. A
     warning never refuses the write. Read each one, fix what is a real
-    problem, and write the script again at most once.
+    problem, and write the script again at most once. A call that leaves the
+    spoken words as they are and sends no record (a pronunciation fix) checks
+    nothing and returns no warnings: that script is already approved.
 
     mascot_id: the video's mascot, or "" for none. Settable only while the
     video is at TOPIC_PROPOSED, and a human's choice at the topic: a new
@@ -2606,9 +2628,8 @@ def update_video(
     voice_exempt = False
     if script_segments is not None or script is not None or voice_id is not None:
         with _conn() as con:
-            vrow = con.execute("SELECT status, voice_id, script, script_segments, project_id, "
-                               "formula_id, hook_alternatives FROM videos "
-                               "WHERE id = ?", (video_id,)).fetchone()
+            vrow = con.execute("SELECT status, voice_id, script, script_segments, project_id "
+                               "FROM videos WHERE id = ?", (video_id,)).fetchone()
         if vrow is None:
             return {"error": f"Video not found: {video_id}"}
         stored_voice = vrow["voice_id"] or ""
@@ -2655,26 +2676,24 @@ def update_video(
 
     # The record follows the script (TMDEV-211). Given: written. Left out on a
     # write whose spoken words are unchanged (a pronunciation fix resends the
-    # script with new markup): kept. Left out on a write that changes the
-    # words: cleared, since a formula and openings chosen for other words say
-    # nothing true about these. The warnings are recomputed on every script
-    # write, against whichever record the script ends up with.
+    # script with new markup): the record and the stored warnings stand, and
+    # nothing is checked, because that script is already approved and the fix
+    # goes straight to a re-voice. Left out on a write that changes the words:
+    # cleared, since a formula and openings chosen for other words say nothing
+    # true about these.
     record_sets, warnings = [], None
     if script_segments is not None or script is not None:
-        if formula_id is not None:
-            record_formula, record_hooks = formula_id, _stored_hooks(hooks)
-        elif (script or "") == (vrow["script"] or ""):
-            record_formula = vrow["formula_id"] or ""
-            record_hooks = json.loads(vrow["hook_alternatives"]) if vrow["hook_alternatives"] else []
-        else:
-            record_formula, record_hooks = "", []
-            record_sets += [("formula_id = ?", ""), ("hook_type = ?", ""),
-                            ("hook_alternatives = ?", "")]
-        warnings = tchecks.check(
-            script or "", publish_title=publish_title or "", formula_id=record_formula,
-            kept_hook=_kept_hook_text(record_hooks),
-            recent_scripts=_recent_domain_scripts(vrow["project_id"], video_id))
-        record_sets.append(("script_warnings = ?", json.dumps(warnings)))
+        spoken = script if script_segments is not None else _strip_non_spoken(script or "")
+        if formula_id is not None or (script or "") != (vrow["script"] or ""):
+            if formula_id is not None:
+                record_formula, record_hooks = formula_id, _stored_hooks(hooks)
+            else:
+                record_formula, record_hooks = "", []
+                record_sets += [("formula_id = ?", ""), ("hook_type = ?", ""),
+                                ("hook_alternatives = ?", "")]
+            warnings = _script_warnings(spoken or "", publish_title or "", record_formula,
+                                        record_hooks, vrow["project_id"], video_id)
+            record_sets.append(("script_warnings = ?", json.dumps(warnings)))
 
     if title is not None and len(title) > VIDEO_TITLE_MAX_LEN:
         return {"error": f"title is {len(title)} characters; the display name must be at most "

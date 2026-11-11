@@ -59,6 +59,13 @@ Four sources shape a script. Where two disagree, the one earlier in this list wi
 4. **The script profile**, or the generic style (Step 8) — sentence rhythm, vocabulary, register,
    humour, phrasing, explanation habits.
 
+Two grammar rules say where things land: the payoff late (rule 9) and the script ending on it
+(rule 10). **The formula's reference file says how those two are met for its structure**, in its
+beats and its Ending section: an Anomaly File answers before it re-opens and closes on a real open
+question, a Scheme Machine keeps a second layer for the last line. Follow the reference file. And
+when `style.script` says how such a video ends (a closing sentence the picture is built on), end it
+that way: that sentence is the script's last, and it should carry the payoff.
+
 A profile has seven sections. Beside a formula they are used like this:
 
 | Profile section | How it is used |
@@ -159,9 +166,10 @@ across nine videos; word count predicts finished duration within ~4%). So:
 | 250 | ~96s |
 | **450, the ceiling** | 3:00 |
 
-The band is in the table above and in the formula's reference file. Inside it the topic decides:
-use the words the beats need and stop. A script earns a minute and a half or more only by
-re-opening its question every few sentences; a recap never earns the time.
+The band is in the table above and in the formula's reference file. **Start from the lower half
+of the band.** Go past its middle only when cutting the words would cost a beat a fact the payoff
+depends on. A script earns a minute and a half or more only by re-opening its question every few
+sentences; a recap never earns the time.
 
 Count words across every segment's `voice` field combined. `update_video` returns a warning for a
 script outside its formula's band or past the ceiling; it does not refuse it.
@@ -198,10 +206,12 @@ arranges beats; these rules decide whether the beats work.
    thing", "Here's the catch").
 8. **Show it working, then name it.** Action first, term second, one new term per beat. No block
    of background before something happens: the constraint is the context.
-9. **Hold the payoff to the last fifth, and make it a definite answer.** The what may come early.
-   The how, the name, the number or the verdict lands late. No hedge.
+9. **Hold the payoff late, and make it a definite answer.** The what may come early. The how, the
+   name, the number or the verdict lands in the last fifth, or where the formula's beats put it.
+   No hedge.
 10. **End on the payoff. Nothing after it.** No recap, no moral, no "next time you", no sign-off.
-    The one exception is the closing line Step 1 describes.
+    The formula's Ending section says what the payoff is for its structure. The only sentence that
+    may follow it is the closing line Step 1 describes.
 11. **Write sentences that can be drawn.** Concrete nouns. The first segment's picture is the
     subject of its first sentence. Pointing words ("watch this", "here") only where the same
     segment's `visual` brief shows the thing pointed at.
@@ -251,8 +261,8 @@ Read the draft once against these. If any answer is no, rewrite once; one pass, 
 
 - After two sentences, does the viewer know the subject and still lack the answer?
 - Is there one question the whole script answers, re-opened twice with a new fact each time?
-- Does the payoff land in the last fifth as a definite answer, and is the last sentence the payoff
-  (or the one closing line the preferences asked for)?
+- Does the script end the way the formula's Ending section says (or the way `style.script` says,
+  where it says), with nothing after it except a closing line the preferences asked for?
 - Can every number, name and claim be traced to the topic brief or a source?
 
 ---
@@ -602,7 +612,8 @@ before these existed), in which case write both from the script now; blanks are 
    problem in this script. If any does, fix those and call `update_video` once more with the whole
    script, `formula_id` and `hooks`. **At most one extra write.** Never loop on warnings, and never
    bend a sound script to silence one: a `closing_ask` on a closing line the preferences asked for
-   stays, and so does a `no_turn` on a script whose turn simply uses none of the listed words.
+   stays, a `no_turn` on a script whose turn simply uses none of the listed words stays, and a
+   `recap_ending` on a closing sentence `style.script` asks for stays.
 3. If `update_video` rejects `formula_id` or `hooks` as arguments it does not know, the tool
    server is older than this skill: send the same call without those two.
 4. In `respell` or `ipa` mode only, and only if there are one or more new lexicon entries:
@@ -612,4 +623,5 @@ before these existed), in which case write both from the script now; blanks are 
    warning you left standing and why.
 
 A pronunciation-only fix changes markup, not words: resend the script without `formula_id` and
-`hooks`, and the record stored with it is kept.
+`hooks`. The record stored with it is kept, nothing is checked and no `warnings` come back. Do not
+change any other word of an approved script in that call.

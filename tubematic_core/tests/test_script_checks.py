@@ -141,14 +141,14 @@ def test_a_closing_that_opens_like_the_domains_recent_scripts_is_flagged():
 
 def test_only_the_newest_thirty_scripts_are_compared():
     script = swap_end("The file was never where the log looked.")
-    old = ["x. The file was never gone."]
-    filler = [f"x. Ending number {i} goes here." for i in range(sc.RECENT_SCRIPTS)]
+    old = ["Start here. The file was never gone."]
+    filler = [f"Start here. Ending number {i} goes here." for i in range(sc.RECENT_SCRIPTS)]
     assert "closing_repeat" not in ids(script, recent_scripts=filler + old)
     assert "closing_repeat" in ids(script, recent_scripts=filler[:-1] + old)
 
 
 def test_a_two_word_closing_is_never_a_repeat():
-    assert "closing_repeat" not in ids(swap_end("It guessed."), recent_scripts=["x. It guessed."])
+    assert "closing_repeat" not in ids(swap_end("It guessed."), recent_scripts=["Start here. It guessed."])
 
 
 # --- the opening ---------------------------------------------------------
@@ -210,7 +210,7 @@ def test_heres_followed_by_the_fact_itself_is_not_a_run_up():
 
 
 def test_a_script_with_no_turn_in_the_middle_is_flagged():
-    flat = CLEAN.replace("But rewrite half", "Rewrite half")
+    flat = CLEAN.replace("But rewrite half", "Rewrite half").replace("But every", "Every")
     assert "no_turn" in ids(flat)
 
 
@@ -269,3 +269,63 @@ def test_past_the_ceiling_is_one_warning_not_two():
 def test_word_count_counts_what_the_voice_speaks():
     assert sc.word_count("the catch... it never verifies") == 5
     assert sc.word_count("") == 0
+
+
+# --- found in review ---------------------------------------------------------
+
+def test_remember_with_a_comma_is_a_recap():
+    assert "recap_ending" in ids(swap_end("Remember, the file was never lost."))
+
+
+def test_a_long_run_of_dots_is_read_in_linear_time():
+    import time
+    started = time.monotonic()
+    sc.check("One fact" + "." * 20000 + " Then another fact. " + CLEAN)
+    assert time.monotonic() - started < 1.0
+
+
+def test_a_title_or_an_initial_does_not_end_a_sentence():
+    assert sc.sentences("Dr. Brown joined the U.S. Navy. Then he left.") == [
+        "Dr. Brown joined the U.S. Navy.", "Then he left."]
+    assert sc.sentences("He said no. Then he left.") == ["He said no.", "Then he left."]
+
+
+@pytest.mark.parametrize("ending", [
+    "So what does that tell us about the moon?",
+    "That is what a black hole looks like and why nothing escapes it.",
+])
+def test_ordinary_endings_found_in_review_are_not_closing_asks(ending):
+    assert "closing_ask" not in ids(swap_end(ending))
+
+
+def test_today_as_an_ordinary_word_is_not_an_agenda_line():
+    assert "greeting_opener" not in ids("Today we are still using a cable laid in 1988. " + CLEAN,
+                                        kept_hook="")
+    assert "greeting_opener" in ids("Today we're going to look at renames. " + CLEAN, kept_hook="")
+
+
+def test_a_closing_line_the_preferences_asked_for_is_not_a_repeat():
+    # The follow line recurs because the operator asked for it. What is
+    # compared is the sentence before it, the script's own ending.
+    script = CLEAN + " Follow for more Git internals."
+    recent = ["Start here. It ended its own way. Follow for more Git internals."]
+    out = ids(script, recent_scripts=recent)
+    assert "closing_ask" in out and "closing_repeat" not in out
+    same_payoff = ["Start here. The guess just went wrong. Follow for more Git internals."]
+    assert "closing_repeat" in ids(script, recent_scripts=same_payoff)
+
+
+@pytest.mark.parametrize("position", [0.26, 0.5, 0.79])
+def test_a_turn_anywhere_in_the_wide_middle_counts(position):
+    tokens = ["word"] * 200
+    tokens[int(200 * position)] = "but"
+    assert "no_turn" not in ids(" ".join(tokens) + ".", formula_id="", kept_hook="",
+                                publish_title="")
+
+
+@pytest.mark.parametrize("position", [0.1, 0.9])
+def test_a_turn_near_either_end_does_not(position):
+    tokens = ["word"] * 200
+    tokens[int(200 * position)] = "but"
+    assert "no_turn" in ids(" ".join(tokens) + ".", formula_id="", kept_hook="",
+                            publish_title="")

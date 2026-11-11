@@ -134,7 +134,10 @@ def test_a_video_with_no_record_reads_as_empty_lists(video):
     ({"formula_id": "", "hooks": hooks()}, "is not a formula"),
     ({"formula_id": FORMULA, "hooks": hooks()[:2]}, "exactly 3"),
     ({"formula_id": FORMULA, "hooks": "three openings"}, "exactly 3"),
-    ({"formula_id": FORMULA, "hooks": hooks(h1={"type": "shout"})}, "is not a hook type"),
+    ({"formula_id": FORMULA, "hooks": hooks(h1={"type": "shout"})}, "opening types of"),
+    ({"formula_id": FORMULA, "hooks": hooks(h1={"type": ["question"]})}, "opening types of"),
+    # A real hook type that this formula's reference file does not offer.
+    ({"formula_id": FORMULA, "hooks": hooks(h1={"type": "scene"})}, "opening types of"),
     ({"formula_id": FORMULA, "hooks": hooks(h1={"type": "problem"})}, "different types"),
     ({"formula_id": FORMULA, "hooks": hooks(h1={"kept": True})}, "exactly one"),
     ({"formula_id": FORMULA, "hooks": hooks(h0={"kept": False})}, "exactly one"),
@@ -196,7 +199,8 @@ def test_the_title_checked_is_the_one_in_the_same_call(video):
 
 
 def test_a_legacy_flat_script_gets_warnings_too(video):
-    result = server.update_video(video, script="A flat script. Follow for more.", **PUBLISH)
+    result = server.update_video(
+        video, script='A flat script. <break time="0.5s" /> Follow for more.', **PUBLISH)
     assert set(warning_ids(result)) == {"no_formula", "closing_ask"}
     assert json.loads(_row()["script_warnings"]) == result["warnings"]
 
@@ -212,7 +216,7 @@ def test_a_write_that_touches_no_script_returns_no_warnings(video):
 
 def test_a_closing_shared_with_the_domains_scripts_is_flagged(video):
     _insert("old1", project_id="git", script="Something else. The guess just went the wrong way.")
-    _insert("other_domain", project_id="dns", script="x. The guess just went the wrong way.")
+    _insert("other_domain", project_id="dns", script="Start here. The guess just went the wrong way.")
     result = write(video, formula_id=FORMULA, hooks=hooks())
     assert warning_ids(result) == ["closing_repeat"]
     assert "1 of" in result["warnings"][0]["message"]
@@ -226,10 +230,10 @@ def test_a_video_is_not_compared_with_its_own_earlier_script(video):
 
 def test_only_the_domains_newest_scripts_are_read(video):
     limit = server.tchecks.RECENT_SCRIPTS
-    _insert("oldest", project_id="git", script="x. The guess just went wrong.",
+    _insert("oldest", project_id="git", script="Start here. The guess just went wrong.",
             created="2025-01-01T00:00:00Z")
     for i in range(limit):
-        _insert(f"new{i}", project_id="git", script=f"x. Ending number {i} goes here.",
+        _insert(f"new{i}", project_id="git", script=f"Start here. Ending number {i} goes here.",
                 created=f"2026-02-{i + 1:02d}T00:00:00Z" if i < 28 else f"2026-03-{i - 27:02d}T00:00:00Z")
     assert "closing_repeat" not in warning_ids(write(video, formula_id=FORMULA, hooks=hooks()))
     with server._conn() as con:
@@ -241,11 +245,11 @@ def test_a_video_with_no_domain_skips_the_comparison(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "DB_FILE", tmp_path / "test.db")
     server._init_db()
     _insert("loose")
-    _insert("other", script="x. The guess just went wrong.")
+    _insert("other", script="Start here. The guess just went wrong.")
     assert write("loose", formula_id=FORMULA, hooks=hooks())["warnings"] == []
     # The same pair inside one domain is flagged, so the quiet above is the skip.
     _insert("in_a", project_id="git")
-    _insert("in_b", project_id="git", script="x. The guess just went wrong.")
+    _insert("in_b", project_id="git", script="Start here. The guess just went wrong.")
     assert warning_ids(write("in_a", formula_id=FORMULA, hooks=hooks())) == ["closing_repeat"]
 
 
@@ -255,11 +259,34 @@ def test_a_pronunciation_fix_keeps_the_record(video):
     write(video, formula_id=FORMULA, hooks=hooks())
     fixed = segments(opening=OPENING.replace("commit", '<respell as="komit">commit</respell>'))
     result = write(video, script_segments=fixed)
-    assert result["warnings"] == []          # still judged against the kept formula and hook
+    assert "warnings" not in result          # the words are approved: nothing is checked again
     assert "formula_id" not in result["updated_fields"]
     row = _row()
     assert (row["formula_id"], row["hook_type"]) == (FORMULA, "problem")
     assert len(json.loads(row["hook_alternatives"])) == 3
+
+
+def test_a_pronunciation_fix_on_a_script_with_no_record_raises_nothing(video):
+    # A script from before records existed, ending on a follow line. The fix
+    # goes straight to a paid re-voice, so a warning here would invite the
+    # agent to change words a person approved.
+    old = segments(ending="Follow for more Git internals.")
+    with server._conn() as con:
+        con.execute("UPDATE videos SET script = ?, script_segments = ? WHERE id = ?",
+                    (server._strip_non_spoken(server._join_segment_voice(old)), json.dumps(old), video))
+    fixed = segments(ending='Follow for more <respell as="Gitt">Git</respell> internals.')
+    result = write(video, script_segments=fixed)
+    assert "error" not in result and "warnings" not in result
+    assert _row()["script_warnings"] == ""
+    assert server.get_video(video)["script_warnings"] == []
+
+
+def test_a_fault_in_the_checks_does_not_stop_the_write(video, monkeypatch):
+    def boom(*a, **kw):
+        raise RuntimeError("a check broke")
+    monkeypatch.setattr(server.tchecks, "check", boom)
+    result = write(video, formula_id=FORMULA, hooks=hooks())
+    assert result["warnings"] == [] and _row()["formula_id"] == FORMULA
 
 
 def test_a_rewrite_that_sends_no_record_clears_it(video):
@@ -274,10 +301,13 @@ def test_a_rewrite_that_sends_no_record_clears_it(video):
 
 def test_a_rewrite_with_a_new_record_replaces_the_old_one(video):
     write(video, formula_id=FORMULA, hooks=hooks())
-    new_hooks = hooks(h0={"kept": False}, h1={"kept": True})
-    opening = new_hooks[1]["text"]
-    write(video, script_segments=segments(opening=opening), formula_id="why-dont-they-just",
-          hooks=new_hooks)
+    opening = "Why don't sites just keep your password?"
+    new_hooks = [{"type": "question", "text": opening, "kept": True},
+                 {"type": "anomaly", "text": "A site can reset your password and cannot read it."},
+                 {"type": "claim", "text": "Storing the password would end resets overnight."}]
+    result = write(video, script_segments=segments(opening=opening),
+                   formula_id="why-dont-they-just", hooks=new_hooks)
+    assert "error" not in result
     row = _row()
     assert (row["formula_id"], row["hook_type"]) == ("why-dont-they-just", "question")
 

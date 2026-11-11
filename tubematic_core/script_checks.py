@@ -22,7 +22,7 @@ from . import formulas as tformulas
 # is not worth a rewrite.
 BAND_SLACK = 0.05
 # The middle of a script, as shares of its words, where a turn belongs.
-TURN_WINDOW = (0.35, 0.75)
+TURN_WINDOW = (0.25, 0.80)
 # Scripts shorter than this have no middle to turn in.
 TURN_MIN_WORDS = 60
 # Share of the publish title's content words found in the first sentence at
@@ -41,35 +41,46 @@ _CLOSING_ASK = re.compile(
     r"\bfollow\b[^.?!]{0,40}\bfor more\b"
     r"|\bfollow (?:me|us|along|this|the (?:channel|page|account))\b"
     r"|\bsubscribe\b"
-    r"|\b(?:like|share|comment) and\b"
+    r"|\blike and (?:subscribe|share|follow|comment)\b"
+    r"|\b(?:share|comment) and (?:subscribe|like|follow)\b"
     r"|\b(?:smash|hit) (?:the|that) (?:like|bell|follow|subscribe)\b"
     r"|\bthanks for watching\b"
     r"|\bsee you (?:next|in the next|soon)\b"
     r"|\bstay tuned\b"
     r"|\b(?:share|send) this (?:with|to)\b"
-    r"|\b(?:comment below|in the comments|let (?:me|us) know|tell (?:me|us))\b",
+    r"|\b(?:comment below|in the comments|let (?:me|us) know"
+    r"|tell (?:me|us) (?:in|below|what you|your))\b",
     re.I)
 _RECAP = re.compile(
-    r"\b(?:next time|so remember|remember,|the (?:lesson|takeaway|moral)"
+    r"\b(?:next time|so remember|the (?:lesson|takeaway|moral)"
     r"|in (?:short|summary|conclusion)|to sum up|to recap|now you know"
-    rf"|(?:and|so),? that{_A}?s (?:why|how))\b",
+    rf"|(?:and|so),? that{_A}?s (?:why|how))\b"
+    r"|\bremember,",
     re.I)
 _GREETING = re.compile(
     r"\b(?:welcome (?:back )?to|(?:hey|hi|hello) (?:guys|everyone|there|folks|and welcome)"
     rf"|what{_A}?s up|in (?:this|today{_A}?s) (?:video|short|episode)"
-    rf"|today,? (?:we{_A}?re|we are|i{_A}?m|i am|we will|we{_A}?ll|let{_A}?s)"
-    r"|let me (?:show|tell) you)\b",
+    rf"|today,? (?:we{_A}?re|we are|i{_A}?m|i am|we will|we{_A}?ll|i will|i{_A}?ll|let{_A}?s) "
+    r"(?:going to |gonna )?(?:look|talk|dive|explor|cover|break|learn|discuss|explain|walk|go)"
+    r"|let me (?:show|tell) you)",
     re.I)
 _RUNUP = re.compile(
     rf"\bhere{_A}?s the (?:\w+ )?(?:thing|catch|trick|part|kicker|twist|problem|deal|truth)\b"
     rf"|\bhere{_A}?s where it gets\b",
     re.I)
-_TURN = re.compile(r"\b(?:but|however|yet|until|instead|except)\b", re.I)
+_TURN = re.compile(r"\b(?:but|however|yet|until|instead|except|though|in fact|turns out)\b",
+                   re.I)
 _WORD = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)*")
 # A sentence ends at . ! or ? (and any closing quote), when what follows does
 # not start in lower case: an ellipsis inside a sentence ("the catch... it
-# never checks") is a pause, not an ending.
-_SENTENCE_END = re.compile(r"[.!?]+[\"'”’)\]]*\s+(?=[^a-z\s])")
+# never checks") is a pause, not an ending. The lookbehind makes a run of
+# punctuation match once, from its first character; without it a long run of
+# dots is rescanned from every dot.
+_SENTENCE_END = re.compile(r"(?<![.!?])[.!?]+[\"'”’)\]]*\s+(?=[^a-z\s])")
+# A full stop after one of these is part of the word, not the end of a
+# sentence: a title or a short form before a name, or a single initial.
+_ABBREVIATION = re.compile(r"(?:\b(?:dr|mr|mrs|ms|st|vs|prof|gen|col|lt|sgt|jr|sr|inc|ltd)"
+                           r"|\b[a-z])\.$", re.I)
 _STOPWORDS = frozenset(
     "a an the and or but of to in on at for with from by as is are was were be been it its this "
     "that these those how why what when where who which do does did your you".split())
@@ -85,6 +96,8 @@ def sentences(text: str) -> list[str]:
     text = " ".join((text or "").split())
     out, start = [], 0
     for match in _SENTENCE_END.finditer(text):
+        if _ABBREVIATION.search(text[start:match.end()].rstrip()):
+            continue
         out.append(text[start:match.end()].strip())
         start = match.end()
     if text[start:].strip():
@@ -98,9 +111,16 @@ def word_count(text: str) -> int:
 
 
 def closing_opening(text: str) -> tuple:
-    """The first words of a script's last sentence, or () when it has fewer
-    than CLOSING_WORDS words."""
+    """The first words of the sentence a script closes on, or () when that
+    sentence has fewer than CLOSING_WORDS words.
+
+    A closing ask (a follow line the operator's preferences asked for) is
+    stepped over: it is meant to recur, so the sentence compared is the one
+    before it, the script's own ending.
+    """
     sents = sentences(text)
+    if len(sents) > 1 and _CLOSING_ASK.search(sents[-1]):
+        sents = sents[:-1]
     head = words(sents[-1])[:CLOSING_WORDS] if sents else []
     return tuple(head) if len(head) == CLOSING_WORDS else ()
 
@@ -130,12 +150,12 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
 
     if not formula_id:
         out.append(_warn("no_formula",
-                         "No formula was recorded with this script. Pass formula_id and hooks "
-                         "with the script so its structure is on record."))
+                         "No formula is on record for this script, so its structure and "
+                         "length were not checked against one."))
     if kept_hook and words(script)[:len(words(kept_hook))] != words(kept_hook):
         out.append(_warn("hook_mismatch",
-                         "The opening marked as kept is not how the script begins. Start the "
-                         "first segment with it, or mark the opening the script really uses."))
+                         "The opening marked as used is not how the script begins: the first "
+                         "segment starts with other words."))
     if _GREETING.search(first_two):
         out.append(_warn("greeting_opener",
                          "The script opens on a greeting or an agenda line. Open on the act, "
@@ -156,9 +176,9 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
         middle = " ".join(tokens[int(count * TURN_WINDOW[0]):int(count * TURN_WINDOW[1])])
         if not _TURN.search(middle):
             out.append(_warn("no_turn",
-                             "No turn word (but, however, yet, until, instead, except) in the "
-                             "middle of the script. One short sentence there should change "
-                             "direction."))
+                             "No turn word (but, however, yet, until, instead, except, though) "
+                             "in the middle of the script. A script holds better when one short "
+                             "sentence there changes direction."))
     band = tformulas.word_band(formula_id)
     if count > tformulas.WORD_CEILING:
         out.append(_warn("over_ceiling",
@@ -175,14 +195,14 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
     if _CLOSING_ASK.search(last):
         out.append(_warn("closing_ask",
                          "The last sentence asks the viewer to follow, subscribe, share or "
-                         "comment. Keep it only if the operator's preferences ask for a "
-                         "closing line."))
+                         "comment. A script ends on its payoff unless the preferences ask for "
+                         "a closing line."))
     opening = closing_opening(script)
     if opening:
         same = sum(closing_opening(s) == opening for s in list(recent_scripts)[:RECENT_SCRIPTS])
         if same:
             out.append(_warn("closing_repeat",
-                             f"The last sentence opens with \"{' '.join(opening)}\", like "
-                             f"{same} of this domain's recent scripts. Close this one "
-                             "differently."))
+                             f"The script closes on a sentence that opens with "
+                             f"\"{' '.join(opening)}\", like {same} of this domain's recent "
+                             "scripts."))
     return out

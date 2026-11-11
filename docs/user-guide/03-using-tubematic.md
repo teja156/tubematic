@@ -45,7 +45,7 @@ Above the script, the **Script** tab shows what the agent built it on:
   viewers to follow, or a script longer than its formula runs. They are advice for you and the
   agent, and you can approve a script that has them.
 
-A script written before version 2.2.0 shows none of these.
+A script with nothing recorded shows none of these.
 
 **Approve** starts the voiceover, and ElevenLabs charges from this point. **Revise** asks the agent
 to rewrite.

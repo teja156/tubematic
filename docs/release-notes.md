@@ -32,7 +32,8 @@ After you upgrade:
 2. Read your text in **Settings → Preferences**. A script now ends on its payoff unless that text
    asks for a closing line. A sentence there that asks for one, such as a line asking viewers to
    follow, still applies to every script, and the **Script** tab lists it under **Script
-   warnings**. Remove the sentence to stop it. See
+   warnings**. Remove the sentence to stop it. If you want a closing line and have no such
+   sentence, add one: a script profile's sign-off does not put one there. See
    [Preferences](https://docs.tubematic.ai/user-guide/settings#preferences).
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did

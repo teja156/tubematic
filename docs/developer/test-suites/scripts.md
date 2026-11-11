@@ -365,6 +365,8 @@ Covers `scripts/collect_diagnostics.py`, whose report is meant to be pasted into
   each: secret settings, service tokens, the password hash, provider keys, auth headers, a cookie,
   an email, public addresses, the home path, user and host names, account, voice and domain ids, and
   a video's content.
+- An opening the agent drafted and did not use is content too. It is in no script column, so it
+  is read from the video's recorded openings.
 - Ids become the same short hash wherever they appear, so lines about one account still match up.
   Content stays out unless you pass `--include-content`. Content under 12 characters is replaced as
   a whole word, and content under four characters is left.
@@ -699,9 +701,13 @@ Covers the `tubematic-script-writing-skill` skill and `scripts/gen_formula_refer
   says what to do when an older tool server refuses the new arguments.
 - The authority order is fixed policy, the style's script text, the formula, the profile. The
   grammar has fourteen rules, and a closing line comes only from the preferences.
-- The fixed five-part sequence, its word budgets and its call to action are gone from the skill.
-- The headings other skills and tests point at are still there, and the operator's `TOPIC_APPROVED`
-  and revision rows pass the record.
+- The skill holds no fixed five-part sequence, no per-part word budget and no call-to-action step.
+- The headings other skills and tests point at are present, and the operator's `TOPIC_APPROVED` and
+  revision rows pass the record. The pronunciation row leaves the record out, in a place where
+  the sentence cannot be read as being about the publish title and description.
+- The formula's reference file and the style's script text decide how the payoff rules are met,
+  and the length starts from the lower half of the band.
+- The user guide's formula table names every formula.
 
 Trap: an instruction that survives beside its replacement is followed whenever the agent reads it
 last, so the removed phrases are pinned as absent.

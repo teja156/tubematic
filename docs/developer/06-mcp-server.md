@@ -328,9 +328,10 @@ Script and voice:
   script follows and the three openings the agent drafted. A malformed record is refused, and a
   script with no record is accepted. See
   [What a script records](08-scripting-and-voice.md#what-a-script-records).
-- A call that writes a script returns `warnings` beside `updated_fields`: the
-  [script warnings](08-scripting-and-voice.md#script-warnings) for the stored script, which the
-  same call saves on the video. A warning does not refuse the write.
+- A call that changes a script's spoken words, or carries a record, returns `warnings` beside
+  `updated_fields`: the [script warnings](08-scripting-and-voice.md#script-warnings) for the stored
+  script, which the same call saves on the video. A warning does not refuse the write. A
+  pronunciation fix returns none.
 - A `voice_id` whose model cannot speak the stored script is refused, except at `TOPIC_PROPOSED`,
   where the script is still to be rewritten. To move a scripted video to such a voice, pass it with
   the rewritten `script_segments` and the publish pair in one call.

@@ -108,6 +108,10 @@ def test_the_valid_formula_passes_the_check():
     (lambda d: d["beats"][-1].update(to=95), "100 percent"),
     (lambda d: d["beats"][0].update(job=""), "beats[0]"),
     (lambda d: d.update(beats=d["beats"][:2]), "at least three"),
+    (lambda d: d["beats"][0].update(name="x" * 61), "at most 60"),
+    (lambda d: d["beats"][1].update(name=d["beats"][0]["name"]), "share a name"),
+    (lambda d: d["beats"][0].update(job="one | two"), "one line"),
+    (lambda d: d.update(ending="line one\nline two"), "one line"),
     (lambda d: d["hooks"][0].update(type="shout"), "hooks[0].type"),
     (lambda d: d["hooks"][1].update(type=d["hooks"][0]["type"]), "different type"),
     (lambda d: d.update(hooks=d["hooks"][:2]), "at least 3"),
@@ -141,3 +145,8 @@ def test_a_reference_file_carries_every_part_of_its_formula():
         assert f"(`{hook['type']}`)" in text and hook["shape"] in text
     for part in (f["holds"], f["ending"], f["template"], *f["pitfalls"]):
         assert part in text
+
+
+def test_hook_types_of_a_formula():
+    assert tf.hook_types("broken-expectation") == ("problem", "myth", "question")
+    assert tf.hook_types("") == () and tf.hook_types("retired-formula") == ()

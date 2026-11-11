@@ -180,18 +180,23 @@ Covers what `update_video` records with a script: `formula_id`, `hooks` and the 
 - A script is stored with its formula, the kept opening's type and the three openings, which are
   saved as spoken text. `get_video` returns the openings and the warnings as lists.
 - A malformed record is refused and nothing is written: one argument without the other, an unknown
-  formula or hook type, not three openings, two of one type, none or two marked `kept`, a record
-  with no `script_segments`.
+  formula, a hook type the formula does not offer, not three openings, two of one type, none or two
+  marked `kept`, a record with no `script_segments`.
 - A flagged script is still written, and the stored warnings equal the returned ones. A script with
   no record is accepted and gets `no_formula`.
-- A pronunciation fix that resends the script with no record keeps it. A rewrite that sends none
-  clears it. A rewrite with a new record replaces it.
+- A pronunciation fix that resends the script with no record keeps it, checks nothing and returns
+  no warnings, on a script with a record and on one without. A rewrite that sends none clears it.
+  A rewrite with a new record replaces it.
+- A fault inside the checks does not stop the write.
 - The closing sentence is compared with the 30 newest other scripts of the same domain, and with
   none when the video has no domain.
 - A `beat` label on a segment must be a short non-empty string.
 
 Trap: a warning must never refuse a write, and a script with no record must be accepted. An agent
 on an older skill sends no record during an upgrade.
+
+Trap: a pronunciation fix goes straight to a paid re-voice with no approval in between. A warning
+returned there would invite the agent to change words a person approved.
 
 ### `test_generate_voice.py`
 

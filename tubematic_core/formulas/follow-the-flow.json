@@ -71,7 +71,8 @@
   "pitfalls": [
     "Ordering by textbook category",
     "Name, then definition, then example, repeated for every part",
-    "Stopping the flow for a background lesson"
+    "Stopping the flow for a background lesson",
+    "A question opening under a publish title that asks the same question: title the video with the surprising stage, and let the opening ask"
   ],
   "template": "What really happens when you [action]? It starts when [first thing]. First, [part] [does its job]: that is [its name]. Next, [part 2] [checks or transforms]. Many people think [misconception]; in fact [fact]. Then [part 3] [hands over]. Last, [the final stage, its most vivid detail]. Every time you [action]."
 }

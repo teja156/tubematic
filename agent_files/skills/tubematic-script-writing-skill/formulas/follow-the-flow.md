@@ -43,6 +43,7 @@ The last stage's detail, or the callback to the action. Never a summary of the s
 - Ordering by textbook category
 - Name, then definition, then example, repeated for every part
 - Stopping the flow for a background lesson
+- A question opening under a publish title that asks the same question: title the video with the surprising stage, and let the opening ask
 
 ## Template
 

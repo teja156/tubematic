@@ -31,8 +31,8 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 
 `tubematic-script-writing-skill/` owns the scripting rules. Its `formulas/` folder holds one
 reference file per script formula. Those files and the table in its `SKILL.md` are generated from
-`tubematic_core/formulas/` by `scripts/gen_formula_references.py`: edit the data, then run the
-script. The style it writes in comes from a
+`tubematic_core/formulas/` by `scripts/gen_formula_references.py` in the source repository: edit the
+data, then run the script. The style it writes in comes from a
 script profile, a database row the agent fetches with `get_script_profile`.
 `tubematic-create-script-writing-skill/` builds that row when the poller finds a profile queued
 from the dashboard. See
