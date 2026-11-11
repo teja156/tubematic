@@ -1154,7 +1154,8 @@ def test_a_success_with_no_output_is_an_error(env):
 
 
 # The video's record of its last successful render (TMDEV-206): the lease is
-# released at upload, so this is the only place the video keeps who made it.
+# released by the success result, so this is the only place the video keeps
+# who made it.
 
 def _last_render(env):
     v = _video(env)
