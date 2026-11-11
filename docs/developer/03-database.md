@@ -83,7 +83,11 @@ One row per video, from proposed topic to published file.
 | `strategy` | TEXT NOT NULL | `manual` | `curriculum`, `trending`, `mining` or `manual` |
 | `producibility_score` | INTEGER NOT NULL | `0` | 1 to 10. The MCP `create_video` tool rejects a score below 5. `POST /videos` does not check it. A video submitted from the dashboard stores `0`, meaning unscored |
 | `script` | TEXT NOT NULL | `''` | The flat script, derived from `script_segments` |
-| `script_segments` | TEXT | | JSON array of `{id, voice, visual}` |
+| `script_segments` | TEXT | | JSON array of `{id, voice, visual}`, each optionally with `beat` |
+| `formula_id` | TEXT NOT NULL | `''` | The [formula](08-scripting-and-voice.md#formulas) the script follows. `''` means none on record |
+| `hook_type` | TEXT NOT NULL | `''` | The hook type of the opening the script uses, or `''` |
+| `hook_alternatives` | TEXT NOT NULL | `''` | JSON array of the three openings the agent drafted, `{type, text, kept, note}`, or `''` |
+| `script_warnings` | TEXT NOT NULL | `''` | JSON array of the [script warnings](08-scripting-and-voice.md#script-warnings) for the stored script, `{id, message}`. `''` when no script write has run the checks |
 | `tts_text` | TEXT NOT NULL | `''` | The text sent to ElevenLabs, after pronunciation substitution |
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
@@ -711,6 +715,7 @@ only in the pre-migration backup.
 | `0019_renderers.sql` | Creates `renderers`, `renderer_enrollments`, `render_timings` and `idx_render_timings_renderer`, adds the five lease columns to `videos`, and inserts the built-in renderer's row | No |
 | `0020_style_pick.sql` | Adds `videos.style_pick`, `style_runner_up` and `style_reason`, `''` on every existing video | No |
 | `0021_last_render.sql` | Adds `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu` and `last_render_seconds`, empty on every existing video | No |
+| `0023_script_record.sql` | Adds `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, `''` on every existing video | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so

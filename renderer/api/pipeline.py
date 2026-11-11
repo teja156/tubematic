@@ -50,6 +50,7 @@ try:
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
+    from tubematic_core import formulas as tformulas
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -64,6 +65,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
+    from tubematic_core import formulas as tformulas
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -2418,6 +2420,10 @@ def create_pipeline_blueprint() -> Blueprint:
         the contract established by mcp/server.py's _fetch_video."""
         raw_segments = video.get("script_segments")
         video["script_segments"] = _json.loads(raw_segments) if raw_segments else None
+        # What update_video recorded with the script: the drafted openings
+        # and the advisory warnings, [] when there are none.
+        for key in ("hook_alternatives", "script_warnings"):
+            video[key] = _json.loads(video[key]) if video.get(key) else []
         return video
 
     def _list_video(video: dict) -> dict:
@@ -2843,6 +2849,11 @@ def create_pipeline_blueprint() -> Blueprint:
                 set_params += clear_params
             elif fields.get("status") == "TOPIC_PROPOSED":
                 set_sql.append(tvs.AUTO_PICK_RESET_SET)
+            # A script written here is a flat one with no formula and no
+            # openings, and nothing has checked it: the record update_video
+            # stored for the script it replaces would describe other words.
+            if "script" in fields:
+                set_sql.append(tformulas.RECORD_CLEAR_SET)
             where_sql, where_params = "", []
             # Bind the write to the status the freeze was checked against.
             # Without onlyIfCurrentStatus, that check and this UPDATE are two
@@ -4720,6 +4731,13 @@ def create_pipeline_blueprint() -> Blueprint:
         with _conn() as con:
             key_set = bool(_secret(_read_all_settings(con), "openai_api_key", "OPENAI_API_KEY"))
             return jsonify({"styles": tvs.public_list(key_set, trenderers.gpu_status(con)["status"])})
+
+    @bp.get("/script-formulas")
+    def list_script_formulas():
+        """Every script formula and every hook type, with its label, from the
+        formula files. The dashboard uses it to name what a video's script
+        recorded (formula_id, hook_type)."""
+        return jsonify(tformulas.public_list())
 
     @bp.post("/render/gpu/test")
     def request_gpu_test():

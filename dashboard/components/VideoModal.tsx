@@ -34,6 +34,7 @@ import { MascotPicker } from "@/components/MascotPicker";
 import { formatRenderDuration } from "@/lib/renderers";
 import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
+import { ScriptRecord } from "@/components/ScriptRecord";
 
 interface VideoModalProps {
   video: Video | null;
@@ -964,6 +965,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                 {/* Script */}
                 {video.script && (
                   <TabsContent value="script" className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
+                    <ScriptRecord video={video} />
                     {video.script_segments && video.script_segments.length > 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                         {video.script_segments.map((seg, i) => (
@@ -976,6 +978,21 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                                 i < video.script_segments!.length - 1 ? "1px solid var(--border)" : "none",
                             }}
                           >
+                            {seg.beat ? (
+                              <div
+                                data-testid={`script-beat-${seg.id}`}
+                                style={{
+                                  fontFamily: "var(--mono)",
+                                  fontSize: 9,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.14em",
+                                  color: "var(--dim)",
+                                  marginBottom: 6,
+                                }}
+                              >
+                                {seg.beat}
+                              </div>
+                            ) : null}
                             <p
                               style={{
                                 margin: "0 0 8px",

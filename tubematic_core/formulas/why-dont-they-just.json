@@ -1,0 +1,83 @@
+{
+  "id": "why-dont-they-just",
+  "order": 50,
+  "family": "explain",
+  "label": "Why Don't They Just",
+  "line": "Name the obvious fix the viewer would suggest, then the rule of the system that blocks it, the exception that proves the rule, and what the rule means.",
+  "best_for": [
+    "a design decision that looks stupid from outside",
+    "a question fans or newcomers keep asking about a story, a period of history or a system"
+  ],
+  "also_for": [
+    "a tool did something that looks wrong, when the cause is a rule and not a bug"
+  ],
+  "avoid_for": [
+    "a question the audience has seen answered many times",
+    "a rule that is a guess: the rule needs a source"
+  ],
+  "words": [
+    150,
+    230
+  ],
+  "beats": [
+    {
+      "name": "The obvious fix",
+      "from": 0,
+      "to": 8,
+      "job": "The question as the viewer would ask it: why not just do the obvious thing?"
+    },
+    {
+      "name": "Catch-up and irony",
+      "from": 8,
+      "to": 25,
+      "job": "One clause on who or what this is, for a newcomer, plus an irony that sharpens the question."
+    },
+    {
+      "name": "Re-ask",
+      "from": 25,
+      "to": 30,
+      "job": "The question again, shorter."
+    },
+    {
+      "name": "The rule",
+      "from": 30,
+      "to": 60,
+      "job": "The rule that blocks the fix, with its source and one concrete picture of it at work."
+    },
+    {
+      "name": "Proof by exception",
+      "from": 60,
+      "to": 85,
+      "job": "Who or what managed it anyway, and what made that case different."
+    },
+    {
+      "name": "The rule as meaning",
+      "from": 85,
+      "to": 100,
+      "job": "What the rule says about the system, or one dry line that answers the first question again."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "question",
+      "shape": "Why don't [they] just [obvious fix]?"
+    },
+    {
+      "type": "anomaly",
+      "shape": "[Something odd in the design or on the map]. By every obvious rule it should have [changed long ago]."
+    },
+    {
+      "type": "claim",
+      "shape": "[Obvious fix] would end [problem] overnight. Nobody does it."
+    }
+  ],
+  "holds": "One question that gets sharper each time and is never merely repeated. A short answer may come at once if it stays incomplete. The re-ask and the exception re-open it; refusing the next obvious step ('surely then...? No.') is a third.",
+  "ending": "The rule restated as meaning, or a dry one-sentence kicker with the present-day state.",
+  "pitfalls": [
+    "Context before the question",
+    "An open debate with no verdict",
+    "An obscure detail as the subject: the obscure detail has to be the answer",
+    "A question opening under a publish title that asks the same question: title the video with the rule or the exception, and let the opening ask"
+  ],
+  "template": "Why don't [they] just [obvious fix]? [Subject] is [one-clause identity], and yet [irony]. So why not? Because [rule], as [source] shows. In practice, [one concrete picture of the rule at work]. Only [named exception] manages it, because [what is different]. For everyone else, [the rule restated as meaning]."
+}
