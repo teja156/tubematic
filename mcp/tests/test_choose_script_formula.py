@@ -539,12 +539,15 @@ def test_a_pick_of_a_dropped_formula_is_picked_again(db):
     assert out["formula_pick"] == "scene-story"
 
 
-def test_a_pick_of_a_dropped_formula_does_not_bind_the_script(db):
-    _video(pick="retired-formula")
+def test_a_pick_of_a_dropped_formula_does_not_bind_the_script_or_block_script_ready(db):
+    # Both the write and the move on: a guard that read the raw pick would
+    # tell the agent to record a formula no tool accepts, forever.
+    _video(status="REVISION_REQUESTED", pick="retired-formula", formula_id="retired-formula")
     out = server.update_video(
         "vid_1", script_segments=[{"id": "seg-1", "voice": "One. Two.", "visual": "x"}],
         publish_title="t", publish_description="d")
     assert "error" not in out
+    assert "error" not in server.set_video_status("vid_1", "SCRIPT_READY")
 
 
 # ── voicing and scenes need a settled script ─────────────────────────────────

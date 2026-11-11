@@ -184,6 +184,7 @@ These events change a pick:
 | The video returns to `TOPIC_PROPOSED` (`set_video_status` or `PATCH /videos/<id>`) | `formulas.py::PICK_RESET_SET` empties `formula_pick`, `formula_runner_up` and `formula_reason`. `formula_choice` stays |
 | [`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style) | The same reset, so the formula is picked again for the new style |
 | [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula) | The pick and the runner-up swap, `formula_choice` becomes the new pick, and the video returns to `TOPIC_APPROVED` to be rewritten |
+| A `script` written through [`PATCH /videos/<id>`](05-http-api.md#patch-videosvideo_id) | `PICK_RESET_SET` empties the pick with the script's record, because a script written by hand follows no formula. `formula_choice` stays |
 | [`POST /videos/<id>/switch-opening`](05-http-api.md#post-videosvideo_idswitch-opening) | The pick stays, or becomes the script's `formula_id` on a video with no pick. Another stored opening is marked as the one in use, `formula_id` is cleared, and the video returns to `TOPIC_APPROVED` to be rewritten from it |
 
 A pick or a choice that names a formula the installed version does not have counts as none, so

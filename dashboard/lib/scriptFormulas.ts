@@ -47,13 +47,20 @@ export function formulaOptions(names: ScriptFormulaNames | null, held = ""): { v
   return options;
 }
 
+/** What the formula row says for a script that follows no formula: one
+ *  written by hand, or before formulas existed, beside no pick. */
+export const NO_FORMULA_LABEL = "No formula";
+
 /** The formula a video is written in, as one label. The pick made before the
  *  script wins over the formula recorded with a stored script, because after
  *  a switch the stored script is the one about to be replaced. "Auto — X"
  *  when Auto picked it, X alone when a person chose it or when the script was
- *  written before formulas were picked ahead of it. */
+ *  written before formulas were picked ahead of it. With neither, a person's
+ *  choice is named only while no script exists yet (at the topic): past it,
+ *  a script with no pick and no record follows no formula, whatever was
+ *  chosen. A status left out is read as the topic. */
 export function videoFormulaLabel(
-  video: Pick<Video, "formula_choice" | "formula_pick" | "formula_id">,
+  video: Pick<Video, "formula_choice" | "formula_pick" | "formula_id"> & { status?: string },
   names: ScriptFormulaNames | null,
 ): string {
   const choice = video.formula_choice ?? "";
@@ -62,6 +69,9 @@ export function videoFormulaLabel(
     return choice === "" ? `${AUTO_FORMULA_LABEL} — ${formulaLabel(pick, names)}` : formulaLabel(pick, names);
   }
   if ((video.formula_id ?? "") !== "") return formulaLabel(video.formula_id ?? "", names);
+  const atTopic = video.status === undefined
+    || video.status === "TOPIC_PROPOSED" || video.status === "TOPIC_APPROVED";
+  if (!atTopic) return NO_FORMULA_LABEL;
   return choice !== "" ? formulaLabel(choice, names) : `${AUTO_FORMULA_LABEL} (not yet chosen)`;
 }
 

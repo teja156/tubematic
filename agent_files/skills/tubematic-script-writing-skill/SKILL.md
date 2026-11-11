@@ -122,7 +122,9 @@ tubematic-formula-routing skill, and recorded on the video. This skill writes in
    - **at `TOPIC_APPROVED`:** the formula has not been picked yet. Go back to the operator skill;
      tubematic-formula-routing runs before this one.
    - **on a script revision with a stored `formula_id`:** the video was scripted before formulas
-     were picked ahead of the script. Keep the stored `formula_id`.
+     were picked ahead of the script. Keep the stored `formula_id`, unless it is not among
+     `formula_routing.candidates` (this version no longer has that formula): then go back to the
+     operator skill, and tubematic-formula-routing picks one first.
    - **on a script revision with no stored `formula_id` either:** the video has no formula yet.
      Go back to the operator skill; tubematic-formula-routing gives it one before you rewrite.
    - **`get_video` has no `formula_routing` at all:** the tool server is older than this skill.

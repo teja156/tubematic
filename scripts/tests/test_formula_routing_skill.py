@@ -121,7 +121,7 @@ def test_the_skill_carries_no_ticket_id():
 
 def test_a_revision_picks_for_a_video_with_no_formula_and_respects_a_choice():
     part = _text()[_text().index("## A revision"):_text().index("## Worked example")]
-    assert "The video has no formula at all" in part
+    assert "The video has no formula this version knows" in part
     assert "your comment says the\n  chosen formula was kept" in part
 
 
@@ -139,3 +139,13 @@ def test_a_pick_in_a_revision_always_goes_back_to_a_person():
     part = _text()[_text().index("## A revision"):_text().index("## Worked example")]
     assert "only for a script revision" in part
     assert "never take a video on to voicing or scenes after a pick in a revision" in part
+
+
+def test_a_dropped_formula_sends_a_revision_to_the_router():
+    # A stored formula this version lacks cannot be kept; every skill on the
+    # revision path points to the router for it.
+    writer = (SKILLS / "tubematic-script-writing-skill" / "SKILL.md").read_text(encoding="utf-8")
+    operator = (SKILLS / "tubematic-operator" / "SKILL.md").read_text(encoding="utf-8")
+    assert "unless it is not among\n     `formula_routing.candidates`" in writer
+    assert "not among `formula_routing.candidates`" in operator
+    assert "not among the candidates" in _text()

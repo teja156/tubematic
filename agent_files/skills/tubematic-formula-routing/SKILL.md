@@ -183,8 +183,9 @@ never take a video on to voicing or scenes after a pick in a revision.
   unless another candidate scored higher. When `formula_routing.choice` is set, a person chose the
   formula: the tool refuses, the script is rewritten in that formula, and your comment says the
   chosen formula was kept and that the runner-up can be taken at Script Ready.
-- **The video has no formula at all:** `formula_routing.pick` and the stored `formula_id` are
-  both `""` (it was scripted before formulas were picked). Decide as above and record it. The
+- **The video has no formula this version knows:** `formula_routing.pick` is `""` and the stored
+  `formula_id` is `""` (it was scripted before formulas were picked) or not among the candidates
+  (a later version dropped it). Decide as above and record it. The
   style is not checked here: the video keeps the style it has.
 
 ## Worked example

@@ -437,7 +437,9 @@ existed costs no request.
 - After the topic, `videoFormulaLabel` names the formula beside the script profile, in the modal
   and on the Quick Actions row. It reads `formula_pick` first and `formula_id` second, because after
   a switch the stored script is the one about to be replaced. A formula Auto picked reads as the
-  word Auto followed by the formula's name.
+  word Auto followed by the formula's name. Past the topic, a script with no pick and no record
+  reads as "No formula" even when a person chose one, because a script written by hand follows
+  none.
 - A picked formula shows a **Why this formula** row with `formula_reason` and the runner-up. At
   Script Ready, when there is a runner-up, the modal adds a **Switch to …** button. After a confirm
   it calls [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula).

@@ -241,6 +241,13 @@ describe("formula labels and options", () => {
     expect(videoFormulaLabel({ formula_pick: "retired" }, null)).toBe("Auto — retired");
   });
 
+  it("names a person's choice only while no script exists", () => {
+    const chosen = { formula_choice: "scene-story", formula_pick: "", formula_id: "" };
+    expect(videoFormulaLabel({ ...chosen, status: "TOPIC_APPROVED" }, NAMES)).toBe("Scene Story");
+    // A script written by hand clears the pick and the record: it follows no formula.
+    expect(videoFormulaLabel({ ...chosen, status: "SCRIPT_READY" }, NAMES)).toBe("No formula");
+  });
+
   it("keeps a held formula the list does not know selectable", () => {
     expect(formulaOptions(null)).toEqual([{ value: "", label: "Auto" }]);
     expect(formulaOptions(NAMES, "retired").at(-1)).toEqual({ value: "retired", label: "retired" });

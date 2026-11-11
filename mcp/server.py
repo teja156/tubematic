@@ -1401,8 +1401,12 @@ def _recent_domain_formulas(project_id, video_id: str) -> dict:
 # A stored script that is not recorded under the formula picked for the video:
 # a formula switch leaves another formula on it, an opening switch clears its
 # record, and both stay so until the script is rewritten.
-_STALE_SCRIPT_SQL = ("COALESCE(formula_pick, '') != '' "
-                     "AND COALESCE(formula_id, '') != formula_pick")
+# A pick of a formula this version does not have counts as none here too, or
+# a revision could never satisfy it (no tool accepts that formula).
+_STALE_SCRIPT_SQL = (
+    "formula_pick IN (" + ", ".join("'" + fid.replace("'", "''") + "'"
+                                    for fid in tformulas.FORMULAS) + ") "
+    "AND COALESCE(formula_id, '') != formula_pick")
 
 
 # Statuses a video reaches only with a script settled in its formula: the
