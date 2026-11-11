@@ -65,6 +65,10 @@ If you go back to 2.1.x later:
 
 - A video that Auto had made Cartoon 3D, sent back to its topic and then given another style, still
   rendered as Cartoon 3D, or failed when no GPU was working.
+- Cartoon 3D videos stopped before their render: every preview frame failed with
+  `EROFS: read-only file system`, the agent could not pass the beat gate, and the video was
+  flagged stuck. If you edited `docker-compose.yml` by hand to work around it, the upgrade replaces
+  that file and you do not need the edit.
 
 ---
 

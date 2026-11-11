@@ -71,3 +71,18 @@ answers into the [beat gate](../10-scene-authoring.md#cartoon-3d)'s verdict.
 Trap: the verdict needs two judges because two judges can disagree about the same frame. The `need`
 values are asserted word for word because `gate/beatGateCli.ts` prints them to tell the author which
 judge to run next.
+
+### `renderer/remotion/cartoon-tools/out-path.test.ts`
+
+Covers `renderer/remotion/cartoon-tools/out-path.mjs::outPathError`, the check the
+[stills server](../11-rendering-and-review.md#the-stills-server) runs on every requested output path
+before it bundles or opens a browser.
+
+- The paths the Cartoon 3D tools write (`<video_id>/cartoon/stills/…`, `<video_id>/cartoon/beatgate/…`)
+  pass, and an output directory under a video's `cartoon/` folder passes.
+- A path elsewhere in `/jobs`, outside it, relative, or escaping with `..` is refused, as is a file that
+  is not a PNG and a missing path.
+
+Trap: the renderer mounts `/jobs` read-write so the server can write stills, and its port takes
+requests with no credential. This check is what keeps such a request from overwriting a video's
+scene-config, timeline or audio.

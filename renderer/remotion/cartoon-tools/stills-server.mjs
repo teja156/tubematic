@@ -19,6 +19,8 @@
 // current bundle was made from, and re-bundles when it differs: an edit to a video's code is seen by its next still
 // (~20 s once), an unchanged tree costs a directory walk.
 //           GET  /health                   {ok, bundled, browser, public, gl, chromeMode}
+// An out or outDir must lie under <public>/<video>/cartoon/ (out-path.mjs), or the request is answered 400 with
+// nothing drawn: the port has no credential, and in production the public directory is the read-write /jobs volume.
 // Responses: JSON {ok, out | outs, ms, logs}. Browser console lines are collected per request and returned as
 // `logs` (what `npx remotion still` never shows).
 //
@@ -30,6 +32,7 @@
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
+import { outPathError } from "./out-path.mjs";
 import { bundle } from "@remotion/bundler";
 import { openBrowser, renderStill, selectComposition } from "@remotion/renderer";
 import { enableTailwind } from "@remotion/tailwind-v4";
@@ -166,6 +169,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/rebundle") { touch(); await (busy = busy.then(rebundle)); return json(res, 200, { ok: true }); }
     if (req.method === "POST" && (req.url === "/still" || req.url === "/stills")) {
       const b = await body(req);
+      // only under <public>/<video>/cartoon/: checked before any bundle or browser, and per file, since
+      // /stills joins the caller's prefix onto outDir
+      const outs = req.url === "/still" ? [b.out]
+        : (Array.isArray(b.frames) ? b.frames : []).map((f) => path.join(String(b.outDir ?? ""), `${b.prefix ?? "f"}${String(f).padStart(4, "0")}.png`));
+      const refused = (req.url === "/stills" ? outPathError(PUBLIC, b.outDir, { dir: true }) : null)
+        ?? outs.map((o) => outPathError(PUBLIC, o)).find((e) => e);
+      if (refused) return json(res, 400, { ok: false, error: refused });
       const t = Date.now();
       const scale = b.scale ?? 1;
       const comp = b.composition ?? "Composition";

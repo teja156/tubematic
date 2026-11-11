@@ -370,8 +370,9 @@ Covers `docker-compose.yml` and the test stack's renderer, parsed as YAML
   server and the worker wait for a healthy API at startup only.
 - Ports bind to loopback, and the worker and the renderer publish none. The API serves the render
   gateway on 4443 without publishing it.
-- The renderer has no database mount, reads `/jobs` read-only and is pointed at the gateway. The
-  gateway's TLS key is mounted in the API alone. The test stack's renderer has the same shape.
+- The renderer has no database mount, mounts `/jobs` read-write for the stills server and is pointed
+  at the gateway. The gateway's TLS key is mounted in the API alone. The test stack's renderer has
+  the same shape. A read-only `/jobs` failed every Cartoon 3D still with `EROFS`.
 - No service uses `env_file`, and every secret is a file in the secrets directory under the name
   `tubematic_core.auth` writes. The Dockerfile's `CMD` names a process, because `entrypoint.sh`
   ends in `exec "$@"`.
