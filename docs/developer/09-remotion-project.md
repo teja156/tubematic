@@ -171,6 +171,13 @@ left-aligned behind a `›` prompt, each word typed on as it is spoken, with a b
 word being spoken. That word is in `accent`; the words already spoken stay, dimmed. Terminal Doc uses
 it.
 
+With `look` set to `"selection"` (`Subtitles.tsx::SelectionLine`), the line builds word by word
+instead, each word appearing 2 frames before its audio (`SELECTION_LEAD`) and blurred for its first
+frame; the latest word is bold and the earlier ones are grey and regular; the line re-centres at once,
+with no tween; and its last frame before the next line is drawn at 60%. An `emphasis` word keeps its
+bold and gets a thin blue selection box: two round handles pop in 2 frames after it appears, then the
+box's top and bottom edges grow from its centre over 3 frames. The Under the Hood style uses this look.
+
 ### Fonts
 
 The default font is the container-local `system-ui, sans-serif`. The captions are on the path of every
@@ -313,6 +320,9 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
   ([Scene Authoring](10-scene-authoring.md#storybook-atlas)).
 - A Terminal Doc video has the one `TerminalDoc` scene and its beats and moves pass the Terminal Doc
   checks; no other video uses `TerminalDoc` ([Scene Authoring](10-scene-authoring.md#terminal-doc)).
+- An Under the Hood video has the one `UnderTheHood` scene and its plates and events pass the Under
+  the Hood checks; no other video uses `UnderTheHood`
+  ([Scene Authoring](10-scene-authoring.md#under-the-hood)).
 
 The tool refuses the write while another session holds the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
@@ -320,9 +330,10 @@ is queued or rendering (`status_mismatch`).
 
 `canvas` is the only default the tool writes into most files. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
-style's look. A Bean Explainer or Storybook Atlas config gets them under whatever `subtitles` keys it
-sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config gets them the same
-way, with its skin's colours and font over the pack's. The
+style's look. A Bean Explainer, Storybook Atlas or Under the Hood config gets them under whatever
+`subtitles` keys it sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config
+gets them the same way, with its skin's colours and font over the pack's. An Under the Hood config
+also gets each plate's `aspect`, read from its photograph. The
 components apply the other defaults at render time, so a changed default reaches every video whose
 config omits the key.
 
@@ -352,7 +363,8 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
 | `accent` | `null` | A CSS colour for the word being spoken in the `log` look. `null` uses `color` |
-| `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
+| `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken, or in a selection box under the `selection` look. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
+| `look` | `"plain"` | `"plain"` or `"selection"` (the line builds word by word; see [Grouping words](#grouping-words)) |
 
 `server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time.
 `server.py::_emphasis_error` checks `emphasis` against the narration's word count. The
@@ -371,8 +383,8 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`SystemFlow`, `BeanExplainer`, `Whiteboard` and `TerminalDoc` are referenced the same way, by videos of
-their own style only. The other
+`SystemFlow`, `BeanExplainer`, `Whiteboard`, `TerminalDoc` and `UnderTheHood` are referenced the
+same way, by videos of their own style only. The other
 files are wrappers and helpers that a scene imports. The directory's `README.md` is the catalogue the
 agent reads.
 
@@ -506,6 +518,18 @@ scene imports them under a `delayRender` handle, and one that fails to load fail
 `TerminalMovePreview` composition, from a bundle entry it writes per call into `terminal-tools/.tmp/`
 (ignored by git) that imports only that video's move files. The contract and the reason the wall is
 a canvas are in [Terminal Doc](10-scene-authoring.md#terminal-doc).
+
+### `UnderTheHood`
+
+`UnderTheHood` draws a whole Under the Hood video from `props.underTheHood`: its plates (generated
+photographs, or plain dark panels for a chart), the overlays pinned to them, the counter row, the
+footnote and the presenter; its helpers are in `underTheHood/`. It loads Space Grotesk (400 and 700)
+and JetBrains Mono (500 and 700) from `public/fonts/` before the first frame; the style's captions use
+Space Grotesk, which this scene loads. The presenter is drawn once per look as a bitmap. The
+`PresenterSheet` composition renders the presenter's poses, mouth shapes and blink as a model sheet,
+for a person to check the drawing: `npx remotion still src/index.ts PresenterSheet out.png
+--frame=0`. No video uses it. The contract and the projection are in
+[Under the Hood](10-scene-authoring.md#under-the-hood).
 
 ### Figure and panel components
 
@@ -664,3 +688,6 @@ beside it (`OFL-Kalam.txt`). Its shipped doodles (`whiteboard/doodles.json`) are
 
 `TerminalDoc`'s fonts in `public/fonts/` are IBM Plex Mono and VT323, each under the SIL Open Font
 License 1.1, with the license beside them.
+
+`UnderTheHood`'s presenter is an original drawing. Its fonts are the Space Grotesk and JetBrains Mono
+files in `public/fonts/` (SIL Open Font License 1.1). Its photographs are generated for each video.

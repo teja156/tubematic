@@ -1,0 +1,95 @@
+{
+  "id": "incident-file",
+  "order": 60,
+  "family": "story",
+  "label": "Incident File",
+  "line": "Start on the moment of failure or its price. Rewind to an ordinary person making a reasonable wrong call, raise an alarm at every beat with one sentence of mechanism each, then the cause and the cost.",
+  "best_for": [
+    "an outage, a loss or a bug with a timeline",
+    "any real incident with a public account that gives times and numbers"
+  ],
+  "also_for": [
+    "a real attack or breach",
+    "the fall of a product or a company, told through one day"
+  ],
+  "avoid_for": [
+    "an incident with no decision by a person",
+    "a cause that needs a tutorial before the story can go on"
+  ],
+  "words": [
+    190,
+    240
+  ],
+  "beats": [
+    {
+      "name": "Cold open",
+      "from": 0,
+      "to": 8,
+      "job": "The fatal action said casually, or the price as a number."
+    },
+    {
+      "name": "Rewind",
+      "from": 8,
+      "to": 22,
+      "job": "A time stamp, the organisation in one line, and an unnamed person (by role) about to make the call."
+    },
+    {
+      "name": "Alarm 1 and the wrong call",
+      "from": 22,
+      "to": 40,
+      "job": "The first symptom and a reasonable wrong assumption."
+    },
+    {
+      "name": "Alarm 2",
+      "from": 40,
+      "to": 60,
+      "job": "It gets worse. One sentence explains the one mechanism the story needs here."
+    },
+    {
+      "name": "The act",
+      "from": 60,
+      "to": 70,
+      "job": "The spoken re-opening: the fix they reached for, or the fatal action again, now understood."
+    },
+    {
+      "name": "Cause",
+      "from": 70,
+      "to": 85,
+      "job": "A chain of three steps."
+    },
+    {
+      "name": "Before and after",
+      "from": 85,
+      "to": 95,
+      "job": "The number pair: what it was, what it became."
+    },
+    {
+      "name": "Kicker",
+      "from": 95,
+      "to": 100,
+      "job": "One dry line."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "number",
+      "shape": "Imagine [losing a large number] by [one tiny action]. [Organisation] nearly did."
+    },
+    {
+      "type": "quote",
+      "shape": "'[A casual line announcing the fatal action]. It should be safe.'"
+    },
+    {
+      "type": "scene",
+      "shape": "At [time] on [date], [a person, by role] [ran one routine thing], and within [short time] [the symptoms]."
+    }
+  ],
+  "holds": "The viewer knows the ending and the people in the story do not. A number in every beat. Facts come in the order an investigation finds them (effect, then cause, then the contradiction), never in calendar order. A spoken re-opening at about three fifths.",
+  "ending": "The before-and-after pair, then one dry kicker. No list of lessons.",
+  "pitfalls": [
+    "Inventing an incident or its numbers: every figure needs a source",
+    "Telling it from the victims' side",
+    "Ending on 'the lesson is'"
+  ],
+  "template": "[The price, or the fatal line]. [Organisation] was [doing X] with [tool], [one-clause gloss]. At [time], [first symptom]. [The person, by role] assumed [a reasonable wrong cause]. Then [second symptom, with a number]. [The mechanism, in one sentence]. The fix? [One sentence], because [cause]. After that, [metric] went from [before] to [after]. [Kicker]."
+}

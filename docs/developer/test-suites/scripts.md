@@ -365,6 +365,8 @@ Covers `scripts/collect_diagnostics.py`, whose report is meant to be pasted into
   each: secret settings, service tokens, the password hash, provider keys, auth headers, a cookie,
   an email, public addresses, the home path, user and host names, account, voice and domain ids, and
   a video's content.
+- An opening the agent drafted and did not use is content too. It is in no script column, so it
+  is read from the video's recorded openings.
 - Ids become the same short hash wherever they appear, so lines about one account still match up.
   Content stays out unless you pass `--include-content`. Content under 12 characters is replaced as
   a whole word, and content under four characters is left.
@@ -669,6 +671,18 @@ Covers the `tubematic-terminal-doc` skill ([Terminal Doc](../10-scene-authoring.
   the skill.
 - The skill teaches moves of the agent's own within the validator's limits, and its worked move,
   `example-move-caesar.tsx`, passes the validator's source checks.
+### `test_under_the_hood_skill.py`
+
+Covers the `tubematic-under-the-hood` skill ([Under the Hood](../10-scene-authoring.md#under-the-hood)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The skill and `reference/contract.md` list every pose, event kind and tone in the pack, and state
+  the limits `mcp/under_the_hood.py` enforces.
+- The skill asks for square photographs with the no-text prompt recipe, checks each with
+  `read_image`, and never calls `generate_character`.
+- The worked example passes the validator and uses every kind of event, and the uninstaller removes
+  the skill.
 
 ### `test_system_flow_skill.py`
 
@@ -704,6 +718,43 @@ is called.
 - The prompt carries the video as `get_video` returns it at `TOPIC_APPROVED`, with every candidate.
 - The answer is the last JSON object in the reply that names a style.
 - A pick is scored best, acceptable or wrong, and the report counts each and lists the wrong ones.
+
+### `test_script_writing_skill.py`
+
+Covers the `tubematic-script-writing-skill` skill and `scripts/gen_formula_references.py`
+([Formulas](../08-scripting-and-voice.md#formulas)).
+
+- The skill's `formulas/` files and the table in its `SKILL.md` equal what the generator renders
+  from the formula data, and `--check` reports an edited file and a stray one.
+- The hand-off names `update_video`'s real arguments, reads `warnings`, allows one extra write, and
+  says what to do when an older tool server refuses the new arguments.
+- The authority order is fixed policy, the style's script text, the formula, the profile. The
+  grammar has fourteen rules, and a closing line comes only from the preferences.
+- The skill holds no fixed five-part sequence, no per-part word budget and no call-to-action step.
+- The headings other skills and tests point at are present, and the operator's `TOPIC_APPROVED` and
+  revision rows pass the record. The pronunciation row leaves the record out, in a place where
+  the sentence cannot be read as being about the publish title and description.
+- The formula's reference file and the style's script text decide how the payoff rules are met.
+  The length starts from the lower half of the band, and a length the style's script text gives
+  wins over the band.
+- A changed style or topic means choosing the formula again, and a style that asks for names may
+  name its people.
+- The user guide's formula table names every formula.
+
+Trap: an instruction that survives beside its replacement is followed whenever the agent reads it
+last, so the removed phrases are pinned as absent.
+
+### `test_eval_script_writing.py`
+
+Covers the plumbing of `scripts/eval_script_writing.py` ([Script writing](script-writing.md)). No
+model is called.
+
+- The topic set is well formed. The prompt carries the video as the skill reads it at
+  `TOPIC_APPROVED`, with no profile and no preferences.
+- The new side carries every formula file. The old side is read from git at the given ref.
+- The answer is the last JSON object in the reply that holds a script. A script is scored on its
+  spoken words, with its record when it has one.
+- The summary shows both sides for each topic and counts each warning per side.
 ### `test_whiteboard_skill.py`
 
 Covers the `tubematic-whiteboard` skill ([Whiteboard](../10-scene-authoring.md#whiteboard)).

@@ -32,6 +32,8 @@ export interface VisualStyleInfo {
   experimental: boolean;
   canvas: "dark" | "light" | null;
   needs: { openai_key: boolean; gpu: boolean };
+  /** False for a style whose videos take no mascot (Cartoon 3D, Under the Hood); absent means true. */
+  mascot?: boolean;
   available?: boolean;
   unavailable_reason?: string;
 }
@@ -45,6 +47,23 @@ export interface ScriptSegment {
   id: string;
   voice: string;
   visual: string;
+  /** The formula beat this segment belongs to, when the writer labelled it. */
+  beat?: string;
+}
+
+/** One of the three openings the writer drafted for a script. `kept` marks
+ *  the one the script uses; `note` says why another was dropped. */
+export interface ScriptHook {
+  type: string;
+  text: string;
+  kept: boolean;
+  note?: string;
+}
+
+/** One finding of the advisory script checks. */
+export interface ScriptWarning {
+  id: string;
+  message: string;
 }
 
 export interface Voice {
@@ -123,6 +142,15 @@ export interface Video {
   style_runner_up?: string;
   /** Auto's one-sentence reason for the pick. */
   style_reason?: string;
+  /** What the agent recorded with the script: the formula it follows ('' =
+   *  none on record, which every script written before 2.2.0 reads as), the
+   *  type of the opening it uses, the three openings drafted, and the script
+   *  checks' findings. The lists are [] when there is nothing.
+   *  Optional for the same reason as tts_text. */
+  formula_id?: string;
+  hook_type?: string;
+  hook_alternatives?: ScriptHook[] | null;
+  script_warnings?: ScriptWarning[] | null;
   /** The video's last successful render (TMDEV-206): the renderer's id and
    *  its name at the time ('' = no render recorded, which every video
    *  rendered before 2.2.0 reads as), whether it rendered on the GPU (1/0),

@@ -143,6 +143,9 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
   `TOPIC_APPROVED` with the runner-up as its style. The pick is seeded in the API container with
   `docker compose exec`, because only the agent's `choose_visual_style` writes one and the test
   stack runs no agent.
+- A video with a script record shows the formula and the opening type by the labels the real
+  `GET /script-formulas` returns, the openings and the warnings. A script written over HTTP then
+  clears the record. The record is seeded the same way, because only `update_video` writes one.
 
 Trap: the Voice and Voice model rows need the real API, because `voice_info` comes only from the
 single-video fetch and the list row the window opens on does not carry it.

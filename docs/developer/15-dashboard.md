@@ -329,7 +329,7 @@ row mounted could show one choice and send another.
 | Field | Approve Topic | Approve Script | Request Revision |
 |---|---|---|---|
 | `script_profile_id`, `visual_style` | Always | No | No |
-| `mascot_id` | When the mascot picker is shown. `""` for a Cartoon 3D video | No | No |
+| `mascot_id` | When the mascot picker is shown. `""` for a style that takes no mascot (Cartoon 3D, Under the Hood) | No | No |
 | `voice_id` | Only when a voice was picked | Always, the shown voice | No |
 | `agent_id` | Only when a different agent was picked | Same | Same |
 | `agent_model` | Always: the picked model, or the agent's default (`""` when the picker is disabled) | When picked, or when the agent changed | Same as Approve Script |
@@ -422,8 +422,8 @@ The rules are in `lib/mascots.ts`. A mascot is drawn on the GPU only, so the mas
 only while `GET /render/gpu` says `working`. A page that has not loaded the GPU status counts
 mascots as unavailable, the opposite of the visual-style rule, so that an untouched picker cannot
 send a mascot the API would refuse. "No mascot" stays selectable, and a held mascot that is not
-offered shows as unavailable. `approvalMascot` sends `""` for a Cartoon 3D video, which has no
-mascot layer.
+offered shows as unavailable. `approvalMascot` sends `""` for a style that takes no mascot
+(`styleTakesMascot`): Cartoon 3D, and any style the served list marks `mascot: false`.
 
 ### Agent, model and effort pickers
 
@@ -472,6 +472,12 @@ Effort:
 
 - Tabs: Topic, Script, Video, Publishing Results, Comments and Logs. Script, Video and Publishing
   Results appear once they have content. Logs is always present.
+- The Script tab opens with what the agent recorded with the script (`components/ScriptRecord.tsx`):
+  the formula, the type of the opening in use, the three openings drafted and the
+  [script warnings](08-scripting-and-voice.md#script-warnings). It is read-only and renders nothing
+  for a script with no record. It takes the labels from
+  [`GET /script-formulas`](05-http-api.md#get-script-formulas), fetched when a record is shown, and
+  shows the ids until that answers. A segment that carries a `beat` shows it above its text.
 - The sidebar holds the actions for the video's status (including Delete), a **Published to**
   section with a link to each live post, metadata, the cost breakdown (`CostBreakdown.tsx`) and the
   AI review feedback.
@@ -575,12 +581,13 @@ Components that a section above covers are left out of this table.
 |---|---|
 | `KanbanBoard.tsx`, `KanbanColumn.tsx`, `KanbanCard.tsx` | The board. A card shows a score dot (a dash when unscored), the display name, the `strategy` tag, relative age, a **STUCK** tag (`agent_stuck_at`), a scheduled post's time, a progress bar for in-flight statuses, and inline actions at checkpoints |
 | `AgentPickers.tsx` | Agent, model and effort controls for the New Video page and the Mascots create form |
-| `MascotPicker.tsx` | The per-video mascot select. Cartoon 3D locks it on "No mascot" |
+| `MascotPicker.tsx` | The per-video mascot select. A style that takes no mascot locks it on "No mascot" |
 | `CostBreakdown.tsx` | A video's cost per provider and model, from `GET /videos/<id>/costs` |
 | `SpendCard.tsx` | The Analytics page's **Spend** tab |
 | `CostsPanel.tsx`, `AutoPilotPanel.tsx`, `RenderersPanel.tsx` | See [The settings page](#the-settings-page) |
 | `LogList.tsx` | Record rendering shared by the Logs page and the video window's Logs tab |
 | `ReviseDialog.tsx` | The mandatory-comment prompt behind every Request Revision |
+| `ScriptRecord.tsx` | The Script tab's read-only block for what a script recorded: formula, openings and warnings. See [The video window](#the-video-window) |
 | `VoicePreviewButton.tsx` | Generates or replays a cached voice sample. One button toggles play and pause and follows the audio's own events. A change of voice or model resets it. Given a `modelId`, it previews that model |
 | `MiningSources.tsx` | Adds and removes YouTube URLs for mining. It mirrors the API's URL rule and adds a URL in the canonical `watch?v=` form. See [Mining sources](05-http-api.md#mining-sources) |
 | `TimeZoneProvider.tsx` | Fetches the host's timezone once and provides it through context. See [Time](#time) |

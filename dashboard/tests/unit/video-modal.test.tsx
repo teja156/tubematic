@@ -1798,4 +1798,17 @@ describe("VideoModal — mascot picker", () => {
     fireEvent.click(screen.getByText("Approve Topic"));
     expect(onAction.mock.calls[0][3]).toMatchObject({ visual_style: "cartoon_3d", mascot_id: "" });
   });
+
+  it("clears and disables the picker when Under the Hood is chosen", async () => {
+    const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
+    mockFetchFor(video);
+    const onAction = vi.fn();
+    render(<VideoModal video={video} mascots={MASCOTS} gpu={gpu("working")} onClose={() => {}} onAction={onAction} />);
+    const select = (await screen.findByTestId("video-modal-mascot-select")) as HTMLSelectElement;
+    fireEvent.change(screen.getByTestId("video-modal-style-select"), { target: { value: "under_the_hood" } });
+    expect(select.value).toBe("");
+    expect(select.disabled).toBe(true);
+    fireEvent.click(screen.getByText("Approve Topic"));
+    expect(onAction.mock.calls[0][3]).toMatchObject({ visual_style: "under_the_hood", mascot_id: "" });
+  });
 });

@@ -1,0 +1,88 @@
+{
+  "id": "myth-break-model",
+  "order": 40,
+  "family": "explain",
+  "label": "Myth, Break, Model",
+  "line": "State the belief the viewer holds in its strongest form, break it in one line, then build the right model on a case the viewer is living through right now.",
+  "best_for": [
+    "a belief most people hold is wrong",
+    "advice or a habit that rests on an outdated idea, with a real study or figure as the proof"
+  ],
+  "also_for": [
+    "practical advice, told as the belief it corrects"
+  ],
+  "avoid_for": [
+    "a trivia correction with no mechanism behind it",
+    "a myth already debunked everywhere: the debunk is the part people know"
+  ],
+  "words": [
+    120,
+    240
+  ],
+  "beats": [
+    {
+      "name": "The belief",
+      "from": 0,
+      "to": 8,
+      "job": "As the viewer learned it, or as a warning in the viewer's own words."
+    },
+    {
+      "name": "The break",
+      "from": 8,
+      "to": 12,
+      "job": "One line: that is wrong, or that stopped being true."
+    },
+    {
+      "name": "Case A",
+      "from": 12,
+      "to": 35,
+      "job": "Where the old belief seems to hold, and what is really happening there."
+    },
+    {
+      "name": "Case B",
+      "from": 35,
+      "to": 60,
+      "job": "Where it fails. One real named source, study or number."
+    },
+    {
+      "name": "Tie to the viewer",
+      "from": 60,
+      "to": 75,
+      "job": "The thing the viewer is doing right now is case B. Or the viewer's objection, spoken."
+    },
+    {
+      "name": "The precise truth",
+      "from": 75,
+      "to": 90,
+      "job": "One sentence."
+    },
+    {
+      "name": "Second sting or action",
+      "from": 90,
+      "to": 100,
+      "job": "A related well-known 'fact' that is also wrong, or the one thing to do."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "myth",
+      "shape": "You were taught [belief]. That is wrong."
+    },
+    {
+      "type": "claim",
+      "shape": "[Thing everybody does to stay safe or healthy] does nothing for [what it is meant to protect]."
+    },
+    {
+      "type": "question",
+      "shape": "If [belief] were true, why does [everyday counter-example] happen?"
+    }
+  ],
+  "holds": "The belief is the viewer's own, so the answer has to overturn something they hold. A pair of contrasting cases carries the middle. The viewer's objection, spoken at about three fifths, re-opens the question.",
+  "ending": "The precise statement, then a second sting or one concrete action. No moral.",
+  "pitfalls": [
+    "Confirming the myth at length before breaking it",
+    "A hedge where the verdict belongs",
+    "An invented study: the source must be real and named"
+  ],
+  "template": "You were taught [belief]. That is wrong. When [case A], [what really happens]. But [case B] breaks it: [real named fact or study]. [The thing you are doing right now] is [case B]. So the truth is [precise statement]. And [a related well-known fact] is wrong too."
+}

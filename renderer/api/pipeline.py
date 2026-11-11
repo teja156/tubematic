@@ -50,6 +50,7 @@ try:
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
+    from tubematic_core import formulas as tformulas
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -64,6 +65,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
+    from tubematic_core import formulas as tformulas
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -1255,25 +1257,30 @@ def _mascot_conflict(con, mascot_id: str, what: str):
     return jsonify({"error": f"This mascot changed while {what}; reload."}), 409
 
 
-def _cartoon_mascot_error(mascot_id: str) -> str:
-    """The refusal for a Cartoon 3D video that would hold `mascot_id`."""
-    return f"This video is Cartoon 3D and holds the mascot {mascot_id!r}. {MASCOT_NOT_ON_CARTOON_3D}"
+def _cartoon_mascot_error(mascot_id: str, style: str = "cartoon_3d") -> str:
+    """The refusal for a video of a style that takes no mascot (Cartoon 3D by
+    default, or Under the Hood) that would hold `mascot_id`."""
+    if (style or "").strip() == "cartoon_3d":
+        return f"This video is Cartoon 3D and holds the mascot {mascot_id!r}. {MASCOT_NOT_ON_CARTOON_3D}"
+    return (f"This video's style is {tvs.route_label(style)} and it holds the mascot {mascot_id!r}. "
+            f"{tmascots.no_mascot_error(style)}")
 
 
-def _approval_pair_error(con, cartoon: bool, mascot_id) -> str:
-    """Why a topic that is (or would be) Cartoon 3D when `cartoon`, holding
-    `mascot_id`, cannot be approved, or "": the pair the renderer refuses, else
-    _mascot_approval_error. Shared with worker.py's Auto Pilot."""
+def _approval_pair_error(con, cartoon: bool, mascot_id, style: str = "cartoon_3d") -> str:
+    """Why a topic whose style takes no mascot (`cartoon`; Cartoon 3D unless
+    `style` names another) and holds `mascot_id` cannot be approved, or "": that
+    pair, else _mascot_approval_error. Shared with worker.py's Auto Pilot."""
     if cartoon and mascot_id:
-        return _cartoon_mascot_error(mascot_id)
+        return _cartoon_mascot_error(mascot_id, style)
     return _mascot_approval_error(con, mascot_id)
 
 
 def _seed_mascot(con, project_id, visual_style: str) -> str:
     """The mascot a new video starts with: the project's default (or the install's),
-    but only while the renderer's GPU is working and never on a Cartoon 3D video.
-    Anything else is "": seeding is a convenience and must never refuse a video."""
-    if visual_style == "cartoon_3d" or trenderers.gpu_status(con)["status"] != "working":
+    but only while the renderer's GPU is working and never on a video whose style
+    takes no mascot (Cartoon 3D, Under the Hood). Anything else is "": seeding is
+    a convenience and must never refuse a video."""
+    if tmascots.no_mascot_error(visual_style) or trenderers.gpu_status(con)["status"] != "working":
         return ""
     prow = con.execute("SELECT default_mascot_id FROM projects WHERE id = ?",
                        (project_id,)).fetchone() if project_id else None
@@ -2586,6 +2593,10 @@ def create_pipeline_blueprint() -> Blueprint:
         the contract established by mcp/server.py's _fetch_video."""
         raw_segments = video.get("script_segments")
         video["script_segments"] = _json.loads(raw_segments) if raw_segments else None
+        # What update_video recorded with the script: the drafted openings
+        # and the advisory warnings, [] when there are none.
+        for key in ("hook_alternatives", "script_warnings"):
+            video[key] = _json.loads(video[key]) if video.get(key) else []
         return video
 
     def _list_video(video: dict) -> dict:
@@ -2913,7 +2924,10 @@ def create_pipeline_blueprint() -> Blueprint:
             cur_vid = con.execute("SELECT mascot_id, visual_style, resolved_renderer FROM videos "
                                   "WHERE id = ?", (video_id,)).fetchone()
             stored_mascot = cur_vid["mascot_id"] or ""
-            will_be_cartoon = fields.get("visual_style", cur_vid["visual_style"]) == "cartoon_3d"
+            # A style that takes no mascot (Cartoon 3D, Under the Hood) refuses
+            # a picked mascot and clears a stored one when the video switches to it.
+            style_after = fields.get("visual_style", cur_vid["visual_style"]) or ""
+            takes_no_mascot = bool(tmascots.no_mascot_error(style_after))
             if fields.get("mascot_id") and fields["mascot_id"] != stored_mascot:
                 err = _mascot_pick_error(con, fields["mascot_id"])
                 if err:
@@ -2921,8 +2935,8 @@ def create_pipeline_blueprint() -> Blueprint:
                 err = tmascots.mascot_gpu_error(trenderers.gpu_status(con)["status"])
                 if err:
                     return jsonify({"error": err}), 400
-                if will_be_cartoon:
-                    return jsonify({"error": MASCOT_NOT_ON_CARTOON_3D}), 400
+                if takes_no_mascot:
+                    return jsonify({"error": tmascots.no_mascot_error(style_after)}), 400
             # The approving PATCH is the last chance to catch a mascot archived
             # since it was seeded or picked, or one left on a Cartoon 3D video:
             # the video is about to be authored against it, and the renderer
@@ -2932,11 +2946,11 @@ def create_pipeline_blueprint() -> Blueprint:
             mascot_guarded = (fields.get("status") == "TOPIC_APPROVED"
                               and row["status"] == "TOPIC_PROPOSED")
             if mascot_guarded:
-                switching = (fields.get("visual_style") == "cartoon_3d"
-                             and (cur_vid["visual_style"] or "") != "cartoon_3d")
+                switching = ("visual_style" in fields
+                             and fields["visual_style"] != (cur_vid["visual_style"] or ""))
                 held = fields.get("mascot_id", stored_mascot)
-                if will_be_cartoon:
-                    err = _cartoon_mascot_error(stored_mascot) if (
+                if takes_no_mascot:
+                    err = _cartoon_mascot_error(stored_mascot, style_after) if (
                         stored_mascot and held and not switching) else ""
                 else:
                     # A changed style clears the recorded renderer in this
@@ -2981,7 +2995,7 @@ def create_pipeline_blueprint() -> Blueprint:
             # (TMDEV-90); a second race test keys on this one's (TMDEV-110).
             set_sql = [f"{k} = ?" for k in fields]
             set_params = list(fields.values())
-            if will_be_cartoon:
+            if takes_no_mascot:
                 # Whatever was sent: an echoed stored mascot must not survive
                 # the switch (a different one was refused above).
                 fields.pop("mascot_id", None)
@@ -2990,7 +3004,7 @@ def create_pipeline_blueprint() -> Blueprint:
                 set_sql.append("mascot_id = ''")
             # The pin belongs to the mascot it was taken for: a different mascot
             # (or none) starts unpinned, or it would inherit the old version number.
-            if will_be_cartoon or ("mascot_id" in fields and fields["mascot_id"] != stored_mascot):
+            if takes_no_mascot or ("mascot_id" in fields and fields["mascot_id"] != stored_mascot):
                 set_sql.append("mascot_version = 0")
             # Any human status change is a human acting on the video, so it
             # releases a stuck flag and starts the no-progress count afresh
@@ -3008,6 +3022,11 @@ def create_pipeline_blueprint() -> Blueprint:
                 set_params += clear_params
             elif fields.get("status") == "TOPIC_PROPOSED":
                 set_sql.append(tvs.AUTO_PICK_RESET_SET)
+            # A script written here is a flat one with no formula and no
+            # openings, and nothing has checked it: the record update_video
+            # stored for the script it replaces would describe other words.
+            if "script" in fields:
+                set_sql.append(tformulas.RECORD_CLEAR_SET)
             where_sql, where_params = "", []
             # Bind the write to the status the freeze was checked against.
             # Without onlyIfCurrentStatus, that check and this UPDATE are two
@@ -3024,11 +3043,11 @@ def create_pipeline_blueprint() -> Blueprint:
             # nor let an approval through for a mascot archived meanwhile.
             # Keep in sync: mcp/server.py's update_video and set_video_status,
             # and worker.py's _auto_pilot_approve.
-            pair_touched = "visual_style" in fields or "mascot_id" in fields or will_be_cartoon
+            pair_touched = "visual_style" in fields or "mascot_id" in fields or takes_no_mascot
             if pair_touched or mascot_guarded:
                 style_sql, style_p = (("?", [fields["visual_style"]]) if "visual_style" in fields
                                       else ("COALESCE(videos.visual_style, '')", []))
-                if will_be_cartoon:
+                if takes_no_mascot:
                     mascot_sql, mascot_p = "''", []
                 elif "mascot_id" in fields:
                     mascot_sql, mascot_p = "?", [fields["mascot_id"]]
@@ -3125,13 +3144,14 @@ def create_pipeline_blueprint() -> Blueprint:
                 if pair_touched or mascot_guarded:
                     now_row = con.execute("SELECT visual_style, resolved_renderer, mascot_id "
                                           "FROM videos WHERE id = ?", (video_id,)).fetchone()
-                    post_mascot = ("" if will_be_cartoon else
+                    post_mascot = ("" if takes_no_mascot else
                                    fields["mascot_id"] if "mascot_id" in fields
                                    else now_row["mascot_id"] or "")
-                    post_cartoon = "cartoon_3d" in (fields.get("visual_style", now_row["visual_style"]),
-                                                    now_row["resolved_renderer"])
-                    err = (_approval_pair_error(con, post_cartoon, post_mascot) if mascot_guarded
-                           else _cartoon_mascot_error(post_mascot) if post_cartoon and post_mascot
+                    post_style = fields.get("visual_style", now_row["visual_style"]) or ""
+                    post_style = "cartoon_3d" if now_row["resolved_renderer"] == "cartoon_3d" else post_style
+                    post_cartoon = bool(tmascots.no_mascot_error(post_style))
+                    err = (_approval_pair_error(con, post_cartoon, post_mascot, post_style) if mascot_guarded
+                           else _cartoon_mascot_error(post_mascot, post_style) if post_cartoon and post_mascot
                            else "")
                     if err:
                         return jsonify({"error": err}), 409
@@ -4950,6 +4970,13 @@ def create_pipeline_blueprint() -> Blueprint:
         with _conn() as con:
             key_set = bool(_secret(_read_all_settings(con), "openai_api_key", "OPENAI_API_KEY"))
             return jsonify({"styles": tvs.public_list(key_set, trenderers.gpu_status(con)["status"])})
+
+    @bp.get("/script-formulas")
+    def list_script_formulas():
+        """Every script formula and every hook type, with its label, from the
+        formula files. The dashboard uses it to name what a video's script
+        recorded (formula_id, hook_type)."""
+        return jsonify(tformulas.public_list())
 
     @bp.post("/render/gpu/test")
     def request_gpu_test():

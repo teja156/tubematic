@@ -689,8 +689,9 @@ describe("ActionPane — visual style picker", () => {
     const illustrated = [...select.options].find((o) => o.value === "illustrated")!;
     expect(illustrated.disabled).toBe(true);
     expect(illustrated.textContent).toMatch(/needs an OpenAI key/);
+    // every style built on OpenAI images is greyed out with it (Under the Hood too)
     expect([...select.options].filter((o) => o.disabled).map((o) => o.value))
-      .toEqual(["illustrated"]);
+      .toEqual(PACK_STYLES.filter((s) => s.needs.openai_key).map((s) => s.id));
   });
 
   it("leaves Illustrated enabled when key state is not given", () => {
@@ -1178,6 +1179,21 @@ describe("ActionPane — mascot picker", () => {
     expect(select.disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(onAction.mock.calls[0][3]).toMatchObject({ visual_style: "cartoon_3d", mascot_id: "" });
+    await act(async () => { vi.advanceTimersByTime(600); });
+    vi.useRealTimers();
+  });
+
+  it("clears and disables the picker for Under the Hood too, whose pack takes no mascot", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const onAction = vi.fn();
+    const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
+    render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} illustratedAvailable onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
+    const select = screen.getByTestId(`mascot-select-${video.id}`) as HTMLSelectElement;
+    fireEvent.change(screen.getByTestId(`style-select-${video.id}`), { target: { value: "under_the_hood" } });
+    expect(select.value).toBe("");
+    expect(select.disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onAction.mock.calls[0][3]).toMatchObject({ visual_style: "under_the_hood", mascot_id: "" });
     await act(async () => { vi.advanceTimersByTime(600); });
     vi.useRealTimers();
   });

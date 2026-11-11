@@ -22,6 +22,7 @@ know about.)
 
 import base64
 import contextvars
+import copy
 import io
 import logging
 import json
@@ -73,7 +74,9 @@ try:
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import mascots as tmascots
+    from tubematic_core import formulas as tformulas
     from tubematic_core import renderers as trenderers
+    from tubematic_core import script_checks as tchecks
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
     from tubematic_core import youtube as tyoutube
@@ -84,7 +87,9 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import mascots as tmascots
+    from tubematic_core import formulas as tformulas
     from tubematic_core import renderers as trenderers
+    from tubematic_core import script_checks as tchecks
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
     from tubematic_core import youtube as tyoutube
@@ -98,6 +103,7 @@ import whiteboard  # the Whiteboard checks (TMDEV-197); a sibling module like sy
 import doodle_preview  # draws a Whiteboard video's own doodles for the agent to look at (TMDEV-197)
 import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import storybook_atlas  # the Storybook Atlas checks (TMDEV-200), the same way
+import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
@@ -203,6 +209,15 @@ VIDEO_TITLE_MAX_LEN = 70
 # Keep in sync: renderer/api/pipeline.py's copies (PATCH /videos/<id>).
 PUBLISH_TITLE_MAX_LEN       = 100
 PUBLISH_DESCRIPTION_MAX_LEN = 2000
+
+# What update_video records with a script (TMDEV-211): the formula it follows
+# and the three openings the writer drafted. An opening is a sentence or two,
+# so the caps are generous; they exist so a whole script cannot be stored as
+# a "hook". A beat label names a formula's beat ("Wrong suspect 1").
+SCRIPT_HOOKS_COUNT     = 3
+HOOK_TEXT_MAX_LEN      = 400
+HOOK_NOTE_MAX_LEN      = 200
+SEGMENT_BEAT_MAX_LEN   = tformulas.BEAT_NAME_MAX_LEN
 
 FPS       = 30
 # SAFE_ZONE used to live here. Its only reader was the TextReveal-gated safe-zone
@@ -320,7 +335,11 @@ SUBTITLE_NUMERIC_RANGES = {
     "position": (0.05, 0.95),
 }
 SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
-                 "background", "position", "uppercase", "emphasis", "accent")
+                 "background", "position", "uppercase", "emphasis", "accent", "look")
+# look: "selection" builds the line word by word with the key words in a blue
+# text-selection box (the Under the Hood style); "plain", or absent, is the
+# look every other style has.
+SUBTITLE_LOOKS = ("plain", "selection")
 # emphasis: indexes into the narration's words drawn on a red box (the key word
 # of a line). One in SUBTITLE_EMPHASIS_EVERY words at most: emphasis on every
 # other word is no emphasis. write_scene_config checks the indexes against the
@@ -369,6 +388,8 @@ def _validate_subtitles(sub) -> str:
         if not (isinstance(sub["accent"], str) and sub["accent"].strip()):
             return ("config.subtitles.accent must be a CSS colour string (the word being spoken in the "
                     "\"log\" look), or null for the text colour")
+    if "look" in sub and sub["look"] not in SUBTITLE_LOOKS:
+        return (f"config.subtitles.look must be one of {list(SUBTITLE_LOOKS)}, got {sub['look']!r}")
     if "emphasis" in sub:
         emph = sub["emphasis"]
         if (not isinstance(emph, list)
@@ -755,6 +776,8 @@ def _fetch_video(con, video_id: str) -> dict | None:
     video = dict(row)
     raw_segments = video.get("script_segments")
     video["script_segments"] = json.loads(raw_segments) if raw_segments else None
+    for key in ("hook_alternatives", "script_warnings"):
+        video[key] = json.loads(video[key]) if video.get(key) else []
     rows = con.execute(
         "SELECT * FROM comments WHERE video_id = ? ORDER BY created_at ASC", (video_id,)
     ).fetchall()
@@ -1194,8 +1217,20 @@ def get_video(video_id: str) -> dict:
     objects set via update_video, or null if the video only has a flat
     script (legacy rows, or rows never updated with segments).
 
+    script_segments may carry a fourth key, beat: the formula beat a segment
+    belongs to.
+
     publish_title and publish_description are what the video will be posted
     with, written by update_video alongside the script ("" before that).
+
+    formula_id, hook_type, hook_alternatives and script_warnings are what
+    update_video recorded with the script: the formula it follows ("" when
+    none is on record: a script written before formulas, or by a writer that
+    sent none), the type of the opening it uses, the three openings drafted
+    ([{type, text, kept, note}], [] when none) and the advisory checks'
+    findings for the stored script ([{id, message}], [] when none). On a
+    script revision read script_warnings first: it says what the last draft
+    was flagged for.
 
     script_profile_id names the script profile this video's script is to be
     written in, or "" for none. Pass it to get_script_profile to read the style
@@ -1684,11 +1719,11 @@ def create_video(
         if strategy == "curriculum" and _profile_is_ready(con, row["default_script_profile_id"]):
             script_profile_id = row["default_script_profile_id"]
         # The domain's default mascot (or the install's) seeds EVERY video, like
-        # the voice, but only while the GPU works and never on a Cartoon 3D
-        # video; seeding never refuses a video. Keep in sync:
+        # the voice, but only while the GPU works and never on a video whose
+        # style takes no mascot; seeding never refuses a video. Keep in sync:
         # renderer/api/pipeline.py's _seed_mascot.
         mascot_id = ""
-        if visual_style != "cartoon_3d" and _gpu_probe_status() == "working":
+        if not tmascots.no_mascot_error(visual_style) and _gpu_probe_status() == "working":
             mascot_id = tmascots.resolve_default(
                 con, row["default_mascot_id"] or "", _get_setting("default_mascot_id", ""))
         agent_id = _pick_agent_id(con)
@@ -1723,10 +1758,12 @@ def _approval_mascot_error(con, video_id: str) -> dict | None:
                        (video_id,)).fetchone()
     if not held or not held["mascot_id"]:
         return None
-    if "cartoon_3d" in (held["visual_style"], held["resolved_renderer"]):
-        # The renderer refuses the pair; approving buys paid work that ends in FAILED.
-        return {"error": f"This video is Cartoon 3D and holds the mascot {held['mascot_id']!r}. "
-                         f"{tmascots.MASCOT_NOT_ON_CARTOON_3D} A human must clear the mascot on the "
+    no_mascot = ("cartoon_3d" if held["resolved_renderer"] == "cartoon_3d"
+                 else (held["visual_style"] or "").strip())
+    if tmascots.no_mascot_error(no_mascot):
+        # A style that takes no mascot; approving buys paid work that ends refused or FAILED.
+        return {"error": f"This video's style is {tvs.route_label(no_mascot)} and it holds the mascot {held['mascot_id']!r}. "
+                         f"{tmascots.no_mascot_error(no_mascot)} A human must clear the mascot on the "
                          "dashboard before the topic is approved."}
     if _mascot_pick_error(con, held["mascot_id"]):
         return {"error": f"This video's mascot {held['mascot_id']!r} can no longer be used (it was "
@@ -2204,7 +2241,8 @@ def _check_markup_values(text: str) -> str | None:
 def _validate_script_segments(segments: list) -> str | None:
     """Return an error message if segments are malformed, else None.
 
-    Each segment must be an object with 'id', 'voice', and 'visual' keys.
+    Each segment must be an object with 'id', 'voice', and 'visual' keys, and
+    may carry 'beat': the name of the formula beat it belongs to.
     'voice' must be a non-empty (post-strip) string that still tokenizes to
     at least one word after phoneme tags and pause markup are stripped — e.g.
     a phoneme tag wrapping only whitespace, or a segment holding nothing but a
@@ -2240,6 +2278,12 @@ def _validate_script_segments(segments: list) -> str | None:
         if seg_id in seen_ids:
             return f"script_segments[{i}].id '{seg_id}' is not unique"
         seen_ids.add(seg_id)
+        if "beat" in seg:
+            beat = seg["beat"]
+            if not isinstance(beat, str) or not beat.strip() or len(beat) > SEGMENT_BEAT_MAX_LEN:
+                return (f"script_segments[{i}].beat, when present, must be the name of the "
+                        f"formula beat this segment belongs to, at most {SEGMENT_BEAT_MAX_LEN} "
+                        "characters")
         voice = seg["voice"]
         if not isinstance(voice, str) or not voice.strip():
             return f"script_segments[{i}].voice must be a non-empty string"
@@ -2264,6 +2308,94 @@ def _validate_script_segments(segments: list) -> str | None:
     return None
 
 
+def _script_record_error(formula_id, hooks) -> str | None:
+    """Why formula_id and hooks cannot be recorded with a script, or None.
+
+    These are the shape of the record, checked like markup: a formula the
+    install does not have, an opening of a type the formula does not offer, or
+    openings that are not three different ones, would make the record say
+    something untrue about the script.
+    """
+    if formula_id is None or hooks is None:
+        return ("formula_id and hooks are recorded together: pass both, or neither")
+    if formula_id not in tformulas.FORMULAS:
+        return (f"formula_id {formula_id!r} is not a formula. Must be one of: "
+                f"{list(tformulas.FORMULAS)}")
+    if not isinstance(hooks, list) or len(hooks) != SCRIPT_HOOKS_COUNT:
+        return (f"hooks must be a list of exactly {SCRIPT_HOOKS_COUNT} openings: the one the "
+                "script uses and the two it does not")
+    for i, hook in enumerate(hooks):
+        if not isinstance(hook, dict) or not {"type", "text"} <= set(hook) \
+                or not set(hook) <= {"type", "text", "kept", "note"}:
+            return (f"hooks[{i}] must be an object with 'type' and 'text', and optionally "
+                    "'kept' and 'note'")
+        allowed = tformulas.hook_types(formula_id)
+        if not isinstance(hook["type"], str) or hook["type"] not in allowed:
+            return (f"hooks[{i}].type {hook['type']!r} is not one of the opening types of "
+                    f"{formula_id}. Must be one of: {list(allowed)}")
+        text = hook["text"]
+        if not isinstance(text, str) or not _strip_non_spoken(text):
+            return f"hooks[{i}].text must be the opening's spoken words"
+        if len(_strip_non_spoken(text)) > HOOK_TEXT_MAX_LEN:
+            return (f"hooks[{i}].text is longer than {HOOK_TEXT_MAX_LEN} characters: an opening "
+                    "is the first sentence or two, not the script")
+        if "kept" in hook and not isinstance(hook["kept"], bool):
+            return f"hooks[{i}].kept must be true or false"
+        note = hook.get("note") or ""       # null is how an agent writes "no note"
+        if not isinstance(note, str) or len(note) > HOOK_NOTE_MAX_LEN:
+            return f"hooks[{i}].note must be a string of at most {HOOK_NOTE_MAX_LEN} characters"
+    types = [h["type"] for h in hooks]
+    if len(set(types)) != len(types):
+        return ("hooks must be three openings of different types: the same type three ways is "
+                "one opening, not three")
+    if sum(1 for h in hooks if h.get("kept")) != 1:
+        return "exactly one of the hooks must have kept: true, the opening the script uses"
+    return None
+
+
+def _stored_hooks(hooks: list) -> list:
+    """Openings in the shape hook_alternatives stores: spoken text only, so the
+    dashboard shows no markup, and every key present."""
+    return [{"type": h["type"], "text": _strip_non_spoken(h["text"]),
+             "kept": bool(h.get("kept")), "note": " ".join((h.get("note") or "").split())}
+            for h in hooks]
+
+
+def _kept_hook_text(hooks) -> str:
+    return next((h.get("text", "") for h in hooks or [] if h.get("kept")), "")
+
+
+def _script_warnings(script: str, publish_title: str, formula_id: str, hooks: list,
+                     project_id, video_id: str) -> list:
+    """The advisory checks' findings for a script about to be stored.
+
+    Never raises: the checks are advice, so a fault in one must not stop the
+    script it was reading from being written.
+    """
+    try:
+        return tchecks.check(
+            script, publish_title=publish_title, formula_id=formula_id,
+            kept_hook=_kept_hook_text(hooks),
+            recent_scripts=_recent_domain_scripts(project_id, video_id))
+    except Exception:  # noqa: BLE001 - advisory path, see the docstring
+        log.exception("script checks failed for %s; the script is stored without warnings",
+                      video_id)
+        return []
+
+
+def _recent_domain_scripts(project_id, video_id: str) -> list[str]:
+    """The newest scripts of a video's domain, other than its own, newest
+    first: what the closing-sentence check compares against."""
+    if not project_id:
+        return []
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT script FROM videos WHERE project_id = ? AND id != ? "
+            "AND COALESCE(script, '') != '' ORDER BY created_at DESC LIMIT ?",
+            (project_id, video_id, tchecks.RECENT_SCRIPTS)).fetchall()
+    return [r["script"] for r in rows]
+
+
 @mcp.tool
 def update_video(
     video_id: str,
@@ -2284,8 +2416,30 @@ def update_video(
     publish_title: str | None = None,
     publish_description: str | None = None,
     mascot_id: str | None = None,
+    formula_id: str | None = None,
+    hooks: list[dict] | None = None,
 ) -> dict:
     """Update one or more fields on a video record. Pass only fields to change.
+
+    formula_id, hooks: what the script was built on, recorded with it. Pass
+    both together, in the call that writes script_segments, and only there.
+    formula_id is the formula the script follows, an id from the
+    script-writing skill's table. hooks is the three openings you drafted, as
+    [{"type", "text", "kept", "note"}]: type is a hook type from the formula's
+    reference file and the three must differ, text is the opening's spoken
+    words, kept is true on the one the script uses (exactly one), and note
+    (optional) says why an opening was dropped. Left out on a call that only
+    fixes pronunciation, the stored record is kept; left out on a call that
+    changes the script's words, the record is cleared, since it no longer
+    describes the script.
+
+    A call that writes a script's words also returns "warnings": advisory
+    checks on them, as [{"id", "message"}], and stores the same list on the
+    video (get_video's script_warnings) for the person at Script Ready. A
+    warning never refuses the write. Read each one, fix what is a real
+    problem, and write the script again at most once. A call that leaves the
+    spoken words as they are and sends no record (a pronunciation fix) checks
+    nothing and returns no warnings: that script is already approved.
 
     mascot_id: the video's mascot, or "" for none. Settable only while the
     video is at TOPIC_PROPOSED, and a human's choice at the topic: a new
@@ -2335,14 +2489,15 @@ def update_video(
     as data, props from a fixed library), "storybook_atlas" (the whole video is
     one picture-book scene in chapters, written as data), "terminal_doc" (the
     whole video is one typographic scene written as data: strings, numbers and
-    ciphertext on a dark terminal) or "cartoon_3d" (one 3D world; needs a
-    working GPU).
+    ciphertext on a dark terminal), "under_the_hood" (the whole video is one
+    scene of close-up photographs with labels pinned to them, written as data;
+    needs an OpenAI key) or "cartoon_3d" (one 3D world; needs a working GPU).
     get_pipeline_status's visual_styles lists every style and whether this
     install can make it. The scene styles are permissions, not looks. Like script_profile_id, a human
     picks it at the topic checkpoint and it is frozen afterwards; set it here
     only from a slash command that creates a video, before flipping it to
-    TOPIC_APPROVED. "illustrated" is refused while no OpenAI key is stored
-    (get_pipeline_status's illustrated_available is false) — offer the other
+    TOPIC_APPROVED. "illustrated" and "under_the_hood" are refused while no
+    OpenAI key is stored (get_pipeline_status's illustrated_available is false) — offer the other
     styles instead. Under "auto", Auto picks the style itself at
     TOPIC_APPROVED with choose_visual_style, never with this field. A changed
     value here clears Auto's earlier pick.
@@ -2352,8 +2507,8 @@ def update_video(
     and never again: a revision round must render on the canvas the video
     already uses. Writable only when the style does not already fix a canvas —
     that is "auto" and "illustrated"; "motion_graphics", "stick",
-    "system_flow", "whiteboard", "bean_explainer", "storybook_atlas", "terminal_doc" and
-    "cartoon_3d" fix theirs.
+    "system_flow", "whiteboard", "bean_explainer", "storybook_atlas", "terminal_doc",
+    "under_the_hood" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer the video uses — "dom"
     (the scene components). Auto reaches Cartoon 3D by picking the cartoon_3d
@@ -2444,6 +2599,13 @@ def update_video(
         err = _validate_script_segments(script_segments)
         if err:
             return {"error": err}
+    if formula_id is not None or hooks is not None:
+        if script_segments is None:
+            return {"error": "formula_id and hooks describe a script: pass them in the call "
+                             "that writes script_segments"}
+        err = _script_record_error(formula_id, hooks)
+        if err:
+            return {"error": err}
     # Written with the script so publishing never has to generate them
     # (TMDEV-132). Required with every script write — an optional pair is one
     # the agent eventually forgets, and the dialog would silently open on the
@@ -2481,8 +2643,8 @@ def update_video(
     voice_exempt = False
     if script_segments is not None or script is not None or voice_id is not None:
         with _conn() as con:
-            vrow = con.execute("SELECT status, voice_id, script, script_segments FROM videos "
-                               "WHERE id = ?", (video_id,)).fetchone()
+            vrow = con.execute("SELECT status, voice_id, script, script_segments, project_id "
+                               "FROM videos WHERE id = ?", (video_id,)).fetchone()
         if vrow is None:
             return {"error": f"Video not found: {video_id}"}
         stored_voice = vrow["voice_id"] or ""
@@ -2526,6 +2688,33 @@ def update_video(
                     return {"error": f"This script can't be voiced with that voice: {err} "
                                      "Keep the current voice, or request a revision so the "
                                      "script is rewritten for the new one."}
+
+    # The record follows the script (TMDEV-211). Given: written. Left out on a
+    # write whose spoken words are unchanged (a pronunciation fix resends the
+    # script with new markup): the record and the stored warnings stand, and
+    # nothing is checked, because that script is already approved and the fix
+    # goes straight to a re-voice. Left out on a write that changes the words:
+    # cleared, since a formula and openings chosen for other words say nothing
+    # true about these.
+    record_sets, warnings = [], None
+    if script_segments is not None or script is not None:
+        spoken = script if script_segments is not None else _strip_non_spoken(script or "")
+
+        def words_of(text):
+            # Spoken words only: a stored flat script keeps its markup and its
+            # line breaks, and neither is a change of words.
+            return " ".join(_strip_non_spoken(text or "").split())
+
+        if formula_id is not None or words_of(script) != words_of(vrow["script"]):
+            if formula_id is not None:
+                record_formula, record_hooks = formula_id, _stored_hooks(hooks)
+            else:
+                record_formula, record_hooks = "", []
+                record_sets += [("formula_id = ?", ""), ("hook_type = ?", ""),
+                                ("hook_alternatives = ?", "")]
+            warnings = _script_warnings(spoken or "", publish_title or "", record_formula,
+                                        record_hooks, vrow["project_id"], video_id)
+            record_sets.append(("script_warnings = ?", json.dumps(warnings)))
 
     if title is not None and len(title) > VIDEO_TITLE_MAX_LEN:
         return {"error": f"title is {len(title)} characters; the display name must be at most "
@@ -2588,16 +2777,18 @@ def update_video(
             if not cur_vid:
                 return {"error": f"Video not found: {video_id}"}
             stored_mascot_id = cur_vid["mascot_id"] or ""
-            will_be_cartoon = (visual_style if visual_style is not None
-                               else cur_vid["visual_style"]) == "cartoon_3d"
+            # A style that takes no mascot (Cartoon 3D, Under the Hood): a picked
+            # mascot is refused, and switching to it clears the stored one.
+            no_mascot = tmascots.no_mascot_error(visual_style if visual_style is not None
+                                                 else cur_vid["visual_style"])
             if mascot_id and mascot_id != (cur_vid["mascot_id"] or ""):
                 err = _mascot_pick_error(con, mascot_id) or tmascots.mascot_gpu_error(_gpu_probe_status())
                 if err:
                     return {"error": err}
-                if will_be_cartoon:
-                    return {"error": tmascots.MASCOT_NOT_ON_CARTOON_3D}
-        if will_be_cartoon:
-            mascot_id = ""     # whatever was sent: no mascot survives on a cartoon_3d video
+                if no_mascot:
+                    return {"error": no_mascot}
+        if no_mascot:
+            mascot_id = ""     # whatever was sent: no mascot survives on such a video
     if resolved_renderer is not None:
         resolved_renderer = resolved_renderer.strip()
         if resolved_renderer not in RENDERERS:
@@ -2628,6 +2819,11 @@ def update_video(
     }.items() if v is not None}
     if script_segments is not None:
         fields["script_segments"] = json.dumps(script_segments)
+    if formula_id is not None:
+        stored = _stored_hooks(hooks)
+        fields["formula_id"] = formula_id
+        fields["hook_type"] = next(h["type"] for h in stored if h["kept"])
+        fields["hook_alternatives"] = json.dumps(stored)
     if not fields:
         return {"error": "No fields to update"}
     # The per-video choices freeze in two groups (TMDEV-110). Keep in sync:
@@ -2777,6 +2973,11 @@ def update_video(
     # other two callers (generate_voice, write_scene_config) run only at
     # statuses an archived video can never be in.
     updated = list(fields.keys())
+    # What the write derives rather than was asked for: the cleared record and
+    # the stored warnings. Not in updated_fields, like the voice pin below.
+    for sql, value in record_sets:
+        set_sql.append(sql)
+        set_params.append(value)
     if pin_voice:
         # Decided in the UPDATE, so a voice set by another call meanwhile wins.
         set_sql.append("voice_id = CASE WHEN voice_id = '' THEN ? ELSE voice_id END")
@@ -2821,9 +3022,16 @@ def update_video(
                 return {"error": "This video's agent changed while the call was in flight — "
                                  "check get_video and pick the model again"}
             if row and pair:
+                now = con.execute("SELECT visual_style, resolved_renderer FROM videos WHERE id = ?",
+                                  (video_id,)).fetchone()
+                style_now = ("cartoon_3d" if (now["resolved_renderer"] or "") == "cartoon_3d"
+                             else (now["visual_style"] or ""))
+                why = tmascots.no_mascot_error(style_now) or tmascots.MASCOT_NOT_ON_CARTOON_3D
                 return {"error": "The video's visual style changed while the call was in flight, and "
-                                 f"the result would put a mascot on a Cartoon 3D video. "
-                                 f"{tmascots.MASCOT_NOT_ON_CARTOON_3D} Check get_video"}
+                                 f"the result would put a mascot on a {tvs.route_label(style_now)} "
+                                 f"video. {why} Check get_video"}
+    if warnings is not None:
+        return {"video_id": video_id, "updated_fields": updated, "warnings": warnings}
     return {"video_id": video_id, "updated_fields": updated}
 
 
@@ -3056,7 +3264,7 @@ def upsert_project(
         videos start in — "auto" or any style in get_pipeline_status's
         visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
         "bean_explainer", "storybook_atlas", "terminal_doc", "cartoon_3d",
-        "whiteboard").
+        "whiteboard", "under_the_hood").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -4648,6 +4856,16 @@ def validate_job(video_id: str) -> dict:
     except Exception as e:
         errors.append(f"Custom move check failed: {e}")
 
+    # An Under the Hood plate's aspect (TMDEV-201). write_scene_config reads it
+    # from the photograph, but the skill lets the agent regenerate a photograph
+    # under its own name afterwards: a new shape would render stretched and
+    # every pinned-point check was made against the old one.
+    try:
+        if "scene_config" in dir() and isinstance(scene_config, dict):
+            errors.extend(_uth_aspect_errors(video_id, scene_config))
+    except Exception as e:
+        errors.append(f"Photograph shape check failed: {e}")
+
     # Cartoon 3D readiness (TMDEV-185). A Cartoon 3D video renders only once
     # its generated source exists and two fresh judges have passed the beat
     # sheet for that exact source (the verdict is keyed by a hash of the
@@ -5596,6 +5814,57 @@ def _redact_keys(text: str) -> str:
     return text
 
 
+# Names a capped video's generate_image calls are generating right now. The
+# folder alone is a check-then-act race: parallel calls each see 11 pictures,
+# all pass and all are billed. A reservation counts until the file exists, and
+# lapses after _IMAGE_RESERVE_SECS so a failed call does not hold a slot.
+_IMAGE_RESERVE_SECS = 300
+_image_reservations: dict[str, dict[str, float]] = {}
+_image_reservations_lock = threading.Lock()
+
+
+def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
+    """The refusal for one generated photograph too many, or "" (and then the
+    name is reserved for this call).
+
+    A style whose pack caps its photographs (Under the Hood: routing.images)
+    is refused a NEW image name once the video's images folder and the calls
+    in flight hold that many; regenerating an existing name stays allowed,
+    because a bad still must be replaceable. Checked before the paid call,
+    since the cap is about spend."""
+    with _conn() as con:
+        vrow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    style = ((vrow["visual_style"] if vrow else "") or "").strip()
+    if style != under_the_hood.STYLE_ID:
+        return ""
+    cap = tvs.pack(style)["routing"].get("images", 0)
+    with _image_reservations_lock:
+        now = time.time()
+        held = {n: t for n, t in _image_reservations.get(video_id, {}).items() if now - t < _IMAGE_RESERVE_SECS}
+        try:
+            names = {f.stem for f in images_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS}
+        except OSError:
+            names = set()
+        names |= set(held)
+        if image_name in names or len(names) < cap:
+            held[image_name] = now
+            _image_reservations[video_id] = held
+            return ""
+    return (f"This Under the Hood video already has {len(names)} photographs, counting any being made "
+            f"now, the most a video may use ({cap}). Reuse one of them on another plate with a "
+            "different focus or zoom, or regenerate one under its own name to replace it.")
+
+
+def _release_image_reservation(video_id: str, image_name: str) -> None:
+    """Drop a name _image_cap_error reserved, when its call ends either way."""
+    with _image_reservations_lock:
+        held = _image_reservations.get(video_id)
+        if held is not None:
+            held.pop(image_name, None)
+            if not held:
+                _image_reservations.pop(video_id, None)
+
+
 @mcp.tool
 def generate_image(video_id: str, image_name: str, prompt: str,
                    aspect_ratio: str = "9:16") -> dict:
@@ -5635,6 +5904,10 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     `width`/`height` are the file's REAL pixel dimensions, not the aspect_ratio
     that was asked for — a provider answers with its own nearest bucket. Use
     them to size any frame the picture sits in, so it is not cropped to fit.
+
+    An under_the_hood video may have at most 12 photographs: a 13th new
+    image_name is refused before the paid call; regenerating an existing name
+    is allowed.
     """
     err = _video_id_error(video_id)
     if err:
@@ -5679,72 +5952,79 @@ def generate_image(video_id: str, image_name: str, prompt: str,
         return guard_err
     # Before the paid call: a symlink on the way to images/ is refused.
     try:
-        tjobs.images_dir(JOBS_DIR, video_id)
+        images_dir = tjobs.images_dir(JOBS_DIR, video_id)
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
-
-    import httpx
-
-    resp = None  # stays None when the request itself fails
+    cap_err = _image_cap_error(video_id, image_name, images_dir)
+    if cap_err:
+        return {"error": cap_err}
     try:
-        with httpx.Client(timeout=180) as client:
-            resp = client.post(
-                OPENAI_IMAGES_URL,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "size": OPENAI_SIZE_BY_ASPECT[aspect_ratio],
-                },
-            )
-        if resp.status_code == 200:
-            usage = _response_json(resp).get("usage")
-            _record_usage(service="openai", model=model, operation="image",
-                          units=tusage.openai_image_units(usage), raw=usage,
-                          videos=[video_id])
-        if resp.status_code != 200:
-            _provider_failed("openai", model, "image", resp=resp)
-            return {"error": _openai_access_error(resp, model)
-                    or _redact_keys(f"OpenAI {resp.status_code}: {resp.text[:400]}")}
-        data = resp.json().get("data") or []
-        b64 = data[0].get("b64_json") if data else None
-        if not b64:
-            _provider_failed("openai", model, "image", resp=resp, error="no image data")
-            return {"error": "OpenAI returned no image data"}
-        mime = "image/png"
-    except Exception as e:
-        _provider_failed("openai", model, "image", resp=resp, error=f"{type(e).__name__}: {e}")
-        return {"error": _redact_keys(f"Image generation failed: {e}")}
+        import httpx
 
-    try:
-        image_bytes = base64.b64decode(b64)
-    except Exception as e:
-        _provider_failed("openai", model, "image", resp=resp,
-                         error=f"undecodable image data: {e}")
-        return {"error": f"Could not decode image data: {e}"}
+        resp = None  # stays None when the request itself fails
+        try:
+            with httpx.Client(timeout=180) as client:
+                resp = client.post(
+                    OPENAI_IMAGES_URL,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": model,
+                        "prompt": prompt,
+                        "size": OPENAI_SIZE_BY_ASPECT[aspect_ratio],
+                    },
+                )
+            if resp.status_code == 200:
+                usage = _response_json(resp).get("usage")
+                _record_usage(service="openai", model=model, operation="image",
+                              units=tusage.openai_image_units(usage), raw=usage,
+                              videos=[video_id])
+            if resp.status_code != 200:
+                _provider_failed("openai", model, "image", resp=resp)
+                return {"error": _openai_access_error(resp, model)
+                        or _redact_keys(f"OpenAI {resp.status_code}: {resp.text[:400]}")}
+            data = resp.json().get("data") or []
+            b64 = data[0].get("b64_json") if data else None
+            if not b64:
+                _provider_failed("openai", model, "image", resp=resp, error="no image data")
+                return {"error": "OpenAI returned no image data"}
+            mime = "image/png"
+        except Exception as e:
+            _provider_failed("openai", model, "image", resp=resp, error=f"{type(e).__name__}: {e}")
+            return {"error": _redact_keys(f"Image generation failed: {e}")}
 
-    ext = _IMAGE_EXT_BY_MIME.get(mime, "png")
-    filename = f"{image_name}.{ext}"
-    try:
-        path = tjobs.image_file(JOBS_DIR, video_id, filename)
-    except tjobs.UnsafePath as e:
-        return {"error": str(e)}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(image_bytes)
+        try:
+            image_bytes = base64.b64decode(b64)
+        except Exception as e:
+            _provider_failed("openai", model, "image", resp=resp,
+                             error=f"undecodable image data: {e}")
+            return {"error": f"Could not decode image data: {e}"}
 
-    return {
-        "video_id": video_id,
-        "image_name": image_name,
-        "filename": filename,
-        "path": str(path),
-        "public_path": f"/public/{video_id}/images/{filename}",
-        "width": _image_pixel_size(path)[0],
-        "height": _image_pixel_size(path)[1],
-        "provider": "openai",
-        "model": model,
-        "aspect_ratio": aspect_ratio,
-        "size_bytes": len(image_bytes),
-    }
+        ext = _IMAGE_EXT_BY_MIME.get(mime, "png")
+        filename = f"{image_name}.{ext}"
+        try:
+            path = tjobs.image_file(JOBS_DIR, video_id, filename)
+        except tjobs.UnsafePath as e:
+            return {"error": str(e)}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(image_bytes)
+
+        return {
+            "video_id": video_id,
+            "image_name": image_name,
+            "filename": filename,
+            "path": str(path),
+            "public_path": f"/public/{video_id}/images/{filename}",
+            "width": _image_pixel_size(path)[0],
+            "height": _image_pixel_size(path)[1],
+            "provider": "openai",
+            "model": model,
+            "aspect_ratio": aspect_ratio,
+            "size_bytes": len(image_bytes),
+        }
+    finally:
+        # Once the file exists the folder counts it; a failed call must not
+        # keep the slot (a different name would be refused for nothing).
+        _release_image_reservation(video_id, image_name)
 
 
 # Above this, an image content block is resized down anyway, so paying to ship
@@ -6403,14 +6683,16 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     scene-config: **never** write scene-config.json using Claude Code's file
     tools, the same rule write_scene_file enforces for .tsx files.
 
-    A System Flow, Bean Explainer, Whiteboard or Storybook Atlas video is one
-    installed scene (SystemFlow, BeanExplainer, Whiteboard or StorybookAtlas)
-    from frame 0 for totalFrames, whose props hold the whole video as data;
-    that data is checked here against the style's contract (the
-    tubematic-system-flow, tubematic-bean-explainer, tubematic-whiteboard and
-    tubematic-storybook-atlas skills document it)
-    and refused with one sentence per problem. Each style fills subtitles with
-    its own caption look when the config has none.
+    A System Flow, Bean Explainer, Whiteboard, Storybook Atlas or Under the
+    Hood video is one installed scene (SystemFlow, BeanExplainer, Whiteboard,
+    StorybookAtlas or UnderTheHood) from frame 0 for totalFrames, whose props
+    hold the whole video as data; that data is checked here against the
+    style's contract (the tubematic-system-flow, tubematic-bean-explainer,
+    tubematic-whiteboard, tubematic-storybook-atlas and tubematic-under-the-hood
+    skills document it) and refused with one sentence per problem. Each style
+    fills subtitles with its own caption look when the config has none. For
+    Under the Hood this also fills each plate's aspect from its photograph's
+    file.
 
     Call write_scene_file for every generated src referenced in config first,
     then call this, then the operator calls validate_job. Only the shape needed
@@ -6477,6 +6759,58 @@ def _bean_custom_list(config) -> list:
     except (KeyError, IndexError, TypeError, AttributeError):
         return []
     return custom if isinstance(custom, list) else []
+
+
+def _uth_aspect_errors(video_id: str, config: dict) -> list[str]:
+    """validate_job's re-check that each Under the Hood plate's stored aspect
+    still matches its photograph; [] for any other config."""
+    try:
+        plates = config["scenes"][0]["props"][under_the_hood.PROPS_KEY]["plates"]
+    except (KeyError, IndexError, TypeError):
+        return []
+    if not isinstance(plates, list):
+        return []
+    fresh = _uth_with_aspects(video_id, config)["scenes"][0]["props"][under_the_hood.PROPS_KEY]["plates"]
+    stale = sorted({p["image"].rsplit("/", 1)[-1] for p, q in zip(plates, fresh)
+                    if isinstance(p, dict) and isinstance(p.get("image"), str)
+                    and "aspect" in q and abs(q["aspect"] - p.get("aspect", 1)) > 0.005})
+    if not stale:
+        return []
+    return [f"The photograph(s) {', '.join(stale)} changed shape after the scene config was written; "
+            "write the config again with write_scene_config so the plates and the pinned points are "
+            "checked against the new pictures."]
+
+
+def _uth_with_aspects(video_id: str, config: dict) -> dict:
+    """The config with each Under the Hood plate's `aspect` (height over width)
+    read from its photograph's file. A plate whose file is missing or unreadable
+    keeps what it had: validate_job reports a missing image by name."""
+    try:
+        data = config["scenes"][0]["props"][under_the_hood.PROPS_KEY]
+        plates = data["plates"]
+    except (KeyError, IndexError, TypeError):
+        return config
+    if not isinstance(plates, list):
+        return config
+    from PIL import Image as PILImage
+    prefix = f"/public/{video_id}/images/"
+    filled = []
+    for plate in plates:
+        image = plate.get("image") if isinstance(plate, dict) else None
+        if isinstance(image, str) and image.startswith(prefix):
+            try:
+                images = tjobs.images_dir(JOBS_DIR, video_id)
+                target = tjobs.join_below(images, image[len(prefix):])
+                if tids.inside(images, target) and target.is_file():
+                    with PILImage.open(target) as im:
+                        w, h = im.size
+                    plate = {**plate, "aspect": round(h / w, 4)}
+            except (tjobs.UnsafePath, OSError, ValueError):
+                pass
+        filled.append(plate)
+    config = copy.deepcopy(config)
+    config["scenes"][0]["props"][under_the_hood.PROPS_KEY]["plates"] = filled
+    return config
 
 
 def _bean_custom_sources(video_id: str, config, props_key: str = bean_explainer.PROPS_KEY) -> dict[str, str]:
@@ -6913,6 +7247,24 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         if given is None or isinstance(given, dict):
             config["subtitles"] = {**terminal_doc.captions_for(tvs.pack(terminal_doc.STYLE_ID),
                                                                terminal_doc.skin_of(config)), **(given or {})}
+    # ── Under the Hood (TMDEV-201) ───────────────────────────────────────────
+    # The same shape again: one installed UnderTheHood scene whose props hold
+    # plates (generated photographs) and the events pinned to them. Each
+    # photograph's aspect is read from its file here, because every check of a
+    # point pinned to it depends on its height; the agent never writes it.
+    uth_err = under_the_hood.check_scene_use(row["visual_style"], scenes)
+    if uth_err:
+        return {"error": uth_err}
+    if (row["visual_style"] or "") == under_the_hood.STYLE_ID:
+        config = _uth_with_aspects(video_id, config)
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = under_the_hood.check(config, fps, word_starts,
+                                        tvs.pack(under_the_hood.STYLE_ID)["extra"], video_id)
+        if problems:
+            return {"error": "The Under the Hood video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(under_the_hood.STYLE_ID)["captions"], **(given or {})}
 
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the

@@ -301,7 +301,7 @@ pickers on its rows.
 - [Mascot](../15-dashboard.md#mascot-picker): the picker is hidden when nothing can be picked.
   Mascots are disabled with the reason unless the GPU is working, and while the GPU status has not
   loaded. `mascot_id` travels with `approve-topic` only when the picker shows. Choosing Cartoon 3D
-  clears and locks the picker and sends an empty mascot.
+  or Under the Hood clears and locks the picker and sends an empty mascot.
 - A refused approval (`onAction` resolving `false`) brings the row back so the pick can be changed.
 - Every picker is found by its caption (`getByLabelText`), which proves the caption is the control's
   accessible name.
@@ -325,7 +325,8 @@ Covers `components/VideoModal.tsx`, [the video window](../15-dashboard.md#the-vi
   markup as the authored words.
 - The Video tab plays `/stream/<project_id>/<id>.mp4` whatever `video_path` holds.
 - The Actions block carries the same pickers as a Quick Actions row, under the same rules. The
-  mascot cases cover its caption, the GPU gate, the `approve-topic` payload and the Cartoon 3D lock.
+  mascot cases cover its caption, the GPU gate, the `approve-topic` payload and the lock for Cartoon
+  3D and Under the Hood.
 - Once the pickers are gone, their values show read-only. The Voice and Voice model rows come from
   `voice_info` and are hidden while the voice picker is up.
 - The Rendered by and Render time rows show the last render's renderer with GPU or CPU, fall back to
@@ -357,6 +358,17 @@ Covers the video window's **Why this style** row and **Switch to …** button
 - An Auto pick shows its reason and runner-up. A style a person chose shows neither.
 - The switch is offered only at `SCRIPT_READY` with a runner-up, posts to `/switch-style` after a
   confirm, does nothing when the confirm is declined, and shows the server's refusal.
+
+### `video-modal-script-record.test.tsx`
+
+Covers `components/ScriptRecord.tsx` on the video window's Script tab and `lib/scriptFormulas.ts`
+([The video window](../15-dashboard.md#the-video-window)).
+
+- A script with a record shows its formula and opening type by their labels, the three openings
+  with the one in use marked, and every warning.
+- A script with no record shows the segments and nothing else, and makes no request for the names.
+- The ids are shown when the names cannot be loaded, and for an id the list does not know.
+- A segment shows its `beat` label only when it has one. The block holds no control.
 
 ### `video-modal-retry-agent.test.tsx`
 
@@ -683,7 +695,8 @@ Covers `lib/mascots.ts` ([Mascot picker](../15-dashboard.md#mascot-picker)).
 - `mascotGate` is open only while the GPU is working.
 - `mascotOptions` keeps a held mascot that is still pickable selectable. One that is not pickable
   shows as unavailable and is never read as None.
-- `approvalMascot` sends no mascot for Cartoon 3D.
+- `approvalMascot` sends no mascot for Cartoon 3D, or for a style the served list marks `mascot:
+  false`; with the list not loaded it leaves the pick to the API.
 
 Trap: the gate fails closed while the GPU status has not loaded, the opposite of the visual-style
 rule. An untouched picker could otherwise send a mascot the API refuses.

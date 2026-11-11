@@ -1,0 +1,83 @@
+{
+  "id": "scene-story",
+  "order": 90,
+  "family": "story",
+  "label": "Scene Story",
+  "line": "Put a person, named only by role, inside an act already under way. Turn it with 'but when' inside the first fifth, hold the reveal to the last quarter, and stop on a hard fact.",
+  "best_for": [
+    "one person inside one moment: a near miss, a strange true incident, an ordinary life in a big event",
+    "a fact that can ride on a story as the answer to its question"
+  ],
+  "also_for": [
+    "the rise or fall of a product, told through one decision"
+  ],
+  "avoid_for": [
+    "a biography or a survey of a period",
+    "invented first-person testimony"
+  ],
+  "words": [
+    90,
+    200
+  ],
+  "beats": [
+    {
+      "name": "The act",
+      "from": 0,
+      "to": 15,
+      "job": "A pronoun or a role, in the middle of doing something. No name and no date with a life history."
+    },
+    {
+      "name": "But when",
+      "from": 15,
+      "to": 30,
+      "job": "The first change of direction."
+    },
+    {
+      "name": "Escalation",
+      "from": 30,
+      "to": 55,
+      "job": "Remove the ways out. Plant one detail for later."
+    },
+    {
+      "name": "False relief",
+      "from": 55,
+      "to": 65,
+      "job": "It seems to be over."
+    },
+    {
+      "name": "Reveal",
+      "from": 65,
+      "to": 85,
+      "job": "As a plain noun or a look back: bigger than the threat the viewer knew about."
+    },
+    {
+      "name": "Last line",
+      "from": 85,
+      "to": 100,
+      "job": "A hard fact, an ironic clause or a what-if. Never a moral."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "scene",
+      "shape": "In [year], [a person, by role] was [doing X] in [a cut-off place] when [the sudden failure]."
+    },
+    {
+      "type": "paradox",
+      "shape": "This is [a harmless-looking thing], and it [did something that should be impossible]."
+    },
+    {
+      "type": "result",
+      "shape": "By [the next morning], [the outcome]. It began with [one small act]."
+    }
+  ],
+  "holds": "The viewer knows only what the person in the scene knows. One or two 'but' turns in every thirty seconds. One line that withholds, a beat before the reveal: they could not believe what they saw.",
+  "ending": "A reveal of a few words, an ironic last clause or a what-if. The script stops on the payoff detail and asks nothing.",
+  "pitfalls": [
+    "A name and a date before any reason to care",
+    "The outcome in the title or the first line (unless the opening is the result-first shape)",
+    "No obstacle: every step succeeds",
+    "A moral"
+  ],
+  "template": "[A person, by role] was [in the middle of an act]. But when [the first turn], [reaction]. [A constraint]. [The planted detail]. Now, [time marker], [it kept happening]. So [a decision]. When [they] looked, [they] could not believe it. It was [the reveal]. [A hard fact or an ironic clause]."
+}

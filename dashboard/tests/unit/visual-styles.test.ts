@@ -38,7 +38,9 @@ describe("styleOptions", () => {
 
   it("disables only the styles that need an OpenAI key, and says why, without one", () => {
     const opts = styleOptions(PACK_STYLES, false);
-    expect(opts.filter((o) => o.disabled).map((o) => o.value)).toEqual(["illustrated"]);
+    const needKey = PACK_STYLES.filter((s) => s.needs.openai_key).map((s) => s.id);
+    expect(needKey).toEqual(expect.arrayContaining(["illustrated", "under_the_hood"]));
+    expect(opts.filter((o) => o.disabled).map((o) => o.value)).toEqual(needKey);
     expect(opts.find((o) => o.value === "illustrated")!.label).toMatch(/needs an OpenAI key/);
   });
 
@@ -87,9 +89,9 @@ describe("styleOptions with the GPU status", () => {
     expect(styleOptions(PACK_STYLES, true, null).every((o) => !o.disabled)).toBe(true);
   });
 
-  it("disables both when neither an OpenAI key nor a GPU is there", () => {
+  it("disables every style that needs an OpenAI key or a GPU when neither is there", () => {
     expect(styleOptions(PACK_STYLES, false, { status: "not_configured" }).filter((o) => o.disabled).map((o) => o.value))
-      .toEqual(["illustrated", "cartoon_3d"]);
+      .toEqual(PACK_STYLES.filter((s) => s.needs.openai_key || s.needs.gpu).map((s) => s.id));
   });
 });
 

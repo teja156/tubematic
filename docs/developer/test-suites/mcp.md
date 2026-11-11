@@ -172,6 +172,33 @@ than `cmu-arpabet` or `ipa` (the word is dropped from the audio) and a `<break>`
 3 seconds. The attribute must be the real one, once: a prefixed name, a repeat, or the text inside
 another attribute's value does not count.
 
+### `test_script_record.py`
+
+Covers what `update_video` records with a script: `formula_id`, `hooks` and the returned `warnings`
+([What a script records](../08-scripting-and-voice.md#what-a-script-records)).
+
+- A script is stored with its formula, the kept opening's type and the three openings, which are
+  saved as spoken text. `get_video` returns the openings and the warnings as lists.
+- A malformed record is refused and nothing is written: one argument without the other, an unknown
+  formula, a hook type the formula does not offer, not three openings, two of one type, none or two
+  marked `kept`, a record with no `script_segments`.
+- A flagged script is still written, and the stored warnings equal the returned ones. A script with
+  no record is accepted and gets `no_formula`.
+- A pronunciation fix that resends the script with no record keeps it, checks nothing and returns
+  no warnings, on a script with a record, on one without, and on a stored flat script that holds
+  markup and line breaks. A rewrite that sends none clears it.
+  A rewrite with a new record replaces it.
+- A fault inside the checks does not stop the write.
+- The closing sentence is compared with the 30 newest other scripts of the same domain, and with
+  none when the video has no domain.
+- A `beat` label on a segment must be a short non-empty string.
+
+Trap: a warning must never refuse a write, and a script with no record must be accepted. An agent
+on an older skill sends no record during an upgrade.
+
+Trap: a pronunciation fix goes straight to a paid re-voice with no approval in between. A warning
+returned there would invite the agent to change words a person approved.
+
 ### `test_generate_voice.py`
 
 Covers `generate_voice`: the text it sends, the alignment it turns into `timeline.json`, and what
@@ -548,6 +575,43 @@ per-beat sampling ([Terminal Doc](../10-scene-authoring.md#terminal-doc)).
   style, a video with no config and a config with no moves, returns the picture (the renderer stubbed)
   with each move's slot and text, and gives way to a heavy check that holds the lock.
 
+### `test_under_the_hood.py`
+
+Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under the Hood config, the
+`subtitles.look` check, the text audit's per-plate sampling, and the cap on photographs in
+`generate_image` ([Under the Hood](../10-scene-authoring.md#under-the-hood)).
+
+- The limits, timings, geometry, camera, event types, poses, tones, shapes, entrances and stat slots
+  equal the ones in the renderer's `contract.ts`, read from the TypeScript source, and the pack's
+  poses, events, tones and photograph cap equal them too. Both sides answer the shared cases in
+  `fixtures/under_the_hood_contract.json` (the projection, the photograph's box, the push, chip and
+  stat boxes, the stat's text with JavaScript's rounding, the leader's start, overlap).
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its plate or event and cause: a plate or a pose off the words, a plate too
+  short, another video's or a container image path, a photograph that does not cover the band, a
+  zoom out of range, photograph fields on a plain plate, a zoom entrance with no photograph before it
+  or no `through`, a callout too long, a pinned point that leaves the band before its plate ends, a
+  chip outside the band or on its point or over another, a bad region, arc count, counter values,
+  stat affix, label, slot or width, a bad chart, a chart on a photograph or a callout on a plain
+  plate, a second footnote, text too late to read, events out of order, too many elements, poses too
+  close together or repeating the current pose, and a still stretch over 3 seconds. More than 12
+  different photographs is
+  refused and a reused one is free. A zoom-through counts the plate's text as leaving 6 frames early.
+  A value of the wrong type gets a sentence back and raises nothing.
+- The text audit samples each plate and stops before a zoom-through.
+- `write_scene_config` writes a sound config with the style's captions, fills each plate's `aspect`
+  from its file, keeps an `emphasis` it was given, refuses a photograph too wide to cover the band
+  before writing anything, refuses `UnderTheHood` on another style and other scenes on an Under the
+  Hood video. `subtitles.look` accepts `plain` and `selection` only.
+- `generate_image` refuses a 13th new photograph on an Under the Hood video before any request goes
+  out, and allows regenerating an existing one; other styles are not capped. A name being generated
+  holds its slot, so a second new name cannot take the last one meanwhile, and a call that fails gives
+  the slot back.
+
+Trap: a plate whose own fields are bad is skipped for every check that projects through its camera,
+including the next plate's zoom-through, or a malformed `focus` raised instead of being reported.
+
 ### `test_choose_visual_style.py`
 
 Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back
@@ -557,7 +621,8 @@ Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes 
   and script guidance. `scenes` keeps `auto` and still counts as decided.
 - The choice is made once, only at `TOPIC_APPROVED`, never over a style a person chose, and never
   for an archived video. A bad style, runner-up or reason is refused.
-- An unavailable style or runner-up is refused with the reason, and a mascot rules out a 3D world.
+- An unavailable style or runner-up is refused with the reason, and a mascot rules out a 3D world
+  and Under the Hood.
 - A status, style, pick or archive change between the row read and the `UPDATE` leaves the video
   untouched, and so does a mascot landing before a 3D pick. While the tool reads what the install
   can make, another writer is locked out.
@@ -810,9 +875,11 @@ Covers a mascot on a video: `create_video`, `update_video`, `set_video_status`, 
 `write_scene_config`, `validate_job`, `submit_render` and the audit's mascot warning
 ([Mascots](../10-scene-authoring.md#mascots)).
 
-- A new video gets the default mascot only while a GPU works, and none on a Cartoon 3D video.
-- The pick is frozen after the topic stage, needs a working GPU when it changes, and is cleared by
-  a switch to `cartoon_3d` in the same write.
+- A new video gets the default mascot only while a GPU works, and none on a Cartoon 3D or Under the
+  Hood video.
+- The pick is frozen after the topic stage, needs a working GPU when it changes, is refused on an
+  Under the Hood video, and is cleared by a switch to `cartoon_3d` or `under_the_hood` in the same
+  write.
 - Topic approval is refused for a withdrawn mascot and for a Cartoon 3D video that holds one,
   including when the other write commits between the check and the `UPDATE`.
 - Invalid cues are refused with their reasons and nothing written. The mascot version is fixed by

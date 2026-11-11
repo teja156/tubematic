@@ -8,17 +8,20 @@ timeline.
 
 ## Script segments
 
-A script is an ordered list of segments, one per beat:
+A script is an ordered list of segments:
 
 ```json
 [
-  { "id": "seg-1", "voice": "Every website you visit starts with a question…",
+  { "id": "seg-1", "beat": "The action",
+                   "voice": "Every website you visit starts with a question…",
                    "visual": "Terminal typing a domain, cursor blinking" },
   { "id": "seg-2", "voice": "…", "visual": "…" }
 ]
 ```
 
 - `voice` is spoken aloud. No other field is.
+- `beat` is optional. It names the beat of the script's [formula](#formulas) the segment belongs
+  to, and the dashboard shows it beside the segment.
 - `visual` is a brief for the scene author. Its kind depends on the video's
   [visual style](10-scene-authoring.md#visual-styles): under `stick`, a beat about a generic
   role gets a pose brief ("scientist at a console, shocked, red alert pops in"), and otherwise a
@@ -29,7 +32,8 @@ A script is an ordered list of segments, one per beat:
 The agent writes segments through `update_video(script_segments=[…])`, which validates them and
 derives the flat `videos.script` column. Do not write `script` directly. The same call carries the
 publish title and description, which the agent writes while it has the whole script in view (see
-[Publishing](14-publishing.md#schema)).
+[Publishing](14-publishing.md#schema)), and the formula and openings the script was built on (see
+[What a script records](#what-a-script-records)).
 
 `mcp/server.py::_validate_script_segments` requires:
 
@@ -40,26 +44,145 @@ publish title and description, which the agent writes while it has the whole scr
   spoken
 - no standalone punctuation word (`the catch ...`)
 - well-formed `<respell>` and `<ipa>` tags
+- a `beat`, when present, that is a non-empty string of at most `SEGMENT_BEAT_MAX_LEN` characters
 
-The canonical beat sequence is hook, context, core content, takeaway, call to action. Each is one
-segment, and only core content splits across several. Segments let `timeline.json` carry a frame
-span per segment, so a scene aligns to a beat.
+Segments follow the beats of the script's formula, in order. Each segment is one visual idea, so a
+long beat splits into several segments and two short beats that share a picture can share one.
+Segments let `timeline.json` carry a frame span per segment, so a scene aligns to a beat.
 
 ## Length
 
+A script's length is the word band of its [formula](#formulas), unless the visual style's `script`
+text gives a length of its own, which then wins. One limit holds for every script:
+
 | | Seconds | Words |
 |---|---|---|
-| Target | ~90 | ~235 |
 | Hard ceiling | 3:00 | 450 |
 
-Time is the canonical measure, and the word counts are derived from it. ElevenLabs speaks at about
-157 words per minute (151 to 162 across finished videos), and word count predicts finished duration
-within about 4%. If you change one of these numbers, redo the arithmetic.
+Three minutes is the longest a YouTube Short can be. ElevenLabs speaks at about 157 words per minute
+(151 to 162 across finished videos), and word count predicts finished duration within about 4%, so
+the ceiling in words is derived from the ceiling in seconds. It is `formulas.py::WORD_CEILING`, and
+no formula's band may pass it. If you change it, redo the arithmetic.
 
-Per-beat budgets at the target: hook ~25, context ~35, core ~120, takeaway ~30, call to action ~25.
+`_validate_script_segments` has no word cap. A script outside its formula's band or past the ceiling
+is stored, and the write returns a [warning](#script-warnings) that the human sees at
+`SCRIPT_READY`.
 
-The script-writing skill states the budget, and `_validate_script_segments` has no word cap. A
-script that overruns is caught by the human who reads it at `SCRIPT_READY`.
+## Formulas
+
+A formula is a script's structure: its beats in order, each beat's share of the script, the shapes
+its opening can take, where the turn and the payoff fall, how it ends, and its word band. The agent
+chooses one per script from the shape of the topic, before it writes a word. A formula says nothing
+about how a line sounds (the [script profile](#script-profiles) does) or what a segment shows (the
+visual style does).
+
+Each formula is one JSON file in `tubematic_core/formulas/`, named for its id.
+`tubematic_core/formulas.py` loads and validates every file at import (`_check_formula`), so a
+malformed file stops the process at start. The MCP server and the API both import the module.
+
+| Field | Meaning |
+|---|---|
+| `id`, `label`, `order` | The id equals the file name. `order` sorts the list and is unique |
+| `family` | `explain`, `story` or `ladder` |
+| `line` | The formula in one sentence |
+| `best_for`, `also_for`, `avoid_for` | Kinds of topic it is the first choice for, also fits, and does not suit |
+| `words` | `[min, max]`, the word band. The maximum is at most `WORD_CEILING` |
+| `beats` | `[{name, from, to, job}]`. `from` and `to` are percentages of the script's words, and the beats cover 0 to 100 with no gap |
+| `hooks` | `[{type, shape}]`. At least three opening shapes, each of a different hook type |
+| `holds`, `ending`, `pitfalls`, `template` | What keeps a viewer, how the script ends, what goes wrong, and a fill-in shape of the whole script |
+
+Hook types are one closed list, `formulas.py::HOOK_TYPES`, shared by every formula. A shared list
+lets openings be compared across formulas.
+
+The agent reads formulas as text. `scripts/gen_formula_references.py` renders one reference file per
+formula into the skill's `formulas/` folder, and the table in the skill's `SKILL.md` that maps the
+shape of a topic to a formula. The agent reads the table, picks a formula, and reads that formula's
+file only. To change a formula, edit its JSON file and run the script.
+`scripts/tests/test_script_writing_skill.py` fails while the generated text differs from the data.
+
+To add a formula, add its file and run the script. `update_video` then accepts the id and
+`GET /script-formulas` lists it. A formula that needs a second voice cannot ship, because a video
+has one voice.
+
+### What outranks a formula
+
+The script-writing skill ranks the four things that shape a script. Where two disagree, the earlier
+one wins:
+
+1. The fixed policy in the skill: the segment shape, markup, pronunciation, the ceiling, the visual
+   brief rule, the skill's grammar rules, accuracy, and no borrowed identity.
+2. The visual style's `script` text (see [Style packs](10-scene-authoring.md#style-packs)), where a
+   style says how narration maps to its picture, including how such a video ends.
+3. The formula.
+4. The script profile, or the skill's generic style when the video has none.
+
+A closing line (a follow ask, a sign-off) is written only when the install's
+[preferences](07-agent-layer.md#user-preferences) ask for one. It is one sentence after the payoff.
+
+## What a script records
+
+`update_video` takes two more arguments in the call that writes `script_segments`:
+
+- `formula_id`: the formula the script follows.
+- `hooks`: the three openings the agent drafted, as `[{type, text, kept, note}]`. `type` is one of
+  the formula's hook types, `text` is the opening's spoken words, `kept` is true on the one the
+  script uses, and `note` (optional) says why another was dropped.
+
+They are stored on the video as `formula_id`, `hook_type` (the kept opening's type) and
+`hook_alternatives` (see [`videos`](03-database.md#videos)). Empty columns mean the script has no
+record. Nothing reads the record to decide what happens to a video.
+
+`update_video` refuses a record that would say something untrue. It refuses either argument without
+the other, and both without `script_segments`. `mcp/server.py::_script_record_error` refuses an id
+that is not a formula, a hook type the formula does not offer, fewer or more than three openings,
+two openings of one type, an opening with no spoken words or longer than `HOOK_TEXT_MAX_LEN`, and
+no opening or more than one marked `kept`.
+
+The record follows the script:
+
+| The script write | What happens to the record |
+|---|---|
+| Carries `formula_id` and `hooks` | Stored |
+| Carries neither, and the spoken words are unchanged (a pronunciation fix) | Kept. Nothing is checked and no `warnings` are returned, because that script is already approved |
+| Carries neither, and the spoken words changed | Cleared |
+| A flat `script` written through `PATCH /videos/<id>` | Cleared, with the stored warnings |
+
+A script write with no record is accepted. An agent running an older skill during an upgrade sends
+none, and refusing it would stop that agent's scripts.
+
+## Script warnings
+
+A script write through `update_video` that changes the spoken words, or that carries a record, runs
+`tubematic_core/script_checks.py::check` over the spoken words. The result is returned to the agent
+as `warnings`, a list of `{id, message}`, and stored in `videos.script_warnings`. The dashboard lists
+it on the Script tab. A fault inside a check is logged and the script is stored with no warnings.
+
+| `id` | Raised when |
+|---|---|
+| `no_formula` | The script has no formula on record |
+| `hook_mismatch` | The opening marked `kept` is not how the first segment begins |
+| `greeting_opener` | A greeting or an agenda line in the first two sentences |
+| `title_repeat` | The first sentence holds most of the publish title's words |
+| `staged_runup` | A phrase that announces a turn ("Here's the thing") |
+| `no_turn` | No turn word in the middle of the script |
+| `over_ceiling` | More than `WORD_CEILING` words |
+| `length_band` | A word count outside the formula's band, beyond `BAND_SLACK` |
+| `recap_ending` | A recap in the last two sentences |
+| `closing_ask` | The last sentence asks the viewer to follow, subscribe, share or comment |
+| `closing_repeat` | The sentence the script closes on opens with the same three words as the closing sentence of one of the same domain's 30 newest other scripts. A closing ask is skipped on both sides, so the sentences compared are the ones before it |
+
+A warning never refuses a write and never changes a status. A check that blocked would stop every
+script on its first false positive. The agent reads the list, fixes what is a real problem, and
+writes the script again at most once. The AI review does not run these checks, because a review
+finding sends a video to revision and a paid re-voice.
+
+A script whose closing line was asked for in the preferences can still get `closing_ask`. The
+server cannot tell that the line was asked for. A script whose length the visual style's `script`
+text set can still get `length_band`, for the same reason. The skill tells the agent to leave both.
+
+Every pattern and threshold is a constant in `script_checks.py`. The checks are regular expressions
+and counts, so they catch a script that fell back to a stock shape and do not judge whether a script
+is good.
 
 ---
 
@@ -403,9 +526,17 @@ flowchart LR
 - The profile holds style: structure, tone, hook patterns, vocabulary, anti-patterns. It leaves out
   absolute word and duration counts and any creator identity (name, channel, handle, sponsor),
   because the finished script is voiced by your ElevenLabs voice.
-- The mechanical contract stays in `tubematic-script-writing-skill`: segment shape, length budget,
-  pronunciation and pause rules, and the rule that decides each beat's visual brief from the beat's
-  subject and the video's visual style. A profile cannot override it.
+- The script's structure comes from its [formula](#formulas), and the profile supplies the voice.
+  The script-writing skill applies a profile's Voice & Tone, Explanation Style, Vocabulary &
+  Signature Phrasing and Anti-patterns sections. It uses Hook Patterns as wording for the opening
+  shape the formula fixes. It does not use Structure Template, and it uses CTA Template only to
+  word a closing line the preferences asked for.
+- The skill tells the agent to use a profile's signature phrases in some scripts and no single one
+  in every script. A phrase repeated as every video's opener or closer is what a returning viewer
+  notices first.
+- The mechanical contract stays in `tubematic-script-writing-skill`: segment shape, the length
+  ceiling, pronunciation and pause rules, and the rule that decides each beat's visual brief from
+  the beat's subject and the video's visual style. A profile cannot override it.
 - A profile is written once and cannot be edited. Delete a bad profile and create it again.
 - Deleting a profile archives the row, so a video that referenced it still resolves.
   `GET /script-profiles/<id>` serves archived rows.

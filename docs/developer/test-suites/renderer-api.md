@@ -285,6 +285,17 @@ Covers `POST /videos/<id>/switch-style` and the `PATCH` rules for a style Auto p
 
 Trap: the dashboard re-sends the style picker's value on every approval, so a rule that cleared the
 pick on any `visual_style` write would erase every Auto pick at its first approval.
+### `test_script_record.py`
+
+Covers a script's record over HTTP
+([What a script records](../08-scripting-and-voice.md#what-a-script-records)).
+
+- Every video route returns `hook_alternatives` and `script_warnings` as lists, `[]` for a video
+  with no record.
+- A `script` written through `PATCH` clears the four record columns. A `PATCH` that leaves the
+  script alone keeps them.
+- `GET /script-formulas` lists every formula and every hook type with its label.
+
 ### `test_voice_models.py`
 
 Covers per-voice ElevenLabs models over HTTP.
@@ -334,12 +345,15 @@ defaults, the seeding of new videos and the per-video pick.
   videos are seeded from the domain default, then the install default, and get nothing without a
   working GPU or on a Cartoon 3D video.
 - The per-video pick is frozen after `TOPIC_PROPOSED` and judged against the style the video will
-  have after the same `PATCH`. A switch to Cartoon 3D clears the mascot and its `mascot_version`.
+  have after the same `PATCH`. A switch to Cartoon 3D or Under the Hood clears the mascot and its
+  `mascot_version`. An Under the Hood video is seeded with no mascot, refuses a pick, and cannot be
+  approved while it holds one.
 
 Trap: the approving `PATCH` refuses a mascot archived since it was seeded, and repeats the check in
 its `UPDATE`, so an archive or a style write that commits between the check and the write still gets
-`409`. No sequence of requests may leave a Cartoon 3D video holding a mascot, because
-[the gateway refuses to hand it out](../11-rendering-and-review.md#refused-before-anything-renders).
+`409`. No sequence of requests may leave a Cartoon 3D or Under the Hood video holding a mascot,
+because [the gateway refuses to hand it out](../11-rendering-and-review.md#refused-before-anything-renders),
+which `test_render_gateway.py` checks for both styles.
 
 ## Publishing and Auto Pilot
 
