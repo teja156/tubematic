@@ -51,7 +51,7 @@ export const BoxCheck: React.FC<{ entry: PropEntry; x: number; y: number }> = ({
     if (top < -h) over.push(`top ${Math.ceil(-h - top)}`);
     if (bottom > 0) over.push(`bottom ${Math.ceil(bottom)}`);
     setReport(over.length ? `OVER: ${over.join(", ")}` : `fits (drawn ${Math.ceil(right - left)}x${Math.ceil(bottom - top)})`);
-  }, [entry]);
+  }, [entry, w, h]);
   return (
     <>
       <svg width={1} height={1} style={{ position: "absolute", left: 0, top: 0, opacity: 0, overflow: "visible" }}>
