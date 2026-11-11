@@ -25,6 +25,9 @@ After you upgrade:
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
    installs new skills for System Flow, Bean Explainer and Auto's style choice, and a session
    started before it does not have them.
+2. Reload any dashboard tab that was open during the upgrade. A **Topics** page loaded before it
+   sets a domain's agent, model and effort back to **Automatic** when it saves another change to
+   that domain.
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did
 before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
@@ -70,6 +73,13 @@ If you go back to 2.1.x later:
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
   agent writes a new script for it, which is voiced when you approve it. See
   [What Auto does](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does).
+- A domain can have its own agent, model and effort. Every new video in the domain then starts on
+  that agent, whichever research mode found the topic, and the shares on **Settings → Agents** apply
+  to the domains left on **Automatic**. You can still change the agent on each video at a
+  checkpoint. Set it under **Edit defaults** on the domain's row on the **Topics** page, or in
+  **Add Domain**. On the **New Video** page, **Automatic** uses the Manual Videos domain's agent
+  when it has one. See
+  [Choose which agent makes a video](https://docs.tubematic.ai/user-guide/agents#choose-which-agent-makes-a-video).
 
 ### Changed
 
@@ -81,6 +91,10 @@ If you go back to 2.1.x later:
   approach. A video's card and window show the picked style after the word Auto.
 - A topic sent back for revision returns to Auto if Auto had picked its style, so the agent picks
   again for the revised topic.
+- A domain's row on the **Topics** page is one line: its name, the defaults it has set, its topic
+  and video counts, its status and the pause button. **Edit defaults** opens the visual style,
+  mascot, voice, script profile and topic cap under the row. Before, those pickers sat on the row
+  itself.
 
 ### Fixed
 

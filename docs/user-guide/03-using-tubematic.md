@@ -86,7 +86,7 @@ curriculum seed. You can change those numbers on **Settings → Research**.
 A video you create on the **New Video** page is not scored. It is filed under a domain called
 **Manual Videos**.
 
-![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button](../images/topics.png)
+![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button and its Edit defaults button](../images/topics.png)
 
 ### Adding a domain
 
@@ -96,10 +96,17 @@ On the **Topics** page, under **Curriculum Seed Domains**, fill in **Add Domain*
 2. Describe the scope in up to 2000 characters. Research works from this description, so say what
    belongs in the domain and what does not.
 3. Leave **Curriculum seed** ticked to have research propose topics for it.
-4. Optionally choose the visual style, voice, script profile and mascot its videos start with.
+4. Optionally choose what its videos start with: the visual style, mascot, voice and script
+   profile, and the agent with its model and effort.
 5. Press **Add Domain**.
 
-You can change the same choices later on the domain's row.
+To change the same choices later, press **Edit defaults** on the domain's row. Each change is saved
+as you make it. The row lists the choices the domain has made, and says "Install defaults for
+everything" when it has made none.
+
+A domain's agent starts every new video in that domain, whichever research mode found the topic.
+Leave it on **Automatic** to share the domain's videos between your agents
+([Choose which agent makes a video](12-agents.md#choose-which-agent-makes-a-video)).
 
 ### Mining sources
 
@@ -120,7 +127,7 @@ Five controls bound what research produces, and so what it costs.
 |---|---|---|---|
 | Research modes | Toggles on the **Topics** page | All on | Turns curriculum, trending or mining off |
 | Pause a domain | **Pause topic generation** on a seed's row on the **Topics** page | Not paused | Stops research filing topics in that domain |
-| Topic cap | **Topic cap** on a domain's row | 100 | The most topics a domain may hold over its lifetime, from 25 to 750 |
+| Topic cap | **Topic cap**, under **Edit defaults** on a domain's row | 100 | The most topics a domain may hold over its lifetime, from 25 to 750 |
 | Pending-topic limit | **Research pending cap** on **Settings → Research** | 15 | Research does not run while this many topics are waiting for your decision |
 | Research runs per day | **Max research runs per day** on **Settings → Research** | 8 | The most research runs in any 24 hours |
 
@@ -139,8 +146,9 @@ Research checks each new idea against every topic the domain has had, including 
 or deleted, so that it does not propose the same thing twice. The cap keeps that history short
 enough for the agent to read.
 
-A domain at its cap shows **EXPIRED**, and research files nothing more in it. Raise the cap on the
-domain's row to continue. The row shows how many topics the domain has had, as "N filed".
+A domain at its cap shows **EXPIRED**, and research files nothing more in it. To continue, press
+**Edit defaults** on the domain's row and raise **Topic cap**. The row shows how many topics the
+domain has had against its cap, for example "42 / 100 topics".
 
 ### The two research limits
 

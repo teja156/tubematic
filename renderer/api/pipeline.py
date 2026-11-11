@@ -638,6 +638,57 @@ def _agent_id_error(con, stored_agent_id, agent_id: str):
     return None
 
 
+def _domain_agent(con, project_id):
+    """The (agent_id, agent_model, agent_effort) a new video filed into this
+    domain starts with (TMDEV-207).
+
+    A domain can name an agent (projects.default_agent_id). While that agent is
+    live the video starts on it, with the domain's model if the agent still
+    offers it, and takes no card from the deck, like a human's override. With
+    no domain agent, or one uninstalled since, the video is dealt by weight as
+    before, and the domain's model is dropped: it belonged to the other agent's
+    list. The effort is a closed set that every agent takes, so it rides along
+    either way. Nothing here refuses: seeding never fails a video.
+
+    Call it where _pick_agent_id was called, inside the inserting transaction.
+    Keep in sync: mcp/server.py's _domain_agent (pinned by an agreement test).
+    """
+    row = con.execute(
+        "SELECT default_agent_id, default_agent_model, default_agent_effort "
+        "FROM projects WHERE id = ?", (project_id,)).fetchone() if project_id else None
+    wanted, model, effort = (row[0] or "", row[1] or "", row[2] or "") if row else ("", "", "")
+    if effort not in AGENT_EFFORTS:
+        effort = ""
+    if wanted:
+        agent = con.execute(
+            "SELECT models FROM agents WHERE id = ? AND archived_at IS NULL",
+            (wanted,)).fetchone()
+        if agent is not None:
+            return wanted, (model if model in _agent_models(agent[0]) else ""), effort
+    return _pick_agent_id(con), "", effort
+
+
+def _domain_agent_error(con, agent_id: str, model: str):
+    """Why a domain cannot take this agent and model as its default, or None.
+
+    The agent must be live and the model one of its own; a model with no agent
+    has no list to belong to. Callers run this only when the pair changes, so a
+    stored pair that went stale never blocks another edit to the domain.
+    Keep in sync: mcp/server.py's _domain_agent_error.
+    """
+    if not agent_id:
+        if model:
+            return ("default_agent_model needs a default_agent_id: a model belongs to one "
+                    "agent's list")
+        return None
+    err = _agent_id_error(con, None, agent_id) or _agent_model_error(con, agent_id, model)
+    if err:
+        return (err.replace("agent_model", "default_agent_model")
+                .replace("agent_id", "default_agent_id")
+                .replace("This video's agent", "The domain's agent"))
+    return None
+
+
 def _script_profile_error(con, profile_id: str):
     """Why `profile_id` cannot be a video's script profile, or None if it can.
     Only a READY, unarchived profile can be written in; the caller skips ""
@@ -3279,20 +3330,24 @@ def create_pipeline_blueprint() -> Blueprint:
             # A project's default mascot seeds EVERY video, whatever the strategy,
             # like its default voice; see _seed_mascot for when it seeds nothing.
             mascot_id = _seed_mascot(con, body.get("project_id"), visual_style)
+            # The domain's agent, model and effort seed EVERY video too, whatever
+            # the strategy (TMDEV-207); a domain on Automatic is dealt by weight.
+            # Keep in sync: mcp/server.py's create_video.
+            agent_id, agent_model, agent_effort = _domain_agent(con, body.get("project_id"))
             # The check above runs outside any transaction, so a pause or another
             # session's topic committed since then would be missed; the INSERT
             # re-checks both itself.
             cur = con.execute(
                 f"""INSERT INTO videos
                    (id, project_id, title, topic, strategy, producibility_score,
-                    status, video_version, voice_id, agent_id, visual_style,
-                    script_profile_id, mascot_id, created_at, updated_at)
-                   SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', 1, ?, ?, ?, ?, ?, ?, ?
+                    status, video_version, voice_id, agent_id, agent_model, agent_effort,
+                    visual_style, script_profile_id, mascot_id, created_at, updated_at)
+                   SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?
                    WHERE {_DOMAIN_OPEN_GUARD}""",
                 (vid, body.get("project_id"), title,
                  body["topic"], body["strategy"], body["producibility_score"], voice_id,
-                 _pick_agent_id(con), visual_style, script_profile_id, mascot_id, now, now,
-                 body["strategy"], body.get("project_id")),
+                 agent_id, agent_model, agent_effort, visual_style, script_profile_id,
+                 mascot_id, now, now, body["strategy"], body.get("project_id")),
             )
             if cur.rowcount == 0:
                 return jsonify({"error": _closed_domain_error(con, body["project_id"])
@@ -3399,10 +3454,15 @@ def create_pipeline_blueprint() -> Blueprint:
                 if err:
                     return jsonify({"error": err}), 400
             else:
-                # Dealt like every other new video, so the configured weights
-                # still hold for a human who leaves the picker on Automatic.
-                # Dealing writes the deck — from here on a refusal rolls back.
-                agent_id = _pick_agent_id(con)
+                # Automatic means what it means for every other new video: the
+                # manual domain's agent when it has a live one (TMDEV-207), else
+                # the weighted deal. A model or effort picked here still wins
+                # over the domain's. A picked agent, above, takes none of the
+                # three from the domain. Dealing writes the deck — from here on
+                # a refusal rolls back.
+                agent_id, seeded_model, seeded_effort = _domain_agent(con, MANUAL_PROJECT_ID)
+                agent_model = agent_model or seeded_model
+                agent_effort = agent_effort or seeded_effort
             if agent_model:
                 err = _agent_model_error(con, agent_id, agent_model)
                 if err:
@@ -3497,6 +3557,24 @@ def create_pipeline_blueprint() -> Blueprint:
         if not isinstance(default_mascot, str):
             return jsonify({"error": "default_mascot_id must be a string"}), 400
         default_mascot = default_mascot.strip()
+        # The agent, model and effort the domain's new videos start on
+        # (TMDEV-207). "" on the agent is Automatic, the weighted deal. Absent
+        # and null mean "", which on this full replace is what omission means;
+        # any other non-string is refused, never read as blank.
+        agent_defaults = {}
+        for key in ("default_agent_id", "default_agent_model", "default_agent_effort"):
+            raw = body.get(key)
+            if raw is not None and not isinstance(raw, str):
+                return jsonify({"error": f"{key} must be a string"}), 400
+            agent_defaults[key] = (raw or "").strip()
+        default_agent = agent_defaults["default_agent_id"]
+        default_agent_model = agent_defaults["default_agent_model"]
+        default_agent_effort = agent_defaults["default_agent_effort"]
+        if default_agent_effort not in ("",) + AGENT_EFFORTS:
+            return jsonify({
+                "error": f"default_agent_effort must be one of {list(AGENT_EFFORTS)}, or blank "
+                         f"for the agent's own effort, got {default_agent_effort!r}"
+            }), 400
         # Absent and null mean the default, which on this full replace is what
         # omission means. A cap below what the domain already holds is allowed:
         # it expires the domain at once, which is the human's call to make.
@@ -3516,7 +3594,8 @@ def create_pipeline_blueprint() -> Blueprint:
             # harmless: seeding never rewrites, and the approval PATCH refuses.
             prev = con.execute(
                 "SELECT description, default_visual_style, default_voice_id, "
-                "default_script_profile_id, default_mascot_id FROM projects WHERE id = ?",
+                "default_script_profile_id, default_mascot_id, default_agent_id, "
+                "default_agent_model FROM projects WHERE id = ?",
                 (pid,)).fetchone()
             # The id names the domain's output directory, so a NEW one must be a
             # plain path segment (TMDEV-158). Only a new one: this is an upsert
@@ -3571,12 +3650,25 @@ def create_pipeline_blueprint() -> Blueprint:
                        or tmascots.mascot_gpu_error(trenderers.gpu_status(con)["status"]))
                 if err:
                     return jsonify({"error": err.replace("mascot_id", "default_mascot_id")}), 400
+            # The default agent and its model follow the same rule, as a pair:
+            # checked only when either changes, so an agent uninstalled since,
+            # or a model it dropped, does not block every other edit. A stale
+            # pair is harmless: seeding falls back to the deal, or to the
+            # agent's own model. Keep in sync: mcp/server.py's upsert_project.
+            agent_unchanged = (prev is not None
+                               and (prev["default_agent_id"] or "") == default_agent
+                               and (prev["default_agent_model"] or "") == default_agent_model)
+            if not agent_unchanged:
+                err = _domain_agent_error(con, default_agent, default_agent_model)
+                if err:
+                    return jsonify({"error": err}), 400
             con.execute(
                 """INSERT INTO projects (id, name, description, is_curriculum_seed, status,
                                          default_visual_style, default_voice_id,
                                          default_script_profile_id, default_mascot_id,
-                                         topic_cap, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                         default_agent_id, default_agent_model,
+                                         default_agent_effort, topic_cap, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                      name=excluded.name,
                      description=excluded.description,
@@ -3586,9 +3678,13 @@ def create_pipeline_blueprint() -> Blueprint:
                      default_voice_id=excluded.default_voice_id,
                      default_script_profile_id=excluded.default_script_profile_id,
                      default_mascot_id=excluded.default_mascot_id,
+                     default_agent_id=excluded.default_agent_id,
+                     default_agent_model=excluded.default_agent_model,
+                     default_agent_effort=excluded.default_agent_effort,
                      topic_cap=excluded.topic_cap""",
                 (pid, body["name"], description, is_seed, status,
                  default_style, default_voice, default_profile, default_mascot,
+                 default_agent, default_agent_model, default_agent_effort,
                  topic_cap, _now()),
             )
             row = con.execute(f"{_PROJECT_SELECT} WHERE p.id = ?", (pid,)).fetchone()

@@ -135,6 +135,23 @@ Covers a domain's default script profile in `upsert_project` and `create_video`.
 - `upsert_project` keeps an omitted default, clears on `""`, and refuses a change to an unusable
   profile. Re-sending a stored default that was deleted since is accepted.
 
+### `test_domain_agent.py`
+
+Covers a domain's agent, model and effort in `upsert_project`, `create_video` and
+`mine_youtube_topics` ([Assignment](../07-agent-layer.md#assignment)).
+
+- `create_video` copies the three values onto a video of every `strategy`, and its result carries
+  what was stored. A mined topic gets them too.
+- A domain with no agent is dealt one. A domain agent uninstalled since falls back to the deal
+  without its model, and a model the agent dropped seeds `""`.
+- `upsert_project` keeps an omitted field and clears on `""`. It refuses an agent that is not
+  live, a model outside the agent's list, a model with no agent and an unknown effort, and writes
+  nothing when it refuses.
+- A stored agent and model that became invalid do not block another edit of the domain.
+
+Trap: changing the agent without naming a model clears the stored model. Keeping it would refuse
+the call, because the stored model belongs to the previous agent's list.
+
 ## Research
 
 ### `test_mining_urls.py`

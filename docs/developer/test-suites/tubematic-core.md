@@ -317,6 +317,16 @@ Covers `0020`: `videos.style_pick`, `style_runner_up` and `style_reason`.
 Trap: `''` means Auto has not decided, which is true of every video before the upgrade, so the
 migration has no backfill. A scripted `auto` video then finishes on the mixed scene system.
 
+### `test_domain_agent_migration.py`
+
+Covers `0022`: `projects.default_agent_id`, `default_agent_model` and `default_agent_effort`.
+
+- An existing domain reads `''` in the three new columns.
+- Every other column of the domain keeps its value.
+
+Trap: `''` on `default_agent_id` means the weighted deal, which is how every domain's videos were
+assigned before the upgrade, so the migration has no backfill.
+
 ## Shared rules
 
 ### `test_usage_accounting.py`

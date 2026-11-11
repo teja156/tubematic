@@ -181,8 +181,8 @@ directory has no test.
 
 The MCP server enforces these rules too, and `mcp/tests` holds its halves. `POST /projects` replaces
 the whole row, and the dashboard re-sends every field on each save. The description limit and the
-defaults for script profile, style, voice and mascot are therefore checked only when the value
-changes. An unchanged value that has become invalid since still saves, because refusing it would
+defaults for script profile, style, voice, mascot and agent are therefore checked only when the
+value changes. An unchanged value that has become invalid since still saves, because refusing it would
 block every other edit to that domain.
 
 ### `test_project_pause.py`
@@ -236,6 +236,28 @@ Covers a domain's default script profile.
 - `POST /projects` refuses a non-string, unknown, archived or not-`READY` profile when the default
   changes. The type check runs on the raw value, so `false`, `0` and `[]` are refused and are not
   read as "no default".
+
+### `test_domain_agent.py`
+
+Covers a domain's agent, model and effort: `_domain_agent`, `_domain_agent_error`, and their use in
+`POST /videos`, `POST /videos/manual` and `POST /projects`
+([Assignment](../07-agent-layer.md#assignment)).
+
+- `POST /videos` copies the three values onto a video of every `strategy`. A domain with no agent
+  is dealt one through `_pick_agent_id`, and a video that takes its domain's agent writes nothing
+  to `agent_deck`.
+- A domain agent uninstalled since falls back to the deal without its model. A model the agent
+  dropped seeds `''`. An effort with no agent is copied onto the dealt agent's video.
+- `POST /videos/manual` takes the `manual` domain's three values when the request names no agent,
+  and none of them when it names one.
+- `POST /projects` refuses an agent that is not live, a model outside the agent's list, a model
+  with no agent, and a non-string. It checks the agent and model as a pair, when either changes.
+- `_domain_agent` and `_domain_agent_error` return what the MCP server's copies return, over every
+  branch.
+
+Trap: the pause and topic-cap race tests replace `_pick_agent_id` to act between the early check
+and the `INSERT`. `_domain_agent` must keep calling it on the path that deals, or those tests pass
+without testing the race.
 
 ## Style, voice and mascot choices
 

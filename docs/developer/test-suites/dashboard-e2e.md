@@ -215,20 +215,24 @@ collide with the mascot a failed attempt left behind.
 Covers [the Topics page](../15-dashboard.md#the-topics-page).
 
 - A curriculum seed can be paused and resumed. A domain that is not a seed offers no pause control.
-- A default voice picked on a domain row is saved, and the next video filed into the domain starts
-  with it.
+- A default voice picked in a domain's panel is saved, and the next video filed into the domain
+  starts with it. The same holds for an effort, which also survives a reload.
 - A domain at its topic cap shows EXPIRED and refuses a curriculum video with `409`. Raising the cap
-  on the row reopens it.
-- A seed row's four pickers and its cap field each carry a caption. At 1280px the row is one line
-  and the domain name keeps its width. At 1024px the row wraps.
+  in the panel reopens it.
+- At 1280px a seed row with three chips is one line: the pause and **Edit defaults** buttons sit
+  beside the name and chips, and the name keeps its width. The open panel sits under that line,
+  each of its eight controls has a caption and stays inside it, and opening it moves nothing on the
+  line. At 1024px the line wraps and the buttons and controls stay inside the row.
 - A mining source added or removed survives a reload.
 
 Trap: the row case asserts each position separately. A check that the row fits its container still
-passes when the pause button wraps to a second line or when the pickers squeeze the name.
+passes when the pause button wraps to a second line or when the chips squeeze the name.
 
 Needs: two stubbed responses in the row case. A `READY` script profile cannot be made in the stack,
-and the projects response is patched to a three-digit count, because filing 120 topics would slow
-the suite. The cap case fills the domain with manual videos, which are exempt from the cap.
+and the projects response is patched to a three-digit count and three defaults, because filing 120
+topics would slow the suite. The cap case fills the domain with manual videos, which are exempt
+from the cap. The stack installs no agents, so the effort is the only agent default a browser can
+set here.
 
 ### `new-video.spec.ts`
 
