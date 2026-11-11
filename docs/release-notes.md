@@ -72,7 +72,8 @@ If you go back to 2.1.x later:
   photograph, numbers tick and charts draw, and a cartoon presenter in the bottom corner reacts to
   the narration. It suits how a device or a part works inside (a touchscreen, a battery, a lock, an
   SSD) and the numbers behind one object, such as a part's price. It needs an OpenAI key and uses up
-  to 12 generated photographs per video; it needs no GPU. Choose it for a topic, on the **New Video**
+  to 12 generated photographs per video; it needs no GPU. Its videos have no mascot: the presenter
+  takes the mascot's place. Choose it for a topic, on the **New Video**
   page, or as a domain's default; Auto can pick it for a topic that fits. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.

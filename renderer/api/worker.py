@@ -584,8 +584,10 @@ def _auto_pilot_block_reason(con, video: dict, settings: dict) -> str:
             return ("its visual style is illustrated, which needs an OpenAI API key and "
                     "none is stored. Add the key in Settings, or change the style and "
                     "approve the topic yourself.")
-        cartoon = "cartoon_3d" in (video["visual_style"], video.get("resolved_renderer"))
-        err = pipeline._approval_pair_error(con, cartoon, video.get("mascot_id") or "")
+        style = ("cartoon_3d" if video.get("resolved_renderer") == "cartoon_3d"
+                 else (video["visual_style"] or ""))
+        no_mascot = bool(tmascots.no_mascot_error(style))
+        err = pipeline._approval_pair_error(con, no_mascot, video.get("mascot_id") or "", style)
         if err:
             return err
     if video["status"] == "SCRIPT_READY":

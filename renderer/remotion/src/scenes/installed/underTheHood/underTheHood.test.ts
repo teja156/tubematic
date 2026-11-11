@@ -4,7 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  CAMERA, POSES, TIMING, chipBox, imageBox, leaderStart, overlaps, plateScale, projectAt, statBox, statText,
+  CAMERA, POSES, TIMING, chartTextWidth, chipBox, counterFits, imageBox, leaderStart, overlaps, plateScale, projectAt,
+  statBox, statText,
   type UnderTheHoodData,
 } from "./contract";
 import { POSE_TABLE } from "./presenter";
@@ -31,6 +32,8 @@ describe("the shared contract cases", () => {
     for (const c of CASES.stat_text) expect(statText(c.value, c.decimals, c.prefix, c.suffix)).toBe(c.text);
     for (const c of CASES.leader_start) expect(leaderStart(c.box, c.target)).toEqual(close(c.point));
     for (const c of CASES.overlaps) expect(overlaps(c.a, c.b)).toBe(c.overlaps);
+    for (const c of CASES.chart_text_width) expect(chartTextWidth(c.chart)).toBeCloseTo(c.width, 6);
+    for (const c of CASES.counter_fits) expect(counterFits(c.values)).toBe(c.fits);
   });
 });
 

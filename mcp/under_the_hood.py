@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import math
 import re
+from decimal import ROUND_HALF_UP, Decimal
 
 SCENE_SRC = "UnderTheHood"
 PROPS_KEY = "underTheHood"
@@ -41,9 +42,10 @@ LIMITS = {
     "chipChars": 10,
     "affixChars": 3,
     "chartLabelChars": 24,
-    "footnoteChars": 40,
+    "footnoteChars": 32,
     "maxCounters": 4,
     "maxCounterValue": 99999,
+    "maxAbsValue": 9999999,
     "minChartPoints": 2,
     "maxChartPoints": 24,
     "minArcs": 3,
@@ -87,23 +89,27 @@ GEOMETRY = {
     "statRight": 1010,
     "statUpperTop": 500,
     "statLowerTop": 1050,
-    "statHeight": 260,
+    "statHeight": 300,
     "statFontPx": 170,
-    "statCharPx": 104,
-    "statLabelCharPx": 24,
+    "statCharPx": 110,
+    "statLabelCharPx": 28,
     "chartLeft": 90,
     "chartRight": 990,
     "chartTop": 700,
     "chartBottom": 1250,
+    "chartCharPx": 96,
     "counterLeft": 70,
     "counterTop": 1400,
     "counterWidth": 520,
+    "counterCharPx": 39,
+    "counterPadPx": 8,
     "footnoteTop": 1560,
     "presenterLeft": 610,
     "presenterTop": 1380,
     "presenterWidth": 440,
     "presenterHeight": 620,
     "anchorMargin": 20,
+    "pointClearPx": 10,
     "overlapTolerance": 4,
 }
 CAMERA = {"push": 0.01, "minZoom": 1, "maxZoom": 3, "through": 4, "enterFrom": 1.25}
@@ -167,21 +173,37 @@ def stat_text(value, decimals: int = 0, prefix: str = "", suffix: str = "") -> s
 
 
 def _to_fixed(value, decimals: int) -> str:
-    # JavaScript's toFixed rounds half away from zero on the decimal it sees;
-    # Python's format rounds half to even. Match the renderer.
-    q = 10 ** decimals
-    n = math.floor(abs(value) * q + 0.5) / q
-    return f"{'-' if value < 0 and n else ''}{n:.{decimals}f}"
+    # JavaScript's toFixed rounds the exact binary value half up (9.95 is
+    # 9.9499... and gives "9.9"); Python's format rounds half to even. Match the
+    # renderer. Values are bounded by maxAbsValue, far below toFixed's 1e21.
+    d = Decimal(value).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
+    text = f"{abs(d):.{decimals}f}"
+    return f"-{text}" if d < 0 else text
 
 
 def stat_box(e: dict) -> tuple[float, float, float, float]:
-    """A stat block's box: the numeral and its label, right-aligned."""
+    """A stat block's box: the numeral (at its wider end of the count) and its
+    label, right-aligned."""
     g = GEOMETRY
-    numeral = len(stat_text(e["value"], e.get("decimals", 0), e.get("prefix", ""), e.get("suffix", ""))) * g["statCharPx"]
+    numeral = max(len(stat_text(v, e.get("decimals", 0), e.get("prefix", ""), e.get("suffix", "")))
+                  for v in (e.get("from", 0), e["value"])) * g["statCharPx"]
     label = len(e["label"]) * g["statLabelCharPx"]
     w = max(numeral, label)
     top = g["statUpperTop"] if e.get("place") == "upper" else g["statLowerTop"]
     return (g["statRight"] - w, top, g["statRight"], top + g["statHeight"])
+
+
+def chart_text_width(e: dict) -> float:
+    """The widest the value above a chart gets, over its points."""
+    return max(len(stat_text(v, e.get("decimals", 0), e.get("prefix", ""), e.get("suffix", "")))
+               for v in e["points"]) * GEOMETRY["chartCharPx"]
+
+
+def counter_fits(values: list) -> bool:
+    """Whether a counter row's widest value fits its column."""
+    g = GEOMETRY
+    digits = max(max(len(str(v["from"])), len(str(v["to"])), 2) for v in values)
+    return digits * g["counterCharPx"] + g["counterPadPx"] <= g["counterWidth"] / len(values)
 
 
 def leader_start(box, target) -> tuple[float, float]:
@@ -205,6 +227,11 @@ def _int(v) -> bool:
 
 def _num(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _value(v) -> bool:
+    """A number a stat or a chart may show."""
+    return _num(v) and abs(v) <= LIMITS["maxAbsValue"]
 
 
 def _uv(v) -> bool:
@@ -231,15 +258,6 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
                 "\"installed\", \"src\": \"UnderTheHood\", \"startFrame\": 0, \"durationInFrames\": "
                 "<totalFrames>, \"props\": {\"underTheHood\": {...}}}. Put every beat in its plates.")
     return ""
-
-
-def plate_images(config: dict) -> list[str]:
-    """The image src of every plate that has one, in plate order (repeats kept)."""
-    scenes = config.get("scenes") or []
-    if len(scenes) != 1 or not is_uth_scene(scenes[0]):
-        return []
-    data = (scenes[0].get("props") or {}).get(PROPS_KEY) or {}
-    return [p["image"] for p in data.get("plates") or [] if isinstance(p, dict) and isinstance(p.get("image"), str)]
 
 
 def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "") -> list[str]:
@@ -307,6 +325,9 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
     last_pose = None
     for i, p in enumerate(plates):
         if not sound[i]:
+            # its own problem is reported; its events still count as changes
+            changes.update(e["frame"] for e in p.get("events") or []
+                           if isinstance(e, dict) and _int(e.get("frame")))
             continue
         # a zoom-through takes what is pinned to this plate away zoomOut frames before the cut
         nxt = plates[i + 1] if i + 1 < len(plates) else {}
@@ -336,8 +357,8 @@ def _check_plate(p, i, plates, starts, ends, fps, video_id, images, sound, err) 
                 "(\"/public/<video_id>/images/<name>.png\").")
             return False
         images.add(image)
-    for key in ("focus", "zoom", "through", "aspect", "enter"):
-        if key in p and image is None and key != "enter":
+    for key in ("focus", "zoom", "aspect"):
+        if key in p and image is None:
             err(f"{where}: {key} applies to a photograph, and this plate has none.")
             return False
     if "focus" in p and not _uv(p["focus"]):
@@ -409,6 +430,7 @@ def _check_events(p, i, start, end, fps, extra, on_word, changes, last_pose, err
     margin = g["anchorMargin"]
     s_end = plate_scale(p, end - start, fps)
     boxes: list[tuple[str, tuple]] = []   # (name, box) of chips, stats and the chart in the band
+    points: list[tuple] = []              # (name, uv, scale, settle) of every pinned point
     elements = 0
     once: set[str] = set()
     for e, f in zip(events, frames):
@@ -420,24 +442,31 @@ def _check_events(p, i, start, end, fps, extra, on_word, changes, last_pose, err
         if not start <= f <= end - TIMING["endMargin"]:
             err(f"{at}: it must start inside its plate (frames {start} to {end - TIMING['endMargin']}).")
             continue
-        if t in READ and f > end - TIMING["readFrames"]:
-            err(f"{at}: its text appears {end - f} frames before the plate ends, too late to be read; "
-                f"start it at least {TIMING['readFrames']} frames before the cut.")
-            continue
         if t in ON_IMAGE and not has_image:
             err(f"{at}: a {t} is drawn on the photograph, and this plate has none.")
+            continue
+        if t == "chart" and has_image:
+            err(f"{at}: a chart draws on a plain dark plate; give it a plate with no image.")
+            continue
+        lead = _lead_frames(e)
+        if lead and f > end - lead:
+            err(f"{at}: it starts {end - f} frames before the plate ends, too late to be read; it needs "
+                f"{lead} frames (its count or draw, then time to read it), so start it at frame "
+                f"{end - lead} or earlier.")
             continue
         changes.add(f)
         if t in ELEMENTS:
             elements += 1
         s_at = plate_scale(p, f - start, fps)
+        settle = entrance_scale(p, f - start)
 
         def pinned(uv, name: str) -> bool:
-            for s, when in ((s_at, "when it appears"), (s_end, "by the end of the plate")):
-                if not _inside_band(project_at(p, s, *uv), margin):
+            for s, k, when in ((s_at, settle, "when it appears"), (s_end, 1, "by the end of the plate")):
+                if not _inside_band(_settled(project_at(p, s, *uv), k), margin):
                     err(f"{at}: {name} {uv} is outside the visible part of the photograph {when}; "
-                        "the slow push moves points away from the focus.")
+                        "the slow push (and a zoom entrance's settle) moves points away from the focus.")
                     return False
+            points.append((name, uv, s_at, settle))
             return True
 
         if t == "pose":
@@ -505,13 +534,17 @@ def _check_events(p, i, start, end, fps, extra, on_word, changes, last_pose, err
                                                            for k in ("from", "to")) for v in vals)):
                 err(f"{at}: values must list 1 to {LIMITS['maxCounters']} {{from, to}} whole numbers from 0 to "
                     f"{LIMITS['maxCounterValue']}.")
+            elif not counter_fits(vals):
+                err(f"{at}: the counters' digits do not fit their columns: four counters take up to 3 "
+                    "digits, three up to 4, one or two up to 5. Use fewer counters or smaller numbers.")
         elif t == "stat":
             if "stat" in once:
                 err(f"{at}: a plate has one stat.")
                 continue
             once.add("stat")
-            if not _num(e.get("value")) or not _num(e.get("from", 0)):
-                err(f"{at}: value (and from, when given) must be numbers.")
+            if not _value(e.get("value")) or not _value(e.get("from", 0)):
+                err(f"{at}: value (and from, when given) must be numbers from -{LIMITS['maxAbsValue']} to "
+                    f"{LIMITS['maxAbsValue']}.")
                 continue
             dec = e.get("decimals", 0)
             if not _int(dec) or not 0 <= dec <= 2:
@@ -536,29 +569,28 @@ def _check_events(p, i, start, end, fps, extra, on_word, changes, last_pose, err
                 continue
             boxes.append(("the stat", box))
         elif t == "chart":
-            if has_image:
-                err(f"{at}: a chart draws on a plain dark plate; give it a plate with no image.")
-                continue
             if "chart" in once:
                 err(f"{at}: a plate has one chart.")
                 continue
             once.add("chart")
             pts = e.get("points")
             if (not isinstance(pts, list) or not LIMITS["minChartPoints"] <= len(pts) <= LIMITS["maxChartPoints"]
-                    or not all(_num(v) for v in pts)):
-                err(f"{at}: points must list {LIMITS['minChartPoints']} to {LIMITS['maxChartPoints']} numbers.")
+                    or not all(_value(v) for v in pts)):
+                err(f"{at}: points must list {LIMITS['minChartPoints']} to {LIMITS['maxChartPoints']} numbers "
+                    f"from -{LIMITS['maxAbsValue']} to {LIMITS['maxAbsValue']}.")
                 continue
             dur = e.get("duration", 88)
             if not _int(dur) or not TIMING["chartMin"] <= dur <= TIMING["chartMax"]:
                 err(f"{at}: duration must be {TIMING['chartMin']} to {TIMING['chartMax']} frames.")
-            elif f + dur > end - TIMING["endMargin"]:
-                err(f"{at}: the chart is still drawing when its plate ends; start it earlier or shorten duration.")
             dec = e.get("decimals", 0)
+            bad = _affix_errors(e)
             if not _int(dec) or not 0 <= dec <= 2:
                 err(f"{at}: decimals must be 0, 1 or 2.")
-            bad = _affix_errors(e)
-            if bad:
+            elif bad:
                 err(f"{at}: {bad}")
+            elif chart_text_width(e) > g["chartRight"] - g["chartLeft"]:
+                err(f"{at}: the value shown above the chart is too wide for the frame; use smaller units "
+                    "(thousands, millions) or fewer decimals.")
             if not _text(e.get("label"), LIMITS["chartLabelChars"]):
                 err(f"{at}: label (the axis) must be 1 to {LIMITS['chartLabelChars']} characters.")
             if "chip" in e and not _text(e["chip"], LIMITS["chipChars"]):
@@ -571,6 +603,15 @@ def _check_events(p, i, start, end, fps, extra, on_word, changes, last_pose, err
             once.add("footnote")
             if not _text(e.get("text"), LIMITS["footnoteChars"]):
                 err(f"{at}: text must be 1 to {LIMITS['footnoteChars']} characters.")
+    clear = g["pointClearPx"]
+    for name, uv, s_at, settle in points:
+        for s, k in ((s_at, settle), (s_end, 1)):
+            x, y = _settled(project_at(p, s, *uv), k)
+            hit = next((n for n, b in boxes if n != "the chart" and
+                        b[0] - clear <= x <= b[2] + clear and b[1] - clear <= y <= b[3] + clear), None)
+            if hit:
+                err(f"{where}: {name} {uv} lies under {hit}, which hides it; move the chip or the stat.")
+                break
     if elements > LIMITS["maxElementsPerPlate"]:
         err(f"{where} puts {elements} callouts, outlines, arcs, stats and charts on screen; at most "
             f"{LIMITS['maxElementsPerPlate']} fit. Cut to a new plate to make room.")
@@ -579,6 +620,39 @@ def _check_events(p, i, start, end, fps, extra, on_word, changes, last_pose, err
             if overlaps(box, box2):
                 err(f"{where}: {name} overlaps {name2}; move one of them.")
     return last_pose
+
+
+def entrance_scale(plate: dict, t: int) -> float:
+    """The extra scale of a zoom-entered plate `t` frames after it starts: it
+    settles from CAMERA['enterFrom'] to 1 over TIMING['zoomIn'] frames
+    (stage.ts camAt), about the band's centre."""
+    if plate.get("enter") != "zoom" or t >= TIMING["zoomIn"]:
+        return 1.0
+    k = 1 - (1 - max(0.0, min(1.0, t / TIMING["zoomIn"]))) ** 3
+    return CAMERA["enterFrom"] + (1 - CAMERA["enterFrom"]) * k
+
+
+def _settled(pt, k: float) -> tuple[float, float]:
+    g = GEOMETRY
+    return (g["plateCx"] + (pt[0] - g["plateCx"]) * k, g["plateCy"] + (pt[1] - g["plateCy"]) * k)
+
+
+def _lead_frames(e: dict) -> int:
+    """How long before its plate ends an event must start for it to be seen
+    finished and read: a counter row ticks, a stat counts (and pops its chip),
+    a chart draws; plain text only needs reading time."""
+    t, T = e.get("type"), TIMING
+    if t == "counters":
+        return T["tickFrames"] + T["readFrames"]
+    if t == "stat":
+        return T["statCount"] + (T["chipIn"] if "chip" in e else 0) + T["readFrames"]
+    if t == "chart":
+        dur = e.get("duration", 88)
+        dur = dur if _int(dur) and T["chartMin"] <= dur <= T["chartMax"] else 0   # a bad one is reported itself
+        return dur + (T["chipIn"] if "chip" in e else 0) + T["readFrames"]
+    if t in READ:
+        return T["readFrames"]
+    return 0
 
 
 def _affix_errors(e: dict) -> str:

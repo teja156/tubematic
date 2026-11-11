@@ -526,7 +526,8 @@ Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes 
   and script guidance. `scenes` keeps `auto` and still counts as decided.
 - The choice is made once, only at `TOPIC_APPROVED`, never over a style a person chose, and never
   for an archived video. A bad style, runner-up or reason is refused.
-- An unavailable style or runner-up is refused with the reason, and a mascot rules out a 3D world.
+- An unavailable style or runner-up is refused with the reason, and a mascot rules out a 3D world
+  and Under the Hood.
 - A status, style, pick or archive change between the row read and the `UPDATE` leaves the video
   untouched, and so does a mascot landing before a 3D pick. While the tool reads what the install
   can make, another writer is locked out.
@@ -743,9 +744,11 @@ Covers a mascot on a video: `create_video`, `update_video`, `set_video_status`, 
 `write_scene_config`, `validate_job`, `submit_render` and the audit's mascot warning
 ([Mascots](../10-scene-authoring.md#mascots)).
 
-- A new video gets the default mascot only while a GPU works, and none on a Cartoon 3D video.
-- The pick is frozen after the topic stage, needs a working GPU when it changes, and is cleared by
-  a switch to `cartoon_3d` in the same write.
+- A new video gets the default mascot only while a GPU works, and none on a Cartoon 3D or Under the
+  Hood video.
+- The pick is frozen after the topic stage, needs a working GPU when it changes, is refused on an
+  Under the Hood video, and is cleared by a switch to `cartoon_3d` or `under_the_hood` in the same
+  write.
 - Topic approval is refused for a withdrawn mascot and for a Cartoon 3D video that holds one,
   including when the other write commits between the check and the `UPDATE`.
 - Invalid cues are refused with their reasons and nothing written. The mascot version is fixed by

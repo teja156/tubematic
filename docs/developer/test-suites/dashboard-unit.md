@@ -282,7 +282,7 @@ pickers on its rows.
 - [Mascot](../15-dashboard.md#mascot-picker): the picker is hidden when nothing can be picked.
   Mascots are disabled with the reason unless the GPU is working, and while the GPU status has not
   loaded. `mascot_id` travels with `approve-topic` only when the picker shows. Choosing Cartoon 3D
-  clears and locks the picker and sends an empty mascot.
+  or Under the Hood clears and locks the picker and sends an empty mascot.
 - A refused approval (`onAction` resolving `false`) brings the row back so the pick can be changed.
 - Every picker is found by its caption (`getByLabelText`), which proves the caption is the control's
   accessible name.
@@ -306,7 +306,8 @@ Covers `components/VideoModal.tsx`, [the video window](../15-dashboard.md#the-vi
   markup as the authored words.
 - The Video tab plays `/stream/<project_id>/<id>.mp4` whatever `video_path` holds.
 - The Actions block carries the same pickers as a Quick Actions row, under the same rules. The
-  mascot cases cover its caption, the GPU gate, the `approve-topic` payload and the Cartoon 3D lock.
+  mascot cases cover its caption, the GPU gate, the `approve-topic` payload and the lock for Cartoon
+  3D and Under the Hood.
 - Once the pickers are gone, their values show read-only. The Voice and Voice model rows come from
   `voice_info` and are hidden while the voice picker is up.
 - A scheduled video says when it goes out, in the zone it was picked in. **Cancel schedule** calls
@@ -659,7 +660,8 @@ Covers `lib/mascots.ts` ([Mascot picker](../15-dashboard.md#mascot-picker)).
 - `mascotGate` is open only while the GPU is working.
 - `mascotOptions` keeps a held mascot that is still pickable selectable. One that is not pickable
   shows as unavailable and is never read as None.
-- `approvalMascot` sends no mascot for Cartoon 3D.
+- `approvalMascot` sends no mascot for Cartoon 3D, or for a style the served list marks `mascot:
+  false`; with the list not loaded it leaves the pick to the API.
 
 Trap: the gate fails closed while the GPU status has not loaded, the opposite of the visual-style
 rule. An untouched picker could otherwise send a mascot the API refuses.

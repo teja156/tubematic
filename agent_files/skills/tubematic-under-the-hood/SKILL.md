@@ -52,16 +52,19 @@ event is wrong. Fix every problem it lists, then write again.
   when the event starts and still inside at the end of the plate, because the slow push moves points
   away from the focus. Keep pinned points well inside the photograph's middle.
 - **Chips** stay inside the band and the side margins, at least 40 px from the point they label, and
-  never overlap another chip or the stat.
+  never overlap another chip or the stat. No pinned point may sit under a chip or the stat.
 - **Per plate:** at most 16 events, listed in frame order; at most 6 callouts, outlines, arc fans, stats
   and charts together; one counter row, one stat, one chart and one footnote. Callouts, outlines and
   arcs need a photograph; a chart needs a plate without one.
-- **Timing:** a pose lands on a word, at least 8 frames after the last pose. Text (a callout, a stat, a
-  chart, a footnote) starts at least 20 frames before its plate ends, or before the zoom that ends it
-  (a zoom-through takes the plate's labels away 6 frames early). A chart finishes drawing before its
-  plate ends.
-- **Lengths:** a callout is at most 18 characters, a stat label 22, a chart label 24, a footnote 40, a
-  chip 10, a unit or sign 3.
+- **Timing:** a pose lands on a word, at least 8 frames after the last pose. Text (a callout, a
+  footnote) starts at least 20 frames before its plate ends, or before the zoom that ends it (a
+  zoom-through takes the plate's labels away 6 frames early). A number must finish and then be read:
+  a stat starts at least 44 frames before (48 with a chip), a counter row 36, a chart its `duration`
+  plus 20 (plus 4 with a chip).
+- **Lengths:** a callout is at most 18 characters, a stat label 22, a chart label 24, a footnote 32, a
+  chip 10, a unit or sign 3. A stat or chart number is at most 9999999 either way; the stat must fit
+  the frame and the chart's value 900 px (about 9 characters). A counter row of four takes up to 3
+  digits each, three up to 4, one or two up to 5.
 - **Never still:** something new (an event, a pose or a plate) at least every 3.5 seconds.
 
 ## Step 0 — read

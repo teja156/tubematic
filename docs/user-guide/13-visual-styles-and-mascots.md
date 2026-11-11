@@ -60,7 +60,8 @@ When you approve a topic left on Auto, the agent picks a style before it writes 
 the script is written for the style: a System Flow script walks through a system one step at a time,
 for example. It reads what each style is made for and avoids, compares that with the topic, and
 picks the style that clearly fits. It considers every style this install can make: Illustrated and
-Under the Hood only while an OpenAI key is stored, Cartoon 3D only while a GPU is working and the video has no mascot.
+Under the Hood only while an OpenAI key is stored and the video has no mascot, Cartoon 3D only while
+a GPU is working and the video has no mascot.
 It may pick a style that generates images, which costs more per video. It does not pick a style for
 variety: the same kind of topic gets the same style every time.
 
@@ -126,8 +127,8 @@ A mascot is a small character that walks on and off screen and reacts to the nar
 surprised, has an idea, hops, glances at something. It does not narrate and does not lip-sync.
 
 Mascots are experimental and off by default. A video has one only if you pick it. They are drawn on
-the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D videos
-cannot have one.
+the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D and Under
+the Hood videos cannot have one: Under the Hood has its own presenter.
 
 ![The Mascots page under Profiles: a form for a new mascot, and the built-in mascot Tubi marked READY](../images/mascots.png)
 

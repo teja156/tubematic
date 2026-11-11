@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  approvalMascot, mascotGate, mascotGateNote, mascotOptions, mascotSheetUrl, showMascotPicker,
+  approvalMascot, mascotGate, mascotGateNote, mascotOptions, mascotSheetUrl, showMascotPicker, styleTakesMascot,
 } from "@/lib/mascots";
+import { PACK_STYLES } from "./packStyles";
 
 const M = [
   { id: "tubi", name: "Tubi", pickable: true },
@@ -62,5 +63,10 @@ describe("showMascotPicker / approvalMascot", () => {
   it("sends no mascot on Cartoon 3D", () => {
     expect(approvalMascot("cartoon_3d", "tubi")).toBe("");
     expect(approvalMascot("stick", "tubi")).toBe("tubi");
+    // a style whose pack takes no mascot, from the served style list
+    expect(approvalMascot("under_the_hood", "tubi", PACK_STYLES)).toBe("");
+    expect(approvalMascot("under_the_hood", "tubi", null)).toBe("tubi");   // list not loaded: the API decides
+    expect(styleTakesMascot("under_the_hood", PACK_STYLES)).toBe(false);
+    expect(styleTakesMascot("bean_explainer", PACK_STYLES)).toBe(true);
   });
 });

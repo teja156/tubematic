@@ -87,6 +87,10 @@ def test_points_and_boxes_are_computed_the_same_way():
         assert list(uth.stat_box(c["stat"])) == pytest.approx(c["box"])
     for c in CASES["stat_text"]:
         assert uth.stat_text(c["value"], c["decimals"], c["prefix"], c["suffix"]) == c["text"]
+    for c in CASES["chart_text_width"]:
+        assert uth.chart_text_width(c["chart"]) == pytest.approx(c["width"])
+    for c in CASES["counter_fits"]:
+        assert uth.counter_fits(c["values"]) is c["fits"]
     for c in CASES["leader_start"]:
         assert list(uth.leader_start(c["box"], c["target"])) == pytest.approx(c["point"])
     for c in CASES["overlaps"]:
@@ -145,10 +149,20 @@ def test_the_example_passes():
     (lambda p: p[1]["events"][4].update(suffix="micron"), "at most 3 characters"),
     (lambda p: p[1]["events"][4].update(label=""), "label must be 1 to 22"),
     (lambda p: p[1]["events"][4].update(place="middle"), "place must be one of"),
-    (lambda p: p[1]["events"][4].update(value=123456789), "too wide for the frame"),
+    (lambda p: p[1]["events"][4].update(value=9999999), "too wide for the frame"),
+    (lambda p: p[1]["events"][4].update(value=123456789), "must be numbers from -9999999"),
+    (lambda p: p[1]["events"][4].update(value=1e308, decimals=1), "must be numbers from -9999999"),
+    (lambda p: p[1]["events"][4].update(**{"from": -9999999}), "too wide for the frame"),
+    (lambda p: p[3]["events"][2].update(points=[1, 999999.5], decimals=2, prefix="$"), "too wide for the frame"),
+    (lambda p: p[3]["events"][2].update(points=[1, 1e22]), "numbers from -9999999"),
+    (lambda p: p[2]["events"][4].update(values=[{"from": 9999, "to": 1}] * 4), "do not fit their columns"),
+    (lambda p: p[0]["events"][2].update(chip=[0.42, 0.42]), "lies under the 'Finger' chip"),
     (lambda p: p[3]["events"][2].update(points=[1]), "points must list 2 to 24"),
     (lambda p: p[3]["events"][2].update(duration=200), "duration must be 30 to 150"),
-    (lambda p: p[3]["events"][2].update(frame=600, duration=150), "still drawing when its plate ends"),
+    (lambda p: p[3]["events"][2].update(frame=600, duration=150), "too late to be read"),
+    (lambda p: p[1]["events"][4].update(frame=258), "too late to be read"),
+    (lambda p: p[2]["events"][4].update(frame=481), "too late to be read"),
+    (lambda p: p[0]["events"][1].update(text="x" * 33), "1 to 32 characters"),
     (lambda p: p[2]["events"].append({"type": "chart", "frame": 480, "points": [1, 2], "label": "x"}), "plain dark plate"),
     (lambda p: p[3]["events"].insert(0, {"type": "callout", "frame": 520, "text": "x", "at": [0.5, 0.5], "chip": [0.3, 0.4]}), "this plate has none"),
     (lambda p: p[0]["events"].insert(4, {"type": "footnote", "frame": 80, "text": "again"}), "one footnote"),
@@ -179,6 +193,34 @@ def test_a_zoom_through_takes_the_plates_text_away_early():
     # ... but not before a zoom-through, which takes the labels away 6 frames before the cut
     late = _with(lambda p: (p[0]["events"].append({"type": "footnote", "frame": 103, "text": "x"}), p[0]["events"].pop(1)))
     assert any("too late to be read" in p for p in _check(late))
+
+
+def test_a_stat_or_counters_timed_to_finish_in_time_pass():
+    # a stat needs its count (24) and reading time (20) before the cut at 299; counters 16 + 20 before 515
+    assert _check(_with(lambda p: p[1]["events"][4].update(frame=255))) == []
+    assert _check(_with(lambda p: (p[2]["events"][4].update(frame=479), p[2]["events"][5].update(frame=485)))) == []
+
+
+def test_a_zoom_into_a_chart_plate_is_allowed_and_through_belongs_to_the_previous_photograph():
+    cfg = _with(lambda p: p[3].update(enter="zoom", through=[0.49, 0.47]))
+    assert _check(cfg) == []
+
+
+def test_a_refused_plates_events_still_count_against_the_stillness_rule():
+    problems = _check(_with(lambda p: p[3].update(focus=[0.5, 0.5])))
+    assert any("applies to a photograph" in x for x in problems)
+    assert not any("Nothing new happens" in x for x in problems), problems
+
+
+def test_a_point_pushed_out_by_a_zoom_entrances_settle_is_refused():
+    # v 0.83 on plate 2 stays inside the band through the whole push, but not at the 1.25x
+    # the plate enters at: a callout timed on the plate's first frame would point outside it
+    def at_entry(p):
+        p[1]["events"][0].update(frame=123, at=[0.5, 0.83], chip=[0.2, 0.31])
+    assert any("outside the visible part of the photograph when it appears" in x for x in _check(_with(at_entry)))
+    def later(p):
+        p[1]["events"][0].update(frame=146, at=[0.5, 0.83], chip=[0.2, 0.31])
+    assert not any("outside the visible part" in x for x in _check(_with(later)))
 
 
 def test_too_many_photographs_are_refused():
@@ -218,7 +260,6 @@ def test_the_scene_use_rule():
 def test_plate_windows_and_images():
     assert uth.plate_windows(EXAMPLE) == [(0, 123), (123, 299), (299, 515), (515, 721), (721, 858)]
     assert uth.plate_windows({"scenes": []}) == []
-    assert len(set(uth.plate_images(EXAMPLE))) == 3
 
 
 @pytest.mark.parametrize("mutate", [
@@ -303,6 +344,18 @@ def test_the_photographs_shape_decides_whether_a_point_fits(make_video):
     result = server.write_scene_config(vid, copy.deepcopy(EXAMPLE))
     assert "does not cover the plate band" in result["error"]
     assert not (server.JOBS_DIR / vid / "scene-config.json").exists()
+
+
+def test_validate_job_finds_a_photograph_that_changed_shape(make_video):
+    from PIL import Image
+    vid = make_video()
+    result = server.write_scene_config(vid, copy.deepcopy(EXAMPLE))
+    assert "error" not in result, result
+    written = json.loads(pathlib.Path(result["path"]).read_text())
+    assert server._uth_aspect_errors(vid, written) == []
+    Image.new("RGB", (64, 96)).save(server.JOBS_DIR / vid / "images" / "screen-layers.png")
+    errs = server._uth_aspect_errors(vid, written)
+    assert len(errs) == 1 and "screen-layers.png" in errs[0] and "write_scene_config" in errs[0]
 
 
 def test_another_style_cannot_use_the_scene(make_video):

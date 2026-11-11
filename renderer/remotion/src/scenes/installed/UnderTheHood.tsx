@@ -24,7 +24,7 @@
  * band's fade into the canvas is a stack of flat translucent strips, an
  * outline draws on by growing its path); every overlay layer is sized to the
  * plate band, never the whole frame; arcs stop breathing and sparks stop
- * flying after TIMING.sparkFrames.
+ * flying TIMING.arcBend + TIMING.sparkFrames after they start.
  *
  * Measured in CPU-seconds per frame over the whole skill example (858 frames,
  * rendered from a prebuilt bundle with software GL, concurrency 2): 0.37
@@ -103,6 +103,12 @@ const Plate: React.FC<{ plate: UTHPlate; cam: Cam }> = ({ plate, cam }) => {
     // a plain dark panel (a chart plate), cross-fading over the plate before it
     return <div style={{ position: "absolute", inset: 0, background: BG, opacity: cam.opacity === 1 ? undefined : cam.opacity }} />;
   }
+  return <PlatePhoto key={plate.image} src={plate.image} plate={plate} cam={cam} />;
+};
+
+/** The photograph itself; its first frame waits for this <image> element to load. */
+const PlatePhoto: React.FC<{ src: string; plate: UTHPlate; cam: Cam }> = ({ src, plate, cam }) => {
+  const [handle] = useState(() => delayRender(`UnderTheHood: drawing ${src}`));
   const [x0, y0] = pointAt(plate, cam, 0, 0);
   const [x1, y1] = pointAt(plate, cam, 1, 1);
   const iw = 1000, ih = 1000 * (plate.aspect ?? 1); // the photograph in its own units
@@ -111,7 +117,9 @@ const Plate: React.FC<{ plate: UTHPlate; cam: Cam }> = ({ plate, cam }) => {
   return (
     <svg width={W} height={BAND_H} viewBox={`${vx} ${vy} ${vw} ${vh}`} preserveAspectRatio="none"
       style={{ position: "absolute", left: 0, top: 0, opacity: cam.opacity === 1 ? undefined : cam.opacity }}>
-      <image href={plate.image} x={0} y={0} width={iw} height={ih} preserveAspectRatio="none" />
+      <image href={src} x={0} y={0} width={iw} height={ih} preserveAspectRatio="none"
+        onLoad={() => continueRender(handle)}
+        onError={() => cancelRender(new Error(`UnderTheHood: the photograph ${src} did not load`))} />
     </svg>
   );
 };

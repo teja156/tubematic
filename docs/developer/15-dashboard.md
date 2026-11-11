@@ -329,7 +329,7 @@ row mounted could show one choice and send another.
 | Field | Approve Topic | Approve Script | Request Revision |
 |---|---|---|---|
 | `script_profile_id`, `visual_style` | Always | No | No |
-| `mascot_id` | When the mascot picker is shown. `""` for a Cartoon 3D video | No | No |
+| `mascot_id` | When the mascot picker is shown. `""` for a style that takes no mascot (Cartoon 3D, Under the Hood) | No | No |
 | `voice_id` | Only when a voice was picked | Always, the shown voice | No |
 | `agent_id` | Only when a different agent was picked | Same | Same |
 | `agent_model` | Always: the picked model, or the agent's default (`""` when the picker is disabled) | When picked, or when the agent changed | Same as Approve Script |
@@ -416,8 +416,8 @@ The rules are in `lib/mascots.ts`. A mascot is drawn on the GPU only, so the mas
 only while `GET /render/gpu` says `working`. A page that has not loaded the GPU status counts
 mascots as unavailable, the opposite of the visual-style rule, so that an untouched picker cannot
 send a mascot the API would refuse. "No mascot" stays selectable, and a held mascot that is not
-offered shows as unavailable. `approvalMascot` sends `""` for a Cartoon 3D video, which has no
-mascot layer.
+offered shows as unavailable. `approvalMascot` sends `""` for a style that takes no mascot
+(`styleTakesMascot`): Cartoon 3D, and any style the served list marks `mascot: false`.
 
 ### Agent, model and effort pickers
 
@@ -551,7 +551,7 @@ Components that a section above covers are left out of this table.
 |---|---|
 | `KanbanBoard.tsx`, `KanbanColumn.tsx`, `KanbanCard.tsx` | The board. A card shows a score dot (a dash when unscored), the display name, the `strategy` tag, relative age, a **STUCK** tag (`agent_stuck_at`), a scheduled post's time, a progress bar for in-flight statuses, and inline actions at checkpoints |
 | `AgentPickers.tsx` | Agent, model and effort controls for the New Video page and the Mascots create form |
-| `MascotPicker.tsx` | The per-video mascot select. Cartoon 3D locks it on "No mascot" |
+| `MascotPicker.tsx` | The per-video mascot select. A style that takes no mascot locks it on "No mascot" |
 | `CostBreakdown.tsx` | A video's cost per provider and model, from `GET /videos/<id>/costs` |
 | `SpendCard.tsx` | The Analytics page's **Spend** tab |
 | `CostsPanel.tsx`, `AutoPilotPanel.tsx`, `RenderersPanel.tsx` | See [The settings page](#the-settings-page) |

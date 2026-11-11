@@ -111,6 +111,22 @@ def test_under_the_hood():
     assert p["routing"]["images"] == 12
     assert p["captions"]["look"] == "selection"
     assert tvs.effective_canvas("under_the_hood", "light") == "dark"
+    # its own presenter stands where a mascot would: no mascot, like Cartoon 3D
+    assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
+    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood"}
+    rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
+    assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
+    assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
+
+
+def test_a_pack_that_takes_no_mascot_must_say_why():
+    data = json.loads((tvs.PACKS_DIR / "stick.json").read_text())
+    data["mascot"] = False
+    with pytest.raises(tvs.PackError, match="messages.mascot"):
+        tvs._check_pack(pathlib.Path("stick.json"), data)
+    data["mascot"] = "no"
+    with pytest.raises(tvs.PackError, match="mascot, when present"):
+        tvs._check_pack(pathlib.Path("stick.json"), data)
 
 
 def test_the_public_list_says_why_a_style_is_unavailable():

@@ -268,10 +268,10 @@
     "place": "upper"
    },
    "box": [
-    698,
+    680,
     500,
     1010,
-    760
+    800
    ]
   },
   {
@@ -282,10 +282,10 @@
     "label": "The drop you cause"
    },
    "box": [
-    578,
+    506,
     1050,
     1010,
-    1310
+    1350
    ]
   },
   {
@@ -295,10 +295,23 @@
     "place": "lower"
    },
    "box": [
-    594,
+    570,
     1050,
     1010,
-    1310
+    1350
+   ]
+  },
+  {
+   "stat": {
+    "value": 5,
+    "from": -9999,
+    "label": "Count down"
+   },
+   "box": [
+    460,
+    1050,
+    1010,
+    1350
    ]
   }
  ],
@@ -351,6 +364,34 @@
    "prefix": "",
    "suffix": "%",
    "text": "-3.3%"
+  },
+  {
+   "value": 9.95,
+   "decimals": 1,
+   "prefix": "",
+   "suffix": "",
+   "text": "9.9"
+  },
+  {
+   "value": 1.45,
+   "decimals": 1,
+   "prefix": "",
+   "suffix": "",
+   "text": "1.4"
+  },
+  {
+   "value": 0.95,
+   "decimals": 1,
+   "prefix": "",
+   "suffix": "",
+   "text": "0.9"
+  },
+  {
+   "value": 1234567,
+   "decimals": 0,
+   "prefix": "$",
+   "suffix": "",
+   "text": "$1234567"
   }
  ],
  "leader_start": [
@@ -464,6 +505,104 @@
     300
    ],
    "overlaps": false
+  }
+ ],
+ "chart_text_width": [
+  {
+   "chart": {
+    "points": [
+     1,
+     22,
+     333
+    ]
+   },
+   "width": 288
+  },
+  {
+   "chart": {
+    "points": [
+     -5,
+     12.5
+    ],
+    "decimals": 1,
+    "prefix": "$",
+    "suffix": "%"
+   },
+   "width": 576
+  }
+ ],
+ "counter_fits": [
+  {
+   "values": [
+    {
+     "from": 100,
+     "to": 81
+    },
+    {
+     "from": 100,
+     "to": 81
+    },
+    {
+     "from": 100,
+     "to": 81
+    },
+    {
+     "from": 100,
+     "to": 81
+    }
+   ],
+   "fits": true
+  },
+  {
+   "values": [
+    {
+     "from": 1000,
+     "to": 81
+    },
+    {
+     "from": 1000,
+     "to": 81
+    },
+    {
+     "from": 1000,
+     "to": 81
+    },
+    {
+     "from": 1000,
+     "to": 81
+    }
+   ],
+   "fits": false
+  },
+  {
+   "values": [
+    {
+     "from": 1000,
+     "to": 1
+    },
+    {
+     "from": 1000,
+     "to": 1
+    },
+    {
+     "from": 1000,
+     "to": 1
+    }
+   ],
+   "fits": true
+  },
+  {
+   "values": [
+    {
+     "from": 99999,
+     "to": 1
+    },
+    {
+     "from": 99999,
+     "to": 1
+    }
+   ],
+   "fits": true
   }
  ]
 }

@@ -30,9 +30,11 @@ export const LIMITS = {
   chipChars: 10,
   affixChars: 3,
   chartLabelChars: 24,
-  footnoteChars: 40,
+  footnoteChars: 32,
   maxCounters: 4,
   maxCounterValue: 99999,
+  // Stats and charts show numbers up to this size; larger needs other units.
+  maxAbsValue: 9999999,
   minChartPoints: 2,
   maxChartPoints: 24,
   minArcs: 3,
@@ -101,19 +103,26 @@ export const GEOMETRY = {
   statRight: 1010,
   statUpperTop: 500,
   statLowerTop: 1050,
-  statHeight: 260,
+  // Sizes measured from the bundled fonts: a numeral is up to 106 px a
+  // character (125 for %), a capital in the label about 26 on average.
+  statHeight: 300,
   statFontPx: 170,
-  statCharPx: 104,
-  statLabelCharPx: 24,
+  statCharPx: 110,
+  statLabelCharPx: 28,
   // The chart's box on a plate with no photograph.
   chartLeft: 90,
   chartRight: 990,
   chartTop: 700,
   chartBottom: 1250,
+  // The value above the chart is drawn at 150 px, where a digit is up to 93 px wide.
+  chartCharPx: 96,
   // The counter row and the footnote, bottom left.
   counterLeft: 70,
   counterTop: 1400,
   counterWidth: 520,
+  // JetBrains Mono at 64 px is 38.4 px a digit; each column keeps a little room.
+  counterCharPx: 39,
+  counterPadPx: 8,
   footnoteTop: 1560,
   // The presenter, bottom right, cut off by the frame's bottom edge.
   presenterLeft: 610,
@@ -122,6 +131,8 @@ export const GEOMETRY = {
   presenterHeight: 620,
   // A point pinned to the photograph must sit this far inside the band.
   anchorMargin: 20,
+  // A pinned point within this much of a chip or the stat is hidden by it.
+  pointClearPx: 10,
   overlapTolerance: 4,
 } as const;
 
@@ -206,13 +217,26 @@ export function statText(value: number, decimals = 0, prefix = "", suffix = ""):
   return `${prefix}${value.toFixed(decimals)}${suffix}`;
 }
 
-/** A stat block's box: the numeral and its label, right-aligned. */
-export function statBox(e: Pick<UTHStat, "value" | "decimals" | "prefix" | "suffix" | "label" | "place">): Box {
-  const numeral = statText(e.value, e.decimals ?? 0, e.prefix ?? "", e.suffix ?? "").length * GEOMETRY.statCharPx;
+/** A stat block's box: the numeral (at its wider end of the count) and its label, right-aligned. */
+export function statBox(e: Pick<UTHStat, "value" | "from" | "decimals" | "prefix" | "suffix" | "label" | "place">): Box {
+  const numeral = Math.max(
+    ...[e.from ?? 0, e.value].map((v) => statText(v, e.decimals ?? 0, e.prefix ?? "", e.suffix ?? "").length),
+  ) * GEOMETRY.statCharPx;
   const label = e.label.length * GEOMETRY.statLabelCharPx;
   const w = Math.max(numeral, label);
   const top = e.place === "upper" ? GEOMETRY.statUpperTop : GEOMETRY.statLowerTop;
   return [GEOMETRY.statRight - w, top, GEOMETRY.statRight, top + GEOMETRY.statHeight];
+}
+
+/** The widest the value above a chart gets, over its points. */
+export function chartTextWidth(e: Pick<UTHChart, "points" | "decimals" | "prefix" | "suffix">): number {
+  return Math.max(...e.points.map((v) => statText(v, e.decimals ?? 0, e.prefix ?? "", e.suffix ?? "").length)) * GEOMETRY.chartCharPx;
+}
+
+/** Whether a counter row's widest value fits its column. */
+export function counterFits(values: { from: number; to: number }[]): boolean {
+  const digits = Math.max(...values.map((v) => Math.max(String(v.from).length, String(v.to).length, 2)));
+  return digits * GEOMETRY.counterCharPx + GEOMETRY.counterPadPx <= GEOMETRY.counterWidth / values.length;
 }
 
 /** The point on a chip's edge where its leader starts: the middle of the side facing the target. */

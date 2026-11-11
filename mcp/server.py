@@ -1683,11 +1683,11 @@ def create_video(
         if strategy == "curriculum" and _profile_is_ready(con, row["default_script_profile_id"]):
             script_profile_id = row["default_script_profile_id"]
         # The domain's default mascot (or the install's) seeds EVERY video, like
-        # the voice, but only while the GPU works and never on a Cartoon 3D
-        # video; seeding never refuses a video. Keep in sync:
+        # the voice, but only while the GPU works and never on a video whose
+        # style takes no mascot; seeding never refuses a video. Keep in sync:
         # renderer/api/pipeline.py's _seed_mascot.
         mascot_id = ""
-        if visual_style != "cartoon_3d" and _gpu_probe_status() == "working":
+        if not tmascots.no_mascot_error(visual_style) and _gpu_probe_status() == "working":
             mascot_id = tmascots.resolve_default(
                 con, row["default_mascot_id"] or "", _get_setting("default_mascot_id", ""))
         agent_id = _pick_agent_id(con)
@@ -1722,10 +1722,12 @@ def _approval_mascot_error(con, video_id: str) -> dict | None:
                        (video_id,)).fetchone()
     if not held or not held["mascot_id"]:
         return None
-    if "cartoon_3d" in (held["visual_style"], held["resolved_renderer"]):
-        # The renderer refuses the pair; approving buys paid work that ends in FAILED.
-        return {"error": f"This video is Cartoon 3D and holds the mascot {held['mascot_id']!r}. "
-                         f"{tmascots.MASCOT_NOT_ON_CARTOON_3D} A human must clear the mascot on the "
+    no_mascot = ("cartoon_3d" if held["resolved_renderer"] == "cartoon_3d"
+                 else (held["visual_style"] or "").strip())
+    if tmascots.no_mascot_error(no_mascot):
+        # A style that takes no mascot; approving buys paid work that ends refused or FAILED.
+        return {"error": f"This video's style is {no_mascot} and it holds the mascot {held['mascot_id']!r}. "
+                         f"{tmascots.no_mascot_error(no_mascot)} A human must clear the mascot on the "
                          "dashboard before the topic is approved."}
     if _mascot_pick_error(con, held["mascot_id"]):
         return {"error": f"This video's mascot {held['mascot_id']!r} can no longer be used (it was "
@@ -2584,16 +2586,18 @@ def update_video(
             if not cur_vid:
                 return {"error": f"Video not found: {video_id}"}
             stored_mascot_id = cur_vid["mascot_id"] or ""
-            will_be_cartoon = (visual_style if visual_style is not None
-                               else cur_vid["visual_style"]) == "cartoon_3d"
+            # A style that takes no mascot (Cartoon 3D, Under the Hood): a picked
+            # mascot is refused, and switching to it clears the stored one.
+            no_mascot = tmascots.no_mascot_error(visual_style if visual_style is not None
+                                                 else cur_vid["visual_style"])
             if mascot_id and mascot_id != (cur_vid["mascot_id"] or ""):
                 err = _mascot_pick_error(con, mascot_id) or tmascots.mascot_gpu_error(_gpu_probe_status())
                 if err:
                     return {"error": err}
-                if will_be_cartoon:
-                    return {"error": tmascots.MASCOT_NOT_ON_CARTOON_3D}
-        if will_be_cartoon:
-            mascot_id = ""     # whatever was sent: no mascot survives on a cartoon_3d video
+                if no_mascot:
+                    return {"error": no_mascot}
+        if no_mascot:
+            mascot_id = ""     # whatever was sent: no mascot survives on such a video
     if resolved_renderer is not None:
         resolved_renderer = resolved_renderer.strip()
         if resolved_renderer not in RENDERERS:
@@ -2817,9 +2821,14 @@ def update_video(
                 return {"error": "This video's agent changed while the call was in flight — "
                                  "check get_video and pick the model again"}
             if row and pair:
+                now = con.execute("SELECT visual_style, resolved_renderer FROM videos WHERE id = ?",
+                                  (video_id,)).fetchone()
+                style_now = ("cartoon_3d" if (now["resolved_renderer"] or "") == "cartoon_3d"
+                             else (now["visual_style"] or ""))
+                why = tmascots.no_mascot_error(style_now) or tmascots.MASCOT_NOT_ON_CARTOON_3D
                 return {"error": "The video's visual style changed while the call was in flight, and "
-                                 f"the result would put a mascot on a Cartoon 3D video. "
-                                 f"{tmascots.MASCOT_NOT_ON_CARTOON_3D} Check get_video"}
+                                 f"the result would put a mascot on a {tvs.route_label(style_now)} "
+                                 f"video. {why} Check get_video"}
     return {"video_id": video_id, "updated_fields": updated}
 
 
@@ -4636,6 +4645,16 @@ def validate_job(video_id: str) -> dict:
     except Exception as e:
         errors.append(f"Custom prop check failed: {e}")
 
+    # An Under the Hood plate's aspect (TMDEV-201). write_scene_config reads it
+    # from the photograph, but the skill lets the agent regenerate a photograph
+    # under its own name afterwards: a new shape would render stretched and
+    # every pinned-point check was made against the old one.
+    try:
+        if "scene_config" in dir() and isinstance(scene_config, dict):
+            errors.extend(_uth_aspect_errors(video_id, scene_config))
+    except Exception as e:
+        errors.append(f"Photograph shape check failed: {e}")
+
     # Cartoon 3D readiness (TMDEV-185). A Cartoon 3D video renders only once
     # its generated source exists and two fresh judges have passed the beat
     # sheet for that exact source (the verdict is keyed by a hash of the
@@ -6371,12 +6390,14 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     scene-config: **never** write scene-config.json using Claude Code's file
     tools, the same rule write_scene_file enforces for .tsx files.
 
-    A System Flow or Bean Explainer video is one installed scene (SystemFlow
-    or BeanExplainer) from frame 0 for totalFrames, whose props hold the whole
-    video as data; that data is checked here against the style's contract
-    (the tubematic-system-flow and tubematic-bean-explainer skills document
-    it) and refused with one sentence per problem. Either style fills
-    subtitles with its own caption look when the config has none.
+    A System Flow, Bean Explainer or Under the Hood video is one installed
+    scene (SystemFlow, BeanExplainer or UnderTheHood) from frame 0 for
+    totalFrames, whose props hold the whole video as data; that data is
+    checked here against the style's contract (the tubematic-system-flow,
+    tubematic-bean-explainer and tubematic-under-the-hood skills document it)
+    and refused with one sentence per problem. Each style fills subtitles
+    with its own caption look. For Under the Hood this also fills each
+    plate's aspect from its photograph's file.
 
     Call write_scene_file for every generated src referenced in config first,
     then call this, then the operator calls validate_job. Only the shape needed
@@ -6443,6 +6464,26 @@ def _bean_custom_list(config) -> list:
     except (KeyError, IndexError, TypeError, AttributeError):
         return []
     return custom if isinstance(custom, list) else []
+
+
+def _uth_aspect_errors(video_id: str, config: dict) -> list[str]:
+    """validate_job's re-check that each Under the Hood plate's stored aspect
+    still matches its photograph; [] for any other config."""
+    try:
+        plates = config["scenes"][0]["props"][under_the_hood.PROPS_KEY]["plates"]
+    except (KeyError, IndexError, TypeError):
+        return []
+    if not isinstance(plates, list):
+        return []
+    fresh = _uth_with_aspects(video_id, config)["scenes"][0]["props"][under_the_hood.PROPS_KEY]["plates"]
+    stale = sorted({p["image"].rsplit("/", 1)[-1] for p, q in zip(plates, fresh)
+                    if isinstance(p, dict) and isinstance(p.get("image"), str)
+                    and "aspect" in q and abs(q["aspect"] - p.get("aspect", 1)) > 0.005})
+    if not stale:
+        return []
+    return [f"The photograph(s) {', '.join(stale)} changed shape after the scene config was written; "
+            "write the config again with write_scene_config so the plates and the pinned points are "
+            "checked against the new pictures."]
 
 
 def _uth_with_aspects(video_id: str, config: dict) -> dict:

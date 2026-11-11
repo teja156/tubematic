@@ -105,6 +105,7 @@ style.
 | `canvas` | The canvas the style fixes, or `null` when the agent chooses it |
 | `allows` | `figures`, `line_art` and `generated_characters`: the three permission columns above |
 | `needs`, `messages` | Whether the style needs an OpenAI key or a working GPU, and the refusal text for each |
+| `mascot` | Optional. `false` when a video of the style may not carry a mascot, with the refusal in `messages.mascot`. A 3D-world style takes none by its renderer |
 | `authoring_skill` | The skill that authors a video in this style; `get_video` returns it as `style.authoring_skill` |
 | `review` | Optional. The style's own block for the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses) |
 | `captions` | Optional. The `subtitles` settings `write_scene_config` fills in when a config has none |
@@ -160,7 +161,8 @@ flowchart TD
 The candidates are data: `tubematic_core/visual_styles.py::routing_candidates` lists every style
 pack in pack order, then `scenes`, each with its `routing` block and whether this install and this
 video can have it. A style that needs an OpenAI key or a working GPU the install lacks is
-unavailable, and so is a 3D-world style on a video with a mascot. The skill names no style, so a new
+unavailable, and so is a style that takes no mascot (a 3D world, or a pack with `"mascot": false`)
+on a video with a mascot. The skill names no style, so a new
 pack with a `routing` block is a candidate the day it ships.
 
 The outcome is recorded in three columns ([`videos`](03-database.md#videos)):
@@ -628,7 +630,7 @@ presenter bottom right.
 |---|---|
 | `callout` | A capital label in a dark chip, with a line to a point of the photograph |
 | `outline` | A box or corner brackets over a region of the photograph, drawn on in 8 frames |
-| `arcs` | A fan of gold arcs rising from one point and bending toward another, with sparks for 45 frames |
+| `arcs` | A fan of gold arcs rising from one point and bending toward another over 20 frames, with sparks; all of it holds still 65 frames after it starts |
 | `counters` | Up to four monospace values ticking to new ones in 4-frame steps; changed ones turn bold white |
 | `stat` | A huge numeral counting up, with a capital label and an optional chip |
 | `chart` | A line drawing left to right on a plate with no photograph, its head value shown large |
@@ -654,7 +656,8 @@ The renderer's side is `src/scenes/installed/UnderTheHood.tsx` with `underTheHoo
 
 The scene follows System Flow's rules (no SVG filter, gradient, pattern or `stroke-dasharray`; an
 arc's glow is a wider translucent stroke and the band's fade into the canvas is a stack of flat
-strips), sizes every overlay layer to the plate band, and stops the arcs and sparks after 45 frames.
+strips), sizes every overlay layer to the plate band, and holds the arcs and sparks still 65 frames
+after they start.
 Measured on the CPU renderer over the whole example video, it costs about 1.6 times System Flow's
 example, about the ratio Bean Explainer measured. About three quarters of that is the slow push itself:
 every frame is a new photograph to capture and encode, which the look requires.
@@ -667,18 +670,24 @@ every frame is a new photograph to capture and encode, which the look requires.
   video has more than 30 plates or more than 12 different photographs.
 - An image is not this video's `/public/<video_id>/images/` path, or a photograph at its `focus` and
   `zoom` does not cover the plate band, so its edge would show.
-- A pinned point leaves the band before its plate ends, a chip leaves the band or the side margins,
-  sits within 40 px of its point, or overlaps another chip, the stat or the chart.
+- A pinned point leaves the band before its plate ends (or, on a plate that zooms in, during its
+  settle), or sits under a chip or the stat; a chip leaves the band or the side margins, sits within
+  40 px of its point, or overlaps another chip, the stat or the chart.
 - A plate holds more than 6 callouts, outlines, arc fans, stats and charts, or more than one counter
   row, stat, chart or footnote; a callout, outline or arc is on a plate with no photograph, or a chart
   on one with a photograph.
-- A pose is off a word or within 8 frames of the last; a text event starts less than 20 frames before
-  its plate ends (6 frames earlier on a plate a zoom-through ends); a chart is still drawing at the
-  cut.
+- A pose is off a word or within 8 frames of the last; an event starts too late to finish and be read
+  before its plate ends (20 frames for text, plus the count of a stat or counters and the draw of a
+  chart; 6 frames earlier on a plate a zoom-through ends).
+- A stat or chart number is beyond 9999999 either way, a stat or a chart's value is too wide for the
+  frame, or a counter row's digits do not fit their columns. Character widths are measured from the
+  bundled fonts.
 - Nothing new happens for more than 3.5 seconds.
 
 `write_scene_config` reads each photograph's height over width from its file into the plate's
-`aspect`, because every pinned-point check depends on it; the agent never writes it.
+`aspect`, because every pinned-point check depends on it; the agent never writes it. `validate_job`
+reads the photographs again and refuses a config whose stored aspect differs from its photograph's,
+which happens when a photograph is regenerated after the config was written.
 `generate_image` refuses a 13th new image name on an Under the Hood video before the paid call, and
 allows regenerating an existing one. `mcp/tests/test_under_the_hood.py` pins `under_the_hood.py` to
 `contract.ts` and to the pack. The pack's `captions` fill every `subtitles` key the config leaves out.
@@ -748,7 +757,9 @@ The geometry constants in `mascots.py` are copies of the engine's, of `Subtitles
 `text_audit.py`'s. Agreement tests keep them in step.
 
 The mascot is drawn under the captions, so it cannot hide one. It can hide a scene's text, which
-[`validate_job` reports as a warning](#text-layout-warnings). A Cartoon 3D video cannot have a mascot.
+[`validate_job` reports as a warning](#text-layout-warnings). A Cartoon 3D or Under the Hood video
+cannot have a mascot: the first has no mascot layer, and the second's presenter stands where a
+mascot would.
 
 ---
 

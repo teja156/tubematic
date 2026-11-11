@@ -74,7 +74,7 @@ Every event has `type` and `frame`, inside its plate and at least 6 frames befor
 | `shape` | `box` (default) or `bracket` |
 
 **`arcs`**: a fan of gold field arcs rising from `from` and bending toward `to` over 20 frames, with
-sparks for 45 frames.
+sparks; 65 frames after it starts, all of it holds still.
 
 | Field | Rule |
 |---|---|
@@ -86,20 +86,20 @@ in 4-frame steps and settling in 16 frames. One row per plate; it stays until th
 
 | Field | Rule |
 |---|---|
-| `values` | 1 to 4 `{"from": n, "to": n}`, whole numbers 0 to 99999. Values that change turn bold white and get a bracket under them |
+| `values` | 1 to 4 `{"from": n, "to": n}`, whole numbers 0 to 99999. Values that change turn bold white and get a bracket under them. Each column is 520 px / the number of counters, a digit 39 px: four counters take up to 3 digits, three up to 4, one or two up to 5 |
 
 **`stat`**: one huge numeral, counting up over 24 frames, right-aligned, with a capital label and an
 optional chip under it. One per plate.
 
 | Field | Rule |
 |---|---|
-| `value` | The number it ends on |
-| `from` | Where it counts from, default 0 |
+| `value` | The number it ends on, -9999999 to 9999999 |
+| `from` | Where it counts from, default 0, in the same range. The block is sized for the longer of the two |
 | `decimals` | 0 (default), 1 or 2 |
 | `prefix`, `suffix` | At most 3 characters each: `$`, `%`, `µm`, `pF` |
 | `label` | 1 to 22 characters, shown in capitals |
 | `chip` | Optional, 1 to 10 characters: `+429%` |
-| `place` | `lower` (default, y 1050 to 1310) or `upper` (y 500 to 760). The numeral is 104 px a character |
+| `place` | `lower` (default, y 1050 to 1350) or `upper` (y 500 to 800). The numeral is 110 px a character and the label 28; the block must fit between x 60 and 1010 |
 
 **`chart`**: a thin line drawing left to right on a plate with no photograph, the value at its head
 shown large above it, the axis label typing on under it, and the chip popping at the end. One per
@@ -107,12 +107,12 @@ plate.
 
 | Field | Rule |
 |---|---|
-| `points` | 2 to 24 numbers, in order |
+| `points` | 2 to 24 numbers from -9999999 to 9999999, in order. The value shown above the chart is 96 px a character and must fit 900 px |
 | `label` | The axis, 1 to 24 characters |
-| `duration` | 30 to 150 frames, default 88; the line finishes before the plate ends |
+| `duration` | 30 to 150 frames, default 88; the chart starts at least `duration` + 20 frames (+ 4 with a chip) before its plate ends |
 | `decimals`, `prefix`, `suffix`, `chip` | As for `stat` |
 
-**`footnote`**: tiny grey text in the bottom left, until the next plate. One per plate, 1 to 40
+**`footnote`**: tiny grey text in the bottom left, until the next plate. One per plate, 1 to 32
 characters.
 
 **`pose`**: the presenter's pose, on a word, at least 8 frames after the last one.
@@ -124,9 +124,15 @@ characters.
 ## Counted per plate
 
 At most 6 callouts, outlines, arc fans, stats and charts together. Callouts, outlines and arcs need a
-photograph. Chips, the stat and the chart may not overlap each other. Text (a callout, a stat, a
-chart, a footnote) starts at least 20 frames before its plate ends; on a plate that a zoom-through
-ends, its pinned things leave 6 frames before the cut, so count from there.
+photograph. Chips, the stat and the chart may not overlap each other, and no pinned point (a
+callout's `at`, an arc's `from` or `to`, an outline's corner) may sit under a chip or the stat, with
+10 px to spare. A callout or a footnote starts at least 20 frames before its plate ends; a stat 44
+(48 with a chip), a counter row 36, a chart its `duration` plus 20 (plus 4 with a chip), so the
+number finishes and can be read. On a plate that a zoom-through ends, its pinned things leave 6
+frames before the cut, so count from there.
+
+On a plate that enters with a zoom, pinned points are also checked at the 1.25x it settles from, so a
+point near the band's edge must wait until the settle is over (8 frames).
 
 ## The whole video
 

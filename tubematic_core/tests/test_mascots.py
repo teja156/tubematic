@@ -81,6 +81,15 @@ def test_cartoon_mascot_clash_sql_names_only_the_pair_the_renderer_refuses():
     bound = mascots.cartoon_mascot_clash_sql("?", "?", "?")
     assert con.execute(f"SELECT {bound}", ("cartoon_3d", "", "moss")).fetchone()[0] == 1
     assert con.execute(f"SELECT {bound}", ("cartoon_3d", "", "")).fetchone()[0] == 0
+    # a pack that takes no mascot is in the pair too (TMDEV-201)
+    assert con.execute(f"SELECT {bound}", ("under_the_hood", "", "moss")).fetchone()[0] == 1
+    assert con.execute(f"SELECT {bound}", ("bean_explainer", "", "moss")).fetchone()[0] == 0
+
+
+def test_no_mascot_error_names_each_style_that_takes_none():
+    assert mascots.no_mascot_error("cartoon_3d") == mascots.MASCOT_NOT_ON_CARTOON_3D
+    assert "presenter" in mascots.no_mascot_error("under_the_hood")
+    assert mascots.no_mascot_error("stick") == mascots.no_mascot_error("") == mascots.no_mascot_error("auto") == ""
 
 
 def test_resolve_default_none_empty_and_unpickable():

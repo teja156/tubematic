@@ -333,7 +333,8 @@ Fields writable only at `TOPIC_PROPOSED`:
   mascot in the same update.
 - A new `mascot_id` must exist, be approved and not archived, and some renderer's GPU test must
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
-  mascot is not refused. A mascot is refused on a `cartoon_3d` video.
+  mascot is not refused. A mascot is refused on a `cartoon_3d` or `under_the_hood` video
+  (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to either style clears the stored one.
 - A `visual_style` different from the stored one clears the record of a style `auto` picked
   (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
   scenes (`resolved_renderer`, `resolved_visual_style`). The same value again keeps them, because the
