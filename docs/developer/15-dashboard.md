@@ -265,8 +265,8 @@ The Mascots page's create form uses the same agent, model and effort controls
 - Writes to one domain run one at a time: each change on its row, and a pause or resume. Each is
   built from the row as the write before it left it, because the route replaces the whole row. Two
   changes sent side by side would each carry the other's field as it was, and one would be lost.
-  A refused change, or one that did not reach the API, is reported in an alert and the row keeps
-  what is stored.
+  A refused change, or one that did not reach the API within 30 seconds, is reported in an alert
+  and the row keeps what is stored.
 - A closed row is one line: the name, a chip for each default the domain sets
   (`lib/domains.ts::domainChips`), the topic and video counts, the status and the pause button. The
   panel is rendered only while its row is open.

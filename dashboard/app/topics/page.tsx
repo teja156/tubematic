@@ -140,14 +140,18 @@ const MAX_DOMAIN_DESCRIPTION_CHARS = 2000;
 // Commits on blur or Enter, like Settings' number fields, so typing "300" is
 // one save rather than three. An entry outside the bounds reverts.
 function DomainCapInput({ testId, value, onCommit }: {
-  testId: string; value: number; onCommit: (next: number) => void;
+  testId: string; value: number; onCommit: (next: number) => Promise<boolean>;
 }) {
   const [local, setLocal] = useState(String(value));
   useEffect(() => { setLocal(String(value)); }, [value]);
   function commit() {
     const n = Number(local);
     if (Number.isInteger(n) && n >= MIN_TOPIC_CAP && n <= MAX_TOPIC_CAP) {
-      if (n !== value) onCommit(n);
+      // A save that was refused, or never reached the API, leaves `value` as
+      // it was, so the effect above does not run: put the stored cap back by
+      // hand, or the field keeps showing a number the domain does not have.
+      const revert = () => setLocal(String(value));
+      if (n !== value) onCommit(n).then((saved) => { if (!saved) revert(); }, revert);
     } else {
       setLocal(String(value));
     }
@@ -324,7 +328,8 @@ function DomainRow({ project, videoCounts, onToggle, onSave, lists, canIllustrat
   project: Project;
   videoCounts: Record<string, number>;
   onToggle: (id: string, next: ProjectStatus) => void;
-  onSave: (id: string, patch: Partial<Project>) => void;
+  /** Resolves to whether the change was stored. */
+  onSave: (id: string, patch: Partial<Project>) => Promise<boolean>;
   lists: DomainLists;
   canIllustrate: boolean;
   gpu: GpuStatus | null;
@@ -506,7 +511,7 @@ function DomainRow({ project, videoCounts, onToggle, onSave, lists, canIllustrat
         >
           <DomainDefaults
             values={values}
-            onChange={(patch) => onSave(project.id, patch as Partial<Project>)}
+            onChange={(patch) => { void onSave(project.id, patch as Partial<Project>); }}
             testId={(control) => `domain-${control}-${project.id}`}
             lists={lists}
             canIllustrate={canIllustrate}
@@ -803,6 +808,11 @@ const SAVED_FIELD: Record<string, string> = {
 };
 
 
+// How long one write to a domain may go unanswered. Writes to a domain wait
+// for one another, so one that never answered would hold every later change
+// to that domain behind it; past this it counts as not having reached the API.
+const DOMAIN_WRITE_TIMEOUT_MS = 30_000;
+
 export default function TopicsPage() {
   const [projects, setProjectsState] = useState<Project[]>([]);
   // The rows as of the last write, readable by a save the moment the one
@@ -820,9 +830,12 @@ export default function TopicsPage() {
   // and a refused one is simply not there for the next. A pause goes through
   // the same chain, or a change sent behind it would re-send "active".
   const domainWrites = useRef<Record<string, Promise<void>>>({});
-  function queued(id: string, write: () => Promise<void>) {
+  function queued<T>(id: string, write: () => Promise<T>): Promise<T> {
     const run = (domainWrites.current[id] ?? Promise.resolve()).then(write);
-    domainWrites.current[id] = run.catch(() => {});
+    // The chain goes on whatever became of this write: one that threw must
+    // not hold up every later change to the domain.
+    domainWrites.current[id] = run.then(() => {}, () => {});
+    return run;
   }
   const [videoCounts, setVideoCounts] = useState<Record<string, number>>({});
   const [activeStrategies, setActiveStrategies] = useState<string[]>(["curriculum", "trending", "mining"]);
@@ -915,11 +928,12 @@ export default function TopicsPage() {
   }, []);
 
   function handleToggleDomain(id: string, next: ProjectStatus) {
-    queued(id, async () => {
+    void queued(id, async () => {
       const r = await apiFetch(`/projects/${id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: next }),
+        signal: AbortSignal.timeout(DOMAIN_WRITE_TIMEOUT_MS),
       }).catch(() => null);
       // A refusal is reported, not shown as success: only a curriculum seed can
       // be paused, and the row may have stopped being one since this page loaded.
@@ -932,10 +946,10 @@ export default function TopicsPage() {
     });
   }
 
-  function saveDomain(id: string, patch: Partial<Project>) {
-    queued(id, async () => {
+  function saveDomain(id: string, patch: Partial<Project>): Promise<boolean> {
+    return queued(id, async () => {
       const project = projectsRef.current.find((p) => p.id === id);
-      if (!project) return;
+      if (!project) return false;
       const next = { ...project, ...patch };
       // POST /projects is an upsert, and its ON CONFLICT clause overwrites every
       // column it is given — so the unchanged fields have to be sent back or
@@ -956,13 +970,14 @@ export default function TopicsPage() {
           ...domainDefaults(next),
           topic_cap: next.topic_cap,
         }),
+        signal: AbortSignal.timeout(DOMAIN_WRITE_TIMEOUT_MS),
       }).catch(() => null);
       // A save that never reached the API is reported like a refused one, and
       // the row keeps showing what is stored.
       if (!r?.ok) {
         const body = r ? await r.json().catch(() => ({})) : {};
         alert(body.error ?? `Could not change this domain's ${SAVED_FIELD[Object.keys(patch)[0]] ?? "settings"}`);
-        return;
+        return false;
       }
       // The saved row carries the topic count and expiry as they are now. The
       // count loaded with the page can be stale (research may have filed since),
@@ -971,6 +986,7 @@ export default function TopicsPage() {
       const saved = await r.json().catch(() => null);
       const fresh = saved && saved.id === id ? (saved as Project) : {};
       setProjects((prev) => prev.map((p) => p.id === id ? { ...p, ...patch, ...fresh } : p));
+      return true;
     });
   }
 

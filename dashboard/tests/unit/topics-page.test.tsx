@@ -1074,6 +1074,11 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     fireEvent.change(screen.getByTestId("domain-agent-plain-1"), { target: { value: "codex" } });
     fireEvent.change(screen.getByTestId("domain-agent-effort-plain-1"), { target: { value: "low" } });
     await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    // Each write carries a time limit: with none, one that never answered
+    // would hold every later change to the domain behind it.
+    const first = spy.mock.calls.find(([u, i]) => u.toString().endsWith("/projects")
+      && (i as RequestInit | undefined)?.method === "POST")![1] as RequestInit;
+    expect(first.signal).toBeInstanceOf(AbortSignal);
     release();
     await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
     expect(projectPosts(spy)[1]).toMatchObject({
@@ -1135,15 +1140,17 @@ describe("TopicsPage — domain summary and agent defaults", () => {
       .toBe("AgentAutomatic · max"));
   });
 
-  it("a pause and a change to the same domain do not cross", async () => {
-    // A change sent while a pause is unanswered would re-send status "active"
-    // on the full replace and undo the pause.
+  // A change sent while a pause is unanswered would re-send status "active"
+  // on the full replace and undo the pause.
+  it("a change made behind a pause waits for it and keeps the domain paused", async () => {
     const spy = mockDomains([{ ...DOMAIN, default_agent_id: "", default_agent_model: "" }]);
     const answer = spy.getMockImplementation()!;
     let release: () => void = () => {};
     const held = new Promise<void>((resolve) => { release = resolve; });
+    let statusCalls = 0;
     spy.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
       if (url.toString().includes("/status")) {
+        statusCalls += 1;
         await held;
         return { ok: true, json: () => Promise.resolve({}) } as Response;
       }
@@ -1154,10 +1161,61 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     await openDefaults();
     fireEvent.click(screen.getByTestId("toggle-domain-seed-1"));
     fireEvent.change(screen.getByTestId("domain-agent-effort-seed-1"), { target: { value: "low" } });
+    // The pause is out and unanswered; given time, the change still has not gone.
+    await waitFor(() => expect(statusCalls).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 30));
     expect(projectPosts(spy)).toHaveLength(0);
     release();
     await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
     expect(projectPosts(spy)[0]).toMatchObject({ status: "paused", default_agent_effort: "low" });
+  });
+
+  it("a pause made behind a change waits for it", async () => {
+    const spy = mockDomains([{ ...DOMAIN, default_agent_id: "", default_agent_model: "" }]);
+    const release = holdPosts(spy);
+    const statusCalls = () => spy.mock.calls.filter(([u]) => u.toString().includes("/status")).length;
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    fireEvent.change(screen.getByTestId("domain-agent-effort-seed-1"), { target: { value: "low" } });
+    fireEvent.click(screen.getByTestId("toggle-domain-seed-1"));
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(statusCalls()).toBe(0);
+    release();
+    await waitFor(() => expect(statusCalls()).toBe(1));
+    await waitFor(() => expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("PAUSED"));
+    expect(screen.getByTestId("domain-chip-agent-seed-1").textContent).toBe("AgentAutomatic · low");
+  });
+
+  it("a write that throws does not hold up the next one", async () => {
+    const spy = mockDomains([PLAIN], AGENTS, "refused");
+    // The first refusal's alert throws, so that write ends in an exception.
+    const alertSpy = vi.spyOn(window, "alert")
+      .mockImplementationOnce(() => { throw new Error("alert blocked"); })
+      .mockImplementation(() => {});
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    const effort = await waitFor(() => screen.getByTestId("domain-agent-effort-plain-1"));
+    fireEvent.change(effort, { target: { value: "low" } });
+    fireEvent.change(effort, { target: { value: "max" } });
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(2));
+  });
+
+  it("puts a refused topic cap back in its field", async () => {
+    mockDomains([PLAIN], AGENTS, "topic_cap must be a whole number from 25 to 750");
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    const cap = await waitFor(() => screen.getByTestId("domain-cap-plain-1") as HTMLInputElement);
+    fireEvent.change(cap, { target: { value: "250" } });
+    fireEvent.blur(cap);
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    await waitFor(() => expect(cap.value).toBe("100"));
+    expect(screen.getByTestId("domain-topics-plain-1").textContent).toBe("3 / 100 topics");
   });
 
   it("an effort alone reads as Automatic with that effort", async () => {

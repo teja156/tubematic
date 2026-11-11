@@ -90,7 +90,8 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
   mascot) are found by their captions. A default that has left the roster or the profile list stays
   visible as removed or unavailable.
 - A save that cannot reach the API is reported and leaves the row as it was, and the next save
-  still goes out.
+  still goes out, as it does after a write that threw. A refused topic cap is put back in its
+  field.
 - The agent picker offers Automatic and the live agents. The model is disabled under Automatic, and
   the blank effort names the agent's own level. Changing the agent sends `default_agent_model: ""`
   in the same save. An uninstalled agent and a dropped model stay selected, disabled, and are
