@@ -77,13 +77,16 @@ function configOf(state: AutoPilotState): AutoPilotConfig {
 
 /** A whole number saved on blur or Enter. Out of range, it stays as typed and
  *  is not sent. At module scope so a re-render never remounts it (TMDEV-93). */
-function NumberCell({ testId, value, max, inputStyle, onCommit, onInvalid }: {
+function NumberCell({ testId, value, max, inputStyle, describedBy, onCommit, onInvalid, onSame }: {
   testId: string;
   value: number;
   max: number;
   inputStyle: CSSProperties;
+  describedBy: string;
   onCommit: (n: number) => void;
   onInvalid: (message: string) => void;
+  /** Typed back to the value set: a refusal shown for it no longer applies. */
+  onSame: () => void;
 }) {
   const [text, setText] = useState(String(value));
   // Follows the stored value only when it changes. Run on mount as well, a
@@ -100,11 +103,13 @@ function NumberCell({ testId, value, max, inputStyle, onCommit, onInvalid }: {
       onInvalid(`must be a whole number from 0 to ${max}`);
       return;
     }
-    if (n !== value) onCommit(n);
+    if (n === value) onSame();
+    else onCommit(n);
   }
   return (
     <input
       data-testid={testId}
+      aria-describedby={describedBy}
       type="number"
       min={0}
       max={max}
@@ -211,13 +216,18 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   /** Saves the whole document with one change applied. `key` names the field
    *  whose status shows the outcome. A change that would approve videos waits
    *  for the confirmation dialog. */
+  /** The configuration in force once the saves on their way land: the newest
+   *  document sent, else the stored one. Confirmation, the dialog and Cancel
+   *  all read this, so a change made while a confirmed "on" is still on its
+   *  way neither asks again nor is undone by a Cancel. */
+  function current(): AutoPilotState {
+    return sentRef.current ? { ...saved!, ...sentRef.current } : saved!;
+  }
+
   function apply(partial: Partial<AutoPilotConfig>, key: string) {
     const next = { ...draft!, ...partial };
     setDraft(next);
-    // Judged against the newest document sent, not the stored one: a change
-    // made while a confirmed "on" is still on its way widens nothing.
-    const base = sentRef.current ? { ...saved!, ...sentRef.current } : saved!;
-    if (needsConfirmation(base, next)) setConfirming({ next, key });
+    if (needsConfirmation(current(), next)) setConfirming({ next, key });
     else void save(next, key);
   }
 
@@ -239,6 +249,9 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
         // With nothing after it, what is stored stays in force and the panel
         // shows it again. A later save carries this change too and decides.
         if (inFlight.current === 0) {
+          // Every change that failed is now off the panel, so no later save
+          // carries it: its message stays until the field changes again.
+          failed.current.clear();
           sentRef.current = null;
           if (savedRef.current) {
             setDraft(configOf(savedRef.current));
@@ -263,11 +276,13 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   }
 
   function cancelConfirm() {
-    // Nothing was sent: the panel goes back to what is stored.
+    // Nothing was sent: the panel goes back to what is in force, saves still
+    // on their way included.
     setConfirming(null);
-    if (savedRef.current) {
-      setDraft(configOf(savedRef.current));
-      showGap(savedRef.current.gap_mins);
+    if (saved) {
+      const base = current();
+      setDraft(configOf(base));
+      showGap(base.gap_mins);
     }
   }
 
@@ -312,7 +327,8 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
     apply({ projects: { ...draft!.projects, [pid]: next.sort() } }, `project-${pid}`);
   }
 
-  const approvedNow = confirming ? newlyApproved(saved, confirming.next) : 0;
+  const inForce = current();
+  const approvedNow = confirming ? newlyApproved(inForce, confirming.next) : 0;
   const ceiling = ceilingStatus(saved);
 
   return (
@@ -329,7 +345,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
             every checkpoint. Pausing the pipeline pauses Auto Pilot.
           </div>
         </div>
-        <SaveStatus status={statuses.get("enabled")} testId="auto-pilot-status-enabled" />
+        <SaveStatus status={statuses.get("enabled")} testId="auto-pilot-status-enabled" id="auto-pilot-status-enabled" />
         <button
           data-testid="toggle-auto-pilot"
           onClick={() => apply({ enabled: !draft.enabled }, "enabled")}
@@ -354,9 +370,10 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
             the daily number keeps posts at a steady time of day.
           </div>
         </div>
-        <SaveStatus status={statuses.get("gap")} testId="auto-pilot-status-gap" />
+        <SaveStatus status={statuses.get("gap")} testId="auto-pilot-status-gap" id="auto-pilot-status-gap" />
         <input
           data-testid="input-auto-pilot-gap"
+          aria-describedby="auto-pilot-status-gap"
           type="number"
           min={0}
           step="any"
@@ -395,14 +412,16 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
             </div>
           )}
         </div>
-        <SaveStatus status={statuses.get("max_in_flight")} testId="auto-pilot-status-max-in-flight" />
+        <SaveStatus status={statuses.get("max_in_flight")} testId="auto-pilot-status-max-in-flight" id="auto-pilot-status-max-in-flight" />
         <NumberCell
           testId="input-auto-pilot-max-in-flight"
           value={draft.max_in_flight}
           max={MAX_AUTO_PILOT_IN_FLIGHT}
           inputStyle={inputStyle}
           onCommit={(n) => apply({ max_in_flight: n }, "max_in_flight")}
+          describedBy="auto-pilot-status-max-in-flight"
           onInvalid={(message) => statuses.fail("max_in_flight", message)}
+          onSame={() => { if (statuses.get("max_in_flight")?.state === "error") statuses.clear("max_in_flight"); }}
         />
       </div>
 
@@ -434,7 +453,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
                 onChange={() => toggleProject(p.id)}
               />
               <span style={{ overflowWrap: "anywhere" }}>{p.name}</span>
-              <SaveStatus status={statuses.get(`project-${p.id}`)} testId={`auto-pilot-status-project-${p.id}`} />
+              <SaveStatus status={statuses.get(`project-${p.id}`)} testId={`auto-pilot-status-project-${p.id}`} id={`auto-pilot-status-project-${p.id}`} />
             </label>
             {on && (
               <div style={{ margin: "8px 0 0 26px" }}>
@@ -495,14 +514,18 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
                   Auto post how many videos per day. 0 means Auto Pilot never posts here.
                 </div>
               </div>
-              <SaveStatus status={statuses.get(`limit-${a.id}`)} testId={`auto-pilot-status-limit-${a.id}`} />
+              <SaveStatus status={statuses.get(`limit-${a.id}`)} testId={`auto-pilot-status-limit-${a.id}`} id={`auto-pilot-status-limit-${a.id}`} />
               <NumberCell
                 testId={`auto-pilot-limit-${a.id}`}
                 value={draft.account_limits[a.id] ?? saved.default_daily_limit}
                 max={MAX_AUTO_PILOT_DAILY}
                 inputStyle={inputStyle}
                 onCommit={(n) => apply({ account_limits: { ...draft.account_limits, [a.id]: n } }, `limit-${a.id}`)}
+                describedBy={`auto-pilot-status-limit-${a.id}`}
                 onInvalid={(message) => statuses.fail(`limit-${a.id}`, message)}
+                onSame={() => {
+                  if (statuses.get(`limit-${a.id}`)?.state === "error") statuses.clear(`limit-${a.id}`);
+                }}
               />
             </div>
           ))}
@@ -517,7 +540,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
         >
           <DialogHeader>
             <DialogTitle style={{ fontSize: 15, fontWeight: 600 }}>
-              {saved.enabled ? "Add these projects to Auto Pilot?" : "Turn on Auto Pilot?"}
+              {inForce.enabled ? "Add these projects to Auto Pilot?" : "Turn on Auto Pilot?"}
             </DialogTitle>
           </DialogHeader>
           <Disclaimer testId="auto-pilot-confirm-disclaimer" />
@@ -541,7 +564,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
                 void save(c.next, c.key);
               }}
                     style={{ ...button, border: "1px solid var(--amber)", color: "var(--amber)" }}>
-              {saved.enabled ? "Add to Auto Pilot" : "Turn on Auto Pilot"}
+              {inForce.enabled ? "Add to Auto Pilot" : "Turn on Auto Pilot"}
             </button>
           </div>
         </DialogContent>

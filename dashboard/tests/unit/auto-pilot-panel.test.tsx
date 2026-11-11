@@ -234,6 +234,43 @@ describe("AutoPilotPanel", () => {
     await waitFor(() => expect(posted(fn)?.gap_mins).toBe(90));
   });
 
+  it("Cancel during a save on its way keeps that change on screen", async () => {
+    const answers: Array<() => void> = [];
+    const fn = stub({ ...STATE, enabled: true, projects: { linux: [] } });
+    const base = fn.getMockImplementation()!;
+    fn.mockImplementation((url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/autopilot") && init?.method === "POST") {
+        return new Promise((resolve) => answers.push(() => resolve(base(url, init))));
+      }
+      return base(url, init);
+    });
+    render(<AutoPilotPanel inputStyle={{}} />);
+    const gap = await screen.findByTestId("input-auto-pilot-gap");
+    fireEvent.change(gap, { target: { value: "2" } });
+    fireEvent.blur(gap);
+    await waitFor(() => expect(answers).toHaveLength(1));
+    fireEvent.click(screen.getByTestId("auto-pilot-project-toggle-net"));
+    expect(await screen.findByTestId("auto-pilot-confirm")).toHaveTextContent("Add these projects");
+    fireEvent.click(screen.getByTestId("auto-pilot-confirm-cancel"));
+    await waitFor(() => expect(screen.queryByTestId("auto-pilot-confirm")).toBeNull());
+    expect(screen.getByTestId("input-auto-pilot-gap")).toHaveValue(2);
+    expect(screen.getByTestId("auto-pilot-project-toggle-net")).not.toBeChecked();
+    answers[0]();
+    await waitFor(() => expect(screen.getByTestId("auto-pilot-status-gap")).toHaveTextContent("✓ Saved"));
+  });
+
+  it("a number typed back to its value clears its refusal", async () => {
+    stub();
+    render(<AutoPilotPanel inputStyle={{}} />);
+    const input = await screen.findByTestId("input-auto-pilot-max-in-flight");
+    fireEvent.change(input, { target: { value: "-4" } });
+    fireEvent.blur(input);
+    expect(screen.getByTestId("auto-pilot-status-max-in-flight")).toHaveTextContent("Not saved:");
+    fireEvent.change(input, { target: { value: "0" } });
+    fireEvent.blur(input);
+    expect(screen.getByTestId("auto-pilot-status-max-in-flight")).toHaveTextContent("");
+  });
+
   it("an edit made while a save is on its way survives that save's answer", async () => {
     const answers: Array<() => void> = [];
     const fn = stub({ ...STATE, projects: { linux: [] } });

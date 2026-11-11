@@ -16,7 +16,7 @@ import { MiningSources } from "@/components/MiningSources";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { SaveStatus } from "@/components/SaveStatus";
 import { ToastStack, useToasts } from "@/components/Toast";
-import { responseError, useSaveStatus, type SaveState } from "@/lib/saveStatus";
+import { responseError, useSaveStatus, useSerialQueue, type SaveState } from "@/lib/saveStatus";
 
 const ALL_MODES: Array<{ key: string; label: string; accent: string; desc: string }> = [
   { key: "curriculum", label: "Curriculum",  accent: "var(--indigo)", desc: "Enumerate sub-topics from seed domains" },
@@ -860,6 +860,9 @@ export default function TopicsPage() {
   // The newest list, for an Undo clicked after later changes.
   const miningUrlsRef = useRef<string[]>([]);
   miningUrlsRef.current = miningUrls;
+  const storedMiningRef = useRef<string[]>([]);
+  const miningInFlight = useRef(0);
+  const enqueueMining = useSerialQueue();
   // Illustrated is disabled as a domain default when no OpenAI key is stored.
   // Fetched apart from loadAll so a failed settings read changes nothing but
   // this: the API refuses the style itself, so true is the safe fallback.
@@ -900,6 +903,7 @@ export default function TopicsPage() {
     }
     if (miningRes.ok) {
       const m: { youtube_urls: string[] } = await miningRes.json();
+      storedMiningRef.current = m.youtube_urls;
       setMiningUrls(m.youtube_urls);
     }
     setLoading(false);
@@ -1025,13 +1029,20 @@ export default function TopicsPage() {
     });
   }
 
-  async function handleMiningUrlsChange(next: string[]) {
-    // From the ref: an Undo runs this from an older render.
-    const prev = miningUrlsRef.current;
-    const removed = prev.filter((u) => !next.includes(u));
+  // Mining saves run one at a time: each sends a whole list, so two side by
+  // side would race, and the screen could show the answer that lost.
+  function handleMiningUrlsChange(next: string[]) {
     setMiningUrls(next);
     setSavingMining(true);
     setMiningError(null);
+    miningInFlight.current += 1;
+    return enqueueMining(() => saveMiningUrls(next));
+  }
+
+  async function saveMiningUrls(next: string[]) {
+    // What is stored when this save goes out, not what the screen shows.
+    const prev = storedMiningRef.current;
+    const removed = prev.filter((u) => !next.includes(u));
     const ok = await statuses.run("mining", async () => {
       const res = await apiFetch("/research/mining-sources", {
         method: "POST",
@@ -1048,13 +1059,14 @@ export default function TopicsPage() {
         setMiningError(message);
         return message;
       }
-      if (Array.isArray(body.youtube_urls)) {
-        // The list as stored: canonical and deduplicated by the API.
-        setMiningUrls(body.youtube_urls);
-      }
+      // The list as stored: canonical and deduplicated by the API.
+      const stored = Array.isArray(body.youtube_urls) ? body.youtube_urls as string[] : next;
+      storedMiningRef.current = stored;
+      setMiningUrls(stored);
       return null;
     });
-    setSavingMining(false);
+    miningInFlight.current -= 1;
+    if (miningInFlight.current === 0) setSavingMining(false);
     // A removal applies at once. Undo puts that one URL back into the list as
     // it is then, so a change made after the removal is kept.
     if (ok && removed.length === 1 && next.length === prev.length - 1) {
@@ -1093,7 +1105,7 @@ export default function TopicsPage() {
         <ModeToggles active={activeStrategies} miningAvailable={miningAvailable}
                      onChange={handleModeChange} />
         {modesError && (
-          <div data-testid="mode-error" style={{ marginTop: 8, fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--red)", letterSpacing: "0.04em" }}>
+          <div data-testid="mode-error" role="alert" style={{ marginTop: 8, fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--red)", letterSpacing: "0.04em" }}>
             {modesError}
           </div>
         )}

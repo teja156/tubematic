@@ -93,7 +93,7 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
   no browser alert, and leaves the row as it was. The next save still goes out, as it does after a
   write that threw. A refused topic cap is put back in its field.
 - Removing a mining URL saves at once and offers an **Undo** that puts that URL back and keeps a
-  URL added since.
+  URL added since. A second mining change waits for the first to be answered.
 - The agent picker offers Automatic and the live agents. The model is disabled under Automatic, and
   the blank effort names the agent's own level. Changing the agent sends `default_agent_model: ""`
   in the same save. An uninstalled agent and a dropped model stay selected, disabled, and are
@@ -171,12 +171,14 @@ Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-setti
 - Saves wait for the one before (a mutation that sends them side by side fails this), the browser
   asks before closing only while one is on its way, and switching tabs never asks.
 - Enter followed by blur sends one save and keeps its outcome. A field typed back to its stored
-  value while another save is on its way is still sent.
+  value while another save is on its way is still sent, and an answer to an older save does not
+  overwrite what is being typed. A new id on the default voice moves the default with it.
 - Turning Publishing on asks first, and Cancel saves nothing; turning it off does not ask.
   Removing a voice offers an **Undo** that puts that voice back and keeps a voice added since.
 - The Preferences text saves a second after typing stops, at once on blur, and on a tab switch
   made before the second is up. A trailing space or line break stays in the box when the API
-  answers with the text trimmed.
+  answers with the text trimmed. An answer to an older save does not replace newer text, and typing
+  back to text on its way keeps that save's outcome, a refusal included.
 - Each field saves only its own key, with its bounds and units (timeouts shown in minutes and
   stored in seconds).
 - An API key renders as the mask the server returned. Clearing the field posts an empty string.
@@ -205,7 +207,7 @@ Covers `components/RenderersPanel.tsx` ([Renderers](../15-dashboard.md#renderers
   Chromium got.
 - Each button sends its request, and an API refusal shows on that renderer's card.
 - A new name saves on Enter or blur and says so. Escape and **Cancel** drop it, whether **Cancel**
-  is clicked or reached by Tab.
+  is clicked or reached by Tab and pressed. Tabbing on past **Cancel** keeps the name.
 - The panel polls every 3 seconds while a GPU test is outstanding and every 20 seconds otherwise.
 - **Add renderer** shows the token and the host command once and forgets both on close.
 - A response of the wrong shape is not drawn as a renderer list.
@@ -234,6 +236,8 @@ Covers `components/AutoPilotPanel.tsx` and `lib/autoPilot.ts`
 - An edit made while an earlier save is on its way survives that save's answer.
 - Enter followed by blur on the gap sends one save and keeps its outcome. Switching the gap's unit
   only changes how it reads, and a fraction of an hour is accepted.
+- **Cancel** in the confirmation keeps a change still on its way on screen. A number typed back to
+  its value clears its refusal.
 - Only accounts that are allowed and connected are offered.
 - The gap shows in hours and is sent in minutes. At the in-progress limit the tab says why nothing
   new starts.

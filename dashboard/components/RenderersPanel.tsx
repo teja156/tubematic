@@ -159,6 +159,13 @@ function RendererCard({ r, now, timeZone, busy, error, status, onPatch, onRemove
             <button type="button" data-testid="renderer-rename-cancel"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={cancelRename}
+                    // Tab from the field lands here first. Tabbing on without
+                    // pressing Cancel keeps the new name, as leaving the field
+                    // any other way does.
+                    onBlur={(e) => {
+                      if ((e.relatedTarget as HTMLElement | null)?.dataset?.testid === "renderer-rename-input") return;
+                      if (!busy) void saveName();
+                    }}
                     style={{ ...button, color: "var(--dim)" }}>Cancel</button>
           </span>
         ) : (
@@ -276,7 +283,7 @@ function RendererCard({ r, now, timeZone, busy, error, status, onPatch, onRemove
           </span>
         )}
       </div>
-      {error && <div data-testid="renderer-error" style={{ ...note, color: "var(--red)" }}>{error}</div>}
+      {error && <div data-testid="renderer-error" role="alert" style={{ ...note, color: "var(--red)" }}>{error}</div>}
     </div>
   );
 }

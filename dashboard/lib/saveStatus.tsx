@@ -166,8 +166,9 @@ export function useSaveStatus(): SaveStatusApi {
     return !error;
   }, [set]);
 
+  // Does not bump the sequence: a save already on its way still reports its
+  // outcome, and a refusal is never hidden by typing that follows it.
   const pending = useCallback((key: string) => {
-    seq.current.set(key, (seq.current.get(key) ?? 0) + 1);
     set(key, { state: "saving" });
   }, [set]);
 

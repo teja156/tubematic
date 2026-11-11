@@ -215,11 +215,21 @@ describe("RenderersPanel", () => {
     fireEvent.click(g.getByTestId("renderer-rename-cancel"));
     expect(callsTo(fn, "PATCH", "/renderers/r2")).toHaveLength(0);
 
+    // Tabbing on past Cancel without pressing it keeps the new name.
+    fireEvent.click(g.getByTestId("renderer-rename"));
+    fireEvent.change(g.getByTestId("renderer-rename-input"), { target: { value: "Tabbed on" } });
+    fireEvent.blur(g.getByTestId("renderer-rename-input"), { relatedTarget: g.getByTestId("renderer-rename-cancel") });
+    fireEvent.blur(g.getByTestId("renderer-rename-cancel"));
+    await waitFor(() => expect(callsTo(fn, "PATCH", "/renderers/r2")).toHaveLength(1));
+    expect(JSON.parse((callsTo(fn, "PATCH", "/renderers/r2")[0][1] as RequestInit).body as string))
+      .toEqual({ name: "Tabbed on" });
+    await waitFor(() => expect(g.queryByTestId("renderer-rename-input")).toBeNull());
+
     fireEvent.click(g.getByTestId("renderer-rename"));
     fireEvent.change(g.getByTestId("renderer-rename-input"), { target: { value: "Studio" } });
     fireEvent.blur(g.getByTestId("renderer-rename-input"));
-    await waitFor(() => expect(callsTo(fn, "PATCH", "/renderers/r2")).toHaveLength(1));
-    expect(JSON.parse((callsTo(fn, "PATCH", "/renderers/r2")[0][1] as RequestInit).body as string))
+    await waitFor(() => expect(callsTo(fn, "PATCH", "/renderers/r2")).toHaveLength(2));
+    expect(JSON.parse((callsTo(fn, "PATCH", "/renderers/r2")[1][1] as RequestInit).body as string))
       .toEqual({ name: "Studio" });
     await waitFor(() => expect(g.getByTestId("renderer-status")).toHaveTextContent("✓ Saved"));
   });

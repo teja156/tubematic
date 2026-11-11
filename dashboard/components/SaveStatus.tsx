@@ -16,9 +16,9 @@ const mono: React.CSSProperties = {
 
 /** The status beside one field: "Saving…", "✓ Saved" or "Not saved: <reason>".
  *  Renders an empty live region when there is nothing to say, so a screen
- *  reader still hears the outcome. Its id is `testId`, for the field's
- *  aria-describedby. */
-export function SaveStatus({ status, testId }: { status?: SaveState; testId?: string }) {
+ *  reader still hears the outcome. `id` is for a field's aria-describedby;
+ *  pass one only where it is unique on the page. */
+export function SaveStatus({ status, testId, id }: { status?: SaveState; testId?: string; id?: string }) {
   let text = "";
   let color = "var(--mute)";
   if (status?.state === "saving") text = status.label ?? "Saving…";
@@ -31,7 +31,7 @@ export function SaveStatus({ status, testId }: { status?: SaveState; testId?: st
   }
   return (
     <span
-      id={testId}
+      id={id}
       data-testid={testId}
       data-state={status?.state ?? "idle"}
       role="status"

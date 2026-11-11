@@ -18,9 +18,9 @@ Below it are fifteen tabs. Every change is saved as you make it, and no tab has 
 - A number or a text field saves when you press Enter or click elsewhere.
 - The **Preferences** text saves a second after you stop typing.
 
-Beside each field you see **Saving…**, then **✓ Saved**. A value that is not allowed is not saved:
-the field turns red, a message beside it says why, and the stored value stays in force until you
-correct it. The line at the top right of the page says **All changes saved**, **Saving…**, or how
+Beside each field you see **Saving…**, then **✓ Saved**. A value that is not allowed is not saved,
+and a message beside it or under its row says why. A number or text you typed stays in its field,
+marked red, so you can correct it. A switch or a list goes back to the stored value. The line at the top right of the page says **All changes saved**, **Saving…**, or how
 many changes were not saved. While a change is still saving, the browser asks before you close or
 reload the page.
 

@@ -161,12 +161,24 @@ function fieldBorder(status: SaveState | undefined): string {
  *  Enter followed by a blur twice. */
 function useBaseline<T>(value: T, status?: SaveState) {
   const sent = useRef<{ v: T } | null>(null);
-  useEffect(() => { sent.current = null; }, [value]);
+  // In flight until the stored value is the one sent last, or the field's
+  // saves are over (saved, refused). An answer to an older save in between
+  // changes nothing here.
+  useEffect(() => { if (sent.current && Object.is(sent.current.v, value)) sent.current = null; }, [value]);
   useEffect(() => { if (status?.state !== "saving") sent.current = null; }, [status?.state]);
   return {
     current: () => (sent.current ? sent.current.v : value),
     mark: (v: T) => { sent.current = { v }; },
+    inFlight: () => sent.current !== null,
   };
+}
+
+/** Whether a field may show the stored value now: not while you have typed
+ *  something not yet committed, not while a save of it is on its way (an
+ *  older answer would put an older value in the box), and not while a refusal
+ *  is shown (what you typed stays, to be corrected). */
+function mayFollow(dirty: boolean, inFlight: boolean, status?: SaveState): boolean {
+  return !dirty && !inFlight && status?.state !== "error";
 }
 
 function NumInput({
@@ -190,9 +202,11 @@ function NumInput({
 }) {
   const [local, setLocal] = useState(String(value));
   const baseline = useBaseline(value, status);
+  const dirty = useRef(false);
 
-  // keep in sync when the stored value changes
-  useEffect(() => { setLocal(String(value)); }, [value]);
+  useEffect(() => {
+    if (mayFollow(dirty.current, baseline.inFlight(), status)) setLocal(String(value));
+  }, [value, status?.state]);
 
   function commit() {
     const text = local.trim();
@@ -202,6 +216,7 @@ function NumInput({
       else setLocal(String(value)); // revert invalid
       return;
     }
+    dirty.current = false;
     if (n === baseline.current()) {
       onSame?.();
       return;
@@ -212,7 +227,7 @@ function NumInput({
 
   return (
     <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <SaveStatus status={status} testId={`status-${testId}`} />
+      <SaveStatus status={status} testId={`status-${testId}`} id={`status-${testId}`} />
       <input
         data-testid={testId}
         type="number"
@@ -221,7 +236,7 @@ function NumInput({
         value={local}
         aria-invalid={status?.state === "error"}
         aria-describedby={`status-${testId}`}
-        onChange={(e) => setLocal(e.target.value)}
+        onChange={(e) => { dirty.current = true; setLocal(e.target.value); }}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
         style={{
@@ -259,11 +274,15 @@ function SecretInput({
   const [local, setLocal] = useState(value);
   const [focused, setFocused] = useState(false);
   const baseline = useBaseline(value, status);
+  const dirty = useRef(false);
 
-  useEffect(() => { setLocal(value); }, [value]);
+  useEffect(() => {
+    if (mayFollow(dirty.current, baseline.inFlight(), status)) setLocal(value);
+  }, [value, status?.state]);
 
   function commit() {
     setFocused(false);
+    dirty.current = false;
     if (local.trim() === baseline.current()) return;
     baseline.mark(local.trim());
     onCommit(local.trim());
@@ -271,7 +290,7 @@ function SecretInput({
 
   return (
     <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <SaveStatus status={status} testId={`status-${testId}`} />
+      <SaveStatus status={status} testId={`status-${testId}`} id={`status-${testId}`} />
       <input
         data-testid={testId}
         // Only mask while unfocused: the stored value is already a mask, and
@@ -285,7 +304,7 @@ function SecretInput({
         aria-invalid={status?.state === "error"}
         aria-describedby={`status-${testId}`}
         onFocus={() => setFocused(true)}
-        onChange={(e) => setLocal(e.target.value)}
+        onChange={(e) => { dirty.current = true; setLocal(e.target.value); }}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         style={{
@@ -318,10 +337,14 @@ function TextInput({
 }) {
   const [local, setLocal] = useState(value);
   const baseline = useBaseline(value, status);
+  const dirty = useRef(false);
 
-  useEffect(() => { setLocal(value); }, [value]);
+  useEffect(() => {
+    if (mayFollow(dirty.current, baseline.inFlight(), status)) setLocal(value);
+  }, [value, status?.state]);
 
   function commit() {
+    dirty.current = false;
     if (local.trim() === baseline.current()) return;
     baseline.mark(local.trim());
     onCommit(local.trim());
@@ -329,7 +352,7 @@ function TextInput({
 
   return (
     <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <SaveStatus status={status} testId={`status-${testId}`} />
+      <SaveStatus status={status} testId={`status-${testId}`} id={`status-${testId}`} />
       <input
         data-testid={testId}
         type="text"
@@ -339,7 +362,7 @@ function TextInput({
         spellCheck={false}
         aria-invalid={status?.state === "error"}
         aria-describedby={`status-${testId}`}
-        onChange={(e) => setLocal(e.target.value)}
+        onChange={(e) => { dirty.current = true; setLocal(e.target.value); }}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         style={{
@@ -390,11 +413,12 @@ function PreferencesEditor({
   // trimmed leaves the box alone, or a trailing space or line break you just
   // typed would vanish under the cursor.
   useEffect(() => {
-    if (!unsent.current && value !== latest.current.trim()) {
+    if (!unsent.current && !baseline.inFlight() && status?.state !== "error"
+        && value !== latest.current.trim()) {
       setLocal(value);
       latest.current = value;
     }
-  }, [value]);
+  }, [value, status?.state]);
 
   function flush() {
     if (timer.current) {
@@ -433,8 +457,9 @@ function PreferencesEditor({
           if (unsent.current) {
             onWaiting();
             timer.current = setTimeout(flush, PREFERENCES_SAVE_DELAY_MS);
-          } else {
-            // Typed back to what is stored: nothing left to send.
+          } else if (!baseline.inFlight()) {
+            // Typed back to what is stored: nothing left to send. With a save
+            // still on its way, its outcome is what shows.
             onSame();
           }
         }}
@@ -445,7 +470,7 @@ function PreferencesEditor({
         }}
       />
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 4 }}>
-        <SaveStatus status={status} testId="status-input-user-preferences" />
+        <SaveStatus status={status} testId="status-input-user-preferences" id="status-input-user-preferences" />
         <div
           data-testid="user-preferences-count"
           style={{
@@ -1543,7 +1568,11 @@ function VoicesEditor({
   const [newModel, setNewModel] = useState(DICTIONARY_COMPATIBLE_MODELS[0]);
 
   function commitRow(index: number, patch: Partial<Voice>) {
-    onSave(voices.map((v, i) => (i === index ? { ...v, ...patch } : v)), defaultVoiceId);
+    // A new voice id on the default voice moves the default with it, or the
+    // default would point at an id no longer in the roster and read as none.
+    const wasDefault = voices[index].voice_id === defaultVoiceId;
+    const nextDefault = wasDefault && patch.voice_id ? patch.voice_id : defaultVoiceId;
+    onSave(voices.map((v, i) => (i === index ? { ...v, ...patch } : v)), nextDefault);
   }
 
   function removeRow(index: number) {
@@ -1654,15 +1683,20 @@ function AgentWeight({
   inputStyle,
   onSave,
   onInvalid,
+  onSame,
 }: {
   agent: Agent;
   disabled: boolean;
   inputStyle: React.CSSProperties;
   onSave: (n: number) => void;
   onInvalid: (message: string) => void;
+  /** Typed back to the stored weight: a refusal shown for it no longer applies. */
+  onSame: () => void;
 }) {
   const [local, setLocal] = useState(String(agent.weight));
-  useEffect(() => { setLocal(String(agent.weight)); }, [agent.weight]);
+  // The weight sent and not yet reloaded, so Enter then blur sends it once.
+  const sent = useRef<number | null>(null);
+  useEffect(() => { setLocal(String(agent.weight)); sent.current = null; }, [agent.weight]);
 
   // Saved on blur or Enter, like every number on this page. An out-of-range
   // value stays in the box with the reason beside it, and is never sent.
@@ -1673,7 +1707,13 @@ function AgentWeight({
       onInvalid(`weight must be a whole number from 0 to ${MAX_AGENT_WEIGHT}`);
       return;
     }
-    if (n !== agent.weight) onSave(n);
+    if (n === agent.weight) {
+      onSame();
+      return;
+    }
+    if (n === sent.current) return;
+    sent.current = n;
+    onSave(n);
   }
 
   return (
@@ -1727,7 +1767,7 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
     // red line under the row, as it always has.
     await statuses.run(id, async () => {
       try {
-        const r = await apiFetch(`/agents/${id}`, init);
+        const r = await apiFetch(`/agents/${id}`, { ...init, signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) });
         if (!r.ok) {
           const detail = await errorDetail(r);
           setErrors((e) => ({ ...e, [id]: detail }));
@@ -1872,6 +1912,11 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
                       statuses.fail(a.id, message);
                       setErrors((e) => ({ ...e, [a.id]: message }));
                     }}
+                    onSame={() => {
+                      if (statuses.get(a.id)?.state !== "error") return;
+                      statuses.clear(a.id);
+                      setErrors((e) => ({ ...e, [a.id]: "" }));
+                    }}
                   />
                   <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ ...mono, fontSize: 11, color: "var(--ink-2)" }}>default model</span>
@@ -1910,7 +1955,7 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
                   </div>
                 )}
                 {errors[a.id] && (
-                  <div data-testid={`agent-error-${a.id}`} style={{ ...mono, fontSize: 10.5, color: "var(--red)", marginTop: 8 }}>
+                  <div data-testid={`agent-error-${a.id}`} role="alert" style={{ ...mono, fontSize: 10.5, color: "var(--red)", marginTop: 8 }}>
                     {errors[a.id]}
                   </div>
                 )}

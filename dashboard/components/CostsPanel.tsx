@@ -300,7 +300,7 @@ export function CostsPanel({ inputStyle, notify }: {
           )}
 
           {actionError && (
-            <div data-testid="costs-action-error" style={{ ...note, color: "var(--amber)" }}>
+            <div data-testid="costs-action-error" role="alert" style={{ ...note, color: "var(--amber)" }}>
               {actionError}
             </div>
           )}

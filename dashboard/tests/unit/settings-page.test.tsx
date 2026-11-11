@@ -520,6 +520,18 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("a new id on the default voice moves the default with it", async () => {
+    const fetchMock = vi.mocked(fetch);
+    render(<SettingsPage />);
+    await waitFor(() => screen.getByTestId("tab-voice"));
+    await openTab("voice");
+    const id = await screen.findByTestId("voice-id-0");
+    fireEvent.change(id, { target: { value: "new-id" } });
+    await act(async () => { fireEvent.blur(id); });
+    await flushSaves();
+    expect(postedBodies(fetchMock)[0]).toMatchObject({ elevenlabs_voice_id: "new-id" });
+  });
+
   it("removing a voice offers an Undo that saves the roster and default back", async () => {
     const fetchMock = vi.mocked(fetch);
     // The API answers a save with what it stored.
@@ -1624,6 +1636,17 @@ describe("SettingsPage — save behaviour", () => {
     expect((input as HTMLInputElement).value).toBe("1");
   });
 
+  it("an answer to an older save does not overwrite what is being typed", async () => {
+    await renderTab("rendering");
+    const held = holdPosts();
+    const input = screen.getByTestId("input-max-render-retries") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "5" } });
+    await act(async () => { fireEvent.keyDown(input, { key: "Enter" }); });
+    fireEvent.change(input, { target: { value: "3" } });
+    await held.answer(0, okAnswer({ ...MOCK_SETTINGS, max_render_retries: 5 }));
+    expect(input.value).toBe("3");
+  });
+
   it("a switch shows its new value at once and goes back when the API refuses it", async () => {
     await renderTab("rendering");
     const held = holdPosts();
@@ -2081,6 +2104,37 @@ describe("SettingsPage — user preferences (TMDEV-117)", () => {
     await openTab("voice");
     await flushSaves();
     expect(postedBodies(fetchMock)).toEqual([{ user_preferences: "UK spelling." }]);
+  });
+
+  it("typing back to text on its way keeps that save's outcome, a refusal included", async () => {
+    stubFetch();
+    await renderTab("preferences");
+    const held = holdPosts();
+    const box = screen.getByTestId("input-user-preferences") as HTMLTextAreaElement;
+    await act(async () => { fireEvent.change(box, { target: { value: "abc" } }); });
+    await act(async () => { fireEvent.blur(box); });
+    expect(held.count()).toBe(1);
+    await act(async () => { fireEvent.change(box, { target: { value: "abcx" } }); });
+    await act(async () => { fireEvent.change(box, { target: { value: "abc" } }); });
+    expect(screen.getByTestId("saves-summary").textContent).toContain("Saving…");
+    await held.answer(0, { ok: false, status: 400, json: async () => ({ error: "too long" }) });
+    expect(screen.getByTestId("status-input-user-preferences").textContent).toBe("Not saved: too long");
+    expect(box.value).toBe("abc");
+  });
+
+  it("an answer to an older save does not replace newer text", async () => {
+    stubFetch();
+    await renderTab("preferences");
+    const held = holdPosts();
+    const box = screen.getByTestId("input-user-preferences") as HTMLTextAreaElement;
+    await act(async () => { fireEvent.change(box, { target: { value: "abc d" } }); });
+    await act(async () => { fireEvent.blur(box); });
+    await act(async () => { fireEvent.change(box, { target: { value: "abc de" } }); });
+    await act(async () => { fireEvent.blur(box); });
+    await held.answer(0, okAnswer({ ...MOCK_SETTINGS, user_preferences: "abc d" }));
+    expect(box.value).toBe("abc de");
+    await held.answer(1, okAnswer({ ...MOCK_SETTINGS, user_preferences: "abc de" }));
+    expect(box.value).toBe("abc de");
   });
 
   it("leaving the box sends the text at once", async () => {

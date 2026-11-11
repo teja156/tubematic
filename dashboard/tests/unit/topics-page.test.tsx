@@ -143,6 +143,48 @@ describe("TopicsPage — removing a mining URL", () => {
   });
 });
 
+describe("TopicsPage — mining saves run one at a time", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("a second change waits for the first to be answered", async () => {
+    const second = "https://www.youtube.com/watch?v=abcdefghijk";
+    const answers: Array<() => void> = [];
+    const posts: string[][] = [];
+    vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/research/mining-sources")) {
+        if (init?.method === "POST") {
+          const list = JSON.parse(String(init.body)).youtube_urls as string[];
+          posts.push(list);
+          return new Promise((resolve) => answers.push(() => resolve(
+            { ok: true, json: () => Promise.resolve({ youtube_urls: list }) } as Response)));
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ youtube_urls: [MINING_URL, second] }) } as Response);
+      }
+      if (urlStr.includes("/research/strategies")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ strategies: ["mining"] }) } as Response);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as Response);
+    });
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: `Remove ${MINING_URL}` }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    // The list is disabled while saving; the Undo in the toast is not.
+    answers[0]();
+    await waitFor(() => expect(screen.getByTestId("toast-action")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: `Remove ${second}` }));
+    fireEvent.click(screen.getByTestId("toast-action"));
+    await waitFor(() => expect(posts).toHaveLength(2));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(posts).toHaveLength(2);
+    answers[1]();
+    await waitFor(() => expect(posts).toHaveLength(3));
+    answers[2]();
+    expect(posts).toEqual([[second], [], [MINING_URL]]);
+  });
+});
+
 // Pause is a curriculum-seed control: for any other domain the pause could
 // never stop the subject being researched, only which row it was filed into.
 describe("TopicsPage — domain pause", () => {

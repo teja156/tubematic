@@ -284,8 +284,9 @@ The Mascots page's create form uses the same agent, model and effort controls
   profiles.
 - Illustrated is disabled while no OpenAI key is stored. A refused change is shown on the domain's
   line like any other.
-- The research modes and the mining list show the same status in their headings. Removing a mining
-  URL saves at once and offers **Undo** in a toast, which saves the previous list.
+- The research modes and the mining list show the same status in their headings. Mining saves run
+  one at a time, because each sends the whole list. Removing a mining URL saves at once and offers
+  **Undo** in a toast, which puts that URL back.
 - The Mining toggle is disabled, with the reason on hover, while `GET /research/strategies` reports
   `mining_available: false`. The masked key in `/settings` reads as unset for a key supplied only
   through the API's environment, so the page does not use it.
@@ -737,6 +738,10 @@ page body clips horizontal overflow.
 - A field compares an edit with the value on its way to the API, or else the stored one
   (`useBaseline`). Comparing with the stored value alone would drop an edit back to it made while
   another save was on its way, and would send an Enter followed by a blur twice.
+- A field shows a new stored value only when you have typed nothing it has not sent, no save of it
+  is on its way, and no refusal is shown (`mayFollow`). An answer to an older save would otherwise
+  put an older value in the box while you type. A Preferences save waiting for its second does not
+  hide the outcome of one already on its way.
 - A switch or a picker shows its new value while the save is on its way, and goes back to the
   stored value if the API refuses it. A typed field keeps what was typed, red, with the reason
   beside it, so the entry can be corrected while the stored value stays in force. An out-of-range
@@ -744,7 +749,8 @@ page body clips horizontal overflow.
 - The voice roster and the default voice are saved in one request, because the API reads a default
   that is not in the roster as empty. Removing a voice offers **Undo**, which puts that one voice
   back into the roster as it is then, so a voice added since stays. It is the default again only if
-  no other voice became the default meanwhile.
+  no other voice became the default meanwhile. A new id on the default voice moves the default with
+  it.
 - Turning Publishing on opens a confirmation: with Auto Pilot on, it starts scheduling posts that
   nobody approves one by one. Turning it off saves at once.
 - Switching tabs never asks, because nothing is ever left unsaved. It clears the refusal messages,
@@ -783,8 +789,9 @@ See [HTTP API](05-http-api.md#agents).
 `RenderersPanel.tsx` reads `GET /renderers`, and each button (Enable or Disable, Rename, Remove for
 a remote renderer, Test GPU) writes at once through the [renderers routes](05-http-api.md#renderers).
 Its rules are pure functions in `lib/renderers.ts`. A new name saves on Enter or blur, and Escape
-or **Cancel** drops it. **Cancel** stops its `mousedown`, and a blur towards **Cancel** (by Tab) is
-skipped, so the field does not save the name **Cancel** is about to drop.
+or **Cancel** drops it. **Cancel** stops its `mousedown`, and a blur from the field towards
+**Cancel** is skipped, so the field does not save the name **Cancel** is about to drop. Tabbing on
+past **Cancel** without pressing it saves the name.
 
 - One card per renderer, the built-in one first.
 - `rendererStatus` picks the status chip: the first of *disabled*, *credential expired*, *needs
@@ -822,8 +829,9 @@ status beside the field that changed. What the settings mean is in
 - A refused change shows the reason. With no save after it, the panel goes back to the stored
   configuration. A later save carries the change too and decides, and once one succeeds an earlier
   failure is cleared, because its change was stored with it.
-- Whether a change needs confirming is judged against the newest document sent, so a change made
-  while a confirmed "on" is still on its way does not ask again.
+- Whether a change needs confirming, what the dialog says and what **Cancel** goes back to are all
+  read from the newest document sent (`current`), so a change made while a confirmed "on" is still
+  on its way does not ask again, and **Cancel** does not undo a change still on its way.
 - Switching the gap between minutes and hours shows the same gap in the other unit and saves
   nothing. Hours may carry a fraction.
 
