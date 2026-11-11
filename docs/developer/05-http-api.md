@@ -343,7 +343,7 @@ Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility
   id names the video's job directory.
 - `project_id` names no domain, `title` is not a string, or `voice_id` is not on the roster.
 - `visual_style` is not `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
-- `visual_style` is `illustrated` or `under_the_hood` and no OpenAI key is stored (the settings row
+- `visual_style` is `illustrated`, `under_the_hood` or `case_file_story` and no OpenAI key is stored (the settings row
   or `OPENAI_API_KEY`).
 - `visual_style` is `cartoon_3d` and the install-wide GPU `status` is not `working` (see
   [GPU rendering](#gpu-rendering)).
@@ -355,8 +355,10 @@ What the route fills in:
 
 - A `title` over 70 characters is clipped at a word boundary, with a `warning`. The create is not
   refused, because a refused create during a research run would lose the topic.
-- `agent_id` is dealt from the assignment deck (see [Assignment](07-agent-layer.md#assignment)). An
-  `agent_id` in the body is ignored.
+- `agent_id` and `agent_model` come from the domain while it names a live agent. Otherwise
+  `agent_id` is dealt from the assignment deck and `agent_model` is `""`. `agent_effort` is the
+  domain's `default_agent_effort` in both cases (see [Assignment](07-agent-layer.md#assignment)).
+  An `agent_id` in the body is ignored.
 - With no `voice_id`, the video takes its domain's `default_voice_id` if that voice is on the
   roster, whatever its `strategy`. Otherwise `voice_id` is `""`, the install default. The voice is
   copied onto the row, so a later change to the domain's default does not change filed videos.
@@ -399,9 +401,10 @@ with `angle_kind`.
 How it differs from `POST /videos`:
 
 - It refuses an over-long title, because a person at the form can shorten it.
-- It keeps a picked `agent_id`. With none, the agent is dealt from the deck, so the configured
-  weights apply. `agent_model` is checked against the agent the video ends up with, and a refused
-  model rolls the deal back.
+- It keeps a picked `agent_id`, and then takes no agent, model or effort from the domain. With
+  none, the video takes the `manual` domain's agent, model and effort as `POST /videos` does, and
+  an `agent_model` or `agent_effort` in the body replaces the domain's. `agent_model` is checked
+  against the agent the video ends up with, and a refused model rolls the deal back.
 - The video is unscored (see [Where topics come from](02-pipeline.md#where-topics-come-from)).
 
 The first request creates the domain `manual`, named **Manual Videos**, with `INSERT OR IGNORE`,
@@ -433,7 +436,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 | `409` | `script_profile_id`, `visual_style` or `mascot_id` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | `agent_id`, `agent_model` or `agent_effort` sent while the video is not at a human checkpoint |
 | `409` | `angle` and `angle_kind` sent while the video is past `TOPIC_PROPOSED` |
-| `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D or Under the Hood video keeps a mascot |
+| `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D, Under the Hood or Case File Story video keeps a mascot |
 | `409` | `{"error": "Status precondition failed", "current", "expected"}` |
 | `409` | `{"error", "voice_conflict": true}`: the voice's model cannot speak the stored script |
 | `409` | A model was written alone and the video's agent changed while the request was in flight |
@@ -462,9 +465,10 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   `effort`). The levels are the same for every agent.
 - `script_profile_id` must be a `READY` profile that is not archived, or `""` for none.
 - `visual_style` must be `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
-  `illustrated` and `under_the_hood` need a stored OpenAI key and `cartoon_3d` needs a working GPU.
+  `illustrated`, `under_the_hood` and `case_file_story` need a stored OpenAI key and `cartoon_3d`
+  needs a working GPU.
 - `mascot_id` must be a string. A changed value must be a pickable mascot, needs a GPU `status` of
-  `working`, and is refused on a video that will be `cartoon_3d` or `under_the_hood`. `""` clears
+  `working`, and is refused on a video that will be `cartoon_3d`, `under_the_hood` or `case_file_story`. `""` clears
   the mascot.
 - `angle` and `angle_kind` are sent together, both strings. `angle` is at most 300 characters and
   `angle_kind` is a kind from [`GET /angle-kinds`](#get-angle-kinds). `""` for both removes the
@@ -494,7 +498,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   after the script was written. The check is skipped at `TOPIC_PROPOSED`, and a voice written there
   is bound to that status.
 - A `mascot_id` is checked only when it changes, so a client that echoes the stored value is not
-  refused for a GPU that has gone since. A switch to `cartoon_3d` or `under_the_hood` clears the mascot in the same
+  refused for a GPU that has gone since. A switch to `cartoon_3d`, `under_the_hood` or `case_file_story` clears the mascot in the same
   `UPDATE`, and a changed mascot resets `mascot_version` to 0.
 - The approving `PATCH` (`TOPIC_PROPOSED` to `TOPIC_APPROVED`) is `409` when the video's mascot has
   been archived, or when the video is Cartoon 3D (by its style or by `resolved_renderer`) and keeps
@@ -669,17 +673,23 @@ back, or they are reset. An omitted `status` is written as `active`, so clearing
 | `default_voice_id` | A roster voice, or `''` for the install default |
 | `default_script_profile_id` | A `READY` profile that is not archived, or `''` or `null` for none. Any other non-string, such as `false` or `0`, is refused |
 | `default_mascot_id` | `''` (inherit the install default), `none` (no mascot), or a pickable mascot id |
+| `default_agent_id` | A live agent's id, or `''` for the weighted deal. Absent or `null` stores `''`. Any other non-string is refused |
+| `default_agent_model` | One of that agent's `models`, or `''` for the agent's default. Refused without a `default_agent_id` |
+| `default_agent_effort` | One of the five effort levels, or `''` for the agent's own level. It needs no `default_agent_id` |
 | `topic_cap` | A whole number from 25 to 750. `true`, `"100"` and `100.5` are refused. Absent or `null` means 100 |
 
-Five checks run only when the value changes, because the dashboard re-sends the whole domain on
+Six checks run only when the value changes, because the dashboard re-sends the whole domain on
 every edit and a value that became invalid later must not block other edits:
 
 - The `description` length.
-- `default_visual_style`: `illustrated` and `under_the_hood` need a stored OpenAI key and
-  `cartoon_3d` needs a working GPU.
+- `default_visual_style`: `illustrated`, `under_the_hood` and `case_file_story` need a stored
+  OpenAI key and `cartoon_3d` needs a working GPU.
 - `default_voice_id` on the roster.
 - `default_script_profile_id` being `READY`.
 - `default_mascot_id` being pickable, with a working GPU.
+- `default_agent_id` and `default_agent_model`, as a pair: a new agent is live, and the agent's
+  `models` holds the model. The stored agent passes when it is sent again, so a model it dropped
+  can be cleared with `''` while the agent is uninstalled.
 
 The id of an existing domain is not checked, so a domain filed under an older id stays editable.
 The id names the domain's output directory. A `topic_cap` below the domain's count is accepted and

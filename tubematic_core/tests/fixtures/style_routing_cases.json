@@ -121,10 +121,11 @@
       ],
       "ok": [
         "system_flow",
-        "scenes"
+        "scenes",
+        "case_file_story"
       ],
       "future": "",
-      "note": ""
+      "note": "A scam walked through as a mechanism with generic roles: Stick. Told as a story with the viewer as the victim it would be a Case File Story, so that is acceptable."
     },
     {
       "title": "How a pickpocket team works a crowded train",
@@ -304,8 +305,8 @@
         "cartoon_3d",
         "scenes"
       ],
-      "future": "Case File Story (TMDEV-202)",
-      "note": ""
+      "future": "",
+      "note": "An invented protagonist, but no scheme, no money and nothing at risk: Illustrated, not Case File Story."
     },
     {
       "title": "A night watch in a medieval castle",
@@ -406,14 +407,15 @@
       "title": "How money laundering moves dirty cash",
       "brief": "Placement, layering and integration: how one criminal's cash passes through shell companies until it looks like a clean salary.",
       "expect": [
-        "scenes"
+        "case_file_story"
       ],
       "ok": [
+        "scenes",
         "stick",
         "system_flow"
       ],
-      "future": "Case File Story (TMDEV-202)",
-      "note": ""
+      "future": "",
+      "note": "One criminal's cash followed through a scheme until it looks clean: a story with money and risk in it, not a diagram."
     },
     {
       "title": "Every type of cyber attack explained",
@@ -557,7 +559,7 @@
         "scenes"
       ],
       "future": "",
-      "note": "Ciphertext, a keyed alphabet and released clues are text on screen. Case File Story (TMDEV-202) may later share unsolved-mystery topics."
+      "note": "Ciphertext, a keyed alphabet and released clues are text on screen. Not Case File Story: a real place and a real puzzle, with no scheme the viewer is inside."
     },
     {
       "title": "What a hash function does to your password",
@@ -662,6 +664,118 @@
       ],
       "future": "",
       "note": "A near miss for Under the Hood: products shown whole as a ranking, with no inside to open."
+    },
+    {
+      "title": "The fake invoice that emptied the company account",
+      "brief": "You are the accounts clerk. An email that looks like it comes from the boss asks for an urgent wire transfer to a new supplier. Follow the invoice fraud from the first message to the call from the bank.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "stick",
+        "scenes",
+        "illustrated"
+      ],
+      "future": "",
+      "note": "A fraud told from inside, with money leaving and suspicion rising."
+    },
+    {
+      "title": "How a Ponzi scheme pays its first investors",
+      "brief": "You promise twenty percent a month and pay the early investors with the later ones' money. Watch the deposits and the payouts grow until withdrawals outrun what comes in, and what the law calls it.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "whiteboard",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A scheme with numbers that move and a named crime at the end. Whiteboard is acceptable for the arithmetic."
+    },
+    {
+      "title": "The bank put 40,000 dollars in your account by mistake",
+      "brief": "A bank error leaves forty thousand dollars in your account overnight. What happens if you spend it, what the law says about keeping money that is not yours, and the choice you face in the morning.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "bean_explainer",
+        "scenes",
+        "illustrated"
+      ],
+      "future": "",
+      "note": "A money dilemma that ends on a choice."
+    },
+    {
+      "title": "Why four deposits of 9,000 dollars is a crime",
+      "brief": "You have forty thousand in cash and a bank that reports any deposit of ten thousand or more. Splitting it up to stay under the line has a name, structuring, and it is a federal offence even when the money is clean.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "whiteboard",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A financial rule shown through someone about to break it."
+    },
+    {
+      "title": "The weekend heist that one receipt undid",
+      "brief": "An invented crew empties a jewellery vault over a holiday weekend without tripping an alarm. Follow the plan step by step, then the one small purchase that leads the police to them.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A heist followed to the moment it is found out, with invented people."
+    },
+    {
+      "title": "How Bernie Madoff's scheme collapsed",
+      "brief": "The real story of Bernard Madoff's fund: the steady returns that never existed, the 2008 rush of withdrawals, his confession to his sons and the 150-year sentence.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "storybook_atlas",
+        "illustrated"
+      ],
+      "future": "",
+      "note": "A near miss for Case File Story: a fraud, but a real, named case with real people, and that style's people are invented."
+    },
+    {
+      "title": "Seven scams that target your phone",
+      "brief": "The missed-call scam, the fake delivery text, the QR code sticker, the SIM swap and three more, one quick idea each and how to spot it.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "stick"
+      ],
+      "future": "",
+      "note": "A near miss for Case File Story: scams, but a list of named items with no single story."
+    },
+    {
+      "title": "How the 2008 financial crisis happened",
+      "brief": "Cheap mortgages, loans bundled into securities, the ratings that called them safe, Lehman Brothers' collapse and the bailout, with the chart of house prices behind it all.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "stick",
+        "whiteboard",
+        "system_flow"
+      ],
+      "future": "",
+      "note": "Real banks and people, a mechanism and a chart in one video: no single style carries every beat."
     }
   ]
 }

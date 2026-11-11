@@ -139,6 +139,24 @@ Covers a domain's default script profile in `upsert_project` and `create_video`.
 - `upsert_project` keeps an omitted default, clears on `""`, and refuses a change to an unusable
   profile. Re-sending a stored default that was deleted since is accepted.
 
+### `test_domain_agent.py`
+
+Covers a domain's agent, model and effort in `upsert_project`, `create_video` and
+`mine_youtube_topics` ([Assignment](../07-agent-layer.md#assignment)).
+
+- `create_video` copies the three values onto a video of every `strategy`, and its result carries
+  what was stored. A mined topic gets them too.
+- A domain with no agent is dealt one. A domain agent uninstalled since falls back to the deal
+  without its model, and a model the agent dropped seeds `""`.
+- `upsert_project` keeps an omitted field and clears on `""`. It refuses an agent that is not
+  live, a model outside the agent's list, a model with no agent and an unknown effort, and writes
+  nothing when it refuses.
+- A stored agent and model that became invalid do not block another edit of the domain, and the
+  model can be cleared while its agent is uninstalled.
+
+Trap: changing the agent without naming a model clears the stored model. Keeping it would refuse
+the call, because the stored model belongs to the previous agent's list.
+
 ## Research
 
 ### `test_mining_urls.py`
@@ -647,6 +665,57 @@ Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under
 
 Trap: a plate whose own fields are bad is skipped for every check that projects through its camera,
 including the next plate's zoom-through, or a malformed `focus` raised instead of being reported.
+
+### `test_case_file_story.py`
+
+Covers `mcp/case_file_story.py`, the checks `write_scene_config` runs on a Case File Story config,
+the `subtitles.look` check, the text audit's per-beat sampling, and what `generate_image` does for
+the style: the reference picture, the text added to the prompt and the cap on pictures
+([Case File Story](../10-scene-authoring.md#case-file-story)).
+
+- The limits, timings, geometry, camera, accents and their colours, beat kinds, meter kinds and
+  icons equal the ones in the renderer's `contract.ts`, read from the TypeScript source, and the
+  pack lists the same values. The pack's picture count is the stills limit plus the lead sheet. Both
+  sides answer the shared cases in `fixtures/case_file_story_contract.json` (the number format, the
+  meter cells, the camera's scale and view, the term's font size, the bars' layout, the frames of a
+  beat's parts and the quiet stretches).
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its meter or beat and cause: a bad accent, meter count, id, kind, label or
+  value; a first beat that is late or is a card; a beat off the words or out of order; a missing,
+  early or second choice; no term card before the choice; a field the beat's type does not take;
+  another video's or a container image path; the lead sheet used as a picture; a bad focus or
+  punch-in; a `set` or `panel` naming the wrong meter; card text over its limit; an unknown icon or
+  kind; a bar, result, payoff line, stamp or button timed off a word or out of order; a card whose
+  last part comes too late to read. A shot or a finished card that sits unchanged for over 4
+  seconds is refused, and a punch-in fixes the shot. More than 16 different stills is refused and a
+  reused one is free. A value of the wrong type gets a sentence back and raises nothing, and so does
+  a broken beat whose own problem falls past the 12 that are reported.
+- The text audit samples each beat, a card from the frame its last part has appeared.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one, refuses `CaseFileStory` on another style and other scenes on a Case File Story video.
+  `subtitles.look` accepts `plain`, `selection` and `fill` only.
+- The house lead's sheet ships beside the server. The lead sheet is made from it through the edits
+  endpoint, at 16:9, with the outfit between the pack's lead description and sheet style. A still
+  with `reference="lead"` sends the video's own sheet and the pack's lead description and painting
+  style around the scene. A still with no reference goes to the generations endpoint with the
+  painting style added. A still is sent at 9:16 whatever `aspect_ratio` asks for. A prompt with no
+  final full stop gets one before the pack's text.
+- `generate_image` refuses, before any request goes out, a lead sheet without `reference="house"`,
+  the house sheet used for another picture, a picture named `house`, a reference that is not yet an image of the video, a
+  reference with a path in it, and a reference on a video of another style, whose prompt is sent
+  unchanged. A 17th new still is refused and a regeneration is allowed. The lead sheet has a slot
+  of its own: a video that already holds 16 stills can still make it, and it never takes a still's
+  place. Under the Hood keeps its own cap and wording.
+
+- An edit from a reference waits up to 600 seconds for a response and a picture from text 180, and
+  a reserved slot lasts longer than both waits.
+
+Trap: the refusals for a wrong reference run before the scene-work claim and the cap, so a refused
+call reserves no picture slot and reaches no paid endpoint.
+
+Trap: a reservation that lapses sooner than the slowest call gives that call's slot to a parallel
+one, and both are billed.
 
 ### `test_choose_visual_style.py`
 

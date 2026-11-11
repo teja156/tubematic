@@ -105,6 +105,7 @@ import doodle_preview  # draws a Whiteboard video's own doodles for the agent to
 import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import storybook_atlas  # the Storybook Atlas checks (TMDEV-200), the same way
 import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
+import case_file_story  # the Case File Story checks (TMDEV-202), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
@@ -343,9 +344,10 @@ SUBTITLE_NUMERIC_RANGES = {
 SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
                  "background", "position", "uppercase", "emphasis", "accent", "look")
 # look: "selection" builds the line word by word with the key words in a blue
-# text-selection box (the Under the Hood style); "plain", or absent, is the
-# look every other style has.
-SUBTITLE_LOOKS = ("plain", "selection")
+# text-selection box (the Under the Hood style); "fill" shows the whole phrase
+# at once with the words still to come in grey (the Case File Story style);
+# "plain", or absent, is the look every other style has.
+SUBTITLE_LOOKS = ("plain", "selection", "fill")
 # emphasis: indexes into the narration's words drawn on a red box (the key word
 # of a line). One in SUBTITLE_EMPHASIS_EVERY words at most: emphasis on every
 # other word is no emphasis. write_scene_config checks the indexes against the
@@ -1502,6 +1504,61 @@ def _agent_id_error(con, stored_agent_id, agent_id: str):
     return None
 
 
+def _domain_agent(con, project_id):
+    """The (agent_id, agent_model, agent_effort) a new video filed into this
+    domain starts with (TMDEV-207).
+
+    A domain can name an agent (projects.default_agent_id). While that agent is
+    live the video starts on it, with the domain's model if the agent still
+    offers it, and takes no card from the deck, like a human's override. With
+    no domain agent, or one uninstalled since, the video is dealt by weight as
+    before, and the domain's model is dropped: it belonged to the other agent's
+    list. The effort is a closed set that every agent takes, so it rides along
+    either way. Nothing here refuses: seeding never fails a video.
+
+    Call it where _pick_agent_id was called, inside the inserting transaction.
+    Keep in sync: renderer/api/pipeline.py's _domain_agent (agreement test).
+    """
+    row = con.execute(
+        "SELECT default_agent_id, default_agent_model, default_agent_effort "
+        "FROM projects WHERE id = ?", (project_id,)).fetchone() if project_id else None
+    wanted, model, effort = (row[0] or "", row[1] or "", row[2] or "") if row else ("", "", "")
+    if effort not in AGENT_EFFORTS:
+        effort = ""
+    if wanted:
+        agent = con.execute(
+            "SELECT models FROM agents WHERE id = ? AND archived_at IS NULL",
+            (wanted,)).fetchone()
+        if agent is not None:
+            return wanted, (model if model in _agent_models(agent[0]) else ""), effort
+    return _pick_agent_id(con), "", effort
+
+
+def _domain_agent_error(con, agent_id: str, model: str, stored_agent_id: str = ""):
+    """Why a domain cannot take this agent and model as its default, or None.
+
+    A new agent must be live, and a model must be one of the agent's own; a
+    model with no agent has no list to belong to. The domain's stored agent may
+    be named again even when it has since been uninstalled, as a video's may:
+    that is how a model it no longer offers gets cleared. Callers run this only
+    when the pair changes, so a stored pair that went stale never blocks
+    another edit to the domain.
+    Keep in sync: renderer/api/pipeline.py's _domain_agent_error (agreement test).
+    """
+    if not agent_id:
+        if model:
+            return ("default_agent_model needs a default_agent_id: a model belongs to one "
+                    "agent's list")
+        return None
+    err = (_agent_id_error(con, stored_agent_id, agent_id)
+           or _agent_model_error(con, agent_id, model))
+    if err:
+        return (err.replace("agent_model", "default_agent_model")
+                .replace("agent_id", "default_agent_id")
+                .replace("This video's agent", "The domain's agent"))
+    return None
+
+
 def _truncate_title(title: str) -> tuple[str, str]:
     """Clip an over-length display name to VIDEO_TITLE_MAX_LEN.
 
@@ -1690,6 +1747,13 @@ def create_video(
     which pronunciation and pause markup the script may use.
     The human will see TOPIC_PROPOSED cards in the dashboard and approve/reject.
 
+    The result carries the video's agent_id, agent_model and agent_effort. The
+    agent and model come from the project when it names an agent
+    (list_projects' default_agent_id and default_agent_model); otherwise the
+    video is dealt an agent by weight. The effort is the project's
+    default_agent_effort either way. A blank model or effort means that
+    agent's own.
+
     A paused or expired project_id is refused (expired: the domain already
     holds as many topics as its topic_cap allows — see list_projects). When
     that happens, skip the candidate — do not file it into another domain or
@@ -1775,26 +1839,30 @@ def create_video(
         if not tmascots.no_mascot_error(visual_style) and _gpu_probe_status() == "working":
             mascot_id = tmascots.resolve_default(
                 con, row["default_mascot_id"] or "", _get_setting("default_mascot_id", ""))
-        agent_id = _pick_agent_id(con)
+        # The domain's agent, model and effort seed EVERY video too, whatever
+        # the strategy (TMDEV-207); a domain on Automatic is dealt by weight.
+        # Keep in sync: renderer/api/pipeline.py's create_video.
+        agent_id, agent_model, agent_effort = _domain_agent(con, project_id)
         # The check above runs outside any transaction, so a pause or another
         # session's topic committed since then would be missed; the INSERT
         # re-checks both itself.
         cur = con.execute(
             f"""INSERT INTO videos
                (id, project_id, topic, strategy, producibility_score, title,
-                status, voice_id, agent_id, visual_style, script_profile_id,
-                mascot_id, angle, angle_kind, angle_score, created_at, updated_at)
-               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                status, voice_id, agent_id, agent_model, agent_effort, visual_style,
+                script_profile_id, mascot_id, angle, angle_kind, angle_score, created_at, updated_at)
+               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                WHERE {_DOMAIN_OPEN_GUARD}""",
             (video_id, project_id, topic, strategy, producibility_score, title, voice_id,
-             agent_id, visual_style, script_profile_id, mascot_id, angle, angle_kind,
-             angle_score, now, now, strategy, project_id),
+             agent_id, agent_model, agent_effort, visual_style, script_profile_id, mascot_id,
+             angle, angle_kind, angle_score, now, now, strategy, project_id),
         )
         if cur.rowcount == 0:
             return {"error": _closed_domain_error(con, project_id)
                     or _paused_domain_error(project_id, row["name"])}
     result = {"video_id": video_id, "status": "TOPIC_PROPOSED", "topic": topic,
-              "agent_id": agent_id, "visual_style": visual_style, "voice_id": voice_id,
+              "agent_id": agent_id, "agent_model": agent_model, "agent_effort": agent_effort,
+              "visual_style": visual_style, "voice_id": voice_id,
               "script_profile_id": script_profile_id, "mascot_id": mascot_id,
               "angle": angle, "angle_kind": angle_kind, "angle_score": angle_score}
     if title_warning:
@@ -2555,12 +2623,14 @@ def update_video(
     whole video is one typographic scene written as data: strings, numbers and
     ciphertext on a dark terminal), "under_the_hood" (the whole video is one
     scene of close-up photographs with labels pinned to them, written as data;
-    needs an OpenAI key) or "cartoon_3d" (one 3D world; needs a working GPU).
+    needs an OpenAI key), "case_file_story" (the whole video is one scene of
+    painted stills with a meter row and number cards, written as data; needs
+    an OpenAI key) or "cartoon_3d" (one 3D world; needs a working GPU).
     get_pipeline_status's visual_styles lists every style and whether this
     install can make it. The scene styles are permissions, not looks. Like script_profile_id, a human
     picks it at the topic checkpoint and it is frozen afterwards; set it here
     only from a slash command that creates a video, before flipping it to
-    TOPIC_APPROVED. "illustrated" and "under_the_hood" are refused while no
+    TOPIC_APPROVED. "illustrated", "under_the_hood" and "case_file_story" are refused while no
     OpenAI key is stored (get_pipeline_status's illustrated_available is false) — offer the other
     styles instead. Under "auto", Auto picks the style itself at
     TOPIC_APPROVED with choose_visual_style, never with this field. A changed
@@ -2572,7 +2642,7 @@ def update_video(
     already uses. Writable only when the style does not already fix a canvas —
     that is "auto" and "illustrated"; "motion_graphics", "stick",
     "system_flow", "whiteboard", "bean_explainer", "storybook_atlas", "terminal_doc",
-    "under_the_hood" and "cartoon_3d" fix theirs.
+    "under_the_hood", "case_file_story" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer the video uses — "dom"
     (the scene components). Auto reaches Cartoon 3D by picking the cartoon_3d
@@ -3306,6 +3376,10 @@ def list_projects() -> list[dict]:
     it, archived and rejected ones included) and expired (topic_count has
     reached topic_cap). An expired domain takes no new research topics:
     create_video refuses it, exactly as it refuses a paused one.
+
+    default_agent_id, default_agent_model and default_agent_effort are what a
+    new video filed into the project starts on. A blank default_agent_id means
+    the video is dealt an agent by weight.
     """
     _init_db()
     with _conn() as con:
@@ -3383,6 +3457,9 @@ def upsert_project(
     default_script_profile_id: str | None = None,
     topic_cap: int | None = None,
     default_mascot_id: str | None = None,
+    default_agent_id: str | None = None,
+    default_agent_model: str | None = None,
+    default_agent_effort: str | None = None,
 ) -> dict:
     """Create or update a project (domain/series container).
 
@@ -3405,7 +3482,7 @@ def upsert_project(
         videos start in — "auto" or any style in get_pipeline_status's
         visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
         "bean_explainer", "storybook_atlas", "terminal_doc", "cartoon_3d",
-        "whiteboard", "under_the_hood").
+        "whiteboard", "under_the_hood", "case_file_story").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -3426,6 +3503,19 @@ def upsert_project(
         never touches videos already filed. A new id is refused if it cannot
         be chosen or no renderer's GPU is working (the error says which);
         re-sending the stored one is never refused.
+    default_agent_id: the agent every new video filed into this domain starts
+        on, whatever its sourcing mode: the id of a live agent from
+        get_pipeline_status's agents, or "" for Automatic (the video is dealt
+        an agent by weight). A video can still be moved to another agent at a
+        human checkpoint, and changing this never touches videos already filed.
+        Changing it without passing default_agent_model clears the stored
+        model, which belonged to the other agent's list.
+    default_agent_model: the model those videos start on: one of that agent's
+        models, or "" for the agent's own default. Refused without an agent.
+    default_agent_effort: the effort level those videos start on: "low",
+        "medium", "high", "xhigh" or "max", or "" for the agent's own. It
+        needs no agent: on an Automatic domain it applies to whichever agent
+        the video is dealt.
     topic_cap: how many topics the domain may ever hold, a whole number from
         25 to 750 (100 when the domain is created). Every video ever filed
         counts, archived and rejected ones included. Once the domain holds
@@ -3434,8 +3524,9 @@ def upsert_project(
 
     OMITTING A FIELD LEAVES IT ALONE on a project that already exists; it is
     only defaulted when the project is created. Pass "" explicitly to clear
-    description, default_visual_style, default_voice_id or
-    default_script_profile_id. This matters because the callers of
+    description, default_visual_style, default_voice_id,
+    default_script_profile_id, default_agent_id, default_agent_model or
+    default_agent_effort. This matters because the callers of
     this tool are partial by nature — one command converts an existing domain
     into a curriculum seed and names only that, another files a video into a
     domain and names only its slug — and a full-replace upsert would have let
@@ -3455,6 +3546,15 @@ def upsert_project(
         default_script_profile_id = default_script_profile_id.strip()
     if default_mascot_id is not None:
         default_mascot_id = default_mascot_id.strip()
+    if default_agent_id is not None:
+        default_agent_id = default_agent_id.strip()
+    if default_agent_model is not None:
+        default_agent_model = default_agent_model.strip()
+    if default_agent_effort is not None:
+        default_agent_effort = default_agent_effort.strip()
+        if default_agent_effort not in ("",) + AGENT_EFFORTS:
+            return {"error": f"default_agent_effort must be one of {list(AGENT_EFFORTS)}, or "
+                             f"blank for the agent's own effort, got {default_agent_effort!r}"}
     if topic_cap is not None and (cap_error := _topic_cap_error(topic_cap)):
         return {"error": cap_error}
     seed = None if is_curriculum_seed is None else int(is_curriculum_seed)
@@ -3467,7 +3567,8 @@ def upsert_project(
         # Keep in sync: renderer/api/pipeline.py's create_project.
         existing = con.execute(
             "SELECT description, is_curriculum_seed, status, default_visual_style, "
-            "default_voice_id, default_script_profile_id, default_mascot_id FROM projects WHERE id = ?",
+            "default_voice_id, default_script_profile_id, default_mascot_id, default_agent_id, "
+            "default_agent_model FROM projects WHERE id = ?",
             (project_id,)
         ).fetchone()
         # The id names the domain's output directory, so a NEW one must be a
@@ -3512,6 +3613,26 @@ def upsert_project(
             err = tmascots.mascot_gpu_error(_gpu_probe_status())
             if err:
                 return {"error": err}
+        # The default agent and its model are judged as a pair, on the row as it
+        # will be after this write, and only when the pair changes: an agent
+        # uninstalled since, or a model it dropped, never blocks another edit
+        # of the domain. Changing the agent without naming a model clears the
+        # stored model, which belonged to the other agent's list (the rule
+        # update_video follows for a video).
+        # Keep in sync: renderer/api/pipeline.py's create_project.
+        if default_agent_id is not None or default_agent_model is not None:
+            stored_agent = (existing["default_agent_id"] or "") if existing else ""
+            stored_model = (existing["default_agent_model"] or "") if existing else ""
+            new_agent = stored_agent if default_agent_id is None else default_agent_id
+            if default_agent_model is not None:
+                new_model = default_agent_model
+            else:
+                new_model = stored_model if new_agent == stored_agent else ""
+            if (new_agent, new_model) != (stored_agent, stored_model):
+                err = _domain_agent_error(con, new_agent, new_model, stored_agent)
+                if err:
+                    return {"error": err}
+            default_agent_id, default_agent_model = new_agent, new_model
         # Only a CHANGE to illustrated is refused without a key; re-sending a
         # stored default is left alone, as in pipeline.py's create_project.
         # Keep in sync: renderer/api/pipeline.py's create_project.
@@ -3537,7 +3658,9 @@ def upsert_project(
         con.execute(
             """INSERT INTO projects (id, name, description, is_curriculum_seed, status,
                                      default_visual_style, default_voice_id,
-                                     default_script_profile_id, topic_cap, default_mascot_id, created_at)
+                                     default_script_profile_id, topic_cap, default_mascot_id,
+                                     default_agent_id, default_agent_model,
+                                     default_agent_effort, created_at)
                VALUES (:id, :name,
                        COALESCE(:description, ''),
                        COALESCE(:seed, 0),
@@ -3547,6 +3670,9 @@ def upsert_project(
                        COALESCE(:profile, ''),
                        COALESCE(:cap, :default_cap),
                        COALESCE(:mascot, ''),
+                       COALESCE(:agent, ''),
+                       COALESCE(:agent_model, ''),
+                       COALESCE(:agent_effort, ''),
                        :now)
                ON CONFLICT(id) DO UPDATE SET
                  name                 = :name,
@@ -3558,10 +3684,16 @@ def upsert_project(
                  default_script_profile_id =
                      COALESCE(:profile, projects.default_script_profile_id),
                  topic_cap            = COALESCE(:cap, projects.topic_cap),
-                 default_mascot_id    = COALESCE(:mascot, projects.default_mascot_id)""",
+                 default_mascot_id    = COALESCE(:mascot, projects.default_mascot_id),
+                 default_agent_id     = COALESCE(:agent, projects.default_agent_id),
+                 default_agent_model  = COALESCE(:agent_model, projects.default_agent_model),
+                 default_agent_effort =
+                     COALESCE(:agent_effort, projects.default_agent_effort)""",
             {"id": project_id, "name": name, "description": description, "seed": seed,
              "status": status, "style": default_visual_style, "voice": default_voice_id,
              "profile": default_script_profile_id, "cap": topic_cap, "mascot": default_mascot_id,
+             "agent": default_agent_id, "agent_model": default_agent_model,
+             "agent_effort": default_agent_effort,
              "default_cap": TOPIC_CAP_DEFAULT, "now": now},
         )
         row = con.execute(f"{_PROJECT_SELECT} WHERE p.id = ?", (project_id,)).fetchone()
@@ -6010,11 +6142,76 @@ def _redact_keys(text: str) -> str:
     return text
 
 
+# The house lead's reference sheet (TMDEV-202): every Case File Story video's
+# own lead sheet is made from it. Shipped beside this module, so it is in the
+# image wherever mcp/ is.
+CASE_FILE_HOUSE_SHEET = Path(__file__).resolve().parent / "case_file_assets" / "lead.png"
+
+
+def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: str,
+                          aspect_ratio: str, reference: str) -> dict:
+    """What generate_image sends for this call: {prompt, aspect_ratio,
+    ref_path}, or {error}. Only a Case File Story video takes a reference or
+    has its prompt extended; every other video gets its arguments back
+    unchanged with ref_path None. Nothing here spends money."""
+    cfs = case_file_story
+    if style != cfs.STYLE_ID:
+        if reference:
+            return {"error": "reference is for a case_file_story video only: this video's visual_style is "
+                             f"{style or 'auto'!r}. Leave it out."}
+        return {"prompt": prompt, "aspect_ratio": aspect_ratio, "ref_path": None}
+    extra = tvs.pack(cfs.STYLE_ID)["extra"]
+    if image_name == cfs.HOUSE_REFERENCE:
+        return {"error": f"The name {cfs.HOUSE_REFERENCE!r} is kept for the house lead's sheet "
+                         f"(reference=\"{cfs.HOUSE_REFERENCE}\"). Give this picture another name."}
+    # The agent's words end as a sentence, so the pack's text starts a new one.
+    said = prompt.strip()
+    if said[-1:] not in ".!?":
+        said += "."
+    if image_name == cfs.LEAD_NAME:
+        if reference != cfs.HOUSE_REFERENCE:
+            return {"error": f"The image named {cfs.LEAD_NAME!r} is this video's lead sheet and is made from "
+                             f"the house lead: call generate_image(video_id, \"{cfs.LEAD_NAME}\", <the outfit>, "
+                             f"reference=\"{cfs.HOUSE_REFERENCE}\")."}
+        if not CASE_FILE_HOUSE_SHEET.is_file():
+            return {"error": "The house lead sheet is missing from this install (mcp/case_file_assets/lead.png)."}
+        return {"prompt": f"{extra['sheet_lead']} The character wears: {said} {extra['sheet_style']}",
+                "aspect_ratio": "16:9", "ref_path": CASE_FILE_HOUSE_SHEET}
+    if reference == cfs.HOUSE_REFERENCE:
+        return {"error": f"reference=\"{cfs.HOUSE_REFERENCE}\" only makes the lead sheet (image_name "
+                         f"\"{cfs.LEAD_NAME}\"). For a still with the lead in it, pass reference=\"{cfs.LEAD_NAME}\"."}
+    # A still covers the frame, and its focus and punch points are read as
+    # fractions of that frame: any other shape would be cropped to a strip.
+    if not reference:
+        return {"prompt": f"{said} {extra['still_style']}", "aspect_ratio": "9:16", "ref_path": None}
+    err = _check_image_name(reference, ".png")
+    if err:
+        return {"error": err.replace("image_name", "reference")}
+    try:
+        ref_path = tjobs.image_file(JOBS_DIR, video_id, f"{reference}.png")
+    except tjobs.UnsafePath as e:
+        return {"error": str(e)}
+    if not ref_path.is_file():
+        hint = (f" Make the lead sheet first: generate_image(video_id, \"{cfs.LEAD_NAME}\", <the outfit>, "
+                f"reference=\"{cfs.HOUSE_REFERENCE}\")." if reference == cfs.LEAD_NAME else "")
+        return {"error": f"reference {reference!r} is not an image of this video yet.{hint}"}
+    return {"prompt": f"{extra['still_lead']} {said} {extra['still_style']}",
+            "aspect_ratio": "9:16", "ref_path": ref_path}
+
+
+# How long generate_image waits for OpenAI: a picture from text, and an edit
+# from a reference (the time generate_character gives the same endpoint; a
+# call that times out may still be billed).
+_IMAGE_TIMEOUT_SECS = 180
+_IMAGE_EDIT_TIMEOUT_SECS = 600
+
 # Names a capped video's generate_image calls are generating right now. The
 # folder alone is a check-then-act race: parallel calls each see 11 pictures,
 # all pass and all are billed. A reservation counts until the file exists, and
-# lapses after _IMAGE_RESERVE_SECS so a failed call does not hold a slot.
-_IMAGE_RESERVE_SECS = 300
+# lapses after _IMAGE_RESERVE_SECS so a call that died without releasing it
+# does not hold a slot. It is longer than the longest wait for a response, so
+# a slow call keeps its slot while it is being paid for.
+_IMAGE_RESERVE_SECS = 900
 _image_reservations: dict[str, dict[str, float]] = {}
 _image_reservations_lock = threading.Lock()
 
@@ -6023,17 +6220,22 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
     """The refusal for one generated photograph too many, or "" (and then the
     name is reserved for this call).
 
-    A style whose pack caps its photographs (Under the Hood: routing.images)
-    is refused a NEW image name once the video's images folder and the calls
-    in flight hold that many; regenerating an existing name stays allowed,
-    because a bad still must be replaceable. Checked before the paid call,
-    since the cap is about spend."""
+    A style whose pack caps its pictures (Under the Hood and Case File Story:
+    routing.images) is refused a NEW image name once the video's images folder
+    and the calls in flight hold that many; regenerating an existing name
+    stays allowed, because a bad still must be replaceable. Checked before the
+    paid call, since the cap is about spend."""
     with _conn() as con:
         vrow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
     style = ((vrow["visual_style"] if vrow else "") or "").strip()
-    if style != under_the_hood.STYLE_ID:
+    if style not in (under_the_hood.STYLE_ID, case_file_story.STYLE_ID):
         return ""
     cap = tvs.pack(style)["routing"].get("images", 0)
+    # A Case File Story video's lead sheet has a slot of its own: it is not a
+    # still, and a video that spent every slot on stills must still be able to
+    # make the sheet they are painted from.
+    apart = {case_file_story.LEAD_NAME} if style == case_file_story.STYLE_ID else set()
+    cap -= len(apart)
     with _image_reservations_lock:
         now = time.time()
         held = {n: t for n, t in _image_reservations.get(video_id, {}).items() if now - t < _IMAGE_RESERVE_SECS}
@@ -6041,11 +6243,15 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
             names = {f.stem for f in images_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS}
         except OSError:
             names = set()
-        names |= set(held)
-        if image_name in names or len(names) < cap:
+        names = (names | set(held)) - apart
+        if image_name in apart or image_name in names or len(names) < cap:
             held[image_name] = now
             _image_reservations[video_id] = held
             return ""
+    if style == case_file_story.STYLE_ID:
+        return (f"This Case File Story video already has {len(names)} stills, counting any being made now, "
+                f"the most a video may use ({cap}). Reuse a still in another shot with a different focus or "
+                "a punch-in, or regenerate one under its own name to replace it.")
     return (f"This Under the Hood video already has {len(names)} photographs, counting any being made "
             f"now, the most a video may use ({cap}). Reuse one of them on another plate with a "
             "different focus or zoom, or regenerate one under its own name to replace it.")
@@ -6063,7 +6269,7 @@ def _release_image_reservation(video_id: str, image_name: str) -> None:
 
 @mcp.tool
 def generate_image(video_id: str, image_name: str, prompt: str,
-                   aspect_ratio: str = "9:16") -> dict:
+                   aspect_ratio: str = "9:16", reference: str = "") -> dict:
     """Generate an image from a text prompt and store it in the video's job dir.
 
     image_name: filename stem without extension (e.g. 'city-skyline').
@@ -6095,7 +6301,7 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     the whole render rather than degrading to a blank frame.
 
     Returns {video_id, image_name, filename, path, public_path, width, height,
-    provider, model, aspect_ratio, size_bytes}.
+    provider, model, aspect_ratio, reference, size_bytes}.
 
     `width`/`height` are the file's REAL pixel dimensions, not the aspect_ratio
     that was asked for — a provider answers with its own nearest bucket. Use
@@ -6104,6 +6310,23 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     An under_the_hood video may have at most 12 photographs: a 13th new
     image_name is refused before the paid call; regenerating an existing name
     is allowed.
+
+    reference: for a case_file_story video only (any other video refuses it).
+    The picture is then made FROM a reference picture, which is what keeps the
+    lead the same character in every still:
+      - reference="house" with image_name="lead" makes this video's lead
+        sheet: the house lead in the outfit your prompt describes. Make it
+        first, once. It is always 16:9 and it is not a picture for the video.
+      - reference="lead" (or the name of another image of this video) paints
+        that character into the scene your prompt describes. No picture of
+        such a video may itself be named "house".
+      - no reference: a still with no lead in it (an object, an exterior).
+    A still of such a video is always 9:16, because it fills the frame, and
+    the lead sheet always 16:9, whatever aspect_ratio says.
+    For a case_file_story video the style's fixed painting instructions are
+    added to every prompt, so describe only the scene: the place, what the
+    lead is doing, the light. Such a video may have at most 16 stills, besides
+    its lead sheet; a 17th new still is refused before the paid call.
     """
     err = _video_id_error(video_id)
     if err:
@@ -6137,6 +6360,16 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     if not prompt or not prompt.strip():
         return {"error": "prompt must not be empty"}
 
+    # Case File Story (TMDEV-202): the reference picture, the fixed painting
+    # instructions and the sheet's shape, all settled before any paid call.
+    with _conn() as con:
+        srow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    plan = _case_file_image_plan((srow["visual_style"] or "").strip(), video_id, image_name, prompt,
+                                 aspect_ratio, reference)
+    if "error" in plan:
+        return plan
+    prompt, aspect_ratio, ref_path = plan["prompt"], plan["aspect_ratio"], plan["ref_path"]
+
     # TMDEV-61: claim (or refresh) this video's scene-work claim before
     # spending on a paid image call — a second session already claimed by a
     # different owner is rejected here, before any billed request goes out.
@@ -6159,16 +6392,29 @@ def generate_image(video_id: str, image_name: str, prompt: str,
 
         resp = None  # stays None when the request itself fails
         try:
-            with httpx.Client(timeout=180) as client:
-                resp = client.post(
-                    OPENAI_IMAGES_URL,
-                    headers={"Authorization": f"Bearer {api_key}"},
-                    json={
-                        "model": model,
-                        "prompt": prompt,
-                        "size": OPENAI_SIZE_BY_ASPECT[aspect_ratio],
-                    },
-                )
+            with httpx.Client(timeout=_IMAGE_EDIT_TIMEOUT_SECS if ref_path is not None
+                              else _IMAGE_TIMEOUT_SECS) as client:
+                if ref_path is None:
+                    resp = client.post(
+                        OPENAI_IMAGES_URL,
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        json={
+                            "model": model,
+                            "prompt": prompt,
+                            "size": OPENAI_SIZE_BY_ASPECT[aspect_ratio],
+                        },
+                    )
+                else:
+                    # Multipart, as generate_character sends a reference: the
+                    # edits endpoint takes the picture as an `image[]` part.
+                    # No `background`, so the answer is an opaque painting.
+                    resp = client.post(
+                        OPENAI_IMAGE_EDITS_URL,
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        files={"image[]": (ref_path.name, ref_path.read_bytes(), "image/png")},
+                        data={"model": model, "prompt": prompt,
+                              "size": OPENAI_SIZE_BY_ASPECT[aspect_ratio]},
+                    )
             if resp.status_code == 200:
                 usage = _response_json(resp).get("usage")
                 _record_usage(service="openai", model=model, operation="image",
@@ -6215,6 +6461,7 @@ def generate_image(video_id: str, image_name: str, prompt: str,
             "provider": "openai",
             "model": model,
             "aspect_ratio": aspect_ratio,
+            "reference": reference,
             "size_bytes": len(image_bytes),
         }
     finally:
@@ -6879,13 +7126,15 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     scene-config: **never** write scene-config.json using Claude Code's file
     tools, the same rule write_scene_file enforces for .tsx files.
 
-    A System Flow, Bean Explainer, Whiteboard, Storybook Atlas or Under the
-    Hood video is one installed scene (SystemFlow, BeanExplainer, Whiteboard,
-    StorybookAtlas or UnderTheHood) from frame 0 for totalFrames, whose props
-    hold the whole video as data; that data is checked here against the
-    style's contract (the tubematic-system-flow, tubematic-bean-explainer,
-    tubematic-whiteboard, tubematic-storybook-atlas and tubematic-under-the-hood
-    skills document it) and refused with one sentence per problem. Each style
+    A System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Under the
+    Hood or Case File Story video is one installed scene (SystemFlow,
+    BeanExplainer, Whiteboard, StorybookAtlas, UnderTheHood or CaseFileStory)
+    from frame 0 for totalFrames, whose props hold the whole video as data;
+    that data is checked here against the style's contract (the
+    tubematic-system-flow, tubematic-bean-explainer, tubematic-whiteboard,
+    tubematic-storybook-atlas, tubematic-under-the-hood and
+    tubematic-case-file-story skills document it) and refused with one
+    sentence per problem. Each style
     fills subtitles with its own caption look when the config has none. For
     Under the Hood this also fills each plate's aspect from its photograph's
     file.
@@ -7461,6 +7710,21 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         given = config.get("subtitles")
         if given is None or isinstance(given, dict):
             config["subtitles"] = {**tvs.pack(under_the_hood.STYLE_ID)["captions"], **(given or {})}
+    # ── Case File Story (TMDEV-202) ──────────────────────────────────────────
+    # The same shape again: one installed CaseFileStory scene whose props hold
+    # the meters and the beats (painted stills and number cards) as data.
+    cfs_err = case_file_story.check_scene_use(row["visual_style"], scenes)
+    if cfs_err:
+        return {"error": cfs_err}
+    if (row["visual_style"] or "") == case_file_story.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = case_file_story.check(config, fps, word_starts,
+                                         tvs.pack(case_file_story.STYLE_ID)["extra"], video_id)
+        if problems:
+            return {"error": "The Case File Story video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(case_file_story.STYLE_ID)["captions"], **(given or {})}
 
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the

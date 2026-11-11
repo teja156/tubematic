@@ -233,7 +233,7 @@ One card for each installed agent. Changes here apply as you make them.
 | Setting | What it does |
 |---|---|
 | **Default agent** | The agent that runs research and builds script profiles. It also takes new videos when every weight is 0 |
-| **weight** | The agent's share of new videos. With weights 3 and 1, three of every four new videos go to the first agent. 0 gives it none |
+| **weight** | The agent's share of new videos. With weights 3 and 1, three of every four new videos go to the first agent. 0 gives it none. A domain with an agent of its own gives all its videos to that agent ([Agents](12-agents.md#choose-which-agent-makes-a-video)) |
 | **default model** | The model the agent uses unless a video names another |
 | **effort** | How hard the agent thinks on each run: `low`, `medium`, `high`, `xhigh` or `max`. Higher levels cost more and take longer. The default is `high` |
 

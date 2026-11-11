@@ -260,9 +260,9 @@ that lands in between fails the write with `409`.
 
 ### The agent group
 
-- A video gets `agent_id` from the weighted deal when it is created
-  ([Assignment](07-agent-layer.md#assignment)). After that only a human at a checkpoint changes
-  it. The poller does not move a video to another agent.
+- A video gets `agent_id` when it is created: its domain's agent, or one from the weighted deal
+  when the domain names none ([Assignment](07-agent-layer.md#assignment)). After that only a human
+  at a checkpoint changes it. The poller does not move a video to another agent.
 - `agent_id` must name a live agent, or the write is refused with `400`. Naming the video's
   current agent again changes nothing.
 - Changing the agent clears `agent_model` to `""`, because a model belongs to one agent's list. A
