@@ -52,7 +52,8 @@ Segments let `timeline.json` carry a frame span per segment, so a scene aligns t
 
 ## Length
 
-A script's length is the word band of its [formula](#formulas). One limit holds for every script:
+A script's length is the word band of its [formula](#formulas), unless the visual style's `script`
+text gives a length of its own, which then wins. One limit holds for every script:
 
 | | Seconds | Words |
 |---|---|---|
@@ -176,7 +177,8 @@ writes the script again at most once. The AI review does not run these checks, b
 finding sends a video to revision and a paid re-voice.
 
 A script whose closing line was asked for in the preferences can still get `closing_ask`. The
-server cannot tell that the line was asked for.
+server cannot tell that the line was asked for. A script whose length the visual style's `script`
+text set can still get `length_band`, for the same reason. The skill tells the agent to leave both.
 
 Every pattern and threshold is a constant in `script_checks.py`. The checks are regular expressions
 and counts, so they catch a script that fell back to a stock shape and do not judge whether a script

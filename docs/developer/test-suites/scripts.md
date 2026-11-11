@@ -722,8 +722,11 @@ Covers the `tubematic-script-writing-skill` skill and `scripts/gen_formula_refer
 - The headings other skills and tests point at are present, and the operator's `TOPIC_APPROVED` and
   revision rows pass the record. The pronunciation row leaves the record out, in a place where
   the sentence cannot be read as being about the publish title and description.
-- The formula's reference file and the style's script text decide how the payoff rules are met,
-  and the length starts from the lower half of the band.
+- The formula's reference file and the style's script text decide how the payoff rules are met.
+  The length starts from the lower half of the band, and a length the style's script text gives
+  wins over the band.
+- A changed style or topic means choosing the formula again, and a style that asks for names may
+  name its people.
 - The user guide's formula table names every formula.
 
 Trap: an instruction that survives beside its replacement is followed whenever the agent reads it

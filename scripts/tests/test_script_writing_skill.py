@@ -126,6 +126,19 @@ def test_the_formula_and_the_style_say_how_the_payoff_rules_are_met():
     assert "`style.script` says how such a video ends" in part
 
 
+def test_a_changed_style_or_topic_means_choosing_the_formula_again():
+    # A style switch at Script Ready sends the video back with its old script
+    # and record still stored. The stored formula was chosen for another style.
+    part = _section("## Step 3", "### Length")
+    assert "the video's style or topic changed" in part
+    assert "a story told in chapters" in part
+
+
+def test_a_style_that_names_people_may_name_them():
+    part = _section("### The grammar", "### Three openings, then one")
+    assert "by name where `style.script` asks for names" in part
+
+
 def test_a_length_the_style_sets_wins_over_the_band():
     # Some style packs give a word count of their own for the whole video.
     assert "that length\nwins over the band" in _section("### Length", "## Step 4")
