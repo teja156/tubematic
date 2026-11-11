@@ -73,7 +73,9 @@ try:
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import mascots as tmascots
+    from tubematic_core import formulas as tformulas
     from tubematic_core import renderers as trenderers
+    from tubematic_core import script_checks as tchecks
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
     from tubematic_core import youtube as tyoutube
@@ -84,7 +86,9 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import mascots as tmascots
+    from tubematic_core import formulas as tformulas
     from tubematic_core import renderers as trenderers
+    from tubematic_core import script_checks as tchecks
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
     from tubematic_core import youtube as tyoutube
@@ -202,6 +206,15 @@ VIDEO_TITLE_MAX_LEN = 70
 # Keep in sync: renderer/api/pipeline.py's copies (PATCH /videos/<id>).
 PUBLISH_TITLE_MAX_LEN       = 100
 PUBLISH_DESCRIPTION_MAX_LEN = 2000
+
+# What update_video records with a script (TMDEV-211): the formula it follows
+# and the three openings the writer drafted. An opening is a sentence or two,
+# so the caps are generous; they exist so a whole script cannot be stored as
+# a "hook". A beat label names a formula's beat ("Wrong suspect 1").
+SCRIPT_HOOKS_COUNT     = 3
+HOOK_TEXT_MAX_LEN      = 400
+HOOK_NOTE_MAX_LEN      = 200
+SEGMENT_BEAT_MAX_LEN   = 60
 
 FPS       = 30
 # SAFE_ZONE used to live here. Its only reader was the TextReveal-gated safe-zone
@@ -754,6 +767,8 @@ def _fetch_video(con, video_id: str) -> dict | None:
     video = dict(row)
     raw_segments = video.get("script_segments")
     video["script_segments"] = json.loads(raw_segments) if raw_segments else None
+    for key in ("hook_alternatives", "script_warnings"):
+        video[key] = json.loads(video[key]) if video.get(key) else []
     rows = con.execute(
         "SELECT * FROM comments WHERE video_id = ? ORDER BY created_at ASC", (video_id,)
     ).fetchall()
@@ -1193,8 +1208,20 @@ def get_video(video_id: str) -> dict:
     objects set via update_video, or null if the video only has a flat
     script (legacy rows, or rows never updated with segments).
 
+    script_segments may carry a fourth key, beat: the formula beat a segment
+    belongs to.
+
     publish_title and publish_description are what the video will be posted
     with, written by update_video alongside the script ("" before that).
+
+    formula_id, hook_type, hook_alternatives and script_warnings are what
+    update_video recorded with the script: the formula it follows ("" when
+    none is on record: a script written before formulas, or by a writer that
+    sent none), the type of the opening it uses, the three openings drafted
+    ([{type, text, kept, note}], [] when none) and the advisory checks'
+    findings for the stored script ([{id, message}], [] when none). On a
+    script revision read script_warnings first: it says what the last draft
+    was flagged for.
 
     script_profile_id names the script profile this video's script is to be
     written in, or "" for none. Pass it to get_script_profile to read the style
@@ -2203,7 +2230,8 @@ def _check_markup_values(text: str) -> str | None:
 def _validate_script_segments(segments: list) -> str | None:
     """Return an error message if segments are malformed, else None.
 
-    Each segment must be an object with 'id', 'voice', and 'visual' keys.
+    Each segment must be an object with 'id', 'voice', and 'visual' keys, and
+    may carry 'beat': the name of the formula beat it belongs to.
     'voice' must be a non-empty (post-strip) string that still tokenizes to
     at least one word after phoneme tags and pause markup are stripped — e.g.
     a phoneme tag wrapping only whitespace, or a segment holding nothing but a
@@ -2239,6 +2267,12 @@ def _validate_script_segments(segments: list) -> str | None:
         if seg_id in seen_ids:
             return f"script_segments[{i}].id '{seg_id}' is not unique"
         seen_ids.add(seg_id)
+        if "beat" in seg:
+            beat = seg["beat"]
+            if not isinstance(beat, str) or not beat.strip() or len(beat) > SEGMENT_BEAT_MAX_LEN:
+                return (f"script_segments[{i}].beat, when present, must be the name of the "
+                        f"formula beat this segment belongs to, at most {SEGMENT_BEAT_MAX_LEN} "
+                        "characters")
         voice = seg["voice"]
         if not isinstance(voice, str) or not voice.strip():
             return f"script_segments[{i}].voice must be a non-empty string"
@@ -2263,6 +2297,74 @@ def _validate_script_segments(segments: list) -> str | None:
     return None
 
 
+def _script_record_error(formula_id, hooks) -> str | None:
+    """Why formula_id and hooks cannot be recorded with a script, or None.
+
+    These are the shape of the record, checked like markup: a formula the
+    install does not have, or openings that are not three different ones,
+    would make the record say something untrue about the script.
+    """
+    if formula_id is None or hooks is None:
+        return ("formula_id and hooks are recorded together: pass both, or neither")
+    if formula_id not in tformulas.FORMULAS:
+        return (f"formula_id {formula_id!r} is not a formula. Must be one of: "
+                f"{list(tformulas.FORMULAS)}")
+    if not isinstance(hooks, list) or len(hooks) != SCRIPT_HOOKS_COUNT:
+        return (f"hooks must be a list of exactly {SCRIPT_HOOKS_COUNT} openings: the one the "
+                "script uses and the two it does not")
+    for i, hook in enumerate(hooks):
+        if not isinstance(hook, dict) or not {"type", "text"} <= set(hook) \
+                or not set(hook) <= {"type", "text", "kept", "note"}:
+            return (f"hooks[{i}] must be an object with 'type' and 'text', and optionally "
+                    "'kept' and 'note'")
+        if hook["type"] not in tformulas.HOOK_TYPES:
+            return (f"hooks[{i}].type {hook['type']!r} is not a hook type. Must be one of: "
+                    f"{list(tformulas.HOOK_TYPES)}")
+        text = hook["text"]
+        if not isinstance(text, str) or not _strip_non_spoken(text):
+            return f"hooks[{i}].text must be the opening's spoken words"
+        if len(_strip_non_spoken(text)) > HOOK_TEXT_MAX_LEN:
+            return (f"hooks[{i}].text is longer than {HOOK_TEXT_MAX_LEN} characters: an opening "
+                    "is the first sentence or two, not the script")
+        if "kept" in hook and not isinstance(hook["kept"], bool):
+            return f"hooks[{i}].kept must be true or false"
+        note = hook.get("note", "")
+        if not isinstance(note, str) or len(note) > HOOK_NOTE_MAX_LEN:
+            return f"hooks[{i}].note must be a string of at most {HOOK_NOTE_MAX_LEN} characters"
+    types = [h["type"] for h in hooks]
+    if len(set(types)) != len(types):
+        return ("hooks must be three openings of different types: the same type three ways is "
+                "one opening, not three")
+    if sum(1 for h in hooks if h.get("kept")) != 1:
+        return "exactly one of the hooks must have kept: true, the opening the script uses"
+    return None
+
+
+def _stored_hooks(hooks: list) -> list:
+    """Openings in the shape hook_alternatives stores: spoken text only, so the
+    dashboard shows no markup, and every key present."""
+    return [{"type": h["type"], "text": _strip_non_spoken(h["text"]),
+             "kept": bool(h.get("kept")), "note": " ".join(h.get("note", "").split())}
+            for h in hooks]
+
+
+def _kept_hook_text(hooks) -> str:
+    return next((h.get("text", "") for h in hooks or [] if h.get("kept")), "")
+
+
+def _recent_domain_scripts(project_id, video_id: str) -> list[str]:
+    """The newest scripts of a video's domain, other than its own, newest
+    first: what the closing-sentence check compares against."""
+    if not project_id:
+        return []
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT script FROM videos WHERE project_id = ? AND id != ? "
+            "AND COALESCE(script, '') != '' ORDER BY created_at DESC LIMIT ?",
+            (project_id, video_id, tchecks.RECENT_SCRIPTS)).fetchall()
+    return [r["script"] for r in rows]
+
+
 @mcp.tool
 def update_video(
     video_id: str,
@@ -2283,8 +2385,28 @@ def update_video(
     publish_title: str | None = None,
     publish_description: str | None = None,
     mascot_id: str | None = None,
+    formula_id: str | None = None,
+    hooks: list[dict] | None = None,
 ) -> dict:
     """Update one or more fields on a video record. Pass only fields to change.
+
+    formula_id, hooks: what the script was built on, recorded with it. Pass
+    both together, in the call that writes script_segments, and only there.
+    formula_id is the formula the script follows, an id from the
+    script-writing skill's table. hooks is the three openings you drafted, as
+    [{"type", "text", "kept", "note"}]: type is a hook type from the formula's
+    reference file and the three must differ, text is the opening's spoken
+    words, kept is true on the one the script uses (exactly one), and note
+    (optional) says why an opening was dropped. Left out on a call that only
+    fixes pronunciation, the stored record is kept; left out on a call that
+    changes the script's words, the record is cleared, since it no longer
+    describes the script.
+
+    Every call that writes a script also returns "warnings": advisory checks
+    on its words, as [{"id", "message"}], and stores the same list on the
+    video (get_video's script_warnings) for the person at Script Ready. A
+    warning never refuses the write. Read each one, fix what is a real
+    problem, and write the script again at most once.
 
     mascot_id: the video's mascot, or "" for none. Settable only while the
     video is at TOPIC_PROPOSED, and a human's choice at the topic: a new
@@ -2440,6 +2562,13 @@ def update_video(
         err = _validate_script_segments(script_segments)
         if err:
             return {"error": err}
+    if formula_id is not None or hooks is not None:
+        if script_segments is None:
+            return {"error": "formula_id and hooks describe a script: pass them in the call "
+                             "that writes script_segments"}
+        err = _script_record_error(formula_id, hooks)
+        if err:
+            return {"error": err}
     # Written with the script so publishing never has to generate them
     # (TMDEV-132). Required with every script write — an optional pair is one
     # the agent eventually forgets, and the dialog would silently open on the
@@ -2477,7 +2606,8 @@ def update_video(
     voice_exempt = False
     if script_segments is not None or script is not None or voice_id is not None:
         with _conn() as con:
-            vrow = con.execute("SELECT status, voice_id, script, script_segments FROM videos "
+            vrow = con.execute("SELECT status, voice_id, script, script_segments, project_id, "
+                               "formula_id, hook_alternatives FROM videos "
                                "WHERE id = ?", (video_id,)).fetchone()
         if vrow is None:
             return {"error": f"Video not found: {video_id}"}
@@ -2522,6 +2652,29 @@ def update_video(
                     return {"error": f"This script can't be voiced with that voice: {err} "
                                      "Keep the current voice, or request a revision so the "
                                      "script is rewritten for the new one."}
+
+    # The record follows the script (TMDEV-211). Given: written. Left out on a
+    # write whose spoken words are unchanged (a pronunciation fix resends the
+    # script with new markup): kept. Left out on a write that changes the
+    # words: cleared, since a formula and openings chosen for other words say
+    # nothing true about these. The warnings are recomputed on every script
+    # write, against whichever record the script ends up with.
+    record_sets, warnings = [], None
+    if script_segments is not None or script is not None:
+        if formula_id is not None:
+            record_formula, record_hooks = formula_id, _stored_hooks(hooks)
+        elif (script or "") == (vrow["script"] or ""):
+            record_formula = vrow["formula_id"] or ""
+            record_hooks = json.loads(vrow["hook_alternatives"]) if vrow["hook_alternatives"] else []
+        else:
+            record_formula, record_hooks = "", []
+            record_sets += [("formula_id = ?", ""), ("hook_type = ?", ""),
+                            ("hook_alternatives = ?", "")]
+        warnings = tchecks.check(
+            script or "", publish_title=publish_title or "", formula_id=record_formula,
+            kept_hook=_kept_hook_text(record_hooks),
+            recent_scripts=_recent_domain_scripts(vrow["project_id"], video_id))
+        record_sets.append(("script_warnings = ?", json.dumps(warnings)))
 
     if title is not None and len(title) > VIDEO_TITLE_MAX_LEN:
         return {"error": f"title is {len(title)} characters; the display name must be at most "
@@ -2624,6 +2777,11 @@ def update_video(
     }.items() if v is not None}
     if script_segments is not None:
         fields["script_segments"] = json.dumps(script_segments)
+    if formula_id is not None:
+        stored = _stored_hooks(hooks)
+        fields["formula_id"] = formula_id
+        fields["hook_type"] = next(h["type"] for h in stored if h["kept"])
+        fields["hook_alternatives"] = json.dumps(stored)
     if not fields:
         return {"error": "No fields to update"}
     # The per-video choices freeze in two groups (TMDEV-110). Keep in sync:
@@ -2773,6 +2931,11 @@ def update_video(
     # other two callers (generate_voice, write_scene_config) run only at
     # statuses an archived video can never be in.
     updated = list(fields.keys())
+    # What the write derives rather than was asked for: the cleared record and
+    # the stored warnings. Not in updated_fields, like the voice pin below.
+    for sql, value in record_sets:
+        set_sql.append(sql)
+        set_params.append(value)
     if pin_voice:
         # Decided in the UPDATE, so a voice set by another call meanwhile wins.
         set_sql.append("voice_id = CASE WHEN voice_id = '' THEN ? ELSE voice_id END")
@@ -2820,6 +2983,8 @@ def update_video(
                 return {"error": "The video's visual style changed while the call was in flight, and "
                                  f"the result would put a mascot on a Cartoon 3D video. "
                                  f"{tmascots.MASCOT_NOT_ON_CARTOON_3D} Check get_video"}
+    if warnings is not None:
+        return {"video_id": video_id, "updated_fields": updated, "warnings": warnings}
     return {"video_id": video_id, "updated_fields": updated}
 
 

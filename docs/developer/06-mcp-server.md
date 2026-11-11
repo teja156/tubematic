@@ -194,8 +194,10 @@ The calls one video takes when it has no mascot and is not Cartoon 3D:
 2. `choose_visual_style(video_id, style, reason, runner_up)` records the style `auto` picks, when
    `style_routing.decided` is `false`. The script is then written for that style.
 3. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
-4. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…)` stores the
-   script and the text the video is posted with.
+4. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…,
+   formula_id=…, hooks=[…])` stores the script, the text the video is posted with, and the formula
+   and openings the script was built on. It returns `warnings`, which the agent reads before it
+   moves on.
 5. `upsert_pronunciation_lexicon(entries=[…])` registers recurring terms, if the script has any.
 6. `add_comment(video_id, "agent", …)` says what was written.
 7. `set_video_status(video_id, "SCRIPT_READY", only_if_current_status="TOPIC_APPROVED")` stops at
@@ -230,6 +232,8 @@ videos.
 |---|---|
 | `comments` | The comment thread |
 | `publish_title`, `publish_description` | The text written with the script |
+| `formula_id`, `hook_type` | The formula the script follows and the type of the opening it uses, or `""` |
+| `hook_alternatives`, `script_warnings` | The three openings drafted and the checks' findings for the stored script, as lists. `[]` when there are none. See [What a script records](08-scripting-and-voice.md#what-a-script-records) |
 | `claimed_by`, `claim_expires_in_secs` | The live scene-work claim, or `null` |
 | `voice` | `{voice_id, name, model_id, source}` or `null` |
 | `elevenlabs_model_id`, `pronunciation_mode` | What the script is written for. Both follow from `voice` |
@@ -306,8 +310,8 @@ columns are cleared too. A style a person chose is kept, with its recorded canva
 `update_video(video_id, title=…, script=…, script_segments=…, youtube_url=…, video_version=…,
 gemini_feedback=…, voice_id=…, agent_id=…, agent_model=…, agent_effort=…, script_profile_id=…,
 visual_style=…, resolved_visual_style=…, resolved_renderer=…, publish_title=…,
-publish_description=…, mascot_id=…)` is a partial update. An archived video returns
-`video_archived`.
+publish_description=…, mascot_id=…, formula_id=…, hooks=…)` is a partial update. An archived video
+returns `video_archived`.
 
 Script and voice:
 
@@ -320,6 +324,13 @@ Script and voice:
   if the stored pair is blank. The pair is required because the Publish dialog opens on it.
 - Writing a script pins the voice it resolved to onto a video that had none, or that was passed
   `voice_id=""`.
+- `formula_id` and `hooks` are passed together, with `script_segments`. They record the formula the
+  script follows and the three openings the agent drafted. A malformed record is refused, and a
+  script with no record is accepted. See
+  [What a script records](08-scripting-and-voice.md#what-a-script-records).
+- A call that writes a script returns `warnings` beside `updated_fields`: the
+  [script warnings](08-scripting-and-voice.md#script-warnings) for the stored script, which the
+  same call saves on the video. A warning does not refuse the write.
 - A `voice_id` whose model cannot speak the stored script is refused, except at `TOPIC_PROPOSED`,
   where the script is still to be rewritten. To move a scripted video to such a voice, pass it with
   the rewritten `script_segments` and the publish pair in one call.

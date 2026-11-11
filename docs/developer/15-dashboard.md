@@ -472,6 +472,12 @@ Effort:
 
 - Tabs: Topic, Script, Video, Publishing Results, Comments and Logs. Script, Video and Publishing
   Results appear once they have content. Logs is always present.
+- The Script tab opens with what the agent recorded with the script (`components/ScriptRecord.tsx`):
+  the formula, the type of the opening in use, the three openings drafted and the
+  [script warnings](08-scripting-and-voice.md#script-warnings). It is read-only and renders nothing
+  for a script with no record. It takes the labels from
+  [`GET /script-formulas`](05-http-api.md#get-script-formulas), fetched when a record is shown, and
+  shows the ids until that answers. A segment that carries a `beat` shows it above its text.
 - The sidebar holds the actions for the video's status (including Delete), a **Published to**
   section with a link to each live post, metadata, the cost breakdown (`CostBreakdown.tsx`) and the
   AI review feedback.
@@ -563,6 +569,7 @@ Components that a section above covers are left out of this table.
 | `CostsPanel.tsx`, `AutoPilotPanel.tsx`, `RenderersPanel.tsx` | See [The settings page](#the-settings-page) |
 | `LogList.tsx` | Record rendering shared by the Logs page and the video window's Logs tab |
 | `ReviseDialog.tsx` | The mandatory-comment prompt behind every Request Revision |
+| `ScriptRecord.tsx` | The Script tab's read-only block for what a script recorded: formula, openings and warnings. See [The video window](#the-video-window) |
 | `VoicePreviewButton.tsx` | Generates or replays a cached voice sample. One button toggles play and pause and follows the audio's own events. A change of voice or model resets it. Given a `modelId`, it previews that model |
 | `MiningSources.tsx` | Adds and removes YouTube URLs for mining. It mirrors the API's URL rule and adds a URL in the canonical `watch?v=` form. See [Mining sources](05-http-api.md#mining-sources) |
 | `TimeZoneProvider.tsx` | Fetches the host's timezone once and provides it through context. See [Time](#time) |

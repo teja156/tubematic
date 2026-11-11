@@ -172,6 +172,27 @@ than `cmu-arpabet` or `ipa` (the word is dropped from the audio) and a `<break>`
 3 seconds. The attribute must be the real one, once: a prefixed name, a repeat, or the text inside
 another attribute's value does not count.
 
+### `test_script_record.py`
+
+Covers what `update_video` records with a script: `formula_id`, `hooks` and the returned `warnings`
+([What a script records](../08-scripting-and-voice.md#what-a-script-records)).
+
+- A script is stored with its formula, the kept opening's type and the three openings, which are
+  saved as spoken text. `get_video` returns the openings and the warnings as lists.
+- A malformed record is refused and nothing is written: one argument without the other, an unknown
+  formula or hook type, not three openings, two of one type, none or two marked `kept`, a record
+  with no `script_segments`.
+- A flagged script is still written, and the stored warnings equal the returned ones. A script with
+  no record is accepted and gets `no_formula`.
+- A pronunciation fix that resends the script with no record keeps it. A rewrite that sends none
+  clears it. A rewrite with a new record replaces it.
+- The closing sentence is compared with the 30 newest other scripts of the same domain, and with
+  none when the video has no domain.
+- A `beat` label on a segment must be a short non-empty string.
+
+Trap: a warning must never refuse a write, and a script with no record must be accepted. An agent
+on an older skill sends no record during an upgrade.
+
 ### `test_generate_voice.py`
 
 Covers `generate_voice`: the text it sends, the alignment it turns into `timeline.json`, and what

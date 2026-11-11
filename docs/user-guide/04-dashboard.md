@@ -123,7 +123,7 @@ Click a card or a row to open the video. The left side has tabs:
 | Tab | Shows |
 |---|---|
 | **Topic** | The full topic |
-| **Script** | The script, segment by segment, with a note on what each segment shows. Appears once a script exists |
+| **Script** | The script, segment by segment, with a note on what each segment shows. Above it are the script's formula, the openings the agent considered and any script warnings (see [Read and approve scripts](03-using-tubematic.md#3-read-and-approve-scripts)). Appears once a script exists |
 | **Video** | The player. Appears once the video is rendered |
 | **Publishing Results** | Each account the video was posted to, with its status, link and any error |
 | **Comments** | Everything you and the agent have said about the video. You add to it through **Request Revision** |

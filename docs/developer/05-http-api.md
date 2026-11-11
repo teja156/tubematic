@@ -61,6 +61,7 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `POST` | [`/settings`](#post-settings) | Write a subset of settings |
 | `POST` | [`/voices/<voice_id>/preview`](#post-voicesvoice_idpreview) | Generate or replay a sample |
 | `GET` | [`/visual-styles`](#get-visual-styles) | Every visual style, and whether this install can make it |
+| `GET` | [`/script-formulas`](#get-script-formulas) | Every script formula and hook type, with its label |
 
 ### Research routes
 
@@ -284,6 +285,10 @@ acts on it.
 The full row plus `comments[]` in chronological order. `gemini_feedback` is not clipped.
 `404 {"error": "Video not found"}`.
 
+`script_segments`, `hook_alternatives` and `script_warnings` are returned as parsed JSON on every
+video route. The last two are `[]` for a video with no
+[script record](08-scripting-and-voice.md#what-a-script-records).
+
 Three computed fields describe the voice:
 
 | Field | On | Meaning |
@@ -430,7 +435,9 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   clipped.
 - `script` must come with both `publish_title` and `publish_description`. Each of those must be a
   non-blank string within its cap (100 and 2000 characters). MCP `update_video` applies the same
-  rule (see [Publishing](14-publishing.md#schema)).
+  rule (see [Publishing](14-publishing.md#schema)). A `script` written here clears the video's
+  `formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, because they describe the
+  script it replaces. Only MCP `update_video` writes them.
 - `voice_id` must be on the roster, or `""` for the install default.
 - `agent_id` must name a live agent. The video's current agent is accepted even when uninstalled.
   A change sets `agent_model` to `""` in the same `UPDATE`, unless the body also sets
@@ -715,6 +722,13 @@ in its pack order. Each entry has `id`, `label`, `experimental`, `canvas` (the c
 or `null`), `needs` (`openai_key`, `gpu`), and `available` with `unavailable_reason` for this install
 now: `needs an OpenAI key`, `needs a working GPU` or `GPU not tested yet`. The dashboard builds its
 style pickers from it. The write routes still refuse an unavailable style themselves.
+
+### `GET /script-formulas`
+
+Returns `{"formulas": [...], "hook_types": [...]}` from the
+[formula files](08-scripting-and-voice.md#formulas). Each formula has `id`, `label`, `family`, `line`
+and `words` (`[min, max]`), in formula order. Each hook type has `id` and `label`. The dashboard uses
+it to label a video's `formula_id` and `hook_type`.
 
 ## Research
 

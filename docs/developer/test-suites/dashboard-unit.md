@@ -336,6 +336,17 @@ Covers the video window's **Why this style** row and **Switch to …** button
 - The switch is offered only at `SCRIPT_READY` with a runner-up, posts to `/switch-style` after a
   confirm, does nothing when the confirm is declined, and shows the server's refusal.
 
+### `video-modal-script-record.test.tsx`
+
+Covers `components/ScriptRecord.tsx` on the video window's Script tab and `lib/scriptFormulas.ts`
+([The video window](../15-dashboard.md#the-video-window)).
+
+- A script with a record shows its formula and opening type by their labels, the three openings
+  with the one in use marked, and every warning.
+- A script with no record shows the segments and nothing else, and makes no request for the names.
+- The ids are shown when the names cannot be loaded, and for an id the list does not know.
+- A segment shows its `beat` label only when it has one. The block holds no control.
+
 ### `video-modal-retry-agent.test.tsx`
 
 Covers **Retry agent**, `lib/videoStatus.ts::isAgentStuck` and the board card's STUCK tag. The

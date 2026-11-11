@@ -252,6 +252,16 @@ Visuals: prefer diagrams over stock-style photos.
 The agent receives the text on every run and applies the parts that fit what it is doing. A
 preference cannot make the agent skip one of your approvals.
 
+A script ends on its payoff. To have scripts end with a closing line, ask for one here:
+
+```
+Scripts: end with one line asking the viewer to follow.
+```
+
+The agent then adds one sentence after the payoff and words it for each video. The **Script** tab
+lists that sentence under **Script warnings**, because the check cannot tell that you asked for
+it. You can approve the script as it is.
+
 Every run pays for this text in tokens, so keep it short.
 
 ## Costs
