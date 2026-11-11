@@ -178,8 +178,10 @@ Body: `{outcome, error, on_gpu, gpu_ok, frames, seconds, gpu_probe?}`. `outcome`
 `failed`, `stalled`, `timeout` or `error`. `200 {}`, or `400 bad_outcome {detail}`.
 
 - `success` records the output path, stamps `render_uploaded_at` and releases the claim. `frames`
-  and `seconds` are stored as a render timing when both are positive. `success` with no uploaded
-  file is handled as `error`.
+  and `seconds` are stored as a render timing when both are positive. The same statement writes the
+  video's `last_render_*` columns: this renderer's id and current name, `on_gpu`, and `seconds` (`0`
+  when the timing is not stored). The next success overwrites them and a failure leaves them.
+  `success` with no uploaded file is handled as `error`.
 - `failed` routes the video to `REVISION_REQUESTED`. `stalled`, `timeout` and `error` route it back
   to `RENDER_QUEUED`. The retry cap and the GPU-only cases are in
   [The result](11-rendering-and-review.md#the-result).
