@@ -30,10 +30,11 @@ your own judgment.
     hand-drawn line figures), `illustrated` (generated character artwork, you choose the canvas
     and whether the art is playful or serious), `system_flow` (the whole video is one diagram per
     subject, written as data), `bean_explainer` (a cartoon bean reacting among props, written as
+    data), `whiteboard` (the whole video is one big board of handwriting and doodles, written as
     data), `under_the_hood` (close-up photographs of one object with labels pinned to its parts,
-    written as data; it needs an OpenAI key) or `cartoon_3d` (a 3D world; it needs a working GPU). There is no
-    dashboard here, so this chat is the only place that choice can be made, and it is frozen the
-    moment the topic is approved. `get_pipeline_status()` returns every style as `visual_styles`,
+    written as data; it needs an OpenAI key) or `cartoon_3d` (a 3D world; it needs a working GPU).
+    There is no dashboard here, so this chat is the only place that choice can be made, and it is
+    frozen the moment the topic is approved. `get_pipeline_status()` returns every style as `visual_styles`,
     each with `available` and `unavailable_reason`: offer an unavailable one only by saying it is
     unavailable and why, rather than leaving it out silently.
 

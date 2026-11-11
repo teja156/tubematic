@@ -23,6 +23,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Bean Explainer (experimental)** | A bald cartoon character with a thick outline reacts pose by pose to the narration on a bright colour field, while props and short handwritten labels build up beside it. No images | Nothing |
 | **Under the Hood (experimental)** | A dark canvas and close-up photographs of one physical object. Short capital labels point at its parts, gold arcs show fields and flows, numbers tick, and a cartoon presenter reacts in the bottom corner | An OpenAI key. Up to 12 generated photographs per video |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
+| **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
 
 Motion Graphics, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
 Explainer video still draws a process as a diagram, and still shows a generated image for a real
@@ -53,6 +54,10 @@ background would flash, and a viewer reads that as a broken render.
   call, up to 12 per video, so it costs more per video than the styles without images. It is
   experimental.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
+- Choose **Whiteboard** for an idea worked out step by step: a formula built up, money arithmetic
+  such as interest or a percentage, a chain of causes that ends in one picture, two ideas side by
+  side. The script is written like a teacher at a board, one step per sentence, ending on one
+  sentence that sums the idea up.
 
 ### What Auto does
 
@@ -89,7 +94,10 @@ diagrams and times them to the narration, but it does not change the canvas or a
 Explainer video works the same way: the agent picks the background colour, the character's
 accessory and the props, and times every pose to the narration. When the library has nothing for an
 object the video needs, the agent draws that prop itself in the same style and checks the drawing
-before the video renders. An Under the Hood video is the same: the agent makes the photographs,
+before the video renders. A Whiteboard video is the same again: the agent picks what to write and
+draw for each step from a fixed set of layouts and a library of simple drawings, times it to the
+narration, and draws a simple one of its own, checked before use, when the library has nothing for
+an object such as a bicycle. An Under the Hood video is the same: the agent makes the photographs,
 looks at each one and makes it again if it shows the wrong thing, pins the labels to the parts, and
 times the labels, numbers and the presenter's poses to the narration. The presenter is the same
 character in every video.

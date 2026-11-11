@@ -310,6 +310,8 @@ Covers `components/VideoModal.tsx`, [the video window](../15-dashboard.md#the-vi
   3D and Under the Hood.
 - Once the pickers are gone, their values show read-only. The Voice and Voice model rows come from
   `voice_info` and are hidden while the voice picker is up.
+- The Rendered by and Render time rows show the last render's renderer with GPU or CPU, fall back to
+  the renderer id when no name was recorded, and are hidden on a video with no render recorded.
 - A scheduled video says when it goes out, in the zone it was picked in. **Cancel schedule** calls
   the API after a confirm, and the window offers no Delete.
 
@@ -676,6 +678,8 @@ Covers `lib/renderers.ts`, the rules behind the Renderers panel and the board's 
 - The GPU verdict is read from the renderer's probe only.
 - `nothingCanRender` is raised when a video is queued and no renderer is enabled, online, on this
   version and holding an unexpired credential. A busy renderer still counts.
+- `formatRenderDuration` reads seconds, minutes and hours, and gives a dash for a time that was not
+  reported.
 
 Trap: `nothingCanRender` judges credential expiry by the same rule and the same `now` as the status
 chip, so a card that says credential expired cannot keep the banner down.

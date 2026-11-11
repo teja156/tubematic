@@ -99,6 +99,9 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   neither line art nor generated characters. Under the Hood needs an OpenAI key, caps its
   photographs at 12, takes no mascot and uses the `selection` caption look. A pack that takes no
   mascot must say why.
+- Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
+  routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
+  apart from.
 - A malformed pack is refused with the field at fault, `auto` cannot be a pack, and every shipped
   pack passes. The optional `routing.images`, `routing.moods` and `script` are checked when
   present, and a pack without them still loads.
@@ -320,6 +323,18 @@ Covers `0020`: `videos.style_pick`, `style_runner_up` and `style_reason`.
 
 Trap: `''` means Auto has not decided, which is true of every video before the upgrade, so the
 migration has no backfill. A scripted `auto` video then finishes on the mixed scene system.
+
+### `test_last_render_migration.py`
+
+Covers `0021`: `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu`
+and `last_render_seconds`.
+
+- Existing videos keep their status, render timestamps and `updated_at`, and read `''`/`0` in the
+  four new columns.
+- A second run changes nothing, and a new video starts with no record.
+
+Trap: no earlier version kept which renderer made a video, so the migration has no backfill and the
+video window hides the rows on every video rendered before the upgrade.
 
 ## Shared rules
 

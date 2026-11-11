@@ -899,6 +899,19 @@ def test_a_style_pack_review_block_replaces_the_canvas_contract():
     assert ai_review._CANVAS_BLOCKS["dark"] not in block
 
 
+def test_the_whiteboard_review_block_licenses_its_lag_and_its_small_recap():
+    """Two negative controls: writing lands about half a second after its word
+    by design, and the closing map is small on purpose. A reviewer told
+    neither reports both on every Whiteboard video, and any finding loops it."""
+    from tubematic_core import visual_styles as tvs
+    text = tvs.pack("whiteboard")["review"]
+    block = ai_review._register_block("light", False, False, False, text)
+    assert block.startswith("INTENDED VISUAL STYLE")
+    assert "half a second after the word is intended" in block
+    assert "Small writing during the final pull-back is intended" in block
+    assert ai_review._CANVAS_BLOCKS["light"] not in block
+
+
 def test_without_a_style_block_the_contract_is_unchanged():
     for args in (("dark", False, False, False), ("light", True, True, False), ("dark", True, False, True)):
         assert ai_review._register_block(*args) == ai_review._register_block(*args, "")

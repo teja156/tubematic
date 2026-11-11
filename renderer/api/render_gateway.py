@@ -1151,18 +1151,27 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
                 ok = False
             if ok:
                 stamp = db._now()
+                frames, seconds = body.get("frames"), body.get("seconds")
+                timed = (isinstance(frames, int) and not isinstance(frames, bool) and frames > 0
+                         and isinstance(seconds, (int, float)) and not isinstance(seconds, bool)
+                         and seconds > 0)
                 with db.conn(db_path) as con:
+                    # The lease (renderer_id) is released here, so the video's
+                    # record of who rendered it, on what and for how long is
+                    # written in the same guarded statement; the name is the
+                    # renderer's name now, so a later rename leaves it alone.
                     cur = con.execute(
                         "UPDATE videos SET video_path = ?, render_uploaded_at = ?, renderer_id = '', "
-                        "render_lease_until = '', render_claim_id = '', updated_at = ? WHERE id = ? "
+                        "render_lease_until = '', render_claim_id = '', updated_at = ?, "
+                        "last_render_renderer_id = ?, "
+                        "last_render_renderer_name = COALESCE((SELECT name FROM renderers WHERE id = ?), ''), "
+                        "last_render_on_gpu = ?, last_render_seconds = ? WHERE id = ? "
                         "AND status = 'RENDERING' AND renderer_id = ? AND render_claim_id = ?",
-                        (str(out), stamp, stamp, video_id, me, claim_id))
+                        (str(out), stamp, stamp, me, me, 1 if on_gpu else 0, float(seconds) if timed else 0.0,
+                         video_id, me, claim_id))
                     if cur.rowcount != 1:
                         return _err(403, "not_lease_holder")
-                    frames, seconds = body.get("frames"), body.get("seconds")
-                    if (isinstance(frames, int) and not isinstance(frames, bool) and frames > 0
-                            and isinstance(seconds, (int, float)) and not isinstance(seconds, bool)
-                            and seconds > 0):
+                    if timed:
                         con.execute("INSERT INTO render_timings (renderer_id, kind, on_gpu, frames, seconds, "
                                     "created_at) VALUES (?, ?, ?, ?, ?, ?)",
                                     (me, kind, 1 if on_gpu else 0, frames, float(seconds), stamp))

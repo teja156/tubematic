@@ -257,8 +257,8 @@ Covers the visual style over HTTP and the style contract of the AI review prompt
   object `tubematic_core.visual_styles` holds, and `mcp/server.py` imports the same names from it.
   The GPU gate passes only `working` and gives `unknown` its own message.
 - `GET /visual-styles` lists `auto` and every [style pack](../10-scene-authoring.md#style-packs),
-  says why a style is unavailable on the install, and `system_flow` can be chosen with nothing
-  configured.
+  says why a style is unavailable on the install, and `system_flow` and `whiteboard` can be chosen
+  with nothing configured.
 
 Trap: a default inherited from the domain is kept and not rewritten when no OpenAI key is stored.
 The approving `PATCH` refuses it, before any spend. An unknown canvas must produce no contract,
@@ -474,7 +474,10 @@ one certificate test serve the app over real TLS on 127.0.0.1 and talk to it ove
   connection caps. A protected route answers `401` without reading its body, and no route parses
   JSON with `request.get_json()`, which reads a body without a bound.
 - Results and heartbeats: a success marks the render uploaded for the worker's review, and each
-  failure outcome goes through `render_results.py`. A heartbeat stores the GPU test result,
+  failure outcome goes through `render_results.py`. A success also writes the video's
+  `last_render_*` record: the renderer's id and its name at that moment, the GPU flag, and the
+  seconds (`0` when the timing is unusable). The next success overwrites it, and a failure or a
+  result for a lost claim leaves it. A heartbeat stores the GPU test result,
   re-queues what a restarted renderer held, and extends the lease and builds the stop list by claim
   id, so a late heartbeat for an earlier claim cannot touch the claim that replaced it.
 - Startup: with a missing or unusable TLS pair, or a port it cannot bind, the API
@@ -688,7 +691,8 @@ reach the assertions, so the method, path, headers and query string are checked.
 - `usage` is returned on every path where Gemini answered `200`, including a reply that failed to
   parse, and on no path where it did not.
 - A style pack's own review text replaces the canvas and figure blocks, and with no style text the
-  contract is the same as before for every combination.
+  contract is the same as before for every combination. Whiteboard's text tells the reviewer that
+  writing a moment after its word and small writing in the closing pull-back are intended.
 
 Trap: any finding sends the video back for a revision, so a clause removed from the prompt produces
 a finding on every video it covered, and a round can cost a paid re-voice. An illustrated video gets
