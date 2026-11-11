@@ -157,6 +157,54 @@ Tubematic reads each published post's figures once an hour. **Refresh metrics** 
 A figure the platform did not report shows as a dash. Figures are kept after a video's files are
 deleted, so an archived video still shows its numbers.
 
+### Watch figures
+
+The **Videos** tab shows three watch figures beside the counts. You can sort the list by each of
+them.
+
+| Figure | Meaning |
+|---|---|
+| **Watched** | The average length of a view, in seconds |
+| **% watched** | That length as a share of the video. A video that loops can pass 100% |
+| **Stayed** | The share of views in which the viewer kept watching |
+
+The **Publishing Results** tab in a video's window shows the same figures for each post, with its
+reach and saves, and says "not reported" where the platform gave none.
+
+Each platform reports its own set:
+
+| Platform | Watched | % watched | Stayed | Reach | Saves |
+|---|---|---|---|---|---|
+| YouTube | Yes | Yes | Yes | No | No |
+| Instagram | Yes | Yes, when Tubematic knows the video's length | No | Yes | Yes |
+| Facebook | Yes | Yes | No | Yes | No |
+| TikTok | No | No | No | No | No |
+
+Instagram reports seconds only, so Tubematic divides them by the video's length. It stores that
+length while the video's files exist. An Instagram post of a video whose files were deleted before
+its length was stored shows a dash under **% watched**.
+
+Instagram can take up to 48 hours to report a new post's figures.
+
+### Comparing groups of videos
+
+The **Watch time** tab groups one account's posts and shows the three figures for each group.
+
+1. Choose the account. The tab opens on the account with the most posts.
+2. Choose **Group by**: visual style, script profile, domain or script length. Script length is
+   the script's word count, in bands of 50 words.
+
+How to read the table:
+
+- Each figure is the median of the group's videos, so one video with an unusual audience does not
+  set it.
+- **Videos** is the number of posts in the group. A figure that only some of them report says how
+  many, for example `25% (9 of 40)`.
+- A group with fewer than 20 videos is marked `TOO FEW`. One unusual video can move its figure, so
+  treat it as a hint.
+- Compare groups inside one account. Platforms count views and watch time differently, and every
+  account has its own audience.
+
 ## Platforms
 
 | Platform | What is posted | Privacy choices |

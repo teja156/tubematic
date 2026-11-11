@@ -563,14 +563,17 @@ rate limit past the fifth target and lose those readings, and a time series cann
   has no likes or views field: `reactions_total` is stored as likes and `video_views` (or
   `media_views`) as views. An absent metric is stored as null, and an unknown platform yields all
   nulls.
-- The whole payload is kept in `raw_json`, so another column can be filled from it later.
+- The whole payload is kept in `raw_json`. The [watch figures](#watch-figures) are read from it.
+- The same pass first stores the length of published videos that have none
+  (`worker.py::_fill_video_durations`, see [Watch figures](#watch-figures)).
 
 ### `GET /analytics`
 
 The route reads local snapshots only. Each snapshot is a cumulative reading, so the query joins a
 publication to its latest snapshot with a `LIMIT 1` subquery. Summing snapshots would multiply the
 view count by the number of polls. Only views, likes, comments and shares are summed across
-platforms. Platform-specific metrics stay in `raw_json`.
+platforms. Platform-specific metrics stay in `raw_json`, and each publication row carries its own
+[watch figures](#watch-figures) read from there.
 
 `by_month` holds the views gained in each of the last 12 months (`ANALYTICS_MONTHS`). A month's
 figure is every post's latest reading before the month ended minus its latest reading before the
@@ -583,6 +586,55 @@ host's timezone.
 - A month can be negative, because platforms remove views. The dashboard draws no bar for it and
   shows the number on hover.
 - A reading with no view count is skipped, so the one before it stands.
+
+### Watch figures
+
+`postforme.py::extract_retention` reads five figures from a snapshot's `raw_json`. The table
+`_RETENTION_FIELDS` names each platform's keys and units.
+
+| Figure | YouTube | Instagram | Facebook | TikTok |
+|---|---|---|---|---|
+| `avg_watch_secs` | `averageViewDuration` (seconds) | `ig_reels_avg_watch_time` (milliseconds) | `video_avg_time_watched` (milliseconds) | None |
+| `watched_pct` | `averageViewPercentage` | `avg_watch_secs` over `videos.duration_secs` | `avg_watch_secs` over its own `video_length` | None |
+| `stayed_pct` | `engagedViews` over `views` | None | None | None |
+| `reach` | None | `reach` | `reach` | None |
+| `saves` | None | `saved` | None | None |
+
+- A figure a platform does not report is null. Zero views gives a null `stayed_pct`.
+- A `watched_pct` above 100 is kept, because a looping Short is watched more than once.
+- TikTok's metrics hold four counts and no watch figure. postforme reports more for a TikTok
+  Business connection, which Tubematic does not support.
+- Facebook's key names come from postforme's API reference.
+
+The figures are read when a route asks for them and are stored in no column. Every snapshot already
+holds its payload, so the figures cover the whole history, and a change to the mapping applies to
+every snapshot.
+
+Three routes return them: `GET /analytics` and `GET /videos/<id>/publications` on each publication
+row, and `GET /analytics/watch-time` grouped. `pipeline.py::_watch_figures` is the one place that
+parses a payload for them.
+
+Instagram reports no share and no video length, so its `watched_pct` needs `videos.duration_secs`.
+`pipeline.py::fill_video_durations` stores it from the video's `timeline.json` for every video that
+has a publication, is not archived and has no length yet. The worker calls it with the hourly
+analytics poll and at the start of `_sweep_published`, because archiving deletes `timeline.json`.
+A video archived before its length was stored keeps a null length, and its Instagram posts report
+no `watched_pct`.
+
+### `GET /analytics/watch-time`
+
+The route groups one account's published posts by visual style, script profile, domain and script
+length, and returns all four groupings in one response. `social_account_id` selects the account.
+Without it the route answers for the account with the most published posts. One account is read at
+a time because each platform counts a view and a watched second in its own way.
+
+- A group's figure for a measure is the median of the posts that report it, with `n`, the number of
+  those posts. `videos` counts every post in the group.
+- `min_group` is `pipeline.py::WATCH_MIN_GROUP` (20). The dashboard marks a group with fewer videos.
+- `pipeline.py::_watch_group_of` places a post in a group. A `visual_style` of `auto` or `''` reads
+  as "Mixed scenes". Script length is the word count of `videos.script` without its markup
+  (`_script_words`), in the bands of `SCRIPT_LENGTH_BANDS`.
+- Groups come largest first. Script length bands come shortest first.
 
 ### Analytics outlive the files
 

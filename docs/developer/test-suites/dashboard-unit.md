@@ -221,7 +221,9 @@ Covers `app/analytics/page.tsx`, the **Videos** tab.
 
 - The totals count published videos, and each publication has its own row.
 - Platform and account filters go to the API, from the menus and from a clicked graph bar.
-- An unreported metric renders a dash and sorts below a real 0.
+- An unreported metric renders a dash and sorts below a real 0. The watch columns do the same, a
+  share above 100% is shown as reported, and the legend says what a dash means.
+- The Watch time tab's panel mounts when its tab opens.
 - When the account-name lookup fails, the page shows the id with the platform and still filters.
 - The table renders 50 rows and adds 50 when its end comes into view of the table's own scroll box.
   A browser with no `IntersectionObserver` gets every row.
@@ -234,6 +236,21 @@ keeps its negative figure and draws no height.
 
 Trap: an entry with nothing reported comes last as a dash with no bar. An empty bar would claim that
 nobody watched.
+
+### `watch-time-panel.test.tsx`
+
+Covers `components/WatchTimePanel.tsx`, the Analytics page's **Watch time** tab.
+
+- The first request names no account and the select shows the account the API answered for.
+  Picking an account sends its id.
+- Changing **Group by** redraws the table from the same response.
+- A group under the response's `min_group` is tagged `TOO FEW` and still listed.
+- A figure only some of a group's videos report shows how many, and a figure none reports is a
+  dash.
+- An error answer, and an answer of another shape, show an error line.
+
+Trap: a measure with `n` of 0 has a null median. Formatting it as a number would show 0, which says
+that nobody watched.
 
 ### `spend-card.test.tsx`
 
@@ -313,6 +330,9 @@ Covers `components/VideoModal.tsx`, [the video window](../15-dashboard.md#the-vi
   the renderer id when no name was recorded, and are hidden on a video with no render recorded.
 - A scheduled video says when it goes out, in the zone it was picked in. **Cancel schedule** calls
   the API after a confirm, and the window offers no Delete.
+- The Publishing Results tab lists a published post's counts and watch figures, with "not reported"
+  in words where the platform gave none. A post with no snapshot shows one line saying so, and a
+  failed target shows no figures.
 
 Trap: the component stays mounted between videos. A pick made for one video (agent, effort, voice)
 must be forgotten when another opens, or the second video's approval writes it.

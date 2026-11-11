@@ -1063,6 +1063,32 @@ def _video_duration_secs(video_id: str):
     return None
 
 
+def fill_video_durations(db_path: str) -> int:
+    """Store the length of every published video that has none yet and still
+    has its files (TMDEV-212). Returns how many were stored.
+
+    Analytics needs the length long after the retention sweep has deleted
+    timeline.json, so the worker calls this hourly and again before a sweep
+    archives anything. Archived videos are skipped: their files are gone, and
+    asking again every hour would only fail again. A video with no readable
+    timeline stays NULL and is asked again on the next pass.
+    """
+    with _db(db_path) as con:
+        ids = [r["id"] for r in con.execute(
+            "SELECT id FROM videos v WHERE duration_secs IS NULL AND archived_at IS NULL"
+            " AND EXISTS (SELECT 1 FROM video_publications p WHERE p.video_id = v.id)")]
+    stored = 0
+    for video_id in ids:
+        duration = _video_duration_secs(video_id)
+        if duration is None:
+            continue
+        with _db(db_path) as con:
+            stored += con.execute(
+                "UPDATE videos SET duration_secs = ? WHERE id = ? AND duration_secs IS NULL",
+                (round(duration, 3), video_id)).rowcount
+    return stored
+
+
 def _output_path(project_id: str, video_id: str):
     """Where this video's rendered mp4 lives (the render gateway writes a
     renderer's upload there), or None if it cannot be named.
@@ -1920,6 +1946,118 @@ def _publication_row(row) -> dict:
         "created_at":        row["created_at"],
         "updated_at":        row["updated_at"],
     }
+
+
+def _watch_figures(platform: str, raw_json, duration_secs) -> dict:
+    """The watch figures of one snapshot, read from its stored payload
+    (postforme.extract_retention). A snapshot that was never taken, or whose
+    payload does not parse, reads as nothing reported."""
+    try:
+        raw = _json.loads(raw_json) if raw_json else {}
+    except (TypeError, ValueError):
+        raw = {}
+    return postforme.extract_retention(platform, raw, duration_secs)
+
+
+# ── Watch time by group (TMDEV-212) ──────────────────────────────────────────
+# One account at a time: a platform counts a view and a watched second its own
+# way and every account has its own audience, so a figure only compares with
+# others from the same account.
+
+# A group with fewer videos than this is shown, and marked as too small to
+# read. One video that did unusually well moves a small group's figure a lot.
+WATCH_MIN_GROUP = 20
+
+WATCH_MEASURES = ("avg_watch_secs", "watched_pct", "stayed_pct")
+
+# (lower bound in words, label), ascending. A script's band is the last one
+# whose bound it reaches.
+SCRIPT_LENGTH_BANDS = ((0, "Under 150 words"), (150, "150 to 199 words"),
+                       (200, "200 to 249 words"), (250, "250 to 299 words"),
+                       (300, "300 words or more"))
+
+_SCRIPT_MARKUP = re.compile(r"<[^>]*>|\[[^\]\n]*\]")
+
+
+def _script_words(script) -> int:
+    """Spoken words in a stored script. Tags and bracketed cues are markup,
+    and the word a tag wraps is spoken, so only the markup itself is dropped.
+    Punctuation left standing alone by a removed tag is not a word."""
+    return sum(1 for token in _SCRIPT_MARKUP.sub(" ", script or "").split()
+               if any(ch.isalnum() for ch in token))
+
+
+def _script_length_band(script) -> tuple:
+    """(key, label, order) of a script's word band."""
+    words = _script_words(script)
+    if not words:
+        return "none", "No script", len(SCRIPT_LENGTH_BANDS)
+    index = max(i for i, (low, _label) in enumerate(SCRIPT_LENGTH_BANDS) if words >= low)
+    return str(SCRIPT_LENGTH_BANDS[index][0]), SCRIPT_LENGTH_BANDS[index][1], index
+
+
+def _watch_group_of(dimension: str, row) -> tuple:
+    """(key, label, order) placing one post in a group. Order ranks a
+    dimension whose groups have a natural sequence; elsewhere it is 0 and the
+    larger group comes first."""
+    if dimension == "visual_style":
+        style = row["visual_style"] or ""
+        if tvs.pack(style):
+            return style, tvs.route_label(style), 0
+        # "auto" that never became a pack is the mixed scene system.
+        if style in ("", tvs.AUTO):
+            return tvs.SCENES, tvs.SCENES_LABEL, 0
+        return style, style, 0
+    if dimension == "script_profile":
+        profile = row["script_profile_id"] or ""
+        if not profile:
+            return "", "No profile", 0
+        return profile, row["profile_name"] or profile, 0
+    if dimension == "domain":
+        project = row["project_id"] or ""
+        return project, row["project_name"] or project or "No domain", 0
+    return _script_length_band(row["script"])
+
+
+WATCH_DIMENSIONS = (("visual_style", "Visual style"), ("script_profile", "Script profile"),
+                    ("domain", "Domain"), ("script_length", "Script length"))
+
+
+def _watch_groups(rows: list, dimension: str) -> list:
+    """Group one account's posts by `dimension`. Each row needs the grouping
+    columns and a `figures` dict (the output of _watch_figures).
+
+    A group's figure is the median of its videos' figures, so one video with
+    many times the usual audience does not set it. `videos` counts every post
+    in the group; each measure's `n` counts the posts that report it, which is
+    smaller where a platform or an older video reports nothing.
+    """
+    groups: dict = {}
+    for row in rows:
+        key, label, order = _watch_group_of(dimension, row)
+        group = groups.setdefault(key, {"key": key, "label": label, "order": order,
+                                        "videos": 0, **{m: [] for m in WATCH_MEASURES}})
+        group["videos"] += 1
+        for measure in WATCH_MEASURES:
+            value = row["figures"].get(measure)
+            if value is not None:
+                group[measure].append(value)
+    out = []
+    for group in sorted(groups.values(),
+                        key=lambda g: (g["order"], -g["videos"], g["label"].lower())):
+        entry = {"key": group["key"], "label": group["label"], "videos": group["videos"]}
+        for measure in WATCH_MEASURES:
+            values = sorted(group[measure])
+            entry[measure] = {"n": len(values),
+                              "median": round(_median(values), 1) if values else None}
+        out.append(entry)
+    return out
+
+
+def _median(values: list) -> float:
+    """Median of a sorted, non-empty list."""
+    mid = len(values) // 2
+    return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
 
 
 def _publish_platforms(api_key: str, account_ids: list) -> dict:
@@ -4207,12 +4345,28 @@ def create_pipeline_blueprint() -> Blueprint:
     @bp.get("/videos/<video_id>/publications")
     def get_video_publications(video_id):
         """Where a video actually went. Replaces videos.youtube_url as the read
-        path — one TEXT column cannot hold four platform URLs."""
+        path — one TEXT column cannot hold four platform URLs.
+
+        Each row also carries its latest snapshot (the four counts, the watch
+        figures and when it was read), so the video window shows how a post is
+        doing without a second request. A row with no snapshot has them all
+        None.
+        """
         with _conn() as con:
             rows = con.execute(
-                "SELECT * FROM video_publications WHERE video_id = ? ORDER BY platform, id",
+                "SELECT vp.*, v.duration_secs, m.views, m.likes, m.comments, m.shares,"
+                " m.fetched_at, m.raw_json" + _LATEST_METRIC_FROM
+                + " WHERE vp.video_id = ? ORDER BY vp.platform, vp.id",
                 (video_id,)).fetchall()
-        return jsonify([_publication_row(r) for r in rows])
+        out = []
+        for row in rows:
+            entry = _publication_row(row)
+            for column in postforme.METRIC_COLUMNS:
+                entry[column] = row[column]
+            entry.update(_watch_figures(row["platform"], row["raw_json"], row["duration_secs"]))
+            entry["fetched_at"] = row["fetched_at"]
+            out.append(entry)
+        return jsonify(out)
 
     @bp.post("/videos/<video_id>/publish-prefill")
     def publish_prefill(video_id):
@@ -4460,14 +4614,14 @@ def create_pipeline_blueprint() -> Blueprint:
     # Latest snapshot per publication. Each video_metrics row is a cumulative
     # reading, so the series is read with a max-fetched_at pick rather than a
     # SUM — adding two snapshots of the same post would double-count it.
-    _LATEST_METRIC_JOIN = """
+    _LATEST_METRIC_FROM = """
         FROM video_publications vp
         JOIN videos v ON v.id = vp.video_id
         LEFT JOIN video_metrics m ON m.id = (
             SELECT id FROM video_metrics WHERE publication_id = vp.id
             ORDER BY fetched_at DESC, id DESC LIMIT 1)
-        WHERE vp.status = 'PUBLISHED'
     """
+    _LATEST_METRIC_JOIN = _LATEST_METRIC_FROM + " WHERE vp.status = 'PUBLISHED'"
 
     @bp.get("/analytics")
     def get_analytics():
@@ -4479,13 +4633,15 @@ def create_pipeline_blueprint() -> Blueprint:
 
         Aggregating `views` across platforms is defensible and is all that is
         summed here. Platform-specific metrics are deliberately not summed —
-        they live in video_metrics.raw_json and mean different things.
+        they live in video_metrics.raw_json and mean different things. Each
+        row carries its own watch figures (seconds watched, share watched,
+        stayed to watch, reach, saves), read from that payload.
         """
         platform = request.args.get("platform", "").strip()
         account_id = request.args.get("social_account_id", "").strip()
 
-        sql = "SELECT vp.*, v.title, v.topic, m.views, m.likes, m.comments, m.shares," \
-              " m.fetched_at" + _LATEST_METRIC_JOIN
+        sql = "SELECT vp.*, v.title, v.topic, v.duration_secs, m.views, m.likes, m.comments," \
+              " m.shares, m.fetched_at, m.raw_json" + _LATEST_METRIC_JOIN
         params = []
         if platform:
             sql += " AND vp.platform = ?"
@@ -4509,6 +4665,7 @@ def create_pipeline_blueprint() -> Blueprint:
                 totals[column] = totals.get(column, 0) + (row[column] or 0)
                 bucket = by_platform.setdefault(row["platform"], {})
                 bucket[column] = bucket.get(column, 0) + (row[column] or 0)
+            entry.update(_watch_figures(row["platform"], row["raw_json"], row["duration_secs"]))
             entry["fetched_at"] = row["fetched_at"]
             publications.append(entry)
 
@@ -4520,6 +4677,52 @@ def create_pipeline_blueprint() -> Blueprint:
         return jsonify({"totals": totals, "by_platform": by_platform,
                         "publications": publications, "by_month": by_month,
                         "timezone": zone_name})
+
+    @bp.get("/analytics/watch-time")
+    def get_watch_time():
+        """One account's watch figures, grouped every way the page offers.
+
+        Figures from different platforms or accounts are never put in one
+        group (see WATCH_MIN_GROUP's section), so there is no all-accounts
+        view: without social_account_id the answer is for the account with
+        the most published posts, and `accounts` lists the others to pick
+        from. Every dimension comes back in one response, so changing the
+        grouping on the page asks for nothing. Served from the local
+        snapshots, like /analytics.
+        """
+        account_id = request.args.get("social_account_id", "").strip()
+        with _conn() as con:
+            accounts = [
+                {"id": r["social_account_id"], "platform": r["platform"], "videos": r["n"]}
+                for r in con.execute(
+                    "SELECT social_account_id, MIN(platform) AS platform, COUNT(*) AS n"
+                    " FROM video_publications WHERE status = 'PUBLISHED'"
+                    " GROUP BY social_account_id ORDER BY n DESC, social_account_id")]
+            if not account_id and accounts:
+                account_id = accounts[0]["id"]
+            fetched = con.execute(
+                "SELECT vp.platform, v.visual_style, v.script_profile_id, v.project_id,"
+                " v.script, v.duration_secs, sp.name AS profile_name, p.name AS project_name,"
+                " m.raw_json" + _LATEST_METRIC_FROM
+                + " LEFT JOIN script_profiles sp ON sp.id = v.script_profile_id"
+                  " LEFT JOIN projects p ON p.id = v.project_id"
+                  " WHERE vp.status = 'PUBLISHED' AND vp.social_account_id = ?",
+                (account_id,)).fetchall()
+        rows = []
+        for row in fetched:
+            entry = dict(row)
+            entry["figures"] = _watch_figures(row["platform"], row["raw_json"],
+                                              row["duration_secs"])
+            rows.append(entry)
+        return jsonify({
+            "accounts": accounts,
+            "social_account_id": account_id,
+            "platform": rows[0]["platform"] if rows else "",
+            "videos": len(rows),
+            "min_group": WATCH_MIN_GROUP,
+            "dimensions": [{"id": dim, "label": label, "groups": _watch_groups(rows, dim)}
+                           for dim, label in WATCH_DIMENSIONS],
+        })
 
     ANALYTICS_MONTHS = 12
 

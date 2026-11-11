@@ -1,0 +1,14 @@
+-- 0024 — the published video's length in seconds (TMDEV-212).
+--
+-- Analytics shows the share of a video people watched. YouTube and Facebook
+-- report what that needs themselves; Instagram reports seconds watched only,
+-- so its share is seconds over the video's length. The length was only ever
+-- in the job folder's timeline.json, which the retention sweep deletes days
+-- after publishing while the analytics go on being read for as long as the
+-- post exists.
+--
+-- NULL = not known. No backfill here: a migration sees the database and not
+-- the jobs folder. The worker fills the column from timeline.json for every
+-- published video whose files still exist (pipeline.fill_video_durations),
+-- and a video whose files are already gone stays NULL and shows no share.
+ALTER TABLE videos ADD COLUMN duration_secs REAL;

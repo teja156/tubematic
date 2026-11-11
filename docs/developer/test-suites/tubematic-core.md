@@ -330,6 +330,16 @@ and `last_render_seconds`.
   four new columns.
 - A second run changes nothing, and a new video starts with no record.
 
+### `test_video_duration_migration.py`
+
+Covers `0024`: `videos.duration_secs`.
+
+- Existing videos keep their status, script and `updated_at`, and read NULL in the new column.
+- A second run changes nothing, and a new video starts at NULL.
+
+Trap: the default is NULL because 0 would be a length. Analytics would divide by it, or show a
+share for a video whose length nobody recorded.
+
 Trap: no earlier version kept which renderer made a video, so the migration has no backfill and the
 video window hides the rows on every video rendered before the upgrade.
 

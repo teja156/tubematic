@@ -125,7 +125,7 @@ Click a card or a row to open the video. The left side has tabs:
 | **Topic** | The full topic |
 | **Script** | The script, segment by segment, with a note on what each segment shows. Appears once a script exists |
 | **Video** | The player. Appears once the video is rendered |
-| **Publishing Results** | Each account the video was posted to, with its status, link and any error |
+| **Publishing Results** | Each account the video was posted to, with its status, link and any error, and the post's latest figures |
 | **Comments** | Everything you and the agent have said about the video. You add to it through **Request Revision** |
 | **Logs** | Log records for this video from every part of Tubematic |
 
@@ -195,16 +195,20 @@ Two pages share this tab. Script profiles are covered in
 ### Socials and Analytics
 
 **Socials** connects social accounts and chooses which ones Tubematic may post to.
-**Analytics** has two tabs:
+**Analytics** has three tabs:
 
-- **Videos** lists each published post with its views, likes, comments and shares. You can filter by
-  platform and account. A dash means the platform reported no figure.
+- **Videos** lists each published post with its views, likes, comments and shares, and how long
+  people watched it. You can filter by platform and account. A dash means the platform reported no
+  figure.
+- **Watch time** compares how long people watched across groups of videos: by visual style, script
+  profile, domain or script length. See [Publishing](06-publishing.md#comparing-groups-of-videos).
 - **Spend** shows what the install spent today, this week, this month or over a range of days. It
   includes spend that belongs to no single video, such as research.
 
 ![The Spend tab for this month: a total, then spend on videos, on research and mining, on other agent runs, and ElevenLabs credits](../images/analytics-spend.png)
 
-**Socials** and the **Videos** tab stay empty until you set up [Publishing](06-publishing.md).
+**Socials**, the **Videos** tab and the **Watch time** tab stay empty until you set up
+[Publishing](06-publishing.md).
 
 ### Logs
 

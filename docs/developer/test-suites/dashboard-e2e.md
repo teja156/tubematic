@@ -239,11 +239,14 @@ spec runs the Automatic path only.
 
 ### `analytics.spec.ts`
 
-Covers the Analytics page's two tabs.
+Covers the Analytics page's three tabs.
 
 - At 1400px the graphs sit right of the table, a mouse wheel over the table scrolls the table and
   leaves the page still, and rows load 50 at a time. At 1000px the graphs stack above the table.
 - Clicking a platform bar sends the platform filter to the API.
+- At 1680px the list's ten columns fit its box. At 1000px the box scrolls and the page does not
+  scroll sideways. The Watch time tab's table fits at both widths, with its `TOO FEW` tag.
+- The Watch time tab reads the real API, which has nothing published and says so.
 - The Spend tab shows this month and Today as days in the host's zone, and a backwards custom range
   is flagged and not sent.
 

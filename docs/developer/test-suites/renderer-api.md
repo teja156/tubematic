@@ -402,6 +402,28 @@ Covers `metrics.poll`, the [metric snapshot pass](../14-publishing.md#capture).
 Trap: postforme's rate limit turns a request per publication into `429` answers that are caught and
 skipped. `video_metrics` is a time series, so a skipped reading is lost and not fetched later.
 
+### `test_watch_time.py`
+
+Covers the [watch figures](../14-publishing.md#watch-figures): `postforme.extract_retention`, the
+publication rows of `GET /analytics` and `GET /videos/<id>/publications`,
+`GET /analytics/watch-time`, and the worker storing a published video's length.
+
+- Each platform's keys and units: YouTube's seconds, percentage and engaged views, Instagram's and
+  Facebook's milliseconds, Facebook's own video length, and TikTok reporting nothing.
+- An absent figure is null and a reported zero stays zero. Zero views gives no stayed figure, a
+  share above 100 is kept, and a value that is not a number is not reported.
+- The routes read the latest snapshot, including snapshots stored by an earlier version. A payload
+  that does not parse reports nothing, and watch figures are added to no total.
+- The grouped route answers for one account, the largest when none is named. A group's figure is
+  the median, `videos` counts every post and `n` counts the posts that report the measure.
+- Script length bands come back shortest first, and markup in a script is not counted as words.
+- The length is stored for published, unarchived videos with a readable `timeline.json`, and a
+  stored length is not overwritten.
+
+Trap: the retention sweep deletes `timeline.json`, the only other record of a video's length, while
+its analytics continue. The test runs `_sweep_published` on a video with no stored length and
+checks that the length is there after the files are gone.
+
 ### `test_auto_pilot.py`
 
 Covers [Auto Pilot](../14-publishing.md#auto-pilot): the `/autopilot` routes and the worker's

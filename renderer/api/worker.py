@@ -832,10 +832,29 @@ def _poll_video_metrics() -> None:
             " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (_METRICS_STAMP_KEY, db._now()))
 
+    _fill_video_durations()
     result = metrics.poll(DB_PATH, api_key)
     if result["snapshots"] or result["errors"]:
         log.info(f"metrics: {result['snapshots']} snapshot(s) across "
                  f"{result['accounts']} account(s), {result['errors']} error(s)")
+
+
+def _fill_video_durations() -> None:
+    """Store the length of published videos that have none (TMDEV-212).
+
+    Analytics divides Instagram's watched seconds by it, and the only other
+    record is timeline.json, which the retention sweep deletes. So this runs
+    with the hourly metrics pass and again right before a sweep archives
+    anything. Never raises: a missing length costs one blank figure, and must
+    not cost the pass it rides on.
+    """
+    try:
+        stored = pipeline.fill_video_durations(DB_PATH)
+    except Exception:  # noqa: BLE001 - see the docstring
+        log.exception("storing video lengths failed")
+        return
+    if stored:
+        log.info(f"stored the length of {stored} published video(s)")
 
 
 # ── Retention (TMDEV-84) ────────────────────────────────────────────────────
@@ -919,6 +938,8 @@ def _sweep_retention_once() -> None:
 
 
 def _sweep_published(days: int) -> None:
+    # Before anything is archived: archiving deletes the file a length is read from.
+    _fill_video_durations()
     cutoff = _cutoff(days)
     with db.conn(DB_PATH) as con:
         # Keyed on when the video was published, not created_at or updated_at.
