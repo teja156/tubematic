@@ -264,7 +264,7 @@ export function fillWordColor(frame: number, startFrame: number, ink: string): s
   try {
     return interpolateColors(k, [0, 1], [FILL_AHEAD, ink]);
   } catch {
-    return FILL_AHEAD;
+    return ink;
   }
 }
 

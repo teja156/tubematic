@@ -618,16 +618,23 @@ the style: the reference picture, the text added to the prompt and the cap on pi
   endpoint, at 16:9, with the outfit between the pack's lead description and sheet style. A still
   with `reference="lead"` sends the video's own sheet and the pack's lead description and painting
   style around the scene. A still with no reference goes to the generations endpoint with the
-  painting style added. A still is sent at 9:16 whatever `aspect_ratio` asks for.
+  painting style added. A still is sent at 9:16 whatever `aspect_ratio` asks for. A prompt with no
+  final full stop gets one before the pack's text.
 - `generate_image` refuses, before any request goes out, a lead sheet without `reference="house"`,
-  the house sheet used for another picture, a reference that is not yet an image of the video, a
+  the house sheet used for another picture, a picture named `house`, a reference that is not yet an image of the video, a
   reference with a path in it, and a reference on a video of another style, whose prompt is sent
   unchanged. A 17th new still is refused and a regeneration is allowed. The lead sheet has a slot
   of its own: a video that already holds 16 stills can still make it, and it never takes a still's
   place. Under the Hood keeps its own cap and wording.
 
+- An edit from a reference waits up to 600 seconds and a picture from text 180, and a reserved
+  slot outlasts both: a slow call keeps its slot until it ends.
+
 Trap: the refusals for a wrong reference run before the scene-work claim and the cap, so a refused
 call reserves no picture slot and reaches no paid endpoint.
+
+Trap: a reservation that lapses sooner than the slowest call gives that call's slot to a parallel
+one, and both are billed.
 
 ### `test_choose_visual_style.py`
 

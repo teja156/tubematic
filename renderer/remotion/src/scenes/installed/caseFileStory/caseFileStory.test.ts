@@ -133,21 +133,10 @@ describe("the cards", () => {
     expect(gridCellAt(0, 12)[0]).toBe(49);
     expect((gridCellAt(8, 12)[0] + gridCellAt(11, 12)[0]) / 2).toBe(784 / 2);
   });
-});
 
-describe("the fill caption look", () => {
-  it("keeps a word grey until it is spoken, then turns it to the text colour and leaves it there", () => {
-    expect(fillWordColor(5, 10, "#FFFFFF")).toBe("#979295");
-    expect(fillWordColor(10, 10, "#FFFFFF")).not.toBe("#979295");
-    expect(fillWordColor(11, 10, "#FFFFFF")).toBe("#FFFFFF");
-    expect(fillWordColor(500, 10, "#FFFFFF")).toBe("#FFFFFF");
-  });
-
-  it("never throws on a text colour the blend cannot parse", () => {
-    for (const ink of ["cream", "currentColor", "var(--ink)"]) {
-      expect(fillWordColor(10, 10, ink)).toBe("#979295");
-      expect(fillWordColor(11, 10, ink)).toBe(ink);
-    }
+  it("keeps the counter level with the icons when each icon is one unit", () => {
+    const card = { type: "count" as const, start: 0, title: "T", icon: "coin" as const, to: 7, kind: "count" as const, result: "R" };
+    for (let f = 0; f <= partFrames(card)[1]; f++) expect(countAt(card, f).text).toBe(String(countAt(card, f).cells));
   });
 
   it("puts each bar up on its own frame and the payoff after the last", () => {
@@ -160,6 +149,23 @@ describe("the fill caption look", () => {
     const parts = partFrames(card);
     expect(barsAt(card, parts[parts.length - 1] - 1).payoff).toBe(false);
     expect(barsAt(card, parts[parts.length - 1]).payoff).toBe(true);
+  });
+});
+
+describe("the fill caption look", () => {
+  it("keeps a word grey until it is spoken, then turns it to the text colour and leaves it there", () => {
+    expect(fillWordColor(5, 10, "#FFFFFF")).toBe("#979295");
+    expect(fillWordColor(10, 10, "#FFFFFF")).not.toBe("#979295");
+    expect(fillWordColor(11, 10, "#FFFFFF")).toBe("#FFFFFF");
+    expect(fillWordColor(500, 10, "#FFFFFF")).toBe("#FFFFFF");
+  });
+
+  it("never throws on a text colour the blend cannot parse", () => {
+    for (const ink of ["cream", "currentColor", "var(--ink)"]) {
+      expect(fillWordColor(9, 10, ink)).toBe("#979295");
+      expect(fillWordColor(10, 10, ink)).toBe(ink);      // no blend: it switches on the word's frame
+      expect(fillWordColor(11, 10, ink)).toBe(ink);
+    }
   });
 });
 

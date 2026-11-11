@@ -407,7 +407,8 @@ def test_the_lead_sheet_is_made_from_the_house_sheet_in_the_given_outfit(make_vi
     assert call["data"]["size"] == "1920x1088" and "background" not in call["data"]
     prompt = call["data"]["prompt"]
     assert prompt.startswith(EXTRA["sheet_lead"]) and prompt.endswith(EXTRA["sheet_style"])
-    assert "a grey hooded jacket and black jeans" in prompt
+    # the outfit ends as a sentence, so the sheet's instructions start a new one
+    assert "The character wears: a grey hooded jacket and black jeans. Show the character" in prompt
     assert out["aspect_ratio"] == "16:9" and out["reference"] == "house"
     assert (server.JOBS_DIR / vid / "images" / "lead.png").is_file()
 
@@ -440,12 +441,16 @@ def test_a_still_without_the_lead_gets_the_painting_instructions_and_no_referenc
     (call,) = paid
     assert call["url"] == server.OPENAI_IMAGES_URL and call["files"] is None
     assert call["json"]["prompt"] == f"A duffel bag of banknotes on a table. No people. {EXTRA['still_style']}"
+    server.generate_image(vid, "street", "A wet street at night")          # no full stop given
+    assert paid[-1]["json"]["prompt"] == f"A wet street at night. {EXTRA['still_style']}"
 
 
 @pytest.mark.parametrize("name, reference, images, fragment", [
     ("lead", "", (), "is made from the house lead"),
     ("lead", "the-desk", ("the-desk",), "is made from the house lead"),
     ("the-desk", "house", (), "only makes the lead sheet"),
+    ("house", "", (), "is kept for the house lead's sheet"),
+    ("house", "lead", ("lead",), "is kept for the house lead's sheet"),
     ("the-desk", "lead", (), "Make the lead sheet first"),
     ("the-desk", "the-bag", (), "is not an image of this video yet"),
     ("the-desk", "../lead", ("lead",), "reference"),
@@ -473,6 +478,39 @@ def test_a_seventeenth_still_is_refused_before_the_paid_call(make_video, paid):
     assert paid == []
     assert "error" not in server.generate_image(vid, "s3", "the same scene again", reference="lead")   # a regeneration
     assert len(paid) == 1
+
+
+def test_a_reservation_outlasts_the_slowest_paid_call():
+    """A slot whose call is still running must not lapse: a parallel call would take it, and both
+    are billed."""
+    assert server._IMAGE_RESERVE_SECS > server._IMAGE_EDIT_TIMEOUT_SECS > server._IMAGE_TIMEOUT_SECS
+
+
+def test_a_slow_edit_keeps_its_slot_until_it_ends(make_video, monkeypatch):
+    vid = make_video(images=["lead"] + [f"s{k}" for k in range(15)])
+    images = server.JOBS_DIR / vid / "images"
+    now = [1000.0]
+    monkeypatch.setattr(server.time, "time", lambda: now[0])
+    assert server._image_cap_error(vid, "slow", images) == ""          # the 16th still, in flight
+    now[0] += server._IMAGE_EDIT_TIMEOUT_SECS                           # as long as the call may take
+    assert "already has 16 stills" in server._image_cap_error(vid, "another", images)
+
+
+def test_an_edit_gets_the_longer_timeout_and_a_plain_picture_the_shorter(make_video, paid, monkeypatch):
+    import httpx
+    seen = []
+    plain = httpx.Client
+
+    class Timed(plain):
+        def __init__(self, *a, timeout=None, **k):
+            seen.append(timeout)
+            super().__init__(*a, **k)
+
+    monkeypatch.setattr(httpx, "Client", Timed)
+    vid = make_video(images=("lead",))
+    server.generate_image(vid, "the-desk", "Night. A desk.", reference="lead")
+    server.generate_image(vid, "the-bag", "A bag. No people.")
+    assert seen == [server._IMAGE_EDIT_TIMEOUT_SECS, server._IMAGE_TIMEOUT_SECS]
 
 
 def test_the_lead_sheet_has_a_slot_of_its_own(make_video, paid):

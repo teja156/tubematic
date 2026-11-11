@@ -574,7 +574,10 @@ model and sizes, which keeps the story's lead the same character in every still:
 On such a video the tool adds the pack's fixed text to the prompt: the lead's description before
 the scene and the painting style after it. It refuses, before any request, a lead sheet asked for
 without `reference="house"`, the house sheet used for another picture, and a reference that is not
-yet a picture of the video (`server.py::_case_file_image_plan`). The result carries `reference`.
+yet a picture of the video, and a picture named `house`, the name kept for the house sheet
+(`server.py::_case_file_image_plan`). The result carries `reference`. A call with a reference
+waits up to 600 seconds for OpenAI, as `generate_character` does, and a reserved slot outlasts
+that.
 The reasons are in [Case File Story](10-scene-authoring.md#the-lead-and-the-stills).
 
 ### `generate_character`

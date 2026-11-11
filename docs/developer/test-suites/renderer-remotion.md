@@ -115,7 +115,7 @@ Covers `contract.ts`, `stage.ts` and the icon tables
   is hidden on a card, on a shot that hides it and on the choice. The large panel counts from the
   old value to the new one.
 - The count grid and its counter finish together and the result lands on its frame; a count under
-  forty shows that many icons, centred in the grid's box; each bar comes
+  forty shows that many icons, centred in the grid's box, with the counter level with the icons; each bar comes
   up on its own frame and the payoff line after the last.
 - The worked example starts at frame 0, shows a term card before its closing choice and has no
   stretch over the stillness limit.

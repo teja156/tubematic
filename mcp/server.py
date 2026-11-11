@@ -5647,6 +5647,13 @@ def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: st
                              f"{style or 'auto'!r}. Leave it out."}
         return {"prompt": prompt, "aspect_ratio": aspect_ratio, "ref_path": None}
     extra = tvs.pack(cfs.STYLE_ID)["extra"]
+    if image_name == cfs.HOUSE_REFERENCE:
+        return {"error": f"The name {cfs.HOUSE_REFERENCE!r} is kept for the house lead's sheet "
+                         f"(reference=\"{cfs.HOUSE_REFERENCE}\"). Give this picture another name."}
+    # The agent's words end as a sentence, so the pack's text starts a new one.
+    said = prompt.strip()
+    if said[-1:] not in ".!?":
+        said += "."
     if image_name == cfs.LEAD_NAME:
         if reference != cfs.HOUSE_REFERENCE:
             return {"error": f"The image named {cfs.LEAD_NAME!r} is this video's lead sheet and is made from "
@@ -5654,7 +5661,7 @@ def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: st
                              f"reference=\"{cfs.HOUSE_REFERENCE}\")."}
         if not CASE_FILE_HOUSE_SHEET.is_file():
             return {"error": "The house lead sheet is missing from this install (mcp/case_file_assets/lead.png)."}
-        return {"prompt": f"{extra['sheet_lead']} The character wears: {prompt.strip()} {extra['sheet_style']}",
+        return {"prompt": f"{extra['sheet_lead']} The character wears: {said} {extra['sheet_style']}",
                 "aspect_ratio": "16:9", "ref_path": CASE_FILE_HOUSE_SHEET}
     if reference == cfs.HOUSE_REFERENCE:
         return {"error": f"reference=\"{cfs.HOUSE_REFERENCE}\" only makes the lead sheet (image_name "
@@ -5662,7 +5669,7 @@ def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: st
     # A still covers the frame, and its focus and punch points are read as
     # fractions of that frame: any other shape would be cropped to a strip.
     if not reference:
-        return {"prompt": f"{prompt.strip()} {extra['still_style']}", "aspect_ratio": "9:16", "ref_path": None}
+        return {"prompt": f"{said} {extra['still_style']}", "aspect_ratio": "9:16", "ref_path": None}
     err = _check_image_name(reference, ".png")
     if err:
         return {"error": err.replace("image_name", "reference")}
@@ -5674,15 +5681,23 @@ def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: st
         hint = (f" Make the lead sheet first: generate_image(video_id, \"{cfs.LEAD_NAME}\", <the outfit>, "
                 f"reference=\"{cfs.HOUSE_REFERENCE}\")." if reference == cfs.LEAD_NAME else "")
         return {"error": f"reference {reference!r} is not an image of this video yet.{hint}"}
-    return {"prompt": f"{extra['still_lead']} {prompt.strip()} {extra['still_style']}",
+    return {"prompt": f"{extra['still_lead']} {said} {extra['still_style']}",
             "aspect_ratio": "9:16", "ref_path": ref_path}
 
+
+# How long generate_image waits for OpenAI: a picture from text, and an edit
+# from a reference (the time generate_character gives the same endpoint; a
+# call that times out may still be billed).
+_IMAGE_TIMEOUT_SECS = 180
+_IMAGE_EDIT_TIMEOUT_SECS = 600
 
 # Names a capped video's generate_image calls are generating right now. The
 # folder alone is a check-then-act race: parallel calls each see 11 pictures,
 # all pass and all are billed. A reservation counts until the file exists, and
-# lapses after _IMAGE_RESERVE_SECS so a failed call does not hold a slot.
-_IMAGE_RESERVE_SECS = 300
+# lapses after _IMAGE_RESERVE_SECS so a call that died without releasing it
+# does not hold a slot. It must outlast the longest call, or a slow call's
+# slot is given away while it is still being paid for.
+_IMAGE_RESERVE_SECS = 900
 _image_reservations: dict[str, dict[str, float]] = {}
 _image_reservations_lock = threading.Lock()
 
@@ -5789,7 +5804,8 @@ def generate_image(video_id: str, image_name: str, prompt: str,
         sheet: the house lead in the outfit your prompt describes. Make it
         first, once. It is always 16:9 and it is not a picture for the video.
       - reference="lead" (or the name of another image of this video) paints
-        that character into the scene your prompt describes.
+        that character into the scene your prompt describes. No picture of
+        such a video may itself be named "house".
       - no reference: a still with no lead in it (an object, an exterior).
     A still of such a video is always 9:16, because it fills the frame, and
     the lead sheet always 16:9, whatever aspect_ratio says.
@@ -5862,9 +5878,8 @@ def generate_image(video_id: str, image_name: str, prompt: str,
 
         resp = None  # stays None when the request itself fails
         try:
-            # An edit from a reference gets the time generate_character gives
-            # the same endpoint: a call that times out may still be billed.
-            with httpx.Client(timeout=600 if ref_path is not None else 180) as client:
+            with httpx.Client(timeout=_IMAGE_EDIT_TIMEOUT_SECS if ref_path is not None
+                              else _IMAGE_TIMEOUT_SECS) as client:
                 if ref_path is None:
                     resp = client.post(
                         OPENAI_IMAGES_URL,

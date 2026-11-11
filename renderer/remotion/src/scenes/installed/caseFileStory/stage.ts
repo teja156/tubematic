@@ -94,10 +94,10 @@ export function countAt(card: CountCard, frame: number): { total: number; cells:
   const t = frame - card.start;
   const k = clamp01((t - TIMING.countStart) / TIMING.countFrames);
   const total = Math.max(1, Math.min(GEOMETRY.gridCols * GEOMETRY.gridRows, Math.floor(card.to)));
-  return {
-    total, cells: Math.floor(k * total),
-    text: formatValue(card.kind, Math.round(card.to * k)), result: frame >= partFrames(card)[2],
-  };
+  const cells = Math.floor(k * total);
+  // When the grid shows the number itself, each icon is one unit and the counter is the icons filled.
+  const value = total === card.to ? cells : Math.round(card.to * k);
+  return { total, cells, text: formatValue(card.kind, value), result: frame >= partFrames(card)[2] };
 }
 
 /**
