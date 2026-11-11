@@ -1349,6 +1349,20 @@ def _project_default_formula(con, project_id) -> str:
     return formula if formula in tformulas.FORMULAS else ""
 
 
+# A video scripted before Auto picked styles can sit on "auto" with no style
+# pick. A switch sends a video back to TOPIC_APPROVED, where such a video
+# would have its style routed again under a formula picked for no style, so
+# both switches refuse it; a revision rewrites it in its own style.
+_STYLE_UNDECIDED_SWITCH = ("This video was scripted before styles were picked ahead of the "
+                           "script, so a switch would pick its style again. Request a revision "
+                           "of the script instead.")
+
+
+def _style_undecided(row) -> bool:
+    return ((row["visual_style"] or "").strip() or DEFAULT_VISUAL_STYLE) == DEFAULT_VISUAL_STYLE \
+        and not (row["style_pick"] or "")
+
+
 def _formula_choice_arg(raw):
     """(formula_choice, error) for a formula sent with a new video: absent,
     null and "" all mean Auto; anything else must be a formula id."""
@@ -3203,8 +3217,8 @@ def create_pipeline_blueprint() -> Blueprint:
             # switch_style; the UPDATE repeats the row checks anyway.
             con.execute("BEGIN IMMEDIATE")
             row = con.execute(
-                "SELECT status, formula_pick, formula_runner_up, archived_at "
-                "FROM videos WHERE id = ?", (video_id,)).fetchone()
+                "SELECT status, formula_pick, formula_runner_up, visual_style, style_pick, "
+                "archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
             if not row:
                 return jsonify({"error": "Video not found"}), 404
             if row["archived_at"]:
@@ -3216,6 +3230,8 @@ def create_pipeline_blueprint() -> Blueprint:
             if row["status"] != "SCRIPT_READY":
                 return jsonify({"error": "The formula can be switched only at Script Ready, while "
                                          f"the script waits for approval (this video is {row['status']})"}), 409
+            if _style_undecided(row):
+                return jsonify({"error": _STYLE_UNDECIDED_SWITCH}), 409
             if target not in tformulas.FORMULAS:
                 return jsonify({"error": f"The runner-up {target!r} is no longer a formula"}), 409
             old, new = tformulas.label(pick), tformulas.label(target)
@@ -3250,7 +3266,10 @@ def create_pipeline_blueprint() -> Blueprint:
         script is never edited here, since a new first sentence over the old
         body would be a script nobody wrote. A video scripted before formulas
         were picked gets its script's formula as the pick, so the rewrite is
-        not routed to another formula whose openings differ.
+        not routed to another formula whose openings differ. formula_id is
+        cleared: the stored script no longer has the opening its record
+        names, and the MCP server will not move the video on until a
+        rewrite records it again.
         """
         body = request.get_json(force=True, silent=True) or {}
         index = body.get("index")
@@ -3260,8 +3279,8 @@ def create_pipeline_blueprint() -> Blueprint:
         with _conn() as con:
             con.execute("BEGIN IMMEDIATE")
             row = con.execute(
-                "SELECT status, hook_alternatives, formula_id, formula_pick, archived_at "
-                "FROM videos WHERE id = ?", (video_id,)).fetchone()
+                "SELECT status, hook_alternatives, formula_id, formula_pick, visual_style, "
+                "style_pick, archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
             if not row:
                 return jsonify({"error": "Video not found"}), 404
             if row["archived_at"]:
@@ -3269,6 +3288,8 @@ def create_pipeline_blueprint() -> Blueprint:
             if row["status"] != "SCRIPT_READY":
                 return jsonify({"error": "The opening can be switched only at Script Ready, while "
                                          f"the script waits for approval (this video is {row['status']})"}), 409
+            if _style_undecided(row):
+                return jsonify({"error": _STYLE_UNDECIDED_SWITCH}), 409
             stored = row["hook_alternatives"] or ""
             try:
                 hooks = _json.loads(stored) if stored else []
@@ -3296,6 +3317,7 @@ def create_pipeline_blueprint() -> Blueprint:
             now = _now()
             cur = con.execute(
                 "UPDATE videos SET hook_alternatives = ?, hook_type = ?, formula_pick = ?, "
+                "formula_id = '', "
                 "status = 'TOPIC_APPROVED', agent_no_progress_count = 0, agent_stuck_at = NULL, "
                 "updated_at = ? WHERE id = ? AND archived_at IS NULL AND status = 'SCRIPT_READY' "
                 "AND hook_alternatives = ? AND COALESCE(formula_pick, '') = ?",

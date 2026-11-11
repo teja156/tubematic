@@ -194,8 +194,9 @@ Covers what `update_video` records with a script: `formula_id`, `hooks` and the 
   opening's type with the domain's previous two videos.
 - On a video with a `formula_pick`, a script recorded under another formula is refused and nothing
   is written. With no pick a person's choice binds the same way, and a choice of a formula this
-  version lacks does not. With neither, any formula id is taken. A script with no record is still
-  written, and a pronunciation fix is not checked against the pick.
+  version lacks does not. With neither, any formula id is taken. New words with no record are
+  refused beside a pick or a choice and accepted with neither, and a pronunciation fix is not
+  checked against the pick.
 - A `beat` label on a segment must be a short non-empty string.
 
 Trap: a warning must never refuse a write, and a script with no record must be accepted. An agent
@@ -634,7 +635,8 @@ Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's de
   reads the setting and the domain's history, another writer is locked out.
 - An experimental formula or runner-up is refused while the setting is off and accepted once it is
   on. The candidates carry `available`, `suits_style` and `recent`, and only a video at
-  `TOPIC_APPROVED` with no pick or at `REVISION_REQUESTED` gets them.
+  `TOPIC_APPROVED` with no pick or at `REVISION_REQUESTED` gets them. A revision whose pick is a
+  person's choice gets none.
 - `recent` is the domain's previous two videos, newest first, counting a video by its recorded
   formula or else its pick, and rows filed in the same second by insertion order. A formula among
   them is refused without `repeat_reason` and accepted with it, and the reason is stored. Another domain's videos and a video with no domain have no
@@ -646,8 +648,11 @@ Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's de
   version does not have reads as Auto.
 - A move back to `TOPIC_PROPOSED`, guarded or not, empties the pick and keeps the person's choice.
   A script revision keeps the pick.
-- A move to `SCRIPT_READY`, guarded or not, is refused while the stored script's formula differs
-  from the pick. A rewritten script, a script from before picks and a pick with no record pass.
+- A move to `SCRIPT_READY`, guarded or not, is refused while the stored script's formula is not
+  the pick, including a pick with no record. A move to `VOICE_READY` after a re-pick in a revision
+  is refused the same way. A rewritten script and a script from before picks pass.
+- Only a formula marked recent stores the repeat note. Recent counts the pick ahead of a switched
+  script's record, and leaves out a topic sent back or rejected.
 - The domain's default formula seeds every new video whatever its strategy. A default that is no
   formula seeds nothing, a new default must be a formula, an omitted one is left alone, and a
   stored one that was dropped does not block another edit.

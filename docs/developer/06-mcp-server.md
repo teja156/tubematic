@@ -270,7 +270,7 @@ of the video's domain.
 `formula_routing.decided` is `true` once a formula is picked. `pick` is the formula the script is
 written in, and `choice` is the formula a person chose for the video (`""` for Auto). `candidates`
 is `tubematic_core/formulas.py::routing_candidates` at `TOPIC_APPROVED` before the pick and at
-`REVISION_REQUESTED`, and `[]` otherwise. `recent` is `{formulas, hook_types}`: the formulas and the kept opening types of the
+`REVISION_REQUESTED` unless the pick is a person's choice, and `[]` otherwise. `recent` is `{formulas, hook_types}`: the formulas and the kept opening types of the
 domain's previous two videos, newest first.
 
 ### `create_video`
@@ -321,10 +321,10 @@ columns are cleared too. A style a person chose is kept, with its recorded canva
 `UPDATE` empties `formula_pick`, `formula_runner_up` and `formula_reason`, so the formula is picked
 again for the revised topic. A person's `formula_choice` is kept.
 
-A move to `SCRIPT_READY` is refused while the stored script's `formula_id` differs from
-`formula_pick`. A formula switch at `SCRIPT_READY` leaves that state until the agent rewrites the
-script, and handing the video back first would show one formula over a script in another. The
-check is repeated in the `UPDATE`'s `WHERE`.
+A move to `SCRIPT_READY` or `VOICE_READY` is refused while a `formula_pick` is set and the stored
+script's `formula_id` is not it. A formula switch leaves another formula there and an opening
+switch clears it, until the agent rewrites the script; handing the video on first would show one
+formula over a script in another. The check is repeated in the `UPDATE`'s `WHERE`.
 
 ### `update_video`
 
@@ -349,7 +349,8 @@ Script and voice:
   script follows and the three openings the agent drafted. A malformed record is refused, and a
   script with no record is accepted. On a video with a `formula_pick`, a `formula_id` that differs
   from the pick is refused, because the pick is what the person sees at `SCRIPT_READY`. With no
-  pick, a person's `formula_choice` binds the same way. See
+  pick, a person's `formula_choice` binds the same way. On such a video a write that changes the
+  words must carry the record. See
   [What a script records](08-scripting-and-voice.md#what-a-script-records).
 - A call that changes a script's spoken words, or carries a record, returns `warnings` beside
   `updated_fields`: the [script warnings](08-scripting-and-voice.md#script-warnings) for the stored

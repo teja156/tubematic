@@ -201,10 +201,24 @@ def test_an_opening_switch_on_a_script_whose_formula_this_version_lacks_is_refus
     assert _row(db_path)["status"] == "SCRIPT_READY"
 
 
-def test_an_opening_switch_keeps_a_held_pick(client, db_path):
+def test_an_opening_switch_keeps_a_held_pick_and_clears_the_record(client, db_path):
+    # The stored script no longer starts with the opening its record names,
+    # so the record goes until the rewrite; the MCP server will not move the
+    # video on before it.
     _video(db_path)       # pick follow-the-flow, formula_id follow-the-flow
     client.post("/videos/vid_1/switch-opening", json={"index": 1})
-    assert _row(db_path)["formula_pick"] == "follow-the-flow"
+    row = _row(db_path, cols=("formula_pick", "formula_id"))
+    assert row == {"formula_pick": "follow-the-flow", "formula_id": ""}
+
+
+@pytest.mark.parametrize("route, body", [("switch-formula", {}), ("switch-opening", {"index": 1})])
+def test_a_switch_on_a_video_whose_style_was_never_picked_is_refused(client, db_path, route, body):
+    # A pre-2.2 video on Auto with no style pick: a switch would send it back
+    # to have its style routed again under a formula picked for no style.
+    _video(db_path, style="auto")
+    resp = client.post(f"/videos/vid_1/{route}", json=body)
+    assert resp.status_code == 409 and "Request a revision" in resp.get_json()["error"]
+    assert _row(db_path)["status"] == "SCRIPT_READY"
 
 
 @pytest.mark.parametrize("body, status, message", [

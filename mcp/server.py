@@ -1315,7 +1315,7 @@ def get_video(video_id: str) -> dict:
     previous two videos) and available / unavailable_reason (an experimental
     formula is off for Auto until the setting auto_experimental_formulas is
     on). candidates is [] otherwise. Only a video at TOPIC_APPROVED with no pick, or at
-    REVISION_REQUESTED, gets the list. recent is {formulas, hook_types}: the formulas and the kept
+    REVISION_REQUESTED (unless its pick is a person's choice), gets the list. recent is {formulas, hook_types}: the formulas and the kept
     opening types of the domain's previous two videos, newest first. Record a
     decision with choose_script_formula.
     """
@@ -1376,37 +1376,48 @@ def _recent_domain_formulas(project_id, video_id: str) -> dict:
     {"formulas": [...], "hook_types": [...]}, each at most
     tformulas.ROTATION_WINDOW long. A video counts once it has a formula (the
     one recorded with its script, else the one picked for it) or a kept
-    opening type. The rotation rule and the opening-type warning read this."""
+    opening type: the pick ahead of the stored script's formula, which a
+    switch leaves behind. A topic back at TOPIC_PROPOSED or rejected does not
+    count: its old script is not what the audience will see. The rotation
+    rule and the opening-type warning read this."""
     out = {"formulas": [], "hook_types": []}
     if not project_id:
         return out
     with _conn() as con:
         out["formulas"] = [r[0] for r in con.execute(
-            "SELECT COALESCE(NULLIF(formula_id, ''), formula_pick) FROM videos "
-            "WHERE project_id = ? AND id != ? "
-            "AND COALESCE(NULLIF(formula_id, ''), formula_pick, '') != '' "
+            "SELECT COALESCE(NULLIF(formula_pick, ''), formula_id) FROM videos "
+            "WHERE project_id = ? AND id != ? AND status NOT IN ('TOPIC_PROPOSED', 'TOPIC_REJECTED') "
+            "AND COALESCE(NULLIF(formula_pick, ''), formula_id, '') != '' "
             "ORDER BY created_at DESC, rowid DESC LIMIT ?",
             (project_id, video_id, tformulas.ROTATION_WINDOW))]
         out["hook_types"] = [r[0] for r in con.execute(
             "SELECT hook_type FROM videos WHERE project_id = ? AND id != ? "
+            "AND status NOT IN ('TOPIC_PROPOSED', 'TOPIC_REJECTED') "
             "AND COALESCE(hook_type, '') != '' ORDER BY created_at DESC, rowid DESC LIMIT ?",
             (project_id, video_id, tformulas.ROTATION_WINDOW))]
     return out
 
 
-# A stored script recorded under another formula than the one picked: what a
-# formula switch leaves until the script is rewritten.
-_STALE_SCRIPT_SQL = ("COALESCE(formula_id, '') != '' AND COALESCE(formula_pick, '') != '' "
-                     "AND formula_id != formula_pick")
+# A stored script that is not recorded under the formula picked for the video:
+# a formula switch leaves another formula on it, an opening switch clears its
+# record, and both stay so until the script is rewritten.
+_STALE_SCRIPT_SQL = ("COALESCE(formula_pick, '') != '' "
+                     "AND COALESCE(formula_id, '') != formula_pick")
+
+
+# Statuses a video reaches only with a script settled in its formula: the
+# script checkpoint, and the scene stage a revision returns to (a re-pick in a
+# revision is followed by a rewrite, never by scenes over the old script).
+_SETTLED_SCRIPT_STATUSES = ("SCRIPT_READY", "VOICE_READY")
 
 
 def _stale_script_error(con, video_id: str) -> dict:
-    row = con.execute("SELECT formula_id, formula_pick FROM videos WHERE id = ?",
-                      (video_id,)).fetchone()
-    return {"error": f"The stored script is in {row['formula_id']!r} but the formula picked for "
-                     f"this video is {row['formula_pick']!r} (a person switched it). Rewrite the "
-                     "script in the picked formula with update_video before moving the video to "
-                     "SCRIPT_READY."}
+    row = con.execute("SELECT formula_pick FROM videos WHERE id = ?", (video_id,)).fetchone()
+    return {"error": f"The stored script is not recorded as written in {row['formula_pick']!r}, "
+                     "the formula picked for this video (a person switched the formula or the "
+                     "opening, or the script was never recorded). Rewrite the script with "
+                     f"update_video, formula_id={row['formula_pick']!r} and the hooks, before "
+                     "moving the video on."}
 
 
 def _person_formula_choice(row) -> str:
@@ -1428,7 +1439,8 @@ def _formula_routing(video: dict) -> dict:
     # the pick, and in a revision (which may re-pick, or pick for a video
     # scripted before picks existed).
     status = video.get("status")
-    if (status == "TOPIC_APPROVED" and not pick) or status == "REVISION_REQUESTED":
+    if ((status == "TOPIC_APPROVED" and not pick)
+            or (status == "REVISION_REQUESTED" and not (pick and choice))):
         candidates = tformulas.routing_candidates(
             (video.get("visual_style") or "").strip(), _experimental_formulas_allowed(),
             recent["formulas"], choice)
@@ -1962,7 +1974,7 @@ def set_video_status(
         # with the old script still stored. Handing it to a person again
         # before the rewrite would show one formula over a script in another,
         # and approving it buys the voice. Repeated in the UPDATE's WHERE.
-        if new_status == "SCRIPT_READY":
+        if new_status in _SETTLED_SCRIPT_STATUSES:
             if con.execute(f"SELECT 1 FROM videos WHERE id = ? AND {_STALE_SCRIPT_SQL}",
                            (video_id,)).fetchone():
                 return _stale_script_error(con, video_id)
@@ -2001,7 +2013,7 @@ def set_video_status(
             if cur.rowcount == 0:
                 fresh = con.execute(
                     "SELECT archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
-                if new_status == "SCRIPT_READY" and con.execute(
+                if new_status in _SETTLED_SCRIPT_STATUSES and con.execute(
                         f"SELECT 1 FROM videos WHERE id = ? AND {_STALE_SCRIPT_SQL}",
                         (video_id,)).fetchone():
                     return _stale_script_error(con, video_id)
@@ -2771,6 +2783,7 @@ def update_video(
     # A voice change alone is checked against the stored script instead.
     pin_voice = None
     voice_exempt = False
+    bound = ""
     if script_segments is not None or script is not None or voice_id is not None:
         with _conn() as con:
             vrow = con.execute("SELECT status, voice_id, script, script_segments, project_id, "
@@ -2848,6 +2861,15 @@ def update_video(
             return " ".join(_strip_non_spoken(text or "").split())
 
         if formula_id is not None or words_of(script) != words_of(vrow["script"]):
+            # New words on a video whose formula is decided must say they are
+            # in it. Without this, a write that sends no record would clear
+            # it and slip past the Script Ready check, leaving the dashboard
+            # naming one formula over a script in another. A pronunciation
+            # fix keeps the words and is not affected.
+            if formula_id is None and bound:
+                return {"error": f"This video's script is written in {bound!r} (get_video's "
+                                 "formula_routing). A script write that changes the words must "
+                                 f"carry formula_id={bound!r} and the three openings as hooks."}
             if formula_id is not None:
                 record_formula, record_hooks = formula_id, _stored_hooks(hooks)
             else:
@@ -3393,7 +3415,7 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
                 runner, stored = runner_up, reason
         else:
             pick, runner, stored = formula, runner_up, reason
-        if repeat_reason and not choice:
+        if repeat_reason and not choice and candidates[formula]["recent"]:
             stored = f"{stored} Repeats a recent formula: {repeat_reason}"
         cur = con.execute(
             "UPDATE videos SET formula_pick = ?, formula_runner_up = ?, formula_reason = ?, "

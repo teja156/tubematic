@@ -223,6 +223,12 @@ def test_the_candidates_are_marked_for_the_videos_style(db):
     assert cands["broken-expectation"]["suits_style"] and not cands["scene-story"]["suits_style"]
 
 
+def test_a_revision_whose_pick_is_a_persons_choice_gets_no_candidates(db):
+    # The tool would refuse a re-pick there, so the list is not sent.
+    _video(status="REVISION_REQUESTED", choice="scene-story", pick="scene-story")
+    assert server.get_video("vid_1")["formula_routing"]["candidates"] == []
+
+
 @pytest.mark.parametrize("status", ["TOPIC_PROPOSED", "SCRIPT_READY", "VOICE_READY", "VIDEO_READY"])
 def test_a_video_with_no_pick_that_cannot_pick_now_gets_no_candidates(db, status):
     _video(status=status)
@@ -478,5 +484,43 @@ def test_a_rewritten_or_pre_pick_script_reaches_script_ready(db):
     assert "error" not in server.set_video_status("vid_1", "SCRIPT_READY")
     _video("vid_2", formula_id="scene-story")          # scripted before picks existed
     assert "error" not in server.set_video_status("vid_2", "SCRIPT_READY")
-    _video("vid_3", pick="scene-story")                # no record: an older writer
+    _video("vid_3")                                    # no pick, no record
     assert "error" not in server.set_video_status("vid_3", "SCRIPT_READY")
+
+
+def test_a_pick_with_no_record_is_not_settled(db):
+    # What an opening switch leaves (it clears the record), and what a script
+    # written with no record would leave: neither may be handed back.
+    _video(pick="scene-story")
+    assert "Rewrite the script" in server.set_video_status("vid_1", "SCRIPT_READY")["error"]
+
+
+def test_a_re_pick_in_a_revision_cannot_go_on_to_scenes_unrewritten(db):
+    _video(status="REVISION_REQUESTED", formula_id="follow-the-flow", pick="scene-story")
+    out = server.set_video_status("vid_1", "VOICE_READY",
+                                  only_if_current_status="REVISION_REQUESTED")
+    assert "Rewrite the script" in out["error"] and _row()["status"] == "REVISION_REQUESTED"
+
+
+def test_a_repeat_reason_is_not_stored_for_a_formula_that_is_not_recent(db):
+    _video()
+    server.choose_script_formula("vid_1", "scene-story", REASON, repeat_reason="Nothing else fits.")
+    assert _row()["formula_reason"] == REASON
+
+
+def test_recent_counts_the_pick_ahead_of_a_switched_scripts_record(db):
+    # A switched video's old script is about to be replaced; its pick is the
+    # formula the domain will see.
+    _video("v_old", status="TOPIC_APPROVED", formula_id="incident-file", pick="scene-story",
+           created="2026-05-01T00:00:00Z")
+    _video()
+    assert server.get_video("vid_1")["formula_routing"]["recent"]["formulas"] == ["scene-story"]
+
+
+@pytest.mark.parametrize("status", ["TOPIC_PROPOSED", "TOPIC_REJECTED"])
+def test_a_topic_sent_back_or_rejected_does_not_count_as_recent(db, status):
+    _video("v_old", status=status, formula_id="incident-file", hook_type="number",
+           created="2026-05-01T00:00:00Z")
+    _video()
+    assert server.get_video("vid_1")["formula_routing"]["recent"] == {"formulas": [],
+                                                                     "hook_types": []}

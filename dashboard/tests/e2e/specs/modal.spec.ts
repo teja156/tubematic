@@ -346,7 +346,7 @@ test.describe("VideoModal", () => {
     const video = await createVideo({ topic: `[${uid}] Switch formula` });
     await patchVideo(video.id, { status: "SCRIPT_READY", script: "# Hello world" });
     seedFormula(video.id,
-      "formula_pick = 'follow-the-flow', formula_runner_up = 'scene-story', "
+      "visual_style = 'system_flow', formula_pick = 'follow-the-flow', formula_runner_up = 'scene-story', "
         + "formula_reason = 'A request moves through fixed stages.', formula_id = 'follow-the-flow'",
       "()");
 
@@ -372,8 +372,8 @@ test.describe("VideoModal", () => {
     const video = await createVideo({ topic: `[${uid}] Switch opening` });
     await patchVideo(video.id, { status: "SCRIPT_READY", script: "You renamed one file. It stops." });
     seedFormula(video.id,
-      "formula_id = 'broken-expectation', formula_pick = 'broken-expectation', hook_type = 'problem', "
-        + "hook_alternatives = ?",
+      "visual_style = 'system_flow', formula_id = 'broken-expectation', "
+        + "formula_pick = 'broken-expectation', hook_type = 'problem', hook_alternatives = ?",
       "(json.dumps(hooks),)");
 
     await page.goto("/");

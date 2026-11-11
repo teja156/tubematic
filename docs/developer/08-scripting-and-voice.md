@@ -114,10 +114,11 @@ ship, because a video has one voice.
 A video's formula is decided once, at `TOPIC_APPROVED`, after its visual style and before its
 script. The `tubematic-formula-routing` skill makes the choice from data and
 [`choose_script_formula`](06-mcp-server.md#choose_script_formula) records it. The script-writing
-skill then writes in the pick. `update_video` refuses a `formula_id` that differs from the pick,
-or, with no pick on record, from a person's `formula_choice`. `set_video_status` refuses
-`SCRIPT_READY` while the stored script's `formula_id` differs from the pick, which is what a switch
-leaves until the script is rewritten.
+skill then writes in the pick. On a video whose formula is decided (a pick, or with no pick a
+person's `formula_choice`), `update_video` refuses a `formula_id` that differs from it and a write
+of new words with no record at all. `set_video_status` refuses `SCRIPT_READY` and `VOICE_READY`
+while the stored script's `formula_id` is not the pick: a formula switch leaves another formula
+there and an opening switch clears it, so the video moves on only after a rewrite records it.
 
 ```mermaid
 flowchart TD
@@ -152,11 +153,11 @@ Four columns on the video hold the decision (see [`videos`](03-database.md#video
 | Mark | Meaning |
 |---|---|
 | `suits_style` | The formula's `styles` names the video's visual style. The skill gives it one point. A style removes no candidate, because a style pack's own `script` text already outranks the formula |
-| `recent` | The formula is the one of either of the domain's `ROTATION_WINDOW` most recently filed other videos that have a formula (the one recorded with the script, else the one picked) |
+| `recent` | The formula is the one of either of the domain's `ROTATION_WINDOW` most recently filed other videos that have a formula (the pick, else the one recorded with the script). A video back at `TOPIC_PROPOSED` or rejected does not count |
 | `available`, `unavailable_reason` | `false` for an experimental formula while `auto_experimental_formulas` is off. A person's own choice is available whatever the setting says |
 
 `get_video` returns the candidates to a video at `TOPIC_APPROVED` with no pick and to a video at
-`REVISION_REQUESTED`, and an empty list otherwise, which keeps several thousand tokens out of every
+`REVISION_REQUESTED` whose pick is not a person's choice, and an empty list otherwise, which keeps several thousand tokens out of every
 other session.
 
 `choose_script_formula` enforces these rules:
@@ -183,12 +184,14 @@ These events change a pick:
 | The video returns to `TOPIC_PROPOSED` (`set_video_status` or `PATCH /videos/<id>`) | `formulas.py::PICK_RESET_SET` empties `formula_pick`, `formula_runner_up` and `formula_reason`. `formula_choice` stays |
 | [`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style) | The same reset, so the formula is picked again for the new style |
 | [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula) | The pick and the runner-up swap, `formula_choice` becomes the new pick, and the video returns to `TOPIC_APPROVED` to be rewritten |
-| [`POST /videos/<id>/switch-opening`](05-http-api.md#post-videosvideo_idswitch-opening) | The pick stays, or becomes the script's `formula_id` on a video with no pick. Another stored opening is marked as the one in use, and the video returns to `TOPIC_APPROVED` to be rewritten from it |
+| [`POST /videos/<id>/switch-opening`](05-http-api.md#post-videosvideo_idswitch-opening) | The pick stays, or becomes the script's `formula_id` on a video with no pick. Another stored opening is marked as the one in use, `formula_id` is cleared, and the video returns to `TOPIC_APPROVED` to be rewritten from it |
 
 A video scripted before picks existed has an empty `formula_pick`. A script revision keeps its
 stored `formula_id`, and one with no stored `formula_id` runs the routing skill first. An agent
-running an older skill against the current server sends a `formula_id` with no pick on record,
-which is accepted unless a person chose a formula for the video.
+running an older skill against the current server writes its own formula, or none, which is
+accepted unless a person chose a formula for the video; then it is refused and the video waits for
+a session that runs the current skills. Both switches refuse a video still on `auto` with no
+`style_pick`, because sending it back to `TOPIC_APPROVED` would pick its style again.
 
 `scripts/eval_formula_routing.py` runs the skill over a fixed topic set with the Claude Code CLI
 and scores the picks. You run it by hand; see

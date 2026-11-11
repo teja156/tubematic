@@ -376,8 +376,21 @@ def test_with_no_pick_on_record_any_formula_is_taken(video):
     assert "error" not in result and _row()["formula_id"] == FORMULA
 
 
-def test_a_script_with_no_record_is_still_written_beside_a_pick(video):
+def test_new_words_beside_a_pick_must_carry_the_record(video):
+    # Written with no record, the script would clear it and slip past the
+    # Script Ready check under a formula nobody recorded.
     _pick(video, "scene-story")
+    result = write(video)
+    assert "formula_id='scene-story'" in result["error"] and _row()["script"] in ("", None)
+
+
+def test_new_words_beside_a_persons_choice_must_carry_the_record(video):
+    with server._conn() as con:
+        con.execute("UPDATE videos SET formula_choice = 'scene-story' WHERE id = ?", (video,))
+    assert "formula_id='scene-story'" in write(video)["error"]
+
+
+def test_a_script_with_no_record_is_written_when_nothing_is_bound(video):
     result = write(video)
     assert "error" not in result and "no_formula" in warning_ids(result)
 

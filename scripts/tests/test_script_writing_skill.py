@@ -157,7 +157,7 @@ def test_the_openings_vary_and_a_persons_switch_is_honoured():
     assert "`formula_routing.recent.hook_types`" in part and "`hook_type_repeat`" in part
     assert '"Opening switched to"' in part
     # Scoped: the comment stays in the thread after the rewrite it asked for.
-    assert "newest human\ncomment, no script has been written since it" in part
+    assert "newest human\ncomment and no script has been written since it" in part
     assert "word for word" in part and "Do not draft new openings" in part
 
 
@@ -245,3 +245,11 @@ def test_the_user_guide_lists_every_formula_by_its_label():
     section = guide[guide.index("## Script formulas"):]
     for formula in tformulas.FORMULAS.values():
         assert f"| {formula['label']} |" in section, formula["label"]
+
+
+def test_the_older_server_fallback_is_only_for_unknown_arguments():
+    # A refusal of the formula's value is not an older server: resending
+    # without the record would drop the formula a person chose.
+    step = _text()[_text().index("## Step 10"):]
+    assert "unexpected-argument error, not a refusal of their values" in step
+    assert "an `opening_repeat` or `hook_type_repeat` on\n   an opening a person switched to stays" in step

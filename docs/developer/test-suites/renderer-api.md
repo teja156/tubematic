@@ -297,7 +297,7 @@ Covers `POST /videos/<id>/switch-formula`, `POST /videos/<id>/switch-opening`, `
   experimental runner-up needs no setting.
 - The opening switch marks the chosen opening as the one in use, clears its note, sets `hook_type`,
   moves the video to `TOPIC_APPROVED` and adds a human comment that quotes the opening. It keeps a
-  held pick. A video scripted before formulas were picked can use it and gets its script's formula
+  held pick and clears `formula_id`, so the old script cannot move on before a rewrite. A video scripted before formulas were picked can use it and gets its script's formula
   as the pick, and one whose formula this version lacks is refused.
 - Each switch is refused away from `SCRIPT_READY` and for an archived or unknown video. The formula
   switch is refused with no pick, no runner-up or a runner-up that the installed version does not
@@ -315,6 +315,9 @@ Covers `POST /videos/<id>/switch-formula`, `POST /videos/<id>/switch-opening`, `
   default.
 - The setting defaults to off and takes a boolean. `GET /script-formulas` says which formulas are
   experimental.
+
+Both switches are refused on a video on `auto` with no style pick, which a switch would send back
+to have its style picked again.
 
 Trap: neither switch edits the stored script. A new formula or a new first sentence over the old
 body would be a script nobody wrote, so both send the video back to be rewritten.

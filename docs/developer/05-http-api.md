@@ -544,7 +544,12 @@ rewrite a script. A second switch goes back. An experimental runner-up needs no 
 |---|---|
 | `200` | The switch landed. The body is the video |
 | `404` | No such video |
-| `409` | The video is archived, not at `SCRIPT_READY`, has no pick or no runner-up, the runner-up is not a formula any more, or the video changed while the request was in flight |
+| `409` | A refusal listed below the table |
+
+`409` causes: the video is archived or not at `SCRIPT_READY`; it has no pick or no runner-up; the
+runner-up is a formula this version does not have; the video is on `auto` with no `style_pick`
+(scripted before styles were picked ahead of the script); or the video changed while the request
+was in flight.
 
 ### `POST /videos/<video_id>/switch-opening`
 
@@ -555,16 +560,22 @@ the opening's place in `hook_alternatives`, from 0. The video must be at `SCRIPT
 The route runs as one write transaction. It marks that opening `kept` in `hook_alternatives`,
 clears its `note`, sets `hook_type` to its type and moves the video to `TOPIC_APPROVED`. It adds a
 `human` comment that quotes the opening and asks the agent to rewrite the script from it, word for
-word, in the same formula. The stored script is left as it is. `formula_pick` is kept, or set to
-the script's `formula_id` on a video scripted before formulas were picked, so the rewrite is not
-routed to another formula whose opening types differ.
+word, in the same formula. The stored script is left as it is and its `formula_id` is cleared,
+because the script now starts with another opening than the one its record names. `formula_pick` is kept, or
+set to the script's `formula_id` on a video scripted before formulas were picked, so the rewrite is
+not routed to another formula whose opening types differ.
 
 | Status | When |
 |---|---|
 | `200` | The switch landed. The body is the video |
 | `400` | `index` is not a whole number, or is outside the stored openings |
 | `404` | No such video |
-| `409` | The video is archived, not at `SCRIPT_READY`, has no stored openings, the opening is the one already in use, the script has no pick and a `formula_id` this version does not have, or the video changed while the request was in flight |
+| `409` | A refusal listed below the table |
+
+`409` causes: the video is archived or not at `SCRIPT_READY`; it has no stored openings; the
+opening is the one already in use; the script has no pick and a `formula_id` this version does not
+have; the video is on `auto` with no `style_pick`; or the video changed while the request was in
+flight.
 
 ### `POST /videos/<video_id>/agent-outcome`
 

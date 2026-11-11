@@ -232,8 +232,8 @@ shape** in its reference file. Three shapes, not one opening worded three ways. 
 
 **When a person switched the opening.** A human comment that begins "Opening switched to" means a
 person chose one of the stored openings at Script Ready. It applies when it is the newest human
-comment, no script has been written since it, and `formula_id` equals `formula_routing.pick`.
-Then `hook_alternatives` already marks the chosen opening `kept`. Do not draft new openings: start the script with that opening word for word, rewrite the
+comment and no script has been written since it (the stored `formula_id` is then `""`). Then
+`hook_alternatives` already marks the chosen opening `kept`. Do not draft new openings: start the script with that opening word for word, rewrite the
 rest from it in the same formula, and send the same three openings back as `hooks` with `kept` on
 the one the person chose.
 
@@ -619,10 +619,13 @@ before these existed), in which case write both from the script now; blanks are 
    script, `formula_id` and `hooks`. **At most one extra write.** Never loop on warnings, and never
    bend a sound script to silence one: any warning raised by the closing line the preferences
    asked for stays, a `no_turn` on a script whose turn simply uses none of the listed words stays,
-   a `recap_ending` on a closing sentence `style.script` asks for stays, and a `length_band` on a
-   script whose length `style.script` set stays.
-3. If `update_video` rejects `formula_id` or `hooks` as arguments it does not know, the tool
-   server is older than this skill: send the same call without those two.
+   a `recap_ending` on a closing sentence `style.script` asks for stays, a `length_band` on a
+   script whose length `style.script` set stays, and an `opening_repeat` or `hook_type_repeat` on
+   an opening a person switched to stays.
+3. If `update_video` fails because it does not know the arguments `formula_id` or `hooks` (an
+   unexpected-argument error, not a refusal of their values), the tool server is
+   older than this skill: send the same call without those two. Any other refusal that names the formula means
+   the script is in the wrong formula: rewrite it in the one the error names.
 4. In `respell` or `ipa` mode only, and only if there are one or more new lexicon entries:
    `upsert_pronunciation_lexicon(entries=[...])`. Skip the call entirely if the list is empty.
 5. Report the segment count, the total word count, the formula and in one clause why it fits the

@@ -777,7 +777,8 @@ Covers the `tubematic-script-writing-skill` skill and `scripts/gen_formula_refer
   at all, an older tool server) and says a changed style or topic drops the pick.
 - The openings step prefers a type the domain's previous two videos did not use, and starts from
   the opening a person switched to, word for word, only while that comment is the newest and no
-  script has been written since.
+  script has been written since. Opening warnings on that opening stay, and the fallback for an
+  older tool server applies only to an unknown argument, never to a refused formula.
 - A style that asks for names may name its people.
 - The user guide's formula table names every formula.
 
