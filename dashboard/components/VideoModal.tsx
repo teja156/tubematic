@@ -19,11 +19,11 @@ import { PublishDialog } from "@/components/PublishDialog";
 import { PublicationFigures } from "@/components/PublicationFigures";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
-import { shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
+import { segmentVoiceConflict, shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
 import { LogList } from "@/components/LogList";
 import { CostBreakdown } from "@/components/CostBreakdown";
 import { formatDateTime, formatScheduled } from "@/lib/datetime";
-import { canDelete, canMarkPublished, canRetryPublish, isAgentStuck, markPublished, retryAgent } from "@/lib/videoStatus";
+import { canDelete, canMarkPublished, canRetryPublish, isAgentStuck, markPublished, patchVideo, retryAgent } from "@/lib/videoStatus";
 import { platformLabel } from "@/lib/platforms";
 import {
   AGENT_EFFORTS, type AgentPicks, agentChanged, agentLabel, agentOptions, agentPicksPayload,
@@ -384,6 +384,8 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const [switchStyleError, setSwitchStyleError] = useState("");
   const [retryingAgent, setRetryingAgent] = useState(false);
   const [retryAgentError, setRetryAgentError] = useState("");
+  const [segmentVoiceSaving, setSegmentVoiceSaving] = useState<string | null>(null);
+  const [segmentVoiceError, setSegmentVoiceError] = useState("");
   // Where this video actually went (TMDEV-83). Replaces videos.youtube_url as
   // the read path — one TEXT column cannot hold four platform URLs.
   const [publications, setPublications] = useState<VideoPublication[]>([]);
@@ -462,6 +464,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     if (!seed) { setVideo(null); return; }
     setVideo(seed);
     setPickedVoice(null);
+    setSegmentVoiceError("");
     setSelectedProfile(seed.script_profile_id ?? "");
     setSelectedStyle(seed.visual_style ?? "auto");
     setSelectedMascot(seed.mascot_id ?? "");
@@ -709,6 +712,26 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const markable = canMarkPublished(video);
   const publishedCount = publications.filter((p) => p.status === "PUBLISHED").length;
   const stuck = isAgentStuck(video);
+
+  // A segment's own voice (TMDEV-216): picked on the Script tab at Script
+  // Ready when the roster has a second voice. One PATCH per change; the API
+  // refuses a voice that cannot speak the segment's markup.
+  const segmentPickerShown = !archived && video.status === "SCRIPT_READY" && voices.length >= 2;
+  const videoVoiceId = video.effective_voice_id ?? "";
+  const voiceName = (id: string) => voices.find((v) => v.voice_id === id)?.name ?? id;
+  const handleSegmentVoice = async (segmentId: string, voiceId: string) => {
+    if (segmentVoiceSaving) return;
+    setSegmentVoiceSaving(segmentId);
+    setSegmentVoiceError("");
+    try {
+      await patchVideo(video.id, { segment_voices: { [segmentId]: voiceId } });
+      refreshVideo(video.id);
+    } catch (e) {
+      setSegmentVoiceError(e instanceof Error ? e.message : "Changing the segment's voice failed.");
+    } finally {
+      setSegmentVoiceSaving(null);
+    }
+  };
 
   // Retry agent (TMDEV-129): clears the stuck flag so the scheduled agent
   // picks the video up again on its next pass. The status is left alone.
@@ -967,6 +990,12 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                 {video.script && (
                   <TabsContent value="script" className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
                     <ScriptRecord video={video} />
+                    {segmentVoiceError && (
+                      <div data-testid="segment-voice-error" role="alert"
+                           style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--red)", margin: "8px 0" }}>
+                        {segmentVoiceError}
+                      </div>
+                    )}
                     {video.script_segments && video.script_segments.length > 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                         {video.script_segments.map((seg, i) => (
@@ -992,6 +1021,34 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                                 }}
                               >
                                 {seg.beat}
+                              </div>
+                            ) : null}
+                            {segmentPickerShown ? (
+                              <select
+                                data-testid={`segment-voice-${seg.id}`}
+                                aria-label={`Voice for segment ${seg.id}`}
+                                value={seg.voice_id ?? ""}
+                                disabled={segmentVoiceSaving !== null}
+                                onChange={(e) => handleSegmentVoice(seg.id, e.target.value)}
+                                style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--ink-2)", background: "transparent", border: "1px solid var(--border)", padding: "2px 6px", marginBottom: 6 }}
+                              >
+                                <option value="">Video voice ({voiceName(videoVoiceId)})</option>
+                                {voices.filter((v) => v.voice_id !== videoVoiceId).map((v) => {
+                                  const conflict = segmentVoiceConflict(video, seg.id, v.voice_id);
+                                  return (
+                                    <option key={v.voice_id} value={v.voice_id} disabled={!!conflict}
+                                            title={conflict || undefined}>
+                                      {voiceLabel(v)}{conflict ? " (can't speak this segment)" : ""}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            ) : seg.voice_id ? (
+                              <div
+                                data-testid={`segment-voice-name-${seg.id}`}
+                                style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", marginBottom: 6 }}
+                              >
+                                Voice: {voiceName(seg.voice_id)}
                               </div>
                             ) : null}
                             <p
@@ -1631,6 +1688,14 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           ? video.voice_info.model_id
                           : <span>{video.voice_info.model_id} <span style={{ color: "var(--dim)" }}>(current setting)</span></span>}
                     />
+                    {video.voice_info.other_voices && video.voice_info.other_voices.length > 0 && (
+                      <MetaRow
+                        label="Other voices"
+                        value={video.voice_info.other_voices
+                          .map((o) => (o.name ? `${o.name} · ${o.model_id}` : `${o.voice_id} (not in roster)`))
+                          .join(", ")}
+                      />
+                    )}
                   </>
                 )}
                 {/* The last successful render: '' on every video rendered

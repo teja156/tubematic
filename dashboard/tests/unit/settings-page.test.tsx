@@ -465,10 +465,11 @@ describe("SettingsPage", () => {
       fireEvent.click(screen.getByTestId("voice-preview-abc123"));
     });
 
-    // The row's model rides along, so an unsaved model change is what plays.
+    // The row's model and speed ride along, so an unsaved change is what plays
+    // (a speed set back to 1.00 must not play the stored one).
     expect(fetchMock).toHaveBeenCalledWith("/api/proxy/voices/abc123/preview", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model_id: "eleven_multilingual_v2" }),
+      body: JSON.stringify({ model_id: "eleven_multilingual_v2", speed: 1 }),
     });
   });
 
@@ -547,6 +548,69 @@ describe("SettingsPage", () => {
       String(url).includes("/settings") && (init as RequestInit | undefined)?.method === "POST");
     expect(JSON.parse(String((posted![1] as RequestInit).body)).elevenlabs_voices[1])
       .toEqual({ name: "Adam", voice_id: "a1", model_id: "eleven_v3" });
+  });
+
+  // ── speed (TMDEV-216) ────────────────────────────────────────────────────
+
+  it("a voice's speed is saved with the roster", async () => {
+    const fetchMock = vi.mocked(fetch);
+    await renderTab("voice");
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("voice-speed-0"), { target: { value: "1.15" } });
+    });
+    await clickSave("voice");
+    expect(savedBody(fetchMock).elevenlabs_voices).toEqual([
+      { name: "Narrator", voice_id: "abc123", model_id: "eleven_multilingual_v2", speed: 1.15 }]);
+  });
+
+  it("a speed of 1.00 is not sent, so the stored roster keeps its old shape", async () => {
+    stubFetch({ ...MOCK_SETTINGS, elevenlabs_voices: [
+      { name: "Narrator", voice_id: "abc123", model_id: "eleven_multilingual_v2", speed: 1.15 }] });
+    const fetchMock = vi.mocked(fetch);
+    await renderTab("voice");
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("voice-speed-0"), { target: { value: "1.00" } });
+    });
+    await clickSave("voice");
+    expect(savedBody(fetchMock).elevenlabs_voices).toEqual([
+      { name: "Narrator", voice_id: "abc123", model_id: "eleven_multilingual_v2" }]);
+  });
+
+  it("the speed is disabled on a model that ignores it", async () => {
+    stubFetch({ ...MOCK_SETTINGS, elevenlabs_voices: [
+      { name: "Teja", voice_id: "t1", model_id: "eleven_v4" }] });
+    await renderTab("voice");
+    const speed = screen.getByTestId("voice-speed-0") as HTMLSelectElement;
+    expect(speed.disabled).toBe(true);
+    expect(speed.value).toBe("1.00");
+    expect(speed.title).toMatch(/ignores speed/);
+  });
+
+  it("moving a voice to a model that ignores speed drops its speed", async () => {
+    stubFetch({ ...MOCK_SETTINGS, elevenlabs_voices: [
+      { name: "Narrator", voice_id: "abc123", model_id: "eleven_multilingual_v2", speed: 1.15 }] });
+    const fetchMock = vi.mocked(fetch);
+    await renderTab("voice");
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("voice-model-0"), { target: { value: "eleven_v4" } });
+    });
+    await clickSave("voice");
+    expect(savedBody(fetchMock).elevenlabs_voices).toEqual([
+      { name: "Narrator", voice_id: "abc123", model_id: "eleven_v4" }]);
+  });
+
+  it("a new voice is added with the speed picked beside it", async () => {
+    const fetchMock = vi.mocked(fetch);
+    await renderTab("voice");
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("voice-add-name"), { target: { value: "Adam" } });
+      fireEvent.change(screen.getByTestId("voice-add-id"), { target: { value: "a1" } });
+      fireEvent.change(screen.getByTestId("voice-add-speed"), { target: { value: "1.10" } });
+      fireEvent.click(screen.getByTestId("voice-add"));
+    });
+    await clickSave("voice");
+    expect(savedBody(fetchMock).elevenlabs_voices[1])
+      .toEqual({ name: "Adam", voice_id: "a1", model_id: "eleven_multilingual_v2", speed: 1.1 });
   });
 
   it("the Images tab has no provider control: OpenAI is the only image provider", async () => {

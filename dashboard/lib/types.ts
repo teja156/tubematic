@@ -49,6 +49,9 @@ export interface ScriptSegment {
   visual: string;
   /** The formula beat this segment belongs to, when the writer labelled it. */
   beat?: string;
+  /** A roster voice that speaks this segment instead of the video's voice
+   *  (TMDEV-216). Absent means the video's voice; never equal to it. */
+  voice_id?: string;
 }
 
 /** One of the three openings the writer drafted for a script. `kept` marks
@@ -73,6 +76,9 @@ export interface Voice {
    *  install-wide model: the model, and so the markup a script may use,
    *  follows the voice. */
   model_id: string;
+  /** ElevenLabs speed (TMDEV-216). Absent means 1.0; only models in
+   *  SPEED_MODELS honour it, and the API refuses it on any other. */
+  speed?: number;
 }
 
 export interface VoiceInfo {
@@ -86,6 +92,9 @@ export interface VoiceInfo {
    *  before usage was recorded. "" when neither is known. */
   model_id: string;
   model_voiced: boolean;
+  /** The other voices this video's segments name (TMDEV-216), in script
+   *  order; name and model are "" for one no longer on the roster. */
+  other_voices?: { voice_id: string; name: string; model_id: string }[];
 }
 
 export interface Comment {
@@ -203,6 +212,10 @@ export interface Video {
    *  refuses such a voice with a 409, so a picker that disables these can
    *  never disagree with the server. Empty for an unscripted video. */
   voice_conflicts?: Record<string, string>;
+  /** Per segment id, the roster voices that cannot speak that segment's
+   *  markup, with the reason (TMDEV-216): what the Script tab's segment
+   *  picker greys out. Only at SCRIPT_READY, on single-video responses. */
+  segment_voice_conflicts?: Record<string, Record<string, string>>;
   /** The voice and model for the modal's read-only rows (TMDEV-147). Only on
    *  single-video responses (GET/PATCH /videos/<id>), never in a list. */
   voice_info?: VoiceInfo;
@@ -515,6 +528,9 @@ export interface PatchVideoBody {
   agent_model?: string;
   agent_effort?: string;
   visual_style?: VisualStyle;
+  /** Per segment id, a roster voice_id or "" for the video's voice
+   *  (TMDEV-216). Sent on its own, only at SCRIPT_READY. */
+  segment_voices?: Record<string, string>;
   onlyIfCurrentStatus?: VideoStatus;
 }
 
