@@ -90,12 +90,26 @@ FORBIDDEN_SOURCE = (
     (re.compile(r"(?i)(linear|radial)Gradient"), "a gradient: the book is flat ink and colour"),
     (re.compile(r"<pattern\b"), "an SVG pattern of its own: use Sh's pen hatching"),
     (re.compile(r"strokeDasharray|stroke-dasharray"), "a dashed stroke"),
-    (re.compile(r"Math\.random|Date\.now|new Date\b"), "randomness or the clock: every render must draw the same frames"),
+    (re.compile(r"Math\.random|Date\.now|new Date\b|performance\s*\.|\bcrypto\b"),
+     "randomness or the clock: every render must draw the same frames"),
+    (re.compile(r"\bglobalThis\b|\bwindow\b|\bdocument\b|\beval\s*\(|\bFunction\s*\(|new\s+Function\b|\bimport\s*\("),
+     "the page, eval, a Function constructor or a dynamic import: a prop only draws shapes"),
     (re.compile(r"<text\b|<tspan\b"), "SVG text: fonts do not load inside a prop's bitmap; draw writing as ink strokes"),
-    (re.compile(r"<image\b|<img\b|<foreignObject\b|dangerouslySetInnerHTML|\bfetch\(|\bimport\("),
+    (re.compile(r"<image\b|<img\b|<foreignObject\b|dangerouslySetInnerHTML|\bfetch\b"),
      "an image, embedded HTML or a fetch: a prop is drawn from shapes only"),
 )
-_IMPORT = re.compile(r"""^\s*(?:import|export)\b[^;]*?from\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']""", re.M)
+# Every way a module names another with import, anywhere on a line: `import x from "m"`, `import x from"m"`,
+# a bare `import "m"` and `export ... from "m"`. A dynamic import is refused in FORBIDDEN_SOURCE.
+_IMPORT = re.compile(r"""\b(?:import|export)\b[^;"'`]*?\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']""")
+_COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
+
+
+def _code(body: str) -> str:
+    """The source with its comments removed, so a comment that mentions a window or an image is not
+    read as code. A string holding // is cut short too, which can only hide code, never invent it."""
+    return _COMMENT.sub(" ", body)
+
+
 _ALLOWED_IMPORT = re.compile(r"^(react|\.\./\.\./installed/storybookAtlas/(ink|palette))$")
 
 _ID = re.compile(r"^[a-z0-9_]{1,24}$")
@@ -277,15 +291,16 @@ def custom_prop_errors(custom, video_id: str, library: dict, sources: dict | Non
             if body is None:
                 errs.append(f"{where} ({cid}): there is no {src}.tsx; write it with write_scene_file first.")
                 continue
+            code = _code(body)
             for pattern, why in FORBIDDEN_SOURCE:
-                if pattern.search(body):
+                if pattern.search(code):
                     errs.append(f"{where} ({cid}): the drawing uses {why}.")
-            named = [next((g for g in groups if g), "") for groups in _IMPORT.findall(body)]
+            named = [next((g for g in groups if g), "") for groups in _IMPORT.findall(code)]
             bad = [m or '""' for m in named if not _ALLOWED_IMPORT.match(m)]
             if bad:
                 errs.append(f"{where} ({cid}): it imports {', '.join(sorted(set(bad)))}; a prop imports only react "
                             "and ../../installed/storybookAtlas/ink (or palette).")
-            if not re.search(r"export\s+default\b", body):
+            if not re.search(r"export\s+default\b", code):
                 errs.append(f"{where} ({cid}): the file must default-export the drawing component.")
         entry = {"box": box, "place": c["place"], "states": states, "acts": acts}
         if portal is not None:
@@ -355,12 +370,16 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
             err(f"{where}: id must be lowercase letters, digits or _, and different from every other cast id.")
             continue
         name = c.get("name")
-        if not isinstance(name, str) or not 1 <= len(name.strip()) <= LIMITS["name"]:
+        ok = isinstance(name, str) and 1 <= len(name.strip()) <= LIMITS["name"]
+        if not ok:
             err(f"cast {c['id']}: name is the text on their tag, 1 to {LIMITS['name']} characters.")
         for knob, values in extra["knobs"].items():
             if c.get(knob) not in values:
                 err(f"cast {c['id']}: {knob} must be one of {', '.join(values)}.")
-        people[c["id"]] = c
+                ok = False
+        # an entry that failed its own checks is reported once, here, and is not a cast member after
+        if ok:
+            people[c["id"]] = c
 
     # ── chapters ──
     chapters = data.get("chapters")
@@ -442,8 +461,12 @@ def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on
         if not _int(until) or not lo * fps <= until - e["at"] <= hi * fps:
             err(f"{where}: the {e['type']} at frame {e['at']} needs `until`, {lo} to {hi} s after it starts.")
             continue
-        if until + TIMING["plateOpen"] > end - TIMING["endMargin"] // 2:
-            err(f"{where}: the {e['type']} at frame {e['at']} must close before the chapter ends.")
+        if until + TIMING["plateOpen"] > end - TIMING["endMargin"]:
+            err(f"{where}: the {e['type']} at frame {e['at']} must be closed (until + {TIMING['plateOpen']} frames) "
+                f"{TIMING['endMargin']} frames before the chapter ends, before the next chapter's push or wipe.")
+        if i > 0 and e["at"] < start + TIMING["wipeFrames"]:
+            err(f"{where}: the {e['type']} at frame {e['at']} opens while the chapter is still coming in; open it "
+                f"{TIMING['wipeFrames']} frames or more after the chapter starts.")
         for p in plates:
             if e["at"] < p[1] + TIMING["plateOpen"]:
                 err(f"{where}: the {e['type']} at frame {e['at']} opens before the plate at frame {p[0]} has closed.")
@@ -462,12 +485,15 @@ def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on
         if in_plate(e["at"]):
             err(f"{where}: the {t} at frame {e['at']} comes while a plate is open; nothing else happens on stage then.")
         if t == "guide":
+            if "exit" in e:
+                err(f"{where}: the guide at frame {e['at']} cannot exit; it stays beside the story in every chapter.")
+                continue
             if not _check_actor(e, where, "the guide", [p for p in extra["guidePoses"] if p not in WALK_POSES], err):
                 continue
             guide_moves.append(e)
         elif t == "person":
             who = e.get("who")
-            if who not in people:
+            if not isinstance(who, str) or who not in people:
                 err(f"{where}: the person at frame {e['at']} names {who!r}, who is not in the cast.")
                 continue
             if not e.get("exit") and not _check_actor(e, where, who, [p for p in extra["personPoses"] if p not in WALK_POSES], err):
@@ -476,7 +502,7 @@ def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on
         elif t == "prop":
             _check_prop(e, where, catalog, placed, err)
         elif t == "act":
-            p = placed.get(e.get("id"))
+            p = placed.get(e["id"]) if isinstance(e.get("id"), str) else None
             if not p:
                 err(f"{where}: the act at frame {e['at']} names {e.get('id')!r}, which is not on stage yet.")
             elif e["at"] < p["at"] + TIMING["propIn"]:
@@ -488,10 +514,11 @@ def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on
             text = e.get("text")
             if not isinstance(text, str) or not 1 <= len(text.strip()) <= LIMITS["tag"]:
                 err(f"{where}: the tag at frame {e['at']} needs text of 1 to {LIMITS['tag']} characters.")
-            elif e.get("on") not in placed:
+            elif not isinstance(e.get("on"), str) or e["on"] not in placed:
                 err(f"{where}: the tag at frame {e['at']} goes on {e.get('on')!r}, which is not a prop on stage yet.")
             else:
-                placed[e["on"]]["tag"] = text
+                # a prop shows its latest tag: a new tag replaces the one before
+                placed[e["on"]]["tags"].append((e["at"], text))
 
     if len(placed) > LIMITS["propsOnStage"]:
         err(f"{where} puts {len(placed)} props on stage; at most {LIMITS['propsOnStage']} keep a page readable.")
@@ -509,7 +536,8 @@ def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on
             err(f"{where}: at frame {f} there are {len(on)} people on stage; at most {LIMITS['onStage']}.")
             break
         g = actor_at(guide_moves, f, STAGE["guideHome"])
-        props_now = [p for p in placed.values() if p["at"] <= f]
+        props_now = [{**p, "tag": next((t for a, t in reversed(p["tags"]) if a <= f), None)}
+                     for p in placed.values() if p["at"] <= f]
         _check_layout(where, f, here, g, props_now, catalog, people, err)
 
     # a push leaves through the previous chapter's door or porthole
@@ -517,7 +545,8 @@ def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on
         prev = chapters[i - 1].get("events") if isinstance(chapters[i - 1], dict) else None
         cut = start - TIMING["pushFrames"]
         portals = [e for e in prev or [] if isinstance(e, dict) and e.get("type") == "prop"
-                   and catalog.get(e.get("prop"), {}).get("portal") and _int(e.get("at")) and e["at"] + TIMING["propIn"] <= cut]
+                   and isinstance(e.get("prop"), str) and catalog.get(e["prop"], {}).get("portal")
+                   and _int(e.get("at")) and e["at"] + TIMING["propIn"] <= cut]
         if not portals:
             err(f"{where} enters with a push, which goes through a prop with a portal (a door, a porthole...) on "
                 f"stage in chapter {i} by frame {cut}; place one, or enter with a wipe.")
@@ -538,7 +567,7 @@ def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on
 def _check_actor(e, where, name, poses, err) -> bool:
     ok = True
     x = e.get("x")
-    if x is not None and not (_num(x) and ACTOR_X[0] <= x <= ACTOR_X[1]):
+    if "x" in e and not (_num(x) and ACTOR_X[0] <= x <= ACTOR_X[1]):
         err(f"{where}: {name} at frame {e['at']}: x is where the feet stop, {ACTOR_X[0]} to {ACTOR_X[1]}.")
         ok = False
     if "pose" in e and e["pose"] not in poses:
@@ -555,7 +584,7 @@ def _check_prop(e, where, catalog, placed, err) -> None:
     if not isinstance(pid, str) or not _ID.match(pid) or pid in placed:
         err(f"{where}: the prop at frame {e['at']} needs an id of its own (lowercase letters, digits or _).")
         return
-    spec = catalog.get(prop)
+    spec = catalog.get(prop) if isinstance(prop, str) else None
     if not spec:
         err(f"{where}: {prop!r} is not in the prop library or the video's customProps.")
         return
@@ -580,7 +609,7 @@ def _check_prop(e, where, catalog, placed, err) -> None:
         err(f"{where}: {pid} at x {x} reaches outside the stage (x {STAGE['left']} to {STAGE['right']}, below "
             f"y {STAGE['top']}); move it or make it smaller.")
         return
-    placed[pid] = {"at": e["at"], "prop": prop, "box": box, "x": x, "place": spec["place"], "tag": None}
+    placed[pid] = {"at": e["at"], "prop": prop, "box": box, "x": x, "place": spec["place"], "tags": []}
 
 
 def _check_layout(where, f, here, guide, props, catalog, people, err) -> None:
@@ -657,7 +686,7 @@ def _check_plate(e, where, catalog, err) -> None:
         prop, word = e.get("prop"), e.get("word")
         if (prop is None) == (word is None):
             err(f"{where}: the morph at frame {e['at']} becomes either a prop or a word, one of the two.")
-        elif prop is not None and prop not in catalog:
+        elif prop is not None and (not isinstance(prop, str) or prop not in catalog):
             err(f"{where}: the morph at frame {e['at']} becomes {prop!r}, which is not a library or custom prop.")
         elif word is not None and not (isinstance(word, str) and 1 <= len(word) <= LIMITS["wordChars"] and " " not in word):
             err(f"{where}: the morph's word must be one word of 1 to {LIMITS['wordChars']} characters.")
@@ -665,7 +694,10 @@ def _check_plate(e, where, catalog, err) -> None:
 
 def chapter_windows(config: dict) -> list[tuple[int, int]]:
     """The stretches the text-layout audit samples as if each were a scene:
-    each chapter cut at every event, plates included as their own stretch."""
+    each chapter cut at every event, plates included as their own stretch,
+    leaving out the transitions (a chapter's first frames, while the wipe or
+    the white of a push brings it in, and the frames of a push out of it), where
+    two chapters' text is on the page at once."""
     out: list[tuple[int, int]] = []
     scenes = config.get("scenes") or []
     data = (scenes[0].get("props") or {}).get(PROPS_KEY) if scenes and isinstance(scenes[0], dict) else None
@@ -674,8 +706,9 @@ def chapter_windows(config: dict) -> list[tuple[int, int]]:
     chapters = [c for c in data.get("chapters") or [] if isinstance(c, dict) and _int(c.get("start"))]
     total = config.get("totalFrames") or 0
     for i, ch in enumerate(chapters):
-        start = ch["start"]
-        end = chapters[i + 1]["start"] if i + 1 < len(chapters) else total
+        start = ch["start"] + (TIMING["wipeFrames"] if i > 0 else 0)
+        nxt = chapters[i + 1] if i + 1 < len(chapters) else None
+        end = (nxt["start"] - (TIMING["pushFrames"] if nxt.get("enter") == "push" else 0)) if nxt else total
         cuts = sorted({start, end} | {e["at"] for e in ch.get("events") or [] if isinstance(e, dict) and _int(e.get("at"))
                                       and start < e["at"] < end})
         out.extend((a, b) for a, b in zip(cuts, cuts[1:]) if b > a)

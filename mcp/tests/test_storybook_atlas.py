@@ -191,6 +191,43 @@ def test_name_tags_that_collide_are_refused():
     assert any("tags under" in p for p in problems), problems
 
 
+def test_a_tag_is_checked_from_its_own_frame():
+    """A tag written after a person has left does not collide with that person's name tag."""
+    def later(d):
+        ch = d["chapters"][1]["events"]
+        ch.append({"type": "prop", "at": 499, "id": "lamp", "prop": "lamp", "x": 760, "enter": "pop"})
+        _ev(d, 1, "prop").update(x=900, scale=0.6)
+        _ev(d, 1, "person").update(x=560)
+        ch.append({"type": "person", "at": 745, "who": "grace", "exit": True})
+        ch.append({"type": "tag", "at": 765, "on": "lamp", "text": "Oil lamp, 1947 lab"})
+    problems = _check(_with(later))
+    assert not any("tags under" in p for p in problems), problems
+
+
+def test_a_second_tag_replaces_the_first():
+    def two(d):
+        d["chapters"][0]["events"].append({"type": "tag", "at": 159, "on": "cabinet", "text": "Harvard Mark II relay"})
+    assert _check(_with(two)) == []
+
+
+@pytest.mark.parametrize("mutate, fragment", [
+    (lambda d: _ev(d, 0, "guide").update(x=None), "x is where the feet stop"),
+    (lambda d: _ev(d, 1, "person").update(x=None), "x is where the feet stop"),
+    (lambda d: _ev(d, 1, "person").update(who=["grace"]), "not in the cast"),
+    (lambda d: _ev(d, 0, "tag").update(on=["cabinet"]), "not a prop on stage yet"),
+    (lambda d: _ev(d, 0, "prop").update(prop=["lamp"]), "not in the prop library"),
+    (lambda d: d["cast"][0].pop("name"), "name is the text on their tag"),
+    (lambda d: _ev(d, 0, "guide").update(exit=True), "cannot exit"),
+    (lambda d: _ev(d, 1, "morph").update(prop=["moth"]), "not a library or custom prop"),
+    (lambda d: _ev(d, 0, "gauge").update(at=315, until=450), "must be closed"),
+    (lambda d: d["chapters"][2]["events"].append({"type": "gauge", "at": 923, "until": 1008, "label": "x", "from": 0, "to": 1, "max": 2}),
+     "still coming in"),
+])
+def test_malformed_and_ill_timed_events_are_refused_not_crashed(mutate, fragment):
+    problems = _check(_with(mutate))
+    assert any(fragment in p for p in problems), problems
+
+
 def test_a_person_walking_past_the_guide_is_fine():
     """Grace walks in from the left past the guide at 210: only where people
     stand still is checked, so the example passes."""
@@ -204,13 +241,18 @@ def test_the_scene_use_rule():
     assert sa.check_scene_use("stick", [{"type": "generated", "src": "Other"}]) == ""
 
 
-def test_chapter_windows_cover_the_video_cut_at_each_event():
+def test_chapter_windows_cut_at_each_event_and_skip_the_transitions():
     windows = sa.chapter_windows(EXAMPLE)
     assert windows[0][0] == 0 and windows[-1][1] == EXAMPLE["totalFrames"]
     assert all(a < b for a, b in windows)
-    assert all(w1[1] == w2[0] for w1, w2 in zip(windows, windows[1:]))
+    chapters = _data(EXAMPLE)["chapters"]
+    # chapter 2 is pushed into: the push out of chapter 1 and the white into chapter 2 are left out
+    assert not any(a < chapters[1]["start"] + sa.TIMING["wipeFrames"] and b > chapters[1]["start"] - sa.TIMING["pushFrames"]
+                   for a, b in windows)
+    # chapter 3 is wiped into: its first frames are left out
+    assert not any(a < chapters[2]["start"] + sa.TIMING["wipeFrames"] and b > chapters[2]["start"] for a, b in windows)
     cuts = {a for a, _ in windows}
-    assert {e["at"] for c in _data(EXAMPLE)["chapters"] for e in c["events"]} <= cuts
+    assert {e["at"] for c in chapters for e in c["events"] if e["at"] >= c["start"] + sa.TIMING["wipeFrames"]} <= cuts
 
 
 def test_the_text_audit_samples_each_stretch():
@@ -256,6 +298,28 @@ def test_a_bad_custom_prop_entry_is_refused(changes, fragment):
 def test_a_custom_prop_file_that_breaks_the_rules_is_refused(body, fragment):
     errs, _ = sa.custom_prop_errors([MOTH_SPEC], "vid_example", EXTRA["props"], {MOTH_SPEC["src"]: body})
     assert any(fragment in e for e in errs), errs
+
+
+@pytest.mark.parametrize("line", [
+    'const k = 0; import * as R from "remotion";',
+    'import R from"remotion";',
+    'const m = import ("remotion");',
+    'const t = performance.now();',
+    'const r = crypto.getRandomValues(new Uint8Array(1));',
+    'const f = globalThis["fe" + "tch"];',
+    'const g = new Function("return 1");',
+    'const d = document.title;',
+])
+def test_a_prop_cannot_slip_past_the_source_rules(line):
+    body = MOTH + "\n" + line + "\n"
+    errs, _ = sa.custom_prop_errors([MOTH_SPEC], "vid_example", EXTRA["props"], {MOTH_SPEC["src"]: body})
+    assert errs, line
+
+
+def test_comments_are_not_read_as_code():
+    body = "// like the library's window, but no image or document here\n/* fetch nothing */\n" + MOTH
+    errs, _ = sa.custom_prop_errors([MOTH_SPEC], "vid_example", EXTRA["props"], {MOTH_SPEC["src"]: body})
+    assert errs == []
 
 
 def test_the_example_moth_passes_the_source_checks():

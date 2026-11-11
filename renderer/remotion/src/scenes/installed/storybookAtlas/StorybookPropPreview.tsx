@@ -31,7 +31,9 @@ export const StorybookPropPreview: React.FC<{ specs: Spec[]; drawings: Record<st
   return (
     <AbsoluteFill>
       <CanvasBitmap d={PAPER} />
-      {specs.slice(0, 8).map((spec, i, all) => {
+      {specs.slice(0, 8).map((raw, i, all) => {
+        // the validator reads a missing `states` as 1
+        const spec = { ...raw, states: raw.states ?? 1 };
         const cols = all.length <= 4 ? 1 : 2;
         const CELL_W = 1080 / cols;
         const draw = drawings[spec.id];

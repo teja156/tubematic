@@ -57,8 +57,10 @@ or event is wrong. Fix every problem it lists, then write again.
 - **A push** (`"enter": "push"`) goes through a prop with a portal (a door, a porthole, a window, an
   open book, the relay cabinet) that was on stage in the chapter before, at least 14 frames before the
   cut. Without one, use `"enter": "wipe"`.
-- **Plates** (constellation, gauge, morph) last 2.5 to 8 seconds (`until`), close before their
-  chapter ends, never overlap, and nothing else happens on stage while one is open.
+- **Plates** (constellation, gauge, morph) last 2.5 to 8 seconds (`until`), are closed (`until` plus 10
+  frames) 20 frames before their chapter ends, open 14 frames or more after a chapter other than the
+  first starts (after its push or wipe), never overlap, and nothing else happens on stage while one
+  is open.
 - **People:** at most 4 in the cast, at most 2 on stage at once. Nobody stands where someone else or a
   floor prop stands (people need 160 px of floor, the guide 140); walking past is fine. The name tags
   printed under their feet must not touch.
@@ -66,12 +68,14 @@ or event is wrong. Fix every problem it lists, then write again.
   (x 60 to 1020, below y 430); floor props do not overlap each other, nor do wall props; a wall prop
   hangs with its base `y` from 620 to 1240. An act starts once its prop has landed (10 frames after it
   appears) and is one of that prop's acts.
-- **Tags** are at most 24 characters and go on a prop already on stage.
+- **Tags** are at most 24 characters and go on a prop already on stage. A prop shows one tag: a new
+  tag on it replaces the one before.
 - **Your own props:** at most 8 per video, each a `prop-<name>` file of this video that exists before
   the config is written, with a box of 60 to 700 px a side, 1 to 4 states and 1 to 4 acts. The file
   default-exports the drawing, imports only `react` and `../../installed/storybookAtlas/ink` (or
   `palette`), and uses no filter, gradient, pattern of its own, dashed stroke, SVG text, image, fetch,
-  randomness or clock.
+  randomness or clock, and nothing from the page (`window`, `document`, `globalThis`), `eval`, a
+  `Function` constructor or a dynamic import. Comments are not checked.
 - **Never still:** something new on stage at least every 4 seconds.
 
 ## Step 0 — read
@@ -105,7 +109,8 @@ afternoon...", "Years later..."). Each chapter gets:
 ## Step 2 — the guide and the cast
 
 `guide` is `{"coat": ...}`: the guide's waistcoat colour (`blue`, `sage`, `brick`, `plum`, `mustard`).
-The guide is in every chapter; it starts each one standing at x 210, and it never speaks.
+The guide is in every chapter; it starts each one standing at x 210, it never speaks, and it never
+exits.
 
 `cast` lists the people of the story, at most four, each made of knobs (`reference/contract.md` lists
 them): `{"id": "ada", "name": "Ada Lovelace", "build": "short", "skin": "light", "hair": "bun",
@@ -158,9 +163,10 @@ flickering), `glow` puts a warm halo behind it, and `wobble`, `bounce`, `shake`,
 
 **Plates.** Use one or two a video, on the story's high points: the constellation for the name the
 story ends on, the gauge for the one number the narration says, the morph for the moment a thing
-appears or is found. Time `until` to the end of the line that explains it. A plate must close (its
-`until` plus 10 frames) at least 10 frames before its chapter ends, and nothing new starts on stage
-while it is open (a walk already under way finishes behind it).
+appears or is found. Time `until` to the end of the line that explains it. A plate must be closed (its
+`until` plus 10 frames) 20 frames before its chapter ends, so the next chapter's push or wipe never
+cuts it off, and in a chapter other than the first it opens 14 frames or more after the chapter starts.
+Nothing new starts on stage while it is open (a walk already under way finishes behind it).
 
 - **Landing the last word.** The ending name is usually said in the last seconds, too late to open a
   2.5-second plate on it. Open the constellation a few seconds earlier, on the sentence that leads to

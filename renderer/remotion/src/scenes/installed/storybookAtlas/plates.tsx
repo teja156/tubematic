@@ -17,6 +17,7 @@ import { letter } from "./glyphs";
 import { Sh, circle } from "./ink";
 import { CREAM, GOLD, INK, IVORY, NAVY, SEAL, SERIF, STARGOLD, TEXT } from "./palette";
 import { rng } from "./backdrops";
+import { loadStorybookFonts } from "./fonts";
 import { clamp01, ease } from "./stage";
 
 const P = STAGE.plate;
@@ -248,7 +249,8 @@ async function wordImage(word: string): Promise<HTMLCanvasElement> {
 
 /** The morph's target as points, sampled once per render tab. */
 function useTarget(e: ME, drawing: Drawing | null): [number, number][] | null {
-  const key = drawing ? drawing.key : `word:${e.word}`;
+  // the seed is part of the key: two morphs to the same target sample their own points
+  const key = `${drawing ? drawing.key : `word:${e.word}`}:${e.at}`;
   const [, rerender] = useState(0);
   useLayoutEffect(() => {
     if (targets.has(key)) return;
@@ -260,7 +262,10 @@ function useTarget(e: ME, drawing: Drawing | null): [number, number][] | null {
           await img.decode();
           return [img, drawing.width, drawing.height];
         })
-      : wordImage(e.word ?? "").then((c) => [c, c.width, c.height]);
+      : loadStorybookFonts()
+          .then(() => document.fonts.load(`500 ${WORD_PX}px 'EB Garamond'`))
+          .then(() => wordImage(e.word ?? ""))
+          .then((c) => [c, c.width, c.height]);
     load
       .then(([img, w, h]) => {
         targets.set(key, samplePoints(img, w, h, e.at + 1));
@@ -288,7 +293,8 @@ export const Morph: React.FC<{ e: ME; frame: number; drawing: Drawing | null; sp
   const key = `${Math.max(-1, Math.min(t, end + 1))}:${target ? 1 : 0}`;
   const ref = useCanvasDraw((ctx) => {
     if (!target) return;
-    const spin = Math.min(t, M.turn) * 0.035;
+    // the galaxy holds still while the shutters open: the key below is clamped there, so the drawing must be too
+    const spin = Math.max(0, Math.min(t, M.turn)) * 0.035;
     const s = ease.inOut(clamp01((t - M.turn) / M.scatter));
     const g = ease.inOut(clamp01((t - M.turn - M.scatter) / M.regroup));
     const fade = 1 - 0.75 * clamp01((t - M.turn - M.scatter - M.regroup) / M.reveal);

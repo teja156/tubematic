@@ -60,7 +60,9 @@ function makeKit(custom: CustomProp[], draws: Record<string, PropDrawing>): Kit 
     const d = DRAWINGS[id];
     if (d) entries[id] = { ...PROPS[id], label: d.label, draw: d.draw };
   }
-  for (const c of custom) {
+  for (const raw of custom) {
+    // the validator reads a missing `states` as 1
+    const c = { ...raw, states: raw.states ?? 1 };
     specs[c.id] = c;
     if (draws[c.id]) entries[c.id] = { ...c, label: c.id, draw: draws[c.id] };
   }
@@ -206,14 +208,16 @@ const ChapterView: React.FC<{ data: StorybookAtlasData; i: number; frame: number
     const who = cast.get(id);
     if (who && a.visible && !a.walking) tags.push({ key: `n-${id}`, x: a.x, y: STAGE.floor + 14, text: who.name, op: 1 });
   }
-  for (const e of c.events) {
-    if (e.type !== "tag" || e.at > frame) continue;
-    const p = props.find((q) => q.id === e.on);
-    const op = clamp01((frame - e.at) / TIMING.tagIn);
-    if (p) {
-      const spec = kit.specs[p.prop];
-      tags.push({ key: `t-${e.at}`, x: p.x, y: spec.place === "wall" ? p.y + 12 : STAGE.floor + 14, text: e.text, op });
-    }
+  // a prop shows its latest tag: a new tag replaces the one before (the validator checks them the same way)
+  const latest = new Map<string, Extract<StorybookAtlasData["chapters"][0]["events"][0], { type: "tag" }>>();
+  for (const e of [...c.events].sort((a, b) => a.at - b.at)) {
+    if (e.type === "tag" && e.at <= frame) latest.set(e.on, e);
+  }
+  for (const [on, e] of latest) {
+    const p = props.find((q) => q.id === on);
+    if (!p) continue;
+    const spec = kit.specs[p.prop];
+    tags.push({ key: `t-${on}`, x: p.x, y: spec.place === "wall" ? p.y + 12 : STAGE.floor + 14, text: e.text, op: clamp01((frame - e.at) / TIMING.tagIn) });
   }
   const title = wrapTitle(c.title).join("\n");
   return (

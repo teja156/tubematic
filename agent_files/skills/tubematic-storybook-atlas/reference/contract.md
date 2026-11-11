@@ -47,13 +47,14 @@ word's `startFrame`. Positions are frame pixels: x from 0 (left) to 1080, y from
 | `person` | `at`, `who` (a cast id), optional `x` (110 to 970), `pose`, `facing`, `exit` | The first event walks them in from the nearer edge; `exit: true` walks them off |
 | `prop` | `at`, `id`, `prop`, `x`, `y` (wall props, 620 to 1240), optional `scale` (0.6 to 1.4), `enter` | `x` is the middle of its base; `id` is your name for it in this chapter |
 | `act` | `at`, `id`, `act` | One of the prop's acts, 10 frames or more after it appeared |
-| `tag` | `at`, `on` (a prop's `id`), `text` (at most 24 characters) | Printed under the prop |
+| `tag` | `at`, `on` (a prop's `id`), `text` (at most 24 characters) | Printed under the prop; a new tag on a prop replaces the one before |
 | `constellation` | `at`, `until`, `words`, optional `then`, `thenAt` | 1 or 2 words of 1 to 10 letters or digits; `thenAt` at least 1.5 s after `at` and 1 s before `until` |
 | `gauge` | `at`, `until`, `label` (at most 24 characters), `from`, `to`, `max`, optional `danger` | 0 to max; the red band runs from `danger` to `max` |
 | `morph` | `at`, `until`, `prop` or `word` (1 to 10 characters) | The dots become the prop (library or yours) or the word |
 
-A plate (`constellation`, `gauge`, `morph`) lasts 2.5 to 8 s, closes before its chapter ends, never
-overlaps another, and nothing else happens on stage while it is open.
+A plate (`constellation`, `gauge`, `morph`) lasts 2.5 to 8 s, is closed (`until` plus 10 frames) 20
+frames before its chapter ends, opens 14 frames or more after a chapter other than the first starts,
+never overlaps another, and nothing else happens on stage while it is open.
 
 `enter` for a prop: `pop` (the default), `drop`, `slide`, `rise`, `fade`.
 

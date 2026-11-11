@@ -677,9 +677,11 @@ about 0.30. The measurements are in `StorybookAtlas.tsx`'s header comment.
   prop, entrance or act is not in the catalogue or the video's `customProps`.
 - An event is not on a word, or comes in its chapter's last 20 frames; an act starts before its prop has
   landed; a tag goes on a prop not yet on stage; a push has no portal prop on stage in the chapter
-  before.
-- A plate lasts under 2.5 or over 8 seconds, overlaps another, or does not close before the chapter
-  ends, or anything else happens on stage while it is open; a constellation's words are not 1 or 2
+  before; the guide is told to exit. A prop shows its latest tag, and a tag is checked from its own
+  frame.
+- A plate lasts under 2.5 or over 8 seconds, overlaps another, is not closed 20 frames before its
+  chapter ends (the scene draws no plate during a push or a wipe), opens within 14 frames of a later
+  chapter's start, or anything else happens on stage while it is open; a constellation's words are not 1 or 2
   words of letters and digits; a gauge's values are not between 0 and its maximum.
 - The cast is over four, more than two people are on stage at once, or a chapter holds more than six
   props.
@@ -688,9 +690,11 @@ about 0.30. The measurements are in `StorybookAtlas.tsx`'s header comment.
   Only where people stand still is checked; walking past is free.
 - A custom prop breaks Bean Explainer's rules for one (its count, id, `src` and box) or its source
   imports anything but `react` and the style's `ink` and `palette`, or uses an SVG filter, a gradient,
-  a pattern of its own, a dashed stroke, SVG text, an image, a fetch, randomness or the clock
-  (`storybook_atlas.py::FORBIDDEN_SOURCE`). SVG text is refused because a prop is drawn into a bitmap,
-  where the page's fonts do not reach.
+  a pattern of its own, a dashed stroke, SVG text, an image, a fetch, randomness or the clock, the page
+  (`window`, `document`, `globalThis`), `eval`, a `Function` constructor or a dynamic import
+  (`storybook_atlas.py::FORBIDDEN_SOURCE`, checked with comments removed). SVG text is refused
+  because a prop is drawn into a bitmap, where the page's fonts do not reach. The checks keep an
+  agent's ordinary mistakes out; they are not a sandbox, as for every agent-written scene.
 - Nothing new happens on stage for more than 4 seconds.
 
 `mcp/tests/test_storybook_atlas.py` pins `storybook_atlas.py` to `contract.ts` and `stage.ts` through
@@ -698,7 +702,8 @@ the shared cases in `fixtures/storybook_atlas_contract.json`, which `stage.ts` i
 pack's `captions` (the `label` caption background) fill every `subtitles` key the config leaves out.
 `validate_job` checks the custom prop files again as they are on disk
 (`server.py::_storybook_custom_prop_errors`). The text-layout audit samples each stretch between two
-events once things have arrived. A Storybook Atlas video can have a mascot; the skill keeps it small and
+events once things have arrived, leaving out the frames of a push or a wipe, where two chapters' text
+is on the page at once. A Storybook Atlas video can have a mascot; the skill keeps it small and
 to one side, away from the guide.
 
 ---

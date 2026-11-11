@@ -140,7 +140,7 @@
         {
          "type": "morph",
          "at": 809,
-         "until": 900,
+         "until": 893,
          "prop": "moth"
         }
        ]
@@ -214,7 +214,7 @@
         {
          "type": "constellation",
          "at": 1242,
-         "until": 1390,
+         "until": 1383,
          "words": [
           "BUG"
          ],
