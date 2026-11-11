@@ -32,7 +32,7 @@
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
-import { outPathError } from "./out-path.mjs";
+import { planRequest } from "./out-path.mjs";
 import { bundle } from "@remotion/bundler";
 import { openBrowser, renderStill, selectComposition } from "@remotion/renderer";
 import { enableTailwind } from "@remotion/tailwind-v4";
@@ -169,13 +169,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/rebundle") { touch(); await (busy = busy.then(rebundle)); return json(res, 200, { ok: true }); }
     if (req.method === "POST" && (req.url === "/still" || req.url === "/stills")) {
       const b = await body(req);
-      // only under <public>/<video>/cartoon/: checked before any bundle or browser, and per file, since
-      // /stills joins the caller's prefix onto outDir
-      const outs = req.url === "/still" ? [b.out]
-        : (Array.isArray(b.frames) ? b.frames : []).map((f) => path.join(String(b.outDir ?? ""), `${b.prefix ?? "f"}${String(f).padStart(4, "0")}.png`));
-      const refused = (req.url === "/stills" ? outPathError(PUBLIC, b.outDir, { dir: true }) : null)
-        ?? outs.map((o) => outPathError(PUBLIC, o)).find((e) => e);
-      if (refused) return json(res, 400, { ok: false, error: refused });
+      // every file goes under <public>/<video>/cartoon/: checked before any bundle or browser, and the loop below
+      // writes exactly the targets checked here
+      const plan = planRequest(PUBLIC, req.url, b);
+      if (plan.error) return json(res, 400, { ok: false, error: plan.error });
       const t = Date.now();
       const scale = b.scale ?? 1;
       const comp = b.composition ?? "Composition";
@@ -190,19 +187,14 @@ const server = http.createServer(async (req, res) => {
           if (!serveUrl || !browser) throw Object.assign(e instanceof Error ? e : new Error(String(e)), { startFailed: true });
           throw e;
         }
-        if (req.url === "/still") {
-          fs.mkdirSync(path.dirname(b.out), { recursive: true });
-          const logs = await one(comp, props, b.frame ?? 0, b.out, scale);
-          return { ok: true, out: b.out, ms: Date.now() - t, logs };
-        }
-        fs.mkdirSync(b.outDir, { recursive: true });
         const outs = [];
         const logs = [];
-        for (const f of b.frames) {
-          const out = path.join(b.outDir, `${b.prefix ?? "f"}${String(f).padStart(4, "0")}.png`);
-          logs.push(...(await one(comp, props, f, out, scale)));
+        for (const { frame, out } of plan.targets) {
+          fs.mkdirSync(path.dirname(out), { recursive: true });
+          logs.push(...(await one(comp, props, frame, out, scale)));
           outs.push(out);
         }
+        if (req.url === "/still") return { ok: true, out: outs[0], ms: Date.now() - t, logs };
         return { ok: true, outs, ms: Date.now() - t, logs };
       };
       // renders are serialised: one browser, one GPU

@@ -74,14 +74,19 @@ judge to run next.
 
 ### `renderer/remotion/cartoon-tools/out-path.test.ts`
 
-Covers `renderer/remotion/cartoon-tools/out-path.mjs::outPathError`, the check the
-[stills server](../11-rendering-and-review.md#the-stills-server) runs on every requested output path
-before it bundles or opens a browser.
+Covers `renderer/remotion/cartoon-tools/out-path.mjs::outPathError` and `planRequest`, the checks the
+[stills server](../11-rendering-and-review.md#the-stills-server) runs on every file a request would
+write, before it bundles or opens a browser.
 
 - The paths the Cartoon 3D tools write (`<video_id>/cartoon/stills/…`, `<video_id>/cartoon/beatgate/…`)
   pass, and an output directory under a video's `cartoon/` folder passes.
 - A path elsewhere in `/jobs`, outside it, relative, or escaping with `..` is refused, as is a file that
   is not a PNG and a missing path.
+- A path that goes through a planted symlink out of the public directory is refused. A folder not
+  yet created passes.
+- `planRequest` returns the exact frame and file pairs the server writes. Frames that are not a list
+  of non-negative integers are refused, because a string iterates character by character and would
+  skip the per-file check. A `/stills` prefix that climbs out of the folder is refused.
 
 Trap: the renderer mounts `/jobs` read-write so the server can write stills, and its port takes
 requests with no credential. This check is what keeps such a request from overwriting a video's

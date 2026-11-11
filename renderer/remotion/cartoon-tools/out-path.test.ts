@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 // @ts-expect-error a plain .mjs module beside the stills server, which node runs untranspiled
-import { outPathError } from "./out-path.mjs";
+import { outPathError, planRequest } from "./out-path.mjs";
 
 const PUBLIC = "/jobs";
 
@@ -36,5 +39,50 @@ describe("outPathError", () => {
   it("refuses an output directory outside a video's cartoon folder", () => {
     expect(outPathError(PUBLIC, "/jobs/vid_a", { dir: true })).toMatch(/is not under/);
     expect(outPathError(PUBLIC, "/jobs", { dir: true })).toMatch(/is not under/);
+  });
+});
+
+describe("outPathError with symlinks", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "out-path-"));
+  const pub = path.join(root, "jobs");
+  const outside = path.join(root, "elsewhere");
+  fs.mkdirSync(path.join(pub, "vid_a", "cartoon"), { recursive: true });
+  fs.mkdirSync(outside);
+  fs.symlinkSync(outside, path.join(pub, "vid_a", "cartoon", "stills"));
+  fs.symlinkSync(outside, path.join(pub, "vid_b"));
+  afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it("follows a planted link out of the public directory and refuses it", () => {
+    expect(outPathError(pub, path.join(pub, "vid_a", "cartoon", "stills", "f0001.png"))).toMatch(/is not under/);
+    expect(outPathError(pub, path.join(pub, "vid_b", "cartoon", "f0001.png"))).toMatch(/is not under/);
+  });
+
+  it("allows a real folder, including parts not yet created", () => {
+    expect(outPathError(pub, path.join(pub, "vid_a", "cartoon", "beatgate", "beat00-f0001.png"))).toBeNull();
+    expect(outPathError(pub, path.join(pub, "vid_new", "cartoon", "stills", "f0001.png"))).toBeNull();
+  });
+});
+
+describe("planRequest", () => {
+  it("plans one /still and the frames of a /stills, writing exactly what it checked", () => {
+    expect(planRequest(PUBLIC, "/still", { out: "/jobs/v/cartoon/stills/f0005.png", frame: 5 }))
+      .toEqual({ targets: [{ frame: 5, out: "/jobs/v/cartoon/stills/f0005.png" }] });
+    expect(planRequest(PUBLIC, "/stills", { outDir: "/jobs/v/cartoon/beatgate", frames: [3, 40], prefix: "b" }))
+      .toEqual({ targets: [{ frame: 3, out: "/jobs/v/cartoon/beatgate/b0003.png" }, { frame: 40, out: "/jobs/v/cartoon/beatgate/b0040.png" }] });
+  });
+
+  it("refuses frames that are not a list of non-negative integers", () => {
+    // a string iterates character by character: its prefix escape would otherwise go unchecked
+    const escape = { outDir: "/jobs/v/cartoon", prefix: "../../../app/remotion/public/watermark" };
+    for (const frames of ["1", [], [1.5], [-1], ["1"], undefined, { 0: 1 }]) {
+      expect(planRequest(PUBLIC, "/stills", { ...escape, frames }).error, JSON.stringify(frames)).toMatch(/frames must be/);
+    }
+    expect(planRequest(PUBLIC, "/still", { out: "/jobs/v/cartoon/x.png", frame: "1" }).error).toMatch(/frame must be/);
+  });
+
+  it("refuses a prefix that leaves the cartoon folder, and a prefix that is not a string", () => {
+    expect(planRequest(PUBLIC, "/stills", { outDir: "/jobs/v/cartoon", frames: [1], prefix: "../../../app/x" }).error).toMatch(/is not under/);
+    expect(planRequest(PUBLIC, "/stills", { outDir: "/jobs/v/cartoon", frames: [1], prefix: 7 }).error).toMatch(/prefix must be/);
+    expect(planRequest(PUBLIC, "/still", { out: "/jobs/v/timeline.png" }).error).toMatch(/is not under/);
   });
 });
