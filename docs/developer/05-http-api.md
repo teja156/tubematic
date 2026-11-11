@@ -348,7 +348,7 @@ Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility
   [GPU rendering](#gpu-rendering)).
 - The angle fails `tubematic_core.angles.angle_error`: `angle` or `angle_kind` is sent without the
   other, either is not a string, `angle_kind` is not a kind, `angle` is over 300 characters, or
-  `angle_score` is not a whole number from 0 to 10.
+  `angle_score` is not a whole number from 0 to 10. A `null` in any of the three reads as absent.
 
 What the route fills in:
 

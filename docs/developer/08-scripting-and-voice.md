@@ -118,8 +118,9 @@ them in two places:
 - Drafting the openings. All three openings are built on the angle, each from a different shape of
   the formula. The angle sentence is a note to the agent and is not spoken.
 
-A video has no angle when a person's own topic came without one and the agent found none at
-pickup. The script is then written from the topic alone.
+A video has no angle when its topic came without one and the agent found none at pickup, or when
+its script was already written before topics carried angles. The script is then written from the
+topic alone.
 
 ### What outranks a formula
 

@@ -109,7 +109,8 @@ Covers the request body of [the New Video page](../15-dashboard.md#the-new-video
 - Submit is blocked with a title over 70 code points, and a refusal keeps the input.
 - The optional angle: an empty field sends no angle, a sentence is sent with its kind, and a
   sentence with no kind or over 300 characters blocks Submit. The field is not offered while the
-  kinds cannot be loaded, and the form still submits.
+  kinds cannot be loaded, and the form still submits. The text box and the kind picker each have
+  their own label.
 
 ### `script-profiles-page.test.tsx`
 
@@ -367,7 +368,9 @@ Covers `components/TopicAngle.tsx` on the video window's Topic tab and `lib/angl
 - A refused save shows the API's reason and keeps the draft. Cancel drops it.
 - Past `TOPIC_PROPOSED`, and on an archived video, there is no Edit button. An approved video with
   no angle shows no block and makes no request for the kinds.
-- The kind's id is shown, with its underscores opened, when the kinds cannot be loaded.
+- The kind's id is shown, with its underscores opened, when the kinds cannot be loaded, and the
+  editor then says why no kind can be chosen.
+- The sentence is counted and sent as the API stores it: whitespace collapsed, in code points.
 
 ### `video-modal-retry-agent.test.tsx`
 

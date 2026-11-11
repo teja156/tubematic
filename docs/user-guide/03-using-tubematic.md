@@ -132,7 +132,8 @@ to start from.
 
 You can change the sentence and its kind while the topic waits at Topic Proposed, on the **Topic**
 tab of the video window. An angle you write has no score, and editing an angle clears the score the
-agent gave it. After you approve the topic the angle is fixed.
+agent gave it. You can edit the angle only until you approve the topic. A revision you request
+after that can still ask the agent for a different one.
 
 A topic of your own can come without an angle. The **New Video** page has an optional **Angle**
 field. When you leave it empty, the agent looks for an angle in your topic before it writes the

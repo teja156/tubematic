@@ -117,6 +117,27 @@ def test_a_changed_kind_alone_resets_the_score(client, db_path):
     assert _angle(db_path) == (SENTENCE, "myth", 0)
 
 
+@pytest.mark.parametrize("style", ["under_the_hood", "cartoon_3d"])
+def test_the_angle_can_be_edited_on_a_video_whose_style_takes_no_mascot(client, db_path, style):
+    """Such a style makes the route rebuild its parameter list to drop the
+    mascot. The score reset's two parameters must survive that, or the edit is
+    a 500 on every topic of a domain that defaults to the style."""
+    _video(db_path)
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET visual_style = ? WHERE id = 'vid_1'", (style,))
+    con.commit()
+    con.close()
+    res = client.patch("/videos/vid_1", json={"angle": SENTENCE, "angle_kind": "paradox"})
+    assert res.status_code == 200
+    assert _angle(db_path) == (SENTENCE, "paradox", 0)
+    # The same angle again, with the approval: the score reset reads the row.
+    res = client.patch("/videos/vid_1", json={"angle": SENTENCE, "angle_kind": "paradox",
+                                               "status": "TOPIC_APPROVED",
+                                               "onlyIfCurrentStatus": "TOPIC_PROPOSED"})
+    assert res.status_code == 200
+    assert res.get_json()["status"] == "TOPIC_APPROVED"
+
+
 def test_an_angle_can_be_added_to_a_topic_that_has_none(client, db_path):
     _video(db_path, angle="", kind="", score=0)
     res = client.patch("/videos/vid_1", json={"angle": SENTENCE, "angle_kind": "incident"})
@@ -236,6 +257,12 @@ def test_post_videos_stores_an_angle_it_is_sent(client, db_path):
     res = _post(client, angle=SENTENCE, angle_kind="paradox", angle_score=8)
     assert res.status_code == 201
     assert _angle(db_path, res.get_json()["id"]) == (SENTENCE, "paradox", 8)
+
+
+def test_a_null_angle_score_on_post_videos_means_unscored(client, db_path):
+    res = _post(client, angle=SENTENCE, angle_kind="paradox", angle_score=None)
+    assert res.status_code == 201
+    assert _angle(db_path, res.get_json()["id"]) == (SENTENCE, "paradox", 0)
 
 
 def test_post_videos_does_not_require_an_angle(client, db_path):

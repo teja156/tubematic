@@ -5,7 +5,9 @@ description: Research and propose new video topics using the curriculum, trendin
 
 # Tubematic Topic Research Skill
 
-**Invoke this skill when:** researching and proposing new video topics during a scheduled research run.
+**Invoke this skill when:** researching and proposing new video topics during a scheduled research
+run. The operator skill and `/tubematic-submit-new-job` also send you to one section of it, **The
+angle**, to find the angle of a single topic that already exists.
 
 Tool signatures are in the MCP docstrings. This skill covers the workflow, what an angle is, and
 the two scores.
@@ -73,6 +75,11 @@ invented: no made-up incident, person, number or quote.
 **A subject with no honest angle is not proposed.** If the material gives none of the kinds below
 a real footing, drop the subject and name it in the run summary. Do not dress a definition up
 until it passes: "X is a data structure, but it is surprisingly clever" is not a paradox.
+
+**When you were sent here for one existing topic** (a video picked up with no angle, or a topic a
+person just submitted), only the kinds, the rules for the sentence and the score below apply. Work
+from that topic's text. Nothing is dropped and no score floor applies: if the topic has no honest
+angle, it simply goes on without one, as the skill or command that sent you says.
 
 The kinds, what a topic must hold for each, and where the script will start from:
 

@@ -26,7 +26,6 @@ import copy
 import io
 import logging
 import json
-import math
 import os
 import math
 import random
@@ -1666,11 +1665,11 @@ def create_video(
     'design_question', 'incident', 'scheme', 'anomaly', 'scene', 'measure' (the
     topic-research skill says what each needs). angle_score is how strong the
     angle is, 0 to 10, by that skill's rubric. The sentence and the kind are
-    passed together. REQUIRED for 'curriculum', 'trending' and 'mining', with
-    an angle_score of 5 or more: a subject with no honest angle is not
-    proposed, so leave it out and name it in your run summary; never invent an
-    angle to pass. For 'manual' all three are optional: a person's own topic
-    is never refused for lacking an angle.
+    passed together. REQUIRED for every topic you researched, with an
+    angle_score of 5 or more: a subject with no honest angle is not proposed,
+    so leave it out and name it in your run summary; never invent an angle to
+    pass. Only a topic a person handed you in this session
+    (/tubematic-submit-new-job) may be filed without one.
 
     topic: the full descriptive brief — what the video covers, at whatever
     length the idea needs. This is the text the producibility score is about.
@@ -2465,8 +2464,9 @@ def update_video(
     """Update one or more fields on a video record. Pass only fields to change.
 
     angle, angle_kind, angle_score: the topic's angle (see create_video). Pass
-    the sentence and its kind together, with the score you gave it; left out,
-    the score is stored as 0 (unscored). Writable at TOPIC_PROPOSED, on a
+    the sentence and its kind together, every time, with the score you gave
+    it; left out, the score is stored as 0 (unscored). The score cannot be
+    passed without them. Writable at TOPIC_PROPOSED, on a
     REVISION_REQUESTED whose comment asks for another angle, and at
     TOPIC_APPROVED only while the video has no angle: that is the fill you make
     when you pick up a video whose topic came without one, before its style
@@ -2655,8 +2655,13 @@ def update_video(
     # with them or reset. Its status window is checked further down.
     angle_write = angle is not None or angle_kind is not None or angle_score is not None
     if angle_write:
-        angle = tangles.clean("" if angle is None else angle)
-        angle_kind = "" if angle_kind is None else angle_kind
+        # Both named, every time: a call carrying the score alone, or one of
+        # the pair, must not read as "clear the angle".
+        if angle is None or angle_kind is None:
+            return {"error": "angle, angle_kind and angle_score are written together: pass the "
+                             "sentence and its kind (with its score), or \"\" for both to "
+                             "remove the angle"}
+        angle = tangles.clean(angle)
         angle_kind = angle_kind.strip() if isinstance(angle_kind, str) else angle_kind
         angle_err = tangles.angle_error(angle, angle_kind,
                                         0 if angle_score is None else angle_score)
@@ -5473,11 +5478,16 @@ def _candidate_angle(candidate: dict) -> tuple:
     angle = candidate.get("angle")
     kind = candidate.get("angle_kind")
     score = candidate.get("angle_score", 0)
-    if isinstance(score, bool) or not isinstance(score, (int, float)) or score != int(score):
+    if isinstance(score, str):
+        try:
+            score = float(score)
+        except ValueError:
+            score = 0
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score):
         score = 0
     return (tangles.clean(angle) if isinstance(angle, str) else "",
             re.sub(r"[\s-]+", "_", kind.strip().lower()) if isinstance(kind, str) else "",
-            min(max(int(score), 0), tangles.ANGLE_SCORE_MAX))
+            min(max(round(score), 0), tangles.ANGLE_SCORE_MAX))
 
 
 def _mining_angle_reason(angle: str, kind: str, score: int) -> str:

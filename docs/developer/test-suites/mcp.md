@@ -170,11 +170,13 @@ Covers the [topic's angle](../02-pipeline.md#topic-angle) in `create_video`, `ge
   no angle reads as empty, and a topic filed before angles existed still approves.
 - `update_video` writes the angle at `TOPIC_PROPOSED` and `REVISION_REQUESTED`, and at
   `TOPIC_APPROVED` only while the video has none. It refuses the write at every later status. A
-  rewrite sent with no score stores 0.
+  rewrite sent with no score stores 0. A call with the score alone, or with one of the sentence and
+  the kind, is refused and leaves the angle as it was.
 - A mined candidate with no angle, an unknown kind or an angle scoring under 5 comes back in
   `not_filed` with the reason. The prompt carries the kinds and the score from
   `tubematic_core.angles`. The cap goes to the candidates with the highest two scores together. A
-  kind written as its label, or with a hyphen, files under its id.
+  kind written as its label, or with a hyphen, files under its id. A fractional or quoted score is
+  brought to a whole number, and a `NaN` or `Infinity` score costs that candidate only.
 
 Trap: the write at `TOPIC_APPROVED` fills a missing angle when the agent picks a video up. Without
 `angle = ''` in the `UPDATE`'s `WHERE`, it could replace an angle a person read and approved. A test

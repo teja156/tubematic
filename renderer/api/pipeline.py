@@ -1445,7 +1445,8 @@ def _body_angle(body: dict, *, with_score: bool):
     kind = body.get("angle_kind")
     angle = "" if angle is None else tangles.clean(angle)
     kind = "" if kind is None else (kind.strip() if isinstance(kind, str) else kind)
-    score = body.get("angle_score", 0) if with_score else 0
+    score = body.get("angle_score") if with_score else 0
+    score = 0 if score is None else score
     err = tangles.angle_error(angle, kind, score)
     return (None, err) if err else ((angle, kind, score), None)
 AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
@@ -2861,12 +2862,6 @@ def create_pipeline_blueprint() -> Blueprint:
             # (TMDEV-90); a second race test keys on this one's (TMDEV-110).
             set_sql = [f"{k} = ?" for k in fields]
             set_params = list(fields.values())
-            if angle_edit:
-                # The score described the words it was given for. SET reads the
-                # old row, so the same angle saved again keeps its score.
-                set_sql.append("angle_score = CASE WHEN angle IS ? AND angle_kind IS ? "
-                               "THEN angle_score ELSE 0 END")
-                set_params += [fields["angle"], fields["angle_kind"]]
             if takes_no_mascot:
                 # Whatever was sent: an echoed stored mascot must not survive
                 # the switch (a different one was refused above).
@@ -2878,6 +2873,14 @@ def create_pipeline_blueprint() -> Blueprint:
             # (or none) starts unpinned, or it would inherit the old version number.
             if takes_no_mascot or ("mascot_id" in fields and fields["mascot_id"] != stored_mascot):
                 set_sql.append("mascot_version = 0")
+            if angle_edit:
+                # The score described the words it was given for. SET reads the
+                # old row, so the same angle saved again keeps its score. Added
+                # after the mascot block above, which rebuilds set_params from
+                # `fields` and would drop these two.
+                set_sql.append("angle_score = CASE WHEN angle IS ? AND angle_kind IS ? "
+                               "THEN angle_score ELSE 0 END")
+                set_params += [fields["angle"], fields["angle_kind"]]
             # Any human status change is a human acting on the video, so it
             # releases a stuck flag and starts the no-progress count afresh
             # (TMDEV-129). Only a status change: renaming a stuck video is not

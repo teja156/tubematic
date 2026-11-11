@@ -39,10 +39,9 @@ After you upgrade:
    warnings**. Remove the sentence to stop it. If you want a closing line and have no such
    sentence, add one: a script profile's sign-off does not put one there. See
    [Preferences](https://docs.tubematic.ai/user-guide/settings#preferences).
-
 3. If `upgrade.py` reported that an agent was not redeployed, run
-   `python3 onboard.py --install-agent <agent>` for that agent. Until its skills are current, its
-   research runs propose nothing, because a proposal with no angle is refused.
+   `python3 onboard.py --install-agent <agent>` for that agent. Until its skills are current, the
+   curriculum and trending topics it proposes are refused for having no angle.
 
 Topics that were proposed before you upgraded have no angle. You can approve them as before, and
 the agent adds an angle when it picks the video up. To set one yourself, open the topic while it
@@ -179,7 +178,6 @@ If you go back to 2.1.x later:
 - A script profile sets how a script sounds, and the formula sets its structure. Before, a
   profile could also set the order of a script's parts and its sign-off. The agent now uses a
   profile's signature phrases in some scripts and no single one in every script.
-
 - Research files a topic only when it has an angle and scores 5 or more twice: for how well the
   pipeline can show it, and for how strong its angle is. Before, only the first score counted. A
   research run can therefore file fewer topics than its limit. The agent ends each run with a

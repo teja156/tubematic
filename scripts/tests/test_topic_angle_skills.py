@@ -106,6 +106,24 @@ def test_the_operator_leaves_an_approved_angle_alone():
     assert "already has" in row
 
 
+def test_the_operator_says_a_topic_has_no_angle_once():
+    """A video can wait at TOPIC_APPROVED across several sessions. Each one
+    sees an empty angle, and each would add the same comment."""
+    text = _skill("tubematic-operator")
+    row = next(line for line in text.splitlines() if line.startswith("| `TOPIC_APPROVED` | **First"))
+    assert "Say it once" in row
+
+
+def test_the_research_skill_says_what_applies_to_one_existing_topic():
+    """The operator and the submit command send a session to The angle for a
+    single topic. The section's research rule (drop the subject) must not
+    read as applying there."""
+    text = _skill("tubematic-topic-research")
+    section = text[text.index("## The angle"):text.index("## Producibility Scoring")]
+    assert "one existing topic" in section
+    assert "Nothing is dropped and no score floor applies" in section
+
+
 def test_a_topic_revision_can_rewrite_the_angle():
     text = _skill("tubematic-operator")
     row = next(line for line in text.splitlines() if "**Topic revision**" in line)

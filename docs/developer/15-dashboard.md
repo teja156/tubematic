@@ -490,7 +490,9 @@ Effort:
   (`components/TopicAngle.tsx`): the sentence, its kind and its score. At `TOPIC_PROPOSED` on a
   video that is not archived, **Edit** (or **Add angle**) opens a text box with a 300-character
   count and a kind picker, and **Save** sends both through `PATCH /videos/<video_id>` and reads the
-  video again. Past that status the block is read-only, and a video with no angle shows none. The
+  video again. The count and the saved text use the stored form (`lib/angles.ts::cleanAngle`):
+  whitespace collapsed, counted in code points. Past that status the block is read-only, and a
+  video with no angle shows none. The
   component is keyed by the video's id, because the window stays mounted between videos and a
   draft must not move to the next one.
 - The sidebar holds the actions for the video's status (including Delete), a **Published to**

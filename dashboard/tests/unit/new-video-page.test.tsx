@@ -281,6 +281,14 @@ describe("NewVideoPage", () => {
     expect(submit.disabled).toBe(true);
   });
 
+  it("gives the angle and its kind a label each", async () => {
+    mockApi({ angleKinds: KINDS });
+    await ready();
+    // One label around both controls would name the text box after every kind.
+    expect((await screen.findByLabelText("Angle (optional)")).getAttribute("data-testid")).toBe("new-video-angle");
+    expect(screen.getByLabelText("Angle kind").getAttribute("data-testid")).toBe("new-video-angle-kind");
+  });
+
   it("does not offer the angle while the kinds cannot be loaded, and still submits", async () => {
     const spy = mockApi();
     await ready();

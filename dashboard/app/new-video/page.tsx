@@ -8,7 +8,7 @@ import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { AgentPickers, Field, resolvePickedModel, selectStyle } from "@/components/AgentPickers";
 import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
 import { voiceLabel } from "@/lib/voices";
-import { ANGLE_MAX_CHARS, fetchAngleKinds, type AngleKind } from "@/lib/angles";
+import { ANGLE_MAX_CHARS, angleLength, cleanAngle, fetchAngleKinds, type AngleKind } from "@/lib/angles";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 
 // The fixed domain every submission here is filed into. Keep in sync:
@@ -124,9 +124,10 @@ export default function NewVideoPage() {
   // emoji is one character there and two in .length — which would disable
   // submit for a title the API accepts.
   const titleLen = Array.from(title.trim()).length;
-  const angleText = angle.trim();
+  const angleText = cleanAngle(angle);
+  const angleLen = angleLength(angle);
   // No sentence is fine. A sentence needs its kind and has to fit.
-  const angleOk = angleText === "" || (angleKind !== "" && angleText.length <= ANGLE_MAX_CHARS);
+  const angleOk = angleText === "" || (angleKind !== "" && angleLen <= ANGLE_MAX_CHARS);
   const canSubmit = titleLen > 0 && titleLen <= TITLE_MAX && topic.trim() !== "" && angleOk && !submitting;
 
   async function submit() {
@@ -202,33 +203,38 @@ export default function NewVideoPage() {
           />
         </Field>
 
+        {/* Two fields, each with its own label: one label around both controls
+            would give the text box a name that includes every kind. */}
         {angleKinds && (
-          <Field
-            label="Angle (optional)"
-            note={`${angleText.length}/${ANGLE_MAX_CHARS} — one sentence saying what the opening will use. Leave it empty and the agent finds one.`}
-          >
-            <textarea
-              data-testid="new-video-angle"
-              value={angle}
-              onChange={(e) => setAngle(e.target.value)}
-              rows={2}
-              placeholder="The backup reported success for a year while it copied an empty folder"
-              style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5, borderColor: angleText.length > ANGLE_MAX_CHARS ? "var(--red)" : "var(--border-2)" }}
-            />
-            <select
-              data-testid="new-video-angle-kind"
-              aria-label="Angle kind"
-              value={angleKind}
-              onChange={(e) => setAngleKind(e.target.value)}
-              disabled={angleText === ""}
-              style={{ ...inputStyle, marginTop: 6, borderColor: angleText !== "" && angleKind === "" ? "var(--red)" : "var(--border-2)" }}
+          <>
+            <Field
+              label="Angle (optional)"
+              note={`${angleLen}/${ANGLE_MAX_CHARS} — one sentence saying what the opening will use. Leave it empty and the agent finds one.`}
             >
-              <option value="">{angleText === "" ? "Kind (choose once the angle is written)" : "Choose the angle's kind"}</option>
-              {angleKinds.map((k) => (
-                <option key={k.id} value={k.id}>{k.label}</option>
-              ))}
-            </select>
-          </Field>
+              <textarea
+                data-testid="new-video-angle"
+                value={angle}
+                onChange={(e) => setAngle(e.target.value)}
+                rows={2}
+                placeholder="The backup reported success for a year while it copied an empty folder"
+                style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5, borderColor: angleLen > ANGLE_MAX_CHARS ? "var(--red)" : "var(--border-2)" }}
+              />
+            </Field>
+            <Field label="Angle kind" note="Needed once an angle is written">
+              <select
+                data-testid="new-video-angle-kind"
+                value={angleKind}
+                onChange={(e) => setAngleKind(e.target.value)}
+                disabled={angleText === ""}
+                style={{ ...inputStyle, borderColor: angleText !== "" && angleKind === "" ? "var(--red)" : "var(--border-2)" }}
+              >
+                <option value="">{angleText === "" ? "Choose once the angle is written" : "Choose the angle's kind"}</option>
+                {angleKinds.map((k) => (
+                  <option key={k.id} value={k.id}>{k.label}</option>
+                ))}
+              </select>
+            </Field>
+          </>
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>

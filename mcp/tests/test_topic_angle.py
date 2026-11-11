@@ -203,6 +203,18 @@ def test_update_video_refuses_a_malformed_angle(db, kw, part):
     assert _angle() == ("An old angle.", "myth", 8)
 
 
+@pytest.mark.parametrize("kw", [{"angle_score": 0}, {"angle_score": 7}, {"angle": ""},
+                                {"angle_kind": ""}])
+def test_only_naming_both_the_sentence_and_the_kind_can_clear_an_angle(db, kw):
+    """A call that carries the score alone, or one half of the pair, is not a
+    request to remove the angle. Read as one, "unscored" from an agent would
+    wipe an angle a person approved."""
+    _video(status="REVISION_REQUESTED", angle="The approved angle.", kind="myth", score=7)
+    result = server.update_video("vid_1", **kw)
+    assert "together" in result["error"]
+    assert _angle() == ("The approved angle.", "myth", 7)
+
+
 def test_an_angle_write_does_not_need_a_weak_angle_to_pass_a_floor(db):
     """The floor is for filing. A person's topic picked up with a thin angle
     keeps it: the alternative is no angle at all."""
@@ -333,6 +345,23 @@ def test_a_mined_candidate_without_a_usable_angle_is_not_filed(db, monkeypatch, 
     assert _count() == 0
     assert result["not_filed"][0]["topic"] == "How page tables map memory"
     assert part in result["not_filed"][0]["reason"]
+
+
+@pytest.mark.parametrize("sent, stored", [(7.6, 8), ("7", 7), (6.0, 6), (99, 10)])
+def test_a_mined_score_is_brought_to_a_whole_number(db, monkeypatch, sent, stored):
+    result, _ = _mine(monkeypatch, [mined("How a retry storm starts", angle_score=sent)])
+    assert result["proposed"] == 1
+    assert result["topics"][0]["angle_score"] == stored
+
+
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
+def test_a_score_that_is_not_a_number_does_not_end_the_run(db, monkeypatch, literal):
+    """json.loads reads NaN and Infinity. The run has paid for the reply by
+    then, so one bad score must cost that candidate and nothing else."""
+    bad = mined("How page tables map memory", angle_score=float(literal.replace("Infinity", "inf")))
+    result, _ = _mine(monkeypatch, [bad, mined("How a retry storm starts")])
+    assert [t["topic"] for t in result["topics"]] == ["How a retry storm starts"]
+    assert "below 5" in result["not_filed"][0]["reason"]
 
 
 def test_mining_files_the_strongest_candidates_first(db, monkeypatch):

@@ -308,11 +308,17 @@ Covers the [topic's angle](../02-pipeline.md#topic-angle) over HTTP: `GET /angle
 - `POST /videos` stores an angle it is sent and requires none. `POST /videos/manual` accepts no
   angle, a blank one and a `null` one as no angle, and stores a given angle with score 0.
 - A malformed angle is refused on all three routes. On `POST /videos/manual` the refusal leaves no
-  video and no `manual` domain behind.
+  video and no `manual` domain behind. A `null` score on `POST /videos` reads as unscored.
+- The edit works on a video whose style takes no mascot (Under the Hood, Cartoon 3D), alone and
+  together with the approval.
 
 Trap: the script writer reads the angle from the moment a topic is approved. A test lands an
 approval between the route's status read and its `UPDATE`, and the edit must write nothing. It was
 confirmed to fail without the status in the `UPDATE`'s `WHERE`.
+
+Trap: for a style that takes no mascot, `patch_video` rebuilds its parameter list from the body's
+fields. Anything appended to the `SET` list before that point loses its parameters and the request
+fails with a binding error, so the score reset is appended after it.
 
 ### `test_voice_models.py`
 

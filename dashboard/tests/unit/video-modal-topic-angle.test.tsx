@@ -223,6 +223,27 @@ describe("VideoModal — the topic's angle", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/angle-kinds"))).toBe(false);
   });
 
+  it("says why no kind can be chosen when the list cannot be loaded", async () => {
+    renderModal(makeVideo(), { kinds: null });
+    await settle();
+    fireEvent.click(screen.getByTestId("topic-angle-edit"));
+    expect(await screen.findByTestId("topic-angle-kinds-failed")).toHaveTextContent("could not be loaded");
+    fireEvent.change(screen.getByTestId("topic-angle-input"), { target: { value: "A sentence." } });
+    expect(screen.getByTestId("topic-angle-save")).toBeDisabled();
+  });
+
+  it("counts and sends the sentence as the API stores it", async () => {
+    const fetchMock = renderModal(makeVideo(ANGLE));
+    await settle();
+    fireEvent.click(screen.getByTestId("topic-angle-edit"));
+    // 298 letters, a line break with spaces around it, and an emoji: 300 as stored.
+    fireEvent.change(screen.getByTestId("topic-angle-input"), { target: { value: "x".repeat(298) + "  \n  🚀" } });
+    expect(screen.getByTestId("topic-angle-count")).toHaveTextContent("300/300");
+    fireEvent.click(screen.getByTestId("topic-angle-save"));
+    await waitFor(() => expect(patches(fetchMock)).toHaveLength(1));
+    expect(patches(fetchMock)[0].angle).toBe("x".repeat(298) + " 🚀");
+  });
+
   it("falls back to the kind's id when the list cannot be loaded", async () => {
     renderModal(makeVideo({ ...ANGLE, angle_kind: "design_question" }), { kinds: null });
     await settle();

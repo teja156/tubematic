@@ -13,6 +13,18 @@ export interface AngleKind {
  *  editors count against this so the refusal is not the first the person hears. */
 export const ANGLE_MAX_CHARS = 300;
 
+/** An angle sentence as the API stores it: runs of whitespace collapsed to one
+ *  space and the ends trimmed. The editors send this form and count it. */
+export function cleanAngle(text: string): string {
+  return text.trim().replace(/\s+/g, " ");
+}
+
+/** The sentence's length as the API counts it: code points of the stored
+ *  form, so an emoji is one and a line break is one space. */
+export function angleLength(text: string): number {
+  return Array.from(cleanAngle(text)).length;
+}
+
 /** A kind's label, or its id with the underscores opened up when the list has
  *  not loaded or does not know it. The ids are the labels in lower case, so
  *  the fallback reads the same. */

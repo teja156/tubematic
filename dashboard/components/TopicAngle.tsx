@@ -5,7 +5,9 @@ import type { Video } from "@/lib/types";
 import {
   ANGLE_MAX_CHARS,
   angleKindLabel,
+  angleLength,
   angleScoreLabel,
+  cleanAngle,
   fetchAngleKinds,
   hasAngle,
   type AngleKind,
@@ -61,6 +63,9 @@ export function TopicAngle({ video, editable, onSaved }: {
   const present = hasAngle(video);
   const show = present || editable;
   const [kinds, setKinds] = useState<AngleKind[] | null>(null);
+  // The list was asked for and did not come. A sentence cannot be saved
+  // without a kind, so the editor has to say why its picker is empty.
+  const [kindsFailed, setKindsFailed] = useState(false);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const [kind, setKind] = useState("");
@@ -70,7 +75,11 @@ export function TopicAngle({ video, editable, onSaved }: {
   useEffect(() => {
     if (!show) return;
     let cancelled = false;
-    fetchAngleKinds().then((list) => { if (!cancelled && list) setKinds(list); });
+    fetchAngleKinds().then((list) => {
+      if (cancelled) return;
+      if (list) setKinds(list);
+      else setKindsFailed(true);
+    });
     return () => { cancelled = true; };
   }, [show]);
 
@@ -83,8 +92,9 @@ export function TopicAngle({ video, editable, onSaved }: {
     setEditing(true);
   };
 
-  const trimmed = text.trim();
-  const tooLong = trimmed.length > ANGLE_MAX_CHARS;
+  const trimmed = cleanAngle(text);
+  const length = angleLength(text);
+  const tooLong = length > ANGLE_MAX_CHARS;
   // An empty sentence saves as "no angle"; a sentence needs its kind.
   const canSave = !saving && !tooLong && (trimmed === "" || kind !== "");
 
@@ -176,7 +186,7 @@ export function TopicAngle({ video, editable, onSaved }: {
             data-testid="topic-angle-count"
             style={{ ...caption, color: tooLong ? "var(--red)" : "var(--dim)" }}
           >
-            {trimmed.length}/{ANGLE_MAX_CHARS}
+            {length}/{ANGLE_MAX_CHARS}
           </div>
           <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={caption}>Kind</span>
@@ -195,6 +205,12 @@ export function TopicAngle({ video, editable, onSaved }: {
           {kind !== "" && (kinds?.find((k) => k.id === kind)?.means ?? "") !== "" && (
             <div data-testid="topic-angle-means" style={{ fontSize: 12, lineHeight: 1.5, color: "var(--dim)" }}>
               {kinds?.find((k) => k.id === kind)?.means}
+            </div>
+          )}
+          {kindsFailed && (
+            <div data-testid="topic-angle-kinds-failed" style={{ fontSize: 12, color: "var(--red)" }}>
+              The list of kinds could not be loaded, so a new kind cannot be chosen. Reload the page
+              and try again.
             </div>
           )}
           {error && (
