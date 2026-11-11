@@ -1041,8 +1041,8 @@ scene. The lead sheet is always 16:9. The same function refuses, before any paid
 `reference` on a video of another style, a lead sheet asked for without `reference="house"`, the
 house sheet used for anything else, and a reference that is not yet a picture of this video.
 
-`generate_image` refuses a new image name once the video holds 16 stills and the lead sheet, the
-pack's `routing.images`, and allows regenerating an existing name
+`generate_image` refuses a new still once the video holds 16, and allows regenerating an existing
+name. The lead sheet has a slot of its own, which makes the pack's `routing.images` 17
 ([`generate_image`](06-mcp-server.md#generate_image)). The skill has the agent open every still with
 `read_image` and compare the lead with the sheet.
 
@@ -1078,7 +1078,8 @@ push: every frame is a new full-frame painting to capture and encode, which the 
 - A shot lasts under 1 second, a punch-in is off a word or within 12 frames of the shot's start or
   end, `set` names a meter `hud` does not list, or `panel` names a meter the shot's `set` does not
   change.
-- A card's text is over its limit, an icon or a kind is not in the pack's list, a bar, a result, a
+- A card's text is over its limit (a one-line text is drawn smaller when it would run past the
+  card's width, so the limits are counts of characters), an icon or a kind is not in the pack's list, a bar, a result, a
   payoff line, a definition, a stamp or a choice button is timed off a word or out of order, or a
   card's last part appears less than 20 frames before the beat ends.
 - More than 4 seconds pass between one part of a beat and the next, or between the last part and

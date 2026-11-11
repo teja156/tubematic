@@ -46,11 +46,11 @@ export const LIMITS = {
   barLabelChars: 6,
   thresholdLabelChars: 24,
   payoffChars: 30,
-  termChars: 18,
+  termChars: 26,
   definitionChars: 110,
   stampChars: 16,
   citationChars: 34,
-  optionChars: 9,
+  optionChars: 10,
   minShotSeconds: 1,
   // The longest stretch, in seconds, with nothing new apart from the slow
   // push. The AI review is told the same number.
@@ -121,7 +121,10 @@ export const GEOMETRY = {
   // The widest a term may be drawn, and the size it starts from.
   termWidth: 920,
   termSize: 112,
-  termCharWidth: 0.62,
+  // The width a one-line card text may take, and the advance of one character
+  // in ems that a fit assumes: capitals of the bundled sans average 0.7.
+  lineWidth: 960,
+  capCharWidth: 0.75,
   // The choice buttons.
   optionTop: 1500,
   optionHeight: 150,
@@ -278,11 +281,15 @@ export function shotView(scale: number, u: number, v: number): [number, number, 
 }
 
 // ── cards ───────────────────────────────────────────────────────────────────
+/** The font size, at most `size`, at which one line of `text` fits `width` pixels. */
+export function fitFontSize(text: string, size: number, width: number): number {
+  const n = Math.max(1, text.length);
+  return Math.min(size, Math.floor(width / (n * GEOMETRY.capCharWidth)));
+}
+
 /** The font size a term is drawn at so it fits the card's width. */
 export function termFontSize(term: string): number {
-  const G = GEOMETRY;
-  const n = Math.max(1, term.length);
-  return Math.min(G.termSize, Math.floor(G.termWidth / (n * G.termCharWidth)));
+  return fitFontSize(term, GEOMETRY.termSize, GEOMETRY.termWidth);
 }
 
 /**

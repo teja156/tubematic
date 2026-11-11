@@ -85,7 +85,8 @@ more than 4 seconds may pass between its cut, its punch-in and its end.
 | `result` | text | 1 to 14 characters: what it comes to |
 | `resultFrame` | frame | Optional. On a word, after the counter stops |
 
-The grid of 40 icons and the counter start 10 frames after the card and run for 36. Without
+The grid of 40 icons (or of `to` icons, when `to` is under 40) and the counter start 10 frames
+after the card and run for 36. Without
 `resultFrame` the result lands 12 frames after the counter stops.
 
 ### `bars`
@@ -103,7 +104,7 @@ The grid of 40 icons and the counter start 10 frames after the card and run for 
 
 | Field | Type | Rule |
 |---|---|---|
-| `term` | text | 1 to 18 characters, in capitals |
+| `term` | text | 1 to 26 characters, in capitals. A long one is drawn smaller to fit |
 | `definition` | text | 1 to 110 characters, one sentence |
 | `stamp` | text | 1 to 16 characters, in capitals |
 | `citation` | text | Optional, 1 to 34 characters: the law or rule, as the script gives it |
@@ -118,7 +119,7 @@ The citation appears 14 frames after the stamp lands.
 |---|---|---|
 | `image` | text | A still of this video, as for a shot |
 | `focus` | [u, v] | As for a shot |
-| `options` | two texts | Two different labels, 1 to 9 characters each, in capitals, in the order the narration says them |
+| `options` | two texts | Two different labels, 1 to 10 characters each, in capitals, in the order the narration says them |
 | `optionFrames` | two frames | Optional. Each on a word, in order, inside the beat. Without them, 8 and 28 frames after the beat starts |
 
 ## Reading time
@@ -136,5 +137,5 @@ of a beat and the next, or between the last part and the beat's end.
 | `generate_image(video_id, "<name>", "<the scene> No people.")` | A still without the lead |
 
 The server adds the lead's description and the painting style to every prompt of a Case File Story
-video. A video may hold 16 stills and the lead sheet; regenerating a name replaces it and does not
-count again.
+video. A video may hold 16 stills, and the lead sheet besides; regenerating a name replaces it and
+does not count again.

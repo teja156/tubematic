@@ -105,8 +105,8 @@ Covers `contract.ts`, `stage.ts` and the presenter's pose table
 Covers `contract.ts`, `stage.ts` and the icon tables
 ([Case File Story](../10-scene-authoring.md#case-file-story)).
 
-- The number format, the meter cells, the camera's scale and view, the term's font size, the bars'
-  layout, the frames of a beat's parts and the quiet stretches are computed as in the shared cases
+- The number format, the meter cells, the camera's scale and view, the fit of a one-line text, the
+  bars' layout, the frames of a beat's parts and the quiet stretches are computed as in the shared cases
   `mcp/tests/test_case_file_story.py` runs.
 - Every accent has a colour, and every icon has a drawing and a fill.
 - The view of a still never reaches past its edge at any focus or scale. A shot pushes in, then
@@ -114,7 +114,8 @@ Covers `contract.ts`, `stage.ts` and the icon tables
 - The meter row shows the starting values, then a shot's new value dissolving in from its cut. It
   is hidden on a card, on a shot that hides it and on the choice. The large panel counts from the
   old value to the new one.
-- The count grid and its counter finish together and the result lands on its frame; each bar comes
+- The count grid and its counter finish together and the result lands on its frame; a count under
+  forty shows that many icons; each bar comes
   up on its own frame and the payoff line after the last.
 - The worked example starts at frame 0, shows a term card before its closing choice and has no
   stretch over the stillness limit.

@@ -112,6 +112,8 @@ def test_numbers_cameras_and_cards_are_computed_the_same_way():
         assert list(cfs.shot_view(c["scale"], c["u"], c["v"])) == pytest.approx(c["view"])
     for c in CASES["term_font_size"]:
         assert cfs.term_font_size(c["term"]) == c["size"]
+    for c in CASES["fit_font_size"]:
+        assert cfs.fit_font_size(c["text"], c["size"], c["width"]) == c["fit"]
     for c in CASES["bar_layout"]:
         got = cfs.bar_layout(c["values"], c["threshold"])
         assert [list(b) for b in got["bars"]] == [pytest.approx(b) for b in c["bars"]]
@@ -176,7 +178,8 @@ def test_the_example_passes():
     (lambda d: d["beats"][BARS].update(payoff="x" * 31), "payoff must be 1 to 30"),
     (lambda d: d["beats"][BARS].update(payoffFrame=d["beats"][BARS]["bars"][0]["frame"]), "after the last bar"),
     (lambda d: d["beats"][TERM].update(term="Structuring"), "term must be in capitals"),
-    (lambda d: d["beats"][TERM].update(term="A TERM THAT RUNS FAR TOO LONG"), "term must be 1 to 18"),
+    (lambda d: d["beats"][TERM].update(term="A TERM THAT RUNS FAR TOO LONG TO FIT"), "term must be 1 to 26"),
+    (lambda d: d["beats"][DESK].update(panel=["suspicion"]), "name a meter this shot's set changes"),
     (lambda d: d["beats"][TERM].update(definition="x" * 111), "definition must be 1 to 110"),
     (lambda d: d["beats"][TERM].update(stamp="Federal crime"), "stamp must be 1 to 16"),
     (lambda d: d["beats"][TERM].update(citation="x" * 35), "citation must be 1 to 34"),
@@ -245,11 +248,38 @@ def test_the_scene_use_rule():
     lambda d: d["beats"][BARS].update(bars=[1, 2], threshold="high"),
     lambda d: d["beats"][BARS].update(bars=[{"label": "A", "value": 1, "frame": "x"}] * 2),
     lambda d: d["beats"][TERM].update(term=None, definitionFrame="x", stampFrame=[1]),
+    lambda d: d["beats"][TERM].update(stampFrame="1145"),            # with a citation on the card
+    lambda d: d["beats"][TERM].update(stampFrame=[1145]),
+    lambda d: d["beats"][DESK].update(panel=["suspicion"]),
+    lambda d: d["beats"][DESK].update(panel={"id": "suspicion"}),
     lambda d: d["beats"][CHOICE].update(options="HIDE", optionFrames="now"),
 ])
 def test_a_value_of_the_wrong_type_is_a_sentence_not_a_crash(mutate):
     problems = _check(_with(mutate))
     assert problems and all(isinstance(p, str) for p in problems)
+
+
+def test_a_broken_beat_past_the_reported_problems_is_still_a_sentence_not_a_crash():
+    """Only MAX_ERRORS problems are reported. A beat whose own problem falls past them is still
+    unsound, and the stillness pass must not read its parts."""
+    def wreck(d):
+        d["accent"] = "green"
+        for m in d["hud"]:
+            m.update(label="lower case label", value=-1)
+        for k in (COUNTING, COUNT, STREET, COUNTER, ATM):
+            d["beats"][k]["start"] += 4          # off the words
+        d["beats"][BARS].pop("bars")
+        d["beats"][DESK]["punch"] = "soon"
+    problems = _check(_with(wreck))
+    assert len(problems) == cfs.MAX_ERRORS and all(isinstance(p, str) for p in problems)
+
+
+def test_a_term_in_capitals_is_sized_to_fit_the_card():
+    """Capitals of the bundled sans average 0.7 em; the fit assumes 0.75."""
+    for term in ("MONEY LAUNDERING", "PUMP AND DUMP", "BUSINESS EMAIL COMPROMISE"):
+        size = cfs.term_font_size(term)
+        assert len(term) * size * 0.7 <= cfs.GEOMETRY["termWidth"], term
+    assert cfs.term_font_size("SCAM") == cfs.GEOMETRY["termSize"]
 
 
 def test_the_text_audit_samples_each_beat_once_its_last_part_is_up():
@@ -434,13 +464,24 @@ def test_a_reference_is_refused_for_every_other_style_and_their_prompts_are_unto
     assert paid[0]["json"]["prompt"] == "a scene" and paid[0]["url"] == server.OPENAI_IMAGES_URL
 
 
-def test_a_picture_past_the_cap_is_refused_before_the_paid_call(make_video, paid):
+def test_a_seventeenth_still_is_refused_before_the_paid_call(make_video, paid):
     vid = make_video(images=["lead"] + [f"s{k}" for k in range(16)])
     out = server.generate_image(vid, "one-more", "a scene", reference="lead")
-    assert "the most a video may use (17)" in out["error"] and "lead sheet" in out["error"]
+    assert "already has 16 stills" in out["error"] and "the most a video may use (16)" in out["error"]
     assert paid == []
     assert "error" not in server.generate_image(vid, "s3", "the same scene again", reference="lead")   # a regeneration
     assert len(paid) == 1
+
+
+def test_the_lead_sheet_has_a_slot_of_its_own(make_video, paid):
+    """A video that spent every still before making the sheet can still make it, and the sheet
+    never takes a still's place."""
+    vid = make_video(images=[f"s{k}" for k in range(16)])
+    assert "error" not in server.generate_image(vid, "lead", "a grey jacket", reference="house")
+    assert len(paid) == 1
+    assert "already has 16 stills" in server.generate_image(vid, "one-more", "a scene", reference="lead")["error"]
+    fewer = make_video("vid_fewer", images=["lead"] + [f"s{k}" for k in range(15)])
+    assert "error" not in server.generate_image(fewer, "the-sixteenth", "a scene", reference="lead")
 
 
 def test_the_under_the_hood_cap_keeps_its_own_number_and_words(make_video):

@@ -192,7 +192,9 @@ def test_case_file_story():
     # the script text carries the ending and the subject line the user set
     script = p["script"]
     for phrase in ("second person", "the last sentence is only the two options", "invented",
-                   "Never write it as instructions", "No violence", "at most sixteen pictures"):
+                   "Never write it as instructions", "No violence", "at most sixteen pictures",
+                   # the cards' limits, so the script names things the cards can show
+                   "at most 26 characters", "at most 16 characters", "at most 10 characters"):
         assert phrase in script, phrase
     assert "comes before the ending" in script
 

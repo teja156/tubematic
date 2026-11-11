@@ -26,10 +26,10 @@
  * (1.6x, the ratio Under the Hood measured). The slow push makes every frame
  * a new full-frame painting to capture and encode; the cards cost little.
  */
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AbsoluteFill, cancelRender, continueRender, delayRender, useCurrentFrame, useVideoConfig } from "remotion";
 import {
-  ACCENTS, GEOMETRY, H, TIMING, W, barLayout, hudCells, partFrames, termFontSize,
+  ACCENTS, GEOMETRY, H, TIMING, W, barLayout, fitFontSize, hudCells, partFrames, termFontSize,
   type BarsCard, type Beat, type CaseFileData, type Choice, type CountCard, type Shot, type TermCard,
 } from "./caseFileStory/contract";
 import { MONO, SANS, useCaseFileFonts } from "./caseFileStory/fonts";
@@ -139,6 +139,10 @@ const Panel: React.FC<{ data: CaseFileData; shot: Shot; frame: number; accent: s
 const cardText: React.CSSProperties = {
   position: "absolute", left: G.safeLeft, width: G.safeRight - G.safeLeft, textAlign: "center", fontFamily: SANS, fontWeight: 700, lineHeight: 1.05,
 };
+/** One line of card text at `size`, drawn smaller when it would not fit the card's width. */
+const line = (text: string, size: number): React.CSSProperties => ({
+  ...cardText, fontSize: fitFontSize(text, size, G.lineWidth), whiteSpace: "nowrap",
+});
 
 /** A cream panel down to the caption band, on the near-black frame. */
 const CreamCard: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -148,21 +152,22 @@ const CreamCard: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </AbsoluteFill>
 );
 
-const CountGrid: React.FC<{ card: CountCard; cells: number }> = ({ card, cells }) => {
+const CountGrid: React.FC<{ card: CountCard; total: number; cells: number }> = ({ card, total, cells }) => {
   const ref = useRef<HTMLCanvasElement>(null);
   const w = G.gridCols * G.gridCell, h = G.gridRows * G.gridCell;
-  useEffect(() => {
+  // Before paint, so the frame captured after this render already has the grid.
+  useLayoutEffect(() => {
     const c = ref.current?.getContext("2d");
     if (!c) return;
     c.clearRect(0, 0, w, h);
     const draw = ICON_DRAW[card.icon];
-    for (let i = 0; i < G.gridCols * G.gridRows; i++) {
+    for (let i = 0; i < total; i++) {
       const cx = (i % G.gridCols) * G.gridCell + G.gridCell / 2;
       const cy = Math.floor(i / G.gridCols) * G.gridCell + G.gridCell / 2;
       if (i < cells) draw(c, cx, cy, G.gridCell * 0.86, ICON_FILL[card.icon], INK);
       else draw(c, cx, cy, G.gridCell * 0.86, GHOST, "rgba(22,19,15,0.0)");
     }
-  }, [card.icon, cells, w, h]);
+  }, [card.icon, total, cells, w, h]);
   return <canvas ref={ref} width={w} height={h} style={{ position: "absolute", left: G.gridLeft, top: G.gridTop }} />;
 };
 
@@ -171,12 +176,12 @@ const CountView: React.FC<{ card: CountCard; frame: number; accent: string }> = 
   const pop = easeOut((frame - partFrames(card)[2]) / 4);
   return (
     <CreamCard>
-      <div style={{ ...cardText, top: 250, fontSize: 60, color: INK }}>{card.title}</div>
-      {card.unit && <div style={{ ...cardText, top: 338, fontSize: 44, color: accent }}>{card.unit}</div>}
-      <CountGrid card={card} cells={s.cells} />
+      <div style={{ ...line(card.title, 60), top: 250, color: INK }}>{card.title}</div>
+      {card.unit && <div style={{ ...line(card.unit, 44), top: 338, color: accent }}>{card.unit}</div>}
+      <CountGrid card={card} total={s.total} cells={s.cells} />
       <div style={{ ...cardText, top: 978, fontSize: 124, color: INK, letterSpacing: "-0.02em" }}>{s.text}</div>
       {s.result && (
-        <div style={{ ...cardText, top: 1118, fontSize: 68, color: accent, transform: `scale(${1.25 - 0.25 * pop})` }}>{card.result}</div>
+        <div style={{ ...line(card.result, 68), top: 1118, color: accent, transform: `scale(${1.25 - 0.25 * pop})` }}>{card.result}</div>
       )}
     </CreamCard>
   );
@@ -189,7 +194,7 @@ const BarsView: React.FC<{ card: BarsCard; frame: number; accent: string }> = ({
   for (let x = G.chartLeft - 30; x < G.chartRight + 30; x += 34) dashes.push(<rect key={x} x={x} y={lineY - 3} width={20} height={6} fill={accent} />);
   return (
     <CreamCard>
-      <div style={{ ...cardText, top: 250, fontSize: 60, color: INK }}>{card.title}</div>
+      <div style={{ ...line(card.title, 60), top: 250, color: INK }}>{card.title}</div>
       <svg width={W} height={G.cardBottom} style={{ position: "absolute", left: 0, top: 0 }}>
         {bars.slice(0, s.shown).map(([x, y, w, h], i) => <rect key={i} x={x} y={y} width={w} height={h} rx={6} fill={INK} />)}
         {dashes}
@@ -249,7 +254,7 @@ const ChoiceButtons: React.FC<{ beat: Choice; frame: number; accent: string }> =
             position: "absolute", left: G.safeLeft + i * (width + G.optionGap), top: G.optionTop, width, height: G.optionHeight,
             borderRadius: 24, background: i === 1 ? accent : "#26221E", border: i === 1 ? "none" : "3px solid rgba(255,255,255,0.85)",
             boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: SANS, fontWeight: 700,
-            fontSize: 64, letterSpacing: "0.04em", color: WHITE, opacity: ghost ? 0.5 : 1, transform: ghost ? "scale(1.1)" : undefined,
+            fontSize: fitFontSize(label, 64, width - 64), letterSpacing: "0.03em", whiteSpace: "nowrap", color: WHITE, opacity: ghost ? 0.5 : 1, transform: ghost ? "scale(1.1)" : undefined,
           }}>{label}</div>
         );
       })}

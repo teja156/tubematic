@@ -5700,6 +5700,11 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
     if style not in (under_the_hood.STYLE_ID, case_file_story.STYLE_ID):
         return ""
     cap = tvs.pack(style)["routing"].get("images", 0)
+    # A Case File Story video's lead sheet has a slot of its own: it is not a
+    # still, and a video that spent every slot on stills must still be able to
+    # make the sheet they are painted from.
+    apart = {case_file_story.LEAD_NAME} if style == case_file_story.STYLE_ID else set()
+    cap -= len(apart)
     with _image_reservations_lock:
         now = time.time()
         held = {n: t for n, t in _image_reservations.get(video_id, {}).items() if now - t < _IMAGE_RESERVE_SECS}
@@ -5707,15 +5712,15 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
             names = {f.stem for f in images_dir.iterdir() if f.suffix.lower() in _IMAGE_EXTS}
         except OSError:
             names = set()
-        names |= set(held)
-        if image_name in names or len(names) < cap:
+        names = (names | set(held)) - apart
+        if image_name in apart or image_name in names or len(names) < cap:
             held[image_name] = now
             _image_reservations[video_id] = held
             return ""
     if style == case_file_story.STYLE_ID:
-        return (f"This Case File Story video already has {len(names)} pictures, counting the lead sheet and "
-                f"any being made now, the most a video may use ({cap}). Reuse a still in another shot with "
-                "a different focus or a punch-in, or regenerate one under its own name to replace it.")
+        return (f"This Case File Story video already has {len(names)} stills, counting any being made now, "
+                f"the most a video may use ({cap}). Reuse a still in another shot with a different focus or "
+                "a punch-in, or regenerate one under its own name to replace it.")
     return (f"This Under the Hood video already has {len(names)} photographs, counting any being made "
             f"now, the most a video may use ({cap}). Reuse one of them on another plate with a "
             "different focus or zoom, or regenerate one under its own name to replace it.")
@@ -5786,8 +5791,8 @@ def generate_image(video_id: str, image_name: str, prompt: str,
       - no reference: a still with no lead in it (an object, an exterior).
     For a case_file_story video the style's fixed painting instructions are
     added to every prompt, so describe only the scene: the place, what the
-    lead is doing, the light. Such a video may have at most 16 stills and the
-    lead sheet; one more new image_name is refused before the paid call.
+    lead is doing, the light. Such a video may have at most 16 stills, besides
+    its lead sheet; a 17th new still is refused before the paid call.
     """
     err = _video_id_error(video_id)
     if err:

@@ -101,8 +101,8 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   Terminal Doc skin changes only caption keys. Under the Hood needs an OpenAI key, caps its
   photographs at 12, takes no mascot and uses the `selection` caption look. Case File Story needs
   an OpenAI key, counts 16 stills and a lead sheet, takes no mascot, uses the `fill` caption look,
-  carries the four prompt texts `generate_image` adds, and its `script` text states the ending and
-  the subject limits. A pack that takes no mascot must say why.
+  carries the four prompt texts `generate_image` adds, and its `script` text states the ending, the
+  subject limits and the lengths the term, the stamp and the options may have. A pack that takes no mascot must say why.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
   routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
   apart from.

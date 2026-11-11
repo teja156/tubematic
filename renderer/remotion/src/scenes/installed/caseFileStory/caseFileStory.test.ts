@@ -4,7 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  ACCENTS, ACCENT_NAMES, CAMERA, ICONS, TIMING, barLayout, formatValue, hudCells, partFrames, shotScale, shotView, termFontSize,
+  ACCENTS, ACCENT_NAMES, CAMERA, ICONS, TIMING, barLayout, fitFontSize, formatValue, hudCells, partFrames, shotScale, shotView,
+  termFontSize,
   type Beat, type CaseFileData, type Shot,
 } from "./contract";
 import { ICON_DRAW, ICON_FILL } from "./icons";
@@ -29,6 +30,7 @@ describe("the shared contract cases", () => {
     for (const c of CASES.shot_scale) expect(shotScale(c.t, c.fps, c.punchAfter)).toBeCloseTo(c.scale, 9);
     for (const c of CASES.shot_view) expect(shotView(c.scale, c.u, c.v)).toEqual(close(c.view));
     for (const c of CASES.term_font_size) expect(termFontSize(c.term)).toBe(c.size);
+    for (const c of CASES.fit_font_size) expect(fitFontSize(c.text, c.size, c.width)).toBe(c.fit);
     for (const c of CASES.bar_layout) {
       const got = barLayout(c.values, c.threshold);
       expect(got.bars.flat()).toEqual(close(c.bars.flat()));
@@ -109,8 +111,14 @@ describe("the cards", () => {
     if (card.type !== "count") throw new Error("no count card");
     const [, counted, result] = partFrames(card);
     expect(countAt(card, card.start)).toMatchObject({ cells: 0, result: false });
-    expect(countAt(card, counted)).toMatchObject({ cells: 40, text: formatValue(card.kind, card.to), result: false });
+    expect(countAt(card, counted)).toMatchObject({ total: 40, cells: 40, text: formatValue(card.kind, card.to), result: false });
     expect(countAt(card, result).result).toBe(true);
+  });
+
+  it("shows as many icons as the number when it is under forty", () => {
+    const card = { type: "count" as const, start: 0, title: "T", icon: "envelope" as const, to: 7, kind: "count" as const, result: "R" };
+    expect(countAt(card, 0)).toMatchObject({ total: 7, cells: 0 });
+    expect(countAt(card, partFrames(card)[1])).toMatchObject({ total: 7, cells: 7, text: "7" });
   });
 
   it("puts each bar up on its own frame and the payoff after the last", () => {

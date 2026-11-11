@@ -217,15 +217,19 @@
   },
   {
    "term": "STRUCTURING",
-   "size": 112
+   "size": 111
   },
   {
    "term": "MONEY LAUNDERING",
-   "size": 92
+   "size": 76
   },
   {
-   "term": "EIGHTEEN CHARACTER",
-   "size": 82
+   "term": "BUSINESS EMAIL COMPROMISE",
+   "size": 49
+  },
+  {
+   "term": "A TERM OF TWENTY-SIX CHARS",
+   "size": 47
   }
  ],
  "bar_layout": [
@@ -962,6 +966,38 @@
      1441
     ]
    ]
+  }
+ ],
+ "fit_font_size": [
+  {
+   "text": "FOUR DEPOSITS",
+   "size": 60,
+   "width": 960,
+   "fit": 60
+  },
+  {
+   "text": "THE MONEY YOU MOVED ABROAD",
+   "size": 60,
+   "width": 960,
+   "fit": 49
+  },
+  {
+   "text": "$36,000. NOTHING REPORTED.",
+   "size": 56,
+   "width": 960,
+   "fit": 49
+  },
+  {
+   "text": "HAND IT IN",
+   "size": 64,
+   "width": 401,
+   "fit": 53
+  },
+  {
+   "text": "",
+   "size": 60,
+   "width": 960,
+   "fit": 60
   }
  ]
 }

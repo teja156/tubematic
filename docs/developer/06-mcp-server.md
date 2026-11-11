@@ -558,8 +558,8 @@ On an `under_the_hood` video the tool refuses a new `image_name` once the video'
 its calls in flight hold 12 pictures, the pack's `routing.images`, before any request; regenerating an
 existing name is allowed (`server.py::_image_cap_error`). A call reserves its name under a lock before
 the request and releases it when it ends, so parallel calls cannot each take the last slot and a
-failed call does not keep one. A `case_file_story` video is capped the same way at 17 pictures: 16
-stills and its lead sheet.
+failed call does not keep one. A `case_file_story` video is capped the same way at 16 stills. Its lead
+sheet has a slot of its own, so the pack's `routing.images` is 17.
 
 `reference` is for a `case_file_story` video; any other video refuses it. With one, the picture is
 made from a reference picture through `POST https://api.openai.com/v1/images/edits`, with the same

@@ -54,11 +54,11 @@ LIMITS = {
     "barLabelChars": 6,
     "thresholdLabelChars": 24,
     "payoffChars": 30,
-    "termChars": 18,
+    "termChars": 26,
     "definitionChars": 110,
     "stampChars": 16,
     "citationChars": 34,
-    "optionChars": 9,
+    "optionChars": 10,
     "minShotSeconds": 1,
     "maxStillSeconds": 4,
 }
@@ -102,7 +102,8 @@ GEOMETRY = {
     "gridCell": 98,
     "termWidth": 920,
     "termSize": 112,
-    "termCharWidth": 0.62,
+    "lineWidth": 960,
+    "capCharWidth": 0.75,
     "optionTop": 1500,
     "optionHeight": 150,
     "optionGap": 30,
@@ -164,9 +165,13 @@ def shot_view(scale: float, u: float, v: float) -> tuple[float, float, float, fl
     return (x, y, vw, vh)
 
 
+def fit_font_size(text: str, size: int, width: int) -> int:
+    """The font size, at most `size`, at which one line of `text` fits `width` pixels."""
+    return min(size, math.floor(width / (max(1, len(text)) * GEOMETRY["capCharWidth"])))
+
+
 def term_font_size(term: str) -> int:
-    g = GEOMETRY
-    return min(g["termSize"], math.floor(g["termWidth"] / (max(1, len(term)) * g["termCharWidth"])))
+    return fit_font_size(term, GEOMETRY["termSize"], GEOMETRY["termWidth"])
 
 
 def bar_layout(values: list, threshold) -> dict:
@@ -274,8 +279,10 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
     MAX_ERRORS), or [] when it may be written. `extra` is the style pack's
     catalogue block."""
     errors: list[str] = []
+    found = [0]   # every problem, including the ones past MAX_ERRORS that are not reported
 
     def err(msg: str) -> None:
+        found[0] += 1
         if len(errors) < MAX_ERRORS:
             errors.append(msg)
 
@@ -360,9 +367,9 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
         extra_keys = sorted(set(b) - _KEYS[b["type"]])
         if extra_keys:
             err(f"{where}: unknown field(s) {extra_keys}; a {b['type']} takes {sorted(_KEYS[b['type']])}.")
-        before = len(errors)
+        before = found[0]
         _check_beat(b, where, starts[i], ends[i], fps, meters, video_id, images, on_word, extra, err)
-        sound.append(len(errors) == before and not extra_keys)
+        sound.append(found[0] == before and not extra_keys)
     if len(images) > LIMITS["maxImages"]:
         err(f"The beats use {len(images)} different stills; a video may use at most {LIMITS['maxImages']}. "
             "Reuse a still with another focus or a punch-in instead of a new one.")
@@ -446,7 +453,7 @@ def _check_beat(b, where, start, end, fps, meters, video_id, images, on_word, ex
             if problem:
                 err(f"{where}: set.{mid} {problem}.")
         if "panel" in b:
-            if b["panel"] not in changed:
+            if not isinstance(b["panel"], str) or b["panel"] not in changed:
                 err(f"{where}: panel shows a meter counting to a new value, so name a meter this shot's "
                     "set changes.")
             elif b.get("hud") is False:
@@ -547,7 +554,7 @@ def _check_beat(b, where, start, end, fps, meters, video_id, images, on_word, ex
     _timed(b, where, "definitionFrame", start, end, on_word, err, "inside the card")
     if not _int(b.get("definitionFrame", 0)):
         return
-    definition = part_frames(b)[1]
+    definition = b.get("definitionFrame", start + T["definitionDelay"])
     _timed(b, where, "stampFrame", definition + 1, end, on_word, err, "after the definition")
     if not _int(b.get("stampFrame", 0)):
         return

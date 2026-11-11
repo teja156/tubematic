@@ -85,12 +85,19 @@ export function panelAt(data: CaseFileData, shot: Shot, frame: number): { label:
   return { label: meter.label, text: formatValue(meter.kind, value), fill, counting: k < 1 };
 }
 
-/** A count card at a frame: grid cells filled, the counter's text, and whether the result has landed. */
-export function countAt(card: CountCard, frame: number): { cells: number; text: string; result: boolean } {
+/**
+ * A count card at a frame: how many icons its grid holds (forty, or the number
+ * itself when that is smaller), how many are filled, the counter's text, and
+ * whether the result has landed.
+ */
+export function countAt(card: CountCard, frame: number): { total: number; cells: number; text: string; result: boolean } {
   const t = frame - card.start;
   const k = clamp01((t - TIMING.countStart) / TIMING.countFrames);
-  const cells = Math.floor(k * GEOMETRY.gridCols * GEOMETRY.gridRows);
-  return { cells, text: formatValue(card.kind, Math.round(card.to * k)), result: frame >= partFrames(card)[2] };
+  const total = Math.max(1, Math.min(GEOMETRY.gridCols * GEOMETRY.gridRows, Math.floor(card.to)));
+  return {
+    total, cells: Math.floor(k * total),
+    text: formatValue(card.kind, Math.round(card.to * k)), result: frame >= partFrames(card)[2],
+  };
 }
 
 /** How many bars of a bars card are up at a frame, and whether its payoff line is. */

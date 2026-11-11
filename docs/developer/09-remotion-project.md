@@ -371,7 +371,7 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `uppercase` | `false` | `true` or `false` |
 | `accent` | `null` | A CSS colour for the word being spoken in the `log` look. `null` uses `color` |
 | `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken, or in a selection box under the `selection` look. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
-| `look` | `"plain"` | `"plain"` or `"selection"` (the line builds word by word; see [Grouping words](#grouping-words)) |
+| `look` | `"plain"` | `"plain"`, `"selection"` (the line builds word by word) or `"fill"` (the whole phrase at once, filling in as it is spoken); see [Grouping words](#grouping-words) |
 
 `server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time.
 `server.py::_emphasis_error` checks `emphasis` against the narration's word count. The

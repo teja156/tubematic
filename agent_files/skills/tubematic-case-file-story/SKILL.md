@@ -49,7 +49,7 @@ beat is wrong. Fix every problem it lists, then write again.
 - **The ending:** exactly one `choice`, and it is the last beat. A `term` card comes somewhere before
   it: the consequence is shown before the viewer is asked to choose.
 - **Stills:** at most **16 different ones per video**, besides the lead sheet. `generate_image`
-  refuses one more new name; reuse a still in another shot with a different `focus` or a punch-in. An
+  refuses a 17th new still; reuse a still in another shot with a different `focus` or a punch-in. An
   `image` is the `public_path` `generate_image` returned. The lead sheet (`lead`) is a reference and is
   never an `image`.
 - **A shot** lasts at least 1 second. A punch-in lands on a word, at least 12 frames after the shot
@@ -59,8 +59,8 @@ beat is wrong. Fix every problem it lists, then write again.
   `definitionFrame`, `stampFrame` and `optionFrames` when you give them. Bars are at least 8 frames
   apart. A card's last part needs at least 20 frames on screen before the beat ends.
 - **Lengths:** a card title is at most 26 characters, a unit line 26, a result 14, a bar label 6, a
-  threshold label 24, a payoff line 30, a term 18, a definition 110, a stamp 16, a citation 34, a
-  choice option 9. A term, a stamp and the options are in capitals.
+  threshold label 24, a payoff line 30, a term 26, a definition 110, a stamp 16, a citation 34, a
+  choice option 10. A term, a stamp and the options are in capitals.
 - **Never still:** something new (a cut, a punch-in, a part of a card) at least every 4 seconds.
 
 `generate_image` refuses, before any paid call: a `reference` on a video of another style, the lead
@@ -170,8 +170,9 @@ it; it changes on that cut. When suspicion or risk jumps, add `panel` with that 
 panel shows it counting up over the shot.
 
 **Icons** for a count card: `bill`, `coin`, `envelope`, `person`, `box`, `card`, `phone`, `document`,
-`key`, `goldbar`. Take the one the number counts; the grid always shows forty, so say in `unit` what
-one stands for when the number is larger ("each one is 50 bills").
+`key`, `goldbar`. Take the one the number counts. The grid shows forty icons, or the number itself
+when it is under forty, so say in `unit` what one stands for when the number is larger ("each one is
+50 bills").
 
 **Timing a card's parts.** A card starts on the first word of its line. Give each bar the `frame` of
 the word that counts it. Put the result, the payoff line, the stamp and each choice button on the word

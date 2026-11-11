@@ -608,7 +608,9 @@ the style: the reference picture, the text added to the prompt and the cap on pi
   kind; a bar, result, payoff line, stamp or button timed off a word or out of order; a card whose
   last part comes too late to read. A shot or a finished card that sits unchanged for over 4
   seconds is refused, and a punch-in fixes the shot. More than 16 different stills is refused and a
-  reused one is free. A value of the wrong type gets a sentence back and raises nothing.
+  reused one is free. A value of the wrong type gets a sentence back and raises nothing, and so does
+  a broken beat whose own problem falls past the 12 that are reported. A term in capitals is sized
+  to fit its card.
 - The text audit samples each beat, a card from the frame its last part has appeared.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
   one, refuses `CaseFileStory` on another style and other scenes on a Case File Story video.
@@ -621,8 +623,9 @@ the style: the reference picture, the text added to the prompt and the cap on pi
 - `generate_image` refuses, before any request goes out, a lead sheet without `reference="house"`,
   the house sheet used for another picture, a reference that is not yet an image of the video, a
   reference with a path in it, and a reference on a video of another style, whose prompt is sent
-  unchanged. A new picture past 16 stills and the lead sheet is refused and a regeneration is
-  allowed. Under the Hood keeps its own cap and wording.
+  unchanged. A 17th new still is refused and a regeneration is allowed. The lead sheet has a slot
+  of its own: a video that already holds 16 stills can still make it, and it never takes a still's
+  place. Under the Hood keeps its own cap and wording.
 
 Trap: the refusals for a wrong reference run before the scene-work claim and the cap, so a refused
 call reserves no picture slot and reaches no paid endpoint.
