@@ -94,7 +94,9 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
 # that vqa/stage_script.py uses.
 import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
 import system_flow  # the System Flow checks (TMDEV-196); a sibling module like cartoon
+import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
+import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
 JOBS_DIR     = Path(os.getenv("TUBEMATIC_JOBS_DIR", str(DATA_ROOT / "jobs")))
@@ -313,7 +315,12 @@ SUBTITLE_NUMERIC_RANGES = {
     "position": (0.05, 0.95),
 }
 SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
-                 "background", "position", "uppercase")
+                 "background", "position", "uppercase", "emphasis")
+# emphasis: indexes into the narration's words drawn on a red box (the key word
+# of a line). One in SUBTITLE_EMPHASIS_EVERY words at most: emphasis on every
+# other word is no emphasis. write_scene_config checks the indexes against the
+# timeline, which this function does not see.
+SUBTITLE_EMPHASIS_EVERY = 5
 
 
 def _validate_subtitles(sub) -> str:
@@ -353,6 +360,29 @@ def _validate_subtitles(sub) -> str:
     if "color" in sub and sub["color"] is not None:
         if not (isinstance(sub["color"], str) and sub["color"].strip()):
             return "config.subtitles.color must be a CSS colour string, or null to follow the canvas"
+    if "emphasis" in sub:
+        emph = sub["emphasis"]
+        if (not isinstance(emph, list)
+                or not all(isinstance(i, int) and not isinstance(i, bool) and i >= 0 for i in emph)
+                or len(set(emph)) != len(emph)):
+            return ("config.subtitles.emphasis must be a list of distinct word indexes (0 is the "
+                    "narration's first word)")
+    return ""
+
+
+def _emphasis_error(sub, word_count: int) -> str:
+    """The refusal for subtitles.emphasis indexes the narration does not have,
+    or for emphasis so dense it stops meaning anything; "" when fine."""
+    emph = sub.get("emphasis") if isinstance(sub, dict) else None
+    if not emph or not word_count:
+        return ""
+    bad = [i for i in emph if i >= word_count]
+    if bad:
+        return (f"config.subtitles.emphasis names word index(es) {bad}, but the narration has "
+                f"{word_count} words (0 to {word_count - 1})")
+    if len(emph) * SUBTITLE_EMPHASIS_EVERY > word_count:
+        return (f"config.subtitles.emphasis marks {len(emph)} of {word_count} words; at most one word "
+                f"in {SUBTITLE_EMPHASIS_EVERY} can be the key word, or nothing stands out")
     return ""
 
 
@@ -2291,7 +2321,9 @@ def update_video(
     art, panel-framed imagery), "illustrated" (characters are generated
     illustrated assets; you pick both the drawing style and the canvas from the
     topic), "system_flow" (the whole video is one diagram scene written as
-    data) or "cartoon_3d" (one 3D world; needs a working GPU).
+    data), "bean_explainer" (the whole video is one cartoon-bean scene written
+    as data, props from a fixed library) or "cartoon_3d" (one 3D world; needs
+    a working GPU).
     get_pipeline_status's visual_styles lists every style and whether this
     install can make it. The scene styles are permissions, not looks. Like script_profile_id, a human
     picks it at the topic checkpoint and it is frozen afterwards; set it here
@@ -2307,7 +2339,7 @@ def update_video(
     and never again: a revision round must render on the canvas the video
     already uses. Writable only when the style does not already fix a canvas —
     that is "auto" and "illustrated"; "motion_graphics", "stick",
-    "system_flow" and "cartoon_3d" fix theirs.
+    "system_flow", "bean_explainer" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer the video uses — "dom"
     (the scene components). Auto reaches Cartoon 3D by picking the cartoon_3d
@@ -3009,7 +3041,7 @@ def upsert_project(
     default_visual_style: which visual register this domain's *curriculum*
         videos start in — "auto" or any style in get_pipeline_status's
         visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
-        "cartoon_3d").
+        "bean_explainer", "cartoon_3d").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -4583,6 +4615,17 @@ def validate_job(video_id: str) -> dict:
     except Exception as e:
         errors.append(f"Image reference check failed: {e}")
 
+    # A Bean Explainer video's own props (TMDEV-198). write_scene_config checks
+    # their files, but the skill has the agent redraw a prop after writing the
+    # config, and a redraw does not pass through it again: check the files as
+    # they are now, so a redraw cannot bring in a filter, a stray import or a
+    # deleted file unseen.
+    try:
+        if "scene_config" in dir() and isinstance(scene_config, dict):
+            errors.extend(_bean_custom_prop_errors(video_id, scene_config))
+    except Exception as e:
+        errors.append(f"Custom prop check failed: {e}")
+
     # Cartoon 3D readiness (TMDEV-185). A Cartoon 3D video renders only once
     # its generated source exists and two fresh judges have passed the beat
     # sheet for that exact source (the verdict is keyed by a hash of the
@@ -5315,6 +5358,8 @@ def mark_research_done() -> dict:
 # ── Group 5: Scene file management ─────────────────────────────────────────
 
 _VALID_SCENE_NAME = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9\-]*$')
+# A file inside an installed scene's folder, read as a reference (read_scene_file).
+_INSTALLED_NESTED = re.compile(r'^[a-zA-Z][a-zA-Z0-9\-]*(/[a-zA-Z][a-zA-Z0-9\-]*){1,2}(\.tsx?)?$')
 
 
 def _check_scene_name(scene_name: str) -> str | None:
@@ -6223,7 +6268,9 @@ def write_scene_config(video_id: str, config: dict) -> dict:
             canvas), background ("pill"/"shadow"/"outline"/"none"; "outline"
             is bold text with a thick dark stroke and no plate, the look of
             narrated cartoon Shorts), position (fraction of
-            frame height), uppercase. Because the narration is captioned, a
+            frame height), uppercase, emphasis (a list of word indexes into
+            the narration, 0 first, drawn on a red box as the line's key word;
+            at most one word in 5). Because the narration is captioned, a
             scene should not also spell it out: put text in a scene only when
             the text is the thing being shown.
 
@@ -6259,6 +6306,13 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     render worker read, so this tool is the only correct way to produce a
     scene-config: **never** write scene-config.json using Claude Code's file
     tools, the same rule write_scene_file enforces for .tsx files.
+
+    A System Flow or Bean Explainer video is one installed scene (SystemFlow
+    or BeanExplainer) from frame 0 for totalFrames, whose props hold the whole
+    video as data; that data is checked here against the style's contract
+    (the tubematic-system-flow and tubematic-bean-explainer skills document
+    it) and refused with one sentence per problem. Either style fills
+    subtitles with its own caption look when the config has none.
 
     Call write_scene_file for every generated src referenced in config first,
     then call this, then the operator calls validate_job. Only the shape needed
@@ -6303,6 +6357,135 @@ def _timeline_word_starts(video_id: str) -> tuple[int, list[int]]:
         return int(tl.get("fps") or 30), [int(w["startFrame"]) for w in tl.get("words", [])]
     except (tjobs.UnsafePath, OSError, ValueError, TypeError, KeyError):
         return 30, []
+
+
+def _bean_custom_prop_errors(video_id: str, config) -> list[str]:
+    """validate_job's re-check of a Bean Explainer config's own props against
+    their files as they are now; [] when the config has none."""
+    custom = _bean_custom_list(config)
+    if not custom:
+        return []
+    errs, _, _ = bean_explainer.custom_prop_errors(
+        custom, video_id, tvs.pack(bean_explainer.STYLE_ID)["extra"]["props"],
+        _bean_custom_sources(video_id, config))
+    return [f"Custom prop: {e}" for e in errs]
+
+
+def _bean_custom_list(config) -> list:
+    """A Bean Explainer config's customProps, or [] for any other config."""
+    try:
+        data = config["scenes"][0]["props"][bean_explainer.PROPS_KEY]
+        custom = data.get("customProps") or []
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return []
+    return custom if isinstance(custom, list) else []
+
+
+def _bean_custom_sources(video_id: str, config) -> dict[str, str]:
+    """The text of every prop file a Bean Explainer config's customProps names,
+    by src, for the validator's source checks. A file that cannot be read is
+    left out, which the validator reports as missing."""
+    try:
+        data = config["scenes"][0]["props"][bean_explainer.PROPS_KEY]
+        custom = data.get("customProps") or []
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return {}
+    out: dict[str, str] = {}
+    for c in custom if isinstance(custom, list) else []:
+        src = c.get("src") if isinstance(c, dict) else None
+        if not isinstance(src, str) or src.count("/") != 1 or src.split("/")[0] != video_id:
+            continue
+        name = src.split("/")[1]
+        if _check_scene_name(name):
+            continue
+        try:
+            out[src] = _source_path(video_id, None, name, ".tsx").read_text(encoding="utf-8")
+        except (tjobs.UnsafePath, OSError, ValueError):
+            continue
+    return out
+
+
+@mcp.tool
+def render_bean_props(video_id: str):
+    """Look at the props you drew for a Bean Explainer video before you submit it.
+
+    Renders the props listed in the video's scene-config `customProps` (so
+    write_scene_config first) on the video's colour field: each at rest and,
+    when it has acts, part-way through its first act, with its declared box
+    outlined in red. Ink outside the red line means the drawing is bigger than
+    its w and h, and the layout checks will miss what it covers: enlarge the
+    box or shrink the drawing. A library prop sits in the corner for line
+    weight and size. Rewrite a prop with write_scene_file and call this again;
+    it reads the files as they are now. It renders on the CPU and waits its
+    turn behind other heavy checks, so it can take a minute or two.
+
+    Returns {video_id, props} followed by the picture, or {"error": ...} (a
+    render failure carries the renderer's error output, often a type error in
+    a prop file: fix it and call again).
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    if (row["visual_style"] or "") != bean_explainer.STYLE_ID:
+        return {"error": "render_bean_props is for Bean Explainer videos; this video's visual_style is "
+                         f"{row['visual_style'] or 'auto'!r}."}
+    try:
+        config = json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+        data = config["scenes"][0]["props"][bean_explainer.PROPS_KEY]
+    except (tjobs.UnsafePath, OSError, ValueError, KeyError, IndexError, TypeError):
+        return {"error": "This video has no Bean Explainer scene-config yet: write it with write_scene_config "
+                         "(customProps listing your props) first."}
+    custom = data.get("customProps") or []
+    if not custom:
+        return {"error": "The scene-config lists no customProps, so there is nothing of yours to preview."}
+    samples: dict[str, str] = {}
+    for shot in data.get("shots") or []:
+        for e in shot.get("events") or []:
+            if e.get("type") == "prop" and isinstance(e.get("text"), str):
+                samples.setdefault(e.get("prop"), e["text"])
+    spec = {"field": data.get("field", "yellow"),
+            "props": [{**c, "sample": samples.get(c.get("id"), "")} for c in custom]}
+    if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):
+        return {"error": f"Other checks kept the renderer busy for {HEAVY_CHECK_WAIT_SECS}s. Nothing is wrong "
+                         "with this video; call render_bean_props again."}
+    try:
+        with tempfile.TemporaryDirectory(prefix="tubematic-bean-props-") as tmp:
+            out_png = Path(tmp) / "props.png"
+            try:
+                bean_preview.render_preview(_MASCOT_REMOTION, spec, out_png)
+            except bean_preview.BeanPreviewError as e:
+                return {"error": str(e)}
+            from PIL import Image as PILImage
+            from fastmcp.utilities.types import Image as MCPImage
+            with PILImage.open(out_png) as src:
+                src.load()
+                img = src.convert("RGB")
+    finally:
+        _heavy_checks_lock.release()
+    longest = max(img.size)
+    if longest > _READ_IMAGE_MAX_EDGE:
+        ratio = _READ_IMAGE_MAX_EDGE / longest
+        img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))), PILImage.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    meta = {"video_id": video_id, "props": [c.get("id") for c in custom]}
+    return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
+
+
+def _timeline_words(video_id: str) -> list[str]:
+    """The narration's words in order, from timeline.json; [] when there is no
+    readable timeline (the checks that need them are skipped)."""
+    try:
+        path = tjobs.job_file(JOBS_DIR, video_id, tjobs.TIMELINE)
+        tl = json.loads(path.read_text(encoding="utf-8"))
+        return [str(w["word"]) for w in tl.get("words", [])]
+    except (tjobs.UnsafePath, OSError, ValueError, TypeError, KeyError):
+        return []
 
 
 def _write_scene_config_locked(video_id: str, config: dict) -> dict:
@@ -6372,13 +6555,34 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         if "subtitles" not in config:
             config["subtitles"] = dict(tvs.pack(system_flow.STYLE_ID)["captions"])
 
+    # ── Bean Explainer (TMDEV-198) ───────────────────────────────────────────
+    # The same shape as System Flow: one installed BeanExplainer scene whose
+    # props hold the sections, shots and events as data, checked here against
+    # the pack's catalogue (props, poses, faces...) before it costs a render.
+    be_err = bean_explainer.check_scene_use(row["visual_style"], scenes)
+    if be_err:
+        return {"error": be_err}
+    if (row["visual_style"] or "") == bean_explainer.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = bean_explainer.check(config, fps, word_starts, _timeline_words(video_id),
+                                        tvs.pack(bean_explainer.STYLE_ID)["extra"], video_id,
+                                        _bean_custom_sources(video_id, config))
+        if problems:
+            return {"error": "The Bean Explainer video has problems: " + " ".join(problems)}
+        # The style's caption look, under whatever the config sets: a config that
+        # sets only `emphasis` keeps the look rather than falling to the defaults.
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(bean_explainer.STYLE_ID)["captions"], **(given or {})}
+
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the
     # defaults into the file would freeze them at the values of the day the
     # config happened to be authored, and a later change to them would then
     # reach new videos only.
     if "subtitles" in config:
-        sub_err = _validate_subtitles(config["subtitles"])
+        sub_err = (_validate_subtitles(config["subtitles"])
+                   or _emphasis_error(config["subtitles"], len(_timeline_words(video_id))))
         if sub_err:
             return {"error": sub_err}
 
@@ -6635,7 +6839,10 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
                 were namespaced per video.
     source:     "generated" (default, agent-authored) or "installed" (the
                 curated committed library — flat names, scoped to no video, so
-                it takes no video_id).
+                it takes no video_id). An installed scene's own folder can be
+                read too, as a reference: "beanExplainer/props/lifeProps" is
+                the Bean Explainer's money and body props, and
+                "beanExplainer/props/common" the helpers a prop of yours imports.
 
                 **A scene-config entry's `src` and `source` are a pair — pass
                 both.** An installed entry's `src` is a bare name, so handing
@@ -6670,6 +6877,27 @@ def read_scene_file(scene_name: str, video_id: str = "", source: str = "generate
             return {"error": err}
         video_id, split = target
         scene_name = "/".join(filter(None, (split[0], split[1] + split[2])))
+    elif source == "installed" and "/" in scene_name:
+        # A file inside an installed scene's own folder: a library prop of the
+        # Bean Explainer (`beanExplainer/props/lifeProps`), System Flow's
+        # icons. A read-only reference for the agent, so the path is checked to
+        # stay inside the installed library.
+        if not _INSTALLED_NESTED.match(scene_name):
+            return {"error": f"scene_name '{scene_name}' is not an installed file path; use letters, digits "
+                             "and '-' in up to three '/'-separated parts, optionally ending .ts or .tsx"}
+        base = scene_name[:-4] if scene_name.endswith(".tsx") else scene_name[:-3] if scene_name.endswith(".ts") else scene_name
+        root = INSTALLED_DIR.resolve()
+        found = [p for p in (INSTALLED_DIR / f"{base}.tsx", INSTALLED_DIR / f"{base}.ts")
+                 if p.is_file() and p.resolve().is_relative_to(root)]
+        if not found:
+            return {"error": f"installed file not found: {scene_name}"}
+        path = found[0]
+        try:
+            tsx_content = path.read_text(encoding="utf-8")
+        except Exception as e:
+            return {"error": f"installed file {scene_name} could not be read: {e}"}
+        return {"scene_name": base, "video_id": "", "source": "installed", "src": base, "path": str(path),
+                "size_bytes": len(tsx_content.encode("utf-8")), "tsx_content": tsx_content}
     elif "/" in scene_name:
         # The composed form. _check_scene_src is validate_job's existing
         # validator for exactly this shape — reused rather than reimplemented,

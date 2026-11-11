@@ -29,7 +29,8 @@ your own judgment.
     vocabularies the beats actually require), `motion_graphics` (dark canvas, no figures at all), `stick` (white canvas,
     hand-drawn line figures), `illustrated` (generated character artwork, you choose the canvas
     and whether the art is playful or serious), `system_flow` (the whole video is one diagram per
-    subject, written as data) or `cartoon_3d` (a 3D world; it needs a working GPU). There is no
+    subject, written as data), `bean_explainer` (a cartoon bean reacting among props, written as
+    data) or `cartoon_3d` (a 3D world; it needs a working GPU). There is no
     dashboard here, so this chat is the only place that choice can be made, and it is frozen the
     moment the topic is approved. `get_pipeline_status()` returns every style as `visual_styles`,
     each with `available` and `unavailable_reason`: offer an unavailable one only by saying it is

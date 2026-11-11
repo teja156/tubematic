@@ -303,25 +303,27 @@
       "title": "Five surprising facts about honey",
       "brief": "Why honey never spoils, how many flowers one jar takes, and three more facts, each with its own picture or quick animation.",
       "expect": [
-        "scenes"
+        "bean_explainer"
       ],
       "ok": [
+        "scenes",
         "motion_graphics"
       ],
-      "future": "Bean Explainer (TMDEV-198)",
+      "future": "",
       "note": ""
     },
     {
       "title": "Why we procrastinate",
       "brief": "What happens in your brain when you put off a task, why the reward of later feels smaller, and two tricks that help.",
       "expect": [
-        "scenes"
+        "bean_explainer"
       ],
       "ok": [
+        "scenes",
         "stick",
         "illustrated"
       ],
-      "future": "Bean Explainer (TMDEV-198)",
+      "future": "",
       "note": ""
     },
     {
@@ -368,13 +370,27 @@
       "title": "Every type of cyber attack explained",
       "brief": "Phishing, ransomware, DDoS, man-in-the-middle, SQL injection and more, one quick idea each.",
       "expect": [
-        "scenes"
+        "bean_explainer"
       ],
       "ok": [
+        "scenes",
         "system_flow",
         "stick"
       ],
-      "future": "Bean Explainer (TMDEV-198)",
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Habits that quietly wreck your sleep",
+      "brief": "A quick list of everyday habits that ruin sleep without you noticing: scrolling in bed, late coffee, the weekend lie-in, and a too-warm room, each with one easy fix.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
       "note": ""
     }
   ]

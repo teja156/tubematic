@@ -20,6 +20,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Stick Explainer** | A white canvas. Black hand-drawn line art, with stick figures for roles such as "the user" or "an attacker" | Nothing |
 | **Illustrated** | Generated cartoon or rendered characters that stay the same from scene to scene | An OpenAI key |
 | **System Flow** | A dark canvas with one diagram per subject. Components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors while the narration explains each step. No people and no images | Nothing |
+| **Bean Explainer (experimental)** | A bald cartoon character with a thick outline reacts pose by pose to the narration on a bright colour field, while props and short handwritten labels build up beside it. No images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 
 Motion Graphics, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
@@ -41,6 +42,10 @@ background would flash, and a viewer reads that as a broken render.
 - Choose **System Flow** for how a system works: a request crossing a network, the steps of a
   protocol, a data pipeline, where an attack is stopped. The script is written as a walk through
   the system, one component and one step at a time.
+- Choose **Bean Explainer** for relatable, conversational topics: habits, health, money mistakes,
+  how people behave, and "every X explained" lists, where each item gets its own section. The props
+  come from a fixed library of everyday objects, so it suits subjects a phone, a coin, a clock or a
+  sign can stand for better than specific real products or places. It is experimental.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
 
 ### What Auto does
@@ -73,7 +78,11 @@ was voiced, the new script is voiced again when you approve it. To give the styl
 topic: a revised topic returns to Auto, and the agent picks again after you approve it.
 
 A System Flow video has a fixed look, so its pick is the whole decision: the agent lays out the
-diagrams and times them to the narration, but it does not change the canvas or add images.
+diagrams and times them to the narration, but it does not change the canvas or add images. A Bean
+Explainer video works the same way: the agent picks the background colour, the character's
+accessory and the props, and times every pose to the narration. When the library has nothing for an
+object the video needs, the agent draws that prop itself in the same style and checks the drawing
+before the video renders.
 
 ### Where you choose
 

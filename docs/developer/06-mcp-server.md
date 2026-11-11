@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 49 tools
+## The 50 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -142,6 +142,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`read_scene_file`](#read_scene_file) | Read one scene's source |
 | [`delete_scene_file`](#delete_scene_file) | Delete one generated scene or module |
 | [`list_scene_files`](#list_scene_files) | List generated and installed scenes |
+| [`render_bean_props`](#render_bean_props) | Render a Bean Explainer video's own props as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
 | [`get_timeline`](#get_timeline) | Read `timeline.json` |
@@ -589,7 +590,10 @@ renderer bundles the generated tree while it renders.
 
 `read_scene_file(scene_name, video_id="", source="generated")` returns a scene's source.
 `scene_name` is the bare stem, or the composed `"<video_id>/<scene_name>"` that `list_scene_files`
-returns. `source="installed"` reads the installed library.
+returns. `source="installed"` reads the installed library. An installed name may also be a path
+inside an installed scene's folder, up to three parts (`beanExplainer/props/lifeProps`), which is
+how a Bean Explainer agent reads the library props it models its own on. The path must match
+`_INSTALLED_NESTED` and resolve inside the installed library.
 
 A Cartoon 3D module is named bare with its `video_id` (`sets/street.ts`) or composed as
 `list_scene_files` lists it (`<video_id>/sets/street.ts`). `delete_scene_file` uses the same parser
@@ -607,6 +611,23 @@ A Cartoon 3D module is named bare with its `video_id` (`sets/street.ts`) or comp
 only for a legacy flat scene. It is refused with `status_mismatch` while the video is queued or
 rendering. This tool does not look the video up, so a given `video_id` has its shape checked before
 any path is built, and the target must stay inside `generated/`.
+
+### `render_bean_props`
+
+`render_bean_props(video_id)` renders the props a Bean Explainer video's agent drew for it (the
+config's `customProps`, so `write_scene_config` comes first) and returns the picture after a JSON
+block. Each prop is drawn at rest and over four moments of its first act, with its declared box
+outlined in red, so ink outside the box shows a box too small for the layout checks
+([Bean Explainer](10-scene-authoring.md#bean-explainer)).
+
+- `mcp/bean_preview.py::render_preview` runs `renderer/remotion/bean-tools/render-props.mjs` on
+  software GL in this container. The script writes a bundle entry per call that imports only this
+  video's prop files, so another video's broken scene cannot fail it.
+- The render holds `_heavy_checks_lock`, the lock `validate_job`'s typecheck holds, so previews and
+  typechecks run one at a time; a call that waits longer than `HEAVY_CHECK_WAIT_SECS` returns an
+  error and renders nothing. The render's own timeout (`bean_preview.py::TIMEOUT_SECS`, 240 s) is
+  shorter than that wait, so a `validate_job` queued behind a preview gets its turn. A preview killed
+  on its timeout leaves its bundle folder in `bean-tools/.tmp/`, which the next preview removes.
 
 ### `list_scene_files`
 
@@ -644,6 +665,13 @@ It checks:
   connected graph, events in a drawable order, no still stretch over 3.5 seconds). No other style may
   use `SystemFlow`. Its `subtitles` are filled from the style pack when the config has none. The
   rules are in [System Flow](10-scene-authoring.md#system-flow).
+- A `bean_explainer` video holds the one installed `BeanExplainer` scene, and its sections and shots
+  pass `mcp/bean_explainer.py` (cuts and poses on word starts, the prop library, the video's own
+  props and their files, the other catalogues, a layout with no label over a prop or a bean, labels that do not repeat the narration,
+  no still stretch over 3 seconds). No other style may use `BeanExplainer`. The style pack's caption
+  settings fill every `subtitles` key the config leaves out. The rules are in
+  [Bean Explainer](10-scene-authoring.md#bean-explainer).
+- `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
 
 It records two things in the same transaction as the rename of the staged file into place:
 
@@ -672,7 +700,7 @@ because the array is large.
 ### `validate_job`
 
 `validate_job(video_id)` returns `{passed, errors, warnings}`, and `passed` depends only on
-`errors`. The agent calls it before `submit_render`. It runs eleven checks in order:
+`errors`. The agent calls it before `submit_render`. It runs twelve checks in order:
 
 1. `audio.mp3`, `timeline.json` and `scene-config.json` exist in `<jobs>/<video_id>/`. The location
    is derived from the id and is not read from the stored path columns. A column that is still empty
@@ -693,10 +721,13 @@ because the array is large.
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
    and the [beat gate](#cartoon_beat_gate) has passed for the source on disk. An open gate is one
    error naming the tool that closes it. A symlink anywhere in the source tree fails the check.
-9. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
+9. A Bean Explainer video's own props: each file its `customProps` names exists and still passes
+   the source rules `write_scene_config` applied, since the agent may have redrawn it since
+   (`server.py::_bean_custom_prop_errors`).
+10. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
    `write_scene_config` already checked the cues (see
    [the `mascot` key](10-scene-authoring.md#mascots)).
-10. A typecheck of this video's scenes passes: `npx tsc --noEmit -p` with a temporary config that
+11. A typecheck of this video's scenes passes: `npx tsc --noEmit -p` with a temporary config that
     extends `tsconfig.json` and includes the video's own `generated/<video_id>/` directory and any
     other generated file its config names. `tsc` follows their imports, so the installed components
     and kits they use are checked too. Other videos' scenes are not: the generated tree holds every
@@ -706,7 +737,7 @@ because the array is large.
     `npx` runs `tsc` as a child of its own, and the error asks the agent to call again. The first
     20 lines of a failure are reported. The check is skipped if `npx` is unavailable or the video
     has no generated scenes.
-11. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
+12. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
     It runs when the checks above found no errors, the `text_layout_audit_enabled` setting is on
     and the video is not Cartoon 3D (a painted canvas has no text rects to measure). Its findings
     go to `warnings`. For a mascot video it also

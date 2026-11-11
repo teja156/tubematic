@@ -162,7 +162,8 @@ captions do not blink out between phrases. The hold ends 12 frames after the run
 (`MAX_HOLD_FRAMES`), so no caption stays up through a long pause.
 
 The word being spoken is drawn at full opacity and the rest of its run is dimmed. After a 4-frame
-entry, nothing in the line moves or resizes.
+entry, nothing in the line moves or resizes. A word listed in `emphasis` is drawn in white on a red box
+from the moment it is spoken, with the box scaling in over 8 frames.
 
 ### Fonts
 
@@ -296,13 +297,18 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
   video's renderer ([Scene Authoring](10-scene-authoring.md#cartoon-3d)).
 - A System Flow video has the one `SystemFlow` scene and its diagram passes the System Flow checks;
   no other video uses `SystemFlow` ([Scene Authoring](10-scene-authoring.md#system-flow)).
+- A Bean Explainer video has the one `BeanExplainer` scene and its sections and shots pass the Bean
+  Explainer checks; no other video uses `BeanExplainer`
+  ([Scene Authoring](10-scene-authoring.md#bean-explainer)).
 
 The tool refuses the write while another session holds the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
 is queued or rendering (`status_mismatch`).
 
-`canvas` is the only default the tool writes into most files. A System Flow config with no `subtitles`
-also gets its style pack's caption settings, because its captions are part of the style's look. The
+`canvas` is the only default the tool writes into most files. A System Flow config with no
+`subtitles` also gets its style pack's caption settings, because its captions are part of the style's
+look. A Bean Explainer config gets them under whatever `subtitles` keys it sets, so a config that
+sets only `emphasis` keeps the look. The
 components apply the other defaults at render time, so a changed default reaches every video whose
 config omits the key.
 
@@ -331,8 +337,10 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate) or `"none"` |
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
+| `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
 
-`server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time. The
+`server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time.
+`server.py::_emphasis_error` checks `emphasis` against the narration's word count. The
 ranges are `SUBTITLE_NUMERIC_RANGES` in `mcp/server.py`. The defaults live only in `Subtitles.tsx`.
 
 ### `mascot`
@@ -348,7 +356,7 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`SystemFlow` is referenced the same way, by System Flow videos only. The other
+`SystemFlow` and `BeanExplainer` are referenced the same way, by videos of their own style only. The other
 files are wrappers and helpers that a scene imports. The directory's `README.md` is the catalogue the
 agent reads.
 
@@ -423,6 +431,24 @@ Mono) from `public/fonts/` before the first frame, so a renderer with no interne
 same picture; the default caption font is unaffected. Its contract, layout, camera and the reasons
 it avoids gradients, filters and dashed strokes are in
 [System Flow](10-scene-authoring.md#system-flow).
+
+### `BeanExplainer`
+
+`BeanExplainer` draws a whole Bean Explainer video from `props.beanExplainer`, with its own colour
+field, floor, header, badge and carousel; its helpers, the bean rig and the prop library are in
+`beanExplainer/`. It loads its fonts (Fredoka, Patrick Hand, Instrument Sans) from `public/fonts/`
+before the first frame; the style's captions use Instrument Sans, which this scene loads. The
+`BeanPropSheet` composition renders the cast and the prop library as a model sheet, one page per
+frame, for a person to check a drawing: `npx remotion still src/index.ts BeanPropSheet out.png
+--frame=<page>`. With `--props='{"measure":"<prop>"}'` it draws one prop at every moment of its act
+on white, the picture each prop's box in `contract.ts` is measured from. No video uses it.
+
+A Bean Explainer video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`. The
+scene imports them under a `delayRender` handle, and one that fails to load fails the render.
+`bean-tools/render-props.mjs` renders them for the `render_bean_props` tool on the
+`BeanPropPreview` composition, from a bundle entry it writes per call into `bean-tools/.tmp/`
+(ignored by git) that imports only that video's prop files. The contract and the reason the bean is drawn as a cached bitmap
+are in [Bean Explainer](10-scene-authoring.md#bean-explainer).
 
 ### Figure and panel components
 
@@ -568,3 +594,7 @@ original. None of the source's own characters are included.
 License; the license is in the file's header). Its fonts in `public/fonts/` are Barlow, Space Grotesk
 and JetBrains Mono, each under the SIL Open Font License 1.1, with the license beside them. Its layout
 uses [@dagrejs/dagre](https://github.com/dagrejs/dagre) (MIT License).
+
+`BeanExplainer`'s bean and props are original drawings. Its fonts in `public/fonts/` are Fredoka,
+Patrick Hand and Instrument Sans, each under the SIL Open Font License 1.1, with the license beside
+them.

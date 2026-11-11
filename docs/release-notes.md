@@ -11,8 +11,9 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds System Flow, a visual style that turns a video into a diagram that builds itself while
-the narrator explains a system, and Auto now picks a video's style before its script is written.
+2.2.0 adds two visual styles: System Flow, which turns a video into a diagram that builds itself
+while the narrator explains a system, and Bean Explainer, a cartoon character that reacts to the
+narration among everyday props. Auto now picks a video's style before its script is written.
 
 ### Upgrade notes
 
@@ -22,8 +23,8 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs new skills for System Flow and for Auto's style choice, and a session started before it
-   does not have them.
+   installs new skills for System Flow, Bean Explainer and Auto's style choice, and a session
+   started before it does not have them.
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did
 before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
@@ -32,9 +33,10 @@ approved after the upgrade.
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow cannot render on 2.1.x. Finish it, or switch it to another style while
-  it waits at its topic, before you go back.
-- A domain whose default style is System Flow starts its new videos on Auto under 2.1.x.
+- A video set to System Flow or Bean Explainer cannot render on 2.1.x. Finish it, or switch it to
+  another style while it waits at its topic, before you go back.
+- A domain whose default style is System Flow or Bean Explainer starts its new videos on Auto under
+  2.1.x.
 
 ### Added
 
@@ -45,6 +47,17 @@ If you go back to 2.1.x later:
   image generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's
   default, or leave the topic on Auto. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Bean Explainer visual style (experimental). A bald, big-headed cartoon character with a thick
+  outline stands on one bright colour field and reacts to the narration pose by pose, while props
+  from a library of everyday objects (a phone, a browser bar, coins, a clock, a pill, a lock and about
+  35 more, and any the agent draws for the video in the same style), short handwritten labels,
+  reaction marks and red crosses build up beside it. In a
+  list video each item gets a header and a coloured badge, and a strip of badges slides between
+  items. It suits habits, health, money, behaviour and "every X explained" lists, and needs no image
+  generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's default;
+  Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
 - A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
   agent writes a new script for it, which is voiced when you approve it. See
@@ -54,7 +67,7 @@ If you go back to 2.1.x later:
 
 - Auto picks the style when the agent picks up an approved topic, before it writes the script, and
   can pick any style this install can make: Motion Graphics, Stick Explainer, Illustrated, System
-  Flow, Cartoon 3D and every style added later. The script is then written for that style. Before,
+  Flow, Bean Explainer, Cartoon 3D and every style added later. The script is then written for that style. Before,
   Auto decided after the voice was made, could only choose between a dark canvas, a white canvas and
   Cartoon 3D, and never chose a named style. When no style clearly fits, Auto keeps that mixed
   approach. A video's card and window show the picked style after the word Auto.
