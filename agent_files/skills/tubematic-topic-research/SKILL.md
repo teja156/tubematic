@@ -50,8 +50,9 @@ For each active strategy:
      short headline for it, at most 70 characters, which is what dashboard cards show.
      Write the title as a real headline, not the first 70 characters of the topic.
      `create_video` refuses a research topic that carries no angle, or one whose angle scores
-     below 5. Treat that refusal as a drop: never reword the angle or raise its score to get
-     the topic through.
+     from 1 to 4. Treat those two refusals as a drop: never reword the angle or raise its score
+     to get the topic through. A third refusal, "angle_score was not passed", means you left the
+     score out: score the angle by the rubric and call again with the number.
    - Call `add_comment` with the rationale for both scores: which signals each one counted.
      The angle itself is stored on the video, so do not repeat it there
 

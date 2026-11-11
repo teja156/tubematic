@@ -126,7 +126,10 @@ def test_a_persons_topic_with_no_angle_is_filed_however_none_is_said(db, kw, thr
 
 @pytest.mark.parametrize("kw", [{"angle": "none", "angle_kind": "none"},
                                 {"angle": "", "angle_kind": "None."},
-                                {"angle": "N/A", "angle_kind": ""}])
+                                {"angle": "N/A", "angle_kind": ""},
+                                {"angle": "", "angle_kind": "no angle"},
+                                {"angle_kind": "-"},
+                                {"angle": "no angle"}])
 def test_a_persons_topic_whose_angle_is_spelled_none_is_filed_without_one(db, kw):
     result = _file("manual", **kw)
     assert "error" not in result, result
@@ -135,8 +138,21 @@ def test_a_persons_topic_whose_angle_is_spelled_none_is_filed_without_one(db, kw
 
 def test_a_research_topic_cannot_pass_with_none_spelled_out(db):
     """The words mean "no angle" only for a person's own topic. For research
-    they are what they look like: a missing angle, refused."""
-    assert "error" in _file("trending", angle="none", angle_kind="none", angle_score=7)
+    they are what they look like: a missing angle, refused, and the refusal
+    does not suggest leaving the angle out, which would be refused too."""
+    err = _file("trending", angle="none", angle_kind="none", angle_score=7)["error"]
+    assert "not a kind" in err
+    assert "leave angle" not in err
+    assert _count() == 0
+
+
+def test_a_real_sentence_with_none_as_its_kind_is_not_thrown_away(db):
+    """The sentence is the person's. Dropping it because of the kind would
+    lose it without a word; the kind is refused and the call can be fixed."""
+    err = _file("manual", angle=SENTENCE, angle_kind="none")["error"]
+    assert "not a kind" in err
+    assert "leave angle, angle_kind and angle_score out" in err
+    assert _count() == 0
 
 
 def test_a_research_proposal_that_left_out_its_score_is_told_to_score_it(db):

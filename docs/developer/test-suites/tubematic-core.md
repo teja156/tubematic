@@ -125,7 +125,10 @@ Covers `tubematic_core/angles.py`, the kinds and score of a
   angle scoring under 5, and both messages tell the agent to name the subject in its run summary.
 - With `required`, a score of 0 is refused with a request for the score, never as a weak angle.
 - `clean_kind` brings a kind's label, a hyphen or a stray full stop to its id, and `says_none`
-  knows the words for no angle without catching a sentence that starts with one.
+  knows the words for no angle without catching a sentence that starts with one. `sent_no_angle`
+  reads the values as sent, so `no angle` and `-` as a kind count, and a real sentence with `none`
+  as its kind does not. The unknown-kind refusal suggests leaving the angle out only where that is
+  allowed.
 - The skill's reference block and the mining prompt both carry every kind and every signal.
 
 Trap: a kind points at a formula by id. A kind left pointing at a formula that was removed would

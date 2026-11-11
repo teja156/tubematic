@@ -113,8 +113,17 @@ def test_says_none_leaves_everything_else(value):
     assert not ta.says_none(value)
 
 
-def test_an_unknown_kind_says_how_to_send_no_angle():
+def test_an_unknown_kind_says_how_to_send_no_angle_only_where_that_is_allowed():
     assert "leave angle, angle_kind and angle_score out" in ta.angle_error("A sentence.", "nope")
+    assert "leave angle" not in ta.angle_error("A sentence.", "nope", 7, required=True)
+
+
+@pytest.mark.parametrize("angle, kind, none", [
+    ("none", "", True), ("", "no angle", True), (None, "-", True), ("", "N/A", True),
+    ("A real sentence.", "none", False), ("", "paradox", False), ("", "", False),
+])
+def test_sent_no_angle_reads_the_raw_values(angle, kind, none):
+    assert ta.sent_no_angle(angle, kind) is none
 
 
 def test_required_asks_for_a_score_that_was_left_out():

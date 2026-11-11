@@ -78,6 +78,20 @@ def test_research_ends_with_a_summary_that_names_what_it_dropped():
     assert summary.index("**Dropped**") < summary.index("**Filed**")
 
 
+def test_research_tells_a_missing_score_from_a_drop():
+    """create_video refuses a left-out score with its own message. Read as a
+    drop, it would lose a subject that had an angle."""
+    text = _skill("tubematic-topic-research")
+    assert "angle_score was not passed" in text
+    assert "call again with the number" in text
+
+
+def test_the_operator_never_writes_none_as_an_angle():
+    text = _skill("tubematic-operator")
+    row = next(line for line in text.splitlines() if line.startswith("| `TOPIC_APPROVED` | **First"))
+    assert "do not call `update_video` for the angle" in row
+
+
 def test_research_no_longer_leaves_the_angle_in_a_comment_only():
     assert "with the hook angle and score rationale" not in _skill("tubematic-topic-research")
 

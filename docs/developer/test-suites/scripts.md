@@ -736,7 +736,8 @@ Covers what the agent is told about a [topic's angle](../02-pipeline.md#topic-an
 - The research skill passes `angle`, `angle_kind` and `angle_score` to `create_video`, drops a
   subject with no angle, never invents one, and ends with a run summary that names what it
   dropped, with the dropped list first because the poller logs only the start of the agent's
-  final message. Its examples name no install's domains.
+  final message. It tells the missing-score refusal from the two that mean a drop. Its examples name
+  no install's domains.
 - The operator skill fills a missing angle before the style and the script, leaves an approved
   angle alone, and lets a topic revision rewrite it.
 - The script-writing skill reads the angle and `angle_formula`, and still works with no angle.

@@ -127,6 +127,19 @@ def says_none(value) -> bool:
     return isinstance(value, str) and value.strip().strip(".").lower() in NO_ANGLE_WORDS
 
 
+def sent_no_angle(angle, kind) -> bool:
+    """Whether a person's-topic request says "no angle" in words: the sentence
+    is one of the NO_ANGLE_WORDS, or the kind is and no sentence came with it.
+    Read on the values as sent, before clean_kind, which would turn "no angle"
+    into no_angle. A real sentence with "none" as its kind is not read as no
+    angle: it stays a sentence, and its kind is refused as unknown, so the
+    sentence is never thrown away without a word."""
+    if says_none(angle):
+        return True
+    no_sentence = angle is None or (isinstance(angle, str) and angle.strip() == "")
+    return says_none(kind) and no_sentence
+
+
 _NO_ANGLE = ("A subject with no honest angle is not proposed: leave it out and name it in your "
              "run summary. Do not invent an angle to get past this check.")
 
@@ -182,8 +195,9 @@ def angle_error(angle, kind, score=0, *, required: bool = False) -> str | None:
         return ("angle and angle_kind are written together: pass the sentence and its kind, or "
                 "leave both empty")
     if kind not in ANGLE_KINDS:
-        return (f"angle_kind {kind!r} is not a kind. Must be one of: {', '.join(ANGLE_KINDS)}. "
-                "For a topic with no angle, leave angle, angle_kind and angle_score out")
+        hint = ("" if required else
+                ". For a topic with no angle, leave angle, angle_kind and angle_score out")
+        return f"angle_kind {kind!r} is not a kind. Must be one of: {', '.join(ANGLE_KINDS)}{hint}"
     if len(angle) > ANGLE_MAX_CHARS:
         return (f"angle is {len(angle)} characters; the limit is {ANGLE_MAX_CHARS} "
                 "(one sentence)")

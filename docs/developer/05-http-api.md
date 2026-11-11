@@ -391,7 +391,9 @@ with `angle_kind`.
   effort, the script profile, the voice or the visual style.
 - The angle fails the rule it has on [`POST /videos`](#post-videos). An absent, `null` or blank
   `angle` with no `angle_kind` means no angle, which is accepted: the agent looks for one when it
-  picks the video up. So does `none` or `n/a` in either field. An `angle_score` in the body is ignored.
+  picks the video up. So does `none` or `n/a` as the sentence, or as the kind with no sentence
+  (`tubematic_core.angles.sent_no_angle`). A real sentence with `none` as its kind is refused for
+  the kind. An `angle_score` in the body is ignored.
 
 How it differs from `POST /videos`:
 

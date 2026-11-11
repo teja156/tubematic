@@ -331,11 +331,20 @@ def test_a_blank_angle_on_a_manual_video_is_no_angle(client, db_path, blank):
 
 
 @pytest.mark.parametrize("none", [{"angle": "none", "angle_kind": "none"},
-                                  {"angle": "N/A", "angle_kind": ""}])
+                                  {"angle": "N/A", "angle_kind": ""},
+                                  {"angle": "", "angle_kind": "no angle"},
+                                  {"angle_kind": "-"}])
 def test_a_manual_video_whose_angle_is_spelled_none_has_no_angle(client, db_path, none):
     res = _submit(client, **none)
     assert res.status_code == 201
     assert _angle(db_path, res.get_json()["id"]) == ("", "", 0)
+
+
+def test_a_manual_sentence_with_none_as_its_kind_is_refused_not_dropped(client, db_path):
+    res = _submit(client, angle=SENTENCE, angle_kind="none")
+    assert res.status_code == 400
+    assert "not a kind" in res.get_json()["error"]
+    assert _count(db_path) == 0
 
 
 def test_a_manual_video_keeps_the_angle_its_author_gave(client, db_path):
