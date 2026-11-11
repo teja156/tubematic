@@ -42,7 +42,8 @@ LIMITS = {
     "recapMinSeconds": 2,
     "recapMaxSeconds": 8,
 }
-TIMING = {"lag": 12, "glide": 42, "snap": 2, "read": 15, "gap": 2, "recapPull": 30, "recapNumberStep": 6}
+TIMING = {"lag": 12, "glide": 42, "snap": 2, "read": 15, "gap": 2, "openLead": 6, "recapPull": 30,
+          "recapNumberStep": 6}
 SPEED = {"text": 1.875, "big": 4, "formula": 2.5, "label": 1.875, "doodle": 30, "arrow": 14, "mark": 12}
 FLOOR = {"text": 0.9, "formula": 1.0, "minText": 8, "doodle": 18, "arrow": 8, "mark": 8}
 LAYOUTS = {
@@ -544,6 +545,13 @@ def region_leave(regions: list, recap: int, i: int) -> int:
     return regions[i + 1]["startFrame"] if i + 1 < len(regions) else recap
 
 
+def opens_video(ri: int, k: int, item: dict) -> bool:
+    """The board's first item at frame 0 opens the video: it is already being
+    drawn on the first frame instead of waiting TIMING["lag"] frames, and it
+    need not sit on a word (the voice starts a few frames in)."""
+    return ri == 0 and k == 0 and item.get("at") == 0
+
+
 def schedule(regions: list, recap: int) -> list[dict]:
     """{region, item, start, dur, deadline} per item, as schedule.ts (plus the
     deadline, which the validator needs to say what is too tight)."""
@@ -552,7 +560,7 @@ def schedule(regions: list, recap: int) -> list[dict]:
         leave = region_leave(regions, recap, ri)
         items = region["items"]
         for k, it in enumerate(items):
-            start = it["at"] + TIMING["lag"]
+            start = -TIMING["openLead"] if opens_video(ri, k, it) else it["at"] + TIMING["lag"]
             nxt = items[k + 1] if k + 1 < len(items) else None
             deadline = nxt["at"] + TIMING["lag"] - TIMING["gap"] if nxt else leave - TIMING["read"]
             dur = max(1, min(item_natural(it), max(item_floor(it), deadline - start)))
@@ -730,7 +738,8 @@ def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_st
             err(f"{what}: at must be a whole frame number (a word's startFrame).")
             continue
         ok, nearest = _near_word(at, word_starts)
-        if not ok:
+        # The item that opens the video sits at frame 0, before the first word.
+        if not ok and not (ri == 0 and at == 0):
             err(f"{what}: at {at} is not on a word; use the startFrame of the word it illustrates "
                 f"(the nearest starts at {nearest}).")
         if prev_at is not None and at <= prev_at:

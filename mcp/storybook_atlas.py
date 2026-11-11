@@ -401,7 +401,9 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
     snaps = sorted(set(word_starts))
 
     def on_word(frame: int) -> bool:
-        return not snaps or any(abs(frame - w) <= TIMING["onWord"] for w in snaps)
+        # Frame 0 opens the video and comes before the first word: what the
+        # first frame shows (the guide walking, a prop arriving) may start there.
+        return frame == 0 or not snaps or any(abs(frame - w) <= TIMING["onWord"] for w in snaps)
 
     # ── the guide and the cast ──
     guide = data.get("guide")

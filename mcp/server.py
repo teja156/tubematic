@@ -109,6 +109,7 @@ import mascot_sheets  # renders a mascot's model sheets (a Node script on softwa
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
 import terminal_preview  # renders a Terminal Doc video's own moves for the agent to look at
+import picture_checks  # the first-frame and beat-change warnings (TMDEV-215), pure like text_audit
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
 JOBS_DIR     = Path(os.getenv("TUBEMATIC_JOBS_DIR", str(DATA_ROOT / "jobs")))
@@ -4764,7 +4765,14 @@ def validate_job(video_id: str) -> dict:
     Also runs an advisory text-layout audit: it renders a few settled frames of
     each scene in headless Chromium (producing no image) and measures real text
     bounding boxes, reporting text-on-text collisions with the offending
-    elements and their coordinates.
+    elements and their coordinates. For a mixed-scenes video it also measures
+    frame 0, and warns when nothing but text or a flat background is on screen
+    there, or when nothing moves in the first frames.
+
+    And advisory picture checks, from the data: a data-driven style's first
+    frame showing no subject, and a turn, re-opening or payoff (each segment's
+    role, as get_timeline reports it) with nothing new on screen near its
+    first word.
 
     Returns {passed: bool, errors: list[str], warnings: list[str]}.
     `passed` depends on `errors` alone — `warnings` never blocks a render.
@@ -4778,7 +4786,8 @@ def validate_job(video_id: str) -> dict:
     _init_db()
     with _conn() as con:
         row = con.execute(
-            "SELECT voice_file_path, timeline_path, scene_config_path, script_segments FROM videos WHERE id = ?",
+            "SELECT voice_file_path, timeline_path, scene_config_path, script_segments, formula_id "
+            "FROM videos WHERE id = ?",
             (video_id,),
         ).fetchone()
     if not row:
@@ -5083,6 +5092,20 @@ def validate_job(video_id: str) -> dict:
             warnings = [f"Text-layout audit could not run ({e}) — text layout was not checked"]
     finally:
         _heavy_checks_lock.release()
+
+    # Picture checks (TMDEV-215) — ADVISORY, pure data, so they run whatever
+    # the text audit did: a first frame with nothing but a headline or a blank
+    # stage on it, and a turn, re-opening or payoff spoken with nothing new on
+    # screen. A video with no formula on record gets the first-frame check only.
+    if ("scene_config" in dir() and isinstance(scene_config, dict)
+            and "timeline" in dir() and isinstance(timeline, dict)):
+        try:
+            warnings = warnings + picture_checks.check(
+                scene_config, timeline.get("segments") or [], script_segments or [],
+                tformulas.beat_roles(row["formula_id"] or ""), timeline.get("fps") or FPS)
+        except Exception as e:
+            warnings = warnings + [f"Picture checks could not run ({e}): the first frame and the "
+                                   "beat changes were not checked"]
 
     return {"passed": len(errors) == 0, "errors": errors, "warnings": warnings}
 
@@ -7661,6 +7684,16 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     }
 
 
+def _parsed_segments(raw) -> list:
+    """A stored script_segments value as a list; [] for none or a value that
+    does not parse (a legacy row never fails a read over it)."""
+    try:
+        parsed = json.loads(raw) if raw else []
+    except (TypeError, ValueError):
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
 @mcp.tool
 def get_timeline(video_id: str, include_words: bool = False) -> dict:
     """Read a video's timeline.json — segment frame spans (and optionally
@@ -7676,9 +7709,17 @@ def get_timeline(video_id: str, include_words: bool = False) -> dict:
     videos); the segment-anchored primary path never needs it, so it's
     opt-in to keep the common-case payload small.
 
-    Returns {video_id, total_frames, fps, segments[, words]}, where segments
-    is [{id, startFrame, endFrame}] — empty if the video predates segmented
-    scripts. Returns {"error": ...} if the video doesn't exist or voice
+    Returns {video_id, total_frames, fps, first_frame, segments[, words]},
+    where segments is [{id, startFrame, endFrame, beat, role}] — empty if the
+    video predates segmented scripts. beat is the formula beat the script
+    gave the segment ("" when none). role is what the segment owes the
+    picture: "opening" for the first segment; "turn", "reopen" or "payoff"
+    for the first segment of a formula beat with that role; "" otherwise. A
+    turn or a re-opening needs a visible change on its first word, the payoff
+    the video's strongest picture (the style's own way of doing each is in
+    get_video's style.picture). first_frame is the formula's line on what the
+    first frame shows ("" when the video has no formula on record).
+    Returns {"error": ...} if the video doesn't exist or voice
     hasn't been generated yet (timeline.json not written).
     """
     err = _video_id_error(video_id)
@@ -7686,7 +7727,8 @@ def get_timeline(video_id: str, include_words: bool = False) -> dict:
         return err
     _init_db()
     with _conn() as con:
-        row = con.execute("SELECT id FROM videos WHERE id = ?", (video_id,)).fetchone()
+        row = con.execute("SELECT id, script_segments, formula_id FROM videos WHERE id = ?",
+                          (video_id,)).fetchone()
     if not row:
         return {"error": f"Video not found: {video_id}"}
 
@@ -7702,11 +7744,15 @@ def get_timeline(video_id: str, include_words: bool = False) -> dict:
     except Exception as e:
         return {"error": f"timeline.json could not be read: {e}"}
 
+    formula_id = row["formula_id"] or ""
     result = {
         "video_id": video_id,
         "total_frames": timeline.get("totalFrames"),
         "fps": timeline.get("fps"),
-        "segments": timeline.get("segments", []),
+        "first_frame": tformulas.first_frame(formula_id),
+        "segments": picture_checks.annotate_segments(
+            timeline.get("segments", []), _parsed_segments(row["script_segments"]),
+            tformulas.beat_roles(formula_id)),
     }
     if include_words:
         result["words"] = timeline.get("words", [])
