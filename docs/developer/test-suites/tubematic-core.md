@@ -320,6 +320,18 @@ Covers `0020`: `videos.style_pick`, `style_runner_up` and `style_reason`.
 Trap: `''` means Auto has not decided, which is true of every video before the upgrade, so the
 migration has no backfill. A scripted `auto` video then finishes on the mixed scene system.
 
+### `test_last_render_migration.py`
+
+Covers `0021`: `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu`
+and `last_render_seconds`.
+
+- Existing videos keep their status, render timestamps and `updated_at`, and read `''`/`0` in the
+  four new columns.
+- A second run changes nothing, and a new video starts with no record.
+
+Trap: no earlier version kept which renderer made a video, so the migration has no backfill and the
+video window hides the rows on every video rendered before the upgrade.
+
 ## Shared rules
 
 ### `test_usage_accounting.py`

@@ -229,7 +229,7 @@ wait, and a stop from the gateway ends it.
 
 | `outcome` | Sent when | The gateway |
 |---|---|---|
-| `success` | Remotion exited 0 and the upload landed | Records `video_path` and `render_uploaded_at`, adds a `render_timings` row (frames, seconds, GPU or CPU) and releases the claim. The [AI review](21-ai-review.md) finishes the video |
+| `success` | Remotion exited 0 and the upload landed | Records `video_path` and `render_uploaded_at`, adds a `render_timings` row (frames, seconds, GPU or CPU), writes the video's `last_render_*` record and releases the claim. The [AI review](21-ai-review.md) finishes the video |
 | `failed` | Remotion exited non-zero | `REVISION_REQUESTED` |
 | `stalled`, `timeout` | The render stopped advancing, or ran past the ceiling | `RENDER_QUEUED` |
 | `error` | Anything else: no bundle, a failed upload, an exception in the renderer | `RENDER_QUEUED` |
