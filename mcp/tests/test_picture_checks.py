@@ -249,6 +249,30 @@ def test_a_whiteboard_doodle_counts_when_the_marker_starts_it():
     assert doodle["at"] + 12 in frames  # its word is not the change; the marker starting it is
 
 
+def test_a_whiteboard_doodle_on_a_word_just_after_the_turn_counts():
+    config = _example("whiteboard")
+    regions = _props(config)["regions"]
+    doodle = next(it for r in regions[1:] for it in r["items"] if it["kind"] == "doodle")
+    word = doodle["at"] - 2  # the validator lets an item sit 2 frames after its word
+    tl = [{"id": "seg-0", "startFrame": 0, "endFrame": word},
+          {"id": "seg-1", "startFrame": word, "endFrame": word + 300}]
+    script = [{"id": "seg-0", "voice": "a", "visual": "", "beat": "Symptom"},
+              {"id": "seg-1", "voice": "b", "visual": "", "beat": "Turn"}]
+    assert pc.check(config, tl, script, {"Turn": "turn"}, 30) == []
+
+
+@pytest.mark.parametrize("bad", [
+    {"scenes": [{"src": "SystemFlow", "props": "x"}]},
+    {"scenes": [{"src": "Whiteboard", "props": {"whiteboard": {"regions": [{"items": ["x"]}]}}}]},
+    {"scenes": [{"src": "BeanExplainer", "props": {"beanExplainer": {"shots": [
+        {"start": 0, "events": [{"type": ["pose"], "frame": 0}]}]}}}]},
+])
+def test_data_the_style_validator_refuses_is_not_judged_and_does_not_raise(bad):
+    tl, script = _segments(["Symptom", "Turn"])
+    out = pc.check(bad, tl, script, {"Turn": "turn"}, 30)
+    assert all(not w.startswith("Picture checks could not run") for w in out)
+
+
 def test_malformed_data_is_skipped_not_raised():
     assert pc.change_frames("whiteboard", {"scenes": [{"src": "Whiteboard", "props": {"whiteboard": 3}}]}) == []
     assert pc.first_frame_warnings({"scenes": [{"src": "SystemFlow", "props": {}}]})

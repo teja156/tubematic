@@ -185,3 +185,15 @@ def test_a_video_with_no_formula_has_beats_but_no_roles(job_db):
     assert [(s["beat"], s["role"]) for s in result["segments"]] == [
         ("Turn", "opening"), ("Root cause", "")]
     assert result["first_frame"] == ""
+
+
+def test_an_unreadable_stored_segment_leaves_the_spans_unlabelled(job_db):
+    job_db("vid_odd")
+    tl = _timeline()
+    tl["segments"][1]["id"] = ["not", "hashable"]
+    _write_timeline("vid_odd", tl)
+    _script("vid_odd", [{"id": "seg-1", "voice": "a", "visual": "b", "beat": "Turn"}], "broken-expectation")
+
+    result = server.get_timeline("vid_odd")
+
+    assert [s["role"] for s in result["segments"]] == ["", ""]

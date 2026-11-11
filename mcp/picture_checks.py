@@ -110,7 +110,8 @@ def style_of(config: dict) -> str | None:
 def _props(config: dict, mod) -> dict:
     for scene in config.get("scenes") or []:
         if isinstance(scene, dict) and scene.get("src") == mod.SCENE_SRC:
-            props = (scene.get("props") or {}).get(mod.PROPS_KEY)
+            props = scene.get("props")
+            props = props.get(mod.PROPS_KEY) if isinstance(props, dict) else None
             return props if isinstance(props, dict) else {}
     return {}
 
@@ -207,11 +208,15 @@ def _first_frame_problem(style: str, config: dict) -> str | None:
 
 def first_frame_warnings(config: dict) -> list[str]:
     """Warnings about a data-driven video's first frame. A mixed-scenes video's
-    first frame is checked by the text-layout audit instead."""
+    first frame is checked by the text-layout audit instead. Data the style's
+    own validator would refuse is not judged here."""
     style = style_of(config)
     if style in (None, MIXED):
         return []
-    problem = _first_frame_problem(style, config)
+    try:
+        problem = _first_frame_problem(style, config)
+    except (AttributeError, KeyError, TypeError, IndexError):
+        return []
     return [f"First frame: {problem}. The first frame should show what the first sentence names, "
             "already moving."] if problem else []
 
@@ -220,7 +225,15 @@ def first_frame_warnings(config: dict) -> list[str]:
 
 def change_frames(style: str, config: dict) -> list[int]:
     """Every frame at which something visible starts changing, in this style's
-    data: a cut to a new unit or an event that changes the picture."""
+    data: a cut to a new unit or an event that changes the picture. Data the
+    style's own validator would refuse yields no frames."""
+    try:
+        return _change_frames(style, config)
+    except (AttributeError, KeyError, TypeError, IndexError):
+        return []
+
+
+def _change_frames(style: str, config: dict) -> list[int]:
     if style == MIXED:
         return _ints(s.get("startFrame") for s in _list(config, "scenes"))
     subtle = _SUBTLE.get(style, set())
@@ -233,10 +246,15 @@ def change_frames(style: str, config: dict) -> list[int]:
         wb = _props(config, whiteboard)
         regions = _list(wb, "regions")
         frames = [r.get("startFrame") for r in regions] + [wb.get("recapFrame")]
+        # A doodle or an arrow counts from its word (`at`, which the validator
+        # lets sit TIMING["snap"] frames after it) and from the frame the marker
+        # starts it, TIMING["lag"] later.
+        frames += [it.get("at") for r in regions for it in _list(r, "items")
+                   if it.get("kind") in _WHITEBOARD_PICTURES]
         try:
             frames += [s["start"] for s in whiteboard.schedule(regions, wb.get("recapFrame"))
                        if s["item"].get("kind") in _WHITEBOARD_PICTURES]
-        except (KeyError, TypeError):
+        except (AttributeError, KeyError, TypeError):
             pass
         return _ints(frames)
     if style == bean_explainer.STYLE_ID:

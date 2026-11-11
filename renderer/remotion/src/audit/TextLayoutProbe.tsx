@@ -249,7 +249,10 @@ const measureVisuals = (): MeasuredVisual[] => {
       }
       const { opacity } = accumulateFromAncestors(el);
       const st = window.getComputedStyle(el);
-      const look = [st.strokeDashoffset, st.stroke, st.fill, st.backgroundColor, st.backgroundPosition, st.backgroundSize].join("|");
+      const look = [
+        st.strokeDashoffset, st.stroke, st.fill, st.backgroundColor, st.backgroundPosition, st.backgroundSize,
+        st.transform, st.objectPosition,
+      ].join("|");
       const owner = tag === "svg" ? null : el.closest("svg");
       const group = owner ? svgs.indexOf(owner) : -1;
       const textOnly =

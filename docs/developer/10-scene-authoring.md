@@ -439,14 +439,16 @@ For a mixed-scenes video the audit adds a frame-0 pass (`text_audit.py::frame0_p
 lists the pictures of the scene layer, the element `CompositionBuilder` marks
 `data-tm-layer="scene"`, at frames 0 and 6. On those frames it holds the frame open and measures
 again once the page has stopped changing, so a lazily loaded scene is seen. Each picture carries its
-box, its opacity and a `look` (stroke offset, colours, background position), so a line drawing on or
-a colour change counts as movement. `text_audit.py::frame0_findings` decides: an image, a canvas or
-a filled box counts as a subject from `FRAME0_MIN_AREA` of the frame at `FRAME0_MIN_OPACITY`, and
-the shapes of one SVG count together, by the box around them, so a figure drawn from a head, a torso
-and thin limbs is one subject. A colour or gradient fill or an SVG rect covering
-`FRAME0_BACKDROP_AREA` of the frame is the backdrop, and a filled card holding only text is a title
-card; neither is a subject. A canvas or a video counts as moving, because its pixels change inside a
-box that stays still. The text checks skip this pass, because text is mid-entrance on frame 0.
+box, its opacity and a `look` (stroke offset, colours, background position, transform), so a line
+drawing on or a colour change counts as movement, and any change of a box counts, however small: a
+slow eased push-in moves an image a tenth of a pixel in its first frames.
+`text_audit.py::frame0_findings` decides: an image, a canvas or a filled box counts as a subject
+from `FRAME0_MIN_AREA` of the frame at `FRAME0_MIN_OPACITY`, and the shapes of one SVG count
+together, by the box around them, so a figure drawn from a head, a torso and thin limbs is one
+subject. A colour or gradient fill or an SVG rect covering `FRAME0_BACKDROP_AREA` of the frame is
+the backdrop, and a filled card holding only text is a title card; neither is a subject. A canvas or
+a video counts as moving, because its pixels change inside a box that stays still. The text checks
+skip this pass, because text is mid-entrance on frame 0.
 
 ### Picture warnings
 

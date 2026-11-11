@@ -133,8 +133,11 @@ FRAME0_MIN_OPACITY = 0.2
 # the scene's backdrop, not a subject.
 FRAME0_BACKDROP_AREA = 0.9
 # What counts as moving between the two frames: a box shifting or resizing by
-# more than this many pixels, or an opacity change past this much.
-FRAME0_MOVE_PX = 0.5
+# more than this many pixels, or an opacity change past this much. The pixel
+# figure is tiny because a slow eased push-in (ImageFX's default) moves its
+# image's box by a tenth of a pixel in its first six frames, and a box that
+# does not move measures the same to the last float digit.
+FRAME0_MOVE_PX = 0.01
 FRAME0_MOVE_OPACITY = 0.02
 _FRAME_AREA = FRAME_WIDTH * FRAME_HEIGHT
 

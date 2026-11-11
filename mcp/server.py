@@ -7747,14 +7747,20 @@ def get_timeline(video_id: str, include_words: bool = False) -> dict:
         return {"error": f"timeline.json could not be read: {e}"}
 
     formula_id = row["formula_id"] or ""
+    raw_segments = timeline.get("segments", [])
+    try:
+        segments = picture_checks.annotate_segments(
+            raw_segments, _parsed_segments(row["script_segments"]), tformulas.beat_roles(formula_id))
+    except (TypeError, ValueError, AttributeError):
+        # A stored segment the annotation cannot read: hand back the spans
+        # unlabelled rather than failing the read.
+        segments = [{**s, "beat": "", "role": ""} for s in raw_segments if isinstance(s, dict)]
     result = {
         "video_id": video_id,
         "total_frames": timeline.get("totalFrames"),
         "fps": timeline.get("fps"),
         "first_frame": tformulas.first_frame(formula_id),
-        "segments": picture_checks.annotate_segments(
-            timeline.get("segments", []), _parsed_segments(row["script_segments"]),
-            tformulas.beat_roles(formula_id)),
+        "segments": segments,
     }
     if include_words:
         result["words"] = timeline.get("words", [])

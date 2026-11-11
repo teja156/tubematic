@@ -952,6 +952,17 @@ def test_the_warning_names_the_scene_on_frame_0():
     assert out[0].startswith("First frame (scene 1, vid/hook)")
 
 
+def test_a_slow_eased_push_in_counts_as_moving():
+    # ImageFX's default push on a long first scene moves the box a tenth of a
+    # pixel in six frames.
+    photo = vis("img", -81, -144, 1242, 2208)
+    later = dict(photo, x=-80.95, width=1241.9)
+    assert text_audit.summarise(frame0_output([photo], [later]), MIXED_CONFIG) == []
+    assert text_audit.summarise(frame0_output([dict(photo, look="matrix(1.15, 0, 0, 1.15, 0, 0)")],
+                                              [dict(photo, look="matrix(1.149, 0, 0, 1.149, 0, 0)")]),
+                                MIXED_CONFIG) == []
+
+
 def test_a_canvas_is_assumed_to_move():
     # A 3D or a 2D canvas redraws its pixels without its box moving.
     canvas = vis("canvas", 0, 300, 1080, 1080)
