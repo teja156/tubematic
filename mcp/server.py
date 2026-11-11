@@ -6139,6 +6139,20 @@ def read_image(video_id: str, image_name: str, grid: bool = True):
     return [summary_text, MCPImage(data=buf.getvalue(), format="png")]
 
 
+def _new_file_mode() -> int:
+    """0o666 less this process's umask: the mode open() gives a new file.
+
+    Read from /proc rather than with os.umask(), which can only be read by
+    setting it, and the umask is process-wide while tools run on threads."""
+    try:
+        for line in Path("/proc/self/status").read_text().splitlines():
+            if line.startswith("Umask:"):
+                return 0o666 & ~int(line.split()[1], 8)
+    except (OSError, ValueError, IndexError):
+        pass
+    return 0o644
+
+
 @mcp.tool
 def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
     """Write or overwrite a generated scene TSX file, scoped to one video.
@@ -6226,6 +6240,14 @@ def write_scene_file(video_id: str, scene_name: str, tsx_content: str) -> dict:
         tmp = None
         try:
             fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".", suffix=".tmp")
+            # mkstemp makes the file 0600 and this container runs as root, so the
+            # host user (upgrade.py's scene check) could not read it: give it the
+            # mode a plain open() would (TMDEV-204). A filesystem that refuses
+            # chmod keeps the write going with whatever mode it gives.
+            try:
+                os.fchmod(fd, _new_file_mode())
+            except OSError:
+                pass
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 fh.write(tsx_content)
                 fh.flush()
