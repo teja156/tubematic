@@ -802,7 +802,7 @@ function ModeToggles({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-// What an alert calls the field a refused save was about, when the API gave
+// What the message beside the domain calls the field a refused save was about, when the API gave
 // no reason of its own.
 const SAVED_FIELD: Record<string, string> = {
   default_visual_style: "style",

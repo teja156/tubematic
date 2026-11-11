@@ -12,14 +12,21 @@ A change applies to the next piece of work. You do not restart anything.
 The switch at the top, **Pipeline state**, pauses and resumes the pipeline. It applies when you
 click it. See [Pausing everything](03-using-tubematic.md#pausing-everything).
 
-Below it are fifteen tabs. On most tabs your edits wait until you press that tab's **SAVE**:
+Below it are fifteen tabs. Every change is saved as you make it, and there is no Save button:
 
-- A tab with unsaved edits shows an amber dot.
-- **SAVE** saves that tab only.
-- If one value is not allowed, nothing on the tab is saved, and a message names the problem.
+- A switch, a list or a tick box saves when you change it.
+- A number or a text field saves when you press Enter or click elsewhere.
+- The **Preferences** text saves a second after you stop typing.
 
-Three tabs work differently. **Agents** and **Costs** apply each change as you make it. **Auto
-Pilot** has its own **SAVE** and asks you to confirm.
+Beside each field you see **Saving…**, then **✓ Saved**. A value that is not allowed is not saved:
+the field turns red, a message beside it says why, and the stored value stays in force until you
+correct it. The line at the top right of the page says **All changes saved**, **Saving…**, or how
+many changes were not saved. While a change is still saving, the browser asks before you close or
+reload the page.
+
+A few changes ask you first, because they act outside the dashboard: turning **Publishing** on,
+turning **Auto Pilot** on or adding a domain to it, and removing a renderer. Removing a voice or
+resetting a price you entered takes effect at once and offers **Undo** for a few seconds.
 
 ---
 
@@ -169,7 +176,8 @@ disk. A failed video cannot be retried once it is archived.
 One field each for ElevenLabs, Gemini, OpenAI, youtube-transcript.io and postforme.dev.
 
 A stored key shows as dots and its last four characters. Type over it to replace it, or clear the
-field to remove it, then press **SAVE**. The new key is used from the next call.
+field to remove it. The key saves when you press Enter or click elsewhere, and is used from the
+next call.
 
 This page stores a key without checking it with its provider. To have a key checked as you enter it,
 run `python3 onboard.py --step install_config`.
@@ -181,7 +189,7 @@ Keys are stored in the database file in plain text. See
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Publishing** | Off | Lets you post approved videos from the dashboard. Needs the postforme.dev key |
+| **Publishing** | Off | Lets you post approved videos from the dashboard. Needs the postforme.dev key. Turning it on asks you to confirm first |
 
 See [Publishing](06-publishing.md).
 
@@ -282,7 +290,7 @@ update.
 |---|---|
 | **Sync now** | Updates the prices now |
 | **Override** | Sets a price for a model yourself |
-| **Reset** | Removes your price and goes back to the synced one |
+| **Reset** | Removes your price and goes back to the synced one. **Undo** puts your price back |
 | **Add price** | Sets a price for a model that has calls and no price. Those calls are then counted in every total |
 
 A call with no price is counted separately beside each total until you add a price.

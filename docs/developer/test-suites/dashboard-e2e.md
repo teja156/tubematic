@@ -267,16 +267,19 @@ Needs: the graph cases answer `/analytics` in the browser, because the stack can
 
 Covers [the settings page](../15-dashboard.md#the-settings-page) against the real API.
 
-- An edit is staged until **SAVE** is clicked, and each tab's values persist through a reload.
+- Every change saves itself with no Save button, and each tab's values persist through a reload.
+  A value out of range is not stored and says why beside the field.
+- Turning Publishing on asks first, and Cancel leaves it off.
 - A voice's model is stored on that voice only, and the preview endpoint refuses an unknown model
   before any ElevenLabs call.
-- Auto Pilot: the stored switch stays off until the confirmation dialog is confirmed.
+- Auto Pilot: the stored switch stays off until the confirmation dialog is confirmed, and each
+  change after it saves on its own.
 - The Renderers panel shows the built-in renderer's startup probe as CPU rendering with a
   SwiftShader renderer string.
 
-Trap: `SaveBar` must stay at module scope in `dashboard/app/settings/page.tsx`. Declared inside the
-page component it is a new component type on every render, so React rebuilds the button between
-`mousedown` and `mouseup` when a number field commits on blur, and the click on **SAVE** is lost.
+Trap: the input components and `SaveStatus` must stay at module scope. Declared inside the page
+component they are a new component type on every render, so React rebuilds them between
+`mousedown` and `mouseup` when a number field commits on blur, and the click is lost.
 
 Trap: the page clips horizontal overflow, so a tab pushed past the right edge cannot be reached. The
 1024px case measures the last tab, because the newest tab is the first one pushed off.

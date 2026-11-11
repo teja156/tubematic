@@ -265,8 +265,9 @@ The Mascots page's create form uses the same agent, model and effort controls
 - Writes to one domain run one at a time: each change on its row, and a pause or resume. Each is
   built from the row as the write before it left it, because the route replaces the whole row. Two
   changes sent side by side would each carry the other's field as it was, and one would be lost.
-  A refused change, or one that did not reach the API within 30 seconds, is reported in an alert
-  and the row keeps what is stored.
+  A refused change, or one that did not reach the API within 30 seconds, is reported on the
+  domain's line ("Not saved:" and the reason, through `SaveStatus`) and the row keeps what is
+  stored. The line shows it with the panel closed too.
 - A closed row is one line: the name, a chip for each default the domain sets
   (`lib/domains.ts::domainChips`), the topic and video counts, the status and the pause button. The
   panel is rendered only while its row is open.
@@ -281,7 +282,10 @@ The Mascots page's create form uses the same agent, model and effort controls
   and counts code points. On a domain row the description stays on one truncated line.
 - A deleted default profile shows as "Unavailable profile", because the profile list omits deleted
   profiles.
-- Illustrated is disabled while no OpenAI key is stored. A refused change is shown in an alert.
+- Illustrated is disabled while no OpenAI key is stored. A refused change is shown on the domain's
+  line like any other.
+- The research modes and the mining list show the same status in their headings. Removing a mining
+  URL saves at once and offers **Undo** in a toast, which saves the previous list.
 - The Mining toggle is disabled, with the reason on hover, while `GET /research/strategies` reports
   `mining_available: false`. The masked key in `/settings` reads as unset for a key supplied only
   through the API's environment, so the page does not use it.
@@ -546,7 +550,8 @@ Library's, show when each post goes out, in the zone it was picked in
 **Partially published** state.
 
 The Socials page lists postforme accounts by platform with a checkbox each, which edits the
-allowlist.
+allowlist. Each tick saves at once, and the outcome shows beside the account. The page's banner is
+for a list that could not load.
 
 - It shows `NOT CONNECTED` for an allowlisted account that postforme does not list. Such an entry
   can only be unticked.
@@ -612,7 +617,8 @@ Components that a section above covers are left out of this table.
 | `MiningSources.tsx` | Adds and removes YouTube URLs for mining. It mirrors the API's URL rule and adds a URL in the canonical `watch?v=` form. See [Mining sources](05-http-api.md#mining-sources) |
 | `TimeZoneProvider.tsx` | Fetches the host's timezone once and provides it through context. See [Time](#time) |
 | `VisualStylesProvider.tsx` | Fetches the visual-style list once and provides it through context. See [Visual-style picker](#visual-style-picker) |
-| `Toast.tsx` | `useToasts()` and a stack renderer. Success toasts dismiss after 3 s. Error toasts stay |
+| `Toast.tsx` | `useToasts()` and a stack renderer. Success toasts dismiss after 3 s. Error toasts stay. A toast can carry an action (**Undo**); it then stays 8 s, and clicking the action does not reach the toast's dismiss-on-click first |
+| `SaveStatus.tsx` | `SaveStatus`, the "Saving…" / "✓ Saved" / "Not saved: reason" text beside a field, and `SavesSummaryLine`, the Settings page's line. See [The settings page](#the-settings-page) |
 | `SummaryStrip.tsx` | Six stat tiles: Topics Awaiting, Scripts Ready, Videos Ready, In Pipeline, Published, Failed |
 | `StatusBadge.tsx`, `SectionLabel.tsx` | The coloured dot and label for each of the 16 statuses, and the section heading rule |
 | `TopBar.tsx` | Sticky navigation, the disk figure (`DiskUsage.tsx`), version badge, timezone badge, health indicator and **Sign out**. Renders nothing on `/login` |
@@ -710,17 +716,41 @@ already been saved.
 
 What each tab holds is in [Settings](../user-guide/05-settings.md).
 
-The pause switch sits above the tabs and applies at once through its own endpoint, with no Save.
+The pause switch sits above the tabs and applies at once through its own endpoint.
 
-Most tabs are staged. Edits collect in a local draft, and nothing reaches the API until that tab's
-**Save** is pressed. Each entry in `app/settings/page.tsx::TABS` lists its `fields`. That list
-scopes both what the tab's Save sends and what counts as unsaved on the tab, so the two cannot
-differ. A tab with unsaved edits shows an amber dot, and switching away asks for confirmation. The
-tab row wraps onto a second line on a narrow window, because the page body clips horizontal
-overflow.
+Every change on every tab saves itself, and the page has no Save button and no draft. A switch, a
+picker or a tick box saves on change. A number or a text field saves on blur or Enter. The
+Preferences text saves one second after the last keystroke, and again on blur and when the tab
+closes. The tab row wraps onto a second line on a narrow window, because the page body clips
+horizontal overflow.
+
+- `lib/saveStatus.tsx::useSaveStatus` holds each field's state: saving, saved, or refused with the
+  API's reason. `components/SaveStatus.tsx` draws it beside the field, and "✓ Saved" clears after
+  three seconds. Only the newest save for a field sets its state, so a late answer to an older save
+  cannot overwrite a newer outcome.
+- `SavesProvider` wraps the page. It sums the states of every panel for the line at the top right,
+  and adds a `beforeunload` prompt while a save is in flight or a Preferences save is waiting.
+- Settings saves run through one queue (`useSerialQueue`). `POST /settings` answers with the whole
+  settings object, so an answer that arrived after a newer one would put older values back on
+  screen.
+- A switch or a picker shows its new value while the save is on its way, and goes back to the
+  stored value if the API refuses it. A typed field keeps what was typed, red, with the reason
+  beside it, so the entry can be corrected while the stored value stays in force. An out-of-range
+  number is refused in the page and never sent.
+- The voice roster and the default voice are saved in one request, because the API reads a default
+  that is not in the roster as empty. Removing a voice offers **Undo**, which saves the previous
+  roster and default.
+- Turning Publishing on opens a confirmation: with Auto Pilot on, it starts scheduling posts that
+  nobody approves one by one. Turning it off saves at once.
+- Switching tabs never asks, because nothing is ever left unsaved. It clears the refusal messages,
+  because their fields leave the screen with the tab.
+- The input components and `SaveStatus` are declared at module scope. Declared inside the page,
+  they get a new identity on every render and React remounts them, which loses a click made while
+  a field blurs.
 
 - On Voice, each roster row has its own model picker and preview button.
-- Preferences is one textbox with a live count against the 6000-character cap. See
+- Preferences is one textbox (`PreferencesEditor`) with a live count against the 6000-character
+  cap. It keeps its own text, so the answer to an earlier save never replaces what is being typed. See
   [User preferences](07-agent-layer.md#user-preferences).
 - API keys render through `SecretInput`, a password field that unmasks only while focused. It shows
   what the server returned: a mask or an empty string. Sending an unchanged mask changes nothing on
@@ -729,12 +759,13 @@ overflow.
   through the same `SecretInput`. Saving a non-empty URL probes it: see
   [Notifications](../user-guide/05-settings.md#notifications).
 
-Four tabs hold rows from their own tables and write outside the staging.
+Four tabs hold rows from their own tables and save through their own routes.
 
 ### Agents
 
-Choosing the default agent, picking an agent's default model and saving a weight each write at once
-through `PATCH /agents/<id>`. The model list is read-only: the dashboard container has no agent
+Choosing the default agent, picking an agent's default model or effort, and changing a weight each
+write at once through `PATCH /agents/<id>`. The weight saves on blur or Enter, and a value outside
+0 to 100 stays in the field with the reason under the row and is never sent. The model list is read-only: the dashboard container has no agent
 binary to validate a new model against, so models change only when you run
 `python3 onboard.py --install-agent <name>` again on the host. Uninstalling is
 `python3 onboard.py --uninstall-agent <name>`, which also removes files the dashboard cannot reach.
@@ -744,7 +775,9 @@ See [HTTP API](05-http-api.md#agents).
 
 `RenderersPanel.tsx` reads `GET /renderers`, and each button (Enable or Disable, Rename, Remove for
 a remote renderer, Test GPU) writes at once through the [renderers routes](05-http-api.md#renderers).
-Its rules are pure functions in `lib/renderers.ts`.
+Its rules are pure functions in `lib/renderers.ts`. A new name saves on Enter or blur, and Escape
+or **Cancel** drops it. **Cancel** stops its `mousedown`, so the field does not blur and save the
+name first.
 
 - One card per renderer, the built-in one first.
 - `rendererStatus` picks the status chip: the first of *disabled*, *credential expired*, *needs
@@ -767,26 +800,34 @@ Its rules are pure functions in `lib/renderers.ts`.
 ### Costs
 
 Model prices are rows in their own table. See [Costs](../user-guide/05-settings.md#costs) and
-[HTTP API](05-http-api.md#costs).
+[HTTP API](05-http-api.md#costs). A price is set from a small form with **Set price**, because
+several rates make one price. **Reset** applies at once and offers **Undo**, which sets the same
+rates again.
 
 ### Auto Pilot
 
-`AutoPilotPanel.tsx` saves the whole configuration to `POST /autopilot` in one request. What the
-settings mean is in [Auto Pilot](14-publishing.md#auto-pilot).
+`AutoPilotPanel.tsx` saves the whole configuration to `POST /autopilot` on every change, with the
+status beside the field that changed. What the settings mean is in
+[Auto Pilot](14-publishing.md#auto-pilot).
+
+- Changes run through one queue, and only the answer to the last one is applied to the whole
+  panel. An earlier answer would undo a change made while it was on its way.
+- A refused change puts the panel back to the stored configuration and shows the reason.
 
 - The warning stays on screen above the switch and is repeated in the confirmation. Its wording is
   `lib/autoPilot.ts::AUTO_PILOT_DISCLAIMER`.
 - A save that widens what Auto Pilot acts on is confirmed first: turning it on, or adding a domain
   while it is on (`needsConfirmation`). The dialog says how many videos wait at a checkpoint in the
   newly covered domains (`newlyApproved`), because they are approved as soon as the save lands.
+  Confirming saves; **Cancel** sends nothing and puts the panel back to the stored configuration.
   Turning it off, removing a domain, or changing accounts, numbers or the gap saves at once.
 - The panel refuses to render a response that is not an Auto Pilot configuration. A proxy error
   read as "off, nothing selected" could otherwise be saved over the real configuration.
 - An account chosen earlier that is not offered any more (switched off on Socials, disconnected, or
   publishing turned off) stays listed under its domain, ticked and marked as not available, so it
   can be unticked.
-- The panel re-reads the in-progress count every 20 seconds and updates only that number, so
-  unsaved edits survive. `ceilingStatus` says when the limit is holding new videos back.
+- The panel re-reads the in-progress count every 20 seconds and updates only that number, so a
+  change on its way or a number being typed is never undone. `ceilingStatus` says when the limit is holding new videos back.
 
 ---
 
@@ -915,6 +956,7 @@ suite can test them without React.
 | `mascots.ts` | The GPU gate for mascot pickers, their options and the mascot an approval sends |
 | `videoStatus.ts` | Which statuses can be deleted, when Retry publishing, Mark as published and Retry agent are offered, and `patchVideo` |
 | `autoPilot.ts` | The disclaimer, the bounds, when a save needs confirmation and how many videos it would approve |
+| `saveStatus.tsx` | Each field's save state (`useSaveStatus`), the page-wide sum and leave-page prompt (`SavesProvider`), the one-at-a-time write queue (`useSerialQueue`) and an error body's reason (`responseError`) |
 | `renderers.ts` | The renderer status chip, the GPU verdict, the device description and the **Nothing can render** condition |
 | `costs.ts` | The cost disclaimer, and money, credit, service, operation and stage labels |
 | `datetime.ts` | Timestamp formatting with an explicit timezone |

@@ -113,7 +113,7 @@ On the **Topics** page, under **Curriculum Seed Domains**, fill in **Add Domain*
 5. Press **Add Domain**.
 
 To change the same choices later, press **Edit defaults** on the domain's row. Each change is saved
-as you make it. The row lists the choices the domain has made, and says "Install defaults for
+as you make it, and the row says **✓ Saved**, or why the change was not saved. The row lists the choices the domain has made, and says "Install defaults for
 everything" when it has made none.
 
 A domain's agent starts every new video in that domain, whichever research mode found the topic.
@@ -124,7 +124,8 @@ Leave it on **Automatic** to share the domain's videos between your agents
 
 Add YouTube video links under **Mining Sources** on the **Topics** page, up to 50. A link to a video,
 a Short or a live video is accepted, in the `youtube.com/watch?v=…` or `youtu.be/…` form. A link to
-a channel or a playlist is not.
+a channel or a playlist is not. Removing a link takes effect at once and offers **Undo** for a few
+seconds.
 
 While no Gemini key is stored, the **Mining** toggle is greyed out. It works again once you add a
 key on **Settings → API Keys**.

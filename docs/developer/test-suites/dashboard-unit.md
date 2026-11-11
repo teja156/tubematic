@@ -89,9 +89,10 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
 - The default pickers in a row's panel and in the add form (visual style, voice, script profile,
   mascot) are found by their captions. A default that has left the roster or the profile list stays
   visible as removed or unavailable.
-- A save that cannot reach the API is reported and leaves the row as it was, and the next save
-  still goes out, as it does after a write that threw. A refused topic cap is put back in its
-  field.
+- A save that cannot reach the API, or that the API refuses, is reported on the domain's line with
+  no browser alert, and leaves the row as it was. The next save still goes out, as it does after a
+  write that threw. A refused topic cap is put back in its field.
+- Removing a mining URL saves at once and offers an **Undo** that saves the previous list.
 - The agent picker offers Automatic and the live agents. The model is disabled under Automatic, and
   the blank effort names the agent's own level. Changing the agent sends `default_agent_model: ""`
   in the same save. An uninstalled agent and a dropped model stay selected, disabled, and are
@@ -161,15 +162,23 @@ tab does not fit the bar's one-row layout.
 
 Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-settings-page).
 
-- Staged saving: **SAVE** sends only the edited field, and switching tabs with unsaved edits asks
-  first. The pause switch applies at once.
-- Each tab saves only its own keys, with its bounds and units (timeouts shown in minutes and stored
-  in seconds).
+- Every change saves itself and there is no Save button. A committed field sends only its own key,
+  and a blur with nothing changed sends nothing. The pause switch applies at once.
+- The field shows "Saving…" then "✓ Saved", and the page line says "All changes saved". A refusal
+  shows the API's reason beside the field and keeps what was typed. An out-of-range number is never
+  sent. A switch shows its new value at once and goes back when the API refuses it.
+- Saves wait for the one before (a mutation that sends them side by side fails this), the browser
+  asks before closing only while one is on its way, and switching tabs never asks.
+- Turning Publishing on asks first, and Cancel saves nothing; turning it off does not ask.
+  Removing a voice offers an **Undo** that saves the previous roster and default.
+- The Preferences text saves a second after typing stops, and at once on blur.
+- Each field saves only its own key, with its bounds and units (timeouts shown in minutes and
+  stored in seconds).
 - An API key renders as the mask the server returned. Clearing the field posts an empty string.
 - Voice: each roster row picks its own model, and a save carries the roster with no
   `elevenlabs_model_id` or `pronunciation_mode` key.
-- Agents: the default, weight, default model and effort each `PATCH` at once, and the tab issues no
-  `DELETE`.
+- Agents: the default, default model and effort each `PATCH` at once, the weight on blur or Enter,
+  and a weight outside 0 to 100 is never sent. The tab issues no `DELETE`.
 - The Rendering tab's default-mascot picker lists only pickable mascots and saves
   `default_mascot_id` alone. Mascots are disabled with the reason while the GPU is not working, and
   "No mascot" and a held value stay selectable. The same tab shows the Renderers panel.
@@ -189,6 +198,8 @@ Covers `components/RenderersPanel.tsx` ([Renderers](../15-dashboard.md#renderers
 - One card per renderer, the built-in one first, with its status chip, GPU verdict and the device
   Chromium got.
 - Each button sends its request, and an API refusal shows on that renderer's card.
+- A new name saves on Enter or blur and says so. Escape and **Cancel** drop it, and **Cancel**
+  stops the `mousedown` that would blur the field and save the name first.
 - The panel polls every 3 seconds while a GPU test is outstanding and every 20 seconds otherwise.
 - **Add renderer** shows the token and the host command once and forgets both on close.
 - A response of the wrong shape is not drawn as a renderer list.
@@ -199,8 +210,8 @@ the token out of the renderer machine's process list and shell history.
 ### `costs-panel.test.tsx`
 
 Covers `components/CostsPanel.tsx`, the settings page's Costs tab. Each model names the source of
-its rate or says it has none, the last successful sync and a failed sync are both shown, and only a
-manual rate offers **Reset**.
+its rate or says it has none, the last successful sync and a failed sync are both shown, only a
+manual rate offers **Reset**, and a reset offers an **Undo** that sets the same rates again.
 
 Trap: a price is typed per million tokens and sent per token.
 
@@ -210,19 +221,23 @@ Covers `components/AutoPilotPanel.tsx` and `lib/autoPilot.ts`
 ([Auto Pilot](../15-dashboard.md#auto-pilot)).
 
 - The whole warning is always on screen.
-- A save that widens what Auto Pilot acts on opens a confirmation that names how many videos are
-  approved at once, and nothing is sent until it is confirmed.
+- Every change saves itself. A change that widens what Auto Pilot acts on opens a confirmation
+  that names how many videos are approved at once. Nothing is sent until it is confirmed, and
+  Cancel puts the switch back.
+- A refused change shows its reason and puts the panel back to what is stored.
+- An edit made while an earlier save is on its way survives that save's answer.
 - Only accounts that are allowed and connected are offered.
 - The gap shows in hours and is sent in minutes. At the in-progress limit the tab says why nothing
   new starts.
 
 Trap: a response that is not a configuration (a proxy error, another suite's fetch mock) must not
-render as "off, no domains", because a **SAVE** on that view overwrites the real configuration.
+render as "off, no domains", because the next change on that view would overwrite the real
+configuration.
 
 Trap: an account chosen earlier that is not offered any more stays visible and ticked. Hidden, it
 could not be removed, and every save would send it again.
 
-Trap: the periodic refresh changes only the in-progress count, so an unsaved edit survives it.
+Trap: the periodic refresh changes only the in-progress count, so a number being typed survives it.
 
 ### `socials-page.test.tsx`
 
@@ -232,6 +247,8 @@ Covers `app/socials/page.tsx` ([Publishing surfaces](../15-dashboard.md#publishi
 - An allowlisted account that is gone upstream is flagged and can still be unticked, which is the
   one way to clean a stale entry out.
 - Connect runs one at a time and falls back to a link when the browser blocks the tab.
+- A tick says "✓ Saved" beside the account. A refused tick shows the reason there, leaves the box
+  as it was and raises no page banner.
 
 Trap: saving sends account ids only. Display data is read live on every load, and a stored username
 would be a second copy that goes stale.
@@ -550,6 +567,23 @@ Covers `components/UpdateBanner.tsx` ([Update check](../15-dashboard.md#update-c
   storage throws, the dismissal lasts for the page.
 
 ## Routes and helpers
+
+### `save-status.test.tsx`
+
+Covers `lib/saveStatus.tsx` and the action on `components/Toast.tsx`
+([The settings page](../15-dashboard.md#the-settings-page)).
+
+- A save shows saving, then saved, and the saved mark clears after three seconds. A refusal keeps
+  its reason.
+- Only the newest save for a field sets its outcome, so an older answer arriving last does not
+  replace it. Clearing every status leaves a save still in flight alone.
+- `SavesProvider` sums the states, asks before the browser tab closes only while something is
+  saving, and drops a field's state when its component goes away.
+- The write queue starts each write after the one before has answered, a failed one included.
+- A toast's action runs once and closes the toast, and the toast stays long enough to be clicked.
+
+Trap: a field unmounted mid-save must report itself gone, or the page would say "Saving…" and
+block leaving for good.
 
 ### `proxy-route.test.ts`
 
