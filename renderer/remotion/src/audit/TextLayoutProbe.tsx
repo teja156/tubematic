@@ -362,15 +362,20 @@ export const TextLayoutProbe: React.FC<{ visualFrames?: number[] }> = ({ visualF
       const wait = Math.max(0, Math.min(VISUAL_SETTLE_MS, VISUAL_SETTLE_MAX_MS - (Date.now() - started)));
       timer = setTimeout(() => {
         observer.disconnect();
+        document.removeEventListener("load", settle, true);
         console.log(measure(frame, visualFrames));
         continueRender(handle);
       }, wait);
     };
     const observer = new MutationObserver(settle);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+    // An image finishing its load changes no attribute, so listen for it too
+    // (load does not bubble; the capture phase sees it).
+    document.addEventListener("load", settle, true);
     settle();
     return () => {
       observer.disconnect();
+      document.removeEventListener("load", settle, true);
       if (timer !== undefined) {
         clearTimeout(timer);
       }

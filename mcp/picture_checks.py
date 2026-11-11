@@ -134,7 +134,7 @@ def annotate_segments(timeline_segments: list, script_segments: list, roles: dic
     beats = {s.get("id"): (s.get("beat") or "") for s in script_segments or []
              if isinstance(s, dict)}
     by_key = {tformulas.beat_key(name): role for name, role in roles.items()}
-    out, previous = [], None
+    out, previous, started = [], None, set()
     for seg in timeline_segments or []:
         if not isinstance(seg, dict):
             continue
@@ -142,12 +142,13 @@ def annotate_segments(timeline_segments: list, script_segments: list, roles: dic
         key = tformulas.beat_key(beat)
         if not out:
             role = OPENING
-        elif key and key != previous:
+        elif key and key != previous and key not in started:
             role = by_key.get(key, "")
         else:
             role = ""
         out.append({**seg, "beat": beat, "role": role})
         previous = key
+        started.add(key)
     return out
 
 
@@ -170,9 +171,10 @@ def _first_frame_problem(style: str, config: dict) -> str | None:
         items = sorted(_list(regions[0], "items"), key=lambda it: it.get("at") if _int(it.get("at")) else 1e9) \
             if regions else []
         first = items[0] if items else {}
-        if not (first.get("kind") in _WHITEBOARD_PICTURES and first.get("at") == 0):
-            return ("region 1's first item is not a doodle or arrow at frame 0, so the video opens on "
-                    "a blank board or on words alone. Make the first item a doodle (or arrow) of the "
+        # An arrow joins two earlier items, so it can never be the first.
+        if not (first.get("kind") == "doodle" and first.get("at") == 0):
+            return ("region 1's first item is not a doodle at frame 0, so the video opens on "
+                    "a blank board or on words alone. Make the first item a doodle of the "
                     "first sentence's subject at frame 0")
     elif style == bean_explainer.STYLE_ID:
         shots = _list(_props(config, bean_explainer), "shots")

@@ -75,6 +75,10 @@ def _wb_text_first(c):
     items[0], items[1] = items[1], items[0]
 
 
+def _wb_arrow_first(c):
+    _props(c)["regions"][0]["items"][0]["kind"] = "arrow"
+
+
 def _bean_late(c):
     for e in _props(c)["shots"][0]["events"]:
         if e["type"] in ("pose", "prop") and e["frame"] <= 3:
@@ -99,6 +103,7 @@ def _uth_no_photo(c):
 @pytest.mark.parametrize("style, mutate, fragment", [
     ("system_flow", _sf_late, "headline alone"),
     ("whiteboard", _wb_text_first, "blank board or on words alone"),
+    ("whiteboard", _wb_arrow_first, "not a doodle at frame 0"),
     ("bean_explainer", _bean_late, "empty field"),
     ("terminal_doc", _td_late, "empty screen"),
     ("storybook_atlas", _sb_still, "still stage"),
@@ -145,6 +150,12 @@ def test_a_beat_owes_its_change_once_where_it_starts():
     assert [s["role"] for s in out] == ["opening", "reopen", "turn", "", "", "payoff", ""]
     assert out[1]["beat"] == "Wrong suspect 1" and out[1]["startFrame"] == 100
     assert "role" not in tl[0]  # the inputs are not changed
+
+
+def test_a_beat_that_comes_back_owes_nothing_again():
+    tl, script = _segments(["Symptom", "Turn", "Mechanism", "Turn", "Root cause"])
+    assert [s["role"] for s in pc.annotate_segments(tl, script, ROLES)] == [
+        "opening", "turn", "", "", "payoff"]
 
 
 def test_a_beat_label_matches_whatever_its_case_and_spacing():

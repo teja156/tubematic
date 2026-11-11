@@ -180,11 +180,11 @@ height): the bottom band below the captions.
 
 `get_timeline` gives each segment a `beat` and a `role`, and the result a `first_frame` (the formula's line on what the first frame shows, `""` when the video has no formula). The first segment's role is `opening`. A `turn` or `reopen` segment needs a visible change on its first word, the `payoff` segment the video's strongest picture, and a segment with role `""` only its own brief. `get_video`'s `style.picture` says how this style does each; in short:
 
-- Opening: region 1's first item is a `doodle` (or an `arrow`) at `at: 0` that draws the first sentence's subject. It may sit before the first word, and the marker is already drawing it on the first frame. Never a blank board, and never words first.
+- Opening: region 1's first item is a `doodle` at `at: 0` that draws the first sentence's subject. It may sit before the first word, and the marker is already drawing it on the first frame. Never a blank board, and never words first.
 - Turn or re-opening: a new region on its first word, or a doodle or arrow drawn at that word.
 - Payoff: the region the answer lives in, with the biggest doodle and its highlight. The recap is this style's ending.
 
-`validate_job` returns warnings (advisory, never blocking) when region 1 does not open on a doodle or arrow at frame 0 or when a `turn`, `reopen` or `payoff` segment has no region, doodle, arrow or recap starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
+`validate_job` returns warnings (advisory, never blocking) when region 1 does not open on a doodle at frame 0 or when a `turn`, `reopen` or `payoff` segment has no region, doodle, arrow or recap starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
 
 ## Step 6 — write, validate, submit
 

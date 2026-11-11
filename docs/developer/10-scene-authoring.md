@@ -382,8 +382,9 @@ styles that time events to words accept an event at frame 0 for that reason: Bea
 Storybook Atlas take any event there, and Whiteboard takes region 1's first item. Whiteboard draws
 that item from `TIMING.openLead` frames before frame 0 instead of `TIMING.lag` frames after its word,
 so the first frame shows ink being drawn, and System Flow draws a node whose event is within
-`TIMING.openWithin` frames of the start half grown on the first frame. Both changes touch the opening frames only and cost no measurable render
-time (frames 0 to 149 of each skill's example, whole-tree CPU seconds, on software GL).
+`TIMING.openWithin` frames of the start from frame 0, half grown. Both changes touch the opening
+frames only and cost no measurable render time (frames 0 to 149 of each skill's example, whole-tree
+CPU seconds, on software GL).
 
 ---
 
@@ -463,7 +464,8 @@ with `FIRST_FRAME_WINDOW` as the early limit):
 
 - System Flow: board 1 has no node by `TIMING.openWithin` (frame 3), so the video opens on the
   headline alone.
-- Whiteboard: region 1 does not open on a doodle or an arrow at frame 0.
+- Whiteboard: region 1 does not open on a doodle at frame 0 (an arrow joins two earlier items, so it
+  cannot open a region).
 - Bean Explainer: the first shot has no pose or prop by frame 3.
 - Terminal Doc: beat 1 has nothing on stage by frame 3.
 - Storybook Atlas: nothing moves in chapter 1 by frame 3.
