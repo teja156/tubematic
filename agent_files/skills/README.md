@@ -17,6 +17,7 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 |---|---|
 | `tubematic-operator/` | Runs the pipeline: moves each video to its next status with the MCP tools and stops at the human checkpoints |
 | `tubematic-topic-research/` | Researches and proposes topics in the curriculum, trending and mining research modes |
+| `tubematic-style-routing/` | Picks a video's visual style before its script is written, when the person left it on Auto: describes the topic, scores the candidate styles from their style packs and records the choice |
 | `tubematic-script-writing-skill/` | Writes a video's script as an ordered list of segments, in the style of the video's script profile |
 | `tubematic-create-script-writing-skill/` | Builds a script profile: extracts a creator's style from YouTube transcripts and stores it as profile Markdown |
 | `tubematic-scene-config/` | Writes `scene-config.json` and the scene TSX files for a voiced video |

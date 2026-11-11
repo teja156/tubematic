@@ -31,6 +31,12 @@
       "where this happens matters",
       "characters walk and react in one world"
     ],
-    "images_per_video": "0"
+    "moods": [
+      "cinematic",
+      "story-driven",
+      "whimsical"
+    ],
+    "images_per_video": "0",
+    "images": 0
   }
 }

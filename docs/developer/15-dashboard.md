@@ -398,7 +398,17 @@ The rules are in `lib/visualStyles.ts`.
 - A key supplied only through the API container's environment reads as unset here while the API
   accepts it. The e2e stack supplies other keys that way.
 - Once the pickers are gone, `videoStyleLabel` decides how the style reads on a card. A video left
-  on Auto shows what the agent chose, marked as automatic, or "Auto (not yet chosen)".
+  on Auto shows what the agent chose after the word Auto (the picked style's label, or Mixed scenes
+  with its canvas), or "Auto (not yet chosen)".
+
+### Auto's style pick
+
+When Auto picked the style (`style_pick` is set), the video modal shows a **Why this style** row
+with `style_reason` and the runner-up. At Script Ready, when there is a runner-up, it adds a
+**Switch to …** button. After a confirm it calls
+[`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style), which sends the
+video back to its agent to rewrite the script, and shows the server's reason when it refuses. The
+Quick Actions row shows the label only: its controls already wrap at narrow widths.
 
 ### Mascot picker
 

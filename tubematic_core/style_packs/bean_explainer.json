@@ -24,6 +24,7 @@
     "fontSize": 66,
     "maxWords": 3
   },
+  "script": "Every beat's `visual` is a **bean** brief: the bean's pose and face, and the one prop on stage that the line is about (`\"bean panics, phone buzzing with a bank text\"`). The video is one cartoon character throughout, so a role is the bean (or the one second bean the cast allows), never a photograph.\n\nThe narration is a cartoon character's script: one everyman bean reacts to what you say, among props from a library of everyday objects (a phone, a browser bar, coins, a pill, a lock, an alarm clock...). Write it to be acted out. When the topic is a list, introduce each item with its name (\"First: urgency.\") so it gets its own section. Give each sentence one picture a person can react to (a fake text arrives, the bill comes, the alarm rings), talk to the viewer (\"you\"), and land each line on one key word, which is shown on a red box in the captions. Never write a beat that needs a photograph, a named real person or a place: this style has none, and a thing the library does not have is drawn for the video or shown as text on a sign or a note.",
   "routing": {
     "best_for": [
       "psychology and behaviour",
@@ -49,7 +50,14 @@
       "a cheeky, upbeat, relatable tone",
       "one everyman reacting, not a cast of named characters"
     ],
-    "images_per_video": "0"
+    "moods": [
+      "cheeky",
+      "upbeat",
+      "relatable",
+      "curious"
+    ],
+    "images_per_video": "0",
+    "images": 0
   },
   "extra": {
     "fields": [

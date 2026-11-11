@@ -135,6 +135,7 @@ def _valid(**over):
     ({"needs": {"openai_key": True, "gpu": False}}, "messages.openai_key"),
     ({"routing": {"best_for": [], "avoid_for": []}}, "routing.signals"),
     ({"review": ""}, "review"),
+    ({"script": "  "}, "script"),
 ])
 def test_a_malformed_pack_is_refused(over, fragment):
     with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
@@ -149,3 +150,30 @@ def test_auto_cannot_be_a_pack():
 def test_every_shipped_pack_passes():
     for path in tvs.PACKS_DIR.glob("*.json"):
         tvs._check_pack(path, json.loads(path.read_text()))
+
+
+@pytest.mark.parametrize("routing_over, fragment", [
+    ({"images": -1}, "routing.images"),
+    ({"images": True}, "routing.images"),
+    ({"images": "3"}, "routing.images"),
+    ({"moods": ["calm", ""]}, "routing.moods"),
+    ({"images_per_video": 3}, "routing.images_per_video"),
+])
+def test_the_optional_routing_fields_are_checked_when_present(routing_over, fragment):
+    data = _valid()
+    data["routing"] = {**data["routing"], **routing_over}
+    with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
+        tvs._check_pack(pathlib.Path("stick.json"), data)
+
+
+def test_a_pack_written_before_the_optional_fields_still_loads():
+    data = _valid()
+    data["routing"] = {k: data["routing"][k] for k in ("best_for", "avoid_for", "signals")}
+    data.pop("script", None)
+    tvs._check_pack(pathlib.Path("stick.json"), data)
+
+
+def test_the_agent_view_carries_the_style_script_guidance():
+    assert "component" in tvs.agent_view("system_flow")["script"]
+    assert tvs.agent_view("stick")["script"] == ""
+    assert tvs.agent_view("auto")["script"] == ""

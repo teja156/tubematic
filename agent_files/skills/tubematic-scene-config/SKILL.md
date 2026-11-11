@@ -226,10 +226,13 @@ Read `visual_style` from `get_video`:
 | `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
 | `system_flow` | Dark | Nothing here: the whole video is the one `SystemFlow` diagram scene, written as data by the tubematic-system-flow skill. |
 | `bean_explainer` | Its own colour field | Nothing here: the whole video is the one `BeanExplainer` scene, written as data by the tubematic-bean-explainer skill. |
-| `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery, **or the Cartoon 3D world**. |
+| `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery. This is the **mixed scene system**: the style-routing skill picked it before the script because no single style fit. |
 
 The three named scene styles are restrictions; `cartoon_3d`, `system_flow` and `bean_explainer`
-are systems of their own. `auto` is the absence of a restriction: **you pick the register, the renderer included.**
+are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
+than the mixed scene system (a style it picked is the video's `visual_style` by now), or when the
+video was scripted before Auto picked styles. It is the absence of a restriction: **you pick the
+register.**
 
 ### A permission is not an instruction
 
@@ -275,32 +278,17 @@ the render — a black figure on a dark canvas is a silhouette of nothing.
 
 ### Resolving `auto`
 
-Under `auto` you first choose **the renderer**, once, before any scene exists, and then, on the
-scene renderer, **the canvas**, once. Nothing else is fixed: every beat still picks its own
-treatment.
+Under `auto` the style is already settled as the mixed scene system, so the renderer is the scene
+components (`dom`). You choose **the canvas**, once. Nothing else is fixed: every beat still picks
+its own treatment. A 3D world is a style of its own, which the style-routing skill picks before the
+script, so it is never yours to choose here.
 
-**The renderer first.** Ask what carries the video:
+**One exception, from before Auto picked styles:** if `get_video` says `resolved_renderer` is
+`cartoon_3d`, that video was made a Cartoon 3D Short by an earlier version of this skill. Stop here
+and invoke the **tubematic-cartoon3d** skill, which authors the world.
 
-| The video is carried by | Renderer | Why |
-|---|---|---|
-| **A place and people moving through it** — a story, a walkthrough with a protagonist, anything where *where this happens* matters | **Cartoon 3D** (`cartoon_3d`) | A world with depth, a camera moving through it, characters that walk and react. Nothing else here does continuous motion |
-| **Recurring characters the viewer must recognise**, but no place | Scenes (`dom`), generated character art, canvas from the topic | Recognition across scenes is what the image calls buy |
-| **Real, specific subjects the viewer came to see** — screenshots, products, people, places as images | Scenes (`dom`), full-bleed imagery, dark canvas | What `motion_graphics` gives |
-| **Mechanism** — how a thing works, processes, architecture, data flow | Scenes (`dom`), diagrams and line art, light canvas | What `stick` gives. A 3D world adds nothing to a packet diagram |
-
-**Choosing Cartoon 3D is an instruction, not a permission.** It commits the whole video, and
-reversing it costs every scene. Choose it when the spine is genuinely a place, not because it is
-the most capable option, and never part-way through. Before choosing it read `cartoon_3d_available`
-from the `get_video` result you already have: when it is `false` no renderer's GPU is working
-and the world cannot be rendered, so take the scene renderer whatever the table says, and say in
-the handback that a world was wanted but the install cannot render one.
-
-**A video with a mascot (`get_video().mascot` is set) never takes Cartoon 3D under `auto`:** the mascot is a flat
-overlay and has no place in a 3D world, so choose `dom` whatever the table says.
-
-Record the renderer with `update_video(video_id, resolved_renderer="cartoon_3d" | "dom")`
-**before** you author anything; it is written once. For `cartoon_3d`, stop here and invoke the
-**tubematic-cartoon3d** skill, which authors the world. For `dom`, continue:
+Otherwise record the renderer with `update_video(video_id, resolved_renderer="dom")` **before** you
+author anything, unless `resolved_renderer` already says `dom` (it is written once), and continue:
 
 1. Classify every segment by subject as usual (see **Images**), allowing STICK for role beats.
 2. Choose the canvas by asking **what carries this video**:

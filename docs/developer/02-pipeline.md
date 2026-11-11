@@ -36,6 +36,7 @@ flowchart TD
     TP -->|reject| TR
     TA -->|agent writes script| SR
     SR -->|"approve: voicing is paid for"| VO
+    SR -->|"switch to Auto's runner-up style"| TA
     VO -->|agent calls generate_voice| VR
     VR -->|agent authors scenes,<br/>validates, submits| RQ
     RQ -->|renderer claims| RN
@@ -76,7 +77,7 @@ flowchart TD
 | Status | Owner | Meaning |
 |---|---|---|
 | `TOPIC_PROPOSED` | Human | A researched, scored topic waits for a decision |
-| `TOPIC_APPROVED` | Agent | The agent writes a script |
+| `TOPIC_APPROVED` | Agent | The agent picks a style when the video is on `auto`, then writes a script |
 | `TOPIC_REJECTED` | none | Terminal. A human rejected the topic |
 | `SCRIPT_READY` | Human | A script exists. Approving it authorizes the paid voicing |
 | `VOICING` | Agent | The agent calls ElevenLabs |
@@ -93,7 +94,9 @@ flowchart TD
 | `FAILED` | none | Terminal, except after a failed publish: **Retry publishing** asks postforme and moves the video to `PUBLISHING` (a live post exists) or `VIDEO_APPROVED` (nothing is live) |
 
 There is no `SCRIPTING` status. The agent picks a video up at `TOPIC_APPROVED` and writes the
-script in one session.
+script in one session. On a video whose style is `auto`, the same session first picks the style
+([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)), because the script is
+written for it.
 
 ### Render-stage exits
 
@@ -280,6 +283,18 @@ that lands in between fails the write with `409`.
 A brief for a posed figure differs from a brief for a photograph, so a later change would call for
 a new script.
 
+Three writes of `visual_style` happen after the topic checkpoint, each in one `UPDATE` that repeats
+its checks:
+
+- `choose_visual_style`, once, at `TOPIC_APPROVED`, on a video still on `auto`: the agent records
+  the style Auto picked, before any script exists.
+- [`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style), at
+  `SCRIPT_READY`: a person takes Auto's runner-up, and the video goes back to `TOPIC_APPROVED` for a
+  new script.
+- A move back to `TOPIC_PROPOSED` returns a style Auto picked to `auto`, so the revised topic is
+  routed again, and clears the renderer and canvas recorded for an `auto` video's old scenes. A
+  style a person chose is kept.
+
 Two fields that follow from `visual_style` are write-once. The agent writes them through
 `update_video`, HTTP cannot write them, and a second, different value is refused:
 
@@ -287,9 +302,9 @@ Two fields that follow from `visual_style` are write-once. The agent writes them
   writes it at scene-config time, after `TOPIC_PROPOSED`, so a status freeze would make it
   unwritable. Write-once is what makes a revision round render on the canvas the video already
   uses. No code on the revision path reads the field.
-- `resolved_renderer` records which renderer (`dom` or `cartoon_3d`) `auto` settled on. The agent
-  writes it before it authors any scene, because a revision that changed the renderer would
-  discard every scene.
+- `resolved_renderer` records which renderer an `auto` video uses (`dom`, or `cartoon_3d` on a
+  video that recorded it before Auto picked styles). The agent writes it before it authors any
+  scene, because a revision that changed the renderer would discard every scene.
 
 `title` is not frozen. It is a display name and stays writable at any status.
 

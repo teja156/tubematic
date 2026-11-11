@@ -42,7 +42,9 @@ Both wrong forms fail the typecheck in `validate_job`, before a render. If a sce
 ## Visual styles
 
 Every video has a visual style, stored in `videos.visual_style`. A person picks it when approving the
-topic and it is frozen after that ([Frozen choices](02-pipeline.md#frozen-choices)). The code and the
+topic and it is frozen after that ([Frozen choices](02-pipeline.md#frozen-choices)). A person who
+leaves it on `auto` lets the agent pick one before the script is written
+([How Auto picks a style](#how-auto-picks-a-style)). The code and the
 skill also call a style a **register**.
 [Visual Styles and Mascots](../user-guide/13-visual-styles-and-mascots.md#the-styles) shows what each
 style looks like.
@@ -101,8 +103,14 @@ style.
 | `authoring_skill` | The skill that authors a video in this style; `get_video` returns it as `style.authoring_skill` |
 | `review` | Optional. The style's own block for the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses) |
 | `captions` | Optional. The `subtitles` settings `write_scene_config` fills in when a config has none |
-| `routing` | What the style suits and avoids, and the signals in a topic or script that point to it |
+| `routing` | What Auto reads to pick a style: `best_for`, `avoid_for`, `signals`, and the optional `moods` and `images` (below) |
+| `script` | Optional. How to write the narration and each segment's `visual` brief for this style; `get_video` returns it as `style.script` and the script-writing skill follows it |
 | `extra` | Style-specific data, such as System Flow's icon list or Bean Explainer's cast and prop catalogue |
+
+The `routing` block lists what the style suits (`best_for`), what it must not get (`avoid_for`) and
+the signals in a topic or script that point to it (`signals`). Two fields are optional: `moods`, the
+tones the style suits, and `images`, a whole number of generated images a video costs at most (0
+when absent). [How Auto picks a style](#how-auto-picks-a-style) reads all five.
 
 `tubematic_core/tests/test_style_packs.py` pins every gate's answer for each style, `auto`, a blank
 value and an unknown one. Adding a style is a new pack file, the style's renderer work and its
@@ -124,29 +132,67 @@ the canvas. A wrong `theme` typechecks and renders a figure that cannot be seen.
 
 A scene leaves its own background transparent where the canvas should show through.
 
-### What `auto` decides
+### How Auto picks a style
 
-Under `auto` the agent makes two video-wide choices and records each once. Every beat still gets its
-own treatment.
+A video on `auto` gets its style before its script, at `TOPIC_APPROVED`, because the script is
+written for the style: a walk through a system, a story, a list. The
+`tubematic-style-routing` skill makes the choice and `choose_visual_style` records it once.
 
-1. The renderer, before any scene exists: `update_video(resolved_renderer="dom" | "cartoon_3d")`. The
-   agent picks Cartoon 3D when a place and people moving through it carry the video. It picks `dom`
-   (the scene components) otherwise, and always when `cartoon_3d_available` is false or the video has
-   a mascot. If it wanted a world the install cannot render, it says so in its handback. A later
-   change would discard every scene.
-2. On the `dom` renderer, the canvas: `update_video(resolved_visual_style="dark" | "light")`. The
-   skill's rule is `dark` when images carry the video (about a third or more of the beats are PHOTO
-   or HYBRID) and `light` when roles, processes and diagrams carry it. A tie goes to `dark`.
+```mermaid
+flowchart TD
+    A["TOPIC_APPROVED<br/>visual_style = auto"] --> B["get_video:<br/>style_routing.candidates"]
+    B --> C["describe the topic<br/>on fixed axes"]
+    C --> D["rule out: unavailable,<br/>a plain avoid_for match"]
+    D --> E["score: best_for 3 or 1,<br/>each signal 1"]
+    E --> F{"a clear fit?<br/>3 points or more"}
+    F -->|yes| G["the highest; ties by<br/>specificity, a person's hint,<br/>mood, images, order"]
+    F -->|no| H["scenes:<br/>the mixed scene system"]
+    G --> I["choose_visual_style"]
+    H --> I
+    I --> J["script written for<br/>the picked style"]
+```
 
-`write_scene_config` records either value if the agent wrote a config without recording it. On a
-revision the agent reads the recorded values and does not choose again.
+The candidates are data: `tubematic_core/visual_styles.py::routing_candidates` lists every style
+pack in pack order, then `scenes`, each with its `routing` block and whether this install and this
+video can have it. A style that needs an OpenAI key or a working GPU the install lacks is
+unavailable, and so is a 3D-world style on a video with a mascot. The skill names no style, so a new
+pack with a `routing` block is a candidate the day it ships.
 
-If the video has character beats, the agent also chooses once between line-art figures and generated
-characters. Generated characters are for recurring characters the viewer must recognise, and only
-while `illustrated_available` is true.
+The outcome is recorded in three columns ([`videos`](03-database.md#videos)):
 
-`auto` says which vocabularies are available. The skill tells the agent to use the fewest that carry
-the video. A video that uses every vocabulary because it was allowed to is a defect.
+| `visual_style` | `style_pick` | Meaning |
+|---|---|---|
+| a pack id | `''` | A person chose the style |
+| a pack id | the same id | Auto picked it before the script |
+| `auto` | `scenes` | Auto kept the mixed scene system |
+| `auto` | `''` | Not decided. Before `TOPIC_APPROVED` it is routed when picked up; after it, the video takes the mixed scene system |
+
+A pack Auto picks is written into `visual_style` itself, so the gates, the AI review prompt and the
+authoring skill read it as if a person had chosen it. `style_runner_up` and `style_reason` are shown
+on the dashboard, where a person can switch to the runner-up at `SCRIPT_READY`
+([`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style)), which sends the
+video back to `TOPIC_APPROVED` for a new script. A video moved back to `TOPIC_PROPOSED` returns to
+`auto`, so its revised topic is routed again.
+
+`scenes` is the mixed scene system: every beat drawn from any vocabulary, on a canvas the agent
+chooses at `VOICE_READY`. Its renderer is always `dom`, recorded in `videos.resolved_renderer`. The
+agent chooses the canvas once, `update_video(resolved_visual_style="dark" | "light")`: `dark` when
+images carry the video (about a third or more of the beats are PHOTO or HYBRID) and `light` when
+roles, processes and diagrams carry it. A tie goes to `dark`. `write_scene_config` records it if the
+agent wrote a config without recording it. On a revision the agent reads the recorded values and does
+not choose again. An `auto` video whose `resolved_renderer` is `cartoon_3d` is a Cartoon 3D Short,
+authored by the Cartoon 3D skill.
+
+If a mixed-scenes video has character beats, the agent also chooses once between line-art figures
+and generated characters. Generated characters are for recurring characters the viewer must
+recognise, and only while `illustrated_available` is true.
+
+Mixed scenes say which vocabularies are available. The skill tells the agent to use the fewest that
+carry the video. A video that uses every vocabulary because it was allowed to is a defect.
+
+The topic set in `tubematic_core/tests/fixtures/style_routing_cases.json` and the hand-run
+`scripts/eval_style_routing.py` check the routing; see
+[Style routing](test-suites/style-routing.md).
 
 ### Generated characters
 

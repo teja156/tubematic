@@ -2766,8 +2766,12 @@ def create_pipeline_blueprint() -> Blueprint:
                     err = _cartoon_mascot_error(stored_mascot) if (
                         stored_mascot and held and not switching) else ""
                 else:
-                    err = _approval_pair_error(
-                        con, (cur_vid["resolved_renderer"] or "") == "cartoon_3d", held)
+                    # A changed style clears the recorded renderer in this
+                    # same UPDATE, so the pair is judged without it.
+                    style_changes = ("visual_style" in fields
+                                     and fields["visual_style"] != (cur_vid["visual_style"] or ""))
+                    renderer_after = "" if style_changes else (cur_vid["resolved_renderer"] or "")
+                    err = _approval_pair_error(con, renderer_after == "cartoon_3d", held)
                 if err:
                     return jsonify({"error": err}), 409
 
@@ -2821,6 +2825,16 @@ def create_pipeline_blueprint() -> Blueprint:
             # a decision about why the agent could not move it.
             if "status" in fields:
                 set_sql += ["agent_no_progress_count = 0", "agent_stuck_at = NULL"]
+            # A style a person sets replaces Auto's pick (the same value, which
+            # the approval re-sends, keeps it); a move back to the topic gives
+            # an Auto pick back to Auto. Keep in sync: mcp/server.py's
+            # update_video and set_video_status.
+            if "visual_style" in fields:
+                clear_sql, clear_params = tvs.style_change_clears_pick(fields["visual_style"])
+                set_sql.append(clear_sql)
+                set_params += clear_params
+            elif fields.get("status") == "TOPIC_PROPOSED":
+                set_sql.append(tvs.AUTO_PICK_RESET_SET)
             where_sql, where_params = "", []
             # Bind the write to the status the freeze was checked against.
             # Without onlyIfCurrentStatus, that check and this UPDATE are two
@@ -2847,9 +2861,12 @@ def create_pipeline_blueprint() -> Blueprint:
                     mascot_sql, mascot_p = "?", [fields["mascot_id"]]
                 else:
                     mascot_sql, mascot_p = "COALESCE(videos.mascot_id, '')", []
+                renderer_sql, renderer_p = (
+                    (tvs.renderer_after_style_write_sql(), [fields["visual_style"]])
+                    if "visual_style" in fields else ("COALESCE(videos.resolved_renderer, '')", []))
                 where_sql += " AND NOT " + tmascots.cartoon_mascot_clash_sql(
-                    style_sql, "COALESCE(videos.resolved_renderer, '')", mascot_sql)
-                where_params += style_p + mascot_p
+                    style_sql, renderer_sql, mascot_sql)
+                where_params += style_p + renderer_p + mascot_p
                 if mascot_guarded:
                     where_sql += " AND " + tmascots.holds_pickable_sql(mascot_sql)
                     where_params += mascot_p * 2
@@ -3028,6 +3045,70 @@ def create_pipeline_blueprint() -> Blueprint:
                 if not exists:
                     return jsonify({"error": "Video not found"}), 404
                 return jsonify({"error": "Video is archived and can no longer be changed"}), 409
+            video = _video_with_comments(con, video_id)
+        return jsonify(video)
+
+    @bp.post("/videos/<video_id>/switch-style")
+    def switch_style(video_id: str):
+        """Switch a video to the runner-up of Auto's style pick (TMDEV-203).
+
+        Auto picks a style before the script and names a runner-up. At
+        SCRIPT_READY a person may take the runner-up instead: the video goes
+        back to TOPIC_APPROVED with that style, and its agent rewrites the
+        script for it. The new script is voiced again when it is approved, so
+        on a video that reached SCRIPT_READY through a revision, voicing is
+        paid twice. The old pick becomes the new runner-up, so a second switch
+        goes back.
+        """
+        with _conn() as con:
+            # One write transaction from the first read to the write: an
+            # approval, a second switch, a key removed in Settings or a GPU
+            # probe result waits for it, so nothing checked below can change
+            # before the UPDATE. The UPDATE repeats the row checks anyway.
+            con.execute("BEGIN IMMEDIATE")
+            row = con.execute(
+                "SELECT status, visual_style, style_pick, style_runner_up, mascot_id, archived_at "
+                "FROM videos WHERE id = ?", (video_id,)).fetchone()
+            if not row:
+                return jsonify({"error": "Video not found"}), 404
+            if row["archived_at"]:
+                return jsonify({"error": "Video is archived and can no longer be changed"}), 409
+            pick, target = row["style_pick"] or "", row["style_runner_up"] or ""
+            if not pick or not target:
+                return jsonify({"error": "Only a style Auto picked, with a runner-up, can be "
+                                         "switched"}), 409
+            if row["status"] != "SCRIPT_READY":
+                return jsonify({"error": "The style can be switched only at Script Ready, while "
+                                         f"the script waits for approval (this video is {row['status']})"}), 409
+            settings = _read_all_settings(con)
+            candidates = {c["id"]: c for c in tvs.routing_candidates(
+                bool(_secret(settings, "openai_api_key", "OPENAI_API_KEY")),
+                trenderers.gpu_status(con)["status"], bool(row["mascot_id"]))}
+            if target not in candidates:
+                return jsonify({"error": f"The runner-up {target!r} is no longer a style"}), 409
+            if not candidates[target]["available"]:
+                return jsonify({"error": f"{candidates[target]['label']} is not available: "
+                                         f"{candidates[target]['unavailable_reason']}"}), 409
+            new_style = DEFAULT_VISUAL_STYLE if target == tvs.SCENES else target
+            reason = (f"Switched by a person from {tvs.route_label(pick)} to "
+                      f"{tvs.route_label(target)}.")
+            now = _now()
+            cur = con.execute(
+                "UPDATE videos SET visual_style = ?, style_pick = ?, style_runner_up = ?, "
+                "style_reason = ?, status = 'TOPIC_APPROVED', agent_no_progress_count = 0, "
+                "agent_stuck_at = NULL, " + tvs.NEW_STYLE_CLEARS_SET + ", updated_at = ? "
+                "WHERE id = ? AND archived_at IS NULL "
+                "AND status = 'SCRIPT_READY' AND style_pick = ? AND style_runner_up = ? AND NOT "
+                + tmascots.cartoon_mascot_clash_sql(style="?", renderer="''"),
+                (new_style, target, pick, reason, now, video_id, pick, target, new_style))
+            if cur.rowcount == 0:
+                return jsonify({"error": "The video changed while the request was in flight — "
+                                         "reload"}), 409
+            con.execute(
+                "INSERT INTO comments (video_id, author, content, created_at) VALUES (?, ?, ?, ?)",
+                (video_id, "human", f"Style switched from {tvs.route_label(pick)} to "
+                                    f"{tvs.route_label(target)}. Rewrite the script for "
+                                    f"{tvs.route_label(target)}; the old script is discarded.", now))
             video = _video_with_comments(con, video_id)
         return jsonify(video)
 

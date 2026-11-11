@@ -15,7 +15,7 @@ corner unless you turn it off on **Settings → Rendering**.
 
 | Style | What you get | Needs |
 |---|---|---|
-| **Auto** | No restriction. The agent chooses the canvas, and draws each part of the video in whatever way suits it. See [What Auto does](#what-auto-does) | Nothing |
+| **Auto** | The agent picks the style that suits the topic before it writes the script, or mixes treatments when no style fits. See [What Auto does](#what-auto-does) | Nothing |
 | **Motion Graphics** | A dark canvas. Generated images with slow camera moves, and animated diagrams. No drawn figures | Nothing |
 | **Stick Explainer** | A white canvas. Black hand-drawn line art, with stick figures for roles such as "the user" or "an attacker" | Nothing |
 | **Illustrated** | Generated cartoon or rendered characters that stay the same from scene to scene | An OpenAI key |
@@ -50,25 +50,32 @@ background would flash, and a viewer reads that as a broken render.
 
 ### What Auto does
 
-Auto does not pick one of the named styles, and it never makes a System Flow or Bean Explainer
-video: choose those yourself. The agent makes two choices for the whole video, then decides how to draw each part of
-the script.
+When you approve a topic left on Auto, the agent picks a style before it writes the script, because
+the script is written for the style: a System Flow script walks through a system one step at a time,
+for example. It reads what each style is made for and avoids, compares that with the topic, and
+picks the style that clearly fits. It considers every style this install can make: Illustrated only
+while an OpenAI key is stored, Cartoon 3D only while a GPU is working and the video has no mascot.
+It may pick a style that generates images, which costs more per video. It does not pick a style for
+variety: the same kind of topic gets the same style every time.
 
-1. Whether the video is Cartoon 3D. The agent chooses it when a place, and people moving through
-   it, carry the video. It can choose it only while a GPU is working and the video has no mascot.
-2. For every other video, a dark or a white canvas. It chooses dark when images carry the video,
-   and white when roles, processes and diagrams do.
+When no style clearly fits, the agent keeps **mixed scenes**. It then chooses a dark or a white
+canvas for the whole video once the voice exists (dark when images carry the video, white when
+roles, processes and diagrams do), and draws each part of the script in whatever way suits it: an
+image, a diagram, line-art figures or generated characters. A mixed video can combine what the named
+styles keep apart. One on a dark canvas can use line-art figures for "the user" and "the server",
+which Motion Graphics leaves out. The agent uses generated characters only for a character the
+viewer must recognise across scenes, and only while an OpenAI key is stored.
 
-Each part of the script then gets its own treatment: an image, a diagram, line-art figures or
-generated characters. An Auto video can therefore mix what the named styles keep apart. One on a
-dark canvas can use line-art figures for "the user" and "the server", which Motion Graphics leaves
-out. The agent uses generated characters only for a character the viewer must recognise across
-scenes, and only while an OpenAI key is stored.
+The video's window shows the choice under **Visual style**, after the word Auto: the picked style's
+name, or Mixed scenes with its canvas once chosen. Until the agent has chosen, it reads
+"Auto (not yet chosen)". The **Why this style** row gives the agent's reason and the runner-up, the
+style that came second.
 
-The video's window shows what the agent settled under **Visual style**: Auto with a dark canvas,
-Auto with a light canvas, or Auto with Cartoon 3D. Until the agent has chosen, it reads
-"Auto (not yet chosen)". It does not name Motion Graphics, Stick Explainer or Illustrated, because
-an Auto video is none of them.
+At Script Ready you can take the runner-up instead: **Switch to …** in the video's window sends the
+video back to the agent, which writes a new script for that style. The old script is discarded. For
+a new video nothing has been paid for at this point; for a video you sent back for revision after it
+was voiced, the new script is voiced again when you approve it. To give the style back to Auto entirely, request a revision of the
+topic: a revised topic returns to Auto, and the agent picks again after you approve it.
 
 A System Flow video has a fixed look, so its pick is the whole decision: the agent lays out the
 diagrams and times them to the narration, but it does not change the canvas or add images. A Bean

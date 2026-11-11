@@ -97,11 +97,31 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
 - System Flow and Bean Explainer each have their renderer, canvas, skill and permissions pinned; Bean
   Explainer's bean counts as a figure but neither line art nor a generated character.
 - A malformed pack is refused with the field at fault, `auto` cannot be a pack, and every shipped
-  pack passes.
+  pack passes. The optional `routing.images`, `routing.moods` and `script` are checked when
+  present, and a pack without them still loads.
 
 Trap: each answer in the truth table decides what an agent may draw or what the AI review is told is
 intended, so a changed answer shows up only after a render. Change the table only when a style's
 rules are meant to change.
+
+### `test_style_routing.py`
+
+Covers the candidate list Auto's style routing reads (`visual_styles.py::routing_candidates`) and
+the fixed topic set in `tests/fixtures/style_routing_cases.json`
+([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
+
+- Every pack, then `scenes`, is a candidate in pack order, and a pack added at run time becomes one
+  with no other edit.
+- Each candidate carries its routing block and its image count, and the list shares no state with
+  the packs.
+- A candidate is unavailable for the same reasons that refuse the choice: no OpenAI key, a GPU that
+  is not working or not tested, a mascot on a 3D-world style. `scenes` is always available.
+- Every topic names only real outcomes, and every outcome is the first expectation of at least
+  three topics.
+
+Trap: the three-topic minimum fails CI for a new pack until its ticket adds topics for it. That is
+what keeps the topic set growing with the packs, so the hand-run eval
+([Style routing](style-routing.md)) measures every style.
 
 ### `test_visual_style.py`
 
@@ -285,6 +305,17 @@ Covers `0019`: the render lease columns and the `renderers`, `renderer_enrollmen
 Trap: An empty lease is what lets the worker's lease sweep queue again a render that was in progress
 during the upgrade. An unprobed built-in row makes the GPU gates read `unknown` until the
 renderer's first probe.
+
+### `test_style_pick_migration.py`
+
+Covers `0020`: `videos.style_pick`, `style_runner_up` and `style_reason`.
+
+- Existing videos keep their status, `visual_style`, `resolved_visual_style` and
+  `resolved_renderer`, and read `''` in the three new columns.
+- A second run changes nothing, and a new video starts at `''`.
+
+Trap: `''` means Auto has not decided, which is true of every video before the upgrade, so the
+migration has no backfill. A scripted `auto` video then finishes on the mixed scene system.
 
 ## Shared rules
 

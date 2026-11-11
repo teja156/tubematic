@@ -480,6 +480,36 @@ Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean E
   other scenes on a Bean Explainer video. `emphasis` beyond the narration's last word, on more than
   one word in 5, repeated, or not a list of numbers is refused, on any style.
 
+### `test_choose_visual_style.py`
+
+Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back
+([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
+
+- A pack pick becomes the video's `visual_style`, so `get_video`'s `style` names its authoring skill
+  and script guidance. `scenes` keeps `auto` and still counts as decided.
+- The choice is made once, only at `TOPIC_APPROVED`, never over a style a person chose, and never
+  for an archived video. A bad style, runner-up or reason is refused.
+- An unavailable style or runner-up is refused with the reason, and a mascot rules out a 3D world.
+- A status, style, pick or archive change between the row read and the `UPDATE` leaves the video
+  untouched, and so does a mascot landing before a 3D pick. While the tool reads what the install
+  can make, another writer is locked out.
+- `style_routing` lists every candidate and the video's domain.
+- A pick clears the renderer and canvas recorded for earlier scenes, including a `cartoon_3d`
+  renderer on a video with a mascot, and so does a return to the topic of an `auto` video or an Auto
+  pick, or a person changing the style. A style a person chose keeps its canvas through a return to
+  the topic.
+- A video Auto routed to mixed scenes cannot record the `cartoon_3d` renderer or take a Cartoon 3D
+  scene through `write_scene_config`, while a video from before Auto picked styles still can.
+- `visual_style` and a `resolved_*` field are refused in one call, and a style change with a mascot
+  is not refused for the Cartoon 3D renderer the same write clears.
+- A move back to `TOPIC_PROPOSED`, guarded or not, returns an Auto pick to `auto`. A person's style
+  survives it, and other moves keep the pick. A changed `visual_style` clears the pick and the same
+  value keeps it.
+
+Trap: the race and lock tests are mutation-checked. Each clause of the `UPDATE`'s `WHERE` is there
+because a check made on an earlier read can be out of date by the write, and the write lock is what
+keeps a removed key or a failed GPU from landing between the availability check and the write.
+
 ### `test_system_flow.py`
 
 Covers `mcp/system_flow.py`, the checks `write_scene_config` runs on a System Flow config, and the

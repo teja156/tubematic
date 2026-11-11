@@ -27,6 +27,12 @@
       "the script names specific real things that are best shown as pictures",
       "most beats want a full-frame image or a vector diagram, none wants a character"
     ],
-    "images_per_video": "varies"
+    "moods": [
+      "bold",
+      "dramatic",
+      "informative"
+    ],
+    "images_per_video": "varies",
+    "images": 8
   }
 }

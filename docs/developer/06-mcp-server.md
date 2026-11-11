@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 49 tools
+## The 50 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -102,6 +102,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`create_video`](#create_video) | File a topic at `TOPIC_PROPOSED` |
 | [`set_video_status`](#set_video_status) | Guarded status write |
 | [`update_video`](#update_video) | Partial update: script, publish text, voice, agent, style |
+| [`choose_visual_style`](#choose_visual_style) | Record the style `auto` picks, before the script |
 | [`add_comment`](#add_comment) | Add an agent comment |
 
 ### Domain tools
@@ -188,23 +189,25 @@ The calls one video takes when it has no mascot and is not Cartoon 3D:
 
 1. `get_video(video_id)` returns the status, the comments, the `pronunciation_mode` to write for
    and the `script_profile_id`.
-2. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
-3. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…)` stores the
+2. `choose_visual_style(video_id, style, reason, runner_up)` records the style `auto` picks, when
+   `style_routing.decided` is `false`. The script is then written for that style.
+3. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
+4. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…)` stores the
    script and the text the video is posted with.
-4. `upsert_pronunciation_lexicon(entries=[…])` registers recurring terms, if the script has any.
-5. `add_comment(video_id, "agent", …)` says what was written.
-6. `set_video_status(video_id, "SCRIPT_READY", only_if_current_status="TOPIC_APPROVED")` stops at
+5. `upsert_pronunciation_lexicon(entries=[…])` registers recurring terms, if the script has any.
+6. `add_comment(video_id, "agent", …)` says what was written.
+7. `set_video_status(video_id, "SCRIPT_READY", only_if_current_status="TOPIC_APPROVED")` stops at
    the script checkpoint. A human approves, which moves the video to `VOICING`.
-7. `generate_voice(video_id, script)` writes the audio and the timeline and moves the video to
+8. `generate_voice(video_id, script)` writes the audio and the timeline and moves the video to
    `VOICE_READY`.
-8. `get_timeline(video_id)` returns each segment's frame span.
-9. `list_scene_files(source="installed")` lists the reusable scene library.
-10. `generate_image(video_id, image_name, prompt)` creates each image and returns its `public_path`.
-11. `read_image(video_id, image_name)` shows the image, so a bad one is replaced before a render.
-12. `write_scene_file(video_id, scene_name, tsx_content)` writes each new scene and returns its `src`.
-13. `write_scene_config(video_id, config)` writes `scene-config.json`.
-14. `validate_job(video_id)` returns `errors` to fix and `warnings` to judge.
-15. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
+9. `get_timeline(video_id)` returns each segment's frame span.
+10. `list_scene_files(source="installed")` lists the reusable scene library.
+11. `generate_image(video_id, image_name, prompt)` creates each image and returns its `public_path`.
+12. `read_image(video_id, image_name)` shows the image, so a bad one is replaced before a render.
+13. `write_scene_file(video_id, scene_name, tsx_content)` writes each new scene and returns its `src`.
+14. `write_scene_config(video_id, config)` writes `scene-config.json`.
+15. `validate_job(video_id)` returns `errors` to fix and `warnings` to judge.
+16. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
 
 ---
 
@@ -231,7 +234,8 @@ videos.
 | `illustrated_available` | `true` when an OpenAI key is stored. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
-| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows}`. Under `auto`, `renderer` and `canvas` are `null` and `authoring_skill` is `tubematic-scene-config` |
+| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config` and `script` is `""` |
+| `style_routing` | The style decision `auto` makes before the script: `{decided, pick, runner_up, reason, candidates, domain}`. See [How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style) |
 
 At `VOICE_READY` the operator skill invokes the skill named in `style.authoring_skill`.
 
@@ -240,10 +244,16 @@ scene-config is written.
 
 The flags are on `get_video` because a scheduled session is scoped to one video. Under `auto`, the
 scene-config skill reads `illustrated_available` before it chooses generated character art (when it
-is `false`, characters are line art and `generate_character` is not called) and
-`cartoon_3d_available` before it resolves the renderer to Cartoon 3D. Under a forced `illustrated`
-style it makes no check: the style can be chosen only while a key is stored, and
+is `false`, characters are line art and `generate_character` is not called). Under a forced
+`illustrated` style it makes no check: the style can be chosen only while a key is stored, and
 `generate_character` refuses before any spend if the key has gone.
+
+`style_routing.decided` is `true` once `auto` has picked (`pick` is a style id, or `scenes` for the
+mixed scene system) and whenever a person chose the style. `candidates` is
+`tubematic_core/visual_styles.py::routing_candidates`: every style pack in pack order, then
+`scenes`, each with its `routing` block, its generated-image count and whether this install and
+this video can have it (`available`, `unavailable_reason`). `domain` is the `{name, description}`
+of the video's domain.
 
 ### `create_video`
 
@@ -284,6 +294,11 @@ It refuses:
   was picked (a human chooses another, or none), or when the video is Cartoon 3D, by its style or
   its resolved renderer, and holds a mascot. Both checks are repeated in the `UPDATE`'s `WHERE`.
 
+A move to `TOPIC_PROPOSED` (a topic revision) gives a style `auto` picked back to `auto`, in the
+same `UPDATE`: `visual_style` returns to `auto` and the three `style_*` columns are cleared, so the
+revised topic is routed again after its next approval. On every `auto` video the two `resolved_*`
+columns are cleared too. A style a person chose is kept, with its recorded canvas.
+
 ### `update_video`
 
 `update_video(video_id, title=…, script=…, script_segments=…, youtube_url=…, video_version=…,
@@ -319,6 +334,12 @@ Fields writable only at `TOPIC_PROPOSED`:
 - A new `mascot_id` must exist, be approved and not archived, and some renderer's GPU test must
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
   mascot is not refused. A mascot is refused on a `cartoon_3d` video.
+- A `visual_style` different from the stored one clears the record of a style `auto` picked
+  (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
+  scenes (`resolved_renderer`, `resolved_visual_style`). The same value again keeps them, because the
+  dashboard re-sends the picker on every approval. A call that writes `visual_style` together with
+  either `resolved_*` field is refused. A mascot is judged against the renderer the video will have
+  after the write, so a changed style is not refused for a Cartoon 3D renderer it clears.
 
 Fields writable at any human checkpoint (`TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY`):
 
@@ -337,14 +358,42 @@ Fields the agent writes once, at scene-config time. A second, different value is
 
 - `resolved_visual_style` is the canvas the agent settled on (`dark` or `light`). It is refused
   when `visual_style` already fixes the canvas.
-- `resolved_renderer` is the renderer `auto` settled on (`dom` or `cartoon_3d`). It is refused when
-  `visual_style` already names the renderer. `cartoon_3d` needs the same working GPU and a video
-  with no mascot.
+- `resolved_renderer` is the renderer an `auto` video uses (`dom` or `cartoon_3d`). `auto` reaches
+  Cartoon 3D by picking the `cartoon_3d` style with `choose_visual_style`, so a video still at
+  `auto` when its scenes are written records `dom`. `cartoon_3d` is kept for a video that recorded
+  it before `auto` picked styles, and refused on a video `auto` routed to mixed scenes
+  (`style_pick` is `scenes`); `write_scene_config` refuses a Cartoon 3D scene there for the same
+  reason. It is refused when `visual_style` already names the renderer.
+  `cartoon_3d` needs the same working GPU and a video with no mascot.
 
 A `title` over 70 characters is rejected. The tool takes none of the four job-path columns:
 `generate_voice`, `write_scene_config` and the render gateway write those, and FastMCP refuses a
 call that passes one as an unexpected argument, so nothing is applied (see
 [Path columns](03-database.md#path-columns)).
+
+### `choose_visual_style`
+
+`choose_visual_style(video_id, style, reason, runner_up="")` records the style `auto` picks for a
+video, once, at `TOPIC_APPROVED`, before the script is written. The
+[tubematic-style-routing skill](10-scene-authoring.md#how-auto-picks-a-style) calls it. It is the
+only write of the style after the topic checkpoint.
+
+- `style` is a candidate id from `style_routing.candidates`. A style pack's id is written into
+  `visual_style`, so the script, the gates, the AI review prompt and the authoring skill all read the
+  picked style. `scenes` leaves `visual_style` at `auto`. The same `UPDATE` clears
+  `resolved_renderer` and `resolved_visual_style`, which belong to scenes the new script replaces.
+- `reason` is one sentence of at most 300 characters (`STYLE_REASON_MAX_CHARS`). The dashboard
+  shows it beside the choice.
+- `runner_up` is another candidate, or `""`. The dashboard offers it as a switch at `SCRIPT_READY`
+  ([`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style)).
+
+It refuses a `style` or `runner_up` that is not available (no OpenAI key, no working GPU, a mascot
+on a 3D-world style), a video not at `TOPIC_APPROVED`, a style a person chose, and a second
+decision. Every condition on the row is repeated in the `UPDATE`'s `WHERE`, so a status change, a
+style write or a mascot committed between the check and the write leaves the video untouched. It
+reads what the install can make after taking the write lock (`BEGIN IMMEDIATE`), so a key removed in
+Settings or a GPU probe result cannot commit between that check and the write. The result carries
+the new `visual_style` and `style`, so the agent writes the script for it in the same session.
 
 ### `add_comment`
 

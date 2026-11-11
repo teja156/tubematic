@@ -115,6 +115,14 @@ export interface Video {
    *  '' until it has. Meaningless unless visual_style is "auto". */
   resolved_visual_style?: string;
   resolved_renderer?: ResolvedRenderer;
+  /** What Auto picked for the style before the script (TMDEV-203): a style
+   *  id (then also the video's visual_style), "scenes" for the mixed scene
+   *  system, or '' when Auto has not decided or a person chose the style. */
+  style_pick?: string;
+  /** The candidate that came second; the Switch button at Script Ready offers it. */
+  style_runner_up?: string;
+  /** Auto's one-sentence reason for the pick. */
+  style_reason?: string;
   /** Scheduled agent sessions in a row that left this video at the status
    *  they found it at (TMDEV-129). Reset by any progress. Optional for the
    *  same reason as tts_text above. */

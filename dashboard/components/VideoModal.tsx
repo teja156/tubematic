@@ -29,7 +29,7 @@ import {
   effectiveAgent, effortLabel, effortOptionLabel, initialEffort, isUsable, modelLabel,
   pickedAgent, resolvedModel, topicApprovalPayload,
 } from "@/lib/agents";
-import { styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { routeLabel, styleOptions, videoStyleLabel } from "@/lib/visualStyles";
 import { MascotPicker } from "@/components/MascotPicker";
 import { approvalMascot, showMascotPicker } from "@/lib/mascots";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
@@ -377,6 +377,8 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const [retryError, setRetryError] = useState("");
   const [cancellingSchedule, setCancellingSchedule] = useState(false);
   const [cancelScheduleError, setCancelScheduleError] = useState("");
+  const [switchingStyle, setSwitchingStyle] = useState(false);
+  const [switchStyleError, setSwitchStyleError] = useState("");
   const [retryingAgent, setRetryingAgent] = useState(false);
   const [retryAgentError, setRetryAgentError] = useState("");
   // Where this video actually went (TMDEV-83). Replaces videos.youtube_url as
@@ -473,6 +475,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     setPublishOpen(false);
     setRetryError("");
     setCancelScheduleError("");
+    setSwitchStyleError("");
     setReviseOpen(openRevise);
     setPublications([]);
     setPublicationsState("loading");
@@ -788,6 +791,34 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
       setCancelScheduleError("Cancelling the schedule failed.");
     } finally {
       setCancellingSchedule(false);
+    }
+  };
+
+  // Switch to Auto's runner-up (TMDEV-203). Auto picked the style before the
+  // script; at Script Ready, before the script is approved, the runner-up can be
+  // taken instead. The video goes back to its agent to rewrite the script.
+  const runnerUp = video.style_runner_up ?? "";
+  const switchable = !archived && video.status === "SCRIPT_READY"
+    && (video.style_pick ?? "") !== "" && runnerUp !== "";
+  const handleSwitchStyle = async () => {
+    if (switchingStyle) return;
+    const to = routeLabel(runnerUp, visualStyles);
+    if (!window.confirm(`Switch this video to ${to}? The script is discarded and the agent rewrites it for ${to}.`)) return;
+    setSwitchingStyle(true);
+    setSwitchStyleError("");
+    try {
+      const res = await fetch(`/api/proxy/videos/${video.id}/switch-style`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) setSwitchStyleError(body.error ?? "Switching the style failed.");
+      refreshVideo(video.id);
+    } catch {
+      setSwitchStyleError("Switching the style failed.");
+    } finally {
+      setSwitchingStyle(false);
     }
   };
 
@@ -1526,6 +1557,38 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                       </>
                     )}
                     <MetaRow label="Visual style" value={videoStyleLabel(video, visualStyles)} />
+                    {(video.style_pick ?? "") !== "" && (
+                      <MetaRow
+                        label="Why this style"
+                        value={
+                          <span data-testid="style-pick-reason">
+                            {video.style_reason || "—"}
+                            {runnerUp && (
+                              <span style={{ display: "block", color: "var(--dim)", marginTop: 4 }}>
+                                Runner-up: {routeLabel(runnerUp, visualStyles)}
+                              </span>
+                            )}
+                          </span>
+                        }
+                      />
+                    )}
+                    {switchable && (
+                      <div data-testid="switch-style" style={{ padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
+                        <ActionBtn
+                          fullWidth
+                          variant="ghost"
+                          disabled={switchingStyle}
+                          onClick={handleSwitchStyle}
+                        >
+                          {switchingStyle ? "Switching…" : `Switch to ${routeLabel(runnerUp, visualStyles)}`}
+                        </ActionBtn>
+                        {switchStyleError && (
+                          <p data-testid="switch-style-error" className="font-mono text-[11px] text-amber-400">
+                            {switchStyleError}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
                 {/* voice_info comes with the single-video fetch, not the list

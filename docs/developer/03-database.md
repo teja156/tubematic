@@ -88,9 +88,12 @@ One row per video, from proposed topic to published file.
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
 | `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
-| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer` or `cartoon_3d`. Set while the video is `TOPIC_PROPOSED` and frozen after. See [Visual style columns](#visual-style-columns) |
+| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer` or `cartoon_3d`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
 | `resolved_visual_style` | TEXT NOT NULL | `''` | The canvas `auto` settled on: `dark` or `light`. Written once by the agent |
-| `resolved_renderer` | TEXT NOT NULL | `''` | The renderer `auto` settled on: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
+| `resolved_renderer` | TEXT NOT NULL | `''` | The renderer an `auto` video uses: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
+| `style_pick` | TEXT NOT NULL | `''` | What Auto picked before the script: a style pack id (then also `visual_style`), `scenes` for the mixed scene system, or `''` when Auto has not decided or a person chose the style |
+| `style_runner_up` | TEXT NOT NULL | `''` | The candidate that came second, offered as a switch at `SCRIPT_READY`, or `''` |
+| `style_reason` | TEXT NOT NULL | `''` | Auto's one-sentence reason for the pick, at most 300 characters |
 | `mascot_id` | TEXT NOT NULL | `''` | The [mascot](#mascots-and-mascot_versions) the video shows. `''` means none. Settable only while the video is `TOPIC_PROPOSED` |
 | `mascot_version` | INTEGER NOT NULL | `0` | The mascot version the video was authored against. `0` means not pinned yet |
 | `agent_id` | TEXT | `NULL` | The [agent](#agents) the video runs under. `NULL` means the default agent at dispatch time |
@@ -142,7 +145,18 @@ code against the style packs, and the column has no CHECK constraint, so a new s
 migration.
 [Frozen choices](02-pipeline.md#frozen-choices) covers when each may change.
 
-Under `auto` the agent records two decisions, each once:
+Under `auto` the agent first picks a style, at `TOPIC_APPROVED` (`choose_visual_style`). A pack it
+picks becomes `visual_style`, and `style_pick`, `style_runner_up` and `style_reason` record that
+Auto made the choice ([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)). The
+three are cleared when a person changes `visual_style` and when the video goes back to
+`TOPIC_PROPOSED`, where a style Auto picked returns to `auto`. Every new style decision (Auto's
+pick, a switch to the runner-up, a return to the topic of a video on `auto` or with an Auto pick, a
+person changing the style) also clears
+`resolved_renderer` and `resolved_visual_style`: a new script and new scenes follow it, and a
+renderer recorded as `cartoon_3d` for the old scenes would send the new ones to the Cartoon 3D
+renderer.
+
+A video that stays on `auto` (the mixed scene system) records two more decisions, each once:
 
 - `resolved_visual_style` holds the canvas (the background the scenes are designed against). The
   canvas is the one thing `auto` must fix for the life of the video, so a revision round renders on
@@ -688,6 +702,7 @@ only in the pre-migration backup.
 | `0017_resolved_renderer.sql` | Adds `videos.resolved_renderer` and sets it to `dom` on every existing video | No |
 | `0018_mascots.sql` | Creates `mascots` and `mascot_versions`, adds `projects.default_mascot_id`, `videos.mascot_id` and `videos.mascot_version`, and inserts the built-in mascot Tubi | No |
 | `0019_renderers.sql` | Creates `renderers`, `renderer_enrollments`, `render_timings` and `idx_render_timings_renderer`, adds the five lease columns to `videos`, and inserts the built-in renderer's row | No |
+| `0020_style_pick.sql` | Adds `videos.style_pick`, `style_runner_up` and `style_reason`, `''` on every existing video | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so

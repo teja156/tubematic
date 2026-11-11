@@ -27,6 +27,12 @@
       "the beats are animation-led diagrams and line art",
       "people in the script are roles, not named individuals"
     ],
-    "images_per_video": "few, in panels"
+    "moods": [
+      "playful",
+      "clear",
+      "teacherly"
+    ],
+    "images_per_video": "few, in panels",
+    "images": 3
   }
 }
