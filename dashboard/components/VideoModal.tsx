@@ -31,6 +31,7 @@ import {
 } from "@/lib/agents";
 import { routeLabel, styleOptions, videoStyleLabel } from "@/lib/visualStyles";
 import { MascotPicker } from "@/components/MascotPicker";
+import { formatRenderDuration } from "@/lib/renderers";
 import { approvalMascot, showMascotPicker } from "@/lib/mascots";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 
@@ -1610,6 +1611,27 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                         : video.voice_info.model_voiced
                           ? video.voice_info.model_id
                           : <span>{video.voice_info.model_id} <span style={{ color: "var(--dim)" }}>(current setting)</span></span>}
+                    />
+                  </>
+                )}
+                {/* The last successful render: '' on every video rendered
+                    before the record existed, so the rows hide there. */}
+                {video.last_render_renderer_id && (
+                  <>
+                    <MetaRow
+                      label="Rendered by"
+                      value={
+                        <span data-testid="rendered-by">
+                          {video.last_render_renderer_name || video.last_render_renderer_id}
+                          <span style={{ color: "var(--dim)" }}>
+                            {video.last_render_on_gpu ? " · GPU" : " · CPU"}
+                          </span>
+                        </span>
+                      }
+                    />
+                    <MetaRow
+                      label="Render time"
+                      value={<span data-testid="render-time">{formatRenderDuration(video.last_render_seconds)}</span>}
                     />
                   </>
                 )}

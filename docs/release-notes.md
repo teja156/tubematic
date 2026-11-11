@@ -70,6 +70,10 @@ If you go back to 2.1.x later:
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
   agent writes a new script for it, which is voiced when you approve it. See
   [What Auto does](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does).
+- **Rendered by** and **Render time** rows in a video's window: which renderer made the video, on
+  its GPU or its CPU, and how long the render took. They describe the last successful render. Videos
+  rendered before this version show neither. See
+  [Remote Renderers](https://docs.tubematic.ai/user-guide/remote-renderers).
 
 ### Changed
 

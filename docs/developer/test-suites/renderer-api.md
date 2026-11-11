@@ -471,7 +471,10 @@ one certificate test serve the app over real TLS on 127.0.0.1 and talk to it ove
   connection caps. A protected route answers `401` without reading its body, and no route parses
   JSON with `request.get_json()`, which reads a body without a bound.
 - Results and heartbeats: a success marks the render uploaded for the worker's review, and each
-  failure outcome goes through `render_results.py`. A heartbeat stores the GPU test result,
+  failure outcome goes through `render_results.py`. A success also writes the video's
+  `last_render_*` record: the renderer's id and its name at that moment, the GPU flag, and the
+  seconds (`0` when the timing is unusable). The next success overwrites it, and a failure or a
+  result for a lost claim leaves it. A heartbeat stores the GPU test result,
   re-queues what a restarted renderer held, and extends the lease and builds the stop list by claim
   id, so a late heartbeat for an earlier claim cannot touch the claim that replaced it.
 - Startup: with a missing or unusable TLS pair, or a port it cannot bind, the API
