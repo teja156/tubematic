@@ -182,6 +182,17 @@ def test_a_first_sentence_that_shares_a_few_title_words_is_not():
     assert "title_repeat" not in ids()
 
 
+def test_a_title_that_copies_a_short_opening_is_flagged():
+    # The other way round: every word of the opening is in a longer title.
+    script = "Git forgets renamed files. " + CLEAN
+    assert "title_repeat" in ids(script, publish_title="Git forgets renamed files, and the log stops "
+                                 "at today", kept_hook="")
+
+
+def test_an_opening_that_continues_a_long_title_is_not_flagged():
+    assert "title_repeat" not in ids(publish_title="Git loses a renamed file: where the history goes")
+
+
 def test_a_short_title_cannot_be_repeated():
     assert "title_repeat" not in ids("Git renames. " + CLEAN, publish_title="Git Renames",
                                      kept_hook="")
