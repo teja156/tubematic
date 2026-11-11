@@ -65,13 +65,19 @@ SCENES = "scenes"
 SCENES_LABEL = "Mixed scenes"
 SCENES_ROUTING = {
     "best_for": [
-        "topics no style describes better: the beats need different things (a real product as a "
-        "picture, a role acted out, a diagram) and no one treatment carries the whole video",
+        "a topic whose beats need both pictures of real, named things and people or roles acted "
+        "out by figures: no one style has both (Motion Graphics draws no figures, the figure styles "
+        "show no real photographs)",
+        "topics no style describes better, where no one treatment carries the whole video",
     ],
     "avoid_for": [
-        "a topic that clearly matches one style's best_for: that style is the better video",
+        "a topic one style carries from start to finish: that style is the better video",
+        "real people, places or events told only through their pictures and diagrams (Motion "
+        "Graphics fits them)",
     ],
     "signals": [
+        "some beats want photographs of real people, places or things, others want someone acting "
+        "out a step",
         "no single style's best_for matches the topic",
         "the beats split between pictures of real things and drawn explanations",
     ],

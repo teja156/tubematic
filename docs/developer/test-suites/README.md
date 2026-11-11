@@ -18,7 +18,7 @@ for the suite that covers your change, and find the file by its subject heading.
 | `dashboard/tests/unit` | React components, route handlers and `lib/` helpers, under vitest | [dashboard-unit.md](dashboard-unit.md) | `cd dashboard && npm test` |
 | `dashboard/tests/e2e` | The dashboard in a real browser against a Docker test stack, under Playwright | [dashboard-e2e.md](dashboard-e2e.md) | `cd dashboard && npm run test:e2e` |
 | `renderer/remotion` | Pure helpers of the Remotion project (`*.test.ts` beside the code), under vitest | [renderer-remotion.md](renderer-remotion.md) | `cd renderer/remotion && npm test` |
-| Style routing eval | Auto's style picks against a fixed topic set, through the Claude Code CLI. Run by hand, never in CI | [style-routing.md](style-routing.md) | `python3 scripts/eval_style_routing.py` |
+| Style routing eval | Auto's style picks against a fixed topic set, through the Claude Code CLI or OpenRouter. Run by hand, never in CI | [style-routing.md](style-routing.md) | `python3 scripts/eval_style_routing.py` |
 | Script writing comparison | Scripts written with an older script-writing skill and with the current one, on a fixed topic set, through the Claude Code CLI. Run by hand, never in CI | [script-writing.md](script-writing.md) | `python3 scripts/eval_script_writing.py` |
 
 Run the Python commands from the repository root. [Development: Tests](../17-development.md#tests)

@@ -33,6 +33,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -118,9 +119,17 @@ def ask_openrouter(prompt: str, system: str, model: str, timeout: int,
                                                     {"role": "user", "content": prompt}]}).encode()
     req = urllib.request.Request(OPENROUTER_URL, data=body, method="POST", headers={
         "Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+    # OpenRouter keeps a slow request open by sending whitespace, so the socket
+    # timeout alone never fires: the whole call gets one deadline.
+    deadline = time.monotonic() + timeout
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
+            chunks = []
+            while chunk := resp.read(65536):
+                chunks.append(chunk)
+                if time.monotonic() > deadline:
+                    return None, f"timed out after {timeout} s", 0.0
+            data = json.loads(b"".join(chunks))
     except urllib.error.HTTPError as e:
         return None, f"HTTP {e.code}: {e.read().decode(errors='replace')[-300:]}", 0.0
     except (urllib.error.URLError, OSError, ValueError) as e:

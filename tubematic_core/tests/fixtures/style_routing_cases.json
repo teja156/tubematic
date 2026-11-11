@@ -501,13 +501,14 @@
       "title": "How one tweet wiped billions off a stock",
       "brief": "The fake post from a verified account, the minutes of panic selling, the chart of the drop and the correction, and what changed afterwards.",
       "expect": [
-        "scenes"
-      ],
-      "ok": [
         "motion_graphics"
       ],
+      "ok": [
+        "scenes",
+        "whiteboard"
+      ],
       "future": "",
-      "note": "Fast news with a real company and a chart: no single style fits."
+      "note": "Fast news with a real company, a real post and a price chart: pictures and a chart carry it."
     },
     {
       "title": "Five inventions that failed before they worked",
@@ -592,15 +593,16 @@
       "title": "Why the Titanic sank",
       "brief": "The ship and its famous passengers, the iceberg warnings that were missed, how the flooded compartments pulled the bow down, and why there were too few lifeboats.",
       "expect": [
-        "scenes"
+        "motion_graphics"
       ],
       "ok": [
-        "motion_graphics",
+        "scenes",
+        "storybook_atlas",
         "illustrated",
         "stick"
       ],
       "future": "",
-      "note": "Real photographs, named people, a mechanism and a story in one video: no single style carries every beat, so the mixed scene system fits best."
+      "note": "A real ship, real people and a mechanism, all carried by photographs and vector diagrams: Motion Graphics. No beat needs someone acting a step out."
     },
     {
       "title": "Why your phone battery wears out",
@@ -739,15 +741,15 @@
       "title": "How Bernie Madoff's scheme collapsed",
       "brief": "The real story of Bernard Madoff's fund: the steady returns that never existed, the 2008 rush of withdrawals, his confession to his sons and the 150-year sentence.",
       "expect": [
-        "scenes"
+        "motion_graphics"
       ],
       "ok": [
-        "motion_graphics",
+        "scenes",
         "storybook_atlas",
         "illustrated"
       ],
       "future": "",
-      "note": "A near miss for Case File Story: a fraud, but a real, named case with real people, and that style's people are invented."
+      "note": "A near miss for Case File Story: a fraud, but a real, named case with real people, told through their pictures. That style's people are invented."
     },
     {
       "title": "Seven scams that target your phone",
@@ -764,18 +766,18 @@
     },
     {
       "title": "How the 2008 financial crisis happened",
-      "brief": "Cheap mortgages, loans bundled into securities, the ratings that called them safe, Lehman Brothers' collapse and the bailout, with the chart of house prices behind it all.",
+      "brief": "A borrower takes a cheap mortgage, a banker bundles it into a security, a ratings agent stamps it safe, then the real Lehman Brothers collapse and the bailout, with the chart of house prices behind it all.",
       "expect": [
         "scenes"
       ],
       "ok": [
         "motion_graphics",
-        "stick",
         "whiteboard",
+        "stick",
         "system_flow"
       ],
       "future": "",
-      "note": "Real banks and people, a mechanism and a chart in one video: no single style carries every beat."
+      "note": "Mixed-scenes probe: real banks as photographs, and a borrower, a banker and a ratings agent acting out the steps. Motion Graphics draws no figures; Stick shows no real photographs."
     },
     {
       "title": "Three famous inventions found by accident",
@@ -1127,29 +1129,29 @@
       "title": "What happens to your body in space",
       "brief": "Real astronauts on the space station, bones and muscles losing strength, fluid moving to the head, eyesight changing, and the exercise that fights it.",
       "expect": [
-        "scenes"
+        "bean_explainer"
       ],
       "ok": [
-        "bean_explainer",
+        "scenes",
         "motion_graphics",
         "stick"
       ],
       "future": "",
-      "note": "Mixed-scenes probe: real photographs of people and places next to a mechanism inside the body; no single style carries every beat."
+      "note": "Pair probe, Bean Explainer vs mixed scenes: the body and what happens to it, one change per section; no roles are acted out, so Bean Explainer carries it."
     },
     {
       "title": "How the Apollo 11 landing almost failed",
       "brief": "The real crew and footage, the computer alarms 1202 and 1201, the boulder field Armstrong flew over, and the fuel counter running down to seconds.",
       "expect": [
-        "scenes"
+        "motion_graphics"
       ],
       "ok": [
-        "motion_graphics",
+        "scenes",
         "storybook_atlas",
         "terminal_doc"
       ],
       "future": "",
-      "note": "Mixed-scenes probe: real footage, a computer error, a place and a countdown in one video."
+      "note": "Real crew, real footage, a computer alarm and a countdown: photographs and diagrams carry every beat."
     },
     {
       "title": "How a Caesar cipher works",
@@ -1163,6 +1165,34 @@
       ],
       "future": "",
       "note": "Pair probe, Terminal Doc vs Whiteboard: text transformed letter by letter is the subject."
+    },
+    {
+      "title": "How Silicon Valley Bank collapsed in 48 hours",
+      "brief": "The real bank and its headquarters, the bond losses on its books, then depositors acting out the run: one group chat, a queue of withdrawals, $42 billion gone in a day.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "stick",
+        "case_file_story"
+      ],
+      "future": "",
+      "note": "Mixed-scenes probe: a real, named bank shown in photographs, and generic depositors acting out the run."
+    },
+    {
+      "title": "How the 1929 stock market crash happened",
+      "brief": "Real photographs of Wall Street and the panicked crowds, and an ordinary investor and a broker acting out buying on margin, the margin call and the forced sale that turned the fall into a crash.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "stick",
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Mixed-scenes probe: real photographs of a real event, and generic people acting out the mechanism. Motion Graphics draws no figures; Stick shows no real photographs."
     }
   ]
 }

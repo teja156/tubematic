@@ -58,8 +58,9 @@ class _Resp:
     def __init__(self, body):
         self._body = json.dumps(body).encode()
 
-    def read(self):
-        return self._body
+    def read(self, n=-1):
+        out, self._body = (self._body, b"") if n < 0 else (self._body[:n], self._body[n:])
+        return out
 
     def __enter__(self):
         return self
@@ -107,3 +108,16 @@ def test_the_report_shows_the_cost_when_there_is_one():
     rows = [{"case": CASE, "style": "system_flow", "verdict": "best", "reason": "r"}]
     assert "Cost: $0.0300" in ev.render_report(rows, "openrouter:m", "2026-11-11 12:00", 0.03)
     assert "Cost:" not in ev.render_report(rows, "sonnet", "2026-11-11 12:00")
+
+
+def test_openrouter_gives_up_on_a_reply_that_trickles_past_the_deadline(monkeypatch):
+    clock = iter([0.0, 3.0, 6.0, 9.0])
+    monkeypatch.setattr(ev.time, "monotonic", lambda: next(clock))
+
+    class Trickle(_Resp):
+        def read(self, n=-1):
+            return b" "  # OpenRouter's keep-alive whitespace, forever
+
+    monkeypatch.setattr(ev.urllib.request, "urlopen", lambda req, timeout: Trickle({}))
+    answer, err, _ = ev.ask_openrouter("v", "s", "m", 5, "k")
+    assert answer is None and err == "timed out after 5 s"

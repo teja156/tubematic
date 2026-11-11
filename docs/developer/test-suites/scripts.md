@@ -744,6 +744,9 @@ is called.
 - The prompt carries the video as `get_video` returns it at `TOPIC_APPROVED`, with every candidate.
 - The answer is the last JSON object in the reply that names a style.
 - A pick is scored best, acceptable or wrong, and the report counts each and lists the wrong ones.
+- `--openrouter` sends the skill as the system message and the video as the user message, with the
+  key as a bearer token; a reply with no answer is an error, and a missing key stops the run before
+  any call. The report shows the run's cost when OpenRouter reports one.
 
 ### `test_topic_angle_skills.py`
 

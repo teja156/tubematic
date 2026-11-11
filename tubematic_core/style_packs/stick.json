@@ -17,15 +17,16 @@
   },
   "routing": {
     "best_for": [
-      "mechanisms: how a thing works, processes, architecture, data flow",
-      "walkthroughs with generic roles (the user, an attacker)"
+      "a process acted out step by step by generic people or roles (a kitchen team, a rescuer, the user and an attacker)",
+      "how a thing works when people, animals or cells carry the steps as roles"
     ],
     "avoid_for": [
       "stories that need recurring, recognisable characters"
     ],
     "signals": [
-      "the beats are animation-led diagrams and line art",
-      "people in the script are roles, not named individuals"
+      "people in the script are roles, not named individuals",
+      "each beat is someone doing one step of the process",
+      "the beats are animation-led diagrams and line art"
     ],
     "moods": [
       "playful",
