@@ -265,9 +265,10 @@ core mechanism (even with different wording), skip the candidate and note it was
 ## Run summary
 
 End the run with a short summary, after `mark_research_done`. It is the only record of what the
-run decided not to propose, so it is never skipped, even when nothing was filed. For each strategy:
+run decided not to propose, so it is never skipped, even when nothing was filed. The log keeps only
+the start of your final message, so put the dropped list first and keep every line short:
 
-- **Filed**: each topic's title, its angle kind and its two scores.
 - **Dropped**: every candidate you did not file, by name, with one reason each: no angle, angle
   score below 5, producibility below 5, a duplicate of an existing topic, or its domain is paused
   or expired. For mining, list what `not_filed` returned, with the reasons it gave.
+- **Filed**: each topic's title, its angle kind and its two scores.

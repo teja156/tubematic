@@ -103,11 +103,43 @@ def test_a_persons_own_topic_keeps_an_angle_it_is_given_whatever_its_score(db):
     ({"angle": SENTENCE, "angle_kind": "surprise"}, "not a kind"),
     ({"angle": "x" * 301, "angle_kind": "myth"}, "300"),
     ({"angle": SENTENCE, "angle_kind": "myth", "angle_score": 11}, "angle_score"),
-    ({"angle_score": 6}, "angle_score"),
 ])
 def test_a_malformed_angle_is_refused_on_any_strategy(db, kw, part):
     assert part in _file("manual", **kw)["error"]
     assert _count() == 0
+
+
+@pytest.mark.parametrize("kw", [
+    {"angle": None, "angle_kind": None, "angle_score": None},
+    {"angle": "", "angle_kind": "", "angle_score": None},
+    {"angle": "", "angle_kind": "", "angle_score": 3},
+])
+def test_a_persons_topic_with_no_angle_is_filed_however_none_is_said(db, kw, through_mcp):
+    """/tubematic-submit-new-job has a path for a topic with no angle, and a
+    model sends that as nulls, empty strings or a score for the angle it did
+    not find. None of them may refuse a person's topic."""
+    out, _ = through_mcp("create_video", project_id="dom", topic="A person's topic",
+                         strategy="manual", producibility_score=7, **kw)
+    assert "error" not in out, out
+    assert _angle(out["video_id"]) == ("", "", 0)
+
+
+def test_a_research_proposal_that_left_out_its_score_is_told_to_score_it(db):
+    """0 is unscored. Read as a weak angle, the refusal would tell the agent
+    to drop a subject it had an angle for."""
+    result = _file("trending", angle=SENTENCE, angle_kind="paradox")
+    assert "angle_score was not passed" in result["error"]
+    assert "run summary" not in result["error"]
+    assert "angle_score" in _file("trending")["error"]
+
+
+@pytest.mark.parametrize("spelled", ["Paradox", " paradox. ", "PARADOX"])
+def test_a_kind_is_matched_whatever_its_spelling_on_every_route(db, spelled):
+    result = _file("trending", angle=SENTENCE, angle_kind=spelled, angle_score=7)
+    assert result["angle_kind"] == "paradox"
+    _video("vid_2")
+    assert "error" not in server.update_video("vid_2", angle=SENTENCE, angle_kind=spelled)
+    assert _angle("vid_2")[1] == "paradox"
 
 
 def test_the_score_floor_is_checked_before_the_angle(db):
@@ -213,6 +245,41 @@ def test_only_naming_both_the_sentence_and_the_kind_can_clear_an_angle(db, kw):
     result = server.update_video("vid_1", **kw)
     assert "together" in result["error"]
     assert _angle() == ("The approved angle.", "myth", 7)
+
+
+def test_resending_the_approved_angle_with_a_script_is_not_refused(db):
+    """At TOPIC_APPROVED an angle is written only when there is none. The same
+    angle sent again beside other fields is nothing to write, and must not take
+    the rest of the call down with it."""
+    _video(status="TOPIC_APPROVED", angle=SENTENCE, kind="paradox", score=7)
+    result = server.update_video("vid_1", title="A new title", angle=SENTENCE,
+                                 angle_kind="paradox", angle_score=7)
+    assert "error" not in result, result
+    assert result["updated_fields"] == ["title"]
+    assert _angle() == (SENTENCE, "paradox", 7)
+    assert server.update_video("vid_1", angle=SENTENCE, angle_kind="paradox") == {
+        "video_id": "vid_1", "updated_fields": []}
+    # A different one is still refused.
+    assert "already has an angle" in server.update_video(
+        "vid_1", angle="Another.", angle_kind="myth")["error"]
+
+
+def test_an_angle_rides_with_the_other_bound_fields(db, monkeypatch):
+    """The angle shares the UPDATE's WHERE with the topic-only and agent
+    fields. Written together, every check and every parameter must line up,
+    and a status change landing in between must stop all of them."""
+    with server._conn() as con:
+        con.execute("INSERT INTO script_profiles (id, name, status, created_at, updated_at) "
+                    "VALUES ('p1', 'P', 'READY', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+    _video()
+    result = server.update_video("vid_1", angle=SENTENCE, angle_kind="paradox", angle_score=6,
+                                 script_profile_id="p1", visual_style="stick",
+                                 agent_effort="high")
+    assert "error" not in result, result
+    assert _angle() == (SENTENCE, "paradox", 6)
+    with server._conn() as con:
+        row = con.execute("SELECT script_profile_id, visual_style, agent_effort FROM videos").fetchone()
+    assert tuple(row) == ("p1", "stick", "high")
 
 
 def test_an_angle_write_does_not_need_a_weak_angle_to_pass_a_floor(db):
@@ -323,7 +390,7 @@ def test_a_mined_topic_is_filed_with_its_angle(db, monkeypatch):
 
 
 @pytest.mark.parametrize("spelled", ["Broken expectation", "broken-expectation",
-                                     " BROKEN_EXPECTATION "])
+                                     " BROKEN_EXPECTATION ", "broken expectation."])
 def test_a_mined_kind_is_matched_whatever_its_spelling(db, monkeypatch, spelled):
     """The model's reply cannot be asked for again, so a kind written as its
     label still files the topic that was paid for."""
@@ -354,11 +421,12 @@ def test_a_mined_score_is_brought_to_a_whole_number(db, monkeypatch, sent, store
     assert result["topics"][0]["angle_score"] == stored
 
 
-@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
-def test_a_score_that_is_not_a_number_does_not_end_the_run(db, monkeypatch, literal):
-    """json.loads reads NaN and Infinity. The run has paid for the reply by
-    then, so one bad score must cost that candidate and nothing else."""
-    bad = mined("How page tables map memory", angle_score=float(literal.replace("Infinity", "inf")))
+@pytest.mark.parametrize("score", [float("nan"), float("inf"), float("-inf"), 10 ** 400])
+def test_a_score_that_is_not_a_number_does_not_end_the_run(db, monkeypatch, score):
+    """json.loads reads NaN, Infinity and integers of any size. The run has
+    paid for the reply by then, so one bad score must cost that candidate and
+    nothing else."""
+    bad = mined("How page tables map memory", angle_score=score)
     result, _ = _mine(monkeypatch, [bad, mined("How a retry storm starts")])
     assert [t["topic"] for t in result["topics"]] == ["How a retry storm starts"]
     assert "below 5" in result["not_filed"][0]["reason"]

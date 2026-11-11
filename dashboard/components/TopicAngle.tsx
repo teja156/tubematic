@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { Video } from "@/lib/types";
 import {
   ANGLE_MAX_CHARS,
@@ -54,11 +54,17 @@ const field: React.CSSProperties = {
  *  it is read-only, and a video with no angle shows nothing.
  *
  *  The parent gives it a `key` of the video's id: the window stays mounted
- *  between videos, and a draft must not carry from one to the next. */
-export function TopicAngle({ video, editable, onSaved }: {
+ *  between videos, and a draft must not carry from one to the next.
+ *
+ *  `onEditingChange` tells the parent while the editor is open, so the window
+ *  can hold back Approve Topic: an approval does not carry the draft, and the
+ *  agent would then write its own angle over a topic the person meant to
+ *  give one. */
+export function TopicAngle({ video, editable, onSaved, onEditingChange }: {
   video: Video;
   editable: boolean;
   onSaved: () => void;
+  onEditingChange?: (open: boolean) => void;
 }) {
   const present = hasAngle(video);
   const show = present || editable;
@@ -71,6 +77,21 @@ export function TopicAngle({ video, editable, onSaved }: {
   const [kind, setKind] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const countId = useId();
+  const kindHintId = useId();
+
+  // The video left Topic Proposed (approved elsewhere, or by Auto Pilot):
+  // the API would refuse the draft, so the editor closes.
+  useEffect(() => {
+    if (!editable) setEditing(false);
+  }, [editable]);
+
+  useEffect(() => {
+    onEditingChange?.(editing);
+  }, [editing, onEditingChange]);
+  // Closed on the way out too, so a window that moves to another video does
+  // not keep Approve held back for one whose editor is gone.
+  useEffect(() => () => onEditingChange?.(false), [onEditingChange]);
 
   useEffect(() => {
     if (!show) return;
@@ -96,7 +117,8 @@ export function TopicAngle({ video, editable, onSaved }: {
   const length = angleLength(text);
   const tooLong = length > ANGLE_MAX_CHARS;
   // An empty sentence saves as "no angle"; a sentence needs its kind.
-  const canSave = !saving && !tooLong && (trimmed === "" || kind !== "");
+  const needsKind = trimmed !== "" && kind === "";
+  const canSave = !saving && !tooLong && !needsKind;
 
   const save = async () => {
     if (!canSave) return;
@@ -145,6 +167,7 @@ export function TopicAngle({ video, editable, onSaved }: {
             type="button"
             data-testid="topic-angle-edit"
             onClick={startEditing}
+            aria-label={present ? "Edit angle" : "Add angle"}
             style={{ ...button, marginLeft: "auto" }}
           >
             {present ? "Edit" : "Add angle"}
@@ -178,11 +201,14 @@ export function TopicAngle({ video, editable, onSaved }: {
               data-testid="topic-angle-input"
               value={text}
               onChange={(e) => setText(e.target.value)}
+              aria-invalid={tooLong}
+              aria-describedby={countId}
               rows={3}
               style={{ ...field, resize: "vertical", lineHeight: 1.5, borderColor: tooLong ? "var(--red)" : "var(--border-2)" }}
             />
           </label>
           <div
+            id={countId}
             data-testid="topic-angle-count"
             style={{ ...caption, color: tooLong ? "var(--red)" : "var(--dim)" }}
           >
@@ -194,7 +220,9 @@ export function TopicAngle({ video, editable, onSaved }: {
               data-testid="topic-angle-kind-select"
               value={kind}
               onChange={(e) => setKind(e.target.value)}
-              style={field}
+              aria-invalid={needsKind}
+              aria-describedby={needsKind ? kindHintId : undefined}
+              style={{ ...field, borderColor: needsKind ? "var(--red)" : "var(--border-2)" }}
             >
               <option value="">Choose a kind</option>
               {kindOptions.map((k) => (
@@ -207,14 +235,19 @@ export function TopicAngle({ video, editable, onSaved }: {
               {kinds?.find((k) => k.id === kind)?.means}
             </div>
           )}
+          {needsKind && (
+            <div id={kindHintId} data-testid="topic-angle-needs-kind" style={{ fontSize: 12, color: "var(--dim)" }}>
+              Choose the angle&apos;s kind to save it.
+            </div>
+          )}
           {kindsFailed && (
-            <div data-testid="topic-angle-kinds-failed" style={{ fontSize: 12, color: "var(--red)" }}>
+            <div role="alert" data-testid="topic-angle-kinds-failed" style={{ fontSize: 12, color: "var(--red)" }}>
               The list of kinds could not be loaded, so a new kind cannot be chosen. Reload the page
               and try again.
             </div>
           )}
           {error && (
-            <div data-testid="topic-angle-error" style={{ fontSize: 12, color: "var(--red)" }}>
+            <div role="alert" data-testid="topic-angle-error" style={{ fontSize: 12, color: "var(--red)" }}>
               {error}
             </div>
           )}

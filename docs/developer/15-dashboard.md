@@ -494,7 +494,9 @@ Effort:
   whitespace collapsed, counted in code points. Past that status the block is read-only, and a
   video with no angle shows none. The
   component is keyed by the video's id, because the window stays mounted between videos and a
-  draft must not move to the next one.
+  draft must not move to the next one. While the editor is open, **Approve Topic** is disabled with
+  a line saying why, because the approval does not carry the draft. The editor closes when the
+  video leaves `TOPIC_PROPOSED`.
 - The sidebar holds the actions for the video's status (including Delete), a **Published to**
   section with a link to each live post, metadata (with the angle score under the topic's score),
   the cost breakdown (`CostBreakdown.tsx`) and the AI review feedback.

@@ -382,6 +382,9 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const [cancellingSchedule, setCancellingSchedule] = useState(false);
   const [cancelScheduleError, setCancelScheduleError] = useState("");
   const [switchingStyle, setSwitchingStyle] = useState(false);
+  // The Topic tab's angle editor is open: Approve Topic waits until it is
+  // saved or cancelled, since the approval does not carry the draft.
+  const [angleEditorOpen, setAngleEditorOpen] = useState(false);
   const [switchStyleError, setSwitchStyleError] = useState("");
   const [retryingAgent, setRetryingAgent] = useState(false);
   const [retryAgentError, setRetryAgentError] = useState("");
@@ -956,6 +959,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                     video={video}
                     editable={!archived && video.status === "TOPIC_PROPOSED"}
                     onSaved={() => refreshVideo(video.id)}
+                    onEditingChange={setAngleEditorOpen}
                   />
                   <p
                     data-testid="video-topic-body"
@@ -1370,7 +1374,12 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                       )}
                       {voicePickers}
                       {agentPickers}
-                      <ActionBtn fullWidth variant="primary" onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
+                      {angleEditorOpen && (
+                        <div data-testid="approve-waits-for-angle" style={{ fontSize: 12, color: "var(--dim)", lineHeight: 1.5 }}>
+                          Save or cancel the angle on the Topic tab first.
+                        </div>
+                      )}
+                      <ActionBtn fullWidth variant="primary" disabled={angleEditorOpen} onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
                         Approve Topic
                       </ActionBtn>
                       <ActionBtn fullWidth variant="danger" onClick={() => { onAction(video.id, "reject-topic", video); onClose(); }}>

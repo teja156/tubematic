@@ -311,6 +311,8 @@ Covers the [topic's angle](../02-pipeline.md#topic-angle) over HTTP: `GET /angle
   video and no `manual` domain behind. A `null` score on `POST /videos` reads as unscored.
 - The edit works on a video whose style takes no mascot (Under the Hood, Cartoon 3D), alone and
   together with the approval.
+- An edit of the angle alone leaves `updated_at` as it was, so the worker does not announce the
+  topic again. A kind is stored by its id whatever its spelling.
 
 Trap: the script writer reads the angle from the moment a topic is approved. A test lands an
 approval between the route's status read and its `UPDATE`, and the edit must write nothing. It was

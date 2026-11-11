@@ -1652,9 +1652,9 @@ def create_video(
     producibility_score: int,
     title: str = "",
     voice_id: str = "",
-    angle: str = "",
-    angle_kind: str = "",
-    angle_score: int = 0,
+    angle: str | None = None,
+    angle_kind: str | None = None,
+    angle_score: int | None = None,
 ) -> dict:
     """Propose a new video topic. Creates a TOPIC_PROPOSED record for human review.
 
@@ -1702,8 +1702,15 @@ def create_video(
     # A research proposal needs an angle; a person's own topic does not
     # (TMDEV-214). After the producibility floor, so a topic the pipeline
     # cannot draw is refused for that, whatever its angle.
-    angle = tangles.clean(angle)
-    angle_kind = angle_kind.strip() if isinstance(angle_kind, str) else angle_kind
+    # Left out and null both mean none: a caller filing a topic with no angle
+    # sends either.
+    angle = tangles.clean("" if angle is None else angle)
+    angle_kind = tangles.clean_kind("" if angle_kind is None else angle_kind)
+    angle_score = 0 if angle_score is None else angle_score
+    if strategy == "manual" and angle == "" and angle_kind == "":
+        # A person's topic with no angle is filed as that, whatever score the
+        # caller gave the angle it did not find.
+        angle_score = 0
     angle_err = tangles.angle_error(angle, angle_kind, angle_score, required=strategy != "manual")
     if angle_err:
         return {"error": angle_err}
@@ -2654,6 +2661,7 @@ def update_video(
     # The angle is one write: the sentence and its kind together, the score
     # with them or reset. Its status window is checked further down.
     angle_write = angle is not None or angle_kind is not None or angle_score is not None
+    angle_noop = False
     if angle_write:
         # Both named, every time: a call carrying the score alone, or one of
         # the pair, must not read as "clear the angle".
@@ -2662,11 +2670,25 @@ def update_video(
                              "sentence and its kind (with its score), or \"\" for both to "
                              "remove the angle"}
         angle = tangles.clean(angle)
-        angle_kind = angle_kind.strip() if isinstance(angle_kind, str) else angle_kind
+        angle_kind = tangles.clean_kind(angle_kind)
+        if angle == "" and angle_kind == "":
+            angle_score = None      # removing the angle: there is nothing to score
         angle_err = tangles.angle_error(angle, angle_kind,
                                         0 if angle_score is None else angle_score)
         if angle_err:
             return {"error": angle_err}
+        _init_db()
+        angle_row = _angle_window_row(video_id)
+        if not angle_row:
+            return {"error": f"Video not found: {video_id}"}
+        if angle_row["archived_at"]:
+            return _archived_error(video_id, angle_row["archived_at"])
+        if (angle_row["status"] == "TOPIC_APPROVED" and angle_row["angle"]
+                and (angle_row["angle"], angle_row["angle_kind"]) == (angle, angle_kind)):
+            # The angle the video already has, sent again with other fields
+            # (a script, say): nothing to write, and no reason to refuse them.
+            angle_write = False
+            angle_noop = True
     if formula_id is not None or hooks is not None:
         if script_segments is None:
             return {"error": "formula_id and hooks describe a script: pass them in the call "
@@ -2898,6 +2920,8 @@ def update_video(
         if angle_score is not None:
             fields["angle_score"] = angle_score
     if not fields:
+        if angle_noop:
+            return {"video_id": video_id, "updated_fields": []}
         return {"error": "No fields to update"}
     # The per-video choices freeze in two groups (TMDEV-110). Keep in sync:
     # renderer/api/pipeline.py's patch_video. The topic group is asked once, at
@@ -2985,11 +3009,7 @@ def update_video(
     # person saw at the topic and approved.
     angle_bound = False
     if angle_write:
-        row = _angle_window_row(video_id)
-        if not row:
-            return {"error": f"Video not found: {video_id}"}
-        if row["archived_at"]:
-            return _archived_error(video_id, row["archived_at"])
+        row = angle_row     # read once, above: the UPDATE's WHERE covers what follows it
         if checked_status is not None and row["status"] != checked_status:
             return {"error": f"The video moved from {checked_status} to {row['status']} while "
                              "the call was in flight — check get_video"}
@@ -3147,8 +3167,8 @@ _ANGLE_ALREADY_SET = ("This video already has an angle, approved with its topic;
 def _angle_window_row(video_id: str):
     """The row update_video checks before it writes a topic's angle."""
     with _conn() as con:
-        return con.execute("SELECT status, angle, archived_at FROM videos WHERE id = ?",
-                           (video_id,)).fetchone()
+        return con.execute("SELECT status, angle, angle_kind, archived_at FROM videos "
+                           "WHERE id = ?", (video_id,)).fetchone()
 
 
 def _style_choice_row(video_id: str):
@@ -5472,22 +5492,24 @@ def _candidate_score(candidate: dict):
 def _candidate_angle(candidate: dict) -> tuple:
     """A mined candidate's (angle, angle_kind, angle_score), each brought to
     the type create_video takes; anything unusable reads as empty or 0. The
-    kind is matched loosely ("Broken expectation" is broken_expectation): the
-    model's reply cannot be asked for again, so a spelling is not worth a
-    topic that was paid for."""
+    kind goes through angles.clean_kind, as every kind does, and a score of
+    any odd shape becomes a whole number or 0: the model's reply cannot be
+    asked for again, so neither is worth a topic that was paid for."""
     angle = candidate.get("angle")
     kind = candidate.get("angle_kind")
     score = candidate.get("angle_score", 0)
-    if isinstance(score, str):
-        try:
+    try:
+        if isinstance(score, str):
             score = float(score)
-        except ValueError:
+        if isinstance(score, bool) or not isinstance(score, (int, float)):
             score = 0
-    if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score):
+        # float() also turns away an integer too large to be a score at all.
+        score = round(float(score)) if math.isfinite(float(score)) else 0
+    except (ValueError, OverflowError):
         score = 0
     return (tangles.clean(angle) if isinstance(angle, str) else "",
-            re.sub(r"[\s-]+", "_", kind.strip().lower()) if isinstance(kind, str) else "",
-            min(max(round(score), 0), tangles.ANGLE_SCORE_MAX))
+            tangles.clean_kind(kind) if isinstance(kind, str) else "",
+            min(max(score, 0), tangles.ANGLE_SCORE_MAX))
 
 
 def _mining_angle_reason(angle: str, kind: str, score: int) -> str:

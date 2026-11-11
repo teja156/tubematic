@@ -96,11 +96,26 @@ def test_required_refuses_a_missing_angle_and_says_not_to_invent_one():
     assert "run summary" in err
 
 
-@pytest.mark.parametrize("score", [0, 4])
+@pytest.mark.parametrize("score", [1, 4])
 def test_required_refuses_a_weak_angle(score):
     err = ta.angle_error(GOOD, "myth", score, required=True)
     assert f"below {ta.ANGLE_MIN_SCORE}" in err
     assert "run summary" in err
+
+
+def test_required_asks_for_a_score_that_was_left_out():
+    """0 is unscored. Read as weak, it would have the agent drop a subject
+    that has an angle."""
+    err = ta.angle_error(GOOD, "myth", 0, required=True)
+    assert "angle_score was not passed" in err
+    assert "run summary" not in err
+
+
+@pytest.mark.parametrize("raw, kind", [("Paradox", "paradox"), ("Broken expectation.", "broken_expectation"),
+                                       ("design-question", "design_question"), (" MYTH ", "myth")])
+def test_clean_kind_brings_a_spelling_to_its_id(raw, kind):
+    assert ta.clean_kind(raw) == kind
+    assert ta.clean_kind(None) is None
 
 
 def test_not_required_takes_any_score():

@@ -14,6 +14,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { VideoModal } from "@/components/VideoModal";
+import { TopicAngle } from "@/components/TopicAngle";
 import { angleKindLabel, angleScoreLabel, hasAngle } from "@/lib/angles";
 import type { Video } from "@/lib/types";
 
@@ -186,6 +187,57 @@ describe("VideoModal — the topic's angle", () => {
     fireEvent.click(screen.getByTestId("topic-angle-save"));
     await waitFor(() => expect(screen.getByTestId("topic-angle-error")).toHaveTextContent("TOPIC_PROPOSED"));
     expect(screen.getByTestId("topic-angle-input")).toHaveValue("A new sentence.");
+  });
+
+  it("holds back Approve Topic while the angle is being edited", async () => {
+    renderModal(makeVideo(ANGLE));
+    await settle();
+    const approve = screen.getByRole("button", { name: "Approve Topic" });
+    expect(approve).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Edit angle" }));
+    expect(approve).toBeDisabled();
+    expect(screen.getByTestId("approve-waits-for-angle")).toHaveTextContent("Save or cancel the angle");
+    fireEvent.click(screen.getByTestId("topic-angle-cancel"));
+    expect(approve).not.toBeDisabled();
+    expect(screen.queryByTestId("approve-waits-for-angle")).toBeNull();
+  });
+
+  it("says a sentence needs its kind, and marks the picker", async () => {
+    renderModal(makeVideo());
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Add angle" }));
+    fireEvent.change(screen.getByTestId("topic-angle-input"), { target: { value: "A sentence." } });
+    expect(screen.getByTestId("topic-angle-needs-kind")).toHaveTextContent("Choose the angle's kind");
+    expect(screen.getByTestId("topic-angle-kind-select")).toHaveAttribute("aria-invalid", "true");
+    fireEvent.change(screen.getByTestId("topic-angle-input"), { target: { value: "x".repeat(301) } });
+    expect(screen.getByTestId("topic-angle-input")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("closes the editor when the video leaves Topic Proposed", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => KINDS }) as Response));
+    const onEditingChange = vi.fn();
+    const video = makeVideo(ANGLE);
+    const { rerender } = render(
+      <TopicAngle video={video} editable onSaved={vi.fn()} onEditingChange={onEditingChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit angle" }));
+    expect(screen.getByTestId("topic-angle-input")).toBeInTheDocument();
+    expect(onEditingChange).toHaveBeenLastCalledWith(true);
+    // A poll brings the video back approved (Auto Pilot, another tab): the
+    // API would refuse the draft.
+    rerender(<TopicAngle video={{ ...video, status: "TOPIC_APPROVED" }} editable={false}
+                         onSaved={vi.fn()} onEditingChange={onEditingChange} />);
+    expect(screen.queryByTestId("topic-angle-input")).toBeNull();
+    expect(onEditingChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("releases Approve when it goes away mid-edit", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => KINDS }) as Response));
+    const onEditingChange = vi.fn();
+    const { unmount } = render(
+      <TopicAngle video={makeVideo(ANGLE)} editable onSaved={vi.fn()} onEditingChange={onEditingChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit angle" }));
+    unmount();
+    expect(onEditingChange).toHaveBeenLastCalledWith(false);
   });
 
   it("cancel drops the draft", async () => {

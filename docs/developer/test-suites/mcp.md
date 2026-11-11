@@ -164,19 +164,24 @@ Covers the [topic's angle](../02-pipeline.md#topic-angle) in `create_video`, `ge
 `update_video` and `mine_youtube_topics`.
 
 - `create_video` stores a research proposal's angle, refuses one with no angle or with an angle
-  scoring under 5, and files nothing in either case. A `manual` topic is accepted with no angle,
-  and keeps an angle of any score. A malformed angle is refused on every strategy.
+  scoring under 5, and files nothing in either case. A left-out score is refused with a request for
+  it. A `manual` topic is accepted with no angle, however the agent says none (nulls through the
+  real MCP client, empty strings, or a score for an angle it did not find), and keeps an angle of
+  any score. A malformed angle is refused on every strategy, and a kind is matched whatever its
+  spelling.
 - `get_video` returns the angle and `angle_formula`, the formula the kind points to. A video with
   no angle reads as empty, and a topic filed before angles existed still approves.
 - `update_video` writes the angle at `TOPIC_PROPOSED` and `REVISION_REQUESTED`, and at
   `TOPIC_APPROVED` only while the video has none. It refuses the write at every later status. A
   rewrite sent with no score stores 0. A call with the score alone, or with one of the sentence and
-  the kind, is refused and leaves the angle as it was.
+  the kind, is refused and leaves the angle as it was. The approved angle sent again with other
+  fields is not a write and does not stop them. An angle written with a profile, a style and an
+  effort in one call stores all four.
 - A mined candidate with no angle, an unknown kind or an angle scoring under 5 comes back in
   `not_filed` with the reason. The prompt carries the kinds and the score from
   `tubematic_core.angles`. The cap goes to the candidates with the highest two scores together. A
   kind written as its label, or with a hyphen, files under its id. A fractional or quoted score is
-  brought to a whole number, and a `NaN` or `Infinity` score costs that candidate only.
+  brought to a whole number, and a `NaN`, `Infinity` or huge integer score costs that candidate only.
 
 Trap: the write at `TOPIC_APPROVED` fills a missing angle when the agent picks a video up. Without
 `angle = ''` in the `UPDATE`'s `WHERE`, it could replace an angle a person read and approved. A test

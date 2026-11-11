@@ -276,12 +276,15 @@ is `manual` (see [Domain pause](02-pipeline.md#domain-pause) and
 The three angle arguments are the [topic's angle](02-pipeline.md#topic-angle). The tool refuses:
 
 - a `curriculum`, `trending` or `mining` topic with no `angle` and `angle_kind`, or with an
-  `angle_score` below 5. The message tells the agent to leave the subject out and name it in its
-  run summary.
+  `angle_score` from 1 to 4. The message tells the agent to leave the subject out and name it in
+  its run summary. An `angle_score` of 0 or left out is refused with a message asking for the score,
+  because 0 means unscored and an agent that forgot the argument has an angle.
 - on any `strategy`: `angle` or `angle_kind` without the other, an `angle_kind` that is not a kind,
   an `angle` over 300 characters, and an `angle_score` that is not a whole number from 0 to 10.
 
-A `manual` topic may carry no angle, and its angle may have any score.
+A `manual` topic may carry no angle, and its angle may have any score. `None` in any of the three
+reads as absent, and a `manual` topic with no sentence and no kind is stored with score 0 whatever
+score was sent. A kind is stored by its id whatever its spelling (`tubematic_core.angles.clean_kind`).
 
 What a new video starts with:
 
@@ -329,7 +332,7 @@ is a partial update. An archived video returns `video_archived`.
 
 The topic's angle:
 
-- `angle` and `angle_kind` are passed together, with the same shape rules as `create_video`. No
+- `angle` and `angle_kind` are passed together, in every call that carries any of the three. No
   score floor applies. A call with no `angle_score` stores 0, because the stored score described
   the earlier sentence. `""` for both removes the angle.
 - The write is allowed at `TOPIC_PROPOSED`, at `REVISION_REQUESTED`, and at `TOPIC_APPROVED` while
@@ -337,6 +340,8 @@ The topic's angle:
   makes when it picks up a video whose topic came without one.
 - The `UPDATE` repeats the status in its `WHERE`, and at `TOPIC_APPROVED` also `angle = ''`. A
   video that moved on, or that got an angle meanwhile, is left as it is and the call says why.
+- At `TOPIC_APPROVED`, sending the angle the video already has is not a write: the other fields of
+  the call are applied, and `updated_fields` leaves the angle out.
 
 Script and voice:
 
@@ -1100,8 +1105,9 @@ The tool enforces the mining cap itself:
   kinds and the score signals in it are `tubematic_core.angles.prompt_text()`, the text the
   topic-research skill carries.
 - Candidates are filed strongest first, ranked by `producibility_score` plus `angle_score`.
-- A candidate's `angle_kind` is matched without regard to case, spaces or hyphens, so
-  `Broken expectation` files as `broken_expectation`. Gemini's reply cannot be asked for again.
+- A candidate's kind goes through `clean_kind` like any other, and a score that is fractional,
+  quoted, too large or not a number becomes a whole number or 0. Gemini's reply cannot be asked
+  for again, so an odd shape costs at most that one candidate.
 - A candidate is not filed, and comes back in `not_filed` with its reason, when it repeats an
   existing topic (70% or more of its significant words in common, after dropping stop-words and
   plurals), scores below 5, has no angle, has an angle that is malformed or scores below 5, or

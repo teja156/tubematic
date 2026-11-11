@@ -16,6 +16,8 @@ dashboard reads the kinds through GET /angle-kinds.
 
 Free of Flask and of I/O beyond what importing formulas does.
 """
+import re
+
 from . import formulas as tformulas
 
 # The longest an angle sentence may be: one sentence a person reads beside
@@ -124,6 +126,17 @@ def clean(angle):
     return " ".join(angle.split()) if isinstance(angle, str) else angle
 
 
+def clean_kind(kind):
+    """An angle kind brought to its id: lower case, spaces and hyphens as
+    underscores, anything else dropped, so "Broken expectation." reads as
+    broken_expectation. Any other type is returned as it came, for
+    angle_error to refuse. Both servers pass every kind they are sent
+    through this, so the one spelling rule holds wherever a kind arrives."""
+    if not isinstance(kind, str):
+        return kind
+    return re.sub(r"[^a-z_]", "", re.sub(r"[\s-]+", "_", kind.strip().lower()))
+
+
 def formula_for(kind) -> str:
     """The formula an angle kind is the first choice for, or '' for no kind
     or an unknown one."""
@@ -148,9 +161,9 @@ def angle_error(angle, kind, score=0, *, required: bool = False) -> str | None:
                 f"(0 = unscored), got {score!r}")
     if not angle and not kind:
         if required:
-            return ("A research proposal needs an angle and an angle_kind: one sentence saying "
-                    "what the opening will use, and its kind (one of: "
-                    f"{', '.join(ANGLE_KINDS)}). {_NO_ANGLE}")
+            return ("A research proposal needs angle, angle_kind and angle_score: one sentence "
+                    "saying what the opening will use, its kind (one of: "
+                    f"{', '.join(ANGLE_KINDS)}) and the score you gave it. {_NO_ANGLE}")
         if score:
             return "angle_score describes an angle: pass it with angle and angle_kind"
         return None
@@ -162,6 +175,12 @@ def angle_error(angle, kind, score=0, *, required: bool = False) -> str | None:
     if len(angle) > ANGLE_MAX_CHARS:
         return (f"angle is {len(angle)} characters; the limit is {ANGLE_MAX_CHARS} "
                 "(one sentence)")
+    if required and score == 0:
+        # 0 means unscored. Reading it as a weak angle would tell an agent
+        # that left the argument out to drop a subject it had an angle for.
+        return ("angle_score was not passed: score this angle with the topic-research skill's "
+                f"rubric and pass the number. A research proposal needs {ANGLE_MIN_SCORE} or "
+                "more.")
     if required and score < ANGLE_MIN_SCORE:
         return (f"angle_score {score} is below {ANGLE_MIN_SCORE}: this angle is too weak to "
                 f"propose. {_NO_ANGLE}")

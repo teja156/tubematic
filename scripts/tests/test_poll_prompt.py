@@ -73,8 +73,7 @@ def test_build_research_prompt_asks_for_an_angle_and_a_list_of_what_was_dropped(
     with patch("poll._fetch_settings", return_value={}), \
          patch("poll._fetch_mining_urls", return_value=[]):
         prompt = build_research_prompt(["curriculum", "trending"])
-    for field in ("angle", "angle_kind", "angle_score"):
-        assert field in prompt
+    assert "with its angle,\n     angle_kind and angle_score" in prompt
     assert "no honest angle is not proposed" in prompt
     assert "both must be 5 or more" in prompt
     assert "every candidate you" in prompt and "dropped" in prompt
@@ -84,11 +83,15 @@ def test_the_pipeline_prompt_lets_a_session_read_the_research_skill_for_an_angle
     """A scripting session fills a missing angle with the research skill's
     rules (TMDEV-214). The prompt also says "do not research new topics", so
     it has to say that reading those rules for this video is something else."""
-    prompt = build_pipeline_prompt("vid_1", "TOPIC_APPROVED")
-    forbid = prompt.index("Do not research new topics during this run.")
-    allow = prompt.index("is not research")
-    assert forbid < allow
-    assert "this video's topic text alone" in prompt
+    for status in ("TOPIC_APPROVED", "REVISION_REQUESTED"):
+        prompt = build_pipeline_prompt("vid_1", status)
+        forbid = prompt.index("Do not research new topics during this run.")
+        allow = prompt.index("is not research")
+        assert forbid < allow
+        assert "this video's topic text alone" in prompt
+    # The stages that never touch the angle are not told about it.
+    for status in ("VOICING", "VOICE_READY"):
+        assert "is not research" not in build_pipeline_prompt("vid_1", status)
 
 
 def test_fetch_settings_returns_empty_on_error():

@@ -125,7 +125,7 @@ Click a card or a row to open the video. The left side has tabs:
 
 | Tab | Shows |
 |---|---|
-| **Topic** | The topic's [angle](03-using-tubematic.md#the-angle) with its kind and score, then the full topic. At Topic Proposed, **Edit** changes the angle and **Add angle** gives one to a topic that has none |
+| **Topic** | The topic's [angle](03-using-tubematic.md#the-angle) with its kind and score, then the full topic. At Topic Proposed, **Edit** changes the angle and **Add angle** gives one to a topic that has none. **Approve Topic** waits until you save or cancel the edit |
 | **Script** | The script, segment by segment, with a note on what each segment shows. Above it are the script's formula, the openings the agent considered and any script warnings (see [Read and approve scripts](03-using-tubematic.md#3-read-and-approve-scripts)). Appears once a script exists |
 | **Video** | The player. Appears once the video is rendered |
 | **Publishing Results** | Each account the video was posted to, with its status, link and any error |

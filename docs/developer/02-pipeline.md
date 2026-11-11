@@ -380,7 +380,7 @@ A topic carries an angle: what it gives the video's opening. Three columns hold 
 | Column | Holds |
 |---|---|
 | `videos.angle` | One sentence, at most 300 characters (`ANGLE_MAX_CHARS`), saying what the opening will use. `''` means no angle |
-| `videos.angle_kind` | The angle's kind, a key of `ANGLE_KINDS`, or `''`. Stored together with `angle`: both or neither |
+| `videos.angle_kind` | The angle's kind, a key of `ANGLE_KINDS`, or `''`. Stored together with `angle`: both or neither. Every route passes a sent kind through `clean_kind`, so `Broken expectation` is stored as `broken_expectation` |
 | `videos.angle_score` | How strong the angle is, 0 to 10. 0 means unscored |
 
 `tubematic_core/angles.py` owns the rules. `ANGLE_KINDS` lists the ten kinds, each with a label,
@@ -396,13 +396,17 @@ Who writes the angle:
 |---|---|---|
 | Research (curriculum, trending, mining) | `create_video` | Required. A proposal with no angle, or an angle scoring under 5 (`ANGLE_MIN_SCORE`), is refused |
 | A person's own topic | `create_video` with `strategy="manual"`, `POST /videos/manual` | Optional, and the score has no floor |
-| A person, on the dashboard | `PATCH /videos/<id>` | At `TOPIC_PROPOSED` only. A changed angle resets `angle_score` to 0 in the same statement |
+| A person, on the dashboard | `PATCH /videos/<id>` | At `TOPIC_PROPOSED` only. A changed angle resets `angle_score` to 0 in the same statement. A request that edits only the angle leaves `updated_at` as it was |
 | The agent | `update_video` | At `TOPIC_PROPOSED`, at `REVISION_REQUESTED`, and at `TOPIC_APPROVED` while the stored angle is empty |
 
 The write at `TOPIC_APPROVED` is how a video with no angle gets one: the operator skill looks for
 an angle before the style and the script, and records it or comments that the topic has none. The
 `UPDATE` carries `angle = ''` in its `WHERE`, so that write cannot replace an angle a person
-approved with the topic.
+approved with the topic. Sending the angle the video already has, beside other fields, writes
+nothing for the angle and lets the other fields through.
+
+`updated_at` stays put on an angle-only edit because the worker announces a topic on Discord when
+its `status@updated_at` changes: an edit that moved it would announce the same topic again.
 
 `POST /videos` stores the three fields when they are sent and checks their shape. It does not
 require them, for the same reason it enforces no score floor: the route seeds test and tool data,

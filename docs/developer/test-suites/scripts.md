@@ -122,7 +122,7 @@ Covers `build_research_prompt`, `build_pipeline_prompt` and `build_mascot_prompt
   no stage would never be dispatched.
 - The pipeline prompt forbids researching new topics and then says that finding the angle of the
   video's own topic is something else, since a scripting session reads the topic-research skill's
-  rules to fill a missing angle.
+  rules to fill a missing angle. It says so at `TOPIC_APPROVED` and `REVISION_REQUESTED` only.
 - The mascot prompt names the builder skill, the mascot and the three build tools, and tells the
   agent not to advance any video.
 - The user preferences block names the stage of the run, limits itself to that stage and says it
@@ -735,7 +735,8 @@ Covers what the agent is told about a [topic's angle](../02-pipeline.md#topic-an
   renders, and `--check` notices a hand edit.
 - The research skill passes `angle`, `angle_kind` and `angle_score` to `create_video`, drops a
   subject with no angle, never invents one, and ends with a run summary that names what it
-  dropped. Its examples name no install's domains.
+  dropped, with the dropped list first because the poller logs only the start of the agent's
+  final message. Its examples name no install's domains.
 - The operator skill fills a missing angle before the style and the script, leaves an approved
   angle alone, and lets a topic revision rewrite it.
 - The script-writing skill reads the angle and `angle_formula`, and still works with no angle.

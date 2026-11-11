@@ -104,6 +104,27 @@ def test_a_person_edits_the_angle_at_topic_proposed_and_the_score_goes(client, d
     assert res.get_json()["angle_score"] == 0
 
 
+def test_an_angle_only_edit_does_not_move_the_video(client, db_path):
+    """The worker announces a topic when its status@updated_at is new. An edit
+    that bumped updated_at would announce the same topic a second time."""
+    _video(db_path)
+    client.patch("/videos/vid_1", json={"angle": SENTENCE, "angle_kind": "paradox"})
+    con = sqlite3.connect(db_path)
+    assert con.execute("SELECT updated_at FROM videos").fetchone()[0] == NOW
+    con.close()
+    client.patch("/videos/vid_1", json={"angle": SENTENCE, "angle_kind": "paradox", "title": "T"})
+    con = sqlite3.connect(db_path)
+    assert con.execute("SELECT updated_at FROM videos").fetchone()[0] != NOW
+    con.close()
+
+
+def test_a_kind_is_matched_whatever_its_spelling(client, db_path):
+    _video(db_path)
+    res = client.patch("/videos/vid_1", json={"angle": SENTENCE, "angle_kind": "Broken expectation"})
+    assert res.status_code == 200
+    assert _angle(db_path)[1] == "broken_expectation"
+
+
 def test_saving_the_same_angle_keeps_its_score(client, db_path):
     _video(db_path, angle=SENTENCE, kind="paradox", score=8)
     res = client.patch("/videos/vid_1", json={"angle": SENTENCE, "angle_kind": "paradox"})

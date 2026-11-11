@@ -944,9 +944,14 @@ def build_pipeline_prompt(video_id: str, status: str, preferences: str = "") -> 
         "re-voice after a pronunciation fix: the original script approval covers it.",
         "",
         "Do not research new topics during this run.",
-        "Finding the angle of this video's own topic, where the operator skill asks for one,",
-        "is not research: read the topic-research skill's section on the angle and work from",
-        "this video's topic text alone.",
+    ]
+    if status in ("TOPIC_APPROVED", "REVISION_REQUESTED"):
+        lines += [
+            "Finding the angle of this video's own topic, where the operator skill asks for one,",
+            "is not research: read the topic-research skill's section on the angle and work from",
+            "this video's topic text alone.",
+        ]
+    lines += [
         "",
         *_preferences_block(preferences, f"advancing one video ({stage})"),
         "IMPORTANT: Skip the operator skill setup checks (docker/curl health checks).",

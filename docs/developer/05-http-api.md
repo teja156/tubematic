@@ -467,7 +467,9 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   `angle_kind` is a kind from [`GET /angle-kinds`](#get-angle-kinds). `""` for both removes the
   angle. A changed sentence or kind sets `angle_score` to 0 in the same `UPDATE`, because the score
   was the agent's judgement of the words it replaced; the same angle sent again keeps its score.
-  `angle_score` itself is not writable here.
+  `angle_score` itself is not writable here. A kind is stored by its id whatever its spelling
+  (`Broken expectation` becomes `broken_expectation`). A request that carries only the angle does
+  not change `updated_at` (see [Topic angle](02-pipeline.md#topic-angle)).
 
 #### Guards
 

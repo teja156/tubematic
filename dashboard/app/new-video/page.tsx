@@ -215,6 +215,7 @@ export default function NewVideoPage() {
                 data-testid="new-video-angle"
                 value={angle}
                 onChange={(e) => setAngle(e.target.value)}
+                aria-invalid={angleLen > ANGLE_MAX_CHARS}
                 rows={2}
                 placeholder="The backup reported success for a year while it copied an empty folder"
                 style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5, borderColor: angleLen > ANGLE_MAX_CHARS ? "var(--red)" : "var(--border-2)" }}
@@ -226,6 +227,7 @@ export default function NewVideoPage() {
                 value={angleKind}
                 onChange={(e) => setAngleKind(e.target.value)}
                 disabled={angleText === ""}
+                aria-invalid={angleText !== "" && angleKind === ""}
                 style={{ ...inputStyle, borderColor: angleText !== "" && angleKind === "" ? "var(--red)" : "var(--border-2)" }}
               >
                 <option value="">{angleText === "" ? "Choose once the angle is written" : "Choose the angle's kind"}</option>

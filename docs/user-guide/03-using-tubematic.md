@@ -111,8 +111,9 @@ A video you create on the **New Video** page is not scored. It is filed under a 
 An angle is one sentence, up to 300 characters, that says what a video's opening will use: the
 contradiction, the failure, the wrong belief or the incident that makes the topic worth watching.
 Research takes it from what it already read for the topic and files it with the topic. A subject
-that offers no angle is left out. The agent ends each research run with a summary that names every
-subject it left out and why; the **Logs** page shows it with the agent's output.
+that offers no angle is left out. The agent ends each research run with a summary that lists the
+subjects it left out, with the reason for each, before the topics it filed. The **Logs** page shows
+it with the agent's output.
 
 Every angle has a kind. The kind tells the script writer which [script formula](#script-formulas)
 to start from.

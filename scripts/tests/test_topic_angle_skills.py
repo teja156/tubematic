@@ -71,9 +71,11 @@ def test_research_drops_a_subject_with_no_angle_and_never_invents_one():
 def test_research_ends_with_a_summary_that_names_what_it_dropped():
     text = _skill("tubematic-topic-research")
     summary = text[text.index("## Run summary"):]
-    assert "Dropped" in summary
     assert "no angle" in summary
     assert "not_filed" in summary
+    # The poller logs only the start of the agent's final message, so the
+    # dropped list, which nothing else records, comes before the filed one.
+    assert summary.index("**Dropped**") < summary.index("**Filed**")
 
 
 def test_research_no_longer_leaves_the_angle_in_a_comment_only():

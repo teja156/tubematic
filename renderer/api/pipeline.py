@@ -1444,7 +1444,7 @@ def _body_angle(body: dict, *, with_score: bool):
     angle = body.get("angle")
     kind = body.get("angle_kind")
     angle = "" if angle is None else tangles.clean(angle)
-    kind = "" if kind is None else (kind.strip() if isinstance(kind, str) else kind)
+    kind = "" if kind is None else tangles.clean_kind(kind)
     score = body.get("angle_score") if with_score else 0
     score = 0 if score is None else score
     err = tangles.angle_error(angle, kind, score)
@@ -2699,7 +2699,11 @@ def create_pipeline_blueprint() -> Blueprint:
                 "error": f"Invalid status '{fields['status']}'. Must be one of: {sorted(VALID_VIDEO_STATUSES)}"
             }), 400
 
-        fields["updated_at"] = _now()
+        # A PATCH that only edits the angle does not move the video: its
+        # updated_at stays, or the worker would read the edit as the topic
+        # arriving again and announce it a second time.
+        if set(fields) - {"angle", "angle_kind"}:
+            fields["updated_at"] = _now()
 
         with _conn() as con:
             row = con.execute(
