@@ -684,6 +684,25 @@ Covers the `tubematic-under-the-hood` skill ([Under the Hood](../10-scene-author
 - The worked example passes the validator and uses every kind of event, and the uninstaller removes
   the skill.
 
+### `test_case_file_story_skill.py`
+
+Covers the `tubematic-case-file-story` skill ([Case File Story](../10-scene-authoring.md#case-file-story)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The skill and `reference/contract.md` list every accent, beat kind, meter kind and icon in the
+  pack, and state the limits and fixed delays `mcp/case_file_story.py` enforces. The contract's
+  number examples are the validator's own formatting.
+- The skill teaches the two calls that keep the lead the same character (the lead sheet from the
+  house lead, then stills from that sheet), tells the agent to leave the lead and the art style out
+  of its prompts, forbids writing, logos, brands, real places, weapons and violence in a picture,
+  and never calls `generate_character`. It leaves the captions to the style.
+- The worked example passes the validator, carries no `subtitles`, and uses every kind of beat, a
+  punch-in, a meter change, a panel and a hidden meter row. The uninstaller removes the skill.
+
+Trap: an agent that skips the lead sheet, or leaves `reference` off a still, gets a different
+character in each painting, and nothing after the paid call can repair that.
+
 ### `test_system_flow_skill.py`
 
 Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md#system-flow)).

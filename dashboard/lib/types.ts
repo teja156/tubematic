@@ -249,6 +249,14 @@ export interface Project {
   /** The mascot new videos here start with: '' = the install default,
    *  "none" = no mascot even if the install has a default. */
   default_mascot_id?: string;
+  /** The agent every new video filed into this domain starts on, whatever its
+   *  sourcing mode; '' means Automatic (the video is dealt an agent by
+   *  weight). A video can still be moved at a checkpoint. */
+  default_agent_id?: string;
+  /** One of that agent's models; '' means the agent's own default. */
+  default_agent_model?: string;
+  /** One of AGENT_EFFORTS; '' means the agent's own level. Needs no agent. */
+  default_agent_effort?: string;
   /** How many topics the domain may ever hold, 25–750 (100 by default). */
   topic_cap?: number;
   /** Every video ever filed into the domain, archived and rejected included —

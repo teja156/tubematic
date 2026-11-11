@@ -238,7 +238,7 @@ videos.
 | `claimed_by`, `claim_expires_in_secs` | The live scene-work claim, or `null` |
 | `voice` | `{voice_id, name, model_id, source}` or `null` |
 | `elevenlabs_model_id`, `pronunciation_mode` | What the script is written for. Both follow from `voice` |
-| `illustrated_available` | `true` when an OpenAI key is stored, which Illustrated and Under the Hood need. The key is not returned |
+| `illustrated_available` | `true` when an OpenAI key is stored, which Illustrated, Under the Hood and Case File Story need. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
 | `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config` and `script` is `""` |
@@ -280,9 +280,12 @@ What a new video starts with:
 - `mascot_id`: the domain's `default_mascot_id`, else the install's, whatever the `strategy`. It is
   set only while some renderer's GPU test passed, and not on a `cartoon_3d` video. Seeding does not
   refuse a video.
-- `agent_id`: the agent the video is pinned to (see [Assignment](07-agent-layer.md#assignment)).
+- `agent_id` and `agent_model`: the domain's `default_agent_id` while that agent is live, with
+  `default_agent_model` while the agent's `models` holds it, whatever the `strategy`. Otherwise
+  the agent is dealt, and the model is `""` (see [Assignment](07-agent-layer.md#assignment)).
+- `agent_effort`: the domain's `default_agent_effort`, whichever agent the video gets.
 
-The result carries those five fields. A `title` over 70 characters is clipped and the result
+The result carries those seven fields. A `title` over 70 characters is clipped and the result
 carries a `warning` (see [Video titles](#video-titles)).
 
 ### `set_video_status`
@@ -342,16 +345,17 @@ Script and voice:
 Fields writable only at `TOPIC_PROPOSED`:
 
 - `script_profile_id` must name a `READY` profile that is not deleted.
-- `visual_style="illustrated"` or `"under_the_hood"` is refused while no OpenAI key is stored, with
-  the style pack's message. Only OpenAI draws their characters and photographs, and the image tools,
+- `visual_style="illustrated"`, `"under_the_hood"` or `"case_file_story"` is refused while no OpenAI
+  key is stored, with the style pack's message. Only OpenAI draws their characters, photographs and
+  paintings, and the image tools,
   the other place the key is checked, run after the style is frozen.
 - `visual_style="cartoon_3d"` is refused unless some renderer's GPU test passed. The message names
   the fix: the GPU step, or Test GPU when a renderer has not tested yet. Writing it clears the
   mascot in the same update.
 - A new `mascot_id` must exist, be approved and not archived, and some renderer's GPU test must
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
-  mascot is not refused. A mascot is refused on a `cartoon_3d` or `under_the_hood` video
-  (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to either style clears the stored one.
+  mascot is not refused. A mascot is refused on a `cartoon_3d`, `under_the_hood` or `case_file_story` video
+  (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to one of those styles clears the stored one.
 - A `visual_style` different from the stored one clears the record of a style `auto` picked
   (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
   scenes (`resolved_renderer`, `resolved_visual_style`). The same value again keeps them, because the
@@ -446,10 +450,11 @@ domain to one readable call. The skill compares briefs. An unknown `project_id` 
 
 `upsert_project(project_id, name, description=None, is_curriculum_seed=None, status=None,
 default_visual_style=None, default_voice_id=None, default_script_profile_id=None, topic_cap=None,
-default_mascot_id=None)` is a partial update. An omitted field is left alone on a domain that
+default_mascot_id=None, default_agent_id=None, default_agent_model=None,
+default_agent_effort=None)` is a partial update. An omitted field is left alone on a domain that
 exists, and takes the creation default (`""`, `False`, `"active"`, a cap of 100) on a new one. Pass
-`""` to clear `description`, `default_visual_style`, `default_voice_id` or
-`default_script_profile_id`. Each caller names one or two fields (one command converts a domain
+`""` to clear `description`, `default_visual_style`, `default_voice_id`,
+`default_script_profile_id`, `default_agent_id`, `default_agent_model` or `default_agent_effort`. Each caller names one or two fields (one command converts a domain
 into a curriculum seed, another files a video into it), so a full replace would blank the rest. The
 HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
 
@@ -460,14 +465,20 @@ HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
 - `description` may run to several paragraphs and at most 2000 characters.
 - `default_voice_id` must be on the roster.
 - `default_script_profile_id` must name a `READY` profile that is not deleted.
-- `default_visual_style` set to `illustrated` or `under_the_hood` needs a stored OpenAI key, and set
+- `default_visual_style` set to `illustrated`, `under_the_hood` or `case_file_story` needs a stored OpenAI key, and set
   to `cartoon_3d` a renderer whose GPU test passed.
 - `default_mascot_id` is `""` (inherit the install's default mascot), `"none"` (no mascot even if
   the install has a default) or an approved mascot that is not archived. A new id also needs a
   renderer whose GPU is `working`.
 
-The description limit and the four defaults are checked only when the value changes. Re-sending a
-stored value that has since become invalid is not refused.
+- `default_agent_id` is a live agent's id, or `""` for the weighted deal. `default_agent_model` is
+  one of that agent's models and is refused without an agent. Changing the agent without passing a
+  model clears the stored model, because it belongs to the other agent's list. `""` for the model
+  is accepted while the stored agent is uninstalled.
+- `default_agent_effort` is one of the five effort levels and needs no agent.
+
+The description limit, the four defaults above it and the agent with its model are checked only
+when the value changes. Re-sending a stored value that has since become invalid is not refused.
 
 ### `set_project_status`
 
@@ -560,7 +571,7 @@ ledger, including a regeneration that overwrites an earlier image.
 
 ### `generate_image`
 
-`generate_image(video_id, image_name, prompt, aspect_ratio="9:16")` calls
+`generate_image(video_id, image_name, prompt, aspect_ratio="9:16", reference="")` calls
 `POST https://api.openai.com/v1/images/generations` with the model in the `image_model` setting
 (`gpt-image-2.5-flare` by default, or `gpt-image-2.5-sunburst`). A stored `image_model` outside that
 list is refused by name before any request. The result carries the path on disk and the
@@ -577,7 +588,27 @@ On an `under_the_hood` video the tool refuses a new `image_name` once the video'
 its calls in flight hold 12 pictures, the pack's `routing.images`, before any request; regenerating an
 existing name is allowed (`server.py::_image_cap_error`). A call reserves its name under a lock before
 the request and releases it when it ends, so parallel calls cannot each take the last slot and a
-failed call does not keep one.
+failed call does not keep one. A `case_file_story` video is capped the same way at 16 stills. Its lead
+sheet has a slot of its own, so the pack's `routing.images` is 17.
+
+`reference` is for a `case_file_story` video; any other video refuses it. With one, the picture is
+made from a reference picture through `POST https://api.openai.com/v1/images/edits`, with the same
+model and sizes, which keeps the story's lead the same character in every still:
+
+| Call | Reference picture | Result |
+|---|---|---|
+| `image_name="lead"`, `reference="house"` | The house lead's sheet shipped in `mcp/case_file_assets/` | The video's lead sheet, always 16:9. The prompt is the outfit |
+| `reference="lead"`, or another image of the video | That image | A still with the lead painted into the scene the prompt describes, always 9:16 |
+| No `reference` | None | A still with no lead in it, always 9:16 |
+
+On such a video the tool adds the pack's fixed text to the prompt: the lead's description before
+the scene and the painting style after it. It refuses, before any request, a lead sheet asked for
+without `reference="house"`, the house sheet used for another picture, and a reference that is not
+yet a picture of the video, and a picture named `house`, the name kept for the house sheet
+(`server.py::_case_file_image_plan`). The result carries `reference`. A call with a reference
+waits up to 600 seconds for OpenAI's response, as `generate_character` does, and a reserved slot
+lasts 900 seconds, longer than that wait.
+The reasons are in [Case File Story](10-scene-authoring.md#the-lead-and-the-stills).
 
 ### `generate_character`
 
@@ -768,8 +799,14 @@ It checks:
   `UnderTheHood`. Each plate's `aspect` is read from its photograph, and the style pack's caption
   settings fill every `subtitles` key the config leaves out. The rules are in
   [Under the Hood](10-scene-authoring.md#under-the-hood).
+- A `case_file_story` video holds the one installed `CaseFileStory` scene, and its meters and beats
+  pass `mcp/case_file_story.py` (beats, punch-ins and card parts on word starts, at most 16
+  different stills and never the lead sheet, a term card before the one closing choice, text within
+  its limits, no still stretch over 4 seconds). No other style may use `CaseFileStory`. The style
+  pack's caption settings fill every `subtitles` key the config leaves out. The rules are in
+  [Case File Story](10-scene-authoring.md#case-file-story).
 - `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
-  `subtitles.look` is `plain` or `selection`.
+  `subtitles.look` is `plain`, `selection` or `fill`.
 
 It records two things in the same transaction as the rename of the staged file into place:
 

@@ -155,7 +155,7 @@ Creates a video from a topic you type.
 |---|---|
 | **Title** | Required. Up to 70 characters. It is the name shown on cards |
 | **Topic** | Required. The full brief the agent writes the script from |
-| **Agent**, **Model**, **Effort** | Optional. **Automatic** lets Tubematic choose the agent by share |
+| **Agent**, **Model**, **Effort** | Optional. **Automatic** lets Tubematic choose the agent by share. It reads **Domain default** when the Manual Videos domain has an agent of its own |
 | **Script profile**, **Visual style**, **Voice** | Optional |
 | **Automatically approve topic** | Ticked by default, so the agent starts on the script. Untick it to review the topic on the Pipeline page first |
 
@@ -175,9 +175,18 @@ and post links. An archived video cannot be played or restored.
 
 ### Topics
 
-Holds the research mode toggles, the mining sources, and a row for each domain. Each row sets the
-domain's default visual style, voice, script profile and mascot, and its topic cap. A curriculum
-seed also has a **Pause topic generation** button.
+Holds the research mode toggles, the mining sources, and a row for each domain. A row shows the
+domain's name, the defaults it has set, how many topics and videos it holds, and its status. A
+curriculum seed also has a **Pause topic generation** button.
+
+**Edit defaults** opens the domain's choices under its row:
+
+| Group | Sets |
+|---|---|
+| Look | The visual style and the mascot |
+| Narration | The voice and the script profile |
+| Agent | The agent, its model and its effort |
+| Limits | The topic cap |
 
 [Using Tubematic](03-using-tubematic.md#where-topics-come-from) explains each of these.
 

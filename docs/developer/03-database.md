@@ -92,7 +92,7 @@ One row per video, from proposed topic to published file.
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
 | `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
-| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `terminal_doc` or `under_the_hood`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
+| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `terminal_doc`, `under_the_hood` or `case_file_story`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
 | `resolved_visual_style` | TEXT NOT NULL | `''` | The canvas `auto` settled on: `dark` or `light`. Written once by the agent |
 | `resolved_renderer` | TEXT NOT NULL | `''` | The renderer an `auto` video uses: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
 | `style_pick` | TEXT NOT NULL | `''` | What Auto picked before the script: a style pack id (then also `visual_style`), `scenes` for the mixed scene system, or `''` when Auto has not decided or a person chose the style |
@@ -150,8 +150,9 @@ first. Any write to the column changes render order.
 vocabularies the video may draw from. `system_flow` makes the whole video one diagram scene written
 as data, `bean_explainer` one cartoon-bean scene written as data, `whiteboard` one board
 scene written as data, `storybook_atlas` one picture-book scene in chapters written as data,
-`terminal_doc` one typographic scene written as data, and `under_the_hood` one scene of annotated
-close-up photographs written as data (it needs an OpenAI key). `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
+`terminal_doc` one typographic scene written as data, `under_the_hood` one scene of annotated
+close-up photographs written as data, and `case_file_story` one scene of painted stills with meters
+and number cards written as data (the last two need an OpenAI key). `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
 video) and needs a working GPU. `auto` leaves the choice to the agent. The values are checked in
 code against the style packs, and the column has no CHECK constraint, so a new style needs no
 migration.
@@ -188,8 +189,11 @@ alter a video already in progress.
 
 ### Agent columns
 
-`agent_id` is dealt when the video is created. A human may move the video to another live agent, or
-change `agent_model` and `agent_effort`, at a human checkpoint. Nothing else changes them
+The three are set when the video is created. `agent_id` and `agent_model` come from the video's
+domain when it names a live agent, and otherwise `agent_id` is dealt by weight. `agent_effort` is
+the domain's `default_agent_effort` in both cases ([Assignment](07-agent-layer.md#assignment)). A human
+may move the video to another live agent, or change `agent_model` and `agent_effort`, at a human
+checkpoint. Nothing else changes them
 ([Frozen choices](02-pipeline.md#frozen-choices)).
 
 - `agent_id` is not a declared foreign key, and nothing writes it back to `NULL`. The poller skips
@@ -266,6 +270,9 @@ A domain. Every video files into one, whatever its research mode.
 | `default_voice_id` | TEXT NOT NULL | `''` | The voice every new video in the domain starts with, whatever its `strategy`. `''` means the install default |
 | `default_script_profile_id` | TEXT NOT NULL | `''` | The [script profile](08-scripting-and-voice.md#script-profiles) the domain's `curriculum` videos start with. `''` means none |
 | `default_mascot_id` | TEXT NOT NULL | `''` | The mascot new videos start with, whatever their `strategy`. `''` inherits the install's `default_mascot_id` setting. `none` means no mascot |
+| `default_agent_id` | TEXT NOT NULL | `''` | The agent every new video in the domain starts on, whatever its `strategy`. `''` means the video is dealt an agent by weight |
+| `default_agent_model` | TEXT NOT NULL | `''` | One of that agent's models. `''` means the agent's default model |
+| `default_agent_effort` | TEXT NOT NULL | `''` | One of the five effort levels. `''` means the agent's own level |
 | `topic_cap` | INTEGER NOT NULL | `100` | How many topics the domain may ever hold, 25 to 750. See [Topic cap](02-pipeline.md#topic-cap) |
 | `created_at` | TEXT NOT NULL | | |
 
@@ -273,9 +280,9 @@ The API and the MCP server check `description` only when it changes, so a longer
 stored is kept. The limit is low because `list_projects` returns every domain's description on
 every research run.
 
-The four defaults are copied into the video's own column (`videos.voice_id`,
-`videos.script_profile_id` and so on) when the video is created. Changing one does not reach videos
-already filed.
+The defaults are copied into the video's own columns (`videos.voice_id`,
+`videos.script_profile_id`, `videos.agent_id` and so on) when the video is created. Changing one
+does not reach videos already filed.
 
 - `default_visual_style` and `default_script_profile_id` apply to `curriculum` videos only, because
   curriculum is the one research mode that produces a series. A `default_visual_style` of `''` is
@@ -285,6 +292,10 @@ already filed.
 - `default_script_profile_id` is skipped if the profile is deleted or not `READY`, because the
   approving `PATCH` would refuse it.
 - A `default_mascot_id` that names an archived or unapproved mascot reads as none.
+- `default_agent_id` is skipped while that agent is uninstalled, and the video is dealt an agent by
+  weight. `default_agent_model` is skipped when the agent's `models` does not hold it.
+  `default_agent_effort` applies to whichever agent the video gets. See
+  [Assignment](07-agent-layer.md#assignment).
 
 The API and the MCP server check `topic_cap`, because SQLite cannot add a `CHECK` to an existing
 table. Every video ever filed counts, archived and rejected included. At the cap the domain is
@@ -719,6 +730,7 @@ only in the pre-migration backup.
 | `0019_renderers.sql` | Creates `renderers`, `renderer_enrollments`, `render_timings` and `idx_render_timings_renderer`, adds the five lease columns to `videos`, and inserts the built-in renderer's row | No |
 | `0020_style_pick.sql` | Adds `videos.style_pick`, `style_runner_up` and `style_reason`, `''` on every existing video | No |
 | `0021_last_render.sql` | Adds `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu` and `last_render_seconds`, empty on every existing video | No |
+| `0022_domain_agent.sql` | Adds `projects.default_agent_id`, `default_agent_model` and `default_agent_effort`, `''` on every existing domain | No |
 | `0023_script_record.sql` | Adds `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, `''` on every existing video | No |
 | `0024_video_duration.sql` | Adds `videos.duration_secs`, NULL on every existing video. The worker fills it for videos that have a publication and whose files exist, and archiving a video stores it | No |
 

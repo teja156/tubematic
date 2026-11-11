@@ -24,6 +24,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Storybook Atlas (experimental)** | A vintage picture book told in chapters, each opened by a plaque over a hand-drawn room or landscape. A small mouse guide walks beside the story while its people, named by printed tags, and hatched objects arrive on the narrator's words. No images | Nothing |
 | **Terminal Doc** | A dark, mostly empty screen where the text is the picture: monospace capitals that scramble, rearrange and resolve out of noise, and quoted sources with citations. An amber CRT look suits retro computing topics. Captions are typed into a log strip. No images | Nothing |
 | **Under the Hood (experimental)** | A dark canvas and close-up photographs of one physical object. Short capital labels point at its parts, gold arcs show fields and flows, numbers tick, and a cartoon presenter reacts in the bottom corner | An OpenAI key. Up to 12 generated photographs per video |
+| **Case File Story (experimental)** | A suspense story in painted pictures that puts the viewer inside a scheme or a money dilemma. One blank-faced character stands in for the viewer, meters change with the plot, cards count the numbers out, and it ends on a choice between two buttons | An OpenAI key. Up to 16 generated pictures per video, and one reference picture |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 | **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
 
@@ -63,6 +64,14 @@ background would flash, and a viewer reads that as a broken render.
   quotes real numbers, which become labels, counters and charts. Each photograph is an OpenAI image
   call, up to 12 per video, so it costs more per video than the styles without images. It is
   experimental.
+- Choose **Case File Story** for how a fraud, a scam, money laundering or a heist works, or for a
+  money dilemma: found money, an offer that is too good, a rule someone is about to break. The
+  script is a suspense story told to the viewer as "you". It names what happened and what the law
+  calls it, then ends on a choice between two options. Its people are invented, so it does not suit
+  a real, named case. A scheme is explained the way a news report would explain it, and it always
+  ends found out or named as a crime. Each picture is an OpenAI image call, up to 16 per video and
+  one more for the character's reference picture, so it costs more per video than the styles
+  without images. It is experimental.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
 - Choose **Whiteboard** for an idea worked out step by step: a formula built up, money arithmetic
   such as interest or a percentage, a chain of causes that ends in one picture, two ideas side by
@@ -75,8 +84,8 @@ When you approve a topic left on Auto, the agent picks a style before it writes 
 the script is written for the style: a System Flow script walks through a system one step at a time,
 for example. It reads what each style is made for and avoids, compares that with the topic, and
 picks the style that clearly fits. It considers every style this install can make: Illustrated only
-while an OpenAI key is stored, Under the Hood only while an OpenAI key is stored and the video has no
-mascot, Cartoon 3D only while a GPU is working and the video has no mascot.
+while an OpenAI key is stored, Under the Hood and Case File Story only while an OpenAI key is stored
+and the video has no mascot, Cartoon 3D only while a GPU is working and the video has no mascot.
 It may pick a style that generates images, which costs more per video. It does not pick a style for
 variety: the same kind of topic gets the same style every time.
 
@@ -121,20 +130,26 @@ makes it again if it shows the wrong thing, pins the labels to the parts, and ti
 numbers and the presenter's poses to the narration. The presenter is the same character in every
 video.
 
+For a Case File Story video the agent first makes a reference picture of the character in the
+clothes the story calls for, then makes each painting from it, so the character stays the same.
+It looks at each painting and makes it again if the character changed or the picture shows the
+wrong thing. It then chooses the meters and times the pictures, the cards and the two buttons to
+the narration. The character's head is the same in every video.
+
 ### Where you choose
 
 | Where | What it sets |
 |---|---|
 | A topic waiting for approval, on its Quick Actions row or in its window | That video's style |
 | The **New Video** page | The style of the video you are creating |
-| A domain's row on the **Topics** page | The style its curriculum topics arrive with. You can still change it on each topic |
+| **Edit defaults** on a domain's row on the **Topics** page | The style its curriculum topics arrive with. You can still change it on each topic |
 
 Once you approve the topic, the style is fixed.
 
 ### When a style is greyed out
 
-- **Illustrated (needs an OpenAI key)** or **Under the Hood (experimental) (needs an OpenAI key)**:
-  no OpenAI key is stored. Add one on **Settings → API Keys**.
+- **Illustrated (needs an OpenAI key)**, **Under the Hood (experimental) (needs an OpenAI key)** or
+  **Case File Story (experimental) (needs an OpenAI key)**: no OpenAI key is stored. Add one on **Settings → API Keys**.
 - **Cartoon 3D (experimental) (needs a working GPU)**: no renderer has passed its GPU test. See
   [GPU Rendering](10-gpu-rendering.md).
 - **Cartoon 3D (experimental) (GPU not tested yet)**: the renderer has not finished its first test.
@@ -154,8 +169,9 @@ A mascot is a small character that walks on and off screen and reacts to the nar
 surprised, has an idea, hops, glances at something. It does not narrate and does not lip-sync.
 
 Mascots are experimental and off by default. A video has one only if you pick it. They are drawn on
-the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D and Under
-the Hood videos cannot have one: Under the Hood has its own presenter.
+the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D, Under
+the Hood and Case File Story videos cannot have one: Under the Hood has its own presenter and Case
+File Story its own lead character.
 
 ![The Mascots page under Profiles: a form for a new mascot, and the built-in mascot Tubi marked READY](../images/mascots.png)
 
@@ -196,7 +212,7 @@ Three places set it. Each overrides the one above.
 | Where | What it sets |
 |---|---|
 | **Settings → Rendering → Default mascot (experimental)** | The default for the whole install. Empty means none |
-| The **Mascot (exp.)** column of a domain's row on the **Topics** page | The default for that domain. *Use install default* follows the setting above. *None* means no mascot in this domain |
+| **Mascot (exp.)**, under **Edit defaults** on a domain's row on the **Topics** page | The default for that domain. *Use install default* follows the setting above. *None* means no mascot in this domain |
 | The mascot picker on a topic waiting for approval | That one video. Fixed once you approve the topic |
 
 You can set a default only while a renderer's GPU works. A default you set earlier stays stored if
