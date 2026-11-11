@@ -12,6 +12,7 @@ Run from repo root: pytest mcp/tests/
 import pytest
 
 import server
+from sample_angle import ANGLE
 
 
 @pytest.fixture
@@ -83,7 +84,7 @@ def test_re_sending_a_default_archived_since_is_accepted(db):
 def test_a_curriculum_video_starts_with_the_domain_profile(db):
     _profile("prof")
     server.upsert_project("dom", "Domain", default_script_profile_id="prof")
-    result = server.create_video("dom", "A topic", "curriculum", 7)
+    result = server.create_video("dom", "A topic", "curriculum", 7, **ANGLE)
     assert result["script_profile_id"] == "prof"
     assert _stored(result["video_id"]) == "prof"
 
@@ -92,14 +93,14 @@ def test_a_curriculum_video_starts_with_the_domain_profile(db):
 def test_other_strategies_do_not_inherit_it(db, strategy):
     _profile("prof")
     server.upsert_project("dom", "Domain", default_script_profile_id="prof")
-    result = server.create_video("dom", "A topic", strategy, 7)
+    result = server.create_video("dom", "A topic", strategy, 7, **ANGLE)
     assert result["script_profile_id"] == ""
     assert _stored(result["video_id"]) == ""
 
 
 def test_a_domain_without_a_default_seeds_no_profile(db):
     server.upsert_project("dom", "Domain")
-    result = server.create_video("dom", "A topic", "curriculum", 7)
+    result = server.create_video("dom", "A topic", "curriculum", 7, **ANGLE)
     assert _stored(result["video_id"]) == ""
 
 
@@ -107,5 +108,5 @@ def test_a_default_archived_since_seeds_nothing(db):
     _profile("prof")
     server.upsert_project("dom", "Domain", default_script_profile_id="prof")
     _archive("prof")
-    result = server.create_video("dom", "A topic", "curriculum", 7)
+    result = server.create_video("dom", "A topic", "curriculum", 7, **ANGLE)
     assert _stored(result["video_id"]) == ""

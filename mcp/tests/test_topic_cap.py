@@ -17,6 +17,7 @@ Run from repo root: pytest mcp/tests/
 import pytest
 
 import server
+from sample_angle import ANGLE, mined
 
 
 @pytest.fixture
@@ -134,7 +135,7 @@ def test_an_unknown_project_is_an_error(db):
 def test_a_domain_at_its_cap_refuses_every_sourced_strategy(db, strategy):
     _project(cap=25)
     _videos("db-internals", 25, archived=True)  # archived rows count toward the cap
-    result = server.create_video("db-internals", "B-trees on disk", strategy, 7)
+    result = server.create_video("db-internals", "B-trees on disk", strategy, 7, **ANGLE)
     assert "error" in result
     assert _count() == 25
 
@@ -142,7 +143,7 @@ def test_a_domain_at_its_cap_refuses_every_sourced_strategy(db, strategy):
 def test_the_refusal_names_the_domain_the_count_and_the_cap(db):
     _project(cap=25)
     _videos("db-internals", 25, status="TOPIC_REJECTED")
-    err = server.create_video("db-internals", "B-trees on disk", "trending", 7)["error"]
+    err = server.create_video("db-internals", "B-trees on disk", "trending", 7, **ANGLE)["error"]
     assert "Database internals" in err
     assert "expired" in err
     assert "25" in err
@@ -153,7 +154,7 @@ def test_the_refusal_names_the_domain_the_count_and_the_cap(db):
 def test_one_below_the_cap_still_files(db):
     _project(cap=25)
     _videos("db-internals", 24)
-    result = server.create_video("db-internals", "B-trees on disk", "curriculum", 7)
+    result = server.create_video("db-internals", "B-trees on disk", "curriculum", 7, **ANGLE)
     assert "error" not in result
     assert server.list_projects()[0]["expired"] is True
 
@@ -170,7 +171,7 @@ def test_raising_the_cap_re_opens_the_domain(db):
     _project(cap=25)
     _videos("db-internals", 25)
     server.upsert_project("db-internals", "Database internals", topic_cap=26)
-    result = server.create_video("db-internals", "B-trees on disk", "curriculum", 7)
+    result = server.create_video("db-internals", "B-trees on disk", "curriculum", 7, **ANGLE)
     assert "error" not in result
 
 
@@ -186,7 +187,7 @@ def test_a_topic_landing_between_the_check_and_the_insert_still_refuses(db, monk
         return real_pick(con, *a, **kw)
 
     monkeypatch.setattr(server, "_pick_agent_id", _fill_then_pick)
-    result = server.create_video("db-internals", "B-trees on disk", "trending", 7)
+    result = server.create_video("db-internals", "B-trees on disk", "trending", 7, **ANGLE)
     assert "expired" in result["error"]
     assert _count() == 25
 
@@ -194,7 +195,7 @@ def test_a_topic_landing_between_the_check_and_the_insert_still_refuses(db, monk
 def test_a_pause_still_reads_as_a_pause_on_an_expired_domain(db):
     _project(cap=25, status="paused")
     _videos("db-internals", 25)
-    err = server.create_video("db-internals", "B-trees on disk", "trending", 7)["error"]
+    err = server.create_video("db-internals", "B-trees on disk", "trending", 7, **ANGLE)["error"]
     assert "paused" in err
 
 
@@ -234,8 +235,8 @@ class _Gemini:
         import json as _json
         self.prompts.append(json["contents"][0]["parts"][1]["text"])
         n = len(self.prompts)
-        topics = [{"topic": f"Distinct mined subject {n}-{i} alpha{n}{i} beta{n}{i}",
-                   "producibility_score": 8} for i in range(self.per_call)]
+        topics = [mined(f"Distinct mined subject {n}-{i} alpha{n}{i} beta{n}{i}")
+                  for i in range(self.per_call)]
 
         class _Resp:
             status_code = 200

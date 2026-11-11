@@ -108,6 +108,24 @@ To add a formula, add its file and run the script. `update_video` then accepts t
 `GET /script-formulas` lists it. The skill chooses a formula that needs a second voice only when the
 roster holds a voice besides the video's (see [A voice per segment](#a-voice-per-segment)).
 
+### The topic's angle
+
+A video can arrive at the script writer with an [angle](02-pipeline.md#topic-angle): one sentence
+saying what the opening will use, and its kind. `get_video` returns them with `angle_formula`, the
+formula the kind is the first choice for (`tubematic_core/angles.py::ANGLE_KINDS`). The skill uses
+them in two places:
+
+- Choosing the formula. With an angle, the kind answers what kind of thing the topic is, and the
+  agent starts from `angle_formula`. The skill's other rules still apply: a formula whose opening
+  the topic cannot fill with real facts is passed over, and the visual style's `script` text
+  outranks the formula. With no angle the agent works the kind out from the topic.
+- Drafting the openings. All three openings are built on the angle, each from a different shape of
+  the formula. The angle sentence is a note to the agent and is not spoken.
+
+A video has no angle when its topic came without one and the agent found none at pickup, or when
+its script was already written before topics carried angles. The script is then written from the
+topic alone.
+
 ### What outranks a formula
 
 The script-writing skill ranks the four things that shape a script. Where two disagree, the earlier

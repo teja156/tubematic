@@ -36,6 +36,8 @@ import { formatRenderDuration } from "@/lib/renderers";
 import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { ScriptRecord } from "@/components/ScriptRecord";
+import { TopicAngle } from "@/components/TopicAngle";
+import { angleScoreLabel } from "@/lib/angles";
 
 interface VideoModalProps {
   video: Video | null;
@@ -381,6 +383,9 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const [cancellingSchedule, setCancellingSchedule] = useState(false);
   const [cancelScheduleError, setCancelScheduleError] = useState("");
   const [switchingStyle, setSwitchingStyle] = useState(false);
+  // The Topic tab's angle editor is open: Approve Topic waits until it is
+  // saved or cancelled, since the approval does not carry the draft.
+  const [angleEditorOpen, setAngleEditorOpen] = useState(false);
   const [switchStyleError, setSwitchStyleError] = useState("");
   const [retryingAgent, setRetryingAgent] = useState(false);
   const [retryAgentError, setRetryAgentError] = useState("");
@@ -970,7 +975,19 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
 
                 {/* Topic — the full descriptive brief. The header shows only the
                     short display name, so this is where the whole text lives. */}
-                <TabsContent value="topic" className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
+                {/* keepMounted: the angle editor lives in this panel, and a draft
+                    must survive a look at another tab, or Approve would be
+                    released with the typed angle thrown away. */}
+                <TabsContent value="topic" keepMounted className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
+                  {/* Keyed by the video: the window stays mounted between
+                      videos, and an angle being typed must not follow it. */}
+                  <TopicAngle
+                    key={video.id}
+                    video={video}
+                    editable={!archived && video.status === "TOPIC_PROPOSED"}
+                    onSaved={() => refreshVideo(video.id)}
+                    onEditingChange={setAngleEditorOpen}
+                  />
                   <p
                     data-testid="video-topic-body"
                     style={{
@@ -1428,7 +1445,12 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                       )}
                       {voicePickers}
                       {agentPickers}
-                      <ActionBtn fullWidth variant="primary" onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
+                      {angleEditorOpen && (
+                        <div data-testid="approve-waits-for-angle" style={{ fontSize: 12, color: "var(--dim)", lineHeight: 1.5 }}>
+                          Save or cancel the angle on the Topic tab first.
+                        </div>
+                      )}
+                      <ActionBtn fullWidth variant="primary" disabled={angleEditorOpen} onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
                         Approve Topic
                       </ActionBtn>
                       <ActionBtn fullWidth variant="danger" onClick={() => { onAction(video.id, "reject-topic", video); onClose(); }}>
@@ -1610,6 +1632,17 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                       </span>
                       {isScored(video.producibility_score) && (
                         <span style={{ color: "var(--dim)", fontSize: 12 }}> / 10</span>
+                      )}
+                    </span>
+                  }
+                />
+                <MetaRow
+                  label="Angle score"
+                  value={
+                    <span data-testid="angle-score-row" style={{ fontFamily: "var(--mono)", fontSize: 15, color: "var(--amber)" }}>
+                      {angleScoreLabel(video.angle_score).split("/")[0]}
+                      {(video.angle_score ?? 0) > 0 && (
+                        <span style={{ fontFamily: "var(--sans)", color: "var(--dim)", fontSize: 12 }}> / 10</span>
                       )}
                     </span>
                   }

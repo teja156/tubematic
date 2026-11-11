@@ -113,6 +113,9 @@ Covers [the pipeline board](../15-dashboard.md#the-pipeline-board) and
   included, and a System Flow pick is stored with the approval.
 - A status pill that hides a group keeps it hidden across a poll.
 - At 1280px the `TOPIC_PROPOSED` row's buttons stay on screen and the title keeps its width.
+- A `TOPIC_PROPOSED` row shows the topic's angle with its kind and score. At 1280px a long angle
+  stays on one line no wider than the title column, with the buttons on screen, and the row drops
+  the angle once the video is at `SCRIPT_READY`.
 
 Trap: assert a disabled `<option>` with `toHaveJSProperty("disabled", true)`. Playwright's
 `toBeDisabled()` reports a disabled option inside an enabled `<select>` as enabled.
@@ -146,6 +149,9 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
 - A video with a script record shows the formula and the opening type by the labels the real
   `GET /script-formulas` returns, the openings and the warnings. A script written over HTTP then
   clears the record. The record is seeded the same way, because only `update_video` writes one.
+- The Topic tab shows a topic's angle with the kind label the real `GET /angle-kinds` returns.
+  **Edit** stores a new sentence and kind and clears the score. After the topic is approved the
+  block has no Edit button and the API refuses the same write.
 - A segment's voice is picked on the Script tab: a voice that cannot speak the segment's markup is
   disabled by the real API's conflicts, and a pick lands in the database through the
   `segment_voices` `PATCH`. The segments are seeded the same way.
@@ -245,7 +251,8 @@ set here.
 Covers [the New Video page](../15-dashboard.md#the-new-video-page) against the real
 `POST /videos/manual`. A submission lands at `TOPIC_APPROVED` in the `manual` domain with a dash for
 its score, or at `TOPIC_PROPOSED` with auto-approve cleared. The stack installs no agents, so the
-spec runs the Automatic path only.
+spec runs the Automatic path only. A submission with no angle is stored with none, a typed angle
+needs its kind before the form submits, and a given angle is stored with score 0.
 
 ### `analytics.spec.ts`
 
