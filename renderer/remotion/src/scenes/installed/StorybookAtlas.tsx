@@ -12,15 +12,22 @@
  * props from a fixed library or drawn for the video), which the MCP server
  * validates against ./storybookAtlas/contract.ts before the video can render.
  *
- * Kept cheap on the CPU renderer (software GL), measured in CPU-seconds per
- * frame (see the measurements below):
+ * Measured on the CPU renderer (software GL), in CPU-seconds per frame of the
+ * whole process tree: 0.34 over the whole worked example (System Flow 0.17,
+ * Bean Explainer 0.28). A settled chapter costs about 0.30, a plate up to 0.34,
+ * and a morph followed by a wipe 0.40 for its few seconds. An empty frame with
+ * captions costs about 0.06 and a flat full-frame colour nothing more, while the
+ * same frame holding one detailed backdrop costs about 0.135 more: every frame
+ * is screenshotted and encoded, so the cost follows how much fine detail the
+ * frame holds. The hatching is about 0.02 of that. What keeps it there:
  * - Every drawing (backdrop, prop state, look of the guide or a person) is a
  *   bitmap drawn once (./storybookAtlas/bitmap.tsx); a frame only moves,
  *   scales and fades bitmaps.
  * - The backdrop is the one full-frame picture: a canvas painted once, with
- *   the book's frame drawn into it. Each extra full-frame textured layer cost
- *   about 0.13 per frame; noise grain over the hatching cost 0.18 by itself,
- *   so there is none.
+ *   the book's frame drawn into it. A second full-frame textured layer (the
+ *   frame as an overlay) cost about 0.13 per frame more; the same backdrop
+ *   shown with <Img> cost 0.21 against the canvas's 0.135; noise grain over
+ *   the hatching cost 0.18 by itself, so there is none.
  * - Plates repaint their canvas only while something on them moves.
  * - No live SVG filter, gradient, pattern or stroke-dasharray.
  */

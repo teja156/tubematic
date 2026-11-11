@@ -35,6 +35,7 @@
     "avoid_for": [
       "a mechanism explained part by part with no story in it (Stick fits it)",
       "components passing requests, packets or data between them (System Flow fits it)",
+      "how a cipher, a code or text is transformed letter by letter, even inside a history (the mechanism is the subject)",
       "an invented protagonist the viewer follows from scene to scene (Illustrated fits it)",
       "a walk through one place in one continuous world (Cartoon 3D fits it)",
       "a list of named items, tips or mistakes (Bean Explainer fits it)",

@@ -662,8 +662,9 @@ CPU-seconds a frame however still it is. So the backdrop is the one full-frame p
 painted once, with the book's frame and vignette drawn into it, and there is no paper grain (noise over
 the hatching cost about 0.18 CPU-seconds a frame by itself). The live parts follow System Flow's
 rules: no SVG filter, gradient, pattern or `stroke-dasharray`. A plate repaints its canvas only while
-something on it moves. The whole worked example costs SA_COST CPU-seconds a frame; the measurements
-are in `StorybookAtlas.tsx`'s header comment.
+something on it moves. The whole worked example costs 0.34 CPU-seconds a frame (System Flow's 0.17,
+Bean Explainer's 0.28): the picture-book detail is the price, since a settled chapter alone costs
+about 0.30. The measurements are in `StorybookAtlas.tsx`'s header comment.
 
 `mcp/storybook_atlas.py` checks a config in `write_scene_config` and refuses it when:
 
