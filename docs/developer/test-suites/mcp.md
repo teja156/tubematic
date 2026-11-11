@@ -585,6 +585,48 @@ Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under
 Trap: a plate whose own fields are bad is skipped for every check that projects through its camera,
 including the next plate's zoom-through, or a malformed `focus` raised instead of being reported.
 
+### `test_case_file_story.py`
+
+Covers `mcp/case_file_story.py`, the checks `write_scene_config` runs on a Case File Story config,
+the `subtitles.look` check, the text audit's per-beat sampling, and what `generate_image` does for
+the style: the reference picture, the text added to the prompt and the cap on pictures
+([Case File Story](../10-scene-authoring.md#case-file-story)).
+
+- The limits, timings, geometry, camera, accents and their colours, beat kinds, meter kinds and
+  icons equal the ones in the renderer's `contract.ts`, read from the TypeScript source, and the
+  pack lists the same values. The pack's picture count is the stills limit plus the lead sheet. Both
+  sides answer the shared cases in `fixtures/case_file_story_contract.json` (the number format, the
+  meter cells, the camera's scale and view, the term's font size, the bars' layout, the frames of a
+  beat's parts and the quiet stretches).
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its meter or beat and cause: a bad accent, meter count, id, kind, label or
+  value; a first beat that is late or is a card; a beat off the words or out of order; a missing,
+  early or second choice; no term card before the choice; a field the beat's type does not take;
+  another video's or a container image path; the lead sheet used as a picture; a bad focus or
+  punch-in; a `set` or `panel` naming the wrong meter; card text over its limit; an unknown icon or
+  kind; a bar, result, payoff line, stamp or button timed off a word or out of order; a card whose
+  last part comes too late to read. A shot or a finished card that sits unchanged for over 4
+  seconds is refused, and a punch-in fixes the shot. More than 16 different stills is refused and a
+  reused one is free. A value of the wrong type gets a sentence back and raises nothing.
+- The text audit samples each beat, a card from the frame its last part has appeared.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one, refuses `CaseFileStory` on another style and other scenes on a Case File Story video.
+  `subtitles.look` accepts `plain`, `selection` and `fill` only.
+- The house lead's sheet ships beside the server. The lead sheet is made from it through the edits
+  endpoint, at 16:9, with the outfit between the pack's lead description and sheet style. A still
+  with `reference="lead"` sends the video's own sheet and the pack's lead description and painting
+  style around the scene. A still with no reference goes to the generations endpoint with the
+  painting style added.
+- `generate_image` refuses, before any request goes out, a lead sheet without `reference="house"`,
+  the house sheet used for another picture, a reference that is not yet an image of the video, a
+  reference with a path in it, and a reference on a video of another style, whose prompt is sent
+  unchanged. A new picture past 16 stills and the lead sheet is refused and a regeneration is
+  allowed. Under the Hood keeps its own cap and wording.
+
+Trap: the refusals for a wrong reference run before the scene-work claim and the cap, so a refused
+call reserves no picture slot and reaches no paid endpoint.
+
 ### `test_choose_visual_style.py`
 
 Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back

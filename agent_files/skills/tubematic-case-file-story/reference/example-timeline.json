@@ -1,0 +1,522 @@
+{
+ "totalFrames": 1441,
+ "fps": 30,
+ "audioDurationSeconds": 48.03,
+ "words": [
+  {
+   "word": "You",
+   "startFrame": 6,
+   "endFrame": 14
+  },
+  {
+   "word": "find",
+   "startFrame": 16,
+   "endFrame": 26
+  },
+  {
+   "word": "a",
+   "startFrame": 28,
+   "endFrame": 33
+  },
+  {
+   "word": "bag",
+   "startFrame": 35,
+   "endFrame": 43
+  },
+  {
+   "word": "with",
+   "startFrame": 45,
+   "endFrame": 55
+  },
+  {
+   "word": "forty",
+   "startFrame": 57,
+   "endFrame": 69
+  },
+  {
+   "word": "thousand",
+   "startFrame": 71,
+   "endFrame": 88
+  },
+  {
+   "word": "dollars",
+   "startFrame": 90,
+   "endFrame": 105
+  },
+  {
+   "word": "in",
+   "startFrame": 107,
+   "endFrame": 113
+  },
+  {
+   "word": "it.",
+   "startFrame": 115,
+   "endFrame": 121
+  },
+  {
+   "word": "No",
+   "startFrame": 133,
+   "endFrame": 139
+  },
+  {
+   "word": "name.",
+   "startFrame": 141,
+   "endFrame": 151
+  },
+  {
+   "word": "No",
+   "startFrame": 160,
+   "endFrame": 166
+  },
+  {
+   "word": "note.",
+   "startFrame": 168,
+   "endFrame": 178
+  },
+  {
+   "word": "You",
+   "startFrame": 190,
+   "endFrame": 198
+  },
+  {
+   "word": "count",
+   "startFrame": 200,
+   "endFrame": 212
+  },
+  {
+   "word": "it",
+   "startFrame": 214,
+   "endFrame": 220
+  },
+  {
+   "word": "twice.",
+   "startFrame": 222,
+   "endFrame": 234
+  },
+  {
+   "word": "Forty",
+   "startFrame": 246,
+   "endFrame": 258
+  },
+  {
+   "word": "thousand,",
+   "startFrame": 260,
+   "endFrame": 277
+  },
+  {
+   "word": "in",
+   "startFrame": 279,
+   "endFrame": 285
+  },
+  {
+   "word": "twenties.",
+   "startFrame": 287,
+   "endFrame": 304
+  },
+  {
+   "word": "That",
+   "startFrame": 316,
+   "endFrame": 326
+  },
+  {
+   "word": "is",
+   "startFrame": 328,
+   "endFrame": 334
+  },
+  {
+   "word": "two",
+   "startFrame": 336,
+   "endFrame": 344
+  },
+  {
+   "word": "thousand",
+   "startFrame": 346,
+   "endFrame": 363
+  },
+  {
+   "word": "bills.",
+   "startFrame": 365,
+   "endFrame": 377
+  },
+  {
+   "word": "You",
+   "startFrame": 389,
+   "endFrame": 397
+  },
+  {
+   "word": "can't",
+   "startFrame": 399,
+   "endFrame": 411
+  },
+  {
+   "word": "just",
+   "startFrame": 413,
+   "endFrame": 423
+  },
+  {
+   "word": "walk",
+   "startFrame": 425,
+   "endFrame": 435
+  },
+  {
+   "word": "into",
+   "startFrame": 437,
+   "endFrame": 447
+  },
+  {
+   "word": "a",
+   "startFrame": 449,
+   "endFrame": 454
+  },
+  {
+   "word": "bank",
+   "startFrame": 456,
+   "endFrame": 466
+  },
+  {
+   "word": "with",
+   "startFrame": 468,
+   "endFrame": 478
+  },
+  {
+   "word": "it.",
+   "startFrame": 480,
+   "endFrame": 486
+  },
+  {
+   "word": "Deposit",
+   "startFrame": 498,
+   "endFrame": 513
+  },
+  {
+   "word": "ten",
+   "startFrame": 515,
+   "endFrame": 523
+  },
+  {
+   "word": "thousand",
+   "startFrame": 525,
+   "endFrame": 542
+  },
+  {
+   "word": "or",
+   "startFrame": 544,
+   "endFrame": 550
+  },
+  {
+   "word": "more,",
+   "startFrame": 552,
+   "endFrame": 562
+  },
+  {
+   "word": "and",
+   "startFrame": 564,
+   "endFrame": 572
+  },
+  {
+   "word": "the",
+   "startFrame": 574,
+   "endFrame": 582
+  },
+  {
+   "word": "bank",
+   "startFrame": 584,
+   "endFrame": 594
+  },
+  {
+   "word": "files",
+   "startFrame": 596,
+   "endFrame": 608
+  },
+  {
+   "word": "a",
+   "startFrame": 610,
+   "endFrame": 615
+  },
+  {
+   "word": "report.",
+   "startFrame": 617,
+   "endFrame": 630
+  },
+  {
+   "word": "So",
+   "startFrame": 642,
+   "endFrame": 648
+  },
+  {
+   "word": "you",
+   "startFrame": 650,
+   "endFrame": 658
+  },
+  {
+   "word": "split",
+   "startFrame": 660,
+   "endFrame": 672
+  },
+  {
+   "word": "it.",
+   "startFrame": 674,
+   "endFrame": 680
+  },
+  {
+   "word": "Nine",
+   "startFrame": 692,
+   "endFrame": 702
+  },
+  {
+   "word": "thousand",
+   "startFrame": 704,
+   "endFrame": 721
+  },
+  {
+   "word": "on",
+   "startFrame": 723,
+   "endFrame": 729
+  },
+  {
+   "word": "Monday.",
+   "startFrame": 731,
+   "endFrame": 744
+  },
+  {
+   "word": "Nine",
+   "startFrame": 756,
+   "endFrame": 766
+  },
+  {
+   "word": "on",
+   "startFrame": 768,
+   "endFrame": 774
+  },
+  {
+   "word": "Tuesday.",
+   "startFrame": 776,
+   "endFrame": 791
+  },
+  {
+   "word": "Nine",
+   "startFrame": 800,
+   "endFrame": 810
+  },
+  {
+   "word": "on",
+   "startFrame": 812,
+   "endFrame": 818
+  },
+  {
+   "word": "Wednesday.",
+   "startFrame": 820,
+   "endFrame": 838
+  },
+  {
+   "word": "Nine",
+   "startFrame": 847,
+   "endFrame": 857
+  },
+  {
+   "word": "on",
+   "startFrame": 859,
+   "endFrame": 865
+  },
+  {
+   "word": "Thursday.",
+   "startFrame": 867,
+   "endFrame": 884
+  },
+  {
+   "word": "Four",
+   "startFrame": 896,
+   "endFrame": 906
+  },
+  {
+   "word": "deposits,",
+   "startFrame": 908,
+   "endFrame": 925
+  },
+  {
+   "word": "nothing",
+   "startFrame": 927,
+   "endFrame": 942
+  },
+  {
+   "word": "reported.",
+   "startFrame": 944,
+   "endFrame": 961
+  },
+  {
+   "word": "Except",
+   "startFrame": 973,
+   "endFrame": 986
+  },
+  {
+   "word": "the",
+   "startFrame": 988,
+   "endFrame": 996
+  },
+  {
+   "word": "bank",
+   "startFrame": 998,
+   "endFrame": 1008
+  },
+  {
+   "word": "noticed.",
+   "startFrame": 1010,
+   "endFrame": 1025
+  },
+  {
+   "word": "That",
+   "startFrame": 1037,
+   "endFrame": 1047
+  },
+  {
+   "word": "has",
+   "startFrame": 1049,
+   "endFrame": 1057
+  },
+  {
+   "word": "a",
+   "startFrame": 1059,
+   "endFrame": 1064
+  },
+  {
+   "word": "name:",
+   "startFrame": 1066,
+   "endFrame": 1076
+  },
+  {
+   "word": "structuring.",
+   "startFrame": 1078,
+   "endFrame": 1100
+  },
+  {
+   "word": "And",
+   "startFrame": 1112,
+   "endFrame": 1120
+  },
+  {
+   "word": "it",
+   "startFrame": 1122,
+   "endFrame": 1128
+  },
+  {
+   "word": "is",
+   "startFrame": 1130,
+   "endFrame": 1136
+  },
+  {
+   "word": "a",
+   "startFrame": 1138,
+   "endFrame": 1143
+  },
+  {
+   "word": "federal",
+   "startFrame": 1145,
+   "endFrame": 1160
+  },
+  {
+   "word": "crime,",
+   "startFrame": 1162,
+   "endFrame": 1174
+  },
+  {
+   "word": "even",
+   "startFrame": 1176,
+   "endFrame": 1186
+  },
+  {
+   "word": "when",
+   "startFrame": 1188,
+   "endFrame": 1198
+  },
+  {
+   "word": "the",
+   "startFrame": 1200,
+   "endFrame": 1208
+  },
+  {
+   "word": "money",
+   "startFrame": 1210,
+   "endFrame": 1222
+  },
+  {
+   "word": "is",
+   "startFrame": 1224,
+   "endFrame": 1230
+  },
+  {
+   "word": "clean.",
+   "startFrame": 1232,
+   "endFrame": 1244
+  },
+  {
+   "word": "Now",
+   "startFrame": 1256,
+   "endFrame": 1264
+  },
+  {
+   "word": "someone",
+   "startFrame": 1266,
+   "endFrame": 1281
+  },
+  {
+   "word": "is",
+   "startFrame": 1283,
+   "endFrame": 1289
+  },
+  {
+   "word": "at",
+   "startFrame": 1291,
+   "endFrame": 1297
+  },
+  {
+   "word": "your",
+   "startFrame": 1299,
+   "endFrame": 1309
+  },
+  {
+   "word": "door.",
+   "startFrame": 1311,
+   "endFrame": 1321
+  },
+  {
+   "word": "Do",
+   "startFrame": 1333,
+   "endFrame": 1339
+  },
+  {
+   "word": "you",
+   "startFrame": 1341,
+   "endFrame": 1349
+  },
+  {
+   "word": "hide",
+   "startFrame": 1351,
+   "endFrame": 1361
+  },
+  {
+   "word": "it,",
+   "startFrame": 1363,
+   "endFrame": 1369
+  },
+  {
+   "word": "or",
+   "startFrame": 1371,
+   "endFrame": 1377
+  },
+  {
+   "word": "hand",
+   "startFrame": 1379,
+   "endFrame": 1389
+  },
+  {
+   "word": "it",
+   "startFrame": 1391,
+   "endFrame": 1397
+  },
+  {
+   "word": "in?",
+   "startFrame": 1399,
+   "endFrame": 1405
+  }
+ ]
+}

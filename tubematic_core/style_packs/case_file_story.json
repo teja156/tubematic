@@ -1,0 +1,102 @@
+{
+  "id": "case_file_story",
+  "label": "Case File Story",
+  "order": 100,
+  "experimental": true,
+  "renderer": "dom",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-case-file-story",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": true,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "openai_key": "OpenAI API key not set. The Case File Story visual style is built on generated painted stills, and only OpenAI makes them. Add an OpenAI key on the dashboard Settings page, or choose another visual style.",
+    "mascot": "Mascots are not available in the Case File Story style: the story has its own lead, and its meters and cards use the room a mascot would stand in. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is a Case File Story, and the following are its intended, approved look: full-frame painted pictures (visible brushwork, one strong coloured light, deep shadows) that push in slowly and sometimes cut hard to a tighter crop of the same painting; one recurring lead with a smooth ivory rounded-cube head, round black glasses and short eyebrows, no nose and no mouth, in the same clothes throughout, and any other person as a plain figure with a featureless round grey head; a row of two or three dark cells near the top, each with a small capital label and a value (meters), whose values change at a cut and which is hidden during cards and close-ups; a large dark panel with one meter's value counting up over a bar; cream cards over the upper part of the frame with a dark band under them, holding a title, a grid of small icons that fills while a counter climbs and a result line, or black bars appearing one at a time under a dashed coloured line with a label; a near-black card with a term in the accent colour, a one-sentence definition, a tilted outlined stamp that slams in and a small citation line; at the end, two buttons over the last painting naming the two options the narration asks about; captions at about 72% of the height showing a short phrase at once, with the words not yet spoken in grey. The meters, cards, stamp and buttons carry their own information and are not redundant text. Do NOT report any of these as defects, and do not suggest a face for the lead, photographs, smooth character animation or more on-screen text: their absence is the style.\n- Do report: the lead looking like a different character in one picture (another head shape or colour, no glasses, different clothes), a nose or a mouth drawn on the lead, garbled lettering or a real logo or brand painted into a picture, a picture that does not show what the narration describes at that moment, a meter value or a card number that contradicts the narration, a card, stamp or button that is cut off or covers the captions, text too small to read on a phone, and a stretch of more than about four seconds where nothing on screen changes apart from the slow push.\n",
+  "captions": {
+    "look": "fill",
+    "background": "shadow",
+    "position": 0.72,
+    "color": "#FFFFFF",
+    "fontFamily": "'Instrument Sans', system-ui, sans-serif",
+    "fontSize": 62,
+    "maxWords": 4
+  },
+  "script": "Every beat's `visual` is a **shot** brief or a **card** brief. A shot brief says where you are, what you are doing and the light (\"night, your kitchen table, the open bag of cash under one lamp\"). A card brief names the card and what is on it: `count card: 2,000 bills`, `bars card: four deposits under the 10,000 line`, `term card: STRUCTURING`. The last beat's brief is always `choice: HIDE / HAND IN`, with the story's own two options.\n\nThe narration is a suspense story told to the viewer in the second person and the present tense. \"You\" are the one person in it, inside a scheme or a money dilemma, and the pictures show a blank-faced lead who stands in for the viewer. Open inside the first scene, on what you do or find (\"You find a bag with forty thousand dollars in it.\"), never on a greeting, a question or a definition. Keep sentences short, one action or one fact each. Name two or three quantities that move with the plot (the cash in hand, the money banked, suspicion as a percentage) and say each new value as a numeral when it changes, because they are meters on screen. Make one number physical, once (\"that is two thousand bills\"), which becomes a count card. When several amounts sit under a limit, say them one by one (\"nine thousand on Monday, nine on Tuesday\"), which becomes a bars card. Then give the consequence: say the real name of what this is (\"that has a name: structuring\"), define it in one plain sentence, and say what it is in law or how it is found out. That becomes a stamped term card, and it comes before the ending. End on a choice: the last sentence is only the two options, put to the viewer as a question (\"Do you hide it, or hand it in?\"), each option one or two words, because they become two buttons. Nothing follows it: no answer, no moral, no request to comment, like or follow.\n\nStay inside these lines. The people are invented and have no names: never use a real person, company, bank or case. Every figure, law, limit and term is real and can be checked. Explain a scheme the way a news report or a textbook does: what it is, why it is a crime and how it gets caught. Never write it as instructions: no tools, no steps a person could follow, no ways to avoid being caught. The scheme never succeeds: it is found out, or named as the crime it is, before the choice. No violence, weapons or threats. Plan at most sixteen pictures for the whole video: a new picture when the place or the moment changes, and the same picture cut tighter for a line that lands on one word.",
+  "routing": {
+    "best_for": [
+      "how a fraud, a scam, a con or money laundering works, told as a story with the viewer inside it",
+      "a heist or a scheme followed from the first step to the moment it is found out",
+      "a money dilemma that ends on a choice: found money, an offer that is too good, a favour that is a crime",
+      "a financial or legal rule shown through someone about to break it (a reporting limit, insider trading, a tax trick)"
+    ],
+    "avoid_for": [
+      "a real, named case, person or company (this style's people are invented)",
+      "a list of scams, tricks, mistakes or tips, one idea each (Bean Explainer fits it)",
+      "an attack or a trick walked through as a mechanism with generic roles or systems (Stick Explainer or System Flow fits it)",
+      "the history of an invention, a discovery or a person (Storybook Atlas fits it)",
+      "an invented hero in an everyday or light-hearted story with no crime and no money at stake (Illustrated fits it)",
+      "money arithmetic worked out step by step (Whiteboard fits it)",
+      "violent crime, or a topic with no person in it"
+    ],
+    "signals": [
+      "the story can be told in the second person: you do it, you are tempted, you are found out",
+      "money, risk or suspicion rises and falls as the plot moves",
+      "a legal or financial term needs naming and defining",
+      "a number can be made physical or set against a limit",
+      "the story can end on a choice between two options"
+    ],
+    "moods": [
+      "dark",
+      "tense",
+      "serious",
+      "suspenseful"
+    ],
+    "images_per_video": "up to 16 painted stills and one lead sheet",
+    "images": 17
+  },
+  "extra": {
+    "accents": [
+      "pink",
+      "amber",
+      "teal",
+      "red"
+    ],
+    "beats": [
+      "shot",
+      "count",
+      "bars",
+      "term",
+      "choice"
+    ],
+    "meter_kinds": [
+      "money",
+      "count",
+      "percent"
+    ],
+    "icons": [
+      "bill",
+      "coin",
+      "envelope",
+      "person",
+      "box",
+      "card",
+      "phone",
+      "document",
+      "key",
+      "goldbar"
+    ],
+    "sheet_lead": "The same character as in the reference picture: the same smooth ivory rounded-cube head, thin round black glasses with plain white lenses, two short dark eyebrows and the same build, exactly. No nose and no mouth. Change only the clothes.",
+    "sheet_style": "Show the character full body three times side by side on a plain pale grey background: front view, three-quarter view, back view, in the same clothes in all three. Neutral standing pose. Painted gouache style with soft visible brushwork and a thin dark outline. No text, no labels, no logos, no watermark, no ground shadow.",
+    "still_lead": "The character in the reference picture, painted into a scene: the same smooth ivory rounded-cube head, round black glasses, short dark eyebrows, build and clothes, exactly, with no nose and no mouth. Any other person in the scene is a plain figure with a smooth round grey head, no glasses and no face.",
+    "still_style": "Painted digital illustration in a cinematic gouache style: soft visible brushwork, one strong coloured light source, deep warm shadows, rich saturated colour, slightly simplified shapes, a film-still composition for a vertical phone screen with the subject in the middle of the frame and calmer, darker areas at the very top and bottom. No text, no letters, no numbers, no logos, no brand names, no watermark, no speech bubbles, no frame."
+  }
+}

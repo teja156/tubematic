@@ -51,8 +51,8 @@ style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
 does not decide any beat's treatment. `cartoon_3d`, `system_flow`, `bean_explainer`, `whiteboard`,
-`storybook_atlas`, `terminal_doc` and `under_the_hood` replace the scene system with one whole-video
-scene of their own.
+`storybook_atlas`, `terminal_doc`, `under_the_hood` and `case_file_story` replace the scene system
+with one whole-video scene of their own.
 
 | `visual_style` | Canvas | Figures | Hand-drawn line art | Generated characters |
 |---|---|---|---|---|
@@ -66,6 +66,7 @@ scene of their own.
 | `storybook_atlas` | `light`, painted over by its own paper | Its own cast | No | No |
 | `terminal_doc` | `dark` | No | No | No |
 | `under_the_hood` | `dark` | Its own presenter | No | No |
+| `case_file_story` | `dark` | Its own lead, painted into the stills | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
@@ -77,22 +78,25 @@ against the look it was meant to have. `cartoon_3d` replaces the scene system wi
 `bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)), `whiteboard`
 with one board scene ([Whiteboard](#whiteboard)), `storybook_atlas` with one picture-book scene
 ([Storybook Atlas](#storybook-atlas)), `terminal_doc` with one typographic scene
-([Terminal Doc](#terminal-doc)), and `under_the_hood` with one scene of annotated close-up
-photographs ([Under the Hood](#under-the-hood)).
+([Terminal Doc](#terminal-doc)), `under_the_hood` with one scene of annotated close-up
+photographs ([Under the Hood](#under-the-hood)), and `case_file_story` with one scene of painted
+stills, meters and number cards ([Case File Story](#case-file-story)).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
-chosen. Three styles have a need:
+chosen. Four styles have a need:
 
 - `illustrated` needs a stored OpenAI key, because an OpenAI image model draws its characters
   (`ILLUSTRATED_NEEDS_OPENAI_KEY`).
 - `under_the_hood` needs a stored OpenAI key, because its plates are generated photographs. The
+  refusal text is its pack's `messages.openai_key`.
+- `case_file_story` needs a stored OpenAI key, because its shots are generated paintings. The
   refusal text is its pack's `messages.openai_key`.
 - `cartoon_3d` needs a renderer whose [GPU test](20-gpu-and-remote-renderers.md#the-gpu-test) passed
   (`CARTOON3D_NEEDS_GPU`, `CARTOON3D_GPU_UNKNOWN`). Software WebGL can render the style, at about 50
   minutes for a 90-second Short, so the rule is a policy.
 
 `get_video` reports the two conditions to the agent as `illustrated_available` (true when an
-OpenAI key is stored, which Under the Hood needs too) and
+OpenAI key is stored, which Under the Hood and Case File Story need too) and
 `cartoon_3d_available`, and gives the video's own style as `style`: its label, canvas, permissions
 and `authoring_skill`.
 
@@ -985,6 +989,105 @@ allows regenerating an existing one. `mcp/tests/test_under_the_hood.py` pins `un
 `contract.ts` and to the pack. The pack's `captions` fill every `subtitles` key the config leaves out.
 The text-layout audit samples each plate as if it were a scene, and stops before a zoom-through.
 
+## Case File Story
+
+A Case File Story video is one installed scene, `CaseFileStory`, that spans the whole video: a
+suspense story told to the viewer in the second person, in painted stills that fill the frame and
+push in slowly. A row of two or three meters near the top changes with the plot. Cards between the
+shots make the numbers physical, and the video ends on the last painting with two choice buttons.
+The captions are the shared caption layer in its `fill` look at 72% of the height. The agent writes
+no code for it. Its props carry `caseFile: {accent, hud, beats}`, written with the
+`tubematic-case-file-story` skill, whose `reference/contract.md` documents every field and whose
+`reference/example-config.json` is the worked example.
+
+| Beat | What the scene draws |
+|---|---|
+| `shot` | A painted still covering the frame, pushing in 2.5% a second. `punch` cuts 1.5 times tighter on a word, `set` changes meters on the cut, `panel` shows one meter large while it counts, and `hud: false` hides the meter row |
+| `count` | A cream card: a title, a grid of 40 icons that fills while a counter climbs, and a result line |
+| `bars` | A cream card: black bars that appear one per counted word under a dashed threshold line with its label, and a payoff line |
+| `term` | A near-black card: a term in the accent colour, a one-sentence definition, a tilted stamp that slams in and a citation line |
+| `choice` | The last beat: a still with two buttons naming the options the narration asks about |
+
+The frame has fixed zones, so nothing the agent places can land on another: the meter row from 232
+to 338 px, the picture or a card's panel down to 1240 px, the captions centred at 72% of the height
+and the choice buttons from 1500 px. A cream card stops above the captions, which sit on the dark
+band under it, so one caption colour reads on every beat.
+
+The pack's `script` text sets the story's form, because Auto picks the style before the script is
+written: second person and present tense, two or three quantities that move, one number made
+physical, the real name of what happened with its definition, and a last sentence that is only the
+two options. It also sets the subject's limits: invented people with no names, real figures and
+laws, a scheme explained as a news report would and never as instructions, an ending in which the
+scheme is found out or named as a crime, and no violence.
+
+### The lead and the stills
+
+The person in every painting is one house character, the lead, who stands in for the viewer. The
+lead is painted into each still by the image model from a reference picture, which is what keeps
+the same character from one still to the next:
+
+1. `mcp/case_file_assets/lead.png` is the house lead's sheet. It ships in the image beside
+   `mcp/server.py`.
+2. `generate_image(video_id, "lead", <the outfit>, reference="house")` makes the video's own lead
+   sheet from it: the same head and build in the clothes the story calls for.
+3. `generate_image(video_id, <name>, <the scene>, reference="lead")` paints that character into a
+   scene. A still with no lead in it takes no reference.
+
+A call with a reference goes to OpenAI's image edits endpoint with the reference as a file part,
+using the `image_model` setting. For this style `server.py::_case_file_image_plan` adds the pack's
+`extra` text to every prompt: the lead's description before the scene and the painting style after
+it. The house look is then the same whatever the agent writes, and the agent's prompt is only the
+scene. The lead sheet is always 16:9. The same function refuses, before any paid call, a
+`reference` on a video of another style, a lead sheet asked for without `reference="house"`, the
+house sheet used for anything else, and a reference that is not yet a picture of this video.
+
+`generate_image` refuses a new image name once the video holds 16 stills and the lead sheet, the
+pack's `routing.images`, and allows regenerating an existing name
+([`generate_image`](06-mcp-server.md#generate_image)). The skill has the agent open every still with
+`read_image` and compare the lead with the sheet.
+
+### The scene and its checks
+
+The renderer's side is `src/scenes/installed/CaseFileStory.tsx` with `caseFileStory/`:
+
+- `contract.ts` holds the limits, timings, zones, the number format, the camera on a still and the
+  frames at which a beat's parts appear (`partFrames`).
+- `stage.ts` works out the beat on screen, the view of its still, each meter's value and its
+  dissolve, and how far a card has built.
+- `icons.ts` draws the count card's icons on one Canvas 2D layer.
+
+A still is an `<image>` in an SVG the size of the frame whose `viewBox` selects the part on screen.
+A scaled-up `<Img>` is dropped by the CPU renderer past about 3000 px a side, which a punch-in on a
+push reaches. The scene uses no SVG filter, gradient, pattern or `stroke-dasharray`: the threshold's
+dashes are rectangles. Measured on the CPU renderer over the whole example video, it costs about
+1.6 times System Flow's example, the ratio Under the Hood measured. Nearly all of that is the slow
+push: every frame is a new full-frame painting to capture and encode, which the look requires.
+
+`mcp/case_file_story.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `case_file_story` video has anything but the one `CaseFileStory` scene, from frame 0 for
+  `totalFrames`, or another style uses `CaseFileStory`.
+- The accent is not one of the pack's four, or `hud` is not 2 or 3 meters with an id of their own, a
+  label of at most 12 capitals, a kind and a whole-number value (a percentage at most 100).
+- The first beat is not a shot at frame 0, a later beat does not start within 2 frames of a word,
+  the video has more than 48 beats, or a beat carries a field its type does not take.
+- The last beat is not the only `choice`, or no `term` card comes before it. The consequence is
+  shown before the viewer is asked to choose.
+- An image is not this video's `/public/<video_id>/images/` path, is the lead sheet, or the beats
+  use more than 16 different stills.
+- A shot lasts under 1 second, a punch-in is off a word or within 12 frames of the shot's start or
+  end, `set` names a meter `hud` does not list, or `panel` names a meter the shot's `set` does not
+  change.
+- A card's text is over its limit, an icon or a kind is not in the pack's list, a bar, a result, a
+  payoff line, a definition, a stamp or a choice button is timed off a word or out of order, or a
+  card's last part appears less than 20 frames before the beat ends.
+- More than 4 seconds pass between one part of a beat and the next, or between the last part and
+  the beat's end, the stretch the AI review is told to report.
+
+`mcp/tests/test_case_file_story.py` pins `case_file_story.py` to `contract.ts` and to the pack. The
+pack's `captions` fill every `subtitles` key the config leaves out. The text-layout audit samples
+each beat as if it were a scene, from the frame its last part has appeared.
+
 ---
 
 ## Mascots
@@ -1049,9 +1152,9 @@ The geometry constants in `mascots.py` are copies of the engine's, of `Subtitles
 `text_audit.py`'s. Agreement tests keep them in step.
 
 The mascot is drawn under the captions, so it cannot hide one. It can hide a scene's text, which
-[`validate_job` reports as a warning](#text-layout-warnings). A Cartoon 3D or Under the Hood video
-cannot have a mascot: the first has no mascot layer, and the second's presenter stands where a
-mascot would.
+[`validate_job` reports as a warning](#text-layout-warnings). A Cartoon 3D, Under the Hood or Case
+File Story video cannot have a mascot: the first has no mascot layer, the second's presenter stands
+where a mascot would, and the third has its own lead and fills the frame with meters and cards.
 
 ---
 

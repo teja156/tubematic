@@ -54,6 +54,7 @@ import bean_explainer  # shot windows for the whole-video Bean Explainer scene (
 import storybook_atlas  # chapter windows for the whole-video Storybook Atlas scene (TMDEV-200)
 import terminal_doc  # beat windows for the whole-video Terminal Doc scene (TMDEV-199)
 import under_the_hood  # plate windows for the whole-video Under the Hood scene (TMDEV-201)
+import case_file_story  # beat windows for the whole-video Case File Story scene (TMDEV-202)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
 
@@ -268,6 +269,19 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
                         - under_the_hood.TIMING["zoomOut"])
                 if first > last:
                     first = last = p_start + max(0, (p_end - p_start) // 2)
+                span = last - first
+                count = min(SAMPLES_PER_SCENE, span + 1)
+                step = max(1, span // max(1, count - 1))
+                passes.append({"scene": index, "first": first, "step": step,
+                               "count": min(count, span // step + 1)})
+            continue
+        # A Case File Story scene spans the whole video too; each beat is a cut,
+        # sampled like a scene from the frame its last part has appeared.
+        cfs_beats = (case_file_story.beat_windows(scene_config)
+                     if case_file_story.is_case_file_scene(scene) else [])
+        if cfs_beats:
+            for first, b_end in cfs_beats:
+                last = b_end - 1
                 span = last - first
                 count = min(SAMPLES_PER_SCENE, span + 1)
                 step = max(1, span // max(1, count - 1))

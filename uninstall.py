@@ -40,6 +40,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-storybook-atlas",
     "tubematic-terminal-doc",
     "tubematic-under-the-hood",
+    "tubematic-case-file-story",
     "tubematic-style-routing",
     "tubematic-mascot-builder",
 ]

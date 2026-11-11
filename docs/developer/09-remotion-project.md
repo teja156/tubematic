@@ -178,6 +178,10 @@ with no tween; and its last frame before the next line is drawn at 60%. An `emph
 bold and gets a thin blue selection box: two round handles pop in 2 frames after it appears, then the
 box's top and bottom edges grow from its centre over 3 frames. The Under the Hood style uses this look.
 
+With `look` set to `"fill"`, the whole phrase is on screen from its first frame, with no rise or
+fade. The words still to come are grey, and each turns to the text colour over 2 frames as it is
+spoken and stays there. The Case File Story style uses this look.
+
 ### Fonts
 
 The default font is the container-local `system-ui, sans-serif`. The captions are on the path of every
@@ -323,6 +327,9 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - An Under the Hood video has the one `UnderTheHood` scene and its plates and events pass the Under
   the Hood checks; no other video uses `UnderTheHood`
   ([Scene Authoring](10-scene-authoring.md#under-the-hood)).
+- A Case File Story video has the one `CaseFileStory` scene and its meters and beats pass the Case
+  File Story checks; no other video uses `CaseFileStory`
+  ([Scene Authoring](10-scene-authoring.md#case-file-story)).
 
 The tool refuses the write while another session holds the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
@@ -330,7 +337,7 @@ is queued or rendering (`status_mismatch`).
 
 `canvas` is the only default the tool writes into most files. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
-style's look. A Bean Explainer, Storybook Atlas or Under the Hood config gets them under whatever
+style's look. A Bean Explainer, Storybook Atlas, Under the Hood or Case File Story config gets them under whatever
 `subtitles` keys it sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config
 gets them the same way, with its skin's colours and font over the pack's. An Under the Hood config
 also gets each plate's `aspect`, read from its photograph. The
@@ -383,8 +390,8 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`SystemFlow`, `BeanExplainer`, `Whiteboard`, `TerminalDoc` and `UnderTheHood` are referenced the
-same way, by videos of their own style only. The other
+`SystemFlow`, `BeanExplainer`, `Whiteboard`, `TerminalDoc`, `UnderTheHood` and `CaseFileStory` are
+referenced the same way, by videos of their own style only. The other
 files are wrappers and helpers that a scene imports. The directory's `README.md` is the catalogue the
 agent reads.
 
@@ -530,6 +537,16 @@ Space Grotesk, which this scene loads. The presenter is drawn once per look as a
 for a person to check the drawing: `npx remotion still src/index.ts PresenterSheet out.png
 --frame=0`. No video uses it. The contract and the projection are in
 [Under the Hood](10-scene-authoring.md#under-the-hood).
+
+### `CaseFileStory`
+
+`CaseFileStory` draws a whole Case File Story video from `props.caseFile`: its painted stills with
+their push-ins and punch-ins, the meter row, the large meter panel, the count, bars and term cards
+and the closing choice buttons; its helpers are in `caseFileStory/`. It loads Instrument Sans (700)
+and IBM Plex Mono (400 and 700) from `public/fonts/` before the first frame; the style's captions
+use Instrument Sans, which this scene loads. It decodes every still before the first frame, and a
+still that does not load fails the render. The contract and the checks are in
+[Case File Story](10-scene-authoring.md#case-file-story).
 
 ### Figure and panel components
 
@@ -691,3 +708,8 @@ License 1.1, with the license beside them.
 
 `UnderTheHood`'s presenter is an original drawing. Its fonts are the Space Grotesk and JetBrains Mono
 files in `public/fonts/` (SIL Open Font License 1.1). Its photographs are generated for each video.
+
+`CaseFileStory`'s icons are original drawings, and its fonts are the Instrument Sans and IBM Plex
+Mono files in `public/fonts/` (SIL Open Font License 1.1). Its stills are generated for each video
+from the house lead's sheet, `mcp/case_file_assets/lead.png`, an original character generated for
+this project.

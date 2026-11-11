@@ -94,13 +94,15 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   as the table in the test says.
 - The refusal messages come from the packs, and the GPU gate passes only `working`.
 - `public_list` explains an unavailable style, and `agent_view` names the authoring skill.
-- System Flow, Bean Explainer, Storybook Atlas, Terminal Doc and Under the Hood each have their
+- System Flow, Bean Explainer, Storybook Atlas, Terminal Doc, Under the Hood and Case File Story each have their
   renderer, canvas, skill and permissions pinned; Bean Explainer's bean, Storybook Atlas's people and
   Under the Hood's presenter count as figures but neither line art nor generated characters.
   Storybook Atlas's captions use the `label` background, Terminal Doc's are the `log` look, and each
   Terminal Doc skin changes only caption keys. Under the Hood needs an OpenAI key, caps its
-  photographs at 12, takes no mascot and uses the `selection` caption look. A pack that takes no
-  mascot must say why.
+  photographs at 12, takes no mascot and uses the `selection` caption look. Case File Story needs
+  an OpenAI key, counts 16 stills and a lead sheet, takes no mascot, uses the `fill` caption look,
+  carries the four prompt texts `generate_image` adds, and its `script` text states the ending and
+  the subject limits. A pack that takes no mascot must say why.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
   routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
   apart from.
@@ -123,7 +125,7 @@ the fixed topic set in `tests/fixtures/style_routing_cases.json`
 - Each candidate carries its routing block and its image count, and the list shares no state with
   the packs.
 - A candidate is unavailable for the same reasons that refuse the choice: no OpenAI key, a GPU that
-  is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood).
+  is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood, Case File Story).
   `scenes` is always available.
 - Every topic names only real outcomes, and every outcome is the first expectation of at least
   three topics.

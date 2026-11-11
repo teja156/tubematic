@@ -100,6 +100,7 @@ import doodle_preview  # draws a Whiteboard video's own doodles for the agent to
 import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import storybook_atlas  # the Storybook Atlas checks (TMDEV-200), the same way
 import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
+import case_file_story  # the Case File Story checks (TMDEV-202), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
@@ -324,9 +325,10 @@ SUBTITLE_NUMERIC_RANGES = {
 SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
                  "background", "position", "uppercase", "emphasis", "accent", "look")
 # look: "selection" builds the line word by word with the key words in a blue
-# text-selection box (the Under the Hood style); "plain", or absent, is the
-# look every other style has.
-SUBTITLE_LOOKS = ("plain", "selection")
+# text-selection box (the Under the Hood style); "fill" shows the whole phrase
+# at once with the words still to come in grey (the Case File Story style);
+# "plain", or absent, is the look every other style has.
+SUBTITLE_LOOKS = ("plain", "selection", "fill")
 # emphasis: indexes into the narration's words drawn on a red box (the key word
 # of a line). One in SUBTITLE_EMPHASIS_EVERY words at most: emphasis on every
 # other word is no emphasis. write_scene_config checks the indexes against the
@@ -2347,12 +2349,14 @@ def update_video(
     whole video is one typographic scene written as data: strings, numbers and
     ciphertext on a dark terminal), "under_the_hood" (the whole video is one
     scene of close-up photographs with labels pinned to them, written as data;
-    needs an OpenAI key) or "cartoon_3d" (one 3D world; needs a working GPU).
+    needs an OpenAI key), "case_file_story" (the whole video is one scene of
+    painted stills with a meter row and number cards, written as data; needs
+    an OpenAI key) or "cartoon_3d" (one 3D world; needs a working GPU).
     get_pipeline_status's visual_styles lists every style and whether this
     install can make it. The scene styles are permissions, not looks. Like script_profile_id, a human
     picks it at the topic checkpoint and it is frozen afterwards; set it here
     only from a slash command that creates a video, before flipping it to
-    TOPIC_APPROVED. "illustrated" and "under_the_hood" are refused while no
+    TOPIC_APPROVED. "illustrated", "under_the_hood" and "case_file_story" are refused while no
     OpenAI key is stored (get_pipeline_status's illustrated_available is false) — offer the other
     styles instead. Under "auto", Auto picks the style itself at
     TOPIC_APPROVED with choose_visual_style, never with this field. A changed
@@ -2364,7 +2368,7 @@ def update_video(
     already uses. Writable only when the style does not already fix a canvas —
     that is "auto" and "illustrated"; "motion_graphics", "stick",
     "system_flow", "whiteboard", "bean_explainer", "storybook_atlas", "terminal_doc",
-    "under_the_hood" and "cartoon_3d" fix theirs.
+    "under_the_hood", "case_file_story" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer the video uses — "dom"
     (the scene components). Auto reaches Cartoon 3D by picking the cartoon_3d
@@ -3074,7 +3078,7 @@ def upsert_project(
         videos start in — "auto" or any style in get_pipeline_status's
         visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
         "bean_explainer", "storybook_atlas", "terminal_doc", "cartoon_3d",
-        "whiteboard", "under_the_hood").
+        "whiteboard", "under_the_hood", "case_file_story").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -5624,6 +5628,54 @@ def _redact_keys(text: str) -> str:
     return text
 
 
+# The house lead's reference sheet (TMDEV-202): every Case File Story video's
+# own lead sheet is made from it. Shipped beside this module, so it is in the
+# image wherever mcp/ is.
+CASE_FILE_HOUSE_SHEET = Path(__file__).resolve().parent / "case_file_assets" / "lead.png"
+
+
+def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: str,
+                          aspect_ratio: str, reference: str) -> dict:
+    """What generate_image sends for this call: {prompt, aspect_ratio,
+    ref_path}, or {error}. Only a Case File Story video takes a reference or
+    has its prompt extended; every other video gets its arguments back
+    unchanged with ref_path None. Nothing here spends money."""
+    cfs = case_file_story
+    if style != cfs.STYLE_ID:
+        if reference:
+            return {"error": "reference is for a case_file_story video only: this video's visual_style is "
+                             f"{style or 'auto'!r}. Leave it out."}
+        return {"prompt": prompt, "aspect_ratio": aspect_ratio, "ref_path": None}
+    extra = tvs.pack(cfs.STYLE_ID)["extra"]
+    if image_name == cfs.LEAD_NAME:
+        if reference != cfs.HOUSE_REFERENCE:
+            return {"error": f"The image named {cfs.LEAD_NAME!r} is this video's lead sheet and is made from "
+                             f"the house lead: call generate_image(video_id, \"{cfs.LEAD_NAME}\", <the outfit>, "
+                             f"reference=\"{cfs.HOUSE_REFERENCE}\")."}
+        if not CASE_FILE_HOUSE_SHEET.is_file():
+            return {"error": "The house lead sheet is missing from this install (mcp/case_file_assets/lead.png)."}
+        return {"prompt": f"{extra['sheet_lead']} The character wears: {prompt.strip()} {extra['sheet_style']}",
+                "aspect_ratio": "16:9", "ref_path": CASE_FILE_HOUSE_SHEET}
+    if reference == cfs.HOUSE_REFERENCE:
+        return {"error": f"reference=\"{cfs.HOUSE_REFERENCE}\" only makes the lead sheet (image_name "
+                         f"\"{cfs.LEAD_NAME}\"). For a still with the lead in it, pass reference=\"{cfs.LEAD_NAME}\"."}
+    if not reference:
+        return {"prompt": f"{prompt.strip()} {extra['still_style']}", "aspect_ratio": aspect_ratio, "ref_path": None}
+    err = _check_image_name(reference, ".png")
+    if err:
+        return {"error": err.replace("image_name", "reference")}
+    try:
+        ref_path = tjobs.image_file(JOBS_DIR, video_id, f"{reference}.png")
+    except tjobs.UnsafePath as e:
+        return {"error": str(e)}
+    if not ref_path.is_file():
+        hint = (f" Make the lead sheet first: generate_image(video_id, \"{cfs.LEAD_NAME}\", <the outfit>, "
+                f"reference=\"{cfs.HOUSE_REFERENCE}\")." if reference == cfs.LEAD_NAME else "")
+        return {"error": f"reference {reference!r} is not an image of this video yet.{hint}"}
+    return {"prompt": f"{extra['still_lead']} {prompt.strip()} {extra['still_style']}",
+            "aspect_ratio": aspect_ratio, "ref_path": ref_path}
+
+
 # Names a capped video's generate_image calls are generating right now. The
 # folder alone is a check-then-act race: parallel calls each see 11 pictures,
 # all pass and all are billed. A reservation counts until the file exists, and
@@ -5637,15 +5689,15 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
     """The refusal for one generated photograph too many, or "" (and then the
     name is reserved for this call).
 
-    A style whose pack caps its photographs (Under the Hood: routing.images)
-    is refused a NEW image name once the video's images folder and the calls
-    in flight hold that many; regenerating an existing name stays allowed,
-    because a bad still must be replaceable. Checked before the paid call,
-    since the cap is about spend."""
+    A style whose pack caps its pictures (Under the Hood and Case File Story:
+    routing.images) is refused a NEW image name once the video's images folder
+    and the calls in flight hold that many; regenerating an existing name
+    stays allowed, because a bad still must be replaceable. Checked before the
+    paid call, since the cap is about spend."""
     with _conn() as con:
         vrow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
     style = ((vrow["visual_style"] if vrow else "") or "").strip()
-    if style != under_the_hood.STYLE_ID:
+    if style not in (under_the_hood.STYLE_ID, case_file_story.STYLE_ID):
         return ""
     cap = tvs.pack(style)["routing"].get("images", 0)
     with _image_reservations_lock:
@@ -5660,6 +5712,10 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
             held[image_name] = now
             _image_reservations[video_id] = held
             return ""
+    if style == case_file_story.STYLE_ID:
+        return (f"This Case File Story video already has {len(names)} pictures, counting the lead sheet and "
+                f"any being made now, the most a video may use ({cap}). Reuse a still in another shot with "
+                "a different focus or a punch-in, or regenerate one under its own name to replace it.")
     return (f"This Under the Hood video already has {len(names)} photographs, counting any being made "
             f"now, the most a video may use ({cap}). Reuse one of them on another plate with a "
             "different focus or zoom, or regenerate one under its own name to replace it.")
@@ -5677,7 +5733,7 @@ def _release_image_reservation(video_id: str, image_name: str) -> None:
 
 @mcp.tool
 def generate_image(video_id: str, image_name: str, prompt: str,
-                   aspect_ratio: str = "9:16") -> dict:
+                   aspect_ratio: str = "9:16", reference: str = "") -> dict:
     """Generate an image from a text prompt and store it in the video's job dir.
 
     image_name: filename stem without extension (e.g. 'city-skyline').
@@ -5718,6 +5774,20 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     An under_the_hood video may have at most 12 photographs: a 13th new
     image_name is refused before the paid call; regenerating an existing name
     is allowed.
+
+    reference: for a case_file_story video only (any other video refuses it).
+    The picture is then made FROM a reference picture, which is what keeps the
+    lead the same character in every still:
+      - reference="house" with image_name="lead" makes this video's lead
+        sheet: the house lead in the outfit your prompt describes. Make it
+        first, once. It is always 16:9 and it is not a picture for the video.
+      - reference="lead" (or the name of another image of this video) paints
+        that character into the scene your prompt describes.
+      - no reference: a still with no lead in it (an object, an exterior).
+    For a case_file_story video the style's fixed painting instructions are
+    added to every prompt, so describe only the scene: the place, what the
+    lead is doing, the light. Such a video may have at most 16 stills and the
+    lead sheet; one more new image_name is refused before the paid call.
     """
     err = _video_id_error(video_id)
     if err:
@@ -5751,6 +5821,16 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     if not prompt or not prompt.strip():
         return {"error": "prompt must not be empty"}
 
+    # Case File Story (TMDEV-202): the reference picture, the fixed painting
+    # instructions and the sheet's shape, all settled before any paid call.
+    with _conn() as con:
+        srow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    plan = _case_file_image_plan((srow["visual_style"] or "").strip(), video_id, image_name, prompt,
+                                 aspect_ratio, reference)
+    if "error" in plan:
+        return plan
+    prompt, aspect_ratio, ref_path = plan["prompt"], plan["aspect_ratio"], plan["ref_path"]
+
     # TMDEV-61: claim (or refresh) this video's scene-work claim before
     # spending on a paid image call — a second session already claimed by a
     # different owner is rejected here, before any billed request goes out.
@@ -5774,15 +5854,27 @@ def generate_image(video_id: str, image_name: str, prompt: str,
         resp = None  # stays None when the request itself fails
         try:
             with httpx.Client(timeout=180) as client:
-                resp = client.post(
-                    OPENAI_IMAGES_URL,
-                    headers={"Authorization": f"Bearer {api_key}"},
-                    json={
-                        "model": model,
-                        "prompt": prompt,
-                        "size": OPENAI_SIZE_BY_ASPECT[aspect_ratio],
-                    },
-                )
+                if ref_path is None:
+                    resp = client.post(
+                        OPENAI_IMAGES_URL,
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        json={
+                            "model": model,
+                            "prompt": prompt,
+                            "size": OPENAI_SIZE_BY_ASPECT[aspect_ratio],
+                        },
+                    )
+                else:
+                    # Multipart, as generate_character sends a reference: the
+                    # edits endpoint takes the picture as an `image[]` part.
+                    # No `background`, so the answer is an opaque painting.
+                    resp = client.post(
+                        OPENAI_IMAGE_EDITS_URL,
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        files={"image[]": (ref_path.name, ref_path.read_bytes(), "image/png")},
+                        data={"model": model, "prompt": prompt,
+                              "size": OPENAI_SIZE_BY_ASPECT[aspect_ratio]},
+                    )
             if resp.status_code == 200:
                 usage = _response_json(resp).get("usage")
                 _record_usage(service="openai", model=model, operation="image",
@@ -5829,6 +5921,7 @@ def generate_image(video_id: str, image_name: str, prompt: str,
             "provider": "openai",
             "model": model,
             "aspect_ratio": aspect_ratio,
+            "reference": reference,
             "size_bytes": len(image_bytes),
         }
     finally:
@@ -6493,13 +6586,15 @@ def write_scene_config(video_id: str, config: dict) -> dict:
     scene-config: **never** write scene-config.json using Claude Code's file
     tools, the same rule write_scene_file enforces for .tsx files.
 
-    A System Flow, Bean Explainer, Whiteboard, Storybook Atlas or Under the
-    Hood video is one installed scene (SystemFlow, BeanExplainer, Whiteboard,
-    StorybookAtlas or UnderTheHood) from frame 0 for totalFrames, whose props
-    hold the whole video as data; that data is checked here against the
-    style's contract (the tubematic-system-flow, tubematic-bean-explainer,
-    tubematic-whiteboard, tubematic-storybook-atlas and tubematic-under-the-hood
-    skills document it) and refused with one sentence per problem. Each style
+    A System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Under the
+    Hood or Case File Story video is one installed scene (SystemFlow,
+    BeanExplainer, Whiteboard, StorybookAtlas, UnderTheHood or CaseFileStory)
+    from frame 0 for totalFrames, whose props hold the whole video as data;
+    that data is checked here against the style's contract (the
+    tubematic-system-flow, tubematic-bean-explainer, tubematic-whiteboard,
+    tubematic-storybook-atlas, tubematic-under-the-hood and
+    tubematic-case-file-story skills document it) and refused with one
+    sentence per problem. Each style
     fills subtitles with its own caption look when the config has none. For
     Under the Hood this also fills each plate's aspect from its photograph's
     file.
@@ -7075,6 +7170,21 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         given = config.get("subtitles")
         if given is None or isinstance(given, dict):
             config["subtitles"] = {**tvs.pack(under_the_hood.STYLE_ID)["captions"], **(given or {})}
+    # ── Case File Story (TMDEV-202) ──────────────────────────────────────────
+    # The same shape again: one installed CaseFileStory scene whose props hold
+    # the meters and the beats (painted stills and number cards) as data.
+    cfs_err = case_file_story.check_scene_use(row["visual_style"], scenes)
+    if cfs_err:
+        return {"error": cfs_err}
+    if (row["visual_style"] or "") == case_file_story.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = case_file_story.check(config, fps, word_starts,
+                                         tvs.pack(case_file_story.STYLE_ID)["extra"], video_id)
+        if problems:
+            return {"error": "The Case File Story video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(case_file_story.STYLE_ID)["captions"], **(given or {})}
 
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the

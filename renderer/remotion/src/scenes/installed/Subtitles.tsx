@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, interpolate, interpolateColors, useCurrentFrame, useVideoConfig } from "remotion";
 import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
 import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
 import { loadFont as loadRoboto } from "@remotion/google-fonts/Roboto";
@@ -133,10 +133,13 @@ export interface SubtitleConfig {
    * "selection": words appear one by one as they are spoken, the latest in
    * bold, the earlier ones of the line in grey regular, and each `emphasis`
    * word gets a thin blue text-selection box with two round handles instead
-   * of the red box. The Under the Hood style uses it. Absent means the plain
-   * look every other style has.
+   * of the red box. The Under the Hood style uses it.
+   * "fill": the whole phrase is on screen from its first frame with no rise;
+   * the words still to come are grey, and each turns to the text colour as it
+   * is spoken and stays there. The Case File Story style uses it.
+   * Absent means the plain look every other style has.
    */
-  look?: "plain" | "selection";
+  look?: "plain" | "selection" | "fill";
 }
 
 /** The "label" plate: ivory paper, ink rule and text, a flat offset shadow. */
@@ -243,6 +246,10 @@ export function visibleChunkIndex(
   const tail = next ? Math.min(next[0].startFrame, held) : held;
   return frame >= tail ? null : index;
 }
+
+/** The "fill" look: the grey of a word not yet spoken, and the frames its turn takes. */
+const FILL_AHEAD = "#979295";
+const FILL_FRAMES = 2;
 
 /** Frames a word is shown before its audio starts: the eye reads ahead of the ear. */
 export const SELECTION_LEAD = 2;
@@ -357,8 +364,9 @@ export default function Subtitles({
   // size anything larger reflows the line and makes fast captions unreadable.
   const age = frame - chunk[0].startFrame;
   // A label cross-fades in 2 frames and does not move: it is printed, not spoken.
-  const rise = label ? 0 : interpolate(age, [0, 4], [14, 0], { extrapolateRight: "clamp" });
-  const fade = interpolate(age, [0, label ? 2 : 3], [0, 1], { extrapolateRight: "clamp" });
+  const fill = look === "fill";
+  const rise = label || fill ? 0 : interpolate(age, [0, 4], [14, 0], { extrapolateRight: "clamp" });
+  const fade = fill ? 1 : interpolate(age, [0, label ? 2 : 3], [0, 1], { extrapolateRight: "clamp" });
 
   const diamond = (
     <span style={{ flex: "none", width: fontSize * 0.2, height: fontSize * 0.2, background: ink, transform: "rotate(45deg)" }} />
@@ -431,6 +439,11 @@ export default function Subtitles({
                 <span style={{ position: "relative" }}>{w.word}</span>
               </span>
             );
+          }
+          if (fill) {
+            // a word turns from grey to the text colour over two frames and stays
+            const k = Math.max(0, Math.min(1, (frame - w.startFrame + 1) / FILL_FRAMES));
+            return <span key={`${i}-${w.word}`} style={{ color: interpolateColors(k, [0, 1], [FILL_AHEAD, ink]) }}>{w.word}</span>;
           }
           return (
             <span

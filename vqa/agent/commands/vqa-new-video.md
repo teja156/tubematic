@@ -33,7 +33,9 @@ your own judgment.
     data), `whiteboard` (the whole video is one big board of handwriting and doodles, written as
     data), `storybook_atlas` (a picture book told in chapters, written as data), `terminal_doc` (strings,
     numbers and ciphertext on a dark terminal, written as data), `under_the_hood` (close-up photographs
-    of one object with labels pinned to its parts, written as data; it needs an OpenAI key) or
+    of one object with labels pinned to its parts, written as data; it needs an OpenAI key),
+    `case_file_story` (a second-person suspense story in painted stills with meters and number
+    cards, written as data; it needs an OpenAI key) or
     `cartoon_3d` (a 3D world; it needs a working GPU). There is no dashboard here, so this chat is the
     only place that choice can be made, and it is frozen the moment the topic is approved.
     `get_pipeline_status()` returns every style as `visual_styles`,

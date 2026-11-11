@@ -1,0 +1,967 @@
+{
+ "_about": "Shared cases for the Case File Story contract (TMDEV-202): mcp/case_file_story.py and renderer/remotion/src/scenes/installed/caseFileStory/ must both give these answers. Run by mcp/tests/test_case_file_story.py and caseFileStory.test.ts.",
+ "format_value": [
+  {
+   "kind": "money",
+   "value": 0,
+   "text": "$0"
+  },
+  {
+   "kind": "money",
+   "value": 999,
+   "text": "$999"
+  },
+  {
+   "kind": "money",
+   "value": 40000,
+   "text": "$40,000"
+  },
+  {
+   "kind": "money",
+   "value": 999999,
+   "text": "$999,999"
+  },
+  {
+   "kind": "money",
+   "value": 1000000,
+   "text": "$1M"
+  },
+  {
+   "kind": "money",
+   "value": 1250000,
+   "text": "$1.2M"
+  },
+  {
+   "kind": "money",
+   "value": 1999999,
+   "text": "$1.9M"
+  },
+  {
+   "kind": "money",
+   "value": 999999999,
+   "text": "$999.9M"
+  },
+  {
+   "kind": "count",
+   "value": 4200,
+   "text": "4,200"
+  },
+  {
+   "kind": "count",
+   "value": 1000000,
+   "text": "1M"
+  },
+  {
+   "kind": "count",
+   "value": 12345678,
+   "text": "12.3M"
+  },
+  {
+   "kind": "percent",
+   "value": 0,
+   "text": "0%"
+  },
+  {
+   "kind": "percent",
+   "value": 58,
+   "text": "58%"
+  },
+  {
+   "kind": "percent",
+   "value": 100,
+   "text": "100%"
+  }
+ ],
+ "hud_cells": [
+  {
+   "n": 2,
+   "cells": [
+    [
+     60.0,
+     474.5
+    ],
+    [
+     545.5,
+     474.5
+    ]
+   ]
+  },
+  {
+   "n": 3,
+   "cells": [
+    [
+     60.0,
+     312.6666666666667
+    ],
+    [
+     383.6666666666667,
+     312.6666666666667
+    ],
+    [
+     707.3333333333334,
+     312.6666666666667
+    ]
+   ]
+  }
+ ],
+ "shot_scale": [
+  {
+   "t": 0,
+   "fps": 30,
+   "punchAfter": null,
+   "scale": 1.0
+  },
+  {
+   "t": 90,
+   "fps": 30,
+   "punchAfter": null,
+   "scale": 1.075
+  },
+  {
+   "t": 90,
+   "fps": 30,
+   "punchAfter": 60,
+   "scale": 1.6124999999999998
+  },
+  {
+   "t": 59,
+   "fps": 30,
+   "punchAfter": 60,
+   "scale": 1.0491666666666666
+  },
+  {
+   "t": 60,
+   "fps": 30,
+   "punchAfter": 60,
+   "scale": 1.5750000000000002
+  },
+  {
+   "t": 300,
+   "fps": 30,
+   "punchAfter": null,
+   "scale": 1.25
+  }
+ ],
+ "shot_view": [
+  {
+   "scale": 1,
+   "u": 0.5,
+   "v": 0.45,
+   "view": [
+    0.0,
+    0.0,
+    1080.0,
+    1920.0
+   ]
+  },
+  {
+   "scale": 1.1,
+   "u": 0.5,
+   "v": 0.45,
+   "view": [
+    49.09090909090912,
+    0,
+    981.8181818181818,
+    1745.4545454545453
+   ]
+  },
+  {
+   "scale": 1.5,
+   "u": 0.2,
+   "v": 0.3,
+   "view": [
+    0,
+    0,
+    720.0,
+    1280.0
+   ]
+  },
+  {
+   "scale": 1.65,
+   "u": 0.9,
+   "v": 0.95,
+   "view": [
+    425.4545454545454,
+    756.3636363636363,
+    654.5454545454546,
+    1163.6363636363637
+   ]
+  },
+  {
+   "scale": 2.2,
+   "u": 0,
+   "v": 0,
+   "view": [
+    0,
+    0,
+    490.9090909090909,
+    872.7272727272726
+   ]
+  },
+  {
+   "scale": 0.5,
+   "u": 0.5,
+   "v": 0.5,
+   "view": [
+    0.0,
+    0.0,
+    1080.0,
+    1920.0
+   ]
+  }
+ ],
+ "term_font_size": [
+  {
+   "term": "SCAM",
+   "size": 112
+  },
+  {
+   "term": "STRUCTURING",
+   "size": 112
+  },
+  {
+   "term": "MONEY LAUNDERING",
+   "size": 92
+  },
+  {
+   "term": "EIGHTEEN CHARACTER",
+   "size": 82
+  }
+ ],
+ "bar_layout": [
+  {
+   "values": [
+    9000,
+    9000,
+    9000,
+    9000
+   ],
+   "threshold": 10000,
+   "bars": [
+    [
+     130.0,
+     626.5217391304348,
+     185.5,
+     383.47826086956525
+    ],
+    [
+     341.5,
+     626.5217391304348,
+     185.5,
+     383.47826086956525
+    ],
+    [
+     553.0,
+     626.5217391304348,
+     185.5,
+     383.47826086956525
+    ],
+    [
+     764.5,
+     626.5217391304348,
+     185.5,
+     383.47826086956525
+    ]
+   ],
+   "lineY": 583.9130434782609
+  },
+  {
+   "values": [
+    5,
+    20
+   ],
+   "threshold": 10,
+   "bars": [
+    [
+     130.0,
+     903.4782608695652,
+     397.0,
+     106.52173913043478
+    ],
+    [
+     553.0,
+     583.9130434782609,
+     397.0,
+     426.0869565217391
+    ]
+   ],
+   "lineY": 796.9565217391305
+  },
+  {
+   "values": [
+    0,
+    3,
+    7,
+    2,
+    9,
+    1
+   ],
+   "threshold": 4,
+   "bars": [
+    [
+     130.0,
+     1010.0,
+     115.0,
+     0.0
+    ],
+    [
+     271.0,
+     867.9710144927536,
+     115.0,
+     142.02898550724638
+    ],
+    [
+     412.0,
+     678.5990338164252,
+     115.0,
+     331.4009661835749
+    ],
+    [
+     553.0,
+     915.3140096618357,
+     115.0,
+     94.68599033816425
+    ],
+    [
+     694.0,
+     583.9130434782609,
+     115.0,
+     426.0869565217391
+    ],
+    [
+     835.0,
+     962.6570048309179,
+     115.0,
+     47.34299516908212
+    ]
+   ],
+   "lineY": 820.6280193236715
+  }
+ ],
+ "part_frames": [
+  {
+   "beat": {
+    "type": "shot",
+    "start": 0,
+    "image": "/public/vid_example01/images/the-bag.png",
+    "focus": [
+     0.5,
+     0.62
+    ],
+    "punch": {
+     "frame": 90,
+     "at": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   "frames": [
+    0,
+    90
+   ]
+  },
+  {
+   "beat": {
+    "type": "shot",
+    "start": 190,
+    "image": "/public/vid_example01/images/counting.png",
+    "focus": [
+     0.5,
+     0.5
+    ],
+    "punch": {
+     "frame": 222,
+     "at": [
+      0.5,
+      0.36
+     ]
+    }
+   },
+   "frames": [
+    190,
+    222
+   ]
+  },
+  {
+   "beat": {
+    "type": "count",
+    "start": 246,
+    "title": "$40,000 IN TWENTIES",
+    "unit": "each one is 50 bills",
+    "icon": "bill",
+    "to": 2000,
+    "kind": "count",
+    "result": "2,000 BILLS",
+    "resultFrame": 365
+   },
+   "frames": [
+    246,
+    292,
+    365
+   ]
+  },
+  {
+   "beat": {
+    "type": "shot",
+    "start": 389,
+    "image": "/public/vid_example01/images/the-bank.png",
+    "focus": [
+     0.55,
+     0.5
+    ]
+   },
+   "frames": [
+    389
+   ]
+  },
+  {
+   "beat": {
+    "type": "shot",
+    "start": 498,
+    "image": "/public/vid_example01/images/the-counter.png",
+    "focus": [
+     0.5,
+     0.4
+    ],
+    "punch": {
+     "frame": 617,
+     "at": [
+      0.62,
+      0.3
+     ]
+    }
+   },
+   "frames": [
+    498,
+    617
+   ]
+  },
+  {
+   "beat": {
+    "type": "shot",
+    "start": 642,
+    "image": "/public/vid_example01/images/cash-machine.png",
+    "focus": [
+     0.45,
+     0.4
+    ]
+   },
+   "frames": [
+    642
+   ]
+  },
+  {
+   "beat": {
+    "type": "bars",
+    "start": 692,
+    "title": "FOUR DEPOSITS",
+    "kind": "money",
+    "threshold": {
+     "value": 10000,
+     "label": "REPORTED AT $10,000"
+    },
+    "bars": [
+     {
+      "label": "MON",
+      "value": 9000,
+      "frame": 692
+     },
+     {
+      "label": "TUE",
+      "value": 9000,
+      "frame": 756
+     },
+     {
+      "label": "WED",
+      "value": 9000,
+      "frame": 800
+     },
+     {
+      "label": "THU",
+      "value": 9000,
+      "frame": 847
+     }
+    ],
+    "payoff": "$36,000. NOTHING REPORTED.",
+    "payoffFrame": 896
+   },
+   "frames": [
+    692,
+    692,
+    756,
+    800,
+    847,
+    896
+   ]
+  },
+  {
+   "beat": {
+    "type": "shot",
+    "start": 973,
+    "image": "/public/vid_example01/images/the-desk.png",
+    "focus": [
+     0.45,
+     0.5
+    ],
+    "set": {
+     "cash": 4000,
+     "banked": 36000,
+     "suspicion": 58
+    },
+    "panel": "suspicion"
+   },
+   "frames": [
+    973
+   ]
+  },
+  {
+   "beat": {
+    "type": "term",
+    "start": 1037,
+    "term": "STRUCTURING",
+    "definition": "Splitting cash into smaller deposits to stay under a reporting limit.",
+    "stamp": "FEDERAL CRIME",
+    "citation": "31 U.S.C. 5324",
+    "stampFrame": 1145
+   },
+   "frames": [
+    1037,
+    1057,
+    1145,
+    1159
+   ]
+  },
+  {
+   "beat": {
+    "type": "shot",
+    "start": 1256,
+    "image": "/public/vid_example01/images/the-knock.png",
+    "focus": [
+     0.5,
+     0.4
+    ],
+    "hud": false
+   },
+   "frames": [
+    1256
+   ]
+  },
+  {
+   "beat": {
+    "type": "choice",
+    "start": 1333,
+    "image": "/public/vid_example01/images/the-door.png",
+    "focus": [
+     0.55,
+     0.45
+    ],
+    "options": [
+     "HIDE",
+     "HAND IN"
+    ],
+    "optionFrames": [
+     1351,
+     1379
+    ]
+   },
+   "frames": [
+    1333,
+    1351,
+    1379
+   ]
+  },
+  {
+   "beat": {
+    "type": "count",
+    "start": 100,
+    "title": "T",
+    "icon": "coin",
+    "to": 5,
+    "kind": "count",
+    "result": "R"
+   },
+   "frames": [
+    100,
+    146,
+    158
+   ]
+  },
+  {
+   "beat": {
+    "type": "bars",
+    "start": 200,
+    "title": "T",
+    "kind": "count",
+    "threshold": {
+     "value": 3,
+     "label": "L"
+    },
+    "bars": [
+     {
+      "label": "A",
+      "value": 1,
+      "frame": 210
+     },
+     {
+      "label": "B",
+      "value": 2,
+      "frame": 230
+     }
+    ],
+    "payoff": "P"
+   },
+   "frames": [
+    200,
+    210,
+    230,
+    241
+   ]
+  },
+  {
+   "beat": {
+    "type": "term",
+    "start": 300,
+    "term": "T",
+    "definition": "D",
+    "stamp": "S"
+   },
+   "frames": [
+    300,
+    320,
+    345
+   ]
+  },
+  {
+   "beat": {
+    "type": "term",
+    "start": 300,
+    "term": "T",
+    "definition": "D",
+    "stamp": "S",
+    "citation": "C",
+    "definitionFrame": 310
+   },
+   "frames": [
+    300,
+    310,
+    335,
+    349
+   ]
+  },
+  {
+   "beat": {
+    "type": "choice",
+    "start": 400,
+    "image": "/public/v/images/a.png",
+    "options": [
+     "A",
+     "B"
+    ]
+   },
+   "frames": [
+    400,
+    408,
+    428
+   ]
+  }
+ ],
+ "quiet_spans": [
+  {
+   "data": {
+    "accent": "pink",
+    "hud": [
+     {
+      "id": "cash",
+      "label": "CASH",
+      "kind": "money",
+      "value": 40000
+     },
+     {
+      "id": "banked",
+      "label": "BANKED",
+      "kind": "money",
+      "value": 0
+     },
+     {
+      "id": "suspicion",
+      "label": "SUSPICION",
+      "kind": "percent",
+      "value": 0
+     }
+    ],
+    "beats": [
+     {
+      "type": "shot",
+      "start": 0,
+      "image": "/public/vid_example01/images/the-bag.png",
+      "focus": [
+       0.5,
+       0.62
+      ],
+      "punch": {
+       "frame": 90,
+       "at": [
+        0.5,
+        0.5
+       ]
+      }
+     },
+     {
+      "type": "shot",
+      "start": 190,
+      "image": "/public/vid_example01/images/counting.png",
+      "focus": [
+       0.5,
+       0.5
+      ],
+      "punch": {
+       "frame": 222,
+       "at": [
+        0.5,
+        0.36
+       ]
+      }
+     },
+     {
+      "type": "count",
+      "start": 246,
+      "title": "$40,000 IN TWENTIES",
+      "unit": "each one is 50 bills",
+      "icon": "bill",
+      "to": 2000,
+      "kind": "count",
+      "result": "2,000 BILLS",
+      "resultFrame": 365
+     },
+     {
+      "type": "shot",
+      "start": 389,
+      "image": "/public/vid_example01/images/the-bank.png",
+      "focus": [
+       0.55,
+       0.5
+      ]
+     },
+     {
+      "type": "shot",
+      "start": 498,
+      "image": "/public/vid_example01/images/the-counter.png",
+      "focus": [
+       0.5,
+       0.4
+      ],
+      "punch": {
+       "frame": 617,
+       "at": [
+        0.62,
+        0.3
+       ]
+      }
+     },
+     {
+      "type": "shot",
+      "start": 642,
+      "image": "/public/vid_example01/images/cash-machine.png",
+      "focus": [
+       0.45,
+       0.4
+      ]
+     },
+     {
+      "type": "bars",
+      "start": 692,
+      "title": "FOUR DEPOSITS",
+      "kind": "money",
+      "threshold": {
+       "value": 10000,
+       "label": "REPORTED AT $10,000"
+      },
+      "bars": [
+       {
+        "label": "MON",
+        "value": 9000,
+        "frame": 692
+       },
+       {
+        "label": "TUE",
+        "value": 9000,
+        "frame": 756
+       },
+       {
+        "label": "WED",
+        "value": 9000,
+        "frame": 800
+       },
+       {
+        "label": "THU",
+        "value": 9000,
+        "frame": 847
+       }
+      ],
+      "payoff": "$36,000. NOTHING REPORTED.",
+      "payoffFrame": 896
+     },
+     {
+      "type": "shot",
+      "start": 973,
+      "image": "/public/vid_example01/images/the-desk.png",
+      "focus": [
+       0.45,
+       0.5
+      ],
+      "set": {
+       "cash": 4000,
+       "banked": 36000,
+       "suspicion": 58
+      },
+      "panel": "suspicion"
+     },
+     {
+      "type": "term",
+      "start": 1037,
+      "term": "STRUCTURING",
+      "definition": "Splitting cash into smaller deposits to stay under a reporting limit.",
+      "stamp": "FEDERAL CRIME",
+      "citation": "31 U.S.C. 5324",
+      "stampFrame": 1145
+     },
+     {
+      "type": "shot",
+      "start": 1256,
+      "image": "/public/vid_example01/images/the-knock.png",
+      "focus": [
+       0.5,
+       0.4
+      ],
+      "hud": false
+     },
+     {
+      "type": "choice",
+      "start": 1333,
+      "image": "/public/vid_example01/images/the-door.png",
+      "focus": [
+       0.55,
+       0.45
+      ],
+      "options": [
+       "HIDE",
+       "HAND IN"
+      ],
+      "optionFrames": [
+       1351,
+       1379
+      ]
+     }
+    ]
+   },
+   "total": 1441,
+   "spans": [
+    [
+     0,
+     90
+    ],
+    [
+     90,
+     190
+    ],
+    [
+     190,
+     222
+    ],
+    [
+     222,
+     246
+    ],
+    [
+     246,
+     292
+    ],
+    [
+     292,
+     365
+    ],
+    [
+     365,
+     389
+    ],
+    [
+     389,
+     498
+    ],
+    [
+     498,
+     617
+    ],
+    [
+     617,
+     642
+    ],
+    [
+     642,
+     692
+    ],
+    [
+     692,
+     692
+    ],
+    [
+     692,
+     756
+    ],
+    [
+     756,
+     800
+    ],
+    [
+     800,
+     847
+    ],
+    [
+     847,
+     896
+    ],
+    [
+     896,
+     973
+    ],
+    [
+     973,
+     1037
+    ],
+    [
+     1037,
+     1057
+    ],
+    [
+     1057,
+     1145
+    ],
+    [
+     1145,
+     1159
+    ],
+    [
+     1159,
+     1256
+    ],
+    [
+     1256,
+     1333
+    ],
+    [
+     1333,
+     1351
+    ],
+    [
+     1351,
+     1379
+    ],
+    [
+     1379,
+     1441
+    ]
+   ]
+  }
+ ]
+}
