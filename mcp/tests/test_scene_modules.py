@@ -158,6 +158,24 @@ def test_a_write_that_fails_leaves_the_last_good_file_and_no_leftovers(job_db, s
     assert sorted(p.name for p in (scenes / "vid-a" / "sets").iterdir()) == ["street.ts"]
 
 
+@pytest.mark.parametrize("umask, mode", [(0o002, 0o664), (0o022, 0o644)])
+def test_a_written_module_gets_the_mode_open_would_give_it(job_db, scenes, umask, mode):
+    """The atomic write's temp file is 0600 (mkstemp), and the MCP container
+    runs as root: left that way, the host user cannot read the scene and
+    upgrade.py refuses to upgrade. A new file and an overwritten one both get
+    0o666 less the umask, as a plain open() would."""
+    job_db("vid-a")
+    old = os.umask(umask)
+    try:
+        assert server._new_file_mode() == mode
+        _author("vid-a")
+        assert "error" not in server.write_scene_file("vid-a", "story.ts", "export const TOTAL = 2;")   # an overwrite
+    finally:
+        os.umask(old)
+    for rel in ("CartoonShort.tsx", "story.ts", "sets/street.ts"):
+        assert (scenes / "vid-a" / rel).stat().st_mode & 0o777 == mode, rel
+
+
 def test_listed_module_names_read_and_delete_as_listed(job_db, scenes):
     job_db("vid-a")
     _author("vid-a")

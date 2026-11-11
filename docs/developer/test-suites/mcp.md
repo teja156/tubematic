@@ -348,6 +348,9 @@ Covers a Cartoon 3D video's TypeScript modules through `write_scene_file`, `read
 - `submit_render` holds the per-video source lock from the readiness check to the queue and
   records the source fingerprint. A write that was waiting on the lock is then refused.
 - A write that fails leaves the last good file and no temporary file.
+- A new and an overwritten file both get `0o666` less the umask. The temporary file is `0600`,
+  and the MCP container runs as root, so without this the host user cannot read the scene and
+  `upgrade.py` refuses.
 - A name reads and deletes as `list_scene_files` lists it.
 
 Trap: the module name parser reads its two arguments and does not look at the directories on

@@ -912,7 +912,8 @@ def test_a_comment_template_or_tag_that_never_closes_hides_nothing(upgrade, head
 
 
 def test_an_unreadable_generated_scene_refuses(upgrade, env, monkeypatch):
-    """The renderer could not compile it either, so the upgrade fails closed."""
+    """It cannot be checked, so the upgrade fails closed, and says how to make
+    the root-owned 0600 scenes 2.1.0 and 2.1.1 wrote readable."""
     bad = _scene(env, "vid_aaaaaaaaaaaa/locked.tsx", "export default null;\n")
     real = Path.read_text
     def read_text(self, *a, **k):
@@ -923,6 +924,8 @@ def test_an_unreadable_generated_scene_refuses(upgrade, env, monkeypatch):
     code, order, rep = _run(upgrade, env)
     assert code == 1 and order == []
     assert str(bad) in rep.text()
+    assert "-perm 600 -exec chmod 664 {} +" in rep.text()
+    assert "could not compile" not in rep.text()
 
 
 def test_a_scene_written_during_the_build_refuses_before_the_stop(upgrade, env, monkeypatch):

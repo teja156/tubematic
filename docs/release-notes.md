@@ -30,6 +30,14 @@ before: it finishes as mixed scenes, on a dark or white canvas the agent chooses
 that is approved but not yet scripted gets a style picked before its script, like every video
 approved after the upgrade.
 
+If you upgrade from 2.1.0 or 2.1.1, `upgrade.py` can stop and list generated scenes it cannot read.
+Those versions saved every new scene so that only the root user could read it. Make them readable,
+then run `upgrade.py` again:
+
+```bash
+sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {} +
+```
+
 If you go back to 2.1.x later:
 
 - A video set to System Flow cannot render on 2.1.x. Finish it, or switch it to another style while
@@ -65,6 +73,8 @@ If you go back to 2.1.x later:
 
 - A video that Auto had made Cartoon 3D, sent back to its topic and then given another style, still
   rendered as Cartoon 3D, or failed when no GPU was working.
+- Scenes the agent wrote were saved so that only the root user could read them, and `upgrade.py`
+  then refused to upgrade. Its message now says why and prints the command that fixes them.
 
 ---
 

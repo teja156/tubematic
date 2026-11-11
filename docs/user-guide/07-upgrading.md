@@ -88,6 +88,7 @@ install they are the untagged images that earlier builds left.
 | No dashboard password is set | Run `python3 onboard.py --set-password` from the new directory, then run it again |
 | No OpenAI key is stored | Add one on **Settings → API Keys** in the running version, then run it again |
 | A scene the agent wrote imports a component this version removed | Delete or fix the files it lists, under `~/.tubematic-data/scenes/generated/`, then run it again |
+| A scene the agent wrote cannot be read by your user | Run the `sudo find … chmod 664` command it prints, then run it again. 2.1.0 and 2.1.1 saved scenes this way |
 | The GPU you chose is gone, or the NVIDIA Container Toolkit is | Run `python3 onboard.py --step gpu`, then run it again |
 | The remote-renderers file cannot be read | Run `python3 onboard.py --step renderers`, then run it again |
 | The database is newer than this version | You are running an older version than the one installed. See [Rollback policy](#rollback-policy) |

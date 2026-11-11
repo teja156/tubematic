@@ -750,8 +750,8 @@ def _check_removed_giffx(data_root: Path, rep, *, configs: bool = True) -> bool:
 
     The renderer bundles every generated scene together, so a single scene
     importing a component that no longer exists fails every render on the
-    install, not just its own video. An unreadable scene fails the same way, so
-    it refuses too. A scene-config that names GifFX only loses that overlay if
+    install, not just its own video. A scene this user cannot read cannot be
+    checked, so it refuses too. A scene-config that names GifFX only loses that overlay if
     the video is rendered again (the renderer skips a scene it cannot load), so
     it is a warning — given once, by the first of the two checks (`configs`)."""
     scenes, unreadable, undecodable = _giffx_scenes(data_root / "scenes" / "generated")
@@ -765,9 +765,14 @@ def _check_removed_giffx(data_root: Path, rep, *, configs: bool = True) -> bool:
                      "one is rendered again, that overlay is left out: "
                      + ", ".join(str(p) for p in named))
     if unreadable:
-        rep.warn("These generated scenes cannot be read, so they cannot be checked for the "
-                 "removed GifFX component — and the renderer could not compile them either. "
-                 "Make them readable or delete them, then re-run this upgrade: "
+        # 2.1.0 and 2.1.1 wrote every new scene as root with mode 0600 (TMDEV-204);
+        # the containers run as root and render them, but this user cannot read them
+        generated = data_root / "scenes" / "generated"
+        rep.warn("These generated scenes cannot be read by this user, so they cannot be "
+                 "checked for the removed GifFX component. Tubematic 2.1.0 and 2.1.1 wrote "
+                 "new scenes as root with mode 0600; make them readable with "
+                 f"`sudo find {generated} -type f -perm 600 -exec chmod 664 {{}} +` (or delete "
+                 "them), then re-run this upgrade: "
                  + ", ".join(str(p) for p in unreadable))
     if undecodable:
         rep.warn("These generated scenes import a module path with an escape this upgrade "

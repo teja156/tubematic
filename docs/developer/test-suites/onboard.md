@@ -460,7 +460,8 @@ list proves the order ([`upgrade.py` in detail](../18-releases.md#upgradepy-in-d
   render can start.
 - Pre-flight refusals, each before anything changes: no dashboard password, no stored OpenAI key,
   a database newer than this code, a GPU or remote-renderers override Docker cannot apply, and a
-  generated scene that imports the removed component
+  generated scene that imports the removed component or cannot be read. The unreadable-scene
+  refusal prints the `chmod` command for the root-owned `0600` scenes 2.1.0 and 2.1.1 wrote
   ([Pre-flight refusals](../18-releases.md#pre-flight-refusals)).
 - `--no-stop` is refused while a token file is missing, while one of two named migrations is
   pending (each constant is checked against the real file), and while the running renderer was
