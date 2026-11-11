@@ -51,7 +51,7 @@ event is wrong. Fix every problem it lists, then write again.
 - **Slots:** one element per slot at a time. A slot is freed by a `clear`, or by a `rearrange` or
   `encode` that takes the element's letters, once the last of them has left. An `encode`'s box holds
   slot `b` until it has played, a bracket's note holds the `note` slot until the cut, and a bracket
-  that reaches below its slot holds the slot below.
+  that reaches below its slot holds the slot below until its element is cleared.
 - **Restraint:** at most 4 elements on screen at once, the context line and a bracket's note
   included.
 - **Fit:** a string fits the frame at its size: at most 40 characters at `s`, 25 at `m`, 16 at `l`,
@@ -59,7 +59,9 @@ event is wrong. Fix every problem it lists, then write again.
 - **Stage text never repeats 4 or more narration words in a row.** The captions carry the sentence;
   the stage shows the thing the sentence is about.
 - **Order:** a `rearrange`, `encode`, `bracket` or `glow` acts on an element that is on stage and has
-  finished its own move. A typed command and a move of your own do not glow.
+  finished its own move. A typed command and a move of your own do not glow, and a move of your own
+  takes no bracket. Only a word, a single-line number (no exponent) or a string another move made can
+  be the `from` of a `rearrange` or `encode`: a grid, a typed command and a move of your own cannot.
 - **Push:** under a beat's `push`, every string must still fit at its size times the push's scale,
   and a beat with a push has no move of your own.
 - **Never still:** something changes on stage at least every 3 seconds.

@@ -114,11 +114,13 @@ FORBIDDEN_SOURCE = _BEAN_FORBIDDEN + (
     (re.compile(r"\buse(CurrentFrame|VideoConfig)\b"), "useCurrentFrame or useVideoConfig: a move draws from the t it is given"),
     # A move is a pure function of t: state kept between frames differs between
     # the render's parallel tabs and when frames are rendered out of order.
-    (re.compile(r"\buse(State|Ref|Effect|LayoutEffect|Reducer)\b|\bset(Timeout|Interval)\b|\brequestAnimationFrame\b"),
+    (re.compile(r"\buse(State|Ref|Effect|LayoutEffect|InsertionEffect|Reducer|SyncExternalStore|ImperativeHandle)\b|\bset(Timeout|Interval)\b|\brequestAnimationFrame\b"),
      "state, an effect or a timer: a move draws each frame from t alone"),
     # Bean's pattern lets a CSS filter through as `.filter =` or an object key
     # outside an inline style.
-    (re.compile(r"\.filter\s*=(?!=)|\bfilter\s*:"), "a CSS or canvas filter: it multiplies the render time"),
+    (re.compile(r"""\.filter\s*=(?!=)|(?<![?\w])(?<!\?\s)["']?filter["']?\s*:(?!\s*(string|boolean|number)\b)|(?i:webkit-?filter)|"""
+                r"""setProperty\(\s*["']filter"""),
+     "a CSS or canvas filter: it multiplies the render time"),
     # A move is DOM, so its gradients and filters are CSS strings Bean's
     # SVG-shaped patterns do not see; each one is full-area work per frame.
     (re.compile(r"(?i)-gradient\s*\(|backdrop-?filter|mix-?blend-?mode"),
@@ -134,6 +136,39 @@ FORBIDDEN_SOURCE = _BEAN_FORBIDDEN + (
 )
 _ALLOWED_IMPORT = re.compile(r"^(react|remotion|\.\./\.\./installed/terminalDoc/(kit|contract))$")
 MAX_ERRORS = 12
+
+
+def strip_comments(src: str) -> str:
+    """The source with its // and /* */ comments blanked, string- and
+    template-aware, so a forbidden word in a comment is not refused and a URL
+    in a string does not hide what follows it."""
+    out, i, n, quote = [], 0, len(src), ""
+    while i < n:
+        c = src[i]
+        if quote:
+            out.append(c)
+            if c == "\\" and i + 1 < n:
+                out.append(src[i + 1])
+                i += 2
+                continue
+            if c == quote:
+                quote = ""
+        elif c in "\"'`":
+            quote = c
+            out.append(c)
+        elif src.startswith("//", i):
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        elif src.startswith("/*", i):
+            j = src.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            out.append(" ")
+            continue
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
 
 
 def is_td_scene(scene) -> bool:
@@ -295,8 +330,9 @@ def custom_move_errors(custom, video_id: str, sources: dict | None) -> tuple[lis
             if body is None:
                 errs.append(f"{where} ({cid}): there is no {src}.tsx; write it with write_scene_file first.")
                 continue
+            code = strip_comments(body)
             for pattern, why in FORBIDDEN_SOURCE:
-                if pattern.search(body):
+                if pattern.search(code):
                     errs.append(f"{where} ({cid}): the move uses {why}.")
             named = [next((g for g in groups if g), "") for groups in _IMPORT.findall(body)]
             bad = [m or '""' for m in named if not _ALLOWED_IMPORT.match(m)]
@@ -459,7 +495,9 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
     note_until = -math.inf
     # Slots held by something that is not an element: an encode's box holds b
     # while it plays, a bracket's note holds the note slot to the cut.
-    holds: list[tuple[tuple, int, float, str]] = []
+    # A hold tied to an element (the slot under its bracket) ends when the
+    # element goes, because the bracket fades out with it.
+    holds: list[tuple[tuple, int, float, str, "_El | None"]] = []
     push = next((e for e in events if e.get("type") == "push"), None)
     scale = push.get("scale") if isinstance(push, dict) and _num(push.get("scale")) else 1
     if push and any(e.get("type") == "custom" for e in events):
@@ -474,7 +512,9 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                 continue
             if set(el.slots) & set(slots):
                 return el.ev["id"]
-        for held, since, upto, name in holds:
+        for held, since, upto, name, owner in holds:
+            if owner is not None:
+                upto = min(upto, owner.gone + TIMING["clearOut"])
             if since < until and frame < upto and set(held) & set(slots):
                 return name
         return ""
@@ -510,6 +550,11 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                     continue
                 if at < src_el.ends:
                     err(f"{what}: {e['from']!r} is still playing its own move until frame {src_el.ends}.")
+                    continue
+                kind = src_el.ev["type"]
+                if kind in ("grid", "type", "custom") or (kind == "number" and "^" in src_el.ev["value"]):
+                    err(f"{what}: the letters of a {'number with an exponent' if kind == 'number' else kind} cannot "
+                        "fly; rearrange or encode a word, a single-line number or a string a move made.")
                     continue
                 from_text = src_el.text
             size = _size_of(e)
@@ -556,9 +601,9 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                 # source slot stays held while they do.
                 n_src = max(len(from_text.replace(" ", "")), 1)
                 upto = at + (TIMING["stagger"] * (n_src - 1) + TIMING["arc"] if t == "encode" else dur)
-                holds.append((src_el.slots, at, upto, f"the letters of {e['from']!r}"))
+                holds.append((src_el.slots, at, upto, f"the letters of {e['from']!r}", None))
             if t == "encode":
-                holds.append((("b",), at, at + dur + TIMING["collapse"], f"the {e['label']} box"))
+                holds.append((("b",), at, at + dur + TIMING["collapse"], f"the {e['label']} box", None))
             el = _El(e, slots, _final_text(e), size, at, at + dur)
             els[eid] = el
             texts = [e.get("text"), e.get("label"), e.get("sub"), e.get("target"), *(e.get("output") or []),
@@ -581,6 +626,9 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
             if el.bracket:
                 err(f"{what}: {e['target']!r} already has a bracket.")
                 continue
+            if el.ev["type"] == "custom":
+                err(f"{what}: a move of your own draws its own picture; a bracket goes under a word, number or string.")
+                continue
             if echoes(e["label"]) or (e.get("note") and echoes(e["note"])):
                 err(f"{what}: the label or note repeats four or more narration words in a row; quote the source, "
                     "not the narration.")
@@ -593,7 +641,10 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                     err(f"{what}: the bracket under {e['target']!r} reaches into slot {below}, which holds {busy!r}; "
                         "use a smaller size or a free slot below.")
                     continue
-                holds.append(((below,), at, end, f"the bracket under {e['target']!r}"))
+                # The note slot under a bracket is where its own note goes, which
+                # clears the label; anything else there is held off.
+                if not (below == "note" and e.get("note")):
+                    holds.append(((below,), at, end, f"the bracket under {e['target']!r}", el))
             if e.get("note"):
                 if at < note_until:
                     err(f"{what}: another bracket's note is still in the note slot.")
@@ -603,7 +654,7 @@ def _check_beat(beat, i, start, end, custom, echoes, active, err) -> None:
                     err(f"{what}: the note slot holds {busy!r}; a bracket's note goes there.")
                     continue
                 note_until = end
-                holds.append((("note",), at, end, "a bracket's note"))
+                holds.append((("note",), at, end, "a bracket's note", el))
             if scale > 1 and BRACKET["label"] * CELL * len(e["label"]) * scale > GEOMETRY["safeRight"] - GEOMETRY["safeLeft"]:
                 err(f"{what}: the beat's push makes the label wider than the frame.")
                 continue

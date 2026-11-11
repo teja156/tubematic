@@ -612,3 +612,77 @@ def test_a_move_with_state_or_a_filter_is_refused(line, fragment):
 def test_an_array_filter_and_a_comparison_are_not_filters():
     body = CAESAR.replace("const SHIFT = 3;", "const SHIFT = [3].filter(Boolean)[0]; const same = SHIFT == 3;")
     assert _check_custom(_with_caesar(), {"vid_td1/move-caesar": body}) == []
+
+
+# ── review round 3 ───────────────────────────────────────────────────────────
+
+def _one_beat(*events):
+    """The example with its first beat's events replaced."""
+    def change(d):
+        d["beats"][0]["events"] = list(events)
+    return _with(change)
+
+
+def test_a_cited_bracket_under_a_big_number_in_slot_c_keeps_its_note():
+    problems = _check(_one_beat(
+        {"type": "number", "at": 17, "id": "n", "slot": "c", "value": "208,827"},
+        {"type": "bracket", "at": 53, "target": "n", "label": "KEYS", "note": "SOURCE, 2024", "cite": 1},
+        {"type": "glow", "at": 96, "target": "n", "tone": "red"},
+        {"type": "glow", "at": 161, "target": "n", "tone": "blue"},
+        {"type": "glow", "at": 236, "target": "n", "tone": "red"},
+    ))
+    assert problems == [], problems
+
+
+def test_the_slot_under_a_bracket_frees_when_its_element_is_cleared():
+    problems = _check(_one_beat(
+        {"type": "word", "at": 17, "id": "w", "slot": "a", "text": "SUNSHINE", "size": "xl"},
+        {"type": "bracket", "at": 53, "target": "w", "label": "PASSWORD"},
+        {"type": "clear", "at": 96, "targets": ["w"]},
+        {"type": "word", "at": 120, "id": "x", "slot": "b", "text": "HASH", "size": "l"},
+        {"type": "glow", "at": 161, "target": "x", "tone": "red"},
+        {"type": "glow", "at": 236, "target": "x", "tone": "blue"},
+    ))
+    assert problems == [], problems
+
+
+@pytest.mark.parametrize("source", [
+    {"type": "grid", "at": 17, "id": "s", "rows": ["ALPHA", "BRAVO"]},
+    {"type": "type", "at": 17, "id": "s", "slot": "a", "text": "ls", "size": "m"},
+    {"type": "number", "at": 17, "id": "s", "slot": "a", "value": "2^10", "size": "l"},
+])
+def test_letters_that_cannot_fly_are_refused_as_a_source(source):
+    problems = _check(_one_beat(source, {"type": "encode", "at": 96, "id": "e", "from": "s", "slot": "c",
+                                         "text": "ABC", "size": "m", "label": "HASH"}))
+    assert any("cannot fly" in p for p in problems), problems
+
+
+def test_a_custom_move_takes_no_bracket():
+    def add(d):
+        ev = d["beats"][2]["events"]
+        ev.append({"type": "bracket", "at": 570, "target": "shift", "label": "ROT3"})
+        ev.sort(key=lambda e: e["at"])
+    cfg = _with_caesar()
+    add(_data(cfg))
+    assert any("draws its own picture" in p for p in _check_custom(cfg))
+
+
+@pytest.mark.parametrize("line", [
+    "// no useState here, filter: none",
+    "/* setTimeout is not used */",
+    'const pick = (on: boolean, filter: string) => (on ? filter : null);',
+    'const url = "http://example.com/a//b";',
+])
+def test_comments_and_ordinary_code_are_not_refused(line):
+    assert _check_custom(_with_caesar(), {"vid_td1/move-caesar": line + "\n" + CAESAR}) == []
+
+
+@pytest.mark.parametrize("line", [
+    'const s = { "filter": "blur(4px)" };',
+    'const s = { WebkitFilter: "blur(4px)" };',
+    'function f(el) { el.style.setProperty("filter", "blur(2px)"); }',
+    'const u = "http://x"; const d = fetch(u);',
+])
+def test_a_filter_or_fetch_cannot_hide_behind_quotes_or_a_url(line):
+    problems = _check_custom(_with_caesar(), {"vid_td1/move-caesar": line + "\n" + CAESAR})
+    assert problems, line

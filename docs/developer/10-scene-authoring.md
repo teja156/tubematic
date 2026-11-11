@@ -671,7 +671,8 @@ under a mask gradient cost about 1.6 CPU-seconds a frame. The measured costs are
   before and after them.
 - A move acts on an element that is not on stage or has not finished its own move, or finishes less
   than 15 frames before its beat's cut. A typed command or a custom move is given a glow, which
-  neither draws.
+  neither draws, or a custom move a bracket. A `rearrange` or `encode` takes its letters from a grid,
+  a typed command, a custom move or a number with an exponent, whose letters the scene cannot fly.
 - A beat's push would scale a string past the frame's edges, or the beat also has a custom move,
   which draws in fixed frame pixels and cannot follow the push.
 - Stage text repeats 4 or more narration words in a row.

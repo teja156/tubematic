@@ -568,8 +568,8 @@ the catalog rejects it.
 `read_image(video_id, image_name, grid=True)` returns the image itself after a text block. With
 `grid`, it overlays a labelled grid in normalised `[u, v]` coordinates (0 to 1 across and down the
 image), so the agent can read off an anchor point for an overlay. The grid is drawn on a copy in
-memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets` and `preview_doodles` also
-return pictures.
+memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets`, `render_bean_props`,
+`preview_doodles` and `preview_terminal_moves` also return pictures.
 
 ### `preview_doodles`
 

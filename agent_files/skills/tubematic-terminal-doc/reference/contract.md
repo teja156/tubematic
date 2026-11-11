@@ -81,8 +81,10 @@ Frames per move are how long it plays; anything acting on its element (a `rearra
 | `custom` | `id`, `move` (a `customMoves` id), `slot` (`a`, `b`, `c`, `stage`); optional `text` (within the move's `text`) | the move's `frames` |
 
 A bracket that reaches below its slot (a large string at the bottom of a band) needs the slot below it
-empty, and holds it to the cut. A `rearrange` or `encode` holds its source's slot until the last of
-the source's letters has left it. Stage text (a word, a string a move makes, a label, a note, a grid row, a command or its
+empty, and holds it until its element is cleared (its own note may go there). A `rearrange` or
+`encode` holds its source's slot until the last of the source's letters has left it, and its `from`
+is a `word`, a number without an exponent, or a string a `rearrange`, `encode` or `stream` made:
+never a `grid`, a `type` or a `custom` element. A `bracket` never goes under a `custom` element. Stage text (a word, a string a move makes, a label, a note, a grid row, a command or its
 output) may not repeat 4 or more narration words in a row.
 
 ## Moves of your own
