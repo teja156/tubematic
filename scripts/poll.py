@@ -944,6 +944,14 @@ def build_pipeline_prompt(video_id: str, status: str, preferences: str = "") -> 
         "re-voice after a pronunciation fix: the original script approval covers it.",
         "",
         "Do not research new topics during this run.",
+    ]
+    if status in ("TOPIC_APPROVED", "REVISION_REQUESTED"):
+        lines += [
+            "Finding the angle of this video's own topic, where the operator skill asks for one,",
+            "is not research: read the topic-research skill's section on the angle and work from",
+            "this video's topic text alone.",
+        ]
+    lines += [
         "",
         *_preferences_block(preferences, f"advancing one video ({stage})"),
         "IMPORTANT: Skip the operator skill setup checks (docker/curl health checks).",
@@ -1187,7 +1195,10 @@ def build_research_prompt(strategies: list[str], preferences: str = "") -> str:
         "  3. For curriculum: only enumerate sub-topics for projects where",
         "     is_curriculum_seed=1 AND status='active' AND expired is false.",
         "     Skip all others.",
-        "  4. For each strategy, research and score topics (score >= 5 required)",
+        "  4. For each strategy, research candidates and find each one's angle (the",
+        "     skill's section The angle): one sentence saying what the opening will",
+        "     use, and its kind. A subject with no honest angle is not proposed.",
+        "     Score producibility and the angle: both must be 5 or more.",
         "  5. Before creating a video: match it to an existing project via",
         "     list_projects(); only call upsert_project() if no project matches",
         "     at all. If the best match is paused or expired, SKIP the candidate:",
@@ -1195,9 +1206,13 @@ def build_research_prompt(strategies: list[str], preferences: str = "") -> str:
         "     Otherwise call list_project_topics() for that project and SKIP the",
         "     candidate if any topic there, archived or rejected ones included,",
         "     covers the same core mechanism.",
-        "  6. Call create_video() for each qualifying topic",
+        "  6. Call create_video() for each qualifying topic, with its angle,",
+        "     angle_kind and angle_score. It refuses a topic without them.",
         "  7. Call mark_research_done() when all strategies are complete",
         "     (records last-research-run time for display — does not gate scheduling)",
+        "  8. End with a run summary: each topic you filed, and every candidate you",
+        "     dropped, by name, with the reason (no angle, a weak angle, low",
+        "     producibility, a duplicate, a paused or expired domain)",
         "",
     ]
     settings = _fetch_settings()

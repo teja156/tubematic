@@ -320,6 +320,33 @@ Covers a script's record over HTTP
   script alone keeps them.
 - `GET /script-formulas` lists every formula and every hook type with its label.
 
+### `test_topic_angle.py`
+
+Covers the [topic's angle](../02-pipeline.md#topic-angle) over HTTP: `GET /angle-kinds`,
+`POST /videos`, `POST /videos/manual` and `PATCH /videos/<video_id>`.
+
+- `GET /angle-kinds` serves `tubematic_core.angles.public_list()`.
+- `PATCH` changes the sentence and the kind at `TOPIC_PROPOSED` and answers `409` at every other
+  status. A changed sentence or kind sets `angle_score` to 0, and the same angle saved again keeps
+  its score. A body with `angle_score` alone has nothing it may write.
+- `POST /videos` stores an angle it is sent and requires none. `POST /videos/manual` accepts no
+  angle, a blank one, a `null` one and `none` spelled out as no angle, and stores a given angle with
+  score 0.
+- A malformed angle is refused on all three routes. On `POST /videos/manual` the refusal leaves no
+  video and no `manual` domain behind. A `null` score on `POST /videos` reads as unscored.
+- The edit works on a video whose style takes no mascot (Under the Hood, Cartoon 3D), alone and
+  together with the approval.
+- An edit of the angle alone leaves `updated_at` as it was, so the worker does not announce the
+  topic again. A kind is stored by its id whatever its spelling.
+
+Trap: the script writer reads the angle from the moment a topic is approved. A test lands an
+approval between the route's status read and its `UPDATE`, and the edit must write nothing. It was
+confirmed to fail without the status in the `UPDATE`'s `WHERE`.
+
+Trap: for a style that takes no mascot, `patch_video` rebuilds its parameter list from the body's
+fields. Anything appended to the `SET` list before that point loses its parameters and the request
+fails with a binding error, so the score reset is appended after it.
+
 ### `test_voice_models.py`
 
 Covers per-voice ElevenLabs models over HTTP.
@@ -811,6 +838,8 @@ settings.
 - A rate limit is retried once, and an absurd `Retry-After` is clamped.
 - Every builder stays inside Discord's size limits with absurd input, because Discord answers `400`
   to an oversized embed and nothing reports the lost message. A topic with score 0 reads "unscored".
+- A topic's angle leads its field and its score sits beside the topic's. An unscored angle shows
+  its sentence and no score, and a 300-character angle leaves the field inside its budget.
 
 Trap: the webhook URL is a credential, and it sits in the request path. httpx puts the URL in its
 log line and its exception text, and the worker stores exception text in comments.

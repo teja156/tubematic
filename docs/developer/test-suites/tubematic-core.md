@@ -118,6 +118,28 @@ Trap: each answer in the truth table decides what an agent may draw or what the 
 intended, so a changed answer shows up only after a render. Change the table only when a style's
 rules are meant to change.
 
+### `test_angles.py`
+
+Covers `tubematic_core/angles.py`, the kinds and score of a
+[topic's angle](../02-pipeline.md#topic-angle) and the validator both servers call.
+
+- Every kind names a formula that exists, and has a label and a meaning.
+- The positive signals of the score add up to the maximum, 10.
+- `angle_error` refuses a sentence without a kind and a kind without a sentence, an unknown kind
+  (the message lists the kinds), a sentence over 300 characters, a value of the wrong type, and a
+  score that is not a whole number from 0 to 10. With `required`, it refuses a missing angle and an
+  angle scoring under 5, and both messages tell the agent to name the subject in its run summary.
+- With `required`, a score of 0 is refused with a request for the score, never as a weak angle.
+- `clean_kind` brings a kind's label, a hyphen or a stray full stop to its id, and `says_none`
+  knows the words for no angle without catching a sentence that starts with one. `sent_no_angle`
+  reads the values as sent, so `no angle` and `-` as a kind count, and a real sentence with `none`
+  as its kind does not. The unknown-kind refusal suggests leaving the angle out only where that is
+  allowed.
+- The skill's reference block and the mining prompt both carry every kind and every signal.
+
+Trap: a kind points at a formula by id. A kind left pointing at a formula that was removed would
+send the script writer to a reference file that is not there, so the test reads the formula files.
+
 ### `test_formulas.py`
 
 Covers `tubematic_core/formulas.py` and the files in `tubematic_core/formulas/`
@@ -418,6 +440,17 @@ Covers `0024`: `videos.duration_secs`.
 
 Trap: the default is NULL because 0 would be a length. Analytics would divide by it, or show a
 share for a video whose length nobody recorded.
+
+### `test_topic_angle_migration.py`
+
+Covers `0026`: `videos.angle`, `angle_kind` and `angle_score`.
+
+- Existing videos keep their status, topic, title, score, script and formula, and read `''`, `''`
+  and 0 in the three new columns.
+- A second run changes nothing, and a new video starts with no angle.
+
+Trap: `''` means no angle, which is true of every topic filed before the upgrade. Such a topic
+stays usable, so the migration has no backfill.
 
 ## Shared rules
 
