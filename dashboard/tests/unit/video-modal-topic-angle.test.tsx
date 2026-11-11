@@ -213,6 +213,17 @@ describe("VideoModal — the topic's angle", () => {
     expect(screen.getByTestId("topic-angle-input")).toHaveAttribute("aria-invalid", "true");
   });
 
+  it("keeps a draft, and Approve held, across a look at another tab", async () => {
+    renderModal(makeVideo({ ...ANGLE, script: "Words.", status: "TOPIC_PROPOSED" }), { tab: "topic" });
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Edit angle" }));
+    fireEvent.change(screen.getByTestId("topic-angle-input"), { target: { value: "A draft." } });
+    fireEvent.click(screen.getByRole("tab", { name: "Comments" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Topic" }));
+    expect(screen.getByTestId("topic-angle-input")).toHaveValue("A draft.");
+    expect(screen.getByRole("button", { name: "Approve Topic" })).toBeDisabled();
+  });
+
   it("closes the editor when the video leaves Topic Proposed", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => KINDS }) as Response));
     const onEditingChange = vi.fn();

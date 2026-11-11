@@ -124,6 +124,21 @@ def test_a_persons_topic_with_no_angle_is_filed_however_none_is_said(db, kw, thr
     assert _angle(out["video_id"]) == ("", "", 0)
 
 
+@pytest.mark.parametrize("kw", [{"angle": "none", "angle_kind": "none"},
+                                {"angle": "", "angle_kind": "None."},
+                                {"angle": "N/A", "angle_kind": ""}])
+def test_a_persons_topic_whose_angle_is_spelled_none_is_filed_without_one(db, kw):
+    result = _file("manual", **kw)
+    assert "error" not in result, result
+    assert _angle(result["video_id"]) == ("", "", 0)
+
+
+def test_a_research_topic_cannot_pass_with_none_spelled_out(db):
+    """The words mean "no angle" only for a person's own topic. For research
+    they are what they look like: a missing angle, refused."""
+    assert "error" in _file("trending", angle="none", angle_kind="none", angle_score=7)
+
+
 def test_a_research_proposal_that_left_out_its_score_is_told_to_score_it(db):
     """0 is unscored. Read as a weak angle, the refusal would tell the agent
     to drop a subject it had an angle for."""

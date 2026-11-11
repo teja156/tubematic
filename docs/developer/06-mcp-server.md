@@ -266,8 +266,8 @@ of the video's domain.
 
 ### `create_video`
 
-`create_video(project_id, topic, strategy, producibility_score, title="", voice_id="", angle="",
-angle_kind="", angle_score=0)` files a
+`create_video(project_id, topic, strategy, producibility_score, title="", voice_id="", angle=None,
+angle_kind=None, angle_score=None)` files a
 video at `TOPIC_PROPOSED`. It refuses a score below 5, an unknown `strategy`, a `voice_id` that is
 not on the roster, an unknown `project_id`, and a paused or expired `project_id` unless `strategy`
 is `manual` (see [Domain pause](02-pipeline.md#domain-pause) and
@@ -283,7 +283,8 @@ The three angle arguments are the [topic's angle](02-pipeline.md#topic-angle). T
   an `angle` over 300 characters, and an `angle_score` that is not a whole number from 0 to 10.
 
 A `manual` topic may carry no angle, and its angle may have any score. `None` in any of the three
-reads as absent, and a `manual` topic with no sentence and no kind is stored with score 0 whatever
+reads as absent, and on a `manual` topic so do the words in `NO_ANGLE_WORDS` (`none`, `n/a` and the
+like), and a `manual` topic with no sentence and no kind is stored with score 0 whatever
 score was sent. A kind is stored by its id whatever its spelling (`tubematic_core.angles.clean_kind`).
 
 What a new video starts with:

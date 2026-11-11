@@ -1707,6 +1707,10 @@ def create_video(
     angle = tangles.clean("" if angle is None else angle)
     angle_kind = tangles.clean_kind("" if angle_kind is None else angle_kind)
     angle_score = 0 if angle_score is None else angle_score
+    if strategy == "manual" and (tangles.says_none(angle) or tangles.says_none(angle_kind)):
+        # "none" spelled out: the topic has no angle, which a person's own
+        # topic is allowed. Read as an angle it would be refused as malformed.
+        angle, angle_kind = "", ""
     if strategy == "manual" and angle == "" and angle_kind == "":
         # A person's topic with no angle is filed as that, whatever score the
         # caller gave the angle it did not find.

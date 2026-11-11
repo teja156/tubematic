@@ -166,7 +166,8 @@ Covers the [topic's angle](../02-pipeline.md#topic-angle) in `create_video`, `ge
 - `create_video` stores a research proposal's angle, refuses one with no angle or with an angle
   scoring under 5, and files nothing in either case. A left-out score is refused with a request for
   it. A `manual` topic is accepted with no angle, however the agent says none (nulls through the
-  real MCP client, empty strings, or a score for an angle it did not find), and keeps an angle of
+  real MCP client, empty strings, `none` spelled out, or a score for an angle it did not find).
+  `none` spelled out on a research topic is still refused. A `manual` topic keeps an angle of
   any score. A malformed angle is refused on every strategy, and a kind is matched whatever its
   spelling.
 - `get_video` returns the angle and `angle_formula`, the formula the kind points to. A video with

@@ -951,7 +951,10 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
 
                 {/* Topic — the full descriptive brief. The header shows only the
                     short display name, so this is where the whole text lives. */}
-                <TabsContent value="topic" className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
+                {/* keepMounted: the angle editor lives in this panel, and a draft
+                    must survive a look at another tab, or Approve would be
+                    released with the typed angle thrown away. */}
+                <TabsContent value="topic" keepMounted className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
                   {/* Keyed by the video: the window stays mounted between
                       videos, and an angle being typed must not follow it. */}
                   <TopicAngle

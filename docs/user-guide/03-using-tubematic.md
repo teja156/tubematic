@@ -28,7 +28,6 @@ Before you approve, set the choices that are fixed from then on:
 
 - the **angle**, if you want the video to open on something else. Open the topic and press **Edit**
   on its **Topic** tab,
-
 - the **script profile**, if you want a particular writing style,
 - the **visual style** and, optionally, a **mascot**
   (see [Visual Styles and Mascots](13-visual-styles-and-mascots.md)),
@@ -97,9 +96,9 @@ four ways.
 Curriculum, trending and mining are the three research modes. Switch each on or off with the
 toggles at the top of the **Topics** page. With all three off, research does not run.
 
-Research gives each topic two scores from 0 to 10. The topic score says how well the pipeline can
-show the topic in a short explainer video. The angle score says how strong a reason the topic gives
-a viewer to keep watching. Research files only topics that score 5 or more on both. Each research
+Research gives each topic two scores. The topic score, from 1 to 10, says how well the pipeline can
+show the topic in a short explainer video. The angle score, from 0 to 10, says how strong a reason
+the topic gives a viewer to keep watching. Research files only topics that score 5 or more on both. Each research
 run files at most 2 topics per mode, or 2 per curriculum seed. You can change those numbers on
 **Settings → Research**.
 

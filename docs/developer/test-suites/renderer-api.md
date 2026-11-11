@@ -306,7 +306,8 @@ Covers the [topic's angle](../02-pipeline.md#topic-angle) over HTTP: `GET /angle
   status. A changed sentence or kind sets `angle_score` to 0, and the same angle saved again keeps
   its score. A body with `angle_score` alone has nothing it may write.
 - `POST /videos` stores an angle it is sent and requires none. `POST /videos/manual` accepts no
-  angle, a blank one and a `null` one as no angle, and stores a given angle with score 0.
+  angle, a blank one, a `null` one and `none` spelled out as no angle, and stores a given angle with
+  score 0.
 - A malformed angle is refused on all three routes. On `POST /videos/manual` the refusal leaves no
   video and no `manual` domain behind. A `null` score on `POST /videos` reads as unscored.
 - The edit works on a video whose style takes no mascot (Under the Hood, Cartoon 3D), alone and

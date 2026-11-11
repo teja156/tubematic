@@ -116,6 +116,17 @@ ANGLE_RUBRIC = (
     (-2, "The answer is already told everywhere"),
 )
 
+# Words a caller may send for "this topic has no angle". A person's own topic
+# is filed without an angle when it has none, and an agent told to file it
+# "without one" can spell that as a word as easily as leave it out.
+NO_ANGLE_WORDS = frozenset({"none", "n/a", "na", "null", "nil", "-", "no angle"})
+
+
+def says_none(value) -> bool:
+    """Whether a sent angle or kind is one of the NO_ANGLE_WORDS."""
+    return isinstance(value, str) and value.strip().strip(".").lower() in NO_ANGLE_WORDS
+
+
 _NO_ANGLE = ("A subject with no honest angle is not proposed: leave it out and name it in your "
              "run summary. Do not invent an angle to get past this check.")
 
@@ -171,7 +182,8 @@ def angle_error(angle, kind, score=0, *, required: bool = False) -> str | None:
         return ("angle and angle_kind are written together: pass the sentence and its kind, or "
                 "leave both empty")
     if kind not in ANGLE_KINDS:
-        return f"angle_kind {kind!r} is not a kind. Must be one of: {', '.join(ANGLE_KINDS)}"
+        return (f"angle_kind {kind!r} is not a kind. Must be one of: {', '.join(ANGLE_KINDS)}. "
+                "For a topic with no angle, leave angle, angle_kind and angle_score out")
     if len(angle) > ANGLE_MAX_CHARS:
         return (f"angle is {len(angle)} characters; the limit is {ANGLE_MAX_CHARS} "
                 "(one sentence)")

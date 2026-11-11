@@ -372,7 +372,8 @@ Covers `components/TopicAngle.tsx` on the video window's Topic tab and `lib/angl
   editor then says why no kind can be chosen.
 - The sentence is counted and sent as the API stores it: whitespace collapsed, in code points.
 - **Approve Topic** is disabled while the editor is open and comes back on Cancel. The editor
-  closes, and releases Approve, when the video leaves `TOPIC_PROPOSED` or the block goes away.
+  closes, and releases Approve, when the video leaves `TOPIC_PROPOSED` or the block goes away. A
+  draft and the hold survive switching to another tab and back.
 - A sentence with no kind says the kind is needed and marks the picker invalid; an over-long one
   marks the text box invalid.
 

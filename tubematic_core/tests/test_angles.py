@@ -103,6 +103,20 @@ def test_required_refuses_a_weak_angle(score):
     assert "run summary" in err
 
 
+@pytest.mark.parametrize("word", ["none", "None.", " N/A ", "null", "no angle"])
+def test_says_none_knows_the_words_for_no_angle(word):
+    assert ta.says_none(word)
+
+
+@pytest.mark.parametrize("value", ["", "paradox", "Nonetheless it works.", None, 3])
+def test_says_none_leaves_everything_else(value):
+    assert not ta.says_none(value)
+
+
+def test_an_unknown_kind_says_how_to_send_no_angle():
+    assert "leave angle, angle_kind and angle_score out" in ta.angle_error("A sentence.", "nope")
+
+
 def test_required_asks_for_a_score_that_was_left_out():
     """0 is unscored. Read as weak, it would have the agent drop a subject
     that has an angle."""

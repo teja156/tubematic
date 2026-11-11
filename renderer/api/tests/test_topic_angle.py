@@ -108,7 +108,9 @@ def test_an_angle_only_edit_does_not_move_the_video(client, db_path):
     """The worker announces a topic when its status@updated_at is new. An edit
     that bumped updated_at would announce the same topic a second time."""
     _video(db_path)
-    client.patch("/videos/vid_1", json={"angle": SENTENCE, "angle_kind": "paradox"})
+    res = client.patch("/videos/vid_1", json={"angle": SENTENCE, "angle_kind": "paradox"})
+    assert res.status_code == 200
+    assert _angle(db_path)[0] == SENTENCE
     con = sqlite3.connect(db_path)
     assert con.execute("SELECT updated_at FROM videos").fetchone()[0] == NOW
     con.close()
@@ -324,6 +326,14 @@ def test_a_manual_video_needs_no_angle(client, db_path):
                                    {"angle": "   ", "angle_kind": ""}])
 def test_a_blank_angle_on_a_manual_video_is_no_angle(client, db_path, blank):
     res = _submit(client, **blank)
+    assert res.status_code == 201
+    assert _angle(db_path, res.get_json()["id"]) == ("", "", 0)
+
+
+@pytest.mark.parametrize("none", [{"angle": "none", "angle_kind": "none"},
+                                  {"angle": "N/A", "angle_kind": ""}])
+def test_a_manual_video_whose_angle_is_spelled_none_has_no_angle(client, db_path, none):
+    res = _submit(client, **none)
     assert res.status_code == 201
     assert _angle(db_path, res.get_json()["id"]) == ("", "", 0)
 

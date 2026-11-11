@@ -3419,6 +3419,8 @@ def create_pipeline_blueprint() -> Blueprint:
         # use, or without one, and is never refused for lacking it (TMDEV-214).
         # Unscored either way; with none, the agent adds one when it picks the
         # video up.
+        if tangles.says_none(body.get("angle")) or tangles.says_none(body.get("angle_kind")):
+            body = {**body, "angle": "", "angle_kind": ""}
         picked_angle, angle_err = _body_angle(body, with_score=False)
         if angle_err:
             return jsonify({"error": angle_err}), 400
