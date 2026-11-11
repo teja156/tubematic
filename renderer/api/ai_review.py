@@ -405,6 +405,26 @@ def _reference_text_block(script_text: str, tts_text: str) -> str:
     )
 
 
+def _voices_block(voices) -> str:
+    """A note that the narration is spoken in more than one voice on purpose
+    (TMDEV-216), or "" for one voice, which keeps a one-voice prompt exactly
+    as it was.
+
+    The negative control for a second voice: without it a reviewer can report
+    the change of speaker as a defect, and any finding routes the video to a
+    revision and a paid re-voice."""
+    names = [str(v) for v in voices or () if str(v).strip()]
+    if len(names) < 2:
+        return ""
+    return (
+        f"\n\nVoices: this narration is spoken by {len(names)} different voices "
+        f"({', '.join(names)}). The script gives some lines to another voice on purpose, for\n"
+        "example a viewer's objection or a second speaker in a dialogue. A change of speaker\n"
+        "between lines is CORRECT BY DESIGN and is not a defect. Judge each voice's delivery\n"
+        "on its own."
+    )
+
+
 def _redact(text: str, api_key: str) -> str:
     """Strip a live API key out of an error string before it's persisted
     anywhere (DB comment, log). Belt-and-braces on top of never sending the
@@ -524,7 +544,7 @@ def run_ai_review(video_path: str, scene_config: dict, *,
                    model: str = "", fps=0, api_key: str = "",
                    canvas: str = "", figures: bool = False,
                    line_art: bool = False, cartoon_3d: bool = False,
-                   style_block: str = "") -> dict:
+                   style_block: str = "", voices=()) -> dict:
     """Run a Gemini quality review on a rendered video.
 
     Args:
@@ -558,6 +578,9 @@ def run_ai_review(video_path: str, scene_config: dict, *,
         api_key: Gemini credential. Passed in for the same reason as `model`
             — the key now lives in the settings table (TMDEV-73) and this
             module must stay DB-free. Empty falls back to env.
+        voices: the names of the voices the narration is spoken in, the
+            video's own first. Two or more add the note that a change of
+            speaker is intended (TMDEV-216); fewer add nothing.
 
     Returns:
         {"overall": str, "must_fix": list[dict], "suggestions": list[dict], "feedback": str,
@@ -661,7 +684,8 @@ def run_ai_review(video_path: str, scene_config: dict, *,
         sampled_fps=sampling_fps or 1,
         register_block=_register_block(canvas, figures, line_art, cartoon_3d, style_block),
         scene_config_json=json.dumps(scene_config, indent=2),
-        reference_text_block=_reference_text_block(script_text, tts_text),
+        reference_text_block=(_reference_text_block(script_text, tts_text)
+                              + _voices_block(voices)),
     )
     # `video_metadata` is a sibling of `file_data` on the same part, not a key
     # inside it — Google's own docs have shown it nested, which silently fails.

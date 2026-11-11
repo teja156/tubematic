@@ -2463,6 +2463,11 @@ def update_video(
     roster, or "" to fall back to the install default. Use this at the
     SCRIPT_READY checkpoint when a human picks (or changes) which voice to
     use before approving — set it before calling set_video_status → VOICING.
+    A segment of script_segments may carry its own "voice_id" (a roster
+    voice_id) to be spoken by that voice instead of the video's; one equal to
+    the video's voice is dropped. Each segment's markup must suit the model of
+    the voice that speaks it (get_pipeline_status's elevenlabs_voices gives
+    each voice's model_id and pronunciation_mode).
     Each voice has its own ElevenLabs model, and a script's markup is written
     for its voice's model, so a voice whose model cannot speak the stored
     script is refused with the reason — keep the voice, or request a revision.
@@ -2595,7 +2600,8 @@ def update_video(
         if voice_id not in roster_ids:
             return {"error": f"voice_id {voice_id!r} is not in elevenlabs_voices"}
     if script_segments is not None:
-        err = _validate_script_segments(script_segments)
+        err = (_validate_script_segments(script_segments)
+               or tvoice.segment_voice_error(script_segments, _get_voices()))
         if err:
             return {"error": err}
     if formula_id is not None or hooks is not None:
@@ -2650,12 +2656,17 @@ def update_video(
         if script_segments is not None or script is not None:
             target = _resolve_voice(voice_id if voice_id is not None else stored_voice)
             if script_segments is not None:
-                model_id = target["model_id"] if target else ELEVENLABS_MODEL_ID
-                label = target["name"] if target else ""
+                # A segment may name its own voice (TMDEV-216). One equal to
+                # the video's voice is dropped, so a stored voice_id always
+                # means another voice; then every segment's markup is checked
+                # against the model of the voice that speaks it.
+                script_segments = tvoice.normalize_segment_voices(
+                    script_segments, target["voice_id"] if target else "")
+                video_voice = target or {"voice_id": "", "name": "",
+                                         "model_id": ELEVENLABS_MODEL_ID}
                 joined = _join_segment_voice(script_segments)
-                err = (_check_pause_markup_model(joined, model_id, label)
-                       or _check_ipa_model(joined, model_id, label)
-                       or _check_phoneme_model(joined, model_id, label)
+                err = (tvoice.script_markup_conflict(script_segments, "", video_voice,
+                                                     _get_voices())
                        or _check_markup_values(joined))
                 if err:
                     return {"error": err}
@@ -2681,7 +2692,9 @@ def update_video(
             # to it below, as patch_video binds its own.
             voice_exempt = vrow["status"] == "TOPIC_PROPOSED"
             if target and not voice_exempt:
-                err = tvoice.markup_conflict(
+                # Only the segments the video's voice speaks: a segment with
+                # its own voice (TMDEV-216) does not change with it.
+                err = tvoice.video_voice_conflict(
                     segs, vrow["script"] or "", target["model_id"], voice_label=target["name"])
                 if err:
                     return {"error": f"This script can't be voiced with that voice: {err} "
@@ -4082,6 +4095,255 @@ def _lockstep_segment_frames(segments: list[dict], words: list[dict]) -> list[di
     return result
 
 
+def _plan_voice_runs(segments: list, voice: dict, roster: dict, lexicon: list):
+    """The runs a segmented script is voiced in (TMDEV-216): consecutive
+    segments spoken by the same voice, each with its roster entry and the
+    tts_text built for that voice's model. Returns the list, or the error
+    that refuses the voicing before any spend. `voice` is the video's resolved
+    voice; `roster` maps voice_id to entry. A one-voice script is one run.
+    vqa/stage_script.py stages tts_text through this too."""
+    runs = []
+    for run_voice_id, idx in tvoice.segment_runs(segments, voice["voice_id"]):
+        entry = voice if run_voice_id == voice["voice_id"] else roster.get(run_voice_id)
+        if entry is None:
+            return (f"segment {segments[idx[0]].get('id')!r} is voiced by {run_voice_id!r}, "
+                    "which is no longer in elevenlabs_voices — re-add it, or give the "
+                    "segment another voice")
+        run_segments = [segments[i] for i in idx]
+        model, label = entry["model_id"], entry["name"]
+        joined = _join_segment_voice(run_segments)
+        # Checked on the authored text: _build_tts_text rewrites <ipa> tags
+        # away, and the model may have changed since update_video.
+        err = _check_ipa_model(joined, model, label) or _check_phoneme_model(joined, model, label)
+        if err:
+            return err
+        tts_text = _build_tts_text(joined, _pronunciation_mode_for_model(model), lexicon)
+        err = _check_pause_markup_model(tts_text, model, label) or _check_markup_values(tts_text)
+        if err:
+            return err
+        runs.append({"voice": entry, "segments": run_segments, "tts_text": tts_text})
+    return runs
+
+
+# The longest previous_text / next_text a run's request carries about its
+# neighbour (TMDEV-216): a sentence or two is what continuity needs.
+_RUN_CONTEXT_CHARS = 200
+
+
+def _run_context_text(run: dict, last: bool) -> str:
+    """A neighbouring run's spoken words for previous_text / next_text: the
+    end of the run before, or the start of the run after, cut at a word."""
+    text = " ".join(_strip_non_spoken(run["tts_text"]).split())
+    if len(text) <= _RUN_CONTEXT_CHARS:
+        return text
+    if last:
+        cut = text[-_RUN_CONTEXT_CHARS:]
+        return cut[cut.find(" ") + 1:] if " " in cut else cut
+    cut = text[:_RUN_CONTEXT_CHARS]
+    return cut[:cut.rfind(" ")] if " " in cut else cut
+
+
+def _voice_run(run: dict, elevenlabs_key: str, video_id: str, context: dict) -> dict:
+    """Voice one run of segments (or a whole one-voice script) with
+    /with-timestamps and read its words back from the alignment.
+
+    Returns {"audio", "words": [{word, start, end}] in seconds from the run's
+    start, "duration", "credits"} or {"error", "credits"}. The credits of a
+    200 are recorded before anything else can fail, tagged with the run's
+    voice so the video modal can tell the voices of one voicing apart.
+    """
+    import httpx
+
+    entry, tts_text = run["voice"], run["tts_text"]
+    model_id = entry["model_id"]
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{entry['voice_id']}/with-timestamps"
+    voice_settings = {"stability": 0.5, "similarity_boost": 0.75}
+    # Sent only when it is not the default, so a voice nobody gave a speed
+    # sends exactly the request it always has (TMDEV-216).
+    speed = tvoice.voice_speed(entry)
+    if speed != tvoice.DEFAULT_SPEED:
+        voice_settings["speed"] = speed
+    payload = {
+        "text": tts_text,
+        "model_id": model_id,
+        "voice_settings": voice_settings,
+        "output_format": "mp3_44100_128",
+        **context,
+    }
+    # Gated strictly on a tag actually being present in tts_text, not on
+    # pronunciation_mode — same rationale as the normalized_alignment gate
+    # below (TMDEV-26 / commit 132c2e9): a legacy flat-script video (no
+    # segments, tts_text never contains phoneme tags) must not get SSML
+    # parsing silently turned on just because the install-wide mode happens
+    # to be "phoneme".
+    if "<phoneme" in tts_text:
+        payload["enable_ssml_parsing"] = True
+    headers = {"xi-api-key": elevenlabs_key, "Content-Type": "application/json"}
+
+    try:
+        with httpx.Client(timeout=120) as client:
+            resp = client.post(url, json=payload, headers=headers)
+    except Exception as e:
+        _provider_failed("elevenlabs", model_id, "voice", error=f"{type(e).__name__}: {e}")
+        return {"error": f"ElevenLabs request failed: {e}", "credits": None}
+
+    # A 200 has been charged for whatever happens next — a body that fails
+    # to parse, a missing audio field, or the segment/word integrity check
+    # below — so the credits are recorded before any of it runs. They come
+    # from ElevenLabs' `character-cost` header: the exact number of plan
+    # credits this call deducted, after the model's discount (Flash and
+    # Turbo cost half). Verified against the account's credit counter.
+    # The local character count is only a fallback for a response without
+    # the header, and is marked estimated: it strips markup ElevenLabs
+    # does bill (a <break> tag costs credits) and ignores the discount.
+    credits = None
+    if resp.status_code == 200:
+        try:
+            credits = int(resp.headers.get("character-cost"))
+            estimated = False
+        except (TypeError, ValueError):
+            credits = len(_strip_non_spoken(tts_text))
+            estimated = True
+        _record_usage(service="elevenlabs", model=model_id, operation="voice",
+                      units={"credits": credits}, videos=[video_id],
+                      request_id=resp.headers.get("request-id"), estimated=estimated,
+                      raw={"voice_id": entry["voice_id"]})
+    try:
+        if resp.status_code != 200:
+            _provider_failed("elevenlabs", model_id, "voice", resp=resp)
+            return {"error": f"ElevenLabs {resp.status_code}: {resp.text[:400]}", "credits": credits}
+        data = resp.json()
+        audio_bytes = base64.b64decode(data["audio_base64"])
+    except Exception as e:
+        _provider_failed("elevenlabs", model_id, "voice", resp=resp,
+                         error=f"unusable response: {type(e).__name__}: {e}")
+        return {"error": f"ElevenLabs returned an unusable response: {e}", "credits": credits}
+
+    # normalized_alignment collapses any inline <phoneme> tag into a single
+    # space-free token at the tagged word's position, matching the word
+    # count of the tag-stripped text — plain `alignment` instead returns the
+    # tag's raw markup characters verbatim, which shatters word-boundary
+    # tokenization on the spaces inside the tag's attributes. Gated strictly
+    # on a tag actually being present in tts_text (not just "segments" or
+    # "phoneme mode") because normalized_alignment also reflects ElevenLabs'
+    # general text normalization (numbers, dates, abbreviations spelled out)
+    # — for a plain script with no tags, that can expand one authored token
+    # into several normalized ones and break the lockstep count check that
+    # plain `alignment` (a literal, 1:1 mirror of the input text) never
+    # would. So this only ever applies to a run that actually used a
+    # phoneme tag; every other case — dictionary mode (tags already
+    # stripped before this point) and legacy flat-script — keeps reading
+    # plain `alignment`, unchanged from pre-TMDEV-26 behavior.
+    #
+    # Pause markup deliberately does NOT widen this gate. A live probe
+    # (TMDEV-26) confirmed plain `alignment` carries <break/> and [pause]
+    # markup verbatim, as zero-duration characters placed at the end of the
+    # silence, leaving every real word's timing literal — so the markup can
+    # be skipped by character index below without giving up alignment's 1:1
+    # mirror property, and without exposing dictionary-mode scripts (the
+    # default) to normalized_alignment's number/date expansion.
+    # used_normalized must reflect which field was actually read, not just
+    # which one was wanted — if normalized_alignment came back empty we fall
+    # back to plain `alignment`, and the marker-drop below would otherwise
+    # hunt for '.' tokens that were never there and report a misleading
+    # count mismatch.
+    normalized = data.get("normalized_alignment") if "<phoneme" in tts_text else None
+    alignment = normalized or data.get("alignment", {})
+    used_normalized = normalized is not None
+    chars      = alignment.get("characters", [])
+    char_start = alignment.get("character_start_times_seconds", [])
+    char_end   = alignment.get("character_end_times_seconds", [])
+
+    # Character positions of any pause markup carried verbatim in the
+    # alignment stream. Matched against the alignment's own characters
+    # rather than tts_text, so this stays correct whichever field was
+    # selected above.
+    markup_char_indices: set[int] = set()
+    aligned_text = "".join(chars)
+    for _rx in (_BREAK_TAG_RE, _V3_PAUSE_TAG_RE):
+        for _m in _rx.finditer(aligned_text):
+            markup_char_indices.update(range(_m.start(), _m.end()))
+
+    duration = char_end[-1] if char_end else (len(audio_bytes) / (128 * 1000 / 8))
+
+    words: list[dict] = []
+    buf: list[str]   = []
+    word_start: float | None = None
+    word_end: float = 0.0
+
+    def _flush():
+        nonlocal buf, word_start
+        if buf and word_start is not None:
+            words.append({"word": "".join(buf).strip(), "start": word_start, "end": word_end})
+        buf, word_start = [], None
+
+    for i, (ch, t0, t1) in enumerate(zip(chars, char_start, char_end)):
+        if ch in _WORD_BOUNDARY_CHARS or i in markup_char_indices:
+            # Pause markup ends the current word and contributes none of its
+            # own — the silence it produces survives as a gap between the
+            # surrounding words' frame spans, which is exactly what captions
+            # should do while nothing is being said.
+            _flush()
+        else:
+            if word_start is None:
+                word_start = t0
+            buf.append(ch)
+            word_end = t1
+    _flush()
+
+    # normalized_alignment renders a <break/> not verbatim but as a lone '.'
+    # token, so the character-index skip above cannot catch it. Drop those
+    # markers instead, count-checked. Unambiguous because
+    # _validate_script_segments rejects standalone punctuation words, so no
+    # authored token can be punctuation-only.
+    if used_normalized:
+        expected_markers = len(_BREAK_TAG_RE.findall(tts_text))
+        if expected_markers:
+            kept = [w for w in words if not _PUNCT_ONLY_RE.match(w["word"])]
+            dropped = len(words) - len(kept)
+            if dropped != expected_markers:
+                err = (f"Expected {expected_markers} break-tag marker token(s) in "
+                       f"ElevenLabs' normalized alignment but found {dropped}. "
+                       "Refusing to guess — captions would silently desync.")
+                _provider_failed("elevenlabs", model_id, "voice",
+                                 status=resp.status_code, error=err)
+                return {"error": err, "credits": credits}
+            words = kept
+
+    return {"audio": audio_bytes, "words": words, "duration": duration, "credits": credits}
+
+
+def _join_voice_audio(ffmpeg: str, parts: list[bytes]) -> tuple[bytes, list[float]]:
+    """Join the runs of a script spoken by more than one voice (TMDEV-216)
+    into one mp3, and return it with each run's decoded length in seconds.
+
+    Each part is decoded to WAV first: the WAV's frame count is the run's
+    real length, which is what the next run's words are offset by, and the
+    WAVs concatenate exactly. Probed: a v4 / multilingual_v2 / v4 join kept
+    every word within 0.14 s of these offsets by speech-to-text.
+    """
+    import wave
+    with tempfile.TemporaryDirectory(prefix="tubematic-voice-") as tmp:
+        tmpdir = Path(tmp)
+        wavs, durations = [], []
+        for i, part in enumerate(parts):
+            src, wav = tmpdir / f"run{i}.mp3", tmpdir / f"run{i}.wav"
+            src.write_bytes(part)
+            subprocess.run([ffmpeg, "-v", "error", "-y", "-i", str(src), "-ac", "1",
+                            "-ar", "44100", "-c:a", "pcm_s16le", str(wav)],
+                           check=True, capture_output=True, timeout=120)
+            with wave.open(str(wav), "rb") as w:
+                durations.append(w.getnframes() / w.getframerate())
+            wavs.append(wav)
+        listing = tmpdir / "runs.txt"
+        listing.write_text("".join(f"file '{w.name}'\n" for w in wavs), encoding="utf-8")
+        out = tmpdir / "joined.mp3"
+        subprocess.run([ffmpeg, "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i",
+                        str(listing), "-c:a", "libmp3lame", "-b:a", "128k", str(out)],
+                       check=True, capture_output=True, timeout=300)
+        return out.read_bytes(), durations
+
+
 @mcp.tool
 def generate_voice(video_id: str, script: str) -> dict:
     """Generate TTS audio for a script via ElevenLabs.
@@ -4197,7 +4459,6 @@ def generate_voice(video_id: str, script: str) -> dict:
         return {"error": "No default voice set — pick one in the Voices step of onboarding, "
                           "or set a default voice in the Settings dashboard"}
     voice_id, model_id, voice_label = voice["voice_id"], voice["model_id"], voice["name"]
-    mode = _pronunciation_mode_for_model(model_id)
 
     # Claim the video for this call before doing any billed work — the status
     # check above is a plain read, so two concurrent calls could otherwise
@@ -4216,20 +4477,19 @@ def generate_voice(video_id: str, script: str) -> dict:
 
     try:
         segments = video.get("script_segments")
+        roster = {v["voice_id"]: v for v in _get_voices()}
 
+        # Everything a voicing needs is decided here, before the first request:
+        # the voice of every run, the markup each run may carry, its speed and
+        # its tts_text. A script whose segments name more than one voice
+        # (TMDEV-216) is voiced as runs of consecutive same-voice segments, one
+        # request each; a one-voice script is one run, voiced exactly as before.
         if segments:
-            joined = _join_segment_voice(segments)
-            # Checked on the authored text: _build_tts_text rewrites <ipa>
-            # tags away, and the model may have changed since update_video.
-            err = (_check_ipa_model(joined, model_id, voice_label)
-                   or _check_phoneme_model(joined, model_id, voice_label))
-            if err:
-                return {"error": err}
-            tts_text = _build_tts_text(joined, mode, lexicon)
-            err = _check_pause_markup_model(tts_text, model_id, voice_label) or _check_markup_values(tts_text)
-            if err:
-                return {"error": err}
+            runs = _plan_voice_runs(segments, voice, roster, lexicon)
+            if isinstance(runs, str):
+                return {"error": runs}
         else:
+            runs = []
             # Legacy flat-script path: strip stage directions like [Show Card],
             # [SCENE], [SHOW] and em dashes before sending to ElevenLabs — these
             # must not appear in the voiced audio. Break tags are stripped too:
@@ -4254,6 +4514,21 @@ def generate_voice(video_id: str, script: str) -> dict:
             tts_text = _apply_respell(tts_text)
             tts_text = _apply_ipa(tts_text)
             tts_text = _apply_lexicon(tts_text, lexicon)
+            runs.append({"voice": voice, "segments": None, "tts_text": tts_text})
+
+        # A speed the voice's model would ignore is refused, never sent:
+        # Settings refuses it too, so this guards a roster written around it.
+        for run in runs:
+            err = tvoice.speed_error(tvoice.voice_speed(run["voice"]), run["voice"]["model_id"],
+                                     run["voice"]["name"])
+            if err:
+                return {"error": err}
+        ffmpeg = None
+        if len(runs) > 1:
+            ffmpeg = shutil.which("ffmpeg")
+            if not ffmpeg:
+                return {"error": "ffmpeg must be on PATH in the MCP container to join a script "
+                                 "spoken by more than one voice"}
 
         # The same names every reader derives (tubematic_core.jobfiles). A
         # planted symlink in place of either file is refused before spend.
@@ -4264,156 +4539,50 @@ def generate_voice(video_id: str, script: str) -> dict:
             return {"error": str(e)}
         audio_path.parent.mkdir(parents=True, exist_ok=True)
 
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/with-timestamps"
-        payload = {
-            "text": tts_text,
-            "model_id": model_id,
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
-            "output_format": "mp3_44100_128",
-        }
-        # Gated strictly on a tag actually being present in tts_text, not on
-        # pronunciation_mode — same rationale as the normalized_alignment gate
-        # below (TMDEV-26 / commit 132c2e9): a legacy flat-script video (no
-        # segments, tts_text never contains phoneme tags) must not get SSML
-        # parsing silently turned on just because the install-wide mode happens
-        # to be "phoneme".
-        if "<phoneme" in tts_text:
-            payload["enable_ssml_parsing"] = True
-        headers = {"xi-api-key": elevenlabs_key, "Content-Type": "application/json"}
+        voiced, credits = [], 0
+        for i, run in enumerate(runs):
+            context = {}
+            # Each run hears its neighbours' words, so the joined audio keeps
+            # its intonation across a change of voice. eleven_v3 refuses the
+            # fields (probed: 400 unsupported_model), so its runs go without.
+            if len(runs) > 1 and run["voice"]["model_id"] not in tvoice.CONTEXT_REFUSED_MODELS:
+                if i > 0:
+                    context["previous_text"] = _run_context_text(runs[i - 1], last=True)
+                if i < len(runs) - 1:
+                    context["next_text"] = _run_context_text(runs[i + 1], last=False)
+            out = _voice_run(run, elevenlabs_key, video_id, context)
+            if out.get("credits") is not None:
+                credits += out["credits"]
+            if "error" in out:
+                return {"error": out["error"]}
+            voiced.append(out)
 
-        try:
-            with httpx.Client(timeout=120) as client:
-                resp = client.post(url, json=payload, headers=headers)
-        except Exception as e:
-            _provider_failed("elevenlabs", model_id, "voice", error=f"{type(e).__name__}: {e}")
-            return {"error": f"ElevenLabs request failed: {e}"}
-
-        # A 200 has been charged for whatever happens next — a body that fails
-        # to parse, a missing audio field, or the segment/word integrity check
-        # below — so the credits are recorded before any of it runs. They come
-        # from ElevenLabs' `character-cost` header: the exact number of plan
-        # credits this call deducted, after the model's discount (Flash and
-        # Turbo cost half). Verified against the account's credit counter.
-        # The local character count is only a fallback for a response without
-        # the header, and is marked estimated: it strips markup ElevenLabs
-        # does bill (a <break> tag costs credits) and ignores the discount.
-        credits = None
-        if resp.status_code == 200:
+        if len(voiced) == 1:
+            audio_bytes = voiced[0]["audio"]
+            durations = [voiced[0]["duration"]]
+        else:
+            # Each run's words are offset by the DECODED length of the audio
+            # before it, never by its last alignment time: on eleven_v4 the
+            # alignment can end ~0.08 s after the audio really does (probed).
             try:
-                credits = int(resp.headers.get("character-cost"))
-                estimated = False
-            except (TypeError, ValueError):
-                credits = len(_strip_non_spoken(tts_text))
-                estimated = True
-            _record_usage(service="elevenlabs", model=model_id, operation="voice",
-                          units={"credits": credits}, videos=[video_id],
-                          request_id=resp.headers.get("request-id"), estimated=estimated)
-        try:
-            if resp.status_code != 200:
-                _provider_failed("elevenlabs", model_id, "voice", resp=resp)
-                return {"error": f"ElevenLabs {resp.status_code}: {resp.text[:400]}"}
-            data = resp.json()
-            audio_bytes = base64.b64decode(data["audio_base64"])
-        except Exception as e:
-            _provider_failed("elevenlabs", model_id, "voice", resp=resp,
-                             error=f"unusable response: {type(e).__name__}: {e}")
-            return {"error": f"ElevenLabs returned an unusable response: {e}"}
-
-        # normalized_alignment collapses any inline <phoneme> tag into a single
-        # space-free token at the tagged word's position, matching the word
-        # count of the tag-stripped text — plain `alignment` instead returns the
-        # tag's raw markup characters verbatim, which shatters word-boundary
-        # tokenization on the spaces inside the tag's attributes. Gated strictly
-        # on a tag actually being present in tts_text (not just "segments" or
-        # "phoneme mode") because normalized_alignment also reflects ElevenLabs'
-        # general text normalization (numbers, dates, abbreviations spelled out)
-        # — for a plain script with no tags, that can expand one authored token
-        # into several normalized ones and break the lockstep count check that
-        # plain `alignment` (a literal, 1:1 mirror of the input text) never
-        # would. So this only ever applies to a segment that actually used a
-        # phoneme tag; every other case — dictionary mode (tags already
-        # stripped before this point) and legacy flat-script — keeps reading
-        # plain `alignment`, unchanged from pre-TMDEV-26 behavior.
-        #
-        # Pause markup deliberately does NOT widen this gate. A live probe
-        # (TMDEV-26) confirmed plain `alignment` carries <break/> and [pause]
-        # markup verbatim, as zero-duration characters placed at the end of the
-        # silence, leaving every real word's timing literal — so the markup can
-        # be skipped by character index below without giving up alignment's 1:1
-        # mirror property, and without exposing dictionary-mode scripts (the
-        # default) to normalized_alignment's number/date expansion.
-        # used_normalized must reflect which field was actually read, not just
-        # which one was wanted — if normalized_alignment came back empty we fall
-        # back to plain `alignment`, and the marker-drop below would otherwise
-        # hunt for '.' tokens that were never there and report a misleading
-        # count mismatch.
-        normalized = data.get("normalized_alignment") if "<phoneme" in tts_text else None
-        alignment = normalized or data.get("alignment", {})
-        used_normalized = normalized is not None
-        chars      = alignment.get("characters", [])
-        char_start = alignment.get("character_start_times_seconds", [])
-        char_end   = alignment.get("character_end_times_seconds", [])
-
-        # Character positions of any pause markup carried verbatim in the
-        # alignment stream. Matched against the alignment's own characters
-        # rather than tts_text, so this stays correct whichever field was
-        # selected above.
-        markup_char_indices: set[int] = set()
-        aligned_text = "".join(chars)
-        for _rx in (_BREAK_TAG_RE, _V3_PAUSE_TAG_RE):
-            for _m in _rx.finditer(aligned_text):
-                markup_char_indices.update(range(_m.start(), _m.end()))
-
-        audio_duration = char_end[-1] if char_end else (len(audio_bytes) / (128 * 1000 / 8))
-        total_frames   = round(audio_duration * FPS)
+                audio_bytes, durations = _join_voice_audio(ffmpeg, [o["audio"] for o in voiced])
+            except Exception as e:
+                _provider_failed("elevenlabs", model_id, "voice",
+                                 error=f"joining the voices failed: {type(e).__name__}: {e}")
+                return {"error": f"The voices were generated but could not be joined: {e}"}
 
         words: list[dict] = []
-        buf: list[str]   = []
-        word_start: float | None = None
-        word_end: float = 0.0
-
-        def _flush():
-            nonlocal buf, word_start
-            if buf and word_start is not None:
+        offset = 0.0
+        for out, duration in zip(voiced, durations):
+            for w in out["words"]:
                 words.append({
-                    "word": "".join(buf).strip(),
-                    "startFrame": round(word_start * FPS),
-                    "endFrame": round(word_end * FPS),
+                    "word": w["word"],
+                    "startFrame": round((offset + w["start"]) * FPS),
+                    "endFrame": round((offset + w["end"]) * FPS),
                 })
-            buf, word_start = [], None
-
-        for i, (ch, t0, t1) in enumerate(zip(chars, char_start, char_end)):
-            if ch in _WORD_BOUNDARY_CHARS or i in markup_char_indices:
-                # Pause markup ends the current word and contributes none of its
-                # own — the silence it produces survives as a gap between the
-                # surrounding words' frame spans, which is exactly what captions
-                # should do while nothing is being said.
-                _flush()
-            else:
-                if word_start is None:
-                    word_start = t0
-                buf.append(ch)
-                word_end = t1
-        _flush()
-
-        # normalized_alignment renders a <break/> not verbatim but as a lone '.'
-        # token, so the character-index skip above cannot catch it. Drop those
-        # markers instead, count-checked. Unambiguous because
-        # _validate_script_segments rejects standalone punctuation words, so no
-        # authored token can be punctuation-only.
-        if used_normalized:
-            expected_markers = len(_BREAK_TAG_RE.findall(tts_text))
-            if expected_markers:
-                kept = [w for w in words if not _PUNCT_ONLY_RE.match(w["word"])]
-                dropped = len(words) - len(kept)
-                if dropped != expected_markers:
-                    err = (f"Expected {expected_markers} break-tag marker token(s) in "
-                           f"ElevenLabs' normalized alignment but found {dropped}. "
-                           "Refusing to guess — captions would silently desync.")
-                    _provider_failed("elevenlabs", model_id, "voice",
-                                     status=resp.status_code, error=err)
-                    return {"error": err}
-                words = kept
+            offset += duration
+        audio_duration = offset if len(voiced) > 1 else durations[0]
+        total_frames   = round(audio_duration * FPS)
 
         timeline = {
             "totalFrames": total_frames,
@@ -4425,15 +4594,14 @@ def generate_voice(video_id: str, script: str) -> dict:
             try:
                 timeline["segments"] = _lockstep_segment_frames(segments, words)
             except (ValueError, IndexError) as e:
-                _provider_failed("elevenlabs", model_id, "voice",
-                                 status=resp.status_code, error=str(e))
+                _provider_failed("elevenlabs", model_id, "voice", status=200, error=str(e))
                 return {"error": str(e)}
-            # When normalized_alignment was used above (a phoneme tag was
-            # present), its word text for the tagged word is ElevenLabs'
-            # internal phonetic rewrite (e.g. "@m@ae1@d@ih0@s@ah0@n"), not the
-            # authored word — restore the authored text for on-screen captions.
-            # When plain `alignment` was used instead (the common case), this is
-            # a no-op: alignment already mirrors the input text literally, so
+            # When normalized_alignment was used (a phoneme tag was present),
+            # its word text for the tagged word is ElevenLabs' internal
+            # phonetic rewrite (e.g. "@m@ae1@d@ih0@s@ah0@n"), not the authored
+            # word — restore the authored text for on-screen captions. When
+            # plain `alignment` was used instead (the common case), this is a
+            # no-op: alignment already mirrors the input text literally, so
             # these tokens already match. Counts are guaranteed equal here
             # either way since _lockstep_segment_frames already validated them
             # via the same tokenization.
@@ -4450,6 +4618,7 @@ def generate_voice(video_id: str, script: str) -> dict:
         # re-derived later: the lexicon is install-wide and mutable, so a
         # derivation run at review time could reconstruct an instruction that
         # was never issued for this video.
+        tts_text = " ".join(run["tts_text"] for run in runs)
         _update_fields(video_id, voice_file_path=str(audio_path), timeline_path=str(timeline_path),
                         tts_text=tts_text)
         status_advanced = _set_status(video_id, "VOICE_READY", only_if="VOICING")

@@ -74,7 +74,7 @@ def test_a_voiced_video_reports_the_model_it_was_voiced_with_after_a_roster_edit
     # The voice's model is edited after voicing; the audio did not change.
     client.post("/settings", json={"elevenlabs_voices": [V2, {**V3, "model_id": "eleven_flash_v2"}]})
     assert _info(client) == {"voice_id": "a1", "name": "Adam",
-                             "model_id": "eleven_v3", "model_voiced": True}
+                             "model_id": "eleven_v3", "model_voiced": True, "other_voices": []}
 
 
 def test_the_latest_voicing_wins_after_a_re_voice(client, db_path):
@@ -93,7 +93,7 @@ def test_before_voicing_an_old_ledger_row_is_ignored_for_the_current_setting(cli
     _video(db_path, status=status)
     _voiced_with(db_path, "eleven_multilingual_v2")
     assert _info(client) == {"voice_id": "a1", "name": "Adam",
-                             "model_id": "eleven_v3", "model_voiced": False}
+                             "model_id": "eleven_v3", "model_voiced": False, "other_voices": []}
 
 
 def test_a_video_with_no_ledger_row_shows_the_current_setting(client, db_path):
@@ -106,18 +106,18 @@ def test_a_voice_off_the_roster_keeps_its_id_and_its_voiced_model(client, db_pat
     _video(db_path, voice_id="gone")
     _voiced_with(db_path, "eleven_v3")
     assert _info(client) == {"voice_id": "gone", "name": "",
-                             "model_id": "eleven_v3", "model_voiced": True}
+                             "model_id": "eleven_v3", "model_voiced": True, "other_voices": []}
 
 
 def test_a_voice_off_the_roster_and_never_voiced_has_no_model(client, db_path):
     _video(db_path, voice_id="gone", status="SCRIPT_READY")
-    assert _info(client) == {"voice_id": "gone", "name": "", "model_id": "", "model_voiced": False}
+    assert _info(client) == {"voice_id": "gone", "name": "", "model_id": "", "model_voiced": False, "other_voices": []}
 
 
 def test_a_blank_voice_resolves_to_the_install_default(client, db_path):
     _video(db_path, voice_id="", status="TOPIC_APPROVED")
     assert _info(client) == {"voice_id": "r1", "name": "Rachel",
-                             "model_id": "eleven_multilingual_v2", "model_voiced": False}
+                             "model_id": "eleven_multilingual_v2", "model_voiced": False, "other_voices": []}
 
 
 def test_another_videos_voicing_is_not_this_ones(client, db_path):
@@ -140,3 +140,31 @@ def test_a_patch_response_carries_voice_info(client, db_path):
     r = client.patch("/videos/vid-1", json={"title": "New title"})
     assert r.status_code == 200
     assert json.loads(r.data)["voice_info"]["model_voiced"] is True
+
+
+# ── more than one voice (TMDEV-216) ──────────────────────────────────────────
+
+def test_a_two_voice_voicing_reports_the_video_voices_model(client, db_path):
+    """Each run of a two-voice voicing is its own ledger row, tagged with its
+    voice; the Voice model row must not show whichever run came last."""
+    _video(db_path)
+    tusage.record_usage(db_path, service="elevenlabs", model="eleven_v3", operation="voice",
+                        units={"credits": 100}, videos=["vid-1"], raw={"voice_id": "a1"})
+    tusage.record_usage(db_path, service="elevenlabs", model="eleven_multilingual_v2",
+                        operation="voice", units={"credits": 100}, videos=["vid-1"],
+                        raw={"voice_id": "r1"})
+    assert _info(client)["model_id"] == "eleven_v3"
+
+
+def test_the_other_voices_of_a_script_are_listed(client, db_path):
+    _video(db_path)
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET script_segments = ? WHERE id = 'vid-1'", (json.dumps([
+        {"id": "s1", "voice": "Hi.", "visual": ""},
+        {"id": "s2", "voice": "Yo.", "visual": "", "voice_id": "r1"},
+        {"id": "s3", "voice": "Hey.", "visual": "", "voice_id": "r1"},
+    ]),))
+    con.commit()
+    con.close()
+    assert _info(client)["other_voices"] == [
+        {"voice_id": "r1", "name": "Rachel", "model_id": "eleven_multilingual_v2"}]
