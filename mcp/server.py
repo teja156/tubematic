@@ -1928,7 +1928,6 @@ def create_video(
         formula_choice = (row["default_formula_id"] or "").strip()
         if formula_choice not in tformulas.FORMULAS:
             formula_choice = ""
-        agent_id = _pick_agent_id(con)
         # The domain's agent, model and effort seed EVERY video too, whatever
         # the strategy (TMDEV-207); a domain on Automatic is dealt by weight.
         # Keep in sync: renderer/api/pipeline.py's create_video.

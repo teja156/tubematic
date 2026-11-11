@@ -1024,6 +1024,7 @@ describe("TopicsPage — domain summary and agent defaults", () => {
       status: "active", default_visual_style: "stick", default_voice_id: "a1",
       default_script_profile_id: "", default_mascot_id: "none",
       default_agent_id: "codex", default_agent_model: "", default_agent_effort: "max",
+      default_formula_id: "",
       topic_cap: 300 }]));
     // The row then offers the new agent's models and names its effort.
     await waitFor(() => expect(options("domain-agent-model-seed-1").map((o) => o.textContent))
