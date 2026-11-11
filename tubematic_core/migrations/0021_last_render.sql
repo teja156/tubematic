@@ -1,7 +1,7 @@
 -- 0021 — the video's last successful render: which renderer, and how long (TMDEV-206).
 --
 -- videos.renderer_id is the render lease, not a record: the render gateway
--- clears it the moment the mp4 arrives, and render_timings (the scheduler's
+-- clears it when the renderer reports a successful render, and render_timings (the scheduler's
 -- history) names no video. So nothing said which machine made a video or how
 -- long it took. The gateway now writes these columns in the same statement
 -- that accepts a successful result, and the next successful render overwrites

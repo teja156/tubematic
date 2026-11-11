@@ -115,7 +115,7 @@ One row per video, from proposed topic to published file.
 | `render_started_at` | TEXT NOT NULL | `''` | When the current render was claimed. The scheduler's "time spent so far" for a busy renderer |
 | `render_uploaded_at` | TEXT NOT NULL | `''` | When the render's mp4 arrived. A `RENDERING` row with this set is waiting for the worker's AI review and is not re-queued |
 | `render_claim_id` | TEXT NOT NULL | `''` | The current claim's id: random, new on every claim. See [Render lease columns](#render-lease-columns) |
-| `last_render_renderer_id` | TEXT NOT NULL | `''` | The renderer that made the video's last successful render. `''` means no render is recorded, which is true of every video rendered before 2.2.0. `renderer_id` is the lease and is cleared at upload, so this is the lasting record |
+| `last_render_renderer_id` | TEXT NOT NULL | `''` | The renderer that made the video's last successful render. `''` means no render is recorded, which is true of every video rendered before 2.2.0. `renderer_id` is the lease and is cleared by the success result, so this is the lasting record |
 | `last_render_renderer_name` | TEXT NOT NULL | `''` | That renderer's name at the time of the render, so a later rename or removal leaves it unchanged |
 | `last_render_on_gpu` | INTEGER NOT NULL | `0` | `1` when that render ran on the GPU |
 | `last_render_seconds` | REAL NOT NULL | `0` | The Remotion run as the renderer measured it, the figure `render_timings` keeps. It excludes fetching the bundle and uploading the mp4. `0` means not reported |
