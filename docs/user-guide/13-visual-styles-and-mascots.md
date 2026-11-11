@@ -142,7 +142,7 @@ the narration. The character's head is the same in every video.
 |---|---|
 | A topic waiting for approval, on its Quick Actions row or in its window | That video's style |
 | The **New Video** page | The style of the video you are creating |
-| A domain's row on the **Topics** page | The style its curriculum topics arrive with. You can still change it on each topic |
+| **Edit defaults** on a domain's row on the **Topics** page | The style its curriculum topics arrive with. You can still change it on each topic |
 
 Once you approve the topic, the style is fixed.
 
@@ -212,7 +212,7 @@ Three places set it. Each overrides the one above.
 | Where | What it sets |
 |---|---|
 | **Settings → Rendering → Default mascot (experimental)** | The default for the whole install. Empty means none |
-| The **Mascot (exp.)** column of a domain's row on the **Topics** page | The default for that domain. *Use install default* follows the setting above. *None* means no mascot in this domain |
+| **Mascot (exp.)**, under **Edit defaults** on a domain's row on the **Topics** page | The default for that domain. *Use install default* follows the setting above. *None* means no mascot in this domain |
 | The mascot picker on a topic waiting for approval | That one video. Fixed once you approve the topic |
 
 You can set a default only while a renderer's GPU works. A default you set earlier stays stored if

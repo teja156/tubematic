@@ -6,6 +6,8 @@ import type { Agent, GpuStatus, Project, ScriptProfile, Video, VisualStyle, Voic
 import { SectionLabel } from "@/components/SectionLabel";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { AgentPickers, Field, resolvePickedModel, selectStyle } from "@/components/AgentPickers";
+import { effortOptionLabel } from "@/lib/agents";
+import { NO_DOMAIN_DEFAULTS, domainAgent, domainDefaults } from "@/lib/domains";
 import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
 import { voiceLabel } from "@/lib/voices";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
@@ -44,6 +46,9 @@ export default function NewVideoPage() {
   // with when no voice is picked (TMDEV-121). "" until the domain has one —
   // it only exists after the first manual video.
   const [manualVoiceId, setManualVoiceId] = useState("");
+  // The manual domain's other defaults; the agent, model and effort among them
+  // are what Automatic means on this page.
+  const [manualDefaults, setManualDefaults] = useState(NO_DOMAIN_DEFAULTS);
   const [canIllustrate, setCanIllustrate] = useState(true);
   const [gpu, setGpu] = useState<GpuStatus | null>(null);
   const [profiles, setProfiles] = useState<ScriptProfile[]>([]);
@@ -91,6 +96,7 @@ export default function NewVideoPage() {
       .then((rows: Project[]) => {
         const manual = Array.isArray(rows) ? rows.find((p) => p.id === MANUAL_PROJECT_ID) : undefined;
         setManualVoiceId(manual?.default_voice_id ?? "");
+        if (manual) setManualDefaults(domainDefaults(manual));
       })
       .catch(() => {});
     apiFetch("/script-profiles")
@@ -105,6 +111,26 @@ export default function NewVideoPage() {
   // model stays "" (its default). A picked agent's model is pinned, as
   // approving a topic pins it, so the row records which model made the video.
   const resolvedModel = resolvePickedModel(picked, model);
+  // What Automatic resolves to here: the manual domain's agent while it is
+  // live, with its model while the agent still offers it, and the domain's
+  // effort. The API seeds a submission the same way (POST /videos/manual), and
+  // deals by weight when the domain names no live agent. Picking an agent on
+  // this page takes none of the three from the domain.
+  const domainLive = domainAgent(agents, manualDefaults.default_agent_id);
+  const domainModel = domainLive?.models.includes(manualDefaults.default_agent_model)
+    ? manualDefaults.default_agent_model : "";
+  // While the agent list has not loaded (or failed), whether the domain's
+  // agent is live is unknown, so the agent and model choices only say that
+  // the domain has one.
+  const unlisted = agents === undefined && manualDefaults.default_agent_id !== "";
+  const automatic = {
+    agent: domainLive ? `Domain default (${domainLive.name})`
+      : unlisted ? "Domain default" : "Automatic (dealt by weight)",
+    model: domainModel ? `${domainModel} (domain default)`
+      : unlisted && manualDefaults.default_agent_model ? "Domain default" : "Agent default",
+    effort: manualDefaults.default_agent_effort
+      ? `${manualDefaults.default_agent_effort} (domain default)` : effortOptionLabel(domainLive),
+  };
   const readyProfiles = profiles.filter((p) => p.status === "READY");
   // What "Default" resolves to: the manual domain's voice while it is still in
   // the roster (the API skips a stale one the same way), else the install's.
@@ -199,6 +225,7 @@ export default function NewVideoPage() {
             onModel={setModel}
             onEffort={setEffort}
             testIdPrefix="new-video"
+            automatic={automatic}
           />
 
           <Field label="Script profile">

@@ -189,8 +189,11 @@ alter a video already in progress.
 
 ### Agent columns
 
-`agent_id` is dealt when the video is created. A human may move the video to another live agent, or
-change `agent_model` and `agent_effort`, at a human checkpoint. Nothing else changes them
+The three are set when the video is created. `agent_id` and `agent_model` come from the video's
+domain when it names a live agent, and otherwise `agent_id` is dealt by weight. `agent_effort` is
+the domain's `default_agent_effort` in both cases ([Assignment](07-agent-layer.md#assignment)). A human
+may move the video to another live agent, or change `agent_model` and `agent_effort`, at a human
+checkpoint. Nothing else changes them
 ([Frozen choices](02-pipeline.md#frozen-choices)).
 
 - `agent_id` is not a declared foreign key, and nothing writes it back to `NULL`. The poller skips
@@ -267,6 +270,9 @@ A domain. Every video files into one, whatever its research mode.
 | `default_voice_id` | TEXT NOT NULL | `''` | The voice every new video in the domain starts with, whatever its `strategy`. `''` means the install default |
 | `default_script_profile_id` | TEXT NOT NULL | `''` | The [script profile](08-scripting-and-voice.md#script-profiles) the domain's `curriculum` videos start with. `''` means none |
 | `default_mascot_id` | TEXT NOT NULL | `''` | The mascot new videos start with, whatever their `strategy`. `''` inherits the install's `default_mascot_id` setting. `none` means no mascot |
+| `default_agent_id` | TEXT NOT NULL | `''` | The agent every new video in the domain starts on, whatever its `strategy`. `''` means the video is dealt an agent by weight |
+| `default_agent_model` | TEXT NOT NULL | `''` | One of that agent's models. `''` means the agent's default model |
+| `default_agent_effort` | TEXT NOT NULL | `''` | One of the five effort levels. `''` means the agent's own level |
 | `topic_cap` | INTEGER NOT NULL | `100` | How many topics the domain may ever hold, 25 to 750. See [Topic cap](02-pipeline.md#topic-cap) |
 | `created_at` | TEXT NOT NULL | | |
 
@@ -274,9 +280,9 @@ The API and the MCP server check `description` only when it changes, so a longer
 stored is kept. The limit is low because `list_projects` returns every domain's description on
 every research run.
 
-The four defaults are copied into the video's own column (`videos.voice_id`,
-`videos.script_profile_id` and so on) when the video is created. Changing one does not reach videos
-already filed.
+The defaults are copied into the video's own columns (`videos.voice_id`,
+`videos.script_profile_id`, `videos.agent_id` and so on) when the video is created. Changing one
+does not reach videos already filed.
 
 - `default_visual_style` and `default_script_profile_id` apply to `curriculum` videos only, because
   curriculum is the one research mode that produces a series. A `default_visual_style` of `''` is
@@ -286,6 +292,10 @@ already filed.
 - `default_script_profile_id` is skipped if the profile is deleted or not `READY`, because the
   approving `PATCH` would refuse it.
 - A `default_mascot_id` that names an archived or unapproved mascot reads as none.
+- `default_agent_id` is skipped while that agent is uninstalled, and the video is dealt an agent by
+  weight. `default_agent_model` is skipped when the agent's `models` does not hold it.
+  `default_agent_effort` applies to whichever agent the video gets. See
+  [Assignment](07-agent-layer.md#assignment).
 
 The API and the MCP server check `topic_cap`, because SQLite cannot add a `CHECK` to an existing
 table. Every video ever filed counts, archived and rejected included. At the cap the domain is
@@ -718,6 +728,7 @@ only in the pre-migration backup.
 | `0019_renderers.sql` | Creates `renderers`, `renderer_enrollments`, `render_timings` and `idx_render_timings_renderer`, adds the five lease columns to `videos`, and inserts the built-in renderer's row | No |
 | `0020_style_pick.sql` | Adds `videos.style_pick`, `style_runner_up` and `style_reason`, `''` on every existing video | No |
 | `0021_last_render.sql` | Adds `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu` and `last_render_seconds`, empty on every existing video | No |
+| `0022_domain_agent.sql` | Adds `projects.default_agent_id`, `default_agent_model` and `default_agent_effort`, `''` on every existing domain | No |
 | `0023_script_record.sql` | Adds `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, `''` on every existing video | No |
 | `0024_video_duration.sql` | Adds `videos.duration_secs`, NULL on every existing video. The worker fills it for videos that have a publication and whose files exist, and archiving a video stores it | No |
 

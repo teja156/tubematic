@@ -280,9 +280,12 @@ What a new video starts with:
 - `mascot_id`: the domain's `default_mascot_id`, else the install's, whatever the `strategy`. It is
   set only while some renderer's GPU test passed, and not on a `cartoon_3d` video. Seeding does not
   refuse a video.
-- `agent_id`: the agent the video is pinned to (see [Assignment](07-agent-layer.md#assignment)).
+- `agent_id` and `agent_model`: the domain's `default_agent_id` while that agent is live, with
+  `default_agent_model` while the agent's `models` holds it, whatever the `strategy`. Otherwise
+  the agent is dealt, and the model is `""` (see [Assignment](07-agent-layer.md#assignment)).
+- `agent_effort`: the domain's `default_agent_effort`, whichever agent the video gets.
 
-The result carries those five fields. A `title` over 70 characters is clipped and the result
+The result carries those seven fields. A `title` over 70 characters is clipped and the result
 carries a `warning` (see [Video titles](#video-titles)).
 
 ### `set_video_status`
@@ -445,10 +448,11 @@ domain to one readable call. The skill compares briefs. An unknown `project_id` 
 
 `upsert_project(project_id, name, description=None, is_curriculum_seed=None, status=None,
 default_visual_style=None, default_voice_id=None, default_script_profile_id=None, topic_cap=None,
-default_mascot_id=None)` is a partial update. An omitted field is left alone on a domain that
+default_mascot_id=None, default_agent_id=None, default_agent_model=None,
+default_agent_effort=None)` is a partial update. An omitted field is left alone on a domain that
 exists, and takes the creation default (`""`, `False`, `"active"`, a cap of 100) on a new one. Pass
-`""` to clear `description`, `default_visual_style`, `default_voice_id` or
-`default_script_profile_id`. Each caller names one or two fields (one command converts a domain
+`""` to clear `description`, `default_visual_style`, `default_voice_id`,
+`default_script_profile_id`, `default_agent_id`, `default_agent_model` or `default_agent_effort`. Each caller names one or two fields (one command converts a domain
 into a curriculum seed, another files a video into it), so a full replace would blank the rest. The
 HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
 
@@ -465,8 +469,14 @@ HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
   the install has a default) or an approved mascot that is not archived. A new id also needs a
   renderer whose GPU is `working`.
 
-The description limit and the four defaults are checked only when the value changes. Re-sending a
-stored value that has since become invalid is not refused.
+- `default_agent_id` is a live agent's id, or `""` for the weighted deal. `default_agent_model` is
+  one of that agent's models and is refused without an agent. Changing the agent without passing a
+  model clears the stored model, because it belongs to the other agent's list. `""` for the model
+  is accepted while the stored agent is uninstalled.
+- `default_agent_effort` is one of the five effort levels and needs no agent.
+
+The description limit, the four defaults above it and the agent with its model are checked only
+when the value changes. Re-sending a stored value that has since become invalid is not refused.
 
 ### `set_project_status`
 

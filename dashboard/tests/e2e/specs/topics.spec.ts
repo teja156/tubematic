@@ -115,7 +115,7 @@ test.describe("Topics page", () => {
   });
 
   // TMDEV-121: every new video filed into a domain starts with its default voice.
-  test("a domain's default voice is picked on its row and seeds its next video", async ({ page }) => {
+  test("a domain's default voice is picked in its defaults and seeds its next video", async ({ page }) => {
     const slug = `voice-domain-${uid}`;
     await setSettings({
       elevenlabs_voices: [
@@ -127,6 +127,7 @@ test.describe("Topics page", () => {
     try {
       await createProject({ id: slug, name: `Voice Domain ${uid}`, is_curriculum_seed: false });
       await page.goto("/topics");
+      await page.getByTestId(`domain-edit-${slug}`).click();
       const select = page.getByTestId(`domain-voice-${slug}`);
       await expect(select.locator(`option[value="${uid}-v3"]`)).toHaveCount(1, { timeout: 10_000 });
       await Promise.all([
@@ -141,68 +142,138 @@ test.describe("Topics page", () => {
     }
   });
 
-  // TMDEV-145: a third per-domain picker, the default script profile, and a
-  // label above each of the three. TMDEV-153 added the topic cap as a fourth. A READY profile cannot be created here
+  // TMDEV-207: a domain row is one summary line (name, chips for what the
+  // domain overrides, counts, badge, the pause button, Edit defaults) and its
+  // defaults sit in a panel under it. A READY profile cannot be created here
   // (creation makes a live transcript call), so the list is stubbed in the
   // browser and seeding is left to the API suites. What only a real browser
-  // shows is the layout: a seed row with three labelled pickers, a count,
-  // a badge and the pause button must still fit at 1280px.
-  test("a domain row labels its four pickers and still fits at 1280px", async ({ page }) => {
+  // shows is the layout: the line must stay one line at 1280px with the widest
+  // content it gets, and the panel's eight controls must stay inside the row.
+  test("a domain row stays one line at 1280px and opens its labelled defaults under it", async ({ page }) => {
     const slug = `labels-domain-${uid}`;
-    await createProject({ id: slug, name: `Labels Domain ${uid}`, is_curriculum_seed: true });
+    await createProject({ id: slug, name: `Labels Domain ${uid}`, is_curriculum_seed: true,
+                          description: "A scope long enough to be cut short on the summary line." });
     await page.route("**/api/proxy/script-profiles", (route) => route.fulfill({ json: [
       { id: `sp-${uid}`, name: "Stubbed profile", status: "READY", source_urls: [], error: "",
         attempt_count: 1, archived: false, created_at: "2026-10-05T00:00:00Z",
         updated_at: "2026-10-05T00:00:00Z" },
     ] }));
-    // The widest the cap field gets: a three-digit count beside a three-digit
-    // cap. Filing 120 real topics would only slow the suite down.
+    // The widest the line gets: three chips, and a three-digit count beside a
+    // three-digit cap. Filing 120 real topics would only slow the suite down.
     await page.route("**/api/proxy/projects", async (route) => {
       const res = await route.fetch();
       const rows = (await res.json()) as Array<Record<string, unknown>>;
       await route.fulfill({ response: res, json: rows.map((p) => p.id === slug
-        ? { ...p, topic_count: 120, topic_cap: 220 } : p) });
+        ? { ...p, topic_count: 120, topic_cap: 220, default_visual_style: "bean_explainer",
+            default_mascot_id: "none", default_agent_effort: "xhigh" } : p) });
     });
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/topics");
 
     const row = page.getByTestId(`domain-row-${slug}`);
     await expect(row).toBeVisible();
-    for (const label of ["Visual style", "Default voice", "Script profile", "Mascot (exp.)", "Topic cap"]) {
-      await expect(row.getByText(label, { exact: true })).toBeVisible();
-    }
+    await expect(page.getByTestId(`domain-panel-${slug}`)).toHaveCount(0);
+    await expect(row.getByTestId(`domain-chip-agent-${slug}`)).toHaveText("AgentAutomatic · xhigh");
+    await expect(row.getByTestId(`domain-chip-mascot-${slug}`)).toHaveText("MascotNone");
+    const topics = row.getByTestId(`domain-topics-${slug}`);
+    await expect(topics).toHaveText("120 / 220 topics");
+
+    const edges = async () => {
+      const box = async (id: string) => (await page.getByTestId(`${id}-${slug}`).boundingBox())!;
+      return { row: (await row.boundingBox())!, name: await box("domain-name"),
+               chips: await box("domain-chips"), toggle: await box("toggle-domain"),
+               edit: await box("domain-edit") };
+    };
+    const wide = await edges();
+    expect(wide.row.x + wide.row.width).toBeLessThanOrEqual(1280);
+    // The name keeps real room beside the description.
+    expect(wide.name.width).toBeGreaterThanOrEqual(150);
+    // One line: the pause and edit buttons sit beside the name and chips, in
+    // that order, inside the row. Each position is asserted on its own; "the
+    // row fits its container" still passes when a button wraps under the name.
+    expect(wide.toggle.y).toBeLessThan(wide.chips.y + wide.chips.height);
+    expect(wide.edit.y).toBeLessThan(wide.chips.y + wide.chips.height);
+    expect(wide.toggle.x + wide.toggle.width).toBeLessThanOrEqual(wide.edit.x);
+    expect(wide.edit.x + wide.edit.width).toBeLessThanOrEqual(wide.row.x + wide.row.width);
+    expect(wide.chips.x + wide.chips.width).toBeLessThanOrEqual(wide.toggle.x);
+    // "120 / 220 topics" does not break in two.
+    expect((await topics.boundingBox())!.height).toBeLessThan(24);
+
+    await page.getByTestId(`domain-edit-${slug}`).click();
+    const panel = page.getByTestId(`domain-panel-${slug}`);
+    await expect(panel).toBeVisible();
+    await expect(page.getByTestId(`domain-edit-${slug}`)).toHaveText("Close");
+    // Each control's caption, matched on the caption's own text: a select's
+    // accessible name also carries its selected option, and "Agent" is a group
+    // title as well as a caption.
+    const captions = panel.locator("label > span:first-child");
+    await expect(captions).toHaveText(["Visual style", "Mascot (exp.)", "Default voice",
+                                       "Script profile", "Agent", "Model", "Effort", "Topic cap"]);
+    for (const caption of await captions.all()) await expect(caption).toBeVisible();
     const profile = page.getByTestId(`domain-profile-${slug}`);
     await expect(profile.locator(`option[value="sp-${uid}"]`)).toHaveCount(1);
     await expect(profile).toHaveValue("");
+    // No agent is installed in this stack, so the model has nothing to offer.
+    await expect(page.getByTestId(`domain-agent-model-${slug}`)).toBeDisabled();
+    await expect(page.getByTestId(`domain-agent-effort-${slug}`)).toHaveValue("xhigh");
 
-    const rowBox = await row.boundingBox();
-    const toggle = await page.getByTestId(`toggle-domain-${slug}`).boundingBox();
-    expect(rowBox!.x + rowBox!.width).toBeLessThanOrEqual(1280);
-    expect(toggle!.x + toggle!.width).toBeLessThanOrEqual(rowBox!.x + rowBox!.width);
-    // The name must keep real room and not run under the first caption. Each
-    // select sizes to its longest option, and three at that width left a seed
-    // row's name ~70px wide, with a long word overlapping "Visual style".
-    const name = await row.getByText(`Labels Domain ${uid}`, { exact: true }).boundingBox();
-    const style = await page.getByTestId(`domain-style-${slug}`).boundingBox();
-    expect(name!.width).toBeGreaterThanOrEqual(150);
-    expect(name!.x + name!.width).toBeLessThanOrEqual(style!.x);
-    // One line at 1280px: the pause button sits level with the pickers rather
-    // than wrapping under them, and "120 filed" does not break in two.
-    expect(toggle!.y).toBeLessThan(style!.y + style!.height);
+    const insidePanel = async () => {
+      const panelBox = (await panel.boundingBox())!;
+      const rowBox = (await row.boundingBox())!;
+      expect(panelBox.x).toBeGreaterThanOrEqual(rowBox.x);
+      expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+      for (const id of ["domain-style", "domain-mascot", "domain-voice", "domain-profile",
+                        "domain-agent", "domain-agent-model", "domain-agent-effort", "domain-cap"]) {
+        const box = (await page.getByTestId(`${id}-${slug}`).boundingBox())!;
+        expect(box.x, id).toBeGreaterThanOrEqual(panelBox.x);
+        expect(box.x + box.width, id).toBeLessThanOrEqual(panelBox.x + panelBox.width);
+        // A select squeezed to nothing would still be "inside".
+        expect(box.width, id).toBeGreaterThanOrEqual(50);
+      }
+    };
+    await insidePanel();
+    // Opening the panel moves nothing on the line above it.
+    const opened = await edges();
+    expect(opened.toggle.x).toBe(wide.toggle.x);
+    expect(opened.edit.x).toBe(wide.edit.x);
+    expect((await panel.boundingBox())!.y).toBeGreaterThanOrEqual(opened.chips.y + opened.chips.height);
     const filed = row.getByTestId(`domain-topic-count-${slug}`);
     await expect(filed).toHaveText("120 filed");
-    const filedBox = await filed.boundingBox();
-    const cap = await page.getByTestId(`domain-cap-${slug}`).boundingBox();
-    expect(filedBox!.height).toBeLessThanOrEqual(cap!.height);
+    const cap = (await page.getByTestId(`domain-cap-${slug}`).boundingBox())!;
+    expect((await filed.boundingBox())!.height).toBeLessThanOrEqual(cap.height);
 
-    // Narrower, the row wraps instead: the name keeps its room and the pause
-    // button moves to a second line, still inside the row.
+    // Narrower, the line wraps instead: the name keeps its room and both
+    // buttons stay inside the row, as do the panel's controls.
     await page.setViewportSize({ width: 1024, height: 800 });
-    const narrowRow = await row.boundingBox();
-    const narrowName = await row.getByText(`Labels Domain ${uid}`, { exact: true }).boundingBox();
-    const narrowToggle = await page.getByTestId(`toggle-domain-${slug}`).boundingBox();
-    expect(narrowName!.width).toBeGreaterThanOrEqual(150);
-    expect(narrowToggle!.x + narrowToggle!.width).toBeLessThanOrEqual(narrowRow!.x + narrowRow!.width);
+    const narrow = await edges();
+    expect(narrow.name.width).toBeGreaterThanOrEqual(150);
+    expect(narrow.toggle.x + narrow.toggle.width).toBeLessThanOrEqual(narrow.row.x + narrow.row.width);
+    expect(narrow.edit.x + narrow.edit.width).toBeLessThanOrEqual(narrow.row.x + narrow.row.width);
+    await insidePanel();
+  });
+
+  // The stack installs no agents, so the effort is the one agent default a
+  // browser can set here; the agent and model pickers are covered by the unit
+  // suite and the seeding by the API suites.
+  test("a domain's effort is picked in its defaults, survives a reload and seeds its next video", async ({ page }) => {
+    const slug = `effort-domain-${uid}`;
+    await createProject({ id: slug, name: `Effort Domain ${uid}`, is_curriculum_seed: false });
+    await page.goto("/topics");
+    await expect(page.getByTestId(`domain-chips-${slug}`)).toHaveText("Install defaults for everything");
+    await page.getByTestId(`domain-edit-${slug}`).click();
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/projects") && r.request().method() === "POST"),
+      page.getByTestId(`domain-agent-effort-${slug}`).selectOption("max"),
+    ]);
+    await expect(page.getByTestId(`domain-chip-agent-${slug}`)).toHaveText("AgentAutomatic · max");
+
+    await page.reload();
+    await expect(page.getByTestId(`domain-chip-agent-${slug}`)).toHaveText("AgentAutomatic · max");
+    await page.getByTestId(`domain-edit-${slug}`).click();
+    await expect(page.getByTestId(`domain-agent-effort-${slug}`)).toHaveValue("max");
+
+    const video = await createVideo({ topic: `[${uid}] inherits effort`, project_id: slug, strategy: "trending" });
+    expect(video.agent_effort).toBe("max");
   });
 
   // TMDEV-153: a domain may only ever hold topic_cap topics. At the cap it is
@@ -221,6 +292,8 @@ test.describe("Topics page", () => {
     const row = page.getByTestId(`domain-row-${slug}`);
     await expect(row.getByTestId(`domain-expired-${slug}`)).toBeVisible();
     await expect(row.getByTestId(`domain-status-${slug}`)).toHaveCount(0);
+    await expect(row.getByTestId(`domain-topics-${slug}`)).toHaveText("25 / 25 topics");
+    await page.getByTestId(`domain-edit-${slug}`).click();
     await expect(row.getByTestId(`domain-topic-count-${slug}`)).toHaveText("25 filed");
 
     const cap = page.getByTestId(`domain-cap-${slug}`);
@@ -233,7 +306,10 @@ test.describe("Topics page", () => {
     await expect(row.getByTestId(`domain-expired-${slug}`)).toHaveCount(0);
     await expect(row.getByTestId(`domain-status-${slug}`)).toHaveText("ACTIVE");
 
+    await expect(row.getByTestId(`domain-topics-${slug}`)).toHaveText("25 / 26 topics");
+
     await page.reload();
+    await page.getByTestId(`domain-edit-${slug}`).click();
     await expect(page.getByTestId(`domain-cap-${slug}`)).toHaveValue("26");
     const video = await createVideo({ topic: `[${uid}] fits now`, project_id: slug, strategy: "curriculum" });
     expect(video.status).toBe("TOPIC_PROPOSED");

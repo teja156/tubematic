@@ -141,8 +141,8 @@ its install denies.
 
 Read `/tubematic-submit-new-job` before you modify it. It scores the topic against the
 producibility rubric and stops below 5. It asks for a voice if the roster has two or more, and for
-a script profile if any is `READY`. It calls `create_video`, whose result names the agent the video
-was dealt, and asks for a model only if that agent has two or more (reading `agents` from
+a script profile if any is `READY`. It calls `create_video`, whose result names the video's agent
+and any model and effort its domain set, and asks for a model only if that agent has two or more (reading `agents` from
 `get_pipeline_status`, because only those names are accepted). It calls `update_video` for the
 agent, profile, model and effort level, and only then changes the status. `script_profile_id`
 freezes when the video leaves `TOPIC_PROPOSED`, and `agent_id`, `agent_model` and `agent_effort`
@@ -337,9 +337,17 @@ settings key, the same as the agent's models.
 
 ### Assignment
 
-A video gets its agent when it is created. All three creation paths deal one: `POST /videos`,
+A video gets its agent when it is created, on all three creation paths: `POST /videos`,
 `POST /videos/manual` (the dashboard's New Video page, unless the request names an agent) and the
-MCP server's `create_video`, which mining also files through.
+MCP server's `create_video`, which mining also files through. Each calls `_domain_agent`.
+
+A domain can name the agent its new videos start on, in `projects.default_agent_id`, with a model
+in `default_agent_model` and an effort in `default_agent_effort`. While that agent is live, the
+video starts on it, with the domain's model if the agent's `models` holds it. With no domain agent,
+or one that is uninstalled, the video is dealt an agent and its model is `""`. The domain's effort
+is copied in both cases, because every agent takes the same five levels. A video that takes its
+domain's agent takes no card from the deck, so the weights split the videos of the domains that
+name no agent.
 
 `_pick_agent_id` deals from a shuffled deck. Every live agent with a `weight` above 0 gets
 `weight ÷ gcd` cards, so 30:10 deals like 3:1. Each new video takes the next card, and an empty
@@ -376,7 +384,9 @@ poller skips a video whose agent is uninstalled or missing and does not reroute 
 at a checkpoint, the next stage may be written in a different agent's style.
 
 The default agent, each weight and each agent's default model are set on **Settings → Agents**,
-which writes through [`PATCH /agents/<id>`](05-http-api.md#agents). Uninstalling happens on the
+which writes through [`PATCH /agents/<id>`](05-http-api.md#agents). A domain's agent, model and
+effort are set on the **Topics** page, which writes through
+[`POST /projects`](05-http-api.md#post-projects). Uninstalling happens on the
 host only and keeps the row, so a video pinned to an uninstalled agent still resolves it.
 
 ---
