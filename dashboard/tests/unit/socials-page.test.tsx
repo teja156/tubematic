@@ -95,6 +95,32 @@ describe("SocialsPage", () => {
     expect(JSON.parse((post![1] as RequestInit).body as string)).toEqual({ account_ids: [] });
   });
 
+  it("says the switch saved, beside the account", async () => {
+    render(<SocialsPage />);
+    await screen.findByTestId("account-toggle-spc_ig");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("account-toggle-spc_ig"));
+    });
+    await waitFor(() => expect(screen.getByTestId("account-save-status-spc_ig")).toHaveTextContent("✓ Saved"));
+    expect(screen.getByTestId("account-toggle-spc_ig")).toBeChecked();
+  });
+
+  it("shows a refused switch beside the account, leaves it as it was, and raises no page banner", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((_url: string, init?: RequestInit) =>
+      Promise.resolve(init?.method === "POST"
+        ? { ok: false, status: 503, json: async () => ({ error: "Publishing is disabled" }) }
+        : { ok: true, json: async () => [YT, IG] })));
+    render(<SocialsPage />);
+    await screen.findByTestId("account-toggle-spc_ig");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("account-toggle-spc_ig"));
+    });
+    await waitFor(() => expect(screen.getByTestId("account-save-status-spc_ig"))
+      .toHaveTextContent("Not saved: Publishing is disabled"));
+    expect(screen.getByTestId("account-toggle-spc_ig")).not.toBeChecked();
+    expect(screen.queryByTestId("socials-error")).toBeNull();
+  });
+
   it("flags an allowlisted account that is gone upstream", async () => {
     stubFetch([YT, GONE]);
     render(<SocialsPage />);

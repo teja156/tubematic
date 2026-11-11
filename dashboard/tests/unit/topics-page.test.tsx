@@ -103,6 +103,40 @@ describe("TopicsPage — mining sources", () => {
   });
 });
 
+describe("TopicsPage — removing a mining URL", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("applies at once and offers an Undo that puts the list back", async () => {
+    let stored = [MINING_URL];
+    const posts: string[][] = [];
+    vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/research/mining-sources")) {
+        if (init?.method === "POST") {
+          stored = JSON.parse(String(init.body)).youtube_urls;
+          posts.push(stored);
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ youtube_urls: stored }) } as Response);
+      }
+      if (urlStr.includes("/research/strategies")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ strategies: ["mining"] }) } as Response);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as Response);
+    });
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: `Remove ${MINING_URL}` }));
+    await waitFor(() => expect(screen.getByTestId("toast-success").textContent)
+      .toContain(`Removed ${MINING_URL}.`));
+    expect(screen.queryByTestId("mining-url-item")).toBeNull();
+    expect(screen.getByTestId("mining-save-status").textContent).toBe("✓ Saved");
+
+    fireEvent.click(screen.getByTestId("toast-action"));
+    await waitFor(() => expect(screen.getAllByTestId("mining-url-item")).toHaveLength(1));
+    expect(posts).toEqual([[], [MINING_URL]]);
+  });
+});
+
 // Pause is a curriculum-seed control: for any other domain the pause could
 // never stop the subject being researched, only which row it was filed into.
 describe("TopicsPage — domain pause", () => {
@@ -163,14 +197,15 @@ describe("TopicsPage — domain pause", () => {
     expect(screen.getByTestId("toggle-domain-seed-1").textContent).toBe("Resume topic generation");
   });
 
-  it("reports a refused pause and leaves the domain as it was", async () => {
+  it("reports a refused pause beside the domain and leaves it as it was", async () => {
     mockDomains(false);
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     render(<TopicsPage />);
     const { fireEvent } = await import("@testing-library/react");
     fireEvent.click(await waitFor(() => screen.getByTestId("toggle-domain-seed-1")));
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
-    expect(alertSpy.mock.calls[0][0]).toContain("not a curriculum seed");
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toContain("not a curriculum seed"));
+    expect(alertSpy).not.toHaveBeenCalled();
     expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("ACTIVE");
   });
 });
@@ -1109,7 +1144,7 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     fireEvent.change(screen.getByTestId("domain-agent-effort-plain-1"), { target: { value: "low" } });
     await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
     expect(projectPosts(spy)[1]).toMatchObject({ default_agent_id: "", default_agent_effort: "low" });
-    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
       .toBe("AgentAutomatic · low"));
   });
@@ -1130,7 +1165,9 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     await openDefaults("plain-1");
     const effort = await waitFor(() => screen.getByTestId("domain-agent-effort-plain-1") as HTMLSelectElement);
     fireEvent.change(effort, { target: { value: "low" } });
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith("Could not change this domain's agent's effort"));
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-plain-1").textContent)
+      .toBe("Not saved: could not change this domain's agent's effort"));
+    expect(alertSpy).not.toHaveBeenCalled();
     expect(effort.value).toBe("");
     expect(screen.queryByTestId("domain-chip-agent-plain-1")).toBeNull();
     // The next save is not stuck behind the failed one.
@@ -1189,11 +1226,18 @@ describe("TopicsPage — domain summary and agent defaults", () => {
   });
 
   it("a write that throws does not hold up the next one", async () => {
-    const spy = mockDomains([PLAIN], AGENTS, "refused");
-    // The first refusal's alert throws, so that write ends in an exception.
-    const alertSpy = vi.spyOn(window, "alert")
-      .mockImplementationOnce(() => { throw new Error("alert blocked"); })
-      .mockImplementation(() => {});
+    const spy = mockDomains([PLAIN]);
+    const answer = spy.getMockImplementation()!;
+    let first = true;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (first && url.toString().endsWith("/projects") && init?.method === "POST") {
+        first = false;
+        // Reading this answer throws, so that write ends in an exception.
+        return Promise.resolve({ ok: false, status: 500,
+          json: () => { throw new Error("unreadable body"); } } as unknown as Response);
+      }
+      return answer(url, init);
+    });
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
     await openDefaults("plain-1");
@@ -1201,7 +1245,8 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     fireEvent.change(effort, { target: { value: "low" } });
     fireEvent.change(effort, { target: { value: "max" } });
     await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
+      .toBe("AgentAutomatic · max"));
   });
 
   it("puts a refused topic cap back in its field", async () => {
@@ -1213,7 +1258,9 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     const cap = await waitFor(() => screen.getByTestId("domain-cap-plain-1") as HTMLInputElement);
     fireEvent.change(cap, { target: { value: "250" } });
     fireEvent.blur(cap);
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-plain-1").textContent)
+      .toBe("Not saved: topic_cap must be a whole number from 25 to 750"));
+    expect(alertSpy).not.toHaveBeenCalled();
     await waitFor(() => expect(cap.value).toBe("100"));
     expect(screen.getByTestId("domain-topics-plain-1").textContent).toBe("3 / 100 topics");
   });
@@ -1277,7 +1324,9 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     const agent = await waitFor(() => screen.getByTestId("domain-agent-seed-1") as HTMLSelectElement);
     await waitFor(() => expect(agent.value).toBe("claude"));
     fireEvent.change(agent, { target: { value: "codex" } });
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith("default_agent_id 'codex' is uninstalled"));
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toBe("Not saved: default_agent_id 'codex' is uninstalled"));
+    expect(alertSpy).not.toHaveBeenCalled();
     expect(agent.value).toBe("claude");
     expect((screen.getByTestId("domain-agent-model-seed-1") as HTMLSelectElement).value).toBe("sonnet");
   });

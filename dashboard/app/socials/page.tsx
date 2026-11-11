@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SocialAccount } from "@/lib/types";
 import { SectionLabel } from "@/components/SectionLabel";
+import { SaveStatus } from "@/components/SaveStatus";
+import { responseError, useSaveStatus } from "@/lib/saveStatus";
 
 function apiFetch(path: string, init?: RequestInit) {
   return fetch(`/api/proxy${path}`, { cache: "no-store", ...init });
@@ -32,6 +34,7 @@ export default function SocialsPage() {
   // The platform whose consent page is open, and its URL when the browser
   // blocked the tab and the user has to open it from a link instead.
   const [pending, setPending] = useState<{ platform: string; url: string } | null>(null);
+  const statuses = useSaveStatus();
 
   const load = useCallback(() => {
     setRefreshing(true);
@@ -61,23 +64,24 @@ export default function SocialsPage() {
       .filter((a) => (a.id === account.id ? !a.allowed : a.allowed))
       .map((a) => a.id);
     setSaving(true);
-    try {
-      const r = await apiFetch("/publishing/accounts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account_ids: next }),
-      });
-      if (!r.ok) {
-        const data = await r.json().catch(() => null);
-        setError(data?.error ?? "Could not save.");
-        return;
+    // Saved at once; the outcome shows beside the account, not in the page's
+    // banner, which is for a list that could not load.
+    await statuses.run(account.id, async () => {
+      try {
+        const r = await apiFetch("/publishing/accounts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ account_ids: next }),
+        }).catch(() => null);
+        if (!r?.ok) return responseError(r);
+        setAccounts((prev) =>
+          prev.map((a) => (a.id === account.id ? { ...a, allowed: !a.allowed } : a)),
+        );
+        return null;
+      } finally {
+        setSaving(false);
       }
-      setAccounts((prev) =>
-        prev.map((a) => (a.id === account.id ? { ...a, allowed: !a.allowed } : a)),
-      );
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   async function connect(platform: string) {
@@ -184,6 +188,7 @@ export default function SocialsPage() {
               <span style={{ ...mono, fontSize: 12, color: "var(--ink)" }}>
                 @{account.username || account.id}
               </span>
+              <SaveStatus status={statuses.get(account.id)} testId={`account-save-status-${account.id}`} />
               {!account.available && (
                 <span
                   data-testid={`account-unavailable-${account.id}`}
