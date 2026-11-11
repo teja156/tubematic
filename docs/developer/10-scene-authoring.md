@@ -647,7 +647,8 @@ can be a morph target and, with a `portal`, a push's way into the next chapter.
 The renderer's side is `src/scenes/installed/StorybookAtlas.tsx` with `storybookAtlas/`:
 
 - `contract.ts` holds the limits, timings and stage; the prop catalogue is written beside each drawing in
-  `props/`, and the pack's `extra.props` is a copy the validator reads.
+  `props/`, and the pack's `extra` (catalogue, backdrops, poses, knobs) is a copy the validator reads.
+  `storybook-tools/sync-contract.mjs` writes that copy and the shared test cases from this code.
 - `stage.ts` works out what is on stage at a frame: walks, props and their states, plates and
   transitions.
 - `bitmap.tsx` draws each picture once and reuses it: every backdrop, prop state and look of the guide

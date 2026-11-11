@@ -468,8 +468,10 @@ shows one prop file's props and `--props='{"chapter":"<backdrop>"}'` one backdro
 A Storybook Atlas video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
 imported the same way as Bean Explainer's. `storybook-tools/render-props.mjs` renders them for the
 `render_storybook_props` tool on the `StorybookPropPreview` composition, from a bundle entry it writes
-per call into `storybook-tools/.tmp/` (ignored by git). The contract and the reason every drawing is a
-cached bitmap are in [Storybook Atlas](10-scene-authoring.md#storybook-atlas).
+per call into `storybook-tools/.tmp/` (ignored by git). `storybook-tools/sync-contract.mjs` rewrites the
+style pack's `extra` and `mcp/tests/fixtures/storybook_atlas_contract.json` from the renderer's code. The
+contract and the reason every drawing is a cached bitmap are in
+[Storybook Atlas](10-scene-authoring.md#storybook-atlas).
 
 ### Figure and panel components
 

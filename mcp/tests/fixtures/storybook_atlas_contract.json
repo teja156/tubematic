@@ -1,5 +1,5 @@
 {
-  "_about": "Shared by renderer/remotion/src/scenes/installed/storybookAtlas/storybookAtlas.test.ts and mcp/tests/test_storybook_atlas.py: the constants both sides use, and cases worked out by the renderer's own stage.ts. Regenerate the cases from stage.ts when its rules change; never edit them by hand.",
+  "_about": "Shared by renderer/remotion/src/scenes/installed/storybookAtlas/storybookAtlas.test.ts and mcp/tests/test_storybook_atlas.py: the constants both sides use, and cases worked out by the renderer's own stage.ts. Written by renderer/remotion/storybook-tools/sync-contract.mjs; never edit it by hand.",
   "constants": {
     "LIMITS": {
       "chapters": [

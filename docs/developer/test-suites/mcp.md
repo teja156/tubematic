@@ -491,8 +491,9 @@ per-stretch sampling ([Storybook Atlas](../10-scene-authoring.md#storybook-atlas
 
 - The limits, timings, stage, acts and other lists equal the renderer's, and titles wrap and walks are
   timed as in `fixtures/storybook_atlas_contract.json`, whose cases the renderer's own `stage.ts`
-  produced (a walk in from the edge, a walk cut short by the next move, an exit). Regenerate them from
-  `stage.ts` when its rules change; never edit them by hand.
+  produced (a walk in from the edge, a walk cut short by the next move, an exit). After a change to
+  `stage.ts`, a limit or the library, `node storybook-tools/sync-contract.mjs` (from `renderer/remotion`)
+  rewrites the fixture and the pack's `extra`; never edit them by hand.
 - The pack carries the prop catalogue, and the caption band `mascots.caption_band` gives for the
   pack's captions holds a two-line label, so a mascot stays out of it.
 - The skill's worked example passes. Each refusal names its chapter or event and cause: a bad coat,
