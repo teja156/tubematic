@@ -95,7 +95,7 @@ FORBIDDEN_SOURCE = (
     (re.compile(r"""<filter\b|<fe[A-Z]|(?<![\w.])filter\s*=\s*["'{]|\bfilter\s*:\s*["'`]|style=\{\{[^}]*\bfilter\s*:"""),
      "an SVG filter (blur, shadow, turbulence): the book is flat ink and colour"),
     (re.compile(r"\brequire\s*\("), "require(): a prop names what it uses with import"),
-    (re.compile(r"(?i)(linear|radial)Gradient"), "a gradient: the book is flat ink and colour"),
+    (re.compile(r"(?i)(linear|radial)Gradient|-gradient\s*\("), "a gradient: the book is flat ink and colour"),
     (re.compile(r"<pattern\b"), "an SVG pattern of its own: use Sh's pen hatching"),
     (re.compile(r"Math\.random|Date\.now|new Date\b|\bperformance\s*\.|\bcrypto\s*\.|\bset(?:Timeout|Interval)\s*\("),
      "randomness, the clock or a timer: every render must draw the same frames"),

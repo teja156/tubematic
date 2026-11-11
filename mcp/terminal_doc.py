@@ -114,25 +114,14 @@ FORBIDDEN_SOURCE = _BEAN_FORBIDDEN + (
     (re.compile(r"\buse(CurrentFrame|VideoConfig)\b"), "useCurrentFrame or useVideoConfig: a move draws from the t it is given"),
     # A move is a pure function of t: state kept between frames differs between
     # the render's parallel tabs and when frames are rendered out of order.
-    (re.compile(r"\buse(State|Ref|Effect|LayoutEffect|InsertionEffect|Reducer|SyncExternalStore|ImperativeHandle)\b|\bset(Timeout|Interval)\b|\brequestAnimationFrame\b"),
-     "state, an effect or a timer: a move draws each frame from t alone"),
+    # (Bean's list already refuses a timer.)
+    (re.compile(r"\buse(State|Ref|Effect|LayoutEffect|InsertionEffect|Reducer|SyncExternalStore|ImperativeHandle)\b"),
+     "state or an effect: a move draws each frame from t alone"),
     # Bean's pattern lets a CSS filter through as `.filter =` or an object key
     # outside an inline style.
     (re.compile(r"""\.filter\s*=(?!=)|(?<![?\w])(?<!\?\s)["']?filter["']?\s*:(?!\s*(string|boolean|number)\b)|(?i:webkit-?filter)|"""
                 r"""setProperty\(\s*["']filter"""),
      "a CSS or canvas filter: it multiplies the render time"),
-    # A move is DOM, so its gradients and filters are CSS strings Bean's
-    # SVG-shaped patterns do not see; each one is full-area work per frame.
-    (re.compile(r"(?i)-gradient\s*\(|backdrop-?filter|mix-?blend-?mode"),
-     "a CSS gradient, backdrop filter or blend mode: it multiplies the render time; use flat colours"),
-    (re.compile(r"\bimport\s*\(|\bperformance\s*\.\s*now\b"),
-     "a dynamic import or performance.now(): a move imports statically and draws the same frames every render"),
-    # Remotion's media and render-control parts reach outside the drawing or
-    # hold the render.
-    (re.compile(r"\b(Img|Audio|Video|OffthreadVideo|IFrame|Html5Audio|Html5Video|staticFile|delayRender|continueRender|"
-                r"cancelRender|prefetch)\b"),
-     "a Remotion media or render-control part (Img, Audio, Video, staticFile, delayRender...): a move draws "
-     "glyphs and shapes only"),
 )
 _ALLOWED_IMPORT = re.compile(r"^(react|remotion|\.\./\.\./installed/terminalDoc/(kit|contract))$")
 MAX_ERRORS = 12

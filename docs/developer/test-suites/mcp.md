@@ -468,7 +468,10 @@ Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean E
 - A prop the agent drew (the skill's `example-prop-rocket.tsx`) passes, serves as a badge, and is
   placed by its declared box. A bad `customProps` entry (a library id, another video's file, a box out
   of range, a text slot too long, a bad act name) is refused, and so is a prop file that is missing,
-  uses a filter, a gradient or randomness, imports another package or has no default export.
+  uses a filter, a gradient (SVG or CSS), randomness, a timer, a dynamic import, `performance`, a
+  fetch, Remotion's media parts, the page or a `Function` constructor, imports another package
+  (`from"fs"` with no space included) or has no default export. Terminal Doc and its moves share this
+  list.
 - `validate_job`'s re-check finds a prop file redrawn with a gradient, or deleted, after the config was
   written. A value of the wrong type (a list where an id belongs, scene props that are not an object)
   gets a sentence back and raises nothing. `.filter(Boolean)` is ordinary code while an SVG filter is

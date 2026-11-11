@@ -358,6 +358,7 @@ def test_a_bad_custom_prop_entry_is_refused(changes, fragment):
     (MOTH.replace("<g transform", '<filter id="b" /><g transform', 1), "an SVG filter"),
     (MOTH.replace("<g transform", '<text x="0">MOTH</text><g transform', 1), "SVG text"),
     (MOTH.replace("<g transform", '<linearGradient id="g" /><g transform', 1), "a gradient"),
+    (MOTH + '\nconst s = { background: "linear-gradient(red, blue)" };', "a gradient"),
     (MOTH.replace("void state;", "void state; Math.random();"), "randomness"),
     (MOTH.replace("void state;", "void state; setTimeout(() => 0, 1);"), "a timer"),
 ])

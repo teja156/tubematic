@@ -114,5 +114,5 @@ The kit also has `Glyph` (one glyph centred on a point), `Row` (a centred row of
 `contract`) with a static `import`, and uses no filter, gradient (SVG or CSS), backdrop filter,
 blend mode, pattern, dashed stroke, image, audio or video, `staticFile`, `delayRender`, fetch,
 `import(...)`, `Math.random`, `Date`, `performance.now`, state, effects or timers (`useState`,
-`useRef`, `useEffect`, `setTimeout`, `requestAnimationFrame`), `useCurrentFrame` or `useVideoConfig`,
-not even in a comment: the check reads the whole file.
+`useRef`, `useEffect`, `setTimeout`, `requestAnimationFrame`), the page (`window`, `document`,
+`globalThis`), `eval`, `crypto`, `useCurrentFrame` or `useVideoConfig`, not even in a comment: the check reads the whole file.

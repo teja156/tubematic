@@ -596,9 +596,11 @@ cannot be drawn fails the render, so no frame goes out without the bean.
   `prop-<name>` file, a box outside 60 to 700 px a side, a text slot over 40 characters or more than 4
   acts. Its file is missing, has no default export, imports anything but `react`, `remotion` and the
   library's `props/common`, `bean` and `contract` (in an `import` or an `export ... from`), calls
-  `require`, or uses an SVG filter, a gradient, a pattern, a
-  dashed stroke, an image, embedded HTML, a fetch, randomness or the clock
-  (`bean_explainer.py::FORBIDDEN_SOURCE`).
+  `require`, or uses an SVG filter, an SVG or CSS gradient, a backdrop filter or blend mode, a pattern,
+  a dashed stroke, an image, embedded HTML, Remotion's media or render-control parts, a fetch, a
+  dynamic import, randomness, the clock, `performance`, `crypto`, a timer, the page (`window`,
+  `document`, `globalThis`), `eval` or a `Function` constructor (`bean_explainer.py::FORBIDDEN_SOURCE`).
+  The patterns read the raw file, comments included.
 - Nothing changes for more than 3 seconds.
 
 `mcp/tests/test_bean_explainer.py` pins `bean_explainer.py` to `contract.ts` and to the pack. The

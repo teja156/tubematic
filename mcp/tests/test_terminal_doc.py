@@ -600,9 +600,9 @@ def test_a_bracket_reaching_into_the_slot_below_holds_it():
 @pytest.mark.parametrize("line, fragment", [
     ('const s = { filter: "blur(4px)" };', "a CSS or canvas filter"),
     ('function f(c) { c.filter = "blur(30px)"; }', "a CSS or canvas filter"),
-    ('import { useRef } from "react";', "state, an effect or a timer"),
-    ('const id = setTimeout(() => 0, 5);', "state, an effect or a timer"),
-    ('const n = requestAnimationFrame(() => 0);', "state, an effect or a timer"),
+    ('import { useRef } from "react";', "state or an effect"),
+    ('const id = setTimeout(() => 0, 5);', "a timer"),
+    ('const n = requestAnimationFrame(() => 0);', "a timer"),
 ])
 def test_a_move_with_state_or_a_filter_is_refused(line, fragment):
     problems = _check_custom(_with_caesar(), {"vid_td1/move-caesar": line + "\n" + CAESAR})
