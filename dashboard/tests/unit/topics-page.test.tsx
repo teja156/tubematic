@@ -1049,6 +1049,32 @@ describe("TopicsPage — domain summary and agent defaults", () => {
       default_agent_id: "claude", default_agent_model: "", default_agent_effort: "" });
   });
 
+  // POST /projects replaces the whole row. A save built from the row as the
+  // page last heard it would send a change still in flight back as blank, and
+  // the first pick would be lost with no error.
+  it("builds a second change on a first one that has not been answered yet", async () => {
+    const spy = mockDomains([PLAIN]);
+    const answer = spy.getMockImplementation()!;
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    spy.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().endsWith("/projects") && init?.method === "POST") await held;
+      return answer(url, init);
+    });
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    await waitFor(() => expect(options("domain-agent-plain-1")).toHaveLength(3));
+    fireEvent.change(screen.getByTestId("domain-agent-plain-1"), { target: { value: "codex" } });
+    fireEvent.change(screen.getByTestId("domain-agent-effort-plain-1"), { target: { value: "low" } });
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
+    expect(projectPosts(spy)[1]).toMatchObject({
+      default_agent_id: "codex", default_agent_effort: "low" });
+    release();
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
+      .toBe("AgentCodex · low"));
+  });
+
   it("an effort alone reads as Automatic with that effort", async () => {
     mockDomains([{ ...PLAIN, default_agent_effort: "low" }]);
     render(<TopicsPage />);

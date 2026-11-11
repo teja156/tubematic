@@ -274,10 +274,10 @@ What a new video starts with:
 - `mascot_id`: the domain's `default_mascot_id`, else the install's, whatever the `strategy`. It is
   set only while some renderer's GPU test passed, and not on a `cartoon_3d` video. Seeding does not
   refuse a video.
-- `agent_id`, `agent_model` and `agent_effort`: the domain's `default_agent_id`,
-  `default_agent_model` and `default_agent_effort` while that agent is live, whatever the
-  `strategy`. Otherwise the agent is dealt and the model is `""` (see
-  [Assignment](07-agent-layer.md#assignment)).
+- `agent_id` and `agent_model`: the domain's `default_agent_id` and `default_agent_model` while
+  that agent is live, whatever the `strategy`. Otherwise the agent is dealt and the model is `""`
+  (see [Assignment](07-agent-layer.md#assignment)).
+- `agent_effort`: the domain's `default_agent_effort`, whichever agent the video gets.
 
 The result carries those seven fields. A `title` over 70 characters is clipped and the result
 carries a `warning` (see [Video titles](#video-titles)).

@@ -104,6 +104,10 @@ re-sends every field. A field left out is reset by that edit: an omitted `defaul
 the domain to the install default, an omitted `default_agent_id` returns it to Automatic, and an
 omitted `topic_cap` resets the cap to 100.
 
+Trap: a second change made before the first is answered must carry the first. `saveDomain` shows
+each change at once for that reason. Built from the row as the API last returned it, the second
+save sends the first change back blank and the pick is lost with no error.
+
 Trap: a row's pickers exist only while its panel is open, so every case that reads or changes one
 calls `openDefaults` first. A lookup that runs before it fails on a missing element.
 
@@ -120,7 +124,7 @@ Covers the request body of [the New Video page](../15-dashboard.md#the-new-video
 - The blank agent, model and effort choices name the Manual Videos domain's agent, model and effort
   while that agent is live, and the request for them is unchanged. An uninstalled domain agent
   reads as Automatic. A picked agent shows its own effort level and never the domain's model. With
-  no agent list, the blank agent choice reads **Domain default** without a name.
+  no agent list, the blank agent and model choices read **Domain default** without a name.
 - Submit is blocked with a title over 70 code points, and a refusal keeps the input.
 
 ### `script-profiles-page.test.tsx`

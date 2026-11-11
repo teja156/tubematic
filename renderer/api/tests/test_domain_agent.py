@@ -340,7 +340,8 @@ def _domains_db(db_path, tmp_path):
     _agent(db_path, "claude", is_default=1, weight=1)
     _agent(db_path, "codex", models=("gpt-a", "gpt-b"), weight=0)
     _agent(db_path, "gone", archived_at=T0)
-    rows = [("auto", "", "", ""), ("pinned", "codex", "gpt-b", "max"),
+    _agent(db_path, "bare", models=(), weight=0)
+    rows = [("auto", "", "", ""), ("pinned", "codex", "gpt-b", "max"), ("no_models", "bare", "x", ""),
             ("stale_model", "codex", "sonnet", ""), ("uninstalled", "gone", "sonnet", "low"),
             ("missing", "ghost", "", ""), ("effort_only", "", "", "xhigh"),
             ("bad_effort", "codex", "", "extreme")]
@@ -374,7 +375,7 @@ def test_the_refusals_match_the_mcp_copy(db_path, tmp_path):
     con.row_factory = sqlite3.Row
     try:
         for stored in ("", "codex", "gone"):
-            for aid in ("", "claude", "codex", "gone", "ghost"):
+            for aid in ("", "claude", "codex", "gone", "ghost", "bare"):
                 for model in ("", "sonnet", "gpt-b"):
                     assert (mcp_fn(con, aid, model, stored)
                             == pipeline._domain_agent_error(con, aid, model, stored)), \

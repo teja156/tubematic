@@ -243,7 +243,9 @@ is kept.
 - The agent picker's blank choice sends no `agent_id`, so the API picks the agent as it does for
   every other new video ([Assignment](07-agent-layer.md#assignment)). The choice reads
   **Automatic (dealt by weight)**, or **Domain default** with the agent's name while the Manual
-  Videos domain names a live agent. The model picker is disabled while no agent is picked.
+  Videos domain names a live agent. While the agent list has not loaded, it reads **Domain default**
+  with no name, because the page cannot tell whether that agent is live. The model picker is
+  disabled while no agent is picked.
 - Once an agent is picked, its default model is pinned, as approving a topic pins it.
 - The voice picker's **Default** names the voice the API will give the video: the Manual Videos
   domain's default voice while it is on the roster, otherwise the install default.
@@ -260,6 +262,8 @@ The Mascots page's create form uses the same agent, model and effort controls
   are controls in a panel under its row, opened by **Edit defaults**, and each change is saved at
   once. The route replaces the whole row, so every edit sends every field again.
   `lib/domains.ts::domainDefaults` is the list of defaults.
+- A change shows on the row before the API answers, so that a second change made in that gap is
+  sent with the first. A refused change is put back after its alert.
 - A closed row is one line: the name, a chip for each default the domain sets
   (`lib/domains.ts::domainChips`), the topic and video counts, the status and the pause button. The
   panel is rendered only while its row is open.

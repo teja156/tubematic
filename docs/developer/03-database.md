@@ -181,8 +181,9 @@ alter a video already in progress.
 
 ### Agent columns
 
-The three are set when the video is created: from the video's domain when it names a live agent,
-and otherwise `agent_id` is dealt by weight ([Assignment](07-agent-layer.md#assignment)). A human
+The three are set when the video is created. `agent_id` and `agent_model` come from the video's
+domain when it names a live agent, and otherwise `agent_id` is dealt by weight. `agent_effort` is
+the domain's `default_agent_effort` in both cases ([Assignment](07-agent-layer.md#assignment)). A human
 may move the video to another live agent, or change `agent_model` and `agent_effort`, at a human
 checkpoint. Nothing else changes them
 ([Frozen choices](02-pipeline.md#frozen-choices)).

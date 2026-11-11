@@ -167,6 +167,7 @@ describe("NewVideoPage", () => {
     mockApi({ agents: "fail", projects: [MANUAL] });
     render(<NewVideoPage />);
     await waitFor(() => expect(blank("new-video-agent")).toBe("Domain default"));
+    expect(blank("new-video-model")).toBe("Domain default");
     expect(blank("new-video-effort")).toBe("max (domain default)");
   });
 

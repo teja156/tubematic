@@ -922,6 +922,11 @@ export default function TopicsPage() {
     // other edit silently clears. domainDefaults is the list of defaults: an
     // omitted default_mascot_id would reset to "use the install default", an
     // omitted default_agent_id to Automatic.
+    //
+    // The change shows at once, before the API answers. A second change made
+    // in that gap is then built on the first; built on the row as last heard
+    // from the API, this full replace would send the first one back blank.
+    setProjects((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p));
     const r = await apiFetch("/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -938,15 +943,23 @@ export default function TopicsPage() {
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       alert(body.error ?? `Could not change this domain's ${SAVED_FIELD[Object.keys(patch)[0]] ?? "settings"}`);
+      // Nothing was stored: put back what this save changed, and only that.
+      const undo = Object.fromEntries(
+        (Object.keys(patch) as (keyof Project)[]).map((k) => [k, project[k]]));
+      setProjects((prev) => prev.map((p) => p.id === id ? { ...p, ...undo } : p));
       return;
     }
     // The saved row carries the topic count and expiry as they are now. The
     // count loaded with the page can be stale (research may have filed since),
-    // so expiry is never worked out here from the new cap. The id check keeps
-    // a response that is not a project row from being merged in.
+    // so expiry is never worked out here from the new cap. Only those two are
+    // taken from it: the rest of the row is what was sent, and merging it
+    // would undo a later change that this answer does not know about. The id
+    // check keeps a response that is not a project row from being merged in.
     const saved = await r.json().catch(() => null);
-    const fresh = saved && saved.id === id ? (saved as Project) : {};
-    setProjects((prev) => prev.map((p) => p.id === id ? { ...p, ...patch, ...fresh } : p));
+    if (saved && saved.id === id) {
+      const { topic_count, expired } = saved as Project;
+      setProjects((prev) => prev.map((p) => p.id === id ? { ...p, topic_count, expired } : p));
+    }
   }
 
   async function handleModeChange(next: string[]) {
