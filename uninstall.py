@@ -38,6 +38,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-whiteboard",
     "tubematic-bean-explainer",
     "tubematic-storybook-atlas",
+    "tubematic-terminal-doc",
     "tubematic-style-routing",
     "tubematic-mascot-builder",
 ]

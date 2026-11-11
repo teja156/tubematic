@@ -215,7 +215,8 @@ Five styles are different in kind: they do not restrict the scene system, they *
 `bean_explainer` is one cartoon-bean scene whose sections, shots, poses and props are written as
 data; `whiteboard` is one board scene whose regions of writing and doodles are written as data;
 `storybook_atlas` is one picture-book scene whose chapters, people and props are written as
-data. None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
+data, and `terminal_doc` is one typographic scene whose beats and moves are written as data.
+None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
 when it is not `tubematic-scene-config`, stop here and invoke that skill.
 
 Read `visual_style` from `get_video`:
@@ -230,10 +231,11 @@ Read `visual_style` from `get_video`:
 | `bean_explainer` | Its own colour field | Nothing here: the whole video is the one `BeanExplainer` scene, written as data by the tubematic-bean-explainer skill. |
 | `whiteboard` | Light | Nothing here: the whole video is the one `Whiteboard` board scene, written as data by the tubematic-whiteboard skill. |
 | `storybook_atlas` | Its own paper | Nothing here: the whole video is the one `StorybookAtlas` scene, written as data by the tubematic-storybook-atlas skill. |
+| `terminal_doc` | Dark | Nothing here: the whole video is the one `TerminalDoc` scene, written as data by the tubematic-terminal-doc skill. |
 | `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery. This is the **mixed scene system**: the style-routing skill picked it before the script because no single style fit. |
 
 The three named scene styles are restrictions; `cartoon_3d`, `system_flow`, `bean_explainer`,
-`whiteboard` and `storybook_atlas` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
+`whiteboard`, `storybook_atlas` and `terminal_doc` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
 than the mixed scene system (a style it picked is the video's `visual_style` by now), or when the
 video was scripted before Auto picked styles. It is the absence of a restriction: **you pick the
 register.**
@@ -833,7 +835,7 @@ entirely.
 | `fontFamily` | container default | A CSS family, or one of `Inter`, `Oswald`, `Roboto`, `Montserrat` |
 | `fontSize` | `62` | 28–120 |
 | `color` | `null` | `null` follows the canvas — black on light, white on dark. Set one only for a real reason |
-| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"` or `"none"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look |
+| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"`, `"none"` or `"log"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look; `"log"` (typed into a terminal log strip) is the Terminal Doc look |
 | `position` | `0.78` | Vertical centre as a fraction of frame height |
 | `uppercase` | `false` | |
 

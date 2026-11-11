@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
+import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
 import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
 import { loadFont as loadRoboto } from "@remotion/google-fonts/Roboto";
@@ -98,8 +98,11 @@ const DEFAULT_WEIGHT = 800;
 /** "outline": bold text with a thick dark stroke and no plate — the standard
  *  look of narrated cartoon Shorts, readable over any picture.
  *  "label": a printed ivory label hugging the phrase, a diamond each side,
- *  every word at full strength and no rise: the Storybook Atlas caption. */
-export type SubtitleBackground = "pill" | "shadow" | "outline" | "label" | "none";
+ *  every word at full strength and no rise: the Storybook Atlas caption.
+ *  "log": a terminal log strip — left-aligned, each word typed on as it is
+ *  spoken behind a prompt, a block caret, the word being spoken in `accent`.
+ *  The Terminal Doc style uses it. */
+export type SubtitleBackground = "pill" | "shadow" | "outline" | "label" | "none" | "log";
 
 export interface SubtitleConfig {
   enabled?: boolean;
@@ -123,6 +126,9 @@ export interface SubtitleConfig {
    * Explainer style uses it.
    */
   emphasis?: number[];
+  /** The colour of the word being spoken in the "log" look; absent means the
+   *  text colour. Ignored by the other looks. */
+  accent?: string | null;
 }
 
 /** The "label" plate: ivory paper, ink rule and text, a flat offset shadow. */
@@ -242,6 +248,7 @@ export default function Subtitles({
   position = 0.78,
   uppercase = false,
   emphasis = [],
+  accent = null,
 }: Props) {
   const frame = useCurrentFrame();
   const webfont = FONTS[fontFamily];
@@ -259,6 +266,9 @@ export default function Subtitles({
 
   const label = background === "label";
   const ink = color ?? (label ? LABEL_TEXT : canvas === "light" ? "#0f0f0f" : "#ffffff");
+  if (background === "log") {
+    return <LogStrip chunk={chunk} frame={frame} family={family} fontSize={fontSize} position={position} ink={ink} accent={accent ?? ink} uppercase={uppercase} />;
+  }
   const paper = canvas === "light" ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.55)";
 
   // A short rise on entry. Deliberately small and over in 4 frames: at this
@@ -357,3 +367,65 @@ export default function Subtitles({
     </AbsoluteFill>
   );
 }
+
+/** The "log" look's typing speed, in characters per frame. */
+const LOG_TYPE_RATE = 1.8;
+
+/**
+ * The "log" look: a strip with a LOG label and a running clock over a
+ * hairline, and the current chunk typed on behind a prompt, word by word as
+ * each is spoken. The word being spoken is in the accent colour with a block
+ * caret after it; words already spoken stay, dimmed. Left-aligned, like a
+ * terminal, so a line never shifts as words arrive.
+ */
+const LogStrip: React.FC<{
+  chunk: TimelineWord[]; frame: number; family: string; fontSize: number; position: number;
+  ink: string; accent: string; uppercase: boolean;
+}> = ({ chunk, frame, family, fontSize, position, ink, accent, uppercase }) => {
+  const top = position * 1920;
+  const meta = Math.round(fontSize * 0.62);
+  let last = -1;
+  chunk.forEach((w, i) => {
+    if (frame >= w.startFrame) last = i;
+  });
+  const { fps } = useVideoConfig();
+  const elapsed = frame / fps;
+  const clock = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${(elapsed % 60).toFixed(1).padStart(4, "0")}`;
+  const lastWord = last >= 0 ? chunk[last] : null;
+  const lastText = lastWord ? lastWord.word : "";
+  const lastTyped = lastWord ? Math.min(lastText.length, Math.floor((frame - lastWord.startFrame) * LOG_TYPE_RATE) + 1) : 0;
+  const caretOn = lastTyped < lastText.length || Math.floor(frame / 15) % 2 === 0;
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", fontFamily: family, fontSynthesis: "none" }}>
+      <div style={{ position: "absolute", left: 66, right: 66, top: top - fontSize * 1.05 - meta * 1.3, display: "flex", justifyContent: "space-between", fontSize: meta, lineHeight: `${meta * 1.2}px`, color: ink, opacity: 0.32, letterSpacing: "0.08em" }}>
+        <span>LOG</span>
+        <span>T+{clock}</span>
+      </div>
+      <div style={{ position: "absolute", left: 66, right: 66, top: top - fontSize * 1.05, height: 2, background: ink, opacity: 0.16 }} />
+      <div
+        style={{
+          position: "absolute", left: 66, right: 66, top: top - fontSize * 0.75,
+          fontSize, lineHeight: 1.2, fontWeight: 700, color: ink, whiteSpace: "pre-wrap",
+          textTransform: uppercase ? "uppercase" : "none",
+        }}
+      >
+        <span style={{ opacity: 0.3 }}>{"\u203a "}</span>
+        {chunk.map((w, i) => {
+          if (i > last) return null;
+          const isLast = i === last;
+          const text = isLast ? w.word.slice(0, lastTyped) : w.word;
+          const speaking = isLast && frame <= w.endFrame + 6;
+          return (
+            <span key={`${i}-${w.word}`} style={{ color: speaking ? accent : ink, opacity: speaking ? 1 : 0.62 }}>
+              {i > 0 ? " " : ""}
+              {text}
+              {isLast && caretOn && (
+                <span style={{ display: "inline-block", width: "0.55em", height: "0.82em", marginLeft: "0.08em", verticalAlign: "-0.1em", background: speaking ? accent : ink, opacity: 0.75 }} />
+              )}
+            </span>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+};

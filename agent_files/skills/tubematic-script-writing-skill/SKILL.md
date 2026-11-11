@@ -358,7 +358,8 @@ narration names it. `bean_explainer` has none either: a named thing there is a p
 on it (a `sign`, a `note`, an address in a `browser` bar). Neither has `whiteboard`: a named person
 or place there is written on the board or drawn as a simple doodle with a label. `storybook_atlas` has
 none either: a named person there is a picture-book figure with a name tag, and a named object is a
-library prop or one drawn for the video.
+library prop or one drawn for the video. `terminal_doc` has none: a named thing there is its name, a
+string, number or quoted source on a dark screen.
 
 ### The treatment follows the beat's subject, not the writer's habit
 

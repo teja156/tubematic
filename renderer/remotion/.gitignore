@@ -11,3 +11,5 @@ bean-tools/.tmp/
 
 # storybook-tools/render-props.mjs writes a private entry per call here; it removes it when done
 storybook-tools/.tmp/
+# terminal-tools/render-moves.mjs writes a private entry per call here; it removes it when done
+terminal-tools/.tmp/

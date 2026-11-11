@@ -11,11 +11,12 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds four visual styles: System Flow, which turns a video into a diagram that builds itself
+2.2.0 adds five visual styles: System Flow, which turns a video into a diagram that builds itself
 while the narrator explains a system; Bean Explainer, a cartoon character that reacts to the
 narration among everyday props; Whiteboard, which works an idea out on one big board, written
-and drawn as the narrator speaks; and Storybook Atlas, a picture book that tells the story of an
-invention or an idea in chapters. Auto now picks a video's style before its script is written.
+and drawn as the narrator speaks; Storybook Atlas, a picture book that tells the story of an
+invention or an idea in chapters; and Terminal Doc, a dark typographic documentary for codes,
+passwords and computing. Auto now picks a video's style before its script is written.
 
 ### Upgrade notes
 
@@ -25,8 +26,8 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs new skills for System Flow, Bean Explainer, Whiteboard, Storybook Atlas and Auto's style
-   choice, and a session started before it does not have them.
+   installs new skills for System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc
+   and Auto's style choice, and a session started before it does not have them.
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did
 before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
@@ -43,10 +44,10 @@ sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow, Bean Explainer, Whiteboard or Storybook Atlas cannot render on 2.1.x.
-  Finish it, or switch it to another style while it waits at its topic, before you go back.
-- A domain whose default style is System Flow, Bean Explainer, Whiteboard or Storybook Atlas starts
-  its new videos on Auto under 2.1.x.
+- A video set to System Flow, Bean Explainer, Whiteboard, Storybook Atlas or Terminal Doc cannot render
+  on 2.1.x. Finish it, or switch it to another style while it waits at its topic, before you go back.
+- A domain whose default style is System Flow, Bean Explainer, Whiteboard, Storybook Atlas or Terminal
+  Doc starts its new videos on Auto under 2.1.x.
 
 ### Added
 
@@ -88,6 +89,16 @@ If you go back to 2.1.x later:
   through a door or porthole or a hatched wipe. It suits the history of an invention, a discovery or
   an idea, and needs no image generation and no GPU. Choose it for a topic, on the **New Video**
   page, or as a domain's default; Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Terminal Doc visual style. The text is the picture: sparse monospace capitals on a dark,
+  mostly empty screen, where a password flies into a box marked HASH and comes out as a digest,
+  letters lift and rearrange into a new word, numbers resolve out of flickering noise, guesses race
+  until one matches, and thin brackets tie a claim to its quoted source. One word or number glows at
+  a time. The captions are typed into a terminal log strip. For retro computing topics the agent can
+  use an amber CRT look instead. When no built-in animation can show a step (a letter shift, two
+  strings combined), the agent writes one for the video and checks it before the render. It suits
+  ciphers and codes, passwords and hashes, encodings and famous unsolved codes, needs no image
+  generation and no GPU, and Auto can pick it. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
 - Captions can be a small printed label: an ivory plate hugging one short phrase, with a diamond each

@@ -68,10 +68,11 @@
         "system_flow"
       ],
       "ok": [
-        "stick"
+        "stick",
+        "terminal_doc"
       ],
-      "future": "Terminal Doc (TMDEV-199) may share this one",
-      "note": ""
+      "future": "",
+      "note": "Messages passing between a browser and a server are a path between components (System Flow); Terminal Doc can show the keys and the first encrypted bytes, so it is acceptable."
     },
     {
       "title": "How a pin tumbler lock works",
@@ -153,14 +154,15 @@
       "title": "How base64 turns bytes into text",
       "brief": "Taking three bytes, regrouping them into four six-bit chunks and mapping each to a letter, and why the output ends in equals signs.",
       "expect": [
-        "stick"
+        "terminal_doc"
       ],
       "ok": [
+        "stick",
         "system_flow",
         "scenes"
       ],
-      "future": "Terminal Doc (TMDEV-199)",
-      "note": ""
+      "future": "",
+      "note": "Bytes regrouped and mapped to letters is text transformed character by character."
     },
     {
       "title": "Why the sky is blue",
@@ -372,15 +374,16 @@
       "title": "How the Enigma code was broken",
       "brief": "How the Enigma machine scrambled letters, the mistakes German operators made, and how Turing's bombe at Bletchley Park used them.",
       "expect": [
-        "scenes"
+        "terminal_doc"
       ],
       "ok": [
+        "scenes",
         "stick",
         "motion_graphics",
         "illustrated"
       ],
-      "future": "Terminal Doc (TMDEV-199)",
-      "note": ""
+      "future": "",
+      "note": "The story turns on letters being scrambled and unscrambled, and on cribs: strings the stage can show."
     },
     {
       "title": "How money laundering moves dirty cash",
@@ -511,6 +514,73 @@
       ],
       "future": "Under the Hood (TMDEV-201)",
       "note": "An old machine, but its insides part by part with no story: not Storybook Atlas."
+    },
+    {
+      "title": "Why an 8-character password falls in seconds",
+      "brief": "How a stolen password hash is cracked by guessing: the keyspace of eight lowercase letters, a graphics card testing billions of guesses a second, and why a long passphrase holds out.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "One string, its hash and one big number carry the whole video."
+    },
+    {
+      "title": "Kryptos: the CIA sculpture nobody has fully solved",
+      "brief": "The four encrypted passages on the Kryptos sculpture outside CIA headquarters, how three were cracked with a keyed alphabet, and the clues the artist has released for the last one.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Ciphertext, a keyed alphabet and released clues are text on screen. Case File Story (TMDEV-202) may later share unsolved-mystery topics."
+    },
+    {
+      "title": "What a hash function does to your password",
+      "brief": "Why the same password always gives the same hash, why one changed letter changes the whole hash, and why sites store hashes with a salt instead of passwords.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "stick",
+        "system_flow",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A string going into a hash and coming out changed is this style's core move."
+    },
+    {
+      "title": "How a VPN tunnels your traffic",
+      "brief": "How your device wraps every packet in an encrypted envelope, sends it to the VPN server, and how that server forwards it so websites see its address instead of yours.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick",
+        "terminal_doc"
+      ],
+      "future": "",
+      "note": "Negative control for Terminal Doc: encryption is mentioned, but the subject is the path packets travel between components."
+    },
+    {
+      "title": "Why the Titanic sank",
+      "brief": "The ship and its famous passengers, the iceberg warnings that were missed, how the flooded compartments pulled the bow down, and why there were too few lifeboats.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "illustrated",
+        "stick"
+      ],
+      "future": "",
+      "note": "Real photographs, named people, a mechanism and a story in one video: no single style carries every beat, so the mixed scene system fits best."
     }
   ]
 }

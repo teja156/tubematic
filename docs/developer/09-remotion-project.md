@@ -165,6 +165,12 @@ The word being spoken is drawn at full opacity and the rest of its run is dimmed
 entry, nothing in the line moves or resizes. A word listed in `emphasis` is drawn in white on a red box
 from the moment it is spoken, with the box scaling in over 8 frames.
 
+The `log` look (`background: "log"`) draws the run as a terminal log instead
+(`Subtitles.tsx::LogStrip`): a `LOG` label and a running clock over a hairline, then the run
+left-aligned behind a `›` prompt, each word typed on as it is spoken, with a block caret after the
+word being spoken. That word is in `accent`; the words already spoken stay, dimmed. Terminal Doc uses
+it.
+
 ### Fonts
 
 The default font is the container-local `system-ui, sans-serif`. The captions are on the path of every
@@ -305,6 +311,8 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - A Storybook Atlas video has the one `StorybookAtlas` scene and its chapters pass the Storybook
   Atlas checks; no other video uses `StorybookAtlas`
   ([Scene Authoring](10-scene-authoring.md#storybook-atlas)).
+- A Terminal Doc video has the one `TerminalDoc` scene and its beats and moves pass the Terminal Doc
+  checks; no other video uses `TerminalDoc` ([Scene Authoring](10-scene-authoring.md#terminal-doc)).
 
 The tool refuses the write while another session holds the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
@@ -313,7 +321,8 @@ is queued or rendering (`status_mismatch`).
 `canvas` is the only default the tool writes into most files. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
 style's look. A Bean Explainer or Storybook Atlas config gets them under whatever `subtitles` keys it
-sets, so a config that sets only `emphasis` keeps the look. The
+sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config gets them the same
+way, with its skin's colours and font over the pack's. The
 components apply the other defaults at render time, so a changed default reaches every video whose
 config omits the key.
 
@@ -339,9 +348,10 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `fontFamily` | `system-ui, sans-serif` | A non-empty string. See [Fonts](#fonts) |
 | `fontSize` | `62` | 28 to 120 |
 | `color` | `null` | A CSS colour. `null` follows the canvas: white on dark, near-black on light |
-| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label hugging the phrase, a diamond each side, every word at full strength, a 2-frame fade and no rise) or `"none"` |
+| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label hugging the phrase, a diamond each side, every word at full strength, a 2-frame fade and no rise), `"none"` or `"log"` (typed into a terminal log strip) |
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
+| `accent` | `null` | A CSS colour for the word being spoken in the `log` look. `null` uses `color` |
 | `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
 
 `server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time.
@@ -361,8 +371,8 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`SystemFlow`, `BeanExplainer` and `Whiteboard` are referenced the same way, by videos of their own
-style only. The other
+`SystemFlow`, `BeanExplainer`, `Whiteboard` and `TerminalDoc` are referenced the same way, by videos of
+their own style only. The other
 files are wrappers and helpers that a scene imports. The directory's `README.md` is the catalogue the
 agent reads.
 
@@ -482,6 +492,20 @@ per call into `storybook-tools/.tmp/` (ignored by git). `storybook-tools/sync-co
 style pack's `extra` and `mcp/tests/fixtures/storybook_atlas_contract.json` from the renderer's code. The
 contract and the reason every drawing is a cached bitmap are in
 [Storybook Atlas](10-scene-authoring.md#storybook-atlas).
+
+### `TerminalDoc`
+
+`TerminalDoc` draws a whole Terminal Doc video from `props.terminalDoc` on a near-black canvas, with
+its ciphertext wall, the CRT glass of its `crt` skin and its moves; its helpers are in
+`terminalDoc/`. It loads its fonts (IBM Plex Mono, and VT323 for the `crt` skin) from `public/fonts/`
+before the first frame; the style's `log` captions use the same faces, which this scene loads.
+
+A Terminal Doc video can also use moves its agent wrote, in `generated/<video_id>/move-*.tsx`. The
+scene imports them under a `delayRender` handle, and one that fails to load fails the render.
+`terminal-tools/render-moves.mjs` renders them for the `preview_terminal_moves` tool on the
+`TerminalMovePreview` composition, from a bundle entry it writes per call into `terminal-tools/.tmp/`
+(ignored by git) that imports only that video's move files. The contract and the reason the wall is
+a canvas are in [Terminal Doc](10-scene-authoring.md#terminal-doc).
 
 ### Figure and panel components
 
@@ -637,3 +661,6 @@ beside it (`OFL-Kalam.txt`). Its shipped doodles (`whiteboard/doodles.json`) are
 
 `StorybookAtlas`'s guide, people, props and backdrops are original drawings. Its font in
 `public/fonts/` is EB Garamond, under the SIL Open Font License 1.1, with the license beside it.
+
+`TerminalDoc`'s fonts in `public/fonts/` are IBM Plex Mono and VT323, each under the SIL Open Font
+License 1.1, with the license beside them.

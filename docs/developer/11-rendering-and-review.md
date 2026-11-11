@@ -412,10 +412,10 @@ counts as settled, the 150/170/60/60 safe zone, and a 180-second timeout.
 
 A System Flow video's one scene changes its diagram at every board, so the audit samples each board
 as if it were a scene, with the same allowance at each board's start. A Bean Explainer video's one
-scene is sampled the same way, shot by shot, and a Whiteboard video's region by region and once
-more for the closing pull-back. A Storybook Atlas video's one scene is sampled once in each stretch
-between two of its events (twice in a long one), after things have arrived, and never during a push
-or a wipe between chapters.
+scene is sampled the same way, shot by shot, a Whiteboard video's region by region and once more
+for the closing pull-back, and a Terminal Doc video's beat by beat. A Storybook Atlas video's one
+scene is sampled once in each stretch between two of its events (twice in a long one), after things
+have arrived, and never during a push or a wipe between chapters.
 
 A Cartoon 3D video skips the audit. Its one scene is a painted canvas with no text rectangles, and
 the composition draws its captions. Its checks are the typecheck and the beat gate in

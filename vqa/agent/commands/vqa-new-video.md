@@ -31,7 +31,9 @@ your own judgment.
     and whether the art is playful or serious), `system_flow` (the whole video is one diagram per
     subject, written as data), `bean_explainer` (a cartoon bean reacting among props, written as
     data), `whiteboard` (the whole video is one big board of handwriting and doodles, written as
-    data), `storybook_atlas` (a picture book told in chapters, written as data) or `cartoon_3d` (a 3D world; it needs a working GPU). There is no
+    data), `storybook_atlas` (a picture book told in chapters, written as data), `terminal_doc` (strings,
+    numbers and ciphertext on a dark terminal, written as data) or `cartoon_3d` (a 3D world; it needs a
+    working GPU). There is no
     dashboard here, so this chat is the only place that choice can be made, and it is frozen the
     moment the topic is approved. `get_pipeline_status()` returns every style as `visual_styles`,
     each with `available` and `unavailable_reason`: offer an unavailable one only by saying it is
