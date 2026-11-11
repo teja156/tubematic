@@ -212,8 +212,13 @@ const Carousel: React.FC<{ data: BeanExplainerData; c: NonNullable<StageState["c
         return (
           <g key={i}>
             <Badge x={x} y={STRIP.y} r={r} section={s} frame={frame} kit={kit} />
-            <text x={x} y={STRIP.y + r + 80} textAnchor="middle" fontSize={56} fontWeight={700} fill={INK} opacity={1 - 0.55 * dist}
-              letterSpacing={1} style={{ fontFamily: ROUND }}>{s.header}</text>
+            {/* Only the name at the centre is read: long names on neighbouring
+                badges ran into it, so they fade as they leave the centre, and the
+                centre name is sized to fit the frame. */}
+            {dist < 0.55 && (
+              <text x={x} y={STRIP.y + r + 80} textAnchor="middle" fontSize={Math.min(58, 940 / (Math.max(s.header.length, 1) * 0.74))}
+                fontWeight={700} fill={INK} opacity={1 - dist / 0.55} letterSpacing={1} style={{ fontFamily: ROUND }}>{s.header}</text>
+            )}
           </g>
         );
       })}

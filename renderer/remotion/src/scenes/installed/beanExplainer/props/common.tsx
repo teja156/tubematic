@@ -61,6 +61,10 @@ export function textEms(text: string): number {
   return em;
 }
 
+/** Line spacing of a text slot: wider than the faces' glyph boxes, or the text-layout
+ *  audit reads two lines of one sign as overlapping text (seen in a live run). */
+const LINE_HEIGHT = 1.25;
+
 /**
  * A text slot fitted to a box: wrapped to at most `maxLines` lines, then sized
  * so its widest line (by textEms) fits `width` and the block fits `height`,
@@ -74,12 +78,12 @@ export const FitText: React.FC<{
   const perLine = Math.max(6, Math.round(width / (maxPx * 0.62)));
   const lines = wrapTo(text, perLine, maxLines);
   const widest = Math.max(...lines.map(textEms), 0.5);
-  const px = Math.min(maxPx, width / widest, height / (lines.length * 1.15));
-  const top = y - ((lines.length - 1) * px * 1.15) / 2 + px * 0.36;
+  const px = Math.min(maxPx, width / widest, height / (lines.length * LINE_HEIGHT));
+  const top = y - ((lines.length - 1) * px * LINE_HEIGHT) / 2 + px * 0.36;
   return (
     <text x={x} y={top} textAnchor={anchor} fontSize={px} fontWeight={weight} fill={fill} style={{ fontFamily: font }}>
       {lines.map((l, i) => (
-        <tspan key={i} x={x} dy={i === 0 ? 0 : px * 1.15}>{l}</tspan>
+        <tspan key={i} x={x} dy={i === 0 ? 0 : px * LINE_HEIGHT}>{l}</tspan>
       ))}
     </text>
   );
