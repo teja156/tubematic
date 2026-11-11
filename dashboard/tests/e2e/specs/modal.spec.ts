@@ -365,4 +365,50 @@ test.describe("VideoModal", () => {
     expect(after.formula_id).toBe("");
     expect(after.script_warnings).toEqual([]);
   });
+
+  test("Topic tab shows the angle, lets it be edited at Topic Proposed and closes it after approval", async ({ page }) => {
+    const video = await createVideo({
+      topic: `[${uid}] Topic angle`,
+      angle: "Deleting the file frees no space until the last program holding it lets go.",
+      angle_kind: "paradox",
+      angle_score: 7,
+    });
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    await expect(modal.getByTestId("topic-angle-text"))
+      .toHaveText("Deleting the file frees no space until the last program holding it lets go.");
+    // The label comes from GET /angle-kinds on the real API.
+    await expect(modal.getByTestId("topic-angle-kind")).toHaveText("Paradox");
+    await expect(modal.getByTestId("topic-angle-score")).toHaveText("7/10");
+
+    await modal.getByTestId("topic-angle-edit").click();
+    await modal.getByTestId("topic-angle-input").fill("Most people think a deleted file is gone at once.");
+    await modal.getByTestId("topic-angle-kind-select").selectOption("myth");
+    await modal.getByTestId("topic-angle-save").click();
+    await expect(modal.getByTestId("topic-angle-text"))
+      .toHaveText("Most people think a deleted file is gone at once.");
+    await expect(modal.getByTestId("topic-angle-kind")).toHaveText("Myth");
+    // The agent's score described the sentence it replaced.
+    await expect(modal.getByTestId("topic-angle-score")).toHaveText("—");
+    const stored = await getVideo(video.id) as unknown as Record<string, unknown>;
+    expect(stored.angle).toBe("Most people think a deleted file is gone at once.");
+    expect(stored.angle_kind).toBe("myth");
+    expect(stored.angle_score).toBe(0);
+
+    // Past the topic the script may already be written from it: read-only,
+    // in the window and in the API.
+    await patchVideo(video.id, { status: "TOPIC_APPROVED" });
+    await page.reload();
+    const approved = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(approved).toBeVisible({ timeout: 10_000 });
+    await approved.click();
+    await expect(modal.getByTestId("topic-angle-text"))
+      .toHaveText("Most people think a deleted file is gone at once.");
+    await expect(modal.getByTestId("topic-angle-edit")).toHaveCount(0);
+    await expect(patchVideo(video.id, { angle: "Too late.", angle_kind: "myth" })).rejects.toThrow();
+  });
 });

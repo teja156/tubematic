@@ -233,6 +233,8 @@ videos.
 |---|---|
 | `comments` | The comment thread |
 | `publish_title`, `publish_description` | The text written with the script |
+| `angle`, `angle_kind`, `angle_score` | The [topic's angle](02-pipeline.md#topic-angle): the sentence, its kind and its score. `""` and `0` when the video has none |
+| `angle_formula` | The formula `angle_kind` is the first choice for, from `ANGLE_KINDS`, or `""` with no angle. The script-writing skill starts from it |
 | `formula_id`, `hook_type` | The formula the script follows and the type of the opening it uses, or `""` |
 | `hook_alternatives`, `script_warnings` | The three openings drafted and the checks' findings for the stored script, as lists. `[]` when there are none. See [What a script records](08-scripting-and-voice.md#what-a-script-records) |
 | `claimed_by`, `claim_expires_in_secs` | The live scene-work claim, or `null` |
@@ -264,11 +266,28 @@ of the video's domain.
 
 ### `create_video`
 
-`create_video(project_id, topic, strategy, producibility_score, title="", voice_id="")` files a
+`create_video(project_id, topic, strategy, producibility_score, title="", voice_id="", angle=None,
+angle_kind=None, angle_score=None)` files a
 video at `TOPIC_PROPOSED`. It refuses a score below 5, an unknown `strategy`, a `voice_id` that is
 not on the roster, an unknown `project_id`, and a paused or expired `project_id` unless `strategy`
 is `manual` (see [Domain pause](02-pipeline.md#domain-pause) and
 [Topic cap](02-pipeline.md#topic-cap)).
+
+The three angle arguments are the [topic's angle](02-pipeline.md#topic-angle). The tool refuses:
+
+- a `curriculum`, `trending` or `mining` topic with no `angle` and `angle_kind`, or with an
+  `angle_score` from 1 to 4. The message tells the agent to leave the subject out and name it in
+  its run summary. An `angle_score` of 0 or left out is refused with a message asking for the score,
+  because 0 means unscored and an agent that forgot the argument has an angle.
+- on any `strategy`: `angle` or `angle_kind` without the other, an `angle_kind` that is not a kind,
+  an `angle` over 300 characters, and an `angle_score` that is not a whole number from 0 to 10.
+
+A `manual` topic may carry no angle, and its angle may have any score. `None` in any of the three
+reads as absent. On a `manual` topic so do the words in `NO_ANGLE_WORDS` (`none`, `n/a` and the
+like) as the sentence, or as the kind when no sentence is sent (`sent_no_angle`, read before the
+kind is cleaned). A real sentence with `none` as its kind keeps its sentence and is refused for the
+kind, and a `manual` topic with no sentence and no kind is stored with score 0 whatever
+score was sent. A kind is stored by its id whatever its spelling (`tubematic_core.angles.clean_kind`).
 
 What a new video starts with:
 
@@ -285,8 +304,8 @@ What a new video starts with:
   the agent is dealt, and the model is `""` (see [Assignment](07-agent-layer.md#assignment)).
 - `agent_effort`: the domain's `default_agent_effort`, whichever agent the video gets.
 
-The result carries those seven fields. A `title` over 70 characters is clipped and the result
-carries a `warning` (see [Video titles](#video-titles)).
+The result carries those seven fields and the stored angle. A `title` over 70 characters is
+clipped and the result carries a `warning` (see [Video titles](#video-titles)).
 
 ### `set_video_status`
 
@@ -314,8 +333,21 @@ columns are cleared too. A style a person chose is kept, with its recorded canva
 `update_video(video_id, title=…, script=…, script_segments=…, youtube_url=…, video_version=…,
 gemini_feedback=…, voice_id=…, agent_id=…, agent_model=…, agent_effort=…, script_profile_id=…,
 visual_style=…, resolved_visual_style=…, resolved_renderer=…, publish_title=…,
-publish_description=…, mascot_id=…, formula_id=…, hooks=…)` is a partial update. An archived video
-returns `video_archived`.
+publish_description=…, mascot_id=…, formula_id=…, hooks=…, angle=…, angle_kind=…, angle_score=…)`
+is a partial update. An archived video returns `video_archived`.
+
+The topic's angle:
+
+- `angle` and `angle_kind` are passed together, in every call that carries any of the three. No
+  score floor applies. A call with no `angle_score` stores 0, because the stored score described
+  the earlier sentence. `""` for both removes the angle.
+- The write is allowed at `TOPIC_PROPOSED`, at `REVISION_REQUESTED`, and at `TOPIC_APPROVED` while
+  the video has no angle (`ANGLE_WRITE_STATUSES`). The last case is the fill the operator skill
+  makes when it picks up a video whose topic came without one.
+- The `UPDATE` repeats the status in its `WHERE`, and at `TOPIC_APPROVED` also `angle = ''`. A
+  video that moved on, or that got an angle meanwhile, is left as it is and the call says why.
+- At `TOPIC_APPROVED`, sending the angle the video already has is not a write: the other fields of
+  the call are applied, and `updated_fields` leaves the angle out.
 
 Script and voice:
 
@@ -1109,9 +1141,18 @@ The tool enforces the mining cap itself:
   whether or not they filed anything, so URLs that return nothing do not cost one call each on
   every run. The next run carries on from the next URL.
 - Every prompt lists the 200 most recent video topics, every status included, as already covered.
+- The prompt asks for an angle with each candidate (`angle`, `angle_kind`, `angle_score`). The
+  kinds and the score signals in it are `tubematic_core.angles.prompt_text()`, the text the
+  topic-research skill carries.
+- Candidates are filed strongest first, ranked by `producibility_score` plus `angle_score`.
+- A candidate's kind goes through `clean_kind` like any other, and a score that is fractional,
+  quoted, too large or not a number becomes a whole number or 0. Gemini's reply cannot be asked
+  for again, so an odd shape costs at most that one candidate.
 - A candidate is not filed, and comes back in `not_filed` with its reason, when it repeats an
   existing topic (70% or more of its significant words in common, after dropping stop-words and
-  plurals), scores below 5, or arrives after the target is full.
+  plurals), scores below 5, has no angle, has an angle that is malformed or scores below 5, or
+  arrives after the target is full.
+- Each entry of `topics` in the result carries the angle the topic was filed with.
 - A domain that fills or is paused by another writer during the run ends the run at the first
   refusal. No further URL is asked, and the topics left over come back in `not_filed`.
 - One run happens at a time. A call made while another is running is refused with an error, because

@@ -16,7 +16,7 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 | Folder | What the agent does with it |
 |---|---|
 | `tubematic-operator/` | Runs the pipeline: moves each video to its next status with the MCP tools and stops at the human checkpoints |
-| `tubematic-topic-research/` | Researches and proposes topics in the curriculum, trending and mining research modes |
+| `tubematic-topic-research/` | Researches and proposes topics in the curriculum, trending and mining research modes, each with the angle its video will open on |
 | `tubematic-style-routing/` | Picks a video's visual style before its script is written, when the person left it on Auto: describes the topic, scores the candidate styles from their style packs and records the choice |
 | `tubematic-script-writing-skill/` | Writes a video's script as an ordered list of segments: chooses a formula for the topic, writes to it, in the voice of the video's script profile |
 | `tubematic-create-script-writing-skill/` | Builds a script profile: extracts a creator's style from YouTube transcripts and stores it as profile Markdown |
@@ -31,6 +31,10 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 | `tubematic-case-file-story/` | Writes a Case File Story video as data (painted stills it generates from the video's lead sheet and checks, with meters, punch-ins, count, bars and term cards and the closing choice timed to the narration) for the one `CaseFileStory` scene, validates and submits it |
 | `tubematic-mascot-builder/` | Writes or revises one mascot's p5.js drawing code, renders its three model sheets and submits it for human review |
 | `tubematic-troubleshooting/` | Diagnoses a broken install with a person, collects redacted evidence and drafts a bug report. A person must ask for it by name |
+
+The table of angle kinds and the angle score in `tubematic-topic-research/SKILL.md` are generated
+from `tubematic_core/angles.py` by `scripts/gen_angle_reference.py` in the source repository: edit
+the data, then run the script.
 
 `tubematic-script-writing-skill/` owns the scripting rules. Its `formulas/` folder holds one
 reference file per script formula. Those files and the table in its `SKILL.md` are generated from

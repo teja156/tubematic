@@ -240,6 +240,11 @@ it asks for is in [the user guide](../user-guide/04-dashboard.md#new-video). The
 route because an over-long title is refused where `POST /videos` clips it, and a picked `agent_id`
 is kept.
 
+The optional **Angle** field is a text box and a kind picker filled from
+[`GET /angle-kinds`](05-http-api.md#get-angle-kinds). The field is shown once that list has loaded,
+because a sentence cannot be stored without its kind. A typed sentence with no kind, or one over
+300 characters, disables **Submit video**. An empty field sends no angle.
+
 - The agent picker's blank choice sends no `agent_id`, so the API picks the agent as it does for
   every other new video ([Assignment](07-agent-layer.md#assignment)). The choice reads
   **Automatic (dealt by weight)**, or **Domain default** with the agent's name while the Manual
@@ -321,6 +326,9 @@ While Auto Pilot is on, the board shows a one-line notice above Quick Actions, r
 status in pipeline order (`TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY`). Inside a group the
 API's oldest-first order is kept.
 
+- A `TOPIC_PROPOSED` row shows the topic's [angle](02-pipeline.md#topic-angle) on one clipped line
+  under the title, and the angle's kind and score in the meta line, or **No angle**. The kind is
+  shown from its id (`lib/angles.ts::angleKindLabel`), so a row loads no list.
 - A row of toggle pills, one per status with its count, hides or shows each group. The filter lives
   in component state and resets on reload, so a forgotten filter cannot keep waiting videos hidden.
   It is stored as the set of statuses switched off, so a status the API adds later is shown.
@@ -498,9 +506,21 @@ Effort:
   for a script with no record. It takes the labels from
   [`GET /script-formulas`](05-http-api.md#get-script-formulas), fetched when a record is shown, and
   shows the ids until that answers. A segment that carries a `beat` shows it above its text.
+- The Topic tab opens with the topic's [angle](02-pipeline.md#topic-angle)
+  (`components/TopicAngle.tsx`): the sentence, its kind and its score. At `TOPIC_PROPOSED` on a
+  video that is not archived, **Edit** (or **Add angle**) opens a text box with a 300-character
+  count and a kind picker, and **Save** sends both through `PATCH /videos/<video_id>` and reads the
+  video again. The count and the saved text use the stored form (`lib/angles.ts::cleanAngle`):
+  whitespace collapsed, counted in code points. Past that status the block is read-only, and a
+  video with no angle shows none. The
+  component is keyed by the video's id, because the window stays mounted between videos and a
+  draft must not move to the next one. While the editor is open, **Approve Topic** is disabled with
+  a line saying why, because the approval does not carry the draft. The editor closes when the
+  video leaves `TOPIC_PROPOSED`. The Topic panel is `keepMounted`, so a draft and the hold on
+  **Approve Topic** survive a look at another tab.
 - The sidebar holds the actions for the video's status (including Delete), a **Published to**
-  section with a link to each live post, metadata, the cost breakdown (`CostBreakdown.tsx`) and the
-  AI review feedback.
+  section with a link to each live post, metadata (with the angle score under the topic's score),
+  the cost breakdown (`CostBreakdown.tsx`) and the AI review feedback.
 - Comments is a read-only thread. The only way to add a human comment is `ReviseDialog`, so every
   human comment comes with the status change that makes the agent read it.
 - The component stays mounted between videos. Each refresh (the video, its publications, its logs)
@@ -608,6 +628,7 @@ Components that a section above covers are left out of this table.
 | `LogList.tsx` | Record rendering shared by the Logs page and the video window's Logs tab |
 | `ReviseDialog.tsx` | The mandatory-comment prompt behind every Request Revision |
 | `ScriptRecord.tsx` | The Script tab's read-only block for what a script recorded: formula, openings and warnings. See [The video window](#the-video-window) |
+| `TopicAngle.tsx` | The Topic tab's block for the topic's angle, with its editor at `TOPIC_PROPOSED`. See [The video window](#the-video-window) |
 | `VoicePreviewButton.tsx` | Generates or replays a cached voice sample. One button toggles play and pause and follows the audio's own events. A change of voice or model resets it. Given a `modelId`, it previews that model |
 | `MiningSources.tsx` | Adds and removes YouTube URLs for mining. It mirrors the API's URL rule and adds a URL in the canonical `watch?v=` form. See [Mining sources](05-http-api.md#mining-sources) |
 | `TimeZoneProvider.tsx` | Fetches the host's timezone once and provides it through context. See [Time](#time) |
@@ -913,6 +934,7 @@ suite can test them without React.
 | `voices.ts` | Voice labels and conflicts, the shown voice, and what Approve Topic sends for the voice |
 | `visualStyles.ts` | Picker options and labels built from the fetched style list, when a style is disabled, and how a frozen style reads on a card |
 | `mascots.ts` | The GPU gate for mascot pickers, their options and the mascot an approval sends |
+| `angles.ts` | The kind list fetched from `GET /angle-kinds`, a kind's label, the angle score's label and the sentence's length limit |
 | `videoStatus.ts` | Which statuses can be deleted, when Retry publishing, Mark as published and Retry agent are offered, and `patchVideo` |
 | `autoPilot.ts` | The disclaimer, the bounds, when a save needs confirmation and how many videos it would approve |
 | `renderers.ts` | The renderer status chip, the GPU verdict, the device description and the **Nothing can render** condition |

@@ -10,6 +10,7 @@ import { effortOptionLabel } from "@/lib/agents";
 import { NO_DOMAIN_DEFAULTS, domainAgent, domainDefaults } from "@/lib/domains";
 import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
 import { voiceLabel } from "@/lib/voices";
+import { ANGLE_MAX_CHARS, angleLength, cleanAngle, fetchAngleKinds, type AngleKind } from "@/lib/angles";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 
 // The fixed domain every submission here is filed into. Keep in sync:
@@ -55,6 +56,12 @@ export default function NewVideoPage() {
 
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
+  // Optional: what the opening will use. Left empty, the agent finds an angle
+  // when it picks the video up. null kinds = the list has not loaded, and the
+  // field is not offered: a sentence cannot be saved without its kind.
+  const [angle, setAngle] = useState("");
+  const [angleKind, setAngleKind] = useState("");
+  const [angleKinds, setAngleKinds] = useState<AngleKind[] | null>(null);
   // "" is Automatic: no agent_id is sent and the API deals one by weight.
   const [agentId, setAgentId] = useState("");
   // null = untouched, the idiom every per-video picker uses.
@@ -72,6 +79,7 @@ export default function NewVideoPage() {
   // One-shot, not polled — the same reasoning as PipelineClient: these change
   // on other pages, and a stale list only lasts until the next page load.
   useEffect(() => {
+    fetchAngleKinds().then(setAngleKinds);
     apiFetch("/agents")
       .then((r) => r.json())
       .then((data: Agent[]) => {
@@ -142,7 +150,11 @@ export default function NewVideoPage() {
   // emoji is one character there and two in .length — which would disable
   // submit for a title the API accepts.
   const titleLen = Array.from(title.trim()).length;
-  const canSubmit = titleLen > 0 && titleLen <= TITLE_MAX && topic.trim() !== "" && !submitting;
+  const angleText = cleanAngle(angle);
+  const angleLen = angleLength(angle);
+  // No sentence is fine. A sentence needs its kind and has to fit.
+  const angleOk = angleText === "" || (angleKind !== "" && angleLen <= ANGLE_MAX_CHARS);
+  const canSubmit = titleLen > 0 && titleLen <= TITLE_MAX && topic.trim() !== "" && angleOk && !submitting;
 
   async function submit() {
     if (!canSubmit) return;
@@ -159,6 +171,7 @@ export default function NewVideoPage() {
       script_profile_id: profileId,
       visual_style: style,
       voice_id: voiceId,
+      ...(angleText ? { angle: angleText, angle_kind: angleKind } : {}),
     };
     try {
       const r = await apiFetch("/videos/manual", {
@@ -176,6 +189,8 @@ export default function NewVideoPage() {
       // usually wants the same agent and style for each.
       setTitle("");
       setTopic("");
+      setAngle("");
+      setAngleKind("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit the video.");
     } finally {
@@ -209,10 +224,46 @@ export default function NewVideoPage() {
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             rows={6}
-            placeholder="What the video is about, the angle, and anything it must cover"
+            placeholder="What the video is about, and anything it must cover"
             style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }}
           />
         </Field>
+
+        {/* Two fields, each with its own label: one label around both controls
+            would give the text box a name that includes every kind. */}
+        {angleKinds && (
+          <>
+            <Field
+              label="Angle (optional)"
+              note={`${angleLen}/${ANGLE_MAX_CHARS} — one sentence saying what the opening will use. Leave it empty and the agent finds one.`}
+            >
+              <textarea
+                data-testid="new-video-angle"
+                value={angle}
+                onChange={(e) => setAngle(e.target.value)}
+                aria-invalid={angleLen > ANGLE_MAX_CHARS}
+                rows={2}
+                placeholder="The backup reported success for a year while it copied an empty folder"
+                style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5, borderColor: angleLen > ANGLE_MAX_CHARS ? "var(--red)" : "var(--border-2)" }}
+              />
+            </Field>
+            <Field label="Angle kind" note="Needed once an angle is written">
+              <select
+                data-testid="new-video-angle-kind"
+                value={angleKind}
+                onChange={(e) => setAngleKind(e.target.value)}
+                disabled={angleText === ""}
+                aria-invalid={angleText !== "" && angleKind === ""}
+                style={{ ...inputStyle, borderColor: angleText !== "" && angleKind === "" ? "var(--red)" : "var(--border-2)" }}
+              >
+                <option value="">{angleText === "" ? "Choose once the angle is written" : "Choose the angle's kind"}</option>
+                {angleKinds.map((k) => (
+                  <option key={k.id} value={k.id}>{k.label}</option>
+                ))}
+              </select>
+            </Field>
+          </>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
           <AgentPickers

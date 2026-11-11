@@ -417,7 +417,8 @@ def _content_literals(db_path: Path, settings: dict) -> tuple:
 
 
 # Video columns written by the human or the agent about the video's subject.
-_VIDEO_CONTENT = (("title", "title"), ("topic", "topic"), ("script", "script"),
+_VIDEO_CONTENT = (("title", "title"), ("topic", "topic"), ("angle", "topic angle"),
+                  ("script", "script"),
                   ("tts_text", "script"), ("gemini_feedback", "review"),
                   ("publish_title", "publish title"), ("publish_description", "publish description"))
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")

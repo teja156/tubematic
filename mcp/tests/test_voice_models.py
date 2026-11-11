@@ -19,6 +19,7 @@ import json
 import pytest
 
 import server
+from sample_angle import ANGLE
 from test_generate_voice import (  # noqa: F401 — fixtures
     _set_install_model, fake_httpx, job_db, voice_env,
 )
@@ -334,14 +335,14 @@ def test_generate_voice_with_a_default_off_the_roster_errors_before_spend(job_db
 def test_every_strategy_inherits_the_project_voice(job_db, strategy):
     _roster(V2, V3)
     server.upsert_project("p", "P", default_voice_id="a1")
-    vid = server.create_video("p", "topic", strategy, 7)["video_id"]
+    vid = server.create_video("p", "topic", strategy, 7, **ANGLE)["video_id"]
     assert _stored_voice(vid) == "a1"
 
 
 def test_an_explicit_voice_beats_the_project_default(job_db):
     _roster(V2, V3)
     server.upsert_project("p", "P", default_voice_id="a1")
-    vid = server.create_video("p", "topic", "trending", 7, voice_id="r1")["video_id"]
+    vid = server.create_video("p", "topic", "trending", 7, voice_id="r1", **ANGLE)["video_id"]
     assert _stored_voice(vid) == "r1"
 
 
@@ -349,7 +350,7 @@ def test_a_project_default_that_left_the_roster_is_not_seeded(job_db):
     _roster(V2, V3)
     server.upsert_project("p", "P", default_voice_id="a1")
     _roster(V2)
-    vid = server.create_video("p", "topic", "trending", 7)["video_id"]
+    vid = server.create_video("p", "topic", "trending", 7, **ANGLE)["video_id"]
     assert _stored_voice(vid) == ""
 
 

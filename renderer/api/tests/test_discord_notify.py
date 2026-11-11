@@ -393,6 +393,38 @@ def test_a_topic_with_neither_title_nor_brief_still_names_something():
     assert field["name"] == "vid_abc"
 
 
+def test_a_topics_angle_leads_its_field_and_its_score_sits_beside_the_topics():
+    video = _video(angle="A lookup you never made is already cached.", angle_kind="paradox",
+                   angle_score=7)
+    value = dn.build_topics_payload([video])["embeds"][0]["fields"][0]["value"]
+    facts, angle, brief = value.split("\n")
+    assert "score 8/10 · angle 7/10" in facts
+    assert angle == "A lookup you never made is already cached."
+    assert brief == "How DNS resolution works"
+
+
+def test_a_topic_with_no_angle_reads_as_before():
+    value = dn.build_topics_payload([_video()])["embeds"][0]["fields"][0]["value"]
+    assert "angle" not in value
+    assert value.split("\n")[1] == "How DNS resolution works"
+
+
+def test_an_unscored_angle_shows_its_sentence_and_no_score():
+    """A person's own angle has no score: 0 is not a rating to print."""
+    video = _video(angle="A lookup you never made is already cached.", angle_kind="paradox",
+                   angle_score=0)
+    value = dn.build_topics_payload([video])["embeds"][0]["fields"][0]["value"]
+    assert "angle 0/10" not in value
+    assert "A lookup you never made is already cached." in value
+
+
+def test_a_long_angle_takes_the_room_and_the_field_stays_inside_its_budget():
+    video = _video(angle="a" * 300, angle_kind="paradox", angle_score=9, topic="b" * 900)
+    value = dn.build_topics_payload([video])["embeds"][0]["fields"][0]["value"]
+    assert len(value) <= dn._TOPIC_VALUE_BUDGET
+    assert "b" * 10 not in value
+
+
 def test_script_ready_says_that_approving_costs_money():
     """This is the checkpoint where ElevenLabs charges per character and the
     charge is not refundable — the message has to say so."""
