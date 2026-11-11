@@ -300,10 +300,12 @@ def test_a_sentence_that_ends_on_a_short_word_still_ends(text):
     assert len(sc.sentences(text)) == 2
 
 
-def test_many_short_sentences_are_split_in_linear_time():
+def test_a_long_run_of_titles_is_read_in_linear_time():
+    # No stop here ends a sentence, so the start of the sentence never moves:
+    # the case that is slow when each stop rereads everything since the start.
     import time
     started = time.monotonic()
-    assert len(sc.sentences("Ask Dr. Lee. " * 4000)) == 4000
+    assert len(sc.sentences("Dr. " * 8000 + "Lee arrived.")) == 1
     assert time.monotonic() - started < 1.0
 
 

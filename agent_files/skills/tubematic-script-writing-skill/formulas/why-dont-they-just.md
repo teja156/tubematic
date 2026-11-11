@@ -44,6 +44,7 @@ The rule restated as meaning, or a dry one-sentence kicker with the present-day 
 - Context before the question
 - An open debate with no verdict
 - An obscure detail as the subject: the obscure detail has to be the answer
+- A question opening under a publish title that asks the same question: title the video with the rule or the exception, and let the opening ask
 
 ## Template
 

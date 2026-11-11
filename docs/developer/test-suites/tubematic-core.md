@@ -141,8 +141,7 @@ Covers `tubematic_core/script_checks.py`
   does not know, is not measured against a band.
 - An ellipsis inside a sentence does not end it, a closing quote stays with its sentence, and a
   title before a name (`Dr.`, `St.`) does not end one. A sentence that ends on a short word ("in
-  C.", "at 3 a.m.") still ends. A long run of dots and a long run of short sentences are read in
-  linear time.
+  C.", "at 3 a.m.") still ends. A long run of dots and a long run of titles are read in linear time.
 - A closing line the preferences asked for is not a repeat: the sentence before it is compared.
 
 Trap: the quiet half matters as much as the firing half. The list is shown to a person and handed to
