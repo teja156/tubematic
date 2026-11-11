@@ -93,6 +93,16 @@ Before any code, write a table with one row per shot:
 - **Reactions land on their word.** An expression or gesture change inside a shot is timed to the word's
   `startFrame`, landing `LEAD` (2 frames) early. Aim for the first stressed word of the phrase.
 
+## The opening and the beats
+
+`get_timeline` gives each segment a `beat` and a `role`, and the result a `first_frame` (the formula's line on what the first frame shows, `""` when the video has no formula). The first segment's role is `opening`. A `turn` or `reopen` segment needs a visible change on its first word, the `payoff` segment the video's strongest picture, and a segment with role `""` only its own brief. `get_video`'s `style.picture` says how this style does each; in short:
+
+- Opening: shot 1 is already in motion at frame 0, a character mid-action on the set the first sentence names, the camera moving. Never a title, a black frame or an empty set.
+- Turn or re-opening: a cut to a new shot on its first word, or a punch-in or impact kick on it.
+- Payoff: the shot with the answer, held longest, with the camera's strongest move. No closing card after it.
+
+Plan these in the shot table of Step 1: a `turn`, `reopen` or `payoff` segment's first word is where a shot starts. No warning checks this style; it is yours to get right.
+
 ## Step 2 — write the video
 
 Write these files with `write_scene_file(video_id, scene_name, tsx_content)`; `scene_name` carries the

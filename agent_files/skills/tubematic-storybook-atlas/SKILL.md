@@ -52,7 +52,8 @@ or event is wrong. Fix every problem it lists, then write again.
 - **Chapters:** 3 to 5. The first starts at frame 0, the others on a word (within 2 frames of a word's
   `startFrame`), each at least 8 seconds long. A title fits 2 lines of 18 characters; a byline is at
   most 28.
-- **Events** land on a word (within 2 frames of its start), inside their chapter, and no later than 20
+- **Events** land on a word (within 2 frames of its start) or at frame 0, which opens the video
+  before the first word. They stay inside their chapter, and no later than 20
   frames before it ends.
 - **A push** (`"enter": "push"`) goes through a prop with a portal (a door, a porthole, a window, an
   open book, the relay cabinet) that was on stage in the chapter before, at least 14 frames before the
@@ -228,6 +229,16 @@ relay, Babbage's engine, a particular instrument. Keep it to a few per video.
 
 Leave `subtitles` out: the style sets its caption label. If `get_video` has a `mascot`, add its cue
 track as the mascot skill describes, small and to one side, away from the guide and the people.
+
+## The opening and the beats
+
+`get_timeline` gives each segment a `beat` and a `role`, and the result a `first_frame` (the formula's line on what the first frame shows, `""` when the video has no formula). The first segment's role is `opening`. A `turn` or `reopen` segment needs a visible change on its first word, the `payoff` segment the video's strongest picture, and a segment with role `""` only its own brief. `get_video`'s `style.picture` says how this style does each; in short:
+
+- Opening: something moves in chapter 1 from frame 0: the guide walking, a person entering or the subject's prop arriving. An event at frame 0 may come before the first word. The plaque is the chapter's title, not the opening picture.
+- Turn or re-opening: a new chapter on its first word, or a person, prop or plate arriving on that word.
+- Payoff: the plate or prop that is the answer, centre stage, with the guide reacting. No chapter after it.
+
+`validate_job` returns warnings (advisory, never blocking) when nothing moves in chapter 1 by frame 3 or when a `turn`, `reopen` or `payoff` segment has no chapter, guide, person, prop, act or plate (a tag alone does not count) starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
 
 ## Step 5 — write, validate, submit
 

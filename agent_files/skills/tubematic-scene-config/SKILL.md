@@ -50,8 +50,10 @@ correct and re-spends `generate_image` on every image beat.
    components you reach for. Settling it late means re-authoring scenes you have already written.
 2. Call `get_timeline(video_id)` — **never** read `timeline.json` directly; `timeline_path` (from
    `get_video`) is container-absolute and unreadable from the agent sandbox or the host. Returns
-   `total_frames`, `fps`, and `segments` (empty for pre-segment videos — see the legacy fallback
-   below, which needs `get_timeline(video_id, include_words=True)` instead)
+   `total_frames`, `fps`, `first_frame`, and `segments` with each segment's `beat` and `role`
+   (empty for pre-segment videos — see the legacy fallback below, which needs
+   `get_timeline(video_id, include_words=True)` instead). The roles are what the picture owes each
+   segment: see **The Opening and the Beats** below
 3. Call `list_scene_files(source="all")` — see **Reusing Existing Scenes** below before planning
    layout. Pass `video_id=<a prior video>` to browse that video's own generated scenes; with no
    `video_id` filter, the generated half of the list is capped at the 50 most recently modified.
@@ -708,6 +710,31 @@ How to direct it:
 - **Be consistent with the scenes.** Do not leave an empty spot for it that no one sees, and do not tell the
   scenes' content about it (no "the mascot points at this").
 
+## The Opening and the Beats
+
+The script's formula decides which moments carry the video, and `get_timeline` hands them to you.
+Every segment it returns has a `beat` (the formula beat the script gave it, `""` when none) and a
+`role`, and the result has `first_frame`, the formula's line on what the first frame shows (`""`
+when the video has no formula on record). `get_video`'s `style.picture` says how this style does
+each of the four things below; follow it where it is more specific than this section.
+
+| `role` | What the picture owes it |
+|---|---|
+| `opening` (the first segment) | **The first frame.** Frame 0 shows what the first sentence names, already moving: an image already pushing in, a diagram already building, a figure mid-action, following `first_frame` when it is set. Never a title card, a black or empty frame, an abstract gradient, or a frame that fills in from nothing. One subject owns a large share of the frame, and something happens to it before about 3 seconds. |
+| `turn`, `reopen` | **A visible change on its first word.** The segment starts a new scene whose picture is visibly different from the scene before (a new image, the diagram's next state, a new place). Never merge it into the scene before it under reconciliation rule 1 below, even when it is short. |
+| `payoff` | **The video's strongest picture.** The hero image, the largest element, the diagram fully built. Spend the image you care most about here. |
+| `""` | Nothing beyond its own `visual` brief. |
+
+**The ending holds on the payoff picture.** No closing card, logo, recap or sign-off scene after it:
+a segment after the payoff keeps the payoff's picture or its scene's motion, unless
+`style.picture.ending` says the style ends another way. A video whose segments carry no `beat`, or
+whose formula is not on record, has only the `opening` role: the first-frame rule still applies.
+
+`validate_job` checks the parts of this it can see from data and returns them in `warnings`. A
+first frame with nothing but text or a backdrop on it, or with nothing moving by frame 6, is
+measured in a browser. A turn, re-opening or payoff with no scene starting within about 0.4 s of its
+first word is read from the config. Treat them as you treat the text-layout warnings.
+
 ## Scene Frequency
 
 **There is no target scene count and no target scene length.** Cut when the visual idea changes,
@@ -889,7 +916,9 @@ come through as exactly one scene each. Deviate from it only in these cases:
 
 1. **A very short segment.** First try merging it with the adjacent segment (before or
    after — whichever is the better narrative fit) into one scene, but *only* if the two segments'
-   `visual` briefs describe content that can genuinely share a single continuous scene (e.g. one
+   `visual` briefs describe content that can genuinely share a single continuous scene, and never
+   when the merge would put a `turn`, `reopen` or `payoff` segment's first word inside a running
+   scene (see **The Opening and the Beats**) (e.g. one
    extends or continues the other's broll/animation idea). A merged scene's span is the union of
    the two segments' frame ranges — its far boundary (the side facing the segment *not* merged
    in) is still a segment boundary, so this never violates rule 3 below. If the two `visual`
@@ -1231,6 +1260,11 @@ Before handing back to the operator:
 - [ ] `totalFrames` matches `timeline.totalFrames` exactly
 - [ ] No scene exceeds `totalFrames`
 - [ ] Scenes cover frame 0 → `totalFrames` with no gaps
+- [ ] Frame 0 shows what the first sentence names, already moving; no title card, no empty or
+      black frame, no abstract gradient (**The Opening and the Beats**)
+- [ ] Every `turn` and `reopen` segment starts a new scene with a visibly different picture; the
+      `payoff` segment has the video's strongest picture; nothing comes after it but its own
+      picture, unless `style.picture.ending` says otherwise
 - [ ] Every newly-authored or copied `src` value written via `write_scene_file(video_id, ...)` —
       confirm with `list_scene_files(source="generated", video_id=video_id)`; every `installed/`
       reuse has `"source": "installed"` set

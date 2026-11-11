@@ -50,7 +50,8 @@ event is wrong. Fix every problem it lists, then write again.
 - **Sections** start where a shot starts, each at least 2 seconds long, at most 12. A list video
   (`"list": true`) has at least two sections; every section after the first opens with the badge
   carousel, and that shot's events start 30 frames after the section does.
-- **Poses** land on a word (within 2 frames of its start), and one bean's poses are at least 8 frames
+- **Poses** land on a word (within 2 frames of its start), or at frame 0, which opens the video
+  before the first word. One bean's poses are at least 8 frames
   apart. `at` goes only on a `point`, `present` or `lean` pose: no other pose reaches for anything.
 - **A shot holds** at most 6 props and labels together (the beans do not count), at most 24 events,
   listed in frame order. An event ends at least 6 frames before the next cut.
@@ -172,6 +173,16 @@ caption look; any other key you set overrides it, so leave them alone.
 If `get_video` has a `mascot`, add its cue track as the mascot skill describes. Keep the mascot small
 and to one side, away from the bean and the props, and bring it on only for a few reactions: two
 characters reacting at once is busy.
+
+## The opening and the beats
+
+`get_timeline` gives each segment a `beat` and a `role`, and the result a `first_frame` (the formula's line on what the first frame shows, `""` when the video has no formula). The first segment's role is `opening`. A `turn` or `reopen` segment needs a visible change on its first word, the `payoff` segment the video's strongest picture, and a segment with role `""` only its own brief. `get_video`'s `style.picture` says how this style does each; in short:
+
+- Opening: the bean is posed and the first sentence's subject is a `prop` from frame 0. An event at frame 0 may come before the first word. Never an empty field or the title alone.
+- Turn or re-opening: a new shot on its first word, or a pose, prop, act, impact or strike on that word.
+- Payoff: the shot with the answer, the biggest prop and the bean's strongest reaction with an `impact`. Nothing after it but that shot.
+
+`validate_job` returns warnings (advisory, never blocking) when the first shot has no pose or prop by frame 3 or when a `turn`, `reopen` or `payoff` segment has no shot, section, pose, prop, act, impact, strike or arrow (a label or mark alone does not count) starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
 
 ## Step 5 — write, validate, submit
 

@@ -192,6 +192,16 @@ overrides them, so leave them alone.
 If `get_video` has a `mascot`, add its cue track as the mascot skill describes. Keep it in the bottom
 of the frame, below the captions and off the stage, and bring it on only for a few reactions.
 
+## The opening and the beats
+
+`get_timeline` gives each segment a `beat` and a `role`, and the result a `first_frame` (the formula's line on what the first frame shows, `""` when the video has no formula). The first segment's role is `opening`. A `turn` or `reopen` segment needs a visible change on its first word, the `payoff` segment the video's strongest picture, and a segment with role `""` only its own brief. `get_video`'s `style.picture` says how this style does each; in short:
+
+- Opening: beat 1's first move is at frame 0: the string or number the first sentence names, already typing, resolving or travelling. Never an empty screen waiting for its first line.
+- Turn or re-opening: a new beat on its first word (a `collapse` cut where the subject changes), or a push, bracket, wall change or new string on that word.
+- Payoff: the answer as the largest thing on stage (`size: "xl"`) with a push in and the one glow. No sign-off line and no `clear` after it.
+
+`validate_job` returns warnings (advisory, never blocking) when beat 1 has nothing on stage by frame 3 or when a `turn`, `reopen` or `payoff` segment has no beat or move starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
+
 ## Step 5 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` and `fps` from the timeline, `"canvas":

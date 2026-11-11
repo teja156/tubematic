@@ -194,6 +194,16 @@ the accent colour.
 Leave `subtitles` out of the config. The style fills in its own caption look; any key you set
 overrides it.
 
+## The opening and the beats
+
+`get_timeline` gives each segment a `beat` and a `role`, and the result a `first_frame` (the formula's line on what the first frame shows, `""` when the video has no formula). The first segment's role is `opening`. A `turn` or `reopen` segment needs a visible change on its first word, the `payoff` segment the video's strongest picture, and a segment with role `""` only its own brief. `get_video`'s `style.picture` says how this style does each; in short:
+
+- Opening: the first beat is a shot of the place you are in, pushing in from frame 0 (the style already requires it).
+- Turn or re-opening: a cut to a new shot on its first word, or a `punch` on the detail.
+- Payoff: the consequence, the `term` card's stamp or the shot where it lands. The choice card after it is this style's ending.
+
+`validate_job` returns a warning (advisory, never blocking) when a `turn`, `reopen` or `payoff` segment has no beat, punch, bar or stamp starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
+
 ## Step 6 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` from the timeline, `"canvas": "dark"` (or
