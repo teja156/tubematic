@@ -634,6 +634,29 @@ Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md
 Trap: a skill that teaches a value the validator refuses teaches the agent to be refused on every
 video. Change a limit in `system_flow.py` and the skill text together.
 
+### `test_style_routing_skill.py`
+
+Covers the `tubematic-style-routing` skill
+([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
+
+- The skill is loadable by an unattended run and names no style id or label.
+- It reads every field `routing_candidates` gives a candidate, names the real fallback, and calls
+  `choose_visual_style` with its real arguments and reason limit.
+- The operator runs it before the script-writing skill at `TOPIC_APPROVED`, the script-writing skill
+  follows `style.script`, and the uninstaller and the skills README know it.
+
+Trap: a skill that named styles would prefer the ones it knew about, and a new pack would need an
+edit to be picked. The candidates are data for that reason.
+
+### `test_eval_style_routing.py`
+
+Covers the plumbing of `scripts/eval_style_routing.py` ([Style routing](style-routing.md)). No model
+is called.
+
+- The prompt carries the video as `get_video` returns it at `TOPIC_APPROVED`, with every candidate.
+- The answer is the last JSON object in the reply that names a style.
+- A pick is scored best, acceptable or wrong, and the report counts each and lists the wrong ones.
+
 ### `test_tubematic_remote_renderer.py`
 
 Covers `scripts/tubematic_remote_renderer.py`, the stdlib-only script that installs, upgrades,

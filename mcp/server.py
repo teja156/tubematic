@@ -1198,10 +1198,8 @@ def get_video(video_id: str) -> dict:
     check first.
 
     cartoon_3d_available is true while at least one renderer's GPU test says
-    its GPU is working. Cartoon 3D renders on the GPU only, so under "auto" read it
-    here before resolving the renderer to cartoon_3d; when it is false, author
-    the video with the scene components and say in the handback that a world
-    was wanted but the install cannot render one.
+    its GPU is working. Cartoon 3D renders on the GPU only; Auto reads the
+    same answer from style_routing.candidates when it picks a style.
 
     mascot: the mascot this video has, {id, name, version}, or null for none.
     version is the version the video is pinned to once its scene-config has
@@ -1212,10 +1210,22 @@ def get_video(video_id: str) -> dict:
     by a human at the topic, never by the video's agent.
 
     style: what this video's visual_style means for the work, from its style
-    pack: {id, label, renderer, canvas, authoring_skill, allows}. At
-    VOICE_READY invoke the skill named by authoring_skill. Under "auto" that is
-    tubematic-scene-config, which settles the renderer and the canvas; renderer
-    and canvas are null there until it does.
+    pack: {id, label, renderer, canvas, authoring_skill, allows, script}. At
+    VOICE_READY invoke the skill named by authoring_skill. Under "auto" (mixed
+    scenes) that is tubematic-scene-config, which settles the canvas; canvas is
+    null there until it does. script is the style's own guidance for writing
+    the narration and each segment's visual brief ("" when it has none).
+
+    style_routing: Auto's style decision, made at TOPIC_APPROVED before the
+    script by the tubematic-style-routing skill: {decided, pick, runner_up,
+    reason, candidates, domain}. decided is true once Auto has picked (pick
+    is a style id, or "scenes" for the mixed scene system) or when a person
+    chose the style, so there is nothing for Auto to do. candidates lists
+    every style Auto may pick, from the style packs, plus "scenes": each with
+    its routing data (best_for, avoid_for, signals, moods, images) and whether
+    this install and this video can have it now (available,
+    unavailable_reason). domain is {name, description} of the video's domain.
+    Record a decision with choose_visual_style.
     """
     _init_db()
     with _conn() as con:
@@ -1236,7 +1246,30 @@ def get_video(video_id: str) -> dict:
     video["cartoon_3d_available"] = _gpu_probe_status() == "working"
     video["mascots_available"] = _gpu_probe_status() == "working"
     video["style"] = tvs.agent_view(video.get("visual_style") or "")
+    video["style_routing"] = _style_routing(video)
     return video
+
+
+def _style_routing(video: dict) -> dict:
+    """get_video's style_routing: Auto's decision so far and its candidates."""
+    chosen = (video.get("visual_style") or "").strip() or DEFAULT_VISUAL_STYLE
+    pick = video.get("style_pick") or ""
+    domain = {"name": "", "description": ""}
+    if video.get("project_id"):
+        with _conn() as con:
+            row = con.execute("SELECT name, description FROM projects WHERE id = ?",
+                              (video["project_id"],)).fetchone()
+        if row:
+            domain = {"name": row["name"] or "", "description": row["description"] or ""}
+    return {
+        "decided": bool(pick) or chosen != DEFAULT_VISUAL_STYLE,
+        "pick": pick,
+        "runner_up": video.get("style_runner_up") or "",
+        "reason": video.get("style_reason") or "",
+        "candidates": tvs.routing_candidates(bool(_openai_key()), _gpu_probe_status(),
+                                             bool(video.get("mascot_id"))),
+        "domain": domain,
+    }
 
 
 def _video_mascot(con, video: dict) -> dict | None:
@@ -1684,6 +1717,11 @@ def set_video_status(
     SCRIPT_READY, VOICING, VOICE_READY, RENDER_QUEUED, RENDERING, VIDEO_READY,
     REVISION_REQUESTED, VIDEO_APPROVED, SCHEDULED, PUBLISHING, PUBLISHED, FAILED.
 
+    Moving a video back to TOPIC_PROPOSED (a topic revision) gives a style Auto
+    picked back to Auto: visual_style returns to "auto" and the pick is
+    cleared, so the next approval routes the revised topic again. A style a
+    person chose is kept.
+
     An archived video (deleted by a human or by retention — its files are
     gone) cannot be moved: returns {"error": "video_archived"}. Stop working
     on that video.
@@ -1700,6 +1738,9 @@ def set_video_status(
         return {"error": "human_only_status",
                 "detail": f"{new_status} is set only by a human on the dashboard. "
                           f"{HUMAN_ONLY_STATUSES[new_status]}"}
+    # Back to the topic (a topic revision): an Auto style pick goes back to
+    # Auto with it. Keep in sync: renderer/api/pipeline.py's patch_video.
+    reset_sql = (", " + tvs.AUTO_PICK_RESET_SET) if new_status == "TOPIC_PROPOSED" else ""
     _init_db()
     with _conn() as con:
         row = con.execute(
@@ -1736,7 +1777,7 @@ def set_video_status(
         # closes the TOCTOU window a double-invocation could otherwise race.
         if only_if_current_status is not None:
             cur = con.execute(
-                "UPDATE videos SET status = ?, updated_at = ? WHERE id = ? AND status = ?"
+                "UPDATE videos SET status = ?, updated_at = ?" + reset_sql + " WHERE id = ? AND status = ?"
                 " AND archived_at IS NULL" + mascot_sql,
                 (new_status, _now(), video_id, only_if_current_status),
             )
@@ -1758,7 +1799,8 @@ def set_video_status(
                 return {"error": "status_mismatch", "current_status": current, "expected": only_if_current_status}
         else:
             cur = con.execute(
-                "UPDATE videos SET status = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL" + mascot_sql,
+                "UPDATE videos SET status = ?, updated_at = ?" + reset_sql
+                + " WHERE id = ? AND archived_at IS NULL" + mascot_sql,
                 (new_status, _now(), video_id),
             )
             if cur.rowcount == 0:
@@ -2256,7 +2298,9 @@ def update_video(
     only from a slash command that creates a video, before flipping it to
     TOPIC_APPROVED. "illustrated" is refused while no OpenAI key is stored
     (get_pipeline_status's illustrated_available is false) — offer the other
-    styles instead.
+    styles instead. Under "auto", Auto picks the style itself at
+    TOPIC_APPROVED with choose_visual_style, never with this field. A changed
+    value here clears Auto's earlier pick.
 
     resolved_visual_style: which canvas you settled on — "dark" or "light".
     Write it once, when you choose the canvas while authoring the scene config,
@@ -2265,14 +2309,16 @@ def update_video(
     that is "auto" and "illustrated"; "motion_graphics", "stick",
     "system_flow" and "cartoon_3d" fix theirs.
 
-    resolved_renderer: under "auto", which renderer you settled on — "dom"
-    (the scene components) or "cartoon_3d" (one Cartoon 3D world, written as
-    code per video by the tubematic-cartoon3d skill).
-    Write it BEFORE authoring any scene and never again: a revision round
-    renders with the renderer the video already uses, and flipping it would
-    discard every scene. "cartoon_3d" is refused while no renderer's GPU is
-    working (get_video's cartoon_3d_available), with the reason. Not
-    writable when visual_style already names the renderer.
+    resolved_renderer: under "auto", which renderer the video uses — "dom"
+    (the scene components). Auto reaches Cartoon 3D by picking the cartoon_3d
+    style with choose_visual_style, so a video still at "auto" at
+    VOICE_READY is "dom". "cartoon_3d" remains valid only for a video that
+    recorded it before Auto picked styles. Write it BEFORE authoring any scene
+    and never again: a revision round renders with the renderer the video
+    already uses, and flipping it would discard every scene. "cartoon_3d" is
+    refused while no renderer's GPU is working (get_video's
+    cartoon_3d_available), with the reason. Not writable when visual_style
+    already names the renderer.
 
     agent_id: which installed agent does this video's next piece of work — the
     id of a live agent from get_pipeline_status's `agents`. A video is dealt
@@ -2544,6 +2590,15 @@ def update_video(
     # reopens at every human checkpoint. /tubematic-submit-new-job sets both
     # between create_video (lands at TOPIC_PROPOSED) and its own flip to
     # TOPIC_APPROVED.
+    # A style write clears the recorded renderer and canvas when it changes
+    # the style, in the same UPDATE, so a value for them in the same call would
+    # be dropped without a word. They are recorded at scene time, long after
+    # the style is settled, so the two never belong in one call.
+    both = [k for k in ("resolved_renderer", "resolved_visual_style") if k in fields]
+    if "visual_style" in fields and both:
+        return {"error": f"visual_style and {', '.join(both)} cannot be written in one call: the "
+                         "style is set at the topic, and the renderer and canvas are recorded "
+                         "later, when the scenes are authored"}
     topic_locked = [k for k in TOPIC_ONLY_FIELDS if k in fields]
     agent_locked = [k for k in AGENT_CHECKPOINT_FIELDS if k in fields]
     set_sql = [f"{k} = ?" for k in fields]
@@ -2552,6 +2607,12 @@ def update_video(
     # none) starts unpinned. Keep in sync: renderer/api/pipeline.py's patch_video.
     if "mascot_id" in fields and fields["mascot_id"] != stored_mascot_id:
         set_sql.append("mascot_version = 0")
+    # A style chosen here replaces Auto's pick, so its record goes; the same
+    # value again keeps it. Keep in sync: renderer/api/pipeline.py's patch_video.
+    if "visual_style" in fields:
+        clear_sql, clear_params = tvs.style_change_clears_pick(fields["visual_style"])
+        set_sql.append(clear_sql)
+        set_params += clear_params
     where_sql, where_params = "", []
     checked_status = None
     if topic_locked or agent_locked:
@@ -2647,10 +2708,14 @@ def update_video(
     if "resolved_renderer" in fields:
         with _conn() as con:
             row = con.execute(
-                "SELECT visual_style, resolved_renderer, mascot_id FROM videos WHERE id = ?",
+                "SELECT visual_style, resolved_renderer, mascot_id, style_pick FROM videos WHERE id = ?",
                 (video_id,)).fetchone()
         if not row:
             return {"error": f"Video not found: {video_id}"}
+        if fields["resolved_renderer"] == "cartoon_3d" and (row["style_pick"] or "") == tvs.SCENES:
+            return {"error": "Auto picked mixed scenes for this video before its script, so it renders "
+                             "with the scene components ('dom'). A 3D world is the cartoon_3d style, "
+                             "which Auto picks with choose_visual_style before the script."}
         if fields["resolved_renderer"] == "cartoon_3d" and (row["mascot_id"] or "") != "":
             return {"error": tmascots.MASCOT_NOT_ON_CARTOON_3D}
         if (row["visual_style"] or DEFAULT_VISUAL_STYLE) != "auto":
@@ -2678,10 +2743,19 @@ def update_video(
     # mascot on a Cartoon 3D video. Keep in sync: pipeline.py's patch_video.
     pair = [k for k in ("visual_style", "resolved_renderer", "mascot_id") if k in fields]
     if pair:
-        exprs = [("?" if k in fields else f"COALESCE(videos.{k}, '')")
-                 for k in ("visual_style", "resolved_renderer", "mascot_id")]
+        exprs, expr_params = [], []
+        for k in ("visual_style", "resolved_renderer", "mascot_id"):
+            if k in fields:
+                exprs.append("?")
+                expr_params.append(fields[k])
+            elif k == "resolved_renderer" and "visual_style" in fields:
+                # A changed style clears the renderer in this same UPDATE.
+                exprs.append(tvs.renderer_after_style_write_sql())
+                expr_params.append(fields["visual_style"])
+            else:
+                exprs.append(f"COALESCE(videos.{k}, '')")
         where_sql += " AND NOT " + tmascots.cartoon_mascot_clash_sql(*exprs)
-        where_params += [fields[k] for k in ("visual_style", "resolved_renderer", "mascot_id") if k in fields]
+        where_params += expr_params
     with _conn() as con:
         cur = con.execute(
             f"UPDATE videos SET {', '.join(set_sql)} WHERE id = ? AND archived_at IS NULL"
@@ -2705,6 +2779,104 @@ def update_video(
                                  f"the result would put a mascot on a Cartoon 3D video. "
                                  f"{tmascots.MASCOT_NOT_ON_CARTOON_3D} Check get_video"}
     return {"video_id": video_id, "updated_fields": updated}
+
+
+def _style_choice_row(video_id: str):
+    """The row choose_visual_style checks before it writes."""
+    with _conn() as con:
+        return con.execute("SELECT status, visual_style, style_pick, mascot_id, archived_at "
+                           "FROM videos WHERE id = ?", (video_id,)).fetchone()
+
+
+@mcp.tool
+def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str = "") -> dict:
+    """Record Auto's style decision for a video, before its script is written.
+
+    Call this from the tubematic-style-routing skill, once, at TOPIC_APPROVED,
+    for a video whose visual_style is "auto" and whose
+    get_video().style_routing.decided is false. It is the only way the style
+    changes after the topic checkpoint, and it can happen once.
+
+    style: the id of one of get_video().style_routing.candidates. A style
+    pack's id makes that the video's visual_style, so the script is written
+    for it and its own skill authors it at VOICE_READY. "scenes" keeps the
+    mixed scene system: visual_style stays "auto" and the scene-config skill
+    settles the canvas at VOICE_READY.
+
+    reason: one sentence, at most 300 characters, saying why this style fits
+    this topic. A person reads it on the dashboard beside the choice.
+
+    runner_up: the candidate that came second, or "" when nothing else fit.
+    The dashboard offers it as a one-click switch at SCRIPT_READY.
+
+    Both style and runner_up must be available (candidates[].available); an
+    unavailable one is refused with the reason (no OpenAI key, no working GPU,
+    a mascot on a 3D-world style). Refused unless the video is at
+    TOPIC_APPROVED, its visual_style is "auto" and Auto has not decided yet.
+    Returns the video's new visual_style and its style ({authoring_skill,
+    script, ...}, as get_video gives it).
+    """
+    style = (style or "").strip()
+    runner_up = (runner_up or "").strip()
+    reason = " ".join((reason or "").split())
+    choices = tvs.ROUTE_CHOICES
+    if style not in choices:
+        return {"error": f"Invalid style {style!r}. Must be one of: {', '.join(choices)}"}
+    if runner_up and runner_up not in choices:
+        return {"error": f"Invalid runner_up {runner_up!r}. Must be one of: {', '.join(choices)}, "
+                         "or \"\" for none"}
+    if runner_up == style:
+        return {"error": "runner_up must be a different style from style, or \"\" for none"}
+    if not reason:
+        return {"error": "reason is required: one sentence on why this style fits this topic"}
+    if len(reason) > tvs.STYLE_REASON_MAX_CHARS:
+        return {"error": f"reason is {len(reason)} characters; the limit is "
+                         f"{tvs.STYLE_REASON_MAX_CHARS} (one sentence)"}
+    _init_db()
+    row = _style_choice_row(video_id)
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    if row["archived_at"]:
+        return _archived_error(video_id, row["archived_at"])
+    current = (row["visual_style"] or "").strip() or DEFAULT_VISUAL_STYLE
+    if row["style_pick"]:
+        return {"error": f"Auto already picked {row['style_pick']!r} for this video; the choice "
+                         "is made once. Write the script for the video's visual_style."}
+    if current != DEFAULT_VISUAL_STYLE:
+        return {"error": f"This video's visual_style is {current!r}, chosen by a person, so "
+                         "there is nothing for Auto to decide. Write the script for it."}
+    if row["status"] != "TOPIC_APPROVED":
+        return {"error": f"Auto picks a style at TOPIC_APPROVED, before the script; this video "
+                         f"is at {row['status']}"}
+    new_style = DEFAULT_VISUAL_STYLE if style == tvs.SCENES else style
+    with _conn() as con:
+        # The write lock first, then what the install can make: a key removed
+        # in Settings or a GPU probe result cannot commit between this check
+        # and the write, because its writer waits for this transaction. The
+        # row checks above are repeated in the UPDATE's WHERE, so a status,
+        # style or mascot written since the read finds nothing to overwrite.
+        con.execute("BEGIN IMMEDIATE")
+        candidates = {c["id"]: c for c in tvs.routing_candidates(
+            bool(_openai_key()), _gpu_probe_status(), bool(row["mascot_id"]))}
+        for role, sid in (("style", style), ("runner_up", runner_up)):
+            if sid and not candidates[sid]["available"]:
+                return {"error": f"{role} {sid!r} ({candidates[sid]['label']}) is not available "
+                                 f"for this video: {candidates[sid]['unavailable_reason']}. Pick "
+                                 "another candidate and say in the reason which style you wanted "
+                                 "and why it was unavailable."}
+        cur = con.execute(
+            "UPDATE videos SET visual_style = ?, style_pick = ?, style_runner_up = ?, "
+            "style_reason = ?, " + tvs.NEW_STYLE_CLEARS_SET + ", updated_at = ? WHERE id = ? "
+            "AND archived_at IS NULL "
+            "AND status = 'TOPIC_APPROVED' AND COALESCE(NULLIF(visual_style, ''), 'auto') = 'auto' "
+            "AND COALESCE(style_pick, '') = '' AND NOT "
+            + tmascots.cartoon_mascot_clash_sql(style="?", renderer="''"),
+            (new_style, style, runner_up, reason, _now(), video_id, new_style))
+        if cur.rowcount == 0:
+            return {"error": "The video changed while the call was in flight (its status, style or "
+                             "mascot) — check get_video before deciding again"}
+    return {"video_id": video_id, "visual_style": new_style, "style_pick": style,
+            "style_runner_up": runner_up, "style": tvs.agent_view(new_style)}
 
 
 @mcp.tool
@@ -6138,8 +6310,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     _init_db()
     with _conn() as con:
         row = con.execute(
-            "SELECT id, visual_style, resolved_visual_style, resolved_renderer, mascot_id FROM videos WHERE id = ?",
-            (video_id,)).fetchone()
+            "SELECT id, visual_style, resolved_visual_style, resolved_renderer, mascot_id, style_pick "
+            "FROM videos WHERE id = ?", (video_id,)).fetchone()
     # The path-traversal guard is the shape check at the top (_video_id_error).
     if not row:
         return {"error": f"Video not found: {video_id}"}
@@ -6835,6 +7007,9 @@ def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
         if style == "auto" and resolved and resolved != "cartoon_3d":
             return (f"this video's 'auto' resolved to the {resolved!r} renderer, which is written once; a "
                     f"Cartoon 3D scene cannot follow (a revision renders with the renderer the video already uses)"), ""
+        if unresolved_auto and (row["style_pick"] or ""):
+            return ("Auto picked mixed scenes for this video before its script, so it is authored with "
+                    "the scene components; a Cartoon 3D scene needs the cartoon_3d style"), ""
         if unresolved_auto:
             gpu_err = _cartoon3d_gpu_error("cartoon_3d")
             if gpu_err:

@@ -28,6 +28,12 @@
     "signals": [
       "the same person or creature returns in several beats"
     ],
-    "images_per_video": "one per character pose"
+    "moods": [
+      "warm",
+      "narrative",
+      "characterful"
+    ],
+    "images_per_video": "one per character pose",
+    "images": 10
   }
 }
