@@ -33,7 +33,7 @@ import { fileURLToPath } from "node:url";
 const PREVIEW_TIMEOUT_MS = 200_000; // under mcp/bean_preview.py TIMEOUT_SECS
 const REMOTION_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const GENERATED = path.join(REMOTION_ROOT, "src", "scenes", "generated");
-const SRC = /^[a-z0-9_]{1,64}\/prop-[a-z0-9-]{1,40}$/;
+const SRC = /^[a-z0-9_-]{1,64}\/prop-[a-z0-9-]{1,40}$/; // video ids are UUIDs (hyphens) or vid_ names
 const ID = /^[a-z0-9_]{1,24}$/;
 
 const die = (message, code = 1) => {

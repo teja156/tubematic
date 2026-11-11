@@ -562,3 +562,15 @@ def test_setting_only_emphasis_keeps_the_styles_caption_look(make_video):
     assert written == {**tvs.pack("bean_explainer")["captions"], "emphasis": [16]}
     cfg["subtitles"] = "big"
     assert "error" in server.write_scene_config(vid, cfg)
+
+
+def test_a_uuid_video_id_works_for_custom_props_and_the_preview_script():
+    """Videos filed from the dashboard have UUID ids, with hyphens (found live):
+    the preview script's src pattern must take them, as the validator does."""
+    vid = "ac30a35a-0c9e-4aba-a624-2f69b5736e0f"
+    spec = {**ROCKET_SPEC, "src": f"{vid}/prop-rocket"}
+    errs, _, _ = be.custom_prop_errors([spec], vid, EXTRA["props"], {f"{vid}/prop-rocket": ROCKET})
+    assert errs == []
+    script = (REPO / "renderer/remotion/bean-tools/render-props.mjs").read_text()
+    pattern = re.search(r"^const SRC = /(.*)/;", script, re.M).group(1).replace("\\/", "/")
+    assert re.match(pattern, f"{vid}/prop-rocket") and re.match(pattern, "vid_be1/prop-rocket")
