@@ -1,0 +1,392 @@
+{
+ "totalFrames": 1057,
+ "fps": 30,
+ "audioDurationSeconds": 35.233,
+ "words": [
+  {
+   "word": "Put",
+   "startFrame": 6,
+   "endFrame": 14
+  },
+  {
+   "word": "one",
+   "startFrame": 16,
+   "endFrame": 24
+  },
+  {
+   "word": "hundred",
+   "startFrame": 26,
+   "endFrame": 41
+  },
+  {
+   "word": "dollars",
+   "startFrame": 43,
+   "endFrame": 58
+  },
+  {
+   "word": "in",
+   "startFrame": 60,
+   "endFrame": 67
+  },
+  {
+   "word": "an",
+   "startFrame": 69,
+   "endFrame": 76
+  },
+  {
+   "word": "account",
+   "startFrame": 78,
+   "endFrame": 93
+  },
+  {
+   "word": "that",
+   "startFrame": 95,
+   "endFrame": 105
+  },
+  {
+   "word": "pays",
+   "startFrame": 107,
+   "endFrame": 117
+  },
+  {
+   "word": "ten",
+   "startFrame": 119,
+   "endFrame": 127
+  },
+  {
+   "word": "percent",
+   "startFrame": 129,
+   "endFrame": 144
+  },
+  {
+   "word": "a",
+   "startFrame": 146,
+   "endFrame": 151
+  },
+  {
+   "word": "year.",
+   "startFrame": 153,
+   "endFrame": 163
+  },
+  {
+   "word": "After",
+   "startFrame": 177,
+   "endFrame": 189
+  },
+  {
+   "word": "one",
+   "startFrame": 191,
+   "endFrame": 199
+  },
+  {
+   "word": "year,",
+   "startFrame": 201,
+   "endFrame": 211
+  },
+  {
+   "word": "you",
+   "startFrame": 213,
+   "endFrame": 221
+  },
+  {
+   "word": "have",
+   "startFrame": 223,
+   "endFrame": 233
+  },
+  {
+   "word": "one",
+   "startFrame": 235,
+   "endFrame": 243
+  },
+  {
+   "word": "hundred",
+   "startFrame": 245,
+   "endFrame": 260
+  },
+  {
+   "word": "and",
+   "startFrame": 262,
+   "endFrame": 270
+  },
+  {
+   "word": "ten.",
+   "startFrame": 272,
+   "endFrame": 280
+  },
+  {
+   "word": "The",
+   "startFrame": 294,
+   "endFrame": 302
+  },
+  {
+   "word": "next",
+   "startFrame": 304,
+   "endFrame": 314
+  },
+  {
+   "word": "year,",
+   "startFrame": 316,
+   "endFrame": 326
+  },
+  {
+   "word": "the",
+   "startFrame": 328,
+   "endFrame": 336
+  },
+  {
+   "word": "ten",
+   "startFrame": 338,
+   "endFrame": 346
+  },
+  {
+   "word": "percent",
+   "startFrame": 348,
+   "endFrame": 363
+  },
+  {
+   "word": "is",
+   "startFrame": 365,
+   "endFrame": 372
+  },
+  {
+   "word": "paid",
+   "startFrame": 374,
+   "endFrame": 384
+  },
+  {
+   "word": "on",
+   "startFrame": 386,
+   "endFrame": 393
+  },
+  {
+   "word": "all",
+   "startFrame": 395,
+   "endFrame": 403
+  },
+  {
+   "word": "one",
+   "startFrame": 405,
+   "endFrame": 413
+  },
+  {
+   "word": "hundred",
+   "startFrame": 415,
+   "endFrame": 430
+  },
+  {
+   "word": "and",
+   "startFrame": 432,
+   "endFrame": 440
+  },
+  {
+   "word": "ten,",
+   "startFrame": 442,
+   "endFrame": 450
+  },
+  {
+   "word": "not",
+   "startFrame": 452,
+   "endFrame": 460
+  },
+  {
+   "word": "just",
+   "startFrame": 462,
+   "endFrame": 472
+  },
+  {
+   "word": "your",
+   "startFrame": 474,
+   "endFrame": 484
+  },
+  {
+   "word": "first",
+   "startFrame": 486,
+   "endFrame": 498
+  },
+  {
+   "word": "hundred.",
+   "startFrame": 500,
+   "endFrame": 515
+  },
+  {
+   "word": "So",
+   "startFrame": 529,
+   "endFrame": 536
+  },
+  {
+   "word": "you",
+   "startFrame": 538,
+   "endFrame": 546
+  },
+  {
+   "word": "earn",
+   "startFrame": 548,
+   "endFrame": 558
+  },
+  {
+   "word": "eleven,",
+   "startFrame": 560,
+   "endFrame": 573
+  },
+  {
+   "word": "and",
+   "startFrame": 575,
+   "endFrame": 583
+  },
+  {
+   "word": "the",
+   "startFrame": 585,
+   "endFrame": 593
+  },
+  {
+   "word": "interest",
+   "startFrame": 595,
+   "endFrame": 611
+  },
+  {
+   "word": "itself",
+   "startFrame": 613,
+   "endFrame": 626
+  },
+  {
+   "word": "starts",
+   "startFrame": 628,
+   "endFrame": 641
+  },
+  {
+   "word": "earning.",
+   "startFrame": 643,
+   "endFrame": 658
+  },
+  {
+   "word": "Keep",
+   "startFrame": 672,
+   "endFrame": 682
+  },
+  {
+   "word": "going,",
+   "startFrame": 684,
+   "endFrame": 696
+  },
+  {
+   "word": "and",
+   "startFrame": 698,
+   "endFrame": 706
+  },
+  {
+   "word": "the",
+   "startFrame": 708,
+   "endFrame": 716
+  },
+  {
+   "word": "curve",
+   "startFrame": 718,
+   "endFrame": 730
+  },
+  {
+   "word": "bends",
+   "startFrame": 732,
+   "endFrame": 744
+  },
+  {
+   "word": "upward.",
+   "startFrame": 746,
+   "endFrame": 759
+  },
+  {
+   "word": "At",
+   "startFrame": 773,
+   "endFrame": 780
+  },
+  {
+   "word": "ten",
+   "startFrame": 782,
+   "endFrame": 790
+  },
+  {
+   "word": "percent,",
+   "startFrame": 792,
+   "endFrame": 807
+  },
+  {
+   "word": "your",
+   "startFrame": 809,
+   "endFrame": 819
+  },
+  {
+   "word": "money",
+   "startFrame": 821,
+   "endFrame": 833
+  },
+  {
+   "word": "doubles",
+   "startFrame": 835,
+   "endFrame": 850
+  },
+  {
+   "word": "about",
+   "startFrame": 852,
+   "endFrame": 864
+  },
+  {
+   "word": "every",
+   "startFrame": 866,
+   "endFrame": 878
+  },
+  {
+   "word": "seven",
+   "startFrame": 880,
+   "endFrame": 892
+  },
+  {
+   "word": "years.",
+   "startFrame": 894,
+   "endFrame": 906
+  },
+  {
+   "word": "That",
+   "startFrame": 920,
+   "endFrame": 930
+  },
+  {
+   "word": "is",
+   "startFrame": 932,
+   "endFrame": 939
+  },
+  {
+   "word": "compound",
+   "startFrame": 941,
+   "endFrame": 957
+  },
+  {
+   "word": "interest:",
+   "startFrame": 959,
+   "endFrame": 975
+  },
+  {
+   "word": "growth",
+   "startFrame": 977,
+   "endFrame": 990
+  },
+  {
+   "word": "on",
+   "startFrame": 992,
+   "endFrame": 999
+  },
+  {
+   "word": "top",
+   "startFrame": 1001,
+   "endFrame": 1009
+  },
+  {
+   "word": "of",
+   "startFrame": 1011,
+   "endFrame": 1018
+  },
+  {
+   "word": "growth.",
+   "startFrame": 1020,
+   "endFrame": 1033
+  }
+ ]
+}

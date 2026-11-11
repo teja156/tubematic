@@ -306,6 +306,8 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - A Bean Explainer video has the one `BeanExplainer` scene and its sections and shots pass the Bean
   Explainer checks; no other video uses `BeanExplainer`
   ([Scene Authoring](10-scene-authoring.md#bean-explainer)).
+- A Whiteboard video has the one `Whiteboard` scene and its board passes the Whiteboard checks; no
+  other video uses `Whiteboard` ([Scene Authoring](10-scene-authoring.md#whiteboard)).
 - A Terminal Doc video has the one `TerminalDoc` scene and its beats and moves pass the Terminal Doc
   checks; no other video uses `TerminalDoc` ([Scene Authoring](10-scene-authoring.md#terminal-doc)).
 
@@ -313,9 +315,9 @@ The tool refuses the write while another session holds the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
 is queued or rendering (`status_mismatch`).
 
-`canvas` is the only default the tool writes into most files. A System Flow config with no
-`subtitles` also gets its style pack's caption settings, because its captions are part of the style's
-look. A Bean Explainer config gets them under whatever `subtitles` keys it sets, so a config that
+`canvas` is the only default the tool writes into most files. A System Flow or Whiteboard config
+with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
+style's look. A Bean Explainer config gets them under whatever `subtitles` keys it sets, so a config that
 sets only `emphasis` keeps the look. A Terminal Doc config gets them the same way, with its skin's
 colours and font over the pack's. The
 components apply the other defaults at render time, so a changed default reaches every video whose
@@ -366,7 +368,8 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`SystemFlow`, `BeanExplainer` and `TerminalDoc` are referenced the same way, by videos of their own style only. The other
+`SystemFlow`, `BeanExplainer`, `Whiteboard` and `TerminalDoc` are referenced the same way, by videos of
+their own style only. The other
 files are wrappers and helpers that a scene imports. The directory's `README.md` is the catalogue the
 agent reads.
 
@@ -459,6 +462,13 @@ scene imports them under a `delayRender` handle, and one that fails to load fail
 `BeanPropPreview` composition, from a bundle entry it writes per call into `bean-tools/.tmp/`
 (ignored by git) that imports only that video's prop files. The contract and the reason the bean is drawn as a cached bitmap
 are in [Bean Explainer](10-scene-authoring.md#bean-explainer).
+### `Whiteboard`
+
+`Whiteboard` draws a whole Whiteboard video from `props.whiteboard`: one board, a camera over it, a
+floating marker and the closing pull-back. Its helpers are in `whiteboard/`. It loads its
+handwriting font (Kalam) from `public/fonts/` before the first frame, and the style pack's captions
+use the same font. It draws its ink on a canvas; its contract, its layouts and the measurement that
+put the ink on a canvas are in [Whiteboard](10-scene-authoring.md#whiteboard).
 
 ### `TerminalDoc`
 
@@ -622,6 +632,9 @@ uses [@dagrejs/dagre](https://github.com/dagrejs/dagre) (MIT License).
 `BeanExplainer`'s bean and props are original drawings. Its fonts in `public/fonts/` are Fredoka,
 Patrick Hand and Instrument Sans, each under the SIL Open Font License 1.1, with the license beside
 them.
+
+`Whiteboard`'s font in `public/fonts/` is Kalam, under the SIL Open Font License 1.1, with the license
+beside it (`OFL-Kalam.txt`). Its shipped doodles (`whiteboard/doodles.json`) are original.
 
 `TerminalDoc`'s fonts in `public/fonts/` are IBM Plex Mono and VT323, each under the SIL Open Font
 License 1.1, with the license beside them.

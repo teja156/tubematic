@@ -103,13 +103,14 @@
       "title": "Why compound interest grows so fast",
       "brief": "Working out how 1,000 dollars at 7 percent becomes 7,600 in 30 years, and why the last ten years add more than the first twenty.",
       "expect": [
-        "stick"
+        "whiteboard"
       ],
       "ok": [
+        "stick",
         "scenes"
       ],
-      "future": "Big-Canvas Whiteboard (TMDEV-197)",
-      "note": ""
+      "future": "",
+      "note": "Money arithmetic worked out step by step: the board's numbers and formula are the video."
     },
     {
       "title": "How a phishing email tricks you",
@@ -167,13 +168,38 @@
       "title": "Why the sky is blue",
       "brief": "How sunlight scatters off air molecules, why short blue wavelengths scatter most, and why sunsets turn red.",
       "expect": [
-        "stick"
+        "whiteboard"
       ],
       "ok": [
+        "stick",
         "scenes"
       ],
-      "future": "Big-Canvas Whiteboard (TMDEV-197)",
-      "note": ""
+      "future": "",
+      "note": "A chain of causes that ends in one picture (scattering, then the colour, then the sunset)."
+    },
+    {
+      "title": "Why 0.999 repeating equals 1",
+      "brief": "Three short proofs that 0.999... and 1 are the same number: one third times three, ten x minus x, and the gap that has no size.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "A derivation built up line by line; nothing to photograph and no roles to act out."
+    },
+    {
+      "title": "How a lever lets you lift a car",
+      "brief": "Effort, load and fulcrum: why a long lever arm trades distance for force, worked out with the numbers for lifting one corner of a car.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "One object with forces on it and a formula built up: the board's core case."
     },
     {
       "title": "The five most expensive watches ever sold",

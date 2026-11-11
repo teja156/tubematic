@@ -23,6 +23,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Bean Explainer (experimental)** | A bald cartoon character with a thick outline reacts pose by pose to the narration on a bright colour field, while props and short handwritten labels build up beside it. No images | Nothing |
 | **Terminal Doc** | A dark, mostly empty screen where the text is the picture: monospace capitals that scramble, rearrange and resolve out of noise, and quoted sources with citations. An amber CRT look suits retro computing topics. Captions are typed into a log strip. No images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
+| **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
 
 Motion Graphics, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
 Explainer video still draws a process as a diagram, and still shows a generated image for a real
@@ -51,6 +52,10 @@ background would flash, and a viewer reads that as a broken render.
   passwords and hashes, encodings, famous unsolved codes, what a computer does with text. It has no
   pictures of real things or people, so it does not suit places or life stories.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
+- Choose **Whiteboard** for an idea worked out step by step: a formula built up, money arithmetic
+  such as interest or a percentage, a chain of causes that ends in one picture, two ideas side by
+  side. The script is written like a teacher at a board, one step per sentence, ending on one
+  sentence that sums the idea up.
 
 ### What Auto does
 
@@ -86,7 +91,11 @@ diagrams and times them to the narration, but it does not change the canvas or a
 Explainer video works the same way: the agent picks the background colour, the character's
 accessory and the props, and times every pose to the narration. When the library has nothing for an
 object the video needs, the agent draws that prop itself in the same style and checks the drawing
-before the video renders. A Terminal Doc video too: the agent picks the house look or the amber CRT
+before the video renders. A Whiteboard video is the same again: the agent picks what to write and
+draw for each step from a fixed set of layouts and a library of simple drawings, times it to the
+narration, and draws a simple one of its own, checked before use, when the library has nothing for
+an object such as a bicycle.
+A Terminal Doc video too: the agent picks the house look or the amber CRT
 look and times every word, number and bracket to the narration, and for a transformation no shipped
 animation shows (a letter shift, two strings combined) it writes one and checks it first.
 

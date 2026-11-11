@@ -257,8 +257,8 @@ Covers the visual style over HTTP and the style contract of the AI review prompt
   object `tubematic_core.visual_styles` holds, and `mcp/server.py` imports the same names from it.
   The GPU gate passes only `working` and gives `unknown` its own message.
 - `GET /visual-styles` lists `auto` and every [style pack](../10-scene-authoring.md#style-packs),
-  says why a style is unavailable on the install, and `system_flow` can be chosen with nothing
-  configured.
+  says why a style is unavailable on the install, and `system_flow` and `whiteboard` can be chosen
+  with nothing configured.
 
 Trap: a default inherited from the domain is kept and not rewritten when no OpenAI key is stored.
 The approving `PATCH` refuses it, before any spend. An unknown canvas must produce no contract,
@@ -688,7 +688,8 @@ reach the assertions, so the method, path, headers and query string are checked.
 - `usage` is returned on every path where Gemini answered `200`, including a reply that failed to
   parse, and on no path where it did not.
 - A style pack's own review text replaces the canvas and figure blocks, and with no style text the
-  contract is the same as before for every combination.
+  contract is the same as before for every combination. Whiteboard's text tells the reviewer that
+  writing a moment after its word and small writing in the closing pull-back are intended.
 
 Trap: any finding sends the video back for a revision, so a clause removed from the prompt produces
 a finding on every video it covered, and a round can cost a paid re-voice. An illustrated video gets

@@ -11,9 +11,10 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds three visual styles: System Flow, which turns a video into a diagram that builds itself
-while the narrator explains a system, Bean Explainer, a cartoon character that reacts to the
-narration among everyday props, and Terminal Doc, a dark typographic documentary for codes,
+2.2.0 adds four visual styles: System Flow, which turns a video into a diagram that builds itself
+while the narrator explains a system; Bean Explainer, a cartoon character that reacts to the
+narration among everyday props; Whiteboard, which works an idea out on one big board, written
+and drawn as the narrator speaks; and Terminal Doc, a dark typographic documentary for codes,
 passwords and computing. Auto now picks a video's style before its script is written.
 
 ### Upgrade notes
@@ -24,8 +25,8 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs new skills for System Flow, Bean Explainer, Terminal Doc and Auto's style choice, and a session
-   started before it does not have them.
+   installs new skills for System Flow, Bean Explainer, Whiteboard, Terminal Doc and Auto's style
+   choice, and a session started before it does not have them.
 
 A video on Auto whose script was already written when you upgraded keeps working the way Auto did
 before: it finishes as mixed scenes, on a dark or white canvas the agent chooses. A video on Auto
@@ -42,10 +43,10 @@ sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow, Bean Explainer or Terminal Doc cannot render on 2.1.x. Finish it, or
-  switch it to another style while it waits at its topic, before you go back.
-- A domain whose default style is System Flow, Bean Explainer or Terminal Doc starts its new videos
-  on Auto under 2.1.x.
+- A video set to System Flow, Bean Explainer, Whiteboard or Terminal Doc cannot render on 2.1.x.
+  Finish it, or switch it to another style while it waits at its topic, before you go back.
+- A domain whose default style is System Flow, Bean Explainer, Whiteboard or Terminal Doc starts its
+  new videos on Auto under 2.1.x.
 
 ### Added
 
@@ -65,6 +66,16 @@ If you go back to 2.1.x later:
   items. It suits habits, health, money, behaviour and "every X explained" lists, and needs no image
   generation and no GPU. Choose it for a topic, on the **New Video** page, or as a domain's default;
   Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Whiteboard visual style. The video is one big white board: the camera rests on one part of it
+  at a time, a floating marker writes and draws each step a moment after the narrator says it, in
+  three inks, and the camera glides on to the next part as the narration moves on. The video ends by
+  pulling back to the whole board with each part numbered. The drawings come from a library of
+  simple doodles, and the agent draws its own in the same style when the library has none for an
+  object the video needs. It suits step-by-step reasoning,
+  formulas and money arithmetic built up line by line, and a chain of causes that ends in one
+  picture. It needs no image generation and no GPU. Choose it for a topic, on the **New Video**
+  page, or as a domain's default; Auto can pick it for a topic that fits. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - The Terminal Doc visual style. The text is the picture: sparse monospace capitals on a dark,
   mostly empty screen, where a password flies into a box marked HASH and comes out as a digest,
@@ -90,7 +101,7 @@ If you go back to 2.1.x later:
 
 - Auto picks the style when the agent picks up an approved topic, before it writes the script, and
   can pick any style this install can make: Motion Graphics, Stick Explainer, Illustrated, System
-  Flow, Bean Explainer, Cartoon 3D and every style added later. The script is then written for that style. Before,
+  Flow, Bean Explainer, Whiteboard, Cartoon 3D and every style added later. The script is then written for that style. Before,
   Auto decided after the voice was made, could only choose between a dark canvas, a white canvas and
   Cartoon 3D, and never chose a named style. When no style clearly fits, Auto keeps that mixed
   approach. A video's card and window show the picked style after the word Auto.

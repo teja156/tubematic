@@ -23,6 +23,7 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 | `tubematic-scene-config/` | Writes `scene-config.json` and the scene TSX files for a voiced video |
 | `tubematic-cartoon3d/` | Writes a Cartoon 3D video as TypeScript against the renderer's kit, takes it through the beat gate and submits it |
 | `tubematic-system-flow/` | Writes a System Flow video as data (boards, components, connectors and events timed to the narration) for the one `SystemFlow` scene, validates and submits it |
+| `tubematic-whiteboard/` | Writes a Whiteboard video as data (regions of handwriting, formulas, doodles and marks timed to the narration) for the one `Whiteboard` scene, validates and submits it |
 | `tubematic-bean-explainer/` | Writes a Bean Explainer video as data (sections, shots, the bean's poses and props from the fixed library, timed to the narration) for the one `BeanExplainer` scene, validates and submits it |
 | `tubematic-terminal-doc/` | Writes a Terminal Doc video as data (beats and typographic moves timed to the narration, plus any move written for the video) for the one `TerminalDoc` scene, validates and submits it |
 | `tubematic-mascot-builder/` | Writes or revises one mascot's p5.js drawing code, renders its three model sheets and submits it for human review |

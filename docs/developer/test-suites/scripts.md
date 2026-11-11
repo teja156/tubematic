@@ -687,6 +687,21 @@ is called.
 - The prompt carries the video as `get_video` returns it at `TOPIC_APPROVED`, with every candidate.
 - The answer is the last JSON object in the reply that names a style.
 - A pick is scored best, acceptable or wrong, and the report counts each and lists the wrong ones.
+### `test_whiteboard_skill.py`
+
+Covers the `tubematic-whiteboard` skill ([Whiteboard](../10-scene-authoring.md#whiteboard)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The doodle list, the layouts and their slots, and the limits the skill states are the ones
+  `mcp/whiteboard.py` enforces.
+- The worked example passes the validator against its own timeline, and the uninstaller removes the
+  skill.
+- The skill's `reference/doodles.json` is the shipped library and its names are the pack's list, and
+  the skill teaches every primitive, the preview tool and the custom-doodle limits.
+
+Trap: a skill that teaches a value the validator refuses teaches the agent to be refused on every
+video. Change a limit in `whiteboard.py` and the skill text together.
 
 ### `test_tubematic_remote_renderer.py`
 

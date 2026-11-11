@@ -49,6 +49,7 @@ from tubematic_core import jobfiles as tjobs
 from tubematic_core import mascots as tmascots
 
 import system_flow  # board windows for the whole-video System Flow scene (TMDEV-196)
+import whiteboard  # region windows for the whole-video Whiteboard scene (TMDEV-197)
 import bean_explainer  # shot windows for the whole-video Bean Explainer scene (TMDEV-198)
 import terminal_doc  # beat windows for the whole-video Terminal Doc scene (TMDEV-199)
 
@@ -187,14 +188,21 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
     for index, scene in enumerate(scenes):
         if int(scene.get("durationInFrames", 0)) <= 0:
             continue
-        # A System Flow scene spans the whole video and changes its diagram at
-        # every board, so it is sampled per board, as if each were a scene;
-        # five samples across the whole video would skip most boards.
-        boards = system_flow.board_windows(scene_config) if system_flow.is_system_flow_scene(scene) else []
+        # A System Flow or Whiteboard scene spans the whole video and changes
+        # what is on screen at every board or region, so it is sampled per
+        # board or region, as if each were a scene; five samples across the
+        # whole video would skip most of them. A Whiteboard region holds no
+        # fade-out (the camera glides away), so its window runs to the end.
+        if system_flow.is_system_flow_scene(scene):
+            boards, tail = system_flow.board_windows(scene_config), system_flow.TIMING["boardFade"]
+        elif whiteboard.is_whiteboard_scene(scene):
+            boards, tail = whiteboard.region_windows(scene_config), 0
+        else:
+            boards, tail = [], 0
         if boards:
             for b_start, b_end in boards:
                 first = b_start + ENTRANCE_ALLOWANCE_FRAMES
-                last = b_end - 1 - system_flow.TIMING["boardFade"]
+                last = b_end - 1 - tail
                 if first > last:
                     first = last = b_start + max(0, (b_end - b_start) // 2)
                 span = last - first

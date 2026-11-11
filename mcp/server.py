@@ -94,6 +94,8 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
 # that vqa/stage_script.py uses.
 import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
 import system_flow  # the System Flow checks (TMDEV-196); a sibling module like cartoon
+import whiteboard  # the Whiteboard checks (TMDEV-197); a sibling module like system_flow
+import doodle_preview  # draws a Whiteboard video's own doodles for the agent to look at (TMDEV-197)
 import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
@@ -2327,6 +2329,7 @@ def update_video(
     art, panel-framed imagery), "illustrated" (characters are generated
     illustrated assets; you pick both the drawing style and the canvas from the
     topic), "system_flow" (the whole video is one diagram scene written as
+    data), "whiteboard" (the whole video is one whiteboard scene written as
     data), "bean_explainer" (the whole video is one cartoon-bean scene written
     as data, props from a fixed library), "terminal_doc" (the whole video is
     one typographic scene written as data: strings, numbers and ciphertext on
@@ -2346,7 +2349,7 @@ def update_video(
     and never again: a revision round must render on the canvas the video
     already uses. Writable only when the style does not already fix a canvas —
     that is "auto" and "illustrated"; "motion_graphics", "stick",
-    "system_flow", "bean_explainer", "terminal_doc" and "cartoon_3d" fix theirs.
+    "system_flow", "whiteboard", "bean_explainer", "terminal_doc" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer the video uses — "dom"
     (the scene components). Auto reaches Cartoon 3D by picking the cartoon_3d
@@ -3048,7 +3051,7 @@ def upsert_project(
     default_visual_style: which visual register this domain's *curriculum*
         videos start in — "auto" or any style in get_pipeline_status's
         visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
-        "bean_explainer", "terminal_doc", "cartoon_3d").
+        "bean_explainer", "terminal_doc", "cartoon_3d", "whiteboard").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -6152,6 +6155,56 @@ def read_image(video_id: str, image_name: str, grid: bool = True):
     return [summary_text, MCPImage(data=buf.getvalue(), format="png")]
 
 
+# The shipped Whiteboard doodles: /app/remotion in the image, renderer/remotion
+# in a checkout. The preview draws two of them beside the agent's for scale.
+_WHITEBOARD_LIBRARY_PATHS = (
+    REPO_ROOT / "remotion" / "src" / "scenes" / "installed" / "whiteboard" / "doodles.json",
+    REPO_ROOT / "renderer" / "remotion" / "src" / "scenes" / "installed" / "whiteboard" / "doodles.json",
+)
+_DOODLE_PREVIEW_REFERENCES = ("coin", "car")
+
+
+def _whiteboard_reference_doodles() -> dict:
+    for path in _WHITEBOARD_LIBRARY_PATHS:
+        try:
+            library = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        return {n: library[n] for n in _DOODLE_PREVIEW_REFERENCES if n in library}
+    return {}
+
+
+@mcp.tool
+def preview_doodles(doodles: dict):
+    """Draw Whiteboard doodles you defined yourself, to look at before you use them.
+
+    doodles: {name: strokes}, exactly as you will put it in
+    props.whiteboard.doodles (the tubematic-whiteboard skill's
+    reference/contract.md documents the format; reference/doodles.json is the
+    shipped library in the same format). At most 8.
+
+    Checks each doodle with the per-doodle rules write_scene_config uses (the
+    board-level ones, such as every doodle being drawn by an item, apply only
+    when you write the config) and returns
+    {"error": ...} listing every problem, or {doodles, references} followed by
+    a picture: each doodle in a cell over a faint 0-100 grid, then two shipped
+    doodles in grey for scale. The video draws them with a slight hand wobble
+    the picture leaves out. Look at each one: if it does not read at once as
+    the thing it is meant to be, simplify it or change it and preview again.
+    Needs no video and writes nothing.
+    """
+    library = tvs.pack(whiteboard.STYLE_ID)["extra"]["doodles"]
+    if isinstance(doodles, dict) and not doodles:
+        return {"error": "doodles is empty; give at least one {name: strokes}."}
+    problems = whiteboard.check_doodles(doodles, library)
+    if problems:
+        return {"error": "The doodles have problems: " + " ".join(problems)}
+    references = _whiteboard_reference_doodles()
+    font, _ = _load_grid_font(22 * doodle_preview.SUPERSAMPLE)
+    png = doodle_preview.render_sheet(doodles, references, font)
+    from fastmcp.utilities.types import Image as MCPImage
+    meta = {"doodles": list(doodles), "references": list(references)}
+    return [json.dumps(meta, indent=2), MCPImage(data=png, format="png")]
 def _new_file_mode() -> int:
     """0o666 less this process's umask: the mode open() gives a new file.
 
@@ -6698,6 +6751,22 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         if "subtitles" not in config:
             config["subtitles"] = dict(tvs.pack(system_flow.STYLE_ID)["captions"])
 
+    # ── Whiteboard (TMDEV-197) ───────────────────────────────────────────────
+    # The same shape as System Flow: one installed Whiteboard scene whose props
+    # hold the board as data, checked here so writing that does not fit, an
+    # arrow through other writing or a marker that cannot keep up is refused
+    # before it costs a render.
+    wb_err = whiteboard.check_scene_use(row["visual_style"], scenes)
+    if wb_err:
+        return {"error": wb_err}
+    if (row["visual_style"] or "") == whiteboard.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = whiteboard.check(config, fps, word_starts,
+                                    tvs.pack(whiteboard.STYLE_ID)["extra"]["doodles"])
+        if problems:
+            return {"error": "The Whiteboard board has problems: " + " ".join(problems)}
+        if "subtitles" not in config:
+            config["subtitles"] = dict(tvs.pack(whiteboard.STYLE_ID)["captions"])
     # ── Bean Explainer (TMDEV-198) ───────────────────────────────────────────
     # The same shape as System Flow: one installed BeanExplainer scene whose
     # props hold the sections, shots and events as data, checked here against
