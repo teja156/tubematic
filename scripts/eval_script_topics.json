@@ -1,0 +1,65 @@
+{
+  "_about": "The fixed topic set for scripts/eval_script_writing.py. Twelve topics no install owns, of different shapes, each with the facts a writer needs in its brief. Change it rarely: a comparison across runs is only as good as the set staying the same.",
+  "topics": [
+    {
+      "title": "How a touchscreen knows it is your finger",
+      "brief": "A phone screen reacts to the lightest touch of a fingertip and ignores a plastic pen pressed hard. The glass carries a grid of transparent conductors holding a small electric charge; a finger conducts, so it draws a little of that charge away at one crossing of the grid, and the controller reads which crossing lost charge. That is why ordinary gloves fail, why a drop of water confuses it, and why two fingers can be tracked at once.",
+      "shape": "a thing the viewer owns works in a way that seems impossible"
+    },
+    {
+      "title": "Why 0.1 plus 0.2 is not 0.3 on a computer",
+      "brief": "Type 0.1 + 0.2 into almost any programming language and the answer is 0.30000000000000004. The machine is not wrong: it stores numbers in binary with 64 bits, and one tenth has no finite binary expansion, just as one third has none in decimal. Both inputs are already rounded, and the sum of two rounded values lands on a neighbour of 0.3. Money code uses whole cents or decimal types for this reason.",
+      "shape": "a tool did something that looks wrong"
+    },
+    {
+      "title": "What happens when you tap a contactless card",
+      "brief": "A contactless card has no battery. The reader's radio field at 13.56 megahertz powers a coil in the card from about four centimetres away. The chip wakes, the reader and the card exchange a handful of messages, and the card produces a one-time cryptogram from a key that never leaves the chip. The terminal sends it to the bank, which checks it and answers. The whole exchange with the card takes well under half a second.",
+      "shape": "a process with a natural order"
+    },
+    {
+      "title": "Private browsing does not hide you",
+      "brief": "Many people believe a private or incognito window makes them anonymous. It only stops the browser saving history, cookies and form entries on that device once the window closes. The websites visited, the network operator, an employer or school network and the internet provider still see the traffic, and logging in to an account identifies the visitor at once. Browser makers say so on the window's first screen.",
+      "shape": "a belief most people hold is wrong"
+    },
+    {
+      "title": "Why websites do not store your password",
+      "brief": "A well-built site cannot tell you your password, only reset it. It stores a hash: the output of a one-way function, combined with a random salt unique to each account, so equal passwords do not produce equal records. At login it hashes what you typed and compares. Slow hash functions such as bcrypt and Argon2 are used on purpose, so that someone who steals the table can test only a few guesses per second per account.",
+      "shape": "a design that looks stupid from outside"
+    },
+    {
+      "title": "The typo that took down part of the internet in 2017",
+      "brief": "On 28 February 2017 an engineer at Amazon Web Services, working on a slow billing system for the S3 storage service in the US-East-1 region, ran a routine command to remove a small number of servers. One argument was entered incorrectly and a much larger set was removed, including the servers behind the index of every stored object. Those subsystems had not been fully restarted in years and took hours to come back. S3 in the region was unavailable for about four hours, many websites and apps failed with it, and the company's own status dashboard could not show the outage because it depended on S3.",
+      "shape": "an outage, a loss or a bug with a timeline"
+    },
+    {
+      "title": "The man who turned pudding into a million air miles",
+      "brief": "In 1999 a food company ran a promotion: buy ten of its products and get 500 airline miles, doubled to 1,000 for early entries. David Phillips, a civil engineer in California, found individual pudding cups at 25 cents each, which carried the same barcode value. He bought 12,150 cups for about 3,140 dollars. To peel the labels in time he gave the pudding to food charities, whose volunteers removed the barcodes, and the donation was tax deductible. He received 1,253,000 miles, which also gave him lifetime elite status with an airline.",
+      "shape": "a scam, a fraud, a loophole or an exploit that works as a loop"
+    },
+    {
+      "title": "The 72-second radio signal nobody has explained",
+      "brief": "On 15 August 1977 the Big Ear radio telescope in Ohio recorded a narrow-band signal near 1420 megahertz, the frequency of hydrogen, lasting the full 72 seconds the telescope could observe one point of the sky. It was about thirty times stronger than the background. Days later the astronomer Jerry Ehman circled the printout's code, 6EQUJ5, and wrote 'Wow!' beside it. Natural sources are normally broad-band, and the signal came from a region in Sagittarius with no obvious source. Repeated searches of the same spot have found nothing. A 2017 proposal that comets caused it was disputed by other astronomers.",
+      "shape": "evidence that looked wrong"
+    },
+    {
+      "title": "The night one officer decided not to report a nuclear attack",
+      "brief": "Shortly after midnight on 26 September 1983, the Soviet satellite early-warning system reported one American missile launch, then four more. The duty officer in the bunker near Moscow, a lieutenant colonel named Stanislav Petrov, had minutes to report an attack up the chain of command. He judged it a false alarm: a real first strike would involve hundreds of missiles, not five, the system was new, and ground radar showed nothing. He reported a malfunction. He was right; the satellites had mistaken sunlight reflecting off high clouds for missile exhaust. The incident stayed secret until the 1990s.",
+      "shape": "one person inside one moment"
+    },
+    {
+      "title": "From a kilobyte to a zettabyte",
+      "brief": "Data sizes climb by a factor of a thousand at each step. A kilobyte holds about half a page of plain text. A megabyte holds a short novel. A gigabyte holds roughly an hour of standard-definition video. A terabyte holds about 250,000 photos. A petabyte is about what a large data-centre storage rack array holds, on the order of 500 billion pages of text. An exabyte is a thousand petabytes. A zettabyte is a thousand exabytes, and the world's stored data passed that mark around 2010 and is now counted in the hundreds of zettabytes.",
+      "shape": "something with a natural measure"
+    },
+    {
+      "title": "Five signs an email is phishing",
+      "brief": "Common marks of a phishing email: a sender address whose domain is close to, but not, the real one; a link whose visible text and real destination differ, seen by hovering; pressure to act within hours; a request for a password, a code or a payment that the real organisation would never ask for by email; and an attachment the recipient did not expect. Any one can appear in a real message, and several together are the signal. The safe response is to open the organisation's site or app directly and not use the link.",
+      "shape": "practical advice or a set of checks"
+    },
+    {
+      "title": "The first transatlantic cable worked for three weeks",
+      "brief": "In August 1858 the first telegraph cable across the Atlantic was completed between Ireland and Newfoundland, about 3,200 kilometres. Signals were so weak that a message of 98 words from Queen Victoria to the American president took around 16 hours to send. The project's electrician, Wildman Whitehouse, tried to force stronger signals by applying about 2,000 volts from induction coils. The cable's insulation, already damaged in storage and laying, failed, and the line went dead in early September 1858. A lasting cable was not laid until 1866.",
+      "shape": "the rise or fall of a project, told through one decision"
+    }
+  ]
+}

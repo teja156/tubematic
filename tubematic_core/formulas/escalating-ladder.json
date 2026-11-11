@@ -1,0 +1,82 @@
+{
+  "id": "escalating-ladder",
+  "order": 100,
+  "family": "ladder",
+  "label": "Escalating Ladder",
+  "line": "Name a measure and both ends, then climb: each step is a label, a number and a picture the viewer knows, joined to the last by a comparison, with the strangest step last.",
+  "best_for": [
+    "something with a natural measure: size, cost, speed, time to break, risk, depth",
+    "a 'what would happen if' question with a real constant",
+    "options ranked from worst to best by one test"
+  ],
+  "also_for": [
+    "a list of items, when one measure can order them"
+  ],
+  "avoid_for": [
+    "steps that are only bigger numbers with nothing to compare them to",
+    "a measure so subjective the steps could be reordered"
+  ],
+  "words": [
+    110,
+    420
+  ],
+  "beats": [
+    {
+      "name": "Frame",
+      "from": 0,
+      "to": 12,
+      "job": "The measure and both ends, or the bottom step tied to something in the viewer's world."
+    },
+    {
+      "name": "Steps 1 to 3",
+      "from": 12,
+      "to": 55,
+      "job": "One step at a time: a label, one number, one picture. Each transition compares it with the step before."
+    },
+    {
+      "name": "Leave the frame",
+      "from": 55,
+      "to": 70,
+      "job": "Go past where the viewer thought it ended, or speak their objection. For a what-if: the law that should stop it, then set it aside."
+    },
+    {
+      "name": "Top step",
+      "from": 70,
+      "to": 92,
+      "job": "The thing the title named, or the most extreme case."
+    },
+    {
+      "name": "Twist or stop",
+      "from": 92,
+      "to": 100,
+      "job": "Stop on the number, or redefine what 'top' means."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "frame",
+      "shape": "From [the cheap end] all the way to [the expensive end]. The test: [one thing you can measure]."
+    },
+    {
+      "type": "number",
+      "shape": "In [year], [the old thing] held [a small amount], about [one familiar object]."
+    },
+    {
+      "type": "what_if",
+      "shape": "Here is what would happen if you [premise]."
+    },
+    {
+      "type": "question",
+      "shape": "How many [X] can you [lose] and still [function]? Start with the easy ones."
+    }
+  ],
+  "holds": "Escalation is the engine: every transition is a comparison with the step before. A running score is a progress bar. The strongest re-opening comes where the ladder leaves the frame the viewer expected. A long what-if ladder earns its length only by re-opening the question every few steps.",
+  "ending": "The top step's number, or a twist on what the top is. Stop there.",
+  "pitfalls": [
+    "The surprise spent in the first sentence",
+    "Steps of equal weight",
+    "A list cut into parts",
+    "Numbers with nothing to compare them to"
+  ],
+  "template": "[The measure] runs from [bottom] to [top]. Bottom: [item 1], [number], about [a picture the viewer knows]. Next: [item 2], [comparison], [number], [a bigger picture]. Next: [item 3]. You might think that is the top. [The step beyond]. Top: [the title's item], [its most vivid number]. The real top: [twist]."
+}

@@ -114,6 +114,45 @@ Trap: each answer in the truth table decides what an agent may draw or what the 
 intended, so a changed answer shows up only after a render. Change the table only when a style's
 rules are meant to change.
 
+### `test_formulas.py`
+
+Covers `tubematic_core/formulas.py` and the files in `tubematic_core/formulas/`
+([Formulas](../08-scripting-and-voice.md#formulas)).
+
+- Every formula file loads, in `order`. Each offers at least three openings of different hook types,
+  its word band sits inside the ceiling, and its beats cover the script from 0 to 100 percent.
+- A malformed file is refused with the reason: a wrong id, a missing or extra key, a bad band, a gap
+  between beats, two beats of one name, a beat name longer than a segment's label may be, a `|` or
+  a line break in a text, an unknown hook type, two openings of one type.
+- The decision table has one row per formula, and a rendered reference file carries every part of
+  its formula.
+- The files hold no ticket id and no link, because they are rendered into skill files that ship in
+  the release archive.
+
+Trap: no formula may need a second voice. A video has one voice, so a dialogue formula would
+produce a script that cannot be voiced.
+
+### `test_script_checks.py`
+
+Covers `tubematic_core/script_checks.py`
+([Script warnings](../08-scripting-and-voice.md#script-warnings)).
+
+- A clean script raises nothing. Each check fires on the script it is for: a closing ask, a recap
+  ending, a greeting opener, a first sentence that repeats the title, a staged run-up, no turn in
+  the middle, a length outside the band or past the ceiling, a kept opening that is not the
+  script's opening, a closing shared with the domain's recent scripts.
+- Each check stays quiet on text that only uses its words: "follow" and "subscribe" as ordinary
+  verbs about the subject, an ask in the middle of the script, a callback that explains the title.
+- The band allows `BAND_SLACK` and no more. A script with no formula, or with a formula this version
+  does not know, is not measured against a band.
+- An ellipsis inside a sentence does not end it, a closing quote stays with its sentence, and a
+  title before a name (`Dr.`, `St.`) does not end one. A sentence that ends on a short word ("in
+  C.", "at 3 a.m.") still ends. A long run of dots and a long run of titles are read in linear time.
+- A closing line the preferences asked for is not a repeat: the sentence before it is compared.
+
+Trap: the quiet half matters as much as the firing half. The list is shown to a person and handed to
+the agent, so a check that fires on a sound script teaches both to ignore it.
+
 ### `test_style_routing.py`
 
 Covers the candidate list Auto's style routing reads (`visual_styles.py::routing_candidates`) and
@@ -339,6 +378,17 @@ and `last_render_seconds`.
 
 Trap: no earlier version kept which renderer made a video, so the migration has no backfill and the
 video window hides the rows on every video rendered before the upgrade.
+
+### `test_script_record_migration.py`
+
+Covers `0023`: `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`.
+
+- Existing videos keep their status, script, segments and publish title, and read `''` in the four
+  new columns.
+- A second run changes nothing, and a new video starts with no record.
+
+Trap: `''` means no formula on record, which is true of every script written before the upgrade, so
+the migration has no backfill.
 
 ## Shared rules
 

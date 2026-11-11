@@ -1,0 +1,93 @@
+{
+  "id": "anomaly-file",
+  "order": 80,
+  "family": "story",
+  "label": "Anomaly File",
+  "line": "State the rule, show the one case that breaks it, say why that should be impossible, then investigate: how it worked, the new evidence, the answer with numbers, and one detail that still does not fit.",
+  "best_for": [
+    "evidence that looked wrong: every gauge normal during a failure, a record that should not exist",
+    "a historical or scientific puzzle with a real anomaly"
+  ],
+  "also_for": [
+    "an outage or a bug whose strangest part is what the evidence showed"
+  ],
+  "avoid_for": [
+    "anything without a real anomaly",
+    "a case whose answer is common knowledge"
+  ],
+  "words": [
+    150,
+    450
+  ],
+  "beats": [
+    {
+      "name": "The rule",
+      "from": 0,
+      "to": 8,
+      "job": "What normally happens, and why that makes sense."
+    },
+    {
+      "name": "The break",
+      "from": 8,
+      "to": 16,
+      "job": "The opposite, as one picture."
+    },
+    {
+      "name": "Why impossible",
+      "from": 16,
+      "to": 20,
+      "job": "One short line of stakes: things like this do not just happen."
+    },
+    {
+      "name": "How it worked",
+      "from": 20,
+      "to": 40,
+      "job": "The system in plain numbers."
+    },
+    {
+      "name": "New evidence",
+      "from": 40,
+      "to": 55,
+      "job": "Dated: when it was found, and what was unexpected."
+    },
+    {
+      "name": "Answer",
+      "from": 55,
+      "to": 80,
+      "job": "The hypothesis as a question, then yes, with the mechanism and two numbers."
+    },
+    {
+      "name": "Reopen",
+      "from": 80,
+      "to": 95,
+      "job": "One piece of evidence still does not fit."
+    },
+    {
+      "name": "Close",
+      "from": 95,
+      "to": 100,
+      "job": "The open question, stated plainly, or the current theory in one sentence."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "anomaly",
+      "shape": "When [this kind of thing] happens, [the pattern] almost always follows. In [case], [the opposite picture]."
+    },
+    {
+      "type": "question",
+      "shape": "What happened to [the object]? And what happened to [the people]?"
+    },
+    {
+      "type": "scene",
+      "shape": "In [year], [a person, by role] opened [the thing] and found [what should not have been there]."
+    }
+  ],
+  "holds": "Stacked questions: the first answer lands at about three fifths and a new question opens before the viewer can leave. The dated new evidence re-opens the middle; an answer with numbers that seems to close the case comes before the reopen.",
+  "ending": "An open question, stated plainly, or the current theory in one sentence. It must be a real open question.",
+  "pitfalls": [
+    "Inventing the detail that does not fit: the reopen must be true",
+    "Skipping the rule, so the break means nothing"
+  ],
+  "template": "When [this kind of thing] happens, [the normal finding]. [Why that makes sense]. But in [case], [the opposite, one picture]. [Things like this] do not just [do that]. [How it worked, two numbers]. Then in [year], [someone, by role] found [new fact]. Was it [hypothesis]? Yes: [mechanism, numbers]. But one detail still does not fit: [second anomaly]. [The open question]."
+}

@@ -157,7 +157,8 @@ adjectives, and give a concrete one-line example wherever an example helps.
 - **Explanation Style** — analogy and example habits, why-before-how or the reverse.
 - **CTA Template** — the sign-off shape.
 - **Vocabulary & Signature Phrasing** — characteristic words and transitions to use, and ones to
-  avoid.
+  avoid. Give several of each kind, not one: the script writer uses a phrase from here in some
+  scripts and never the same one in every script.
 - **Anti-patterns** — things absent from or inconsistent with this style.
 
 Nothing else. No segment shapes, no `update_video` calls, no pronunciation or pause markup, no
