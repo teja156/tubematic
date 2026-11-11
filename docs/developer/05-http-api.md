@@ -61,6 +61,7 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `POST` | [`/settings`](#post-settings) | Write a subset of settings |
 | `POST` | [`/voices/<voice_id>/preview`](#post-voicesvoice_idpreview) | Generate or replay a sample |
 | `GET` | [`/visual-styles`](#get-visual-styles) | Every visual style, and whether this install can make it |
+| `GET` | [`/script-formulas`](#get-script-formulas) | Every script formula and hook type, with its label |
 
 ### Research routes
 
@@ -117,6 +118,7 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `POST` | [`/videos/<video_id>/publish/retry`](#post-videosvideo_idpublishretry) | Recover a failed publish |
 | `POST` | [`/videos/<video_id>/schedule/cancel`](#post-videosvideo_idschedulecancel) | Cancel a scheduled post |
 | `GET` | [`/analytics`](#analytics) | Read stored performance figures |
+| `GET` | [`/analytics/watch-time`](#analytics) | Read one account's watch figures by group |
 | `POST` | [`/analytics/refresh`](#analytics) | Poll performance figures now |
 | `GET` | [`/autopilot`](#auto-pilot) | Read the Auto Pilot configuration |
 | `POST` | [`/autopilot`](#auto-pilot) | Replace the Auto Pilot configuration |
@@ -284,6 +286,10 @@ acts on it.
 The full row plus `comments[]` in chronological order. `gemini_feedback` is not clipped.
 `404 {"error": "Video not found"}`.
 
+`script_segments`, `hook_alternatives` and `script_warnings` are returned as parsed JSON on every
+video route. The last two are `[]` for a video with no
+[script record](08-scripting-and-voice.md#what-a-script-records).
+
 Three computed fields describe the voice:
 
 | Field | On | Meaning |
@@ -335,8 +341,8 @@ Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility
   id names the video's job directory.
 - `project_id` names no domain, `title` is not a string, or `voice_id` is not on the roster.
 - `visual_style` is not `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
-- `visual_style` is `illustrated` and no OpenAI key is stored (the settings row or
-  `OPENAI_API_KEY`).
+- `visual_style` is `illustrated` or `under_the_hood` and no OpenAI key is stored (the settings row
+  or `OPENAI_API_KEY`).
 - `visual_style` is `cartoon_3d` and the install-wide GPU `status` is not `working` (see
   [GPU rendering](#gpu-rendering)).
 
@@ -418,7 +424,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 | `409` | The video is archived |
 | `409` | `script_profile_id`, `visual_style` or `mascot_id` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | `agent_id`, `agent_model` or `agent_effort` sent while the video is not at a human checkpoint |
-| `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D video keeps a mascot |
+| `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D or Under the Hood video keeps a mascot |
 | `409` | `{"error": "Status precondition failed", "current", "expected"}` |
 | `409` | `{"error", "voice_conflict": true}`: the voice's model cannot speak the stored script |
 | `409` | A model was written alone and the video's agent changed while the request was in flight |
@@ -433,7 +439,9 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   clipped.
 - `script` must come with both `publish_title` and `publish_description`. Each of those must be a
   non-blank string within its cap (100 and 2000 characters). MCP `update_video` applies the same
-  rule (see [Publishing](14-publishing.md#schema)).
+  rule (see [Publishing](14-publishing.md#schema)). A `script` written here clears the video's
+  `formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, because they describe the
+  script it replaces. Only MCP `update_video` writes them.
 - `voice_id` must be on the roster, or `""` for the install default.
 - `agent_id` must name a live agent. The video's current agent is accepted even when uninstalled.
   A change sets `agent_model` to `""` in the same `UPDATE`, unless the body also sets
@@ -445,9 +453,10 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   `effort`). The levels are the same for every agent.
 - `script_profile_id` must be a `READY` profile that is not archived, or `""` for none.
 - `visual_style` must be `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
-  `illustrated` needs a stored OpenAI key and `cartoon_3d` needs a working GPU.
+  `illustrated` and `under_the_hood` need a stored OpenAI key and `cartoon_3d` needs a working GPU.
 - `mascot_id` must be a string. A changed value must be a pickable mascot, needs a GPU `status` of
-  `working`, and is refused on a video that will be `cartoon_3d`. `""` clears the mascot.
+  `working`, and is refused on a video that will be `cartoon_3d` or `under_the_hood`. `""` clears
+  the mascot.
 
 #### Guards
 
@@ -469,7 +478,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   after the script was written. The check is skipped at `TOPIC_PROPOSED`, and a voice written there
   is bound to that status.
 - A `mascot_id` is checked only when it changes, so a client that echoes the stored value is not
-  refused for a GPU that has gone since. A switch to `cartoon_3d` clears the mascot in the same
+  refused for a GPU that has gone since. A switch to `cartoon_3d` or `under_the_hood` clears the mascot in the same
   `UPDATE`, and a changed mascot resets `mascot_version` to 0.
 - The approving `PATCH` (`TOPIC_PROPOSED` to `TOPIC_APPROVED`) is `409` when the video's mascot has
   been archived, or when the video is Cartoon 3D (by its style or by `resolved_renderer`) and keeps
@@ -653,8 +662,8 @@ Six checks run only when the value changes, because the dashboard re-sends the w
 every edit and a value that became invalid later must not block other edits:
 
 - The `description` length.
-- `default_visual_style`: `illustrated` needs a stored OpenAI key and `cartoon_3d` needs a working
-  GPU.
+- `default_visual_style`: `illustrated` and `under_the_hood` need a stored OpenAI key and
+  `cartoon_3d` needs a working GPU.
 - `default_voice_id` on the roster.
 - `default_script_profile_id` being `READY`.
 - `default_mascot_id` being pickable, with a working GPU.
@@ -721,9 +730,17 @@ A generated preview is recorded in the usage ledger with no video, with credits 
 
 Returns `{"styles": [...]}`: `auto` first, then every [style pack](10-scene-authoring.md#style-packs)
 in its pack order. Each entry has `id`, `label`, `experimental`, `canvas` (the canvas the style fixes,
-or `null`), `needs` (`openai_key`, `gpu`), and `available` with `unavailable_reason` for this install
+or `null`), `needs` (`openai_key`, `gpu`), `mascot` (false when the style's videos take no mascot),
+and `available` with `unavailable_reason` for this install
 now: `needs an OpenAI key`, `needs a working GPU` or `GPU not tested yet`. The dashboard builds its
 style pickers from it. The write routes still refuse an unavailable style themselves.
+
+### `GET /script-formulas`
+
+Returns `{"formulas": [...], "hook_types": [...]}` from the
+[formula files](08-scripting-and-voice.md#formulas). Each formula has `id`, `label`, `family`, `line`
+and `words` (`[min, max]`), in formula order. Each hook type has `id` and `label`. The dashboard uses
+it to label a video's `formula_id` and `hook_type`.
 
 ## Research
 
@@ -944,8 +961,8 @@ one does internally is in [Publishing internals](14-publishing.md#http-routes).
 
 The routes that reach postforme, and `POST /publishing/accounts`, answer `503` when
 `publishing_enabled` is false or no `postforme_api_key` is stored. The check runs before any
-outbound call. `GET /videos/<video_id>/publications`, `publish-prefill`, `GET /analytics` and the
-two `/autopilot` routes have no such check.
+outbound call. `GET /videos/<video_id>/publications`, `publish-prefill`, `GET /analytics`,
+`GET /analytics/watch-time` and the two `/autopilot` routes have no such check.
 
 ### Accounts
 
@@ -975,7 +992,9 @@ any outbound call. `502` when postforme fails (the body carries its message) or 
 
 `GET /videos/<video_id>/publications` returns the video's publication rows, ordered by platform:
 `id`, `video_id`, `platform`, `social_account_id`, `status`, `post_url`, `error`, `published_at`,
-`created_at`, `updated_at`.
+`created_at`, `updated_at`. Each row also carries its latest snapshot: `views`, `likes`,
+`comments`, `shares`, the six [watch figures](14-publishing.md#watch-figures) and `fetched_at`.
+They are all null for a row with no snapshot.
 
 `POST /videos/<video_id>/publish-prefill` is a read that calls no model. It returns
 `{title, description, duration_secs, youtube_short, youtube_shorts_max_secs}`. `title` and
@@ -1031,12 +1050,28 @@ parameters `platform` and `social_account_id` filter every part of the response.
 |---|---|
 | `totals` | `views`, `likes`, `comments`, `shares`, `publications`, `videos` |
 | `by_platform` | The four metrics summed per platform. An unreported metric adds 0 |
-| `publications` | Each published row with its latest `views`, `likes`, `comments`, `shares` (null when unreported), `fetched_at` and the video's `title` |
+| `publications` | Each published row with its latest `views`, `likes`, `comments`, `shares` (null when unreported), `fetched_at`, the video's `title` and the watch figures `avg_watch_secs`, `watched_pct`, `stayed_pct`, `engaged_views`, `reach` and `saves` (null when unreported, see [Watch figures](14-publishing.md#watch-figures)) |
 | `by_month` | `[{month: "YYYY-MM", views}]`: views gained in each of the last 12 months, oldest first. Months before any snapshot are left out. A figure can be negative |
 | `timezone` | The zone the months were cut in (the host's, or `UTC`) |
 
+`GET /analytics/watch-time` returns one account's watch figures by group, from local snapshots.
+The optional `social_account_id` selects the account. Without it the answer is for the account with
+the most published posts.
+
+| Field | Meaning |
+|---|---|
+| `accounts` | `[{id, platform, videos}]`: every account with a published post, the largest first |
+| `social_account_id`, `platform`, `videos` | The account answered for and its number of published posts. `''` and 0 when nothing is published |
+| `min_group` | A group with fewer videos is too small to read (20) |
+| `dimensions` | `[{id, label, groups}]` for `visual_style`, `script_profile`, `domain`, `script_length`, `formula` and `hook_type` |
+
+Each group is `{key, label, videos, avg_watch_secs, watched_pct, stayed_pct}`. Each measure is
+`{median, n}`: the median over the `n` posts that report it, and `median` is null when `n` is 0.
+How posts are grouped is in [Publishing internals](14-publishing.md#get-analyticswatch-time).
+
 `POST /analytics/refresh` captures metrics for every account now and returns
-`{accounts, snapshots, errors}`.
+`{accounts, snapshots, errors}`. It first stores `videos.duration_secs` for published videos that
+have none ([Watch figures](14-publishing.md#watch-figures)).
 
 ### Auto Pilot
 

@@ -16,6 +16,7 @@ import { isScored, videoStreamUrl } from "@/lib/utils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReviseDialog } from "@/components/ReviseDialog";
 import { PublishDialog } from "@/components/PublishDialog";
+import { PublicationFigures } from "@/components/PublicationFigures";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
@@ -32,8 +33,9 @@ import {
 import { routeLabel, styleOptions, videoStyleLabel } from "@/lib/visualStyles";
 import { MascotPicker } from "@/components/MascotPicker";
 import { formatRenderDuration } from "@/lib/renderers";
-import { approvalMascot, showMascotPicker } from "@/lib/mascots";
+import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
+import { ScriptRecord } from "@/components/ScriptRecord";
 
 interface VideoModalProps {
   video: Video | null;
@@ -964,6 +966,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                 {/* Script */}
                 {video.script && (
                   <TabsContent value="script" className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
+                    <ScriptRecord video={video} />
                     {video.script_segments && video.script_segments.length > 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                         {video.script_segments.map((seg, i) => (
@@ -976,6 +979,21 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                                 i < video.script_segments!.length - 1 ? "1px solid var(--border)" : "none",
                             }}
                           >
+                            {seg.beat ? (
+                              <div
+                                data-testid={`script-beat-${seg.id}`}
+                                style={{
+                                  fontFamily: "var(--mono)",
+                                  fontSize: 9,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.14em",
+                                  color: "var(--dim)",
+                                  marginBottom: 6,
+                                }}
+                              >
+                                {seg.beat}
+                              </div>
+                            ) : null}
                             <p
                               style={{
                                 margin: "0 0 8px",
@@ -1122,12 +1140,13 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                             {pub.error}
                           </p>
                         )}
+                        <PublicationFigures pub={pub} timeZone={timeZone} tzLabel={tzLabel} />
                       </div>
                     ))}
                     <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--mute)",
                                 marginTop: 14 }}>
-                      View counts and other figures live on the Analytics page — this tab is where
-                      the video went and whether it got there.
+                      Figures are each post&apos;s latest snapshot. The Analytics page compares
+                      them across videos.
                     </p>
                   </TabsContent>
                 )}
@@ -1299,7 +1318,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           value={selectedStyle}
                           onChange={(e) => {
                             setSelectedStyle(e.target.value as Video["visual_style"]);
-                            if (e.target.value === "cartoon_3d") setSelectedMascot("");
+                            if (!styleTakesMascot(e.target.value, visualStyles)) setSelectedMascot("");
                           }}
                           title="Visual register for this video"
                           className="w-full rounded border border-[#2a2a42] bg-[#131325] px-3 py-2 text-sm text-[#f0f0ff]"
@@ -1316,7 +1335,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                             mascots={mascots}
                             gpu={gpu}
                             value={selectedMascot}
-                            locked={selectedStyle === "cartoon_3d"}
+                            locked={!styleTakesMascot(selectedStyle, visualStyles)}
                             onChange={setSelectedMascot}
                             maxWidth={9999}
                             style={{ width: "100%", borderRadius: 4, padding: "8px 12px", fontSize: 14, fontFamily: "inherit", borderColor: "#2a2a42", background: "#131325", color: "#f0f0ff" }}
@@ -1343,7 +1362,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                       )}
                       {voicePickers}
                       {agentPickers}
-                      <ActionBtn fullWidth variant="primary" onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
+                      <ActionBtn fullWidth variant="primary" onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
                         Approve Topic
                       </ActionBtn>
                       <ActionBtn fullWidth variant="danger" onClick={() => { onAction(video.id, "reject-topic", video); onClose(); }}>

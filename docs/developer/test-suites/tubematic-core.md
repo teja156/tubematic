@@ -94,8 +94,13 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   as the table in the test says.
 - The refusal messages come from the packs, and the GPU gate passes only `working`.
 - `public_list` explains an unavailable style, and `agent_view` names the authoring skill.
-- System Flow and Bean Explainer each have their renderer, canvas, skill and permissions pinned; Bean
-  Explainer's bean counts as a figure but neither line art nor a generated character.
+- System Flow, Bean Explainer, Storybook Atlas, Terminal Doc and Under the Hood each have their
+  renderer, canvas, skill and permissions pinned; Bean Explainer's bean, Storybook Atlas's people and
+  Under the Hood's presenter count as figures but neither line art nor generated characters.
+  Storybook Atlas's captions use the `label` background, Terminal Doc's are the `log` look, and each
+  Terminal Doc skin changes only caption keys. Under the Hood needs an OpenAI key, caps its
+  photographs at 12, takes no mascot and uses the `selection` caption look. A pack that takes no
+  mascot must say why.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
   routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
   apart from.
@@ -106,6 +111,45 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
 Trap: each answer in the truth table decides what an agent may draw or what the AI review is told is
 intended, so a changed answer shows up only after a render. Change the table only when a style's
 rules are meant to change.
+
+### `test_formulas.py`
+
+Covers `tubematic_core/formulas.py` and the files in `tubematic_core/formulas/`
+([Formulas](../08-scripting-and-voice.md#formulas)).
+
+- Every formula file loads, in `order`. Each offers at least three openings of different hook types,
+  its word band sits inside the ceiling, and its beats cover the script from 0 to 100 percent.
+- A malformed file is refused with the reason: a wrong id, a missing or extra key, a bad band, a gap
+  between beats, two beats of one name, a beat name longer than a segment's label may be, a `|` or
+  a line break in a text, an unknown hook type, two openings of one type.
+- The decision table has one row per formula, and a rendered reference file carries every part of
+  its formula.
+- The files hold no ticket id and no link, because they are rendered into skill files that ship in
+  the release archive.
+
+Trap: no formula may need a second voice. A video has one voice, so a dialogue formula would
+produce a script that cannot be voiced.
+
+### `test_script_checks.py`
+
+Covers `tubematic_core/script_checks.py`
+([Script warnings](../08-scripting-and-voice.md#script-warnings)).
+
+- A clean script raises nothing. Each check fires on the script it is for: a closing ask, a recap
+  ending, a greeting opener, a first sentence that repeats the title, a staged run-up, no turn in
+  the middle, a length outside the band or past the ceiling, a kept opening that is not the
+  script's opening, a closing shared with the domain's recent scripts.
+- Each check stays quiet on text that only uses its words: "follow" and "subscribe" as ordinary
+  verbs about the subject, an ask in the middle of the script, a callback that explains the title.
+- The band allows `BAND_SLACK` and no more. A script with no formula, or with a formula this version
+  does not know, is not measured against a band.
+- An ellipsis inside a sentence does not end it, a closing quote stays with its sentence, and a
+  title before a name (`Dr.`, `St.`) does not end one. A sentence that ends on a short word ("in
+  C.", "at 3 a.m.") still ends. A long run of dots and a long run of titles are read in linear time.
+- A closing line the preferences asked for is not a repeat: the sentence before it is compared.
+
+Trap: the quiet half matters as much as the firing half. The list is shown to a person and handed to
+the agent, so a check that fires on a sound script teaches both to ignore it.
 
 ### `test_style_routing.py`
 
@@ -118,7 +162,8 @@ the fixed topic set in `tests/fixtures/style_routing_cases.json`
 - Each candidate carries its routing block and its image count, and the list shares no state with
   the packs.
 - A candidate is unavailable for the same reasons that refuse the choice: no OpenAI key, a GPU that
-  is not working or not tested, a mascot on a 3D-world style. `scenes` is always available.
+  is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood).
+  `scenes` is always available.
 - Every topic names only real outcomes, and every outcome is the first expectation of at least
   three topics.
 
@@ -342,6 +387,27 @@ Covers `0022`: `projects.default_agent_id`, `default_agent_model` and `default_a
 Trap: `''` on `default_agent_id` means the weighted deal, which is how every domain's videos were
 assigned before the upgrade, so the migration has no backfill.
 
+### `test_script_record_migration.py`
+
+Covers `0023`: `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`.
+
+- Existing videos keep their status, script, segments and publish title, and read `''` in the four
+  new columns.
+- A second run changes nothing, and a new video starts with no record.
+
+Trap: `''` means no formula on record, which is true of every script written before the upgrade, so
+the migration has no backfill.
+
+### `test_video_duration_migration.py`
+
+Covers `0024`: `videos.duration_secs`.
+
+- Existing videos keep their status, script and `updated_at`, and read NULL in the new column.
+- A second run changes nothing, and a new video starts at NULL.
+
+Trap: the default is NULL because 0 would be a length. Analytics would divide by it, or show a
+share for a video whose length nobody recorded.
+
 ## Shared rules
 
 ### `test_usage_accounting.py`
@@ -448,8 +514,9 @@ Covers `mascots.py`, the mascot rules every process shares
   of violation.
 - `caption_band` derives a line count from `maxWords` and `fontSize`, so large captions that wrap to
   three or four lines still keep the mascot off them. A hidden caption band frees the space.
-- `holds_pickable_sql` agrees with `pickable`, and `cartoon_mascot_clash_sql` names a Cartoon 3D
-  style or resolved renderer with a non-empty mascot.
+- `holds_pickable_sql` agrees with `pickable`, and `cartoon_mascot_clash_sql` names a style that
+  takes no mascot (Cartoon 3D, Under the Hood) or a Cartoon 3D resolved renderer, with a non-empty
+  mascot.
 - `resolve_default` turns an archived or unapproved default into no mascot. `mascot_gpu_error` asks
   for a GPU test when the status is `unknown`. `code_for` reads a built-in's code from its versioned
   file.

@@ -6,8 +6,10 @@ import { AnalyticsCharts, type MonthViews } from "@/components/AnalyticsCharts";
 import { SectionLabel } from "@/components/SectionLabel";
 import { SpendCard } from "@/components/SpendCard";
 import { useTimeZone } from "@/components/TimeZoneProvider";
+import { WatchTimePanel } from "@/components/WatchTimePanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/datetime";
+import { formatShare, formatWatchSeconds } from "@/lib/format";
 import { accountLabel, platformLabel, type AccountName } from "@/lib/platforms";
 
 function apiFetch(path: string, init?: RequestInit) {
@@ -42,7 +44,12 @@ const control = {
   border: "1px solid var(--border)", padding: "6px 10px",
 } as const;
 
-type SortKey = "newest" | keyof Metrics;
+/** How long people watched a post, from its latest snapshot (TMDEV-212). Never
+ *  summed into a total: a watched second is a different measurement on each
+ *  platform. */
+type WatchKey = "avg_watch_secs" | "watched_pct" | "stayed_pct";
+
+type SortKey = "newest" | keyof Metrics | WatchKey;
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "newest", label: "Newest first" },
@@ -50,6 +57,9 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "likes", label: "Most likes" },
   { key: "comments", label: "Most comments" },
   { key: "shares", label: "Most shares" },
+  { key: "avg_watch_secs", label: "Longest watched" },
+  { key: "watched_pct", label: "Highest % watched" },
+  { key: "stayed_pct", label: "Most stayed" },
 ];
 
 /** Highest first, and an unreported metric below a real 0 — "not reported"
@@ -215,6 +225,7 @@ export default function AnalyticsPage() {
         >
           <TabsTrigger value="videos" data-testid="tab-videos">Videos</TabsTrigger>
           <TabsTrigger value="spend" data-testid="tab-spend">Spend</TabsTrigger>
+          <TabsTrigger value="watch" data-testid="tab-watch">Watch time</TabsTrigger>
         </TabsList>
 
         <TabsContent value="videos">
@@ -320,14 +331,16 @@ export default function AnalyticsPage() {
                 data-testid="analytics-scroll"
                 style={{ overflow: "auto", maxHeight: "min(70vh, 720px)" }}
               >
-                <table style={{ ...mono, fontSize: 11, borderCollapse: "collapse", minWidth: 720,
+                <table style={{ ...mono, fontSize: 11, borderCollapse: "collapse", minWidth: 960,
                                 width: "100%" }}>
                   <thead>
                     <tr style={{ color: "var(--mute)", textAlign: "left" }}>
-                      {["Video", "Platform", "Views", "Likes", "Comments", "Shares", "Updated"].map((h) => (
+                      {["Video", "Platform", "Views", "Likes", "Comments", "Shares", "Watched",
+                        "% watched", "Stayed", "Updated"].map((h) => (
                         <th key={h} style={{ padding: "8px 14px 8px 0", fontWeight: 400,
                                              textTransform: "uppercase", letterSpacing: "0.12em",
                                              fontSize: 9, position: "sticky", top: 0,
+                                             whiteSpace: "nowrap",
                                              background: "var(--bg)",
                                              boxShadow: "inset 0 -1px 0 var(--border)" }}>
                           {h}
@@ -354,6 +367,15 @@ export default function AnalyticsPage() {
                         <td style={{ padding: "9px 14px 9px 0" }}>{metric(row.likes)}</td>
                         <td style={{ padding: "9px 14px 9px 0" }}>{metric(row.comments)}</td>
                         <td style={{ padding: "9px 14px 9px 0" }}>{metric(row.shares)}</td>
+                        <td data-testid={`watched-${row.id}`} style={{ padding: "9px 14px 9px 0" }}>
+                          {formatWatchSeconds(row.avg_watch_secs)}
+                        </td>
+                        <td data-testid={`watched-pct-${row.id}`} style={{ padding: "9px 14px 9px 0" }}>
+                          {formatShare(row.watched_pct)}
+                        </td>
+                        <td data-testid={`stayed-${row.id}`} style={{ padding: "9px 14px 9px 0" }}>
+                          {formatShare(row.stayed_pct)}
+                        </td>
                         <td style={{ padding: "9px 14px 9px 0", color: "var(--mute)" }}>
                           {row.fetched_at ? formatDate(row.fetched_at, timeZone) : "not polled yet"}
                         </td>
@@ -361,7 +383,7 @@ export default function AnalyticsPage() {
                     ))}
                     {hasMore && (
                       <tr ref={sentinel} data-testid="analytics-more">
-                        <td colSpan={7} style={{ padding: "12px 0", color: "var(--mute)" }}>
+                        <td colSpan={10} style={{ padding: "12px 0", color: "var(--mute)" }}>
                           Showing {shown.length} of {rows.length} — scroll for more
                         </td>
                       </tr>
@@ -397,6 +419,12 @@ export default function AnalyticsPage() {
                 takes a snapshot now, though how fresh the numbers are still depends on how often
                 postforme itself reads each platform.
               </p>
+              <p data-testid="analytics-legend"
+                 style={{ ...mono, fontSize: 10, color: "var(--mute)", marginTop: 8, maxWidth: 640 }}>
+                A dash means the platform did not report that figure. Watched is the average
+                length of a view, % watched is that as a share of the video, and Stayed is the
+                share of views that kept watching.
+              </p>
             </div>
           </div>
         </TabsContent>
@@ -405,6 +433,11 @@ export default function AnalyticsPage() {
             pool call) is fetched when someone looks at it, not on every visit. */}
         <TabsContent value="spend">
           <SpendCard />
+        </TabsContent>
+
+        {/* Also mounted only while open: its figures are one more request. */}
+        <TabsContent value="watch">
+          <WatchTimePanel names={names} />
         </TabsContent>
       </Tabs>
     </>

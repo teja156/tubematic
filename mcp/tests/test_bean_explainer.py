@@ -416,6 +416,16 @@ def test_a_bad_custom_prop_entry_is_refused(change, fragment):
     (ROCKET.replace("const lift", "const jitter = Math.random();\n  const lift", 1), "randomness"),
     ('import x from "lodash";\n' + ROCKET, "it imports lodash"),
     (ROCKET.replace("export default function", "export function"), "default-export"),
+    # gaps the Storybook Atlas and Terminal Doc reviews found in this shared list
+    ('import fs from"fs";\n' + ROCKET, "it imports fs"),
+    (ROCKET + '\nconst s = { background: "linear-gradient(red, blue)" };', "a CSS gradient"),
+    (ROCKET + '\nconst m = import ("fs");', "a dynamic import"),
+    (ROCKET + '\nconst t = performance.now();', "performance.now()"),
+    (ROCKET + '\nconst id = setTimeout(() => 0, 5);', "a timer"),
+    (ROCKET + '\nconst r = fetch ("https://example.com");', "a fetch"),
+    ('import { Img, staticFile } from "remotion";\n' + ROCKET, "a Remotion media or render-control part"),
+    (ROCKET + '\nconst w = window.innerWidth;', "the page"),
+    (ROCKET + '\nconst g = new Function("return 1");', "a Function constructor"),
 ])
 def test_a_custom_prop_file_that_breaks_the_rules_is_refused(body, fragment):
     sources = {} if body is None else {"vid_be1/prop-rocket": body}

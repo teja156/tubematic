@@ -35,6 +35,18 @@ Leave a picker alone to keep what the video already has.
 
 Press **Read** to open the script. The agent leaves a comment explaining what it wrote.
 
+Above the script, the **Script** tab shows what the agent built it on:
+
+- **Formula** is the structure the agent chose for this topic. See
+  [Script formulas](#script-formulas).
+- **Openings considered** lists the three openings the agent drafted, with the one it used marked.
+  To have the script start with another one, press **Revise** and say which.
+- **Script warnings** are automatic checks on the script's words, such as an ending that asks
+  viewers to follow, or a script longer than its formula runs. They are advice for you and the
+  agent, and you can approve a script that has them.
+
+A script with nothing recorded shows none of these.
+
 **Approve** starts the voiceover, and ElevenLabs charges from this point. **Revise** asks the agent
 to rewrite.
 
@@ -214,6 +226,38 @@ A script profile teaches the agent to write in the style of YouTube videos you c
    **Topics** page.
 
 You cannot edit a profile. Delete it and create another.
+
+A profile decides how a script sounds: its tone, its vocabulary and its phrasing. The
+[formula](#script-formulas) decides how the script is built, so the agent does not copy a
+profile's structure or its sign-off.
+
+---
+
+## Script formulas
+
+A formula is the structure of a script: its parts in order, how it opens, where it turns and how
+it ends. The agent picks one for each video from the kind of topic it is, then writes the script
+in your script profile's voice.
+
+| Formula | The agent picks it for |
+|---|---|
+| Paradox, Mechanism, Reframe | A thing the viewer owns or uses every day works in a way that seems impossible |
+| Broken Expectation | A tool did something that looks wrong |
+| Follow the Flow | A process with a natural order: a request, a boot, a login, a payment, a signal through the body |
+| Myth, Break, Model | A belief most people hold is wrong |
+| Why Don't They Just | A design decision that looks stupid from outside |
+| Incident File | An outage, a loss or a bug with a timeline |
+| Scheme Machine | A scam, a fraud, a loophole or an exploit that works as a loop |
+| Anomaly File | Evidence that looked wrong: every gauge normal during a failure, a record that should not exist |
+| Scene Story | One person inside one moment: a near miss, a strange true incident, an ordinary life in a big event |
+| Escalating Ladder | Something with a natural measure: size, cost, speed, time to break, risk, depth |
+
+Each formula has its own length, so scripts are not all the same length. The agent writes every
+script to fit inside three minutes.
+
+A script ends on its payoff, with no closing line after it. To have scripts end with a line of
+your own, such as asking viewers to follow, say so in
+[Preferences](05-settings.md#preferences).
 
 ---
 

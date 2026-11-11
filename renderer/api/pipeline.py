@@ -50,6 +50,7 @@ try:
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
+    from tubematic_core import formulas as tformulas
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -64,6 +65,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
+    from tubematic_core import formulas as tformulas
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -1118,6 +1120,56 @@ def _video_duration_secs(video_id: str):
     return None
 
 
+# No video here is a day long. A length past this is a damaged timeline.
+MAX_STORED_DURATION_SECS = 86400
+
+
+def _readable_duration_secs(video_id: str):
+    """_video_duration_secs, or None for a timeline it cannot make sense of
+    (an fps that is not a number, say). For callers that must carry on."""
+    try:
+        duration = _video_duration_secs(video_id)
+    except Exception:  # noqa: BLE001 - any shape of bad file means "not known"
+        # Debug, like a length out of range below: the video is asked again on
+        # every pass until it is archived, and a warning an hour says nothing new.
+        log.debug("could not read the length of %s from its timeline", video_id,
+                  extra={"video_id": video_id})
+        return None
+    # The value is stored once and returned with every video. 1e999 in a
+    # damaged file parses to infinity, which no browser can read back as JSON.
+    if duration is None or not 0 < duration <= MAX_STORED_DURATION_SECS:
+        return None
+    return duration
+
+
+def fill_video_durations(db_path: str) -> int:
+    """Store the length of every published video that has none yet and still
+    has its files (TMDEV-212). Returns how many were stored.
+
+    Analytics needs the length for as long as the post exists, and shows it
+    from the first reading, so the worker calls this hourly. archive_video
+    stores it too, at the moment the files go, for a video this never reached.
+    Archived videos are skipped: their files are gone, and asking again every
+    hour would only fail again. A video with no readable timeline stays NULL
+    and is asked again on the next pass, and one bad file does not stop the
+    others.
+    """
+    with _db(db_path) as con:
+        ids = [r["id"] for r in con.execute(
+            "SELECT id FROM videos v WHERE duration_secs IS NULL AND archived_at IS NULL"
+            " AND EXISTS (SELECT 1 FROM video_publications p WHERE p.video_id = v.id)")]
+    stored = 0
+    for video_id in ids:
+        duration = _readable_duration_secs(video_id)
+        if duration is None:
+            continue
+        with _db(db_path) as con:
+            stored += con.execute(
+                "UPDATE videos SET duration_secs = ? WHERE id = ? AND duration_secs IS NULL",
+                (round(duration, 3), video_id)).rowcount
+    return stored
+
+
 def _output_path(project_id: str, video_id: str):
     """Where this video's rendered mp4 lives (the render gateway writes a
     renderer's upload there), or None if it cannot be named.
@@ -1260,25 +1312,30 @@ def _mascot_conflict(con, mascot_id: str, what: str):
     return jsonify({"error": f"This mascot changed while {what}; reload."}), 409
 
 
-def _cartoon_mascot_error(mascot_id: str) -> str:
-    """The refusal for a Cartoon 3D video that would hold `mascot_id`."""
-    return f"This video is Cartoon 3D and holds the mascot {mascot_id!r}. {MASCOT_NOT_ON_CARTOON_3D}"
+def _cartoon_mascot_error(mascot_id: str, style: str = "cartoon_3d") -> str:
+    """The refusal for a video of a style that takes no mascot (Cartoon 3D by
+    default, or Under the Hood) that would hold `mascot_id`."""
+    if (style or "").strip() == "cartoon_3d":
+        return f"This video is Cartoon 3D and holds the mascot {mascot_id!r}. {MASCOT_NOT_ON_CARTOON_3D}"
+    return (f"This video's style is {tvs.route_label(style)} and it holds the mascot {mascot_id!r}. "
+            f"{tmascots.no_mascot_error(style)}")
 
 
-def _approval_pair_error(con, cartoon: bool, mascot_id) -> str:
-    """Why a topic that is (or would be) Cartoon 3D when `cartoon`, holding
-    `mascot_id`, cannot be approved, or "": the pair the renderer refuses, else
-    _mascot_approval_error. Shared with worker.py's Auto Pilot."""
+def _approval_pair_error(con, cartoon: bool, mascot_id, style: str = "cartoon_3d") -> str:
+    """Why a topic whose style takes no mascot (`cartoon`; Cartoon 3D unless
+    `style` names another) and holds `mascot_id` cannot be approved, or "": that
+    pair, else _mascot_approval_error. Shared with worker.py's Auto Pilot."""
     if cartoon and mascot_id:
-        return _cartoon_mascot_error(mascot_id)
+        return _cartoon_mascot_error(mascot_id, style)
     return _mascot_approval_error(con, mascot_id)
 
 
 def _seed_mascot(con, project_id, visual_style: str) -> str:
     """The mascot a new video starts with: the project's default (or the install's),
-    but only while the renderer's GPU is working and never on a Cartoon 3D video.
-    Anything else is "": seeding is a convenience and must never refuse a video."""
-    if visual_style == "cartoon_3d" or trenderers.gpu_status(con)["status"] != "working":
+    but only while the renderer's GPU is working and never on a video whose style
+    takes no mascot (Cartoon 3D, Under the Hood). Anything else is "": seeding is
+    a convenience and must never refuse a video."""
+    if tmascots.no_mascot_error(visual_style) or trenderers.gpu_status(con)["status"] != "working":
         return ""
     prow = con.execute("SELECT default_mascot_id FROM projects WHERE id = ?",
                        (project_id,)).fetchone() if project_id else None
@@ -1770,12 +1827,19 @@ def archive_video(db_path: str, video_id: str, allowed_statuses, author: str,
             return {"result": "not_found"}
         mp4 = _output_path(row["project_id"], video_id)
         job_dir = JOBS_DIR / video_id
+        # Read before the files go and stored with the archive itself: this is
+        # the last moment the video's length exists anywhere, and Analytics
+        # divides by it for as long as the post does (TMDEV-212). COALESCE
+        # keeps a length already stored.
+        duration = _readable_duration_secs(video_id)
         age_sql, age_args = (" AND updated_at < ?", [updated_before]) if updated_before else ("", [])
         cur = con.execute(
-            "UPDATE videos SET archived_at = ?, video_path = '', updated_at = ?"
+            "UPDATE videos SET archived_at = ?, video_path = '', updated_at = ?,"
+            " duration_secs = COALESCE(duration_secs, ?)"
             " WHERE id = ? AND archived_at IS NULL"
             f" AND status IN ({','.join('?' * len(allowed))}){age_sql}",
-            [now, now, video_id, *allowed, *age_args])
+            [now, now, None if duration is None else round(duration, 3),
+             video_id, *allowed, *age_args])
         if cur.rowcount == 0:
             con.rollback()
             fresh = con.execute(
@@ -1975,6 +2039,133 @@ def _publication_row(row) -> dict:
         "created_at":        row["created_at"],
         "updated_at":        row["updated_at"],
     }
+
+
+def _watch_figures(platform: str, raw_json, duration_secs) -> dict:
+    """The watch figures of one snapshot, read from its stored payload
+    (postforme.extract_retention). A snapshot that was never taken, or whose
+    payload does not parse, reads as nothing reported."""
+    try:
+        raw = _json.loads(raw_json) if raw_json else {}
+    except (TypeError, ValueError):
+        raw = {}
+    return postforme.extract_retention(platform, raw, duration_secs)
+
+
+# ── Watch time by group (TMDEV-212) ──────────────────────────────────────────
+# One account at a time: a platform counts a view and a watched second its own
+# way and every account has its own audience, so a figure only compares with
+# others from the same account.
+
+# A group with fewer videos than this is shown, and marked as too small to
+# read. One video that did unusually well moves a small group's figure a lot.
+WATCH_MIN_GROUP = 20
+
+WATCH_MEASURES = ("avg_watch_secs", "watched_pct", "stayed_pct")
+
+# (lower bound in words, label), ascending. A script's band is the last one
+# whose bound it reaches.
+SCRIPT_LENGTH_BANDS = ((0, "Under 150 words"), (150, "150 to 199 words"),
+                       (200, "200 to 249 words"), (250, "250 to 299 words"),
+                       (300, "300 words or more"))
+
+# A tag holds no "<" of its own, so a stray "<" in the words ("a < b") cannot
+# pair with the ">" of a later tag and take everything between with it.
+_SCRIPT_MARKUP = re.compile(r"<[^<>]*>|\[[^\[\]\n]*\]")
+
+
+def _script_words(script) -> int:
+    """Spoken words in a stored script. Tags and bracketed cues are markup,
+    and the word a tag wraps is spoken, so only the markup itself is dropped.
+    Punctuation left standing alone by a removed tag is not a word."""
+    return sum(1 for token in _SCRIPT_MARKUP.sub(" ", script or "").split()
+               if any(ch.isalnum() for ch in token))
+
+
+def _script_length_band(script) -> tuple:
+    """(key, label, order) of a script's word band."""
+    words = _script_words(script)
+    if not words:
+        return "none", "No script", len(SCRIPT_LENGTH_BANDS)
+    index = max(i for i, (low, _label) in enumerate(SCRIPT_LENGTH_BANDS) if words >= low)
+    return str(SCRIPT_LENGTH_BANDS[index][0]), SCRIPT_LENGTH_BANDS[index][1], index
+
+
+def _watch_group_of(dimension: str, row) -> tuple:
+    """(key, label, order) placing one post in a group. Order ranks a
+    dimension whose groups have a natural sequence; elsewhere it is 0 and the
+    larger group comes first."""
+    if dimension == "visual_style":
+        style = row["visual_style"] or ""
+        if style in ("", tvs.AUTO):
+            # "auto" that never became a pack is the mixed scene system,
+            # unless Auto took the video to the Cartoon 3D renderer, which
+            # some videos record in resolved_renderer alone.
+            if row["resolved_renderer"] == "cartoon_3d" and tvs.pack("cartoon_3d"):
+                return "cartoon_3d", tvs.route_label("cartoon_3d"), 0
+            return tvs.SCENES, tvs.SCENES_LABEL, 0
+        return style, tvs.route_label(style), 0
+    if dimension == "script_profile":
+        profile = row["script_profile_id"] or ""
+        if not profile:
+            return "", "No profile", 0
+        return profile, row["profile_name"] or profile, 0
+    if dimension == "domain":
+        project = row["project_id"] or ""
+        return project, row["project_name"] or project or "No domain", 0
+    if dimension == "formula":
+        # '' is a script written before scripts recorded a formula, or one
+        # whose words were replaced without a record.
+        formula = row["formula_id"] or ""
+        return formula, tformulas.label(formula) or WATCH_NOT_RECORDED, 0
+    if dimension == "hook_type":
+        hook = row["hook_type"] or ""
+        return hook, tformulas.HOOK_TYPES.get(hook, hook) or WATCH_NOT_RECORDED, 0
+    return _script_length_band(row["script"])
+
+
+WATCH_NOT_RECORDED = "Not recorded"
+
+WATCH_DIMENSIONS = (("visual_style", "Visual style"), ("script_profile", "Script profile"),
+                    ("domain", "Domain"), ("script_length", "Script length"),
+                    ("formula", "Formula"), ("hook_type", "Opening"))
+
+
+def _watch_groups(rows: list, dimension: str) -> list:
+    """Group one account's posts by `dimension`. Each row needs the grouping
+    columns and a `figures` dict (the output of _watch_figures).
+
+    A group's figure is the median of its videos' figures, so one video with
+    many times the usual audience does not set it. `videos` counts every post
+    in the group; each measure's `n` counts the posts that report it, which is
+    smaller where a platform or an older video reports nothing.
+    """
+    groups: dict = {}
+    for row in rows:
+        key, label, order = _watch_group_of(dimension, row)
+        group = groups.setdefault(key, {"key": key, "label": label, "order": order,
+                                        "videos": 0, **{m: [] for m in WATCH_MEASURES}})
+        group["videos"] += 1
+        for measure in WATCH_MEASURES:
+            value = row["figures"].get(measure)
+            if value is not None:
+                group[measure].append(value)
+    out = []
+    for group in sorted(groups.values(),
+                        key=lambda g: (g["order"], -g["videos"], g["label"].lower())):
+        entry = {"key": group["key"], "label": group["label"], "videos": group["videos"]}
+        for measure in WATCH_MEASURES:
+            values = sorted(group[measure])
+            entry[measure] = {"n": len(values),
+                              "median": round(_median(values), 1) if values else None}
+        out.append(entry)
+    return out
+
+
+def _median(values: list) -> float:
+    """Median of a sorted, non-empty list."""
+    mid = len(values) // 2
+    return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
 
 
 def _publish_platforms(api_key: str, account_ids: list) -> dict:
@@ -2468,6 +2659,10 @@ def create_pipeline_blueprint() -> Blueprint:
         the contract established by mcp/server.py's _fetch_video."""
         raw_segments = video.get("script_segments")
         video["script_segments"] = _json.loads(raw_segments) if raw_segments else None
+        # What update_video recorded with the script: the drafted openings
+        # and the advisory warnings, [] when there are none.
+        for key in ("hook_alternatives", "script_warnings"):
+            video[key] = _json.loads(video[key]) if video.get(key) else []
         return video
 
     def _list_video(video: dict) -> dict:
@@ -2795,7 +2990,10 @@ def create_pipeline_blueprint() -> Blueprint:
             cur_vid = con.execute("SELECT mascot_id, visual_style, resolved_renderer FROM videos "
                                   "WHERE id = ?", (video_id,)).fetchone()
             stored_mascot = cur_vid["mascot_id"] or ""
-            will_be_cartoon = fields.get("visual_style", cur_vid["visual_style"]) == "cartoon_3d"
+            # A style that takes no mascot (Cartoon 3D, Under the Hood) refuses
+            # a picked mascot and clears a stored one when the video switches to it.
+            style_after = fields.get("visual_style", cur_vid["visual_style"]) or ""
+            takes_no_mascot = bool(tmascots.no_mascot_error(style_after))
             if fields.get("mascot_id") and fields["mascot_id"] != stored_mascot:
                 err = _mascot_pick_error(con, fields["mascot_id"])
                 if err:
@@ -2803,8 +3001,8 @@ def create_pipeline_blueprint() -> Blueprint:
                 err = tmascots.mascot_gpu_error(trenderers.gpu_status(con)["status"])
                 if err:
                     return jsonify({"error": err}), 400
-                if will_be_cartoon:
-                    return jsonify({"error": MASCOT_NOT_ON_CARTOON_3D}), 400
+                if takes_no_mascot:
+                    return jsonify({"error": tmascots.no_mascot_error(style_after)}), 400
             # The approving PATCH is the last chance to catch a mascot archived
             # since it was seeded or picked, or one left on a Cartoon 3D video:
             # the video is about to be authored against it, and the renderer
@@ -2814,11 +3012,11 @@ def create_pipeline_blueprint() -> Blueprint:
             mascot_guarded = (fields.get("status") == "TOPIC_APPROVED"
                               and row["status"] == "TOPIC_PROPOSED")
             if mascot_guarded:
-                switching = (fields.get("visual_style") == "cartoon_3d"
-                             and (cur_vid["visual_style"] or "") != "cartoon_3d")
+                switching = ("visual_style" in fields
+                             and fields["visual_style"] != (cur_vid["visual_style"] or ""))
                 held = fields.get("mascot_id", stored_mascot)
-                if will_be_cartoon:
-                    err = _cartoon_mascot_error(stored_mascot) if (
+                if takes_no_mascot:
+                    err = _cartoon_mascot_error(stored_mascot, style_after) if (
                         stored_mascot and held and not switching) else ""
                 else:
                     # A changed style clears the recorded renderer in this
@@ -2863,7 +3061,7 @@ def create_pipeline_blueprint() -> Blueprint:
             # (TMDEV-90); a second race test keys on this one's (TMDEV-110).
             set_sql = [f"{k} = ?" for k in fields]
             set_params = list(fields.values())
-            if will_be_cartoon:
+            if takes_no_mascot:
                 # Whatever was sent: an echoed stored mascot must not survive
                 # the switch (a different one was refused above).
                 fields.pop("mascot_id", None)
@@ -2872,7 +3070,7 @@ def create_pipeline_blueprint() -> Blueprint:
                 set_sql.append("mascot_id = ''")
             # The pin belongs to the mascot it was taken for: a different mascot
             # (or none) starts unpinned, or it would inherit the old version number.
-            if will_be_cartoon or ("mascot_id" in fields and fields["mascot_id"] != stored_mascot):
+            if takes_no_mascot or ("mascot_id" in fields and fields["mascot_id"] != stored_mascot):
                 set_sql.append("mascot_version = 0")
             # Any human status change is a human acting on the video, so it
             # releases a stuck flag and starts the no-progress count afresh
@@ -2890,6 +3088,11 @@ def create_pipeline_blueprint() -> Blueprint:
                 set_params += clear_params
             elif fields.get("status") == "TOPIC_PROPOSED":
                 set_sql.append(tvs.AUTO_PICK_RESET_SET)
+            # A script written here is a flat one with no formula and no
+            # openings, and nothing has checked it: the record update_video
+            # stored for the script it replaces would describe other words.
+            if "script" in fields:
+                set_sql.append(tformulas.RECORD_CLEAR_SET)
             where_sql, where_params = "", []
             # Bind the write to the status the freeze was checked against.
             # Without onlyIfCurrentStatus, that check and this UPDATE are two
@@ -2906,11 +3109,11 @@ def create_pipeline_blueprint() -> Blueprint:
             # nor let an approval through for a mascot archived meanwhile.
             # Keep in sync: mcp/server.py's update_video and set_video_status,
             # and worker.py's _auto_pilot_approve.
-            pair_touched = "visual_style" in fields or "mascot_id" in fields or will_be_cartoon
+            pair_touched = "visual_style" in fields or "mascot_id" in fields or takes_no_mascot
             if pair_touched or mascot_guarded:
                 style_sql, style_p = (("?", [fields["visual_style"]]) if "visual_style" in fields
                                       else ("COALESCE(videos.visual_style, '')", []))
-                if will_be_cartoon:
+                if takes_no_mascot:
                     mascot_sql, mascot_p = "''", []
                 elif "mascot_id" in fields:
                     mascot_sql, mascot_p = "?", [fields["mascot_id"]]
@@ -3007,13 +3210,14 @@ def create_pipeline_blueprint() -> Blueprint:
                 if pair_touched or mascot_guarded:
                     now_row = con.execute("SELECT visual_style, resolved_renderer, mascot_id "
                                           "FROM videos WHERE id = ?", (video_id,)).fetchone()
-                    post_mascot = ("" if will_be_cartoon else
+                    post_mascot = ("" if takes_no_mascot else
                                    fields["mascot_id"] if "mascot_id" in fields
                                    else now_row["mascot_id"] or "")
-                    post_cartoon = "cartoon_3d" in (fields.get("visual_style", now_row["visual_style"]),
-                                                    now_row["resolved_renderer"])
-                    err = (_approval_pair_error(con, post_cartoon, post_mascot) if mascot_guarded
-                           else _cartoon_mascot_error(post_mascot) if post_cartoon and post_mascot
+                    post_style = fields.get("visual_style", now_row["visual_style"]) or ""
+                    post_style = "cartoon_3d" if now_row["resolved_renderer"] == "cartoon_3d" else post_style
+                    post_cartoon = bool(tmascots.no_mascot_error(post_style))
+                    err = (_approval_pair_error(con, post_cartoon, post_mascot, post_style) if mascot_guarded
+                           else _cartoon_mascot_error(post_mascot, post_style) if post_cartoon and post_mascot
                            else "")
                     if err:
                         return jsonify({"error": err}), 409
@@ -4308,12 +4512,28 @@ def create_pipeline_blueprint() -> Blueprint:
     @bp.get("/videos/<video_id>/publications")
     def get_video_publications(video_id):
         """Where a video actually went. Replaces videos.youtube_url as the read
-        path — one TEXT column cannot hold four platform URLs."""
+        path — one TEXT column cannot hold four platform URLs.
+
+        Each row also carries its latest snapshot (the four counts, the watch
+        figures and when it was read), so the video window shows how a post is
+        doing without a second request. A row with no snapshot has them all
+        None.
+        """
         with _conn() as con:
             rows = con.execute(
-                "SELECT * FROM video_publications WHERE video_id = ? ORDER BY platform, id",
+                "SELECT vp.*, v.duration_secs, m.views, m.likes, m.comments, m.shares,"
+                " m.fetched_at, m.raw_json" + _LATEST_METRIC_FROM
+                + " WHERE vp.video_id = ? ORDER BY vp.platform, vp.id",
                 (video_id,)).fetchall()
-        return jsonify([_publication_row(r) for r in rows])
+        out = []
+        for row in rows:
+            entry = _publication_row(row)
+            for column in postforme.METRIC_COLUMNS:
+                entry[column] = row[column]
+            entry.update(_watch_figures(row["platform"], row["raw_json"], row["duration_secs"]))
+            entry["fetched_at"] = row["fetched_at"]
+            out.append(entry)
+        return jsonify(out)
 
     @bp.post("/videos/<video_id>/publish-prefill")
     def publish_prefill(video_id):
@@ -4561,14 +4781,14 @@ def create_pipeline_blueprint() -> Blueprint:
     # Latest snapshot per publication. Each video_metrics row is a cumulative
     # reading, so the series is read with a max-fetched_at pick rather than a
     # SUM — adding two snapshots of the same post would double-count it.
-    _LATEST_METRIC_JOIN = """
+    _LATEST_METRIC_FROM = """
         FROM video_publications vp
         JOIN videos v ON v.id = vp.video_id
         LEFT JOIN video_metrics m ON m.id = (
             SELECT id FROM video_metrics WHERE publication_id = vp.id
             ORDER BY fetched_at DESC, id DESC LIMIT 1)
-        WHERE vp.status = 'PUBLISHED'
     """
+    _LATEST_METRIC_JOIN = _LATEST_METRIC_FROM + " WHERE vp.status = 'PUBLISHED'"
 
     @bp.get("/analytics")
     def get_analytics():
@@ -4580,13 +4800,15 @@ def create_pipeline_blueprint() -> Blueprint:
 
         Aggregating `views` across platforms is defensible and is all that is
         summed here. Platform-specific metrics are deliberately not summed —
-        they live in video_metrics.raw_json and mean different things.
+        they live in video_metrics.raw_json and mean different things. Each
+        row carries its own watch figures (seconds watched, share watched,
+        stayed to watch, reach, saves), read from that payload.
         """
         platform = request.args.get("platform", "").strip()
         account_id = request.args.get("social_account_id", "").strip()
 
-        sql = "SELECT vp.*, v.title, v.topic, m.views, m.likes, m.comments, m.shares," \
-              " m.fetched_at" + _LATEST_METRIC_JOIN
+        sql = "SELECT vp.*, v.title, v.topic, v.duration_secs, m.views, m.likes, m.comments," \
+              " m.shares, m.fetched_at, m.raw_json" + _LATEST_METRIC_JOIN
         params = []
         if platform:
             sql += " AND vp.platform = ?"
@@ -4610,6 +4832,7 @@ def create_pipeline_blueprint() -> Blueprint:
                 totals[column] = totals.get(column, 0) + (row[column] or 0)
                 bucket = by_platform.setdefault(row["platform"], {})
                 bucket[column] = bucket.get(column, 0) + (row[column] or 0)
+            entry.update(_watch_figures(row["platform"], row["raw_json"], row["duration_secs"]))
             entry["fetched_at"] = row["fetched_at"]
             publications.append(entry)
 
@@ -4621,6 +4844,54 @@ def create_pipeline_blueprint() -> Blueprint:
         return jsonify({"totals": totals, "by_platform": by_platform,
                         "publications": publications, "by_month": by_month,
                         "timezone": zone_name})
+
+    @bp.get("/analytics/watch-time")
+    def get_watch_time():
+        """One account's watch figures, grouped every way the page offers.
+
+        Figures from different platforms or accounts are never put in one
+        group (see WATCH_MIN_GROUP's section), so there is no all-accounts
+        view: without social_account_id the answer is for the account with
+        the most published posts, and `accounts` lists the others to pick
+        from. Every dimension comes back in one response, so changing the
+        grouping on the page asks for nothing. Served from the local
+        snapshots, like /analytics.
+        """
+        account_id = request.args.get("social_account_id", "").strip()
+        with _conn() as con:
+            accounts = [
+                {"id": r["social_account_id"], "platform": r["platform"], "videos": r["n"]}
+                for r in con.execute(
+                    "SELECT social_account_id, MIN(platform) AS platform, COUNT(*) AS n"
+                    " FROM video_publications WHERE status = 'PUBLISHED'"
+                    " GROUP BY social_account_id ORDER BY n DESC, social_account_id")]
+            if not account_id and accounts:
+                account_id = accounts[0]["id"]
+            fetched = con.execute(
+                "SELECT vp.platform, v.visual_style, v.resolved_renderer, v.script_profile_id,"
+                " v.project_id, v.script, v.duration_secs, v.formula_id, v.hook_type,"
+                " sp.name AS profile_name,"
+                " p.name AS project_name,"
+                " m.raw_json" + _LATEST_METRIC_FROM
+                + " LEFT JOIN script_profiles sp ON sp.id = v.script_profile_id"
+                  " LEFT JOIN projects p ON p.id = v.project_id"
+                  " WHERE vp.status = 'PUBLISHED' AND vp.social_account_id = ?",
+                (account_id,)).fetchall()
+        rows = []
+        for row in fetched:
+            entry = dict(row)
+            entry["figures"] = _watch_figures(row["platform"], row["raw_json"],
+                                              row["duration_secs"])
+            rows.append(entry)
+        return jsonify({
+            "accounts": accounts,
+            "social_account_id": account_id,
+            "platform": rows[0]["platform"] if rows else "",
+            "videos": len(rows),
+            "min_group": WATCH_MIN_GROUP,
+            "dimensions": [{"id": dim, "label": label, "groups": _watch_groups(rows, dim)}
+                           for dim, label in WATCH_DIMENSIONS],
+        })
 
     ANALYTICS_MONTHS = 12
 
@@ -4813,6 +5084,13 @@ def create_pipeline_blueprint() -> Blueprint:
             key_set = bool(_secret(_read_all_settings(con), "openai_api_key", "OPENAI_API_KEY"))
             return jsonify({"styles": tvs.public_list(key_set, trenderers.gpu_status(con)["status"])})
 
+    @bp.get("/script-formulas")
+    def list_script_formulas():
+        """Every script formula and every hook type, with its label, from the
+        formula files. The dashboard uses it to name what a video's script
+        recorded (formula_id, hook_type)."""
+        return jsonify(tformulas.public_list())
+
     @bp.post("/render/gpu/test")
     def request_gpu_test():
         """Ask the built-in renderer to probe again: the gateway's next
@@ -4968,10 +5246,20 @@ def create_pipeline_blueprint() -> Blueprint:
         Bounded by the per-account walk: one feed per account regardless of how
         many videos have been published. Returns counts rather than the payload
         — the page re-fetches /analytics itself, so this stays one job.
+
+        It first stores the length of published videos that have none, as the
+        worker's pass does (fill_video_durations): one timeline read per such
+        video that is still on disk.
         """
         _settings, api_key, err = _publishing_context()
         if err:
             return err
+        # As the worker's hourly pass does: a post first read from here would
+        # otherwise show Instagram's seconds with no share until that pass.
+        try:
+            fill_video_durations(db_path)
+        except Exception:  # noqa: BLE001 - a missing length must not fail the refresh
+            log.exception("storing video lengths failed")
         return jsonify(metrics_poll.poll(db_path, api_key))
 
     # ── /script-profiles ──────────────────────────────────────────────────────

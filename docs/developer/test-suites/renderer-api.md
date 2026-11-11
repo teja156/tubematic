@@ -309,6 +309,17 @@ Covers `POST /videos/<id>/switch-style` and the `PATCH` rules for a style Auto p
 
 Trap: the dashboard re-sends the style picker's value on every approval, so a rule that cleared the
 pick on any `visual_style` write would erase every Auto pick at its first approval.
+### `test_script_record.py`
+
+Covers a script's record over HTTP
+([What a script records](../08-scripting-and-voice.md#what-a-script-records)).
+
+- Every video route returns `hook_alternatives` and `script_warnings` as lists, `[]` for a video
+  with no record.
+- A `script` written through `PATCH` clears the four record columns. A `PATCH` that leaves the
+  script alone keeps them.
+- `GET /script-formulas` lists every formula and every hook type with its label.
+
 ### `test_voice_models.py`
 
 Covers per-voice ElevenLabs models over HTTP.
@@ -358,12 +369,15 @@ defaults, the seeding of new videos and the per-video pick.
   videos are seeded from the domain default, then the install default, and get nothing without a
   working GPU or on a Cartoon 3D video.
 - The per-video pick is frozen after `TOPIC_PROPOSED` and judged against the style the video will
-  have after the same `PATCH`. A switch to Cartoon 3D clears the mascot and its `mascot_version`.
+  have after the same `PATCH`. A switch to Cartoon 3D or Under the Hood clears the mascot and its
+  `mascot_version`. An Under the Hood video is seeded with no mascot, refuses a pick, and cannot be
+  approved while it holds one.
 
 Trap: the approving `PATCH` refuses a mascot archived since it was seeded, and repeats the check in
 its `UPDATE`, so an archive or a style write that commits between the check and the write still gets
-`409`. No sequence of requests may leave a Cartoon 3D video holding a mascot, because
-[the gateway refuses to hand it out](../11-rendering-and-review.md#refused-before-anything-renders).
+`409`. No sequence of requests may leave a Cartoon 3D or Under the Hood video holding a mascot,
+because [the gateway refuses to hand it out](../11-rendering-and-review.md#refused-before-anything-renders),
+which `test_render_gateway.py` checks for both styles.
 
 ## Publishing and Auto Pilot
 
@@ -425,6 +439,43 @@ Covers `metrics.poll`, the [metric snapshot pass](../14-publishing.md#capture).
 
 Trap: postforme's rate limit turns a request per publication into `429` answers that are caught and
 skipped. `video_metrics` is a time series, so a skipped reading is lost and not fetched later.
+
+### `test_watch_time.py`
+
+Covers the [watch figures](../14-publishing.md#watch-figures): `postforme.extract_retention`, the
+publication rows of `GET /analytics` and `GET /videos/<id>/publications`,
+`GET /analytics/watch-time`, and the worker storing a published video's length.
+
+- Each platform's keys and units: YouTube's seconds, percentage and engaged views, Instagram's and
+  Facebook's milliseconds, Facebook's own video length, and TikTok reporting nothing.
+- An absent figure is null and a reported zero count stays zero. Zero views gives no stayed
+  figure, a share above 100 is kept, and a value that is not a number, or is too large to divide, is
+  not reported.
+- An average of 0 seconds with no share, and a 0 share, are not reported, on every platform. An
+  average that rounds to 0 follows the same rule whatever the video's length, and YouTube's 0 whole
+  seconds beside a real share is kept. A reported share of 0 gets the stored length like an absent
+  one.
+- A division by a vanishing length or view count gives no figure, so the answer stays valid JSON.
+- The routes read the latest snapshot, whatever its age. A payload
+  that does not parse reports nothing, and watch figures are added to no total.
+- The grouped route answers for one account, the largest when none is named. A group's figure is
+  the median, `videos` counts every post and `n` counts the posts that report the measure.
+- Script length bands come back shortest first, and markup in a script is not counted as words. A
+  stray `<` in the words does not remove the words after it.
+- The length is stored for published, unarchived videos with a readable `timeline.json`, and a
+  stored length is not overwritten. One unreadable timeline leaves the other videos' lengths stored.
+  An infinite length, or one above a day, is not stored. `POST /analytics/refresh` stores lengths too.
+- A video on `auto` whose `resolved_renderer` is `cartoon_3d` is grouped as Cartoon 3D.
+- The `formula` and `hook_type` groupings use the labels of `tubematic_core/formulas.py`. A video
+  with neither on record is in a group named "Not recorded", and one with a formula and no hook
+  type, or the reverse, is in the named group of the one it has. An id `formulas.py` does not know
+  is shown as its own label. Each group's `key` is the stored id. One hook type under two formulas
+  is one group.
+- A failure while storing lengths leaves the metrics poll running.
+
+Trap: archiving deletes `timeline.json`, the only other record of a video's length, while its
+analytics continue. The tests archive a video with no stored length through the retention sweep and
+through `DELETE /videos/<id>`, and check that the length is there after the files are gone.
 
 ### `test_auto_pilot.py`
 

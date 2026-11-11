@@ -15,7 +15,7 @@ import {
 import { styleOptions, videoStyleLabel } from "@/lib/visualStyles";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { MascotPicker } from "@/components/MascotPicker";
-import { approvalMascot, showMascotPicker } from "@/lib/mascots";
+import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
 
 const STATUS_ACCENT: Partial<Record<string, string>> = {
   TOPIC_PROPOSED: "var(--amber)",
@@ -391,7 +391,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
             onChange={(e) => {
               const next = e.target.value as typeof selectedStyle;
               setSelectedStyle(next);
-              if (next === "cartoon_3d") setSelectedMascot("");
+              if (!styleTakesMascot(next, visualStyles)) setSelectedMascot("");
             }}
             title="Visual register for this video"
             style={{
@@ -420,7 +420,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
               mascots={mascots}
               gpu={gpu}
               value={selectedMascot}
-              locked={selectedStyle === "cartoon_3d"}
+              locked={!styleTakesMascot(selectedStyle, visualStyles)}
               onChange={setSelectedMascot}
             />
           </PickerField>
@@ -431,7 +431,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
           className="tm-btn"
           onClick={() => onAction(video.id, "approve-topic", video, {
             script_profile_id: selectedProfile, visual_style: selectedStyle,
-            ...(mascotShown ? { mascot_id: approvalMascot(selectedStyle, selectedMascot) } : {}),
+            ...(mascotShown ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}),
             ...topicVoicePayload(pickedVoice),
             ...topicApprovalPayload(video, agentList, picks),
           })}

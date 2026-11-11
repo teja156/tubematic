@@ -891,3 +891,37 @@ def test_an_abandoned_draft_is_not_reported_after_a_later_version_is_approved(cl
     item = {m["id"]: m for m in client.get("/mascots").get_json()}["moss"]
     assert item["approved_version"] == 3
     assert item["draft_version"] is None and item["sheets"]["draft"] is None
+
+
+# ── Under the Hood takes no mascot either (TMDEV-201) ────────────────────────
+# It has its own presenter in the corner a mascot would use, so the pack says
+# "mascot": false and every check above that keys on Cartoon 3D applies to it.
+
+def test_under_the_hood_is_seeded_without_a_mascot_and_refuses_one(client, db_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")   # the style needs a key
+    _gpu(db_path, "working")
+    _project(client, default_mascot_id="tubi")
+    vid = _video(client, visual_style="under_the_hood").get_json()["id"]
+    assert _mascot_of(db_path, vid) == ""
+    r = client.patch(f"/videos/{vid}", json={"mascot_id": "tubi"})
+    assert r.status_code == 400 and "Under the Hood" in r.get_json()["error"]
+
+
+def test_switching_to_under_the_hood_clears_the_mascot_and_still_approves(client, db_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    _gpu(db_path, "working")
+    vid = _proposed(client)
+    client.patch(f"/videos/{vid}", json={"mascot_id": "tubi"})
+    assert _mascot_of(db_path, vid) == "tubi"
+    r = client.patch(f"/videos/{vid}", json={"visual_style": "under_the_hood", "mascot_id": "tubi"})
+    assert r.status_code == 200 and r.get_json()["mascot_id"] == ""
+    assert client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED"}).status_code == 200
+
+
+def test_approving_an_under_the_hood_video_that_holds_a_mascot_is_refused(client, db_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    _gpu(db_path, "working")
+    vid = _proposed(client)
+    _sql(db_path, "UPDATE videos SET visual_style = 'under_the_hood', mascot_id = 'tubi' WHERE id = ?", (vid,))
+    r = client.patch(f"/videos/{vid}", json={"status": "TOPIC_APPROVED"})
+    assert r.status_code == 409 and "Under the Hood" in r.get_json()["error"]

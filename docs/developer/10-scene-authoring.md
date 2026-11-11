@@ -50,8 +50,9 @@ skill also call a style a **register**.
 style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
-does not decide any beat's treatment. `cartoon_3d`, `system_flow`, `bean_explainer` and `whiteboard` replace the
-scene system with one whole-video scene of their own.
+does not decide any beat's treatment. `cartoon_3d`, `system_flow`, `bean_explainer`, `whiteboard`,
+`storybook_atlas`, `terminal_doc` and `under_the_hood` replace the scene system with one whole-video
+scene of their own.
 
 | `visual_style` | Canvas | Figures | Hand-drawn line art | Generated characters |
 |---|---|---|---|---|
@@ -62,6 +63,9 @@ scene system with one whole-video scene of their own.
 | `system_flow` | `dark` | No | No | No |
 | `bean_explainer` | `light`, painted over by its own colour field | Its own cast | No | No |
 | `whiteboard` | `light` | No | No | No |
+| `storybook_atlas` | `light`, painted over by its own paper | Its own cast | No | No |
+| `terminal_doc` | `dark` | No | No | No |
+| `under_the_hood` | `dark` | Its own presenter | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
@@ -69,20 +73,26 @@ The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `ch
 `characters_allowed` gates the `generate_character` tool. `figures_allowed` and `line_art_allowed` go
 into the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses), so the reviewer judges a video
 against the look it was meant to have. `cartoon_3d` replaces the scene system with one 3D world
-([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)), and
-`bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)), and `whiteboard`
-with one board scene ([Whiteboard](#whiteboard)).
+([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)),
+`bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)), `whiteboard`
+with one board scene ([Whiteboard](#whiteboard)), `storybook_atlas` with one picture-book scene
+([Storybook Atlas](#storybook-atlas)), `terminal_doc` with one typographic scene
+([Terminal Doc](#terminal-doc)), and `under_the_hood` with one scene of annotated close-up
+photographs ([Under the Hood](#under-the-hood)).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
-chosen. Two styles have a need:
+chosen. Three styles have a need:
 
 - `illustrated` needs a stored OpenAI key, because an OpenAI image model draws its characters
   (`ILLUSTRATED_NEEDS_OPENAI_KEY`).
+- `under_the_hood` needs a stored OpenAI key, because its plates are generated photographs. The
+  refusal text is its pack's `messages.openai_key`.
 - `cartoon_3d` needs a renderer whose [GPU test](20-gpu-and-remote-renderers.md#the-gpu-test) passed
   (`CARTOON3D_NEEDS_GPU`, `CARTOON3D_GPU_UNKNOWN`). Software WebGL can render the style, at about 50
   minutes for a 90-second Short, so the rule is a policy.
 
-`get_video` reports both conditions to the agent as `illustrated_available` and
+`get_video` reports the two conditions to the agent as `illustrated_available` (true when an
+OpenAI key is stored, which Under the Hood needs too) and
 `cartoon_3d_available`, and gives the video's own style as `style`: its label, canvas, permissions
 and `authoring_skill`.
 
@@ -102,12 +112,13 @@ style.
 | `canvas` | The canvas the style fixes, or `null` when the agent chooses it |
 | `allows` | `figures`, `line_art` and `generated_characters`: the three permission columns above |
 | `needs`, `messages` | Whether the style needs an OpenAI key or a working GPU, and the refusal text for each |
+| `mascot` | Optional. `false` when a video of the style may not carry a mascot, with the refusal in `messages.mascot`. A 3D-world style takes none by its renderer |
 | `authoring_skill` | The skill that authors a video in this style; `get_video` returns it as `style.authoring_skill` |
 | `review` | Optional. The style's own block for the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses) |
 | `captions` | Optional. The `subtitles` settings `write_scene_config` fills in when a config has none |
 | `routing` | What Auto reads to pick a style: `best_for`, `avoid_for`, `signals`, and the optional `moods` and `images` (below) |
 | `script` | Optional. How to write the narration and each segment's `visual` brief for this style; `get_video` returns it as `style.script` and the script-writing skill follows it |
-| `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's cast and prop catalogue or Whiteboard's doodle library |
+| `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's and Storybook Atlas's cast and prop catalogues or Whiteboard's doodle library |
 
 The `routing` block lists what the style suits (`best_for`), what it must not get (`avoid_for`) and
 the signals in a topic or script that point to it (`signals`). Two fields are optional: `moods`, the
@@ -157,7 +168,8 @@ flowchart TD
 The candidates are data: `tubematic_core/visual_styles.py::routing_candidates` lists every style
 pack in pack order, then `scenes`, each with its `routing` block and whether this install and this
 video can have it. A style that needs an OpenAI key or a working GPU the install lacks is
-unavailable, and so is a 3D-world style on a video with a mascot. The skill names no style, so a new
+unavailable, and so is a style that takes no mascot (a 3D world, or a pack with `"mascot": false`)
+on a video with a mascot. The skill names no style, so a new
 pack with a `routing` block is a candidate the day it ships.
 
 The outcome is recorded in three columns ([`videos`](03-database.md#videos)):
@@ -297,7 +309,7 @@ resolve, so a video with no images passes.
 
 The renderer draws the narration over every video as captions
 ([Captions](09-remotion-project.md#captions)). A scene therefore carries no text unless the text is
-the content. The skill's complete list of justified text:
+the content. Terminal Doc is the one style whose content is text ([Terminal Doc](#terminal-doc)). The skill's complete list of justified text:
 
 - A number the viewer must read.
 - A label pinned to part of a diagram or an image.
@@ -592,9 +604,11 @@ cannot be drawn fails the render, so no frame goes out without the bean.
   `prop-<name>` file, a box outside 60 to 700 px a side, a text slot over 40 characters or more than 4
   acts. Its file is missing, has no default export, imports anything but `react`, `remotion` and the
   library's `props/common`, `bean` and `contract` (in an `import` or an `export ... from`), calls
-  `require`, or uses an SVG filter, a gradient, a pattern, a
-  dashed stroke, an image, embedded HTML, a fetch, randomness or the clock
-  (`bean_explainer.py::FORBIDDEN_SOURCE`).
+  `require`, or uses an SVG filter, an SVG or CSS gradient, a backdrop filter or blend mode, a pattern,
+  a dashed stroke, an image, embedded HTML, Remotion's media or render-control parts, a fetch, a
+  dynamic import, randomness, the clock, `performance`, `crypto`, a timer, the page (`window`,
+  `document`, `globalThis`), `eval` or a `Function` constructor (`bean_explainer.py::FORBIDDEN_SOURCE`).
+  The patterns read the raw file, comments included.
 - Nothing changes for more than 3 seconds.
 
 `mcp/tests/test_bean_explainer.py` pins `bean_explainer.py` to `contract.ts` and to the pack. The
@@ -603,6 +617,96 @@ prop files again as they are on disk (`server.py::_bean_custom_prop_errors`), be
 redraws a prop after the config is written. The text-layout audit samples each shot
 as if it were a scene, from the end of the badge carousel when the shot opens a list section. A Bean Explainer video can have a mascot; the skill keeps it small and to one
 side.
+
+## Terminal Doc
+
+A Terminal Doc video is one installed scene, `TerminalDoc`, that spans the whole video: a dark
+typographic documentary where the text is the picture. Sparse monospace capitals sit on near-black,
+letters lift out of a word and arc into a new one, numbers resolve out of glyph noise, and one element
+at a time glows red or blue. The agent writes `props.terminalDoc: {skin, beats, customMoves}` with the
+`tubematic-terminal-doc` skill, whose `reference/contract.md` documents every field and whose
+`reference/example-config.json` is the worked example.
+
+`skin` is the house look (white and grey on near-black) or `crt` (amber phosphor with scanlines and a
+vignette). The agent picks it per video; the captions follow it. A beat is a cut and starts empty.
+Its events are moves, each placed in a named slot (a context line, three stage bands `a` to `c`, a
+note line), never in pixels:
+
+| Move | What the scene draws |
+|---|---|
+| `word` | A string scrambles, types or cuts in |
+| `rearrange` | The letters of one element lift and arc into a new string; missing letters come out of noise |
+| `encode` | A string flies into a box labelled with an operation (HASH, BASE64) and comes out as another |
+| `number` | A number resolves out of glyph noise right to left, or counts up |
+| `wall` | A grey ciphertext wall fades up behind the stage, and holds across beats |
+| `grid` | An alphabet or table builds row by row across the stage |
+| `stream` | Guesses race through a slot and lock on the target in red |
+| `bracket` | A hairline under an element with a short label, and a quoted note with a citation |
+| `glow` | One element, row or span turns red or blue; a later glow fades it out |
+| `type` | A command typed behind a `$` prompt, then its output |
+| `push` | A slow push-in over a held beat |
+| `clear` | Elements fade out and free their slots |
+| `custom` | A move the agent wrote for this video |
+
+Where no shipped move can show a beat, the agent writes its own: a TSX component in
+`generated/<video_id>/move-<name>.tsx` that draws from the frame it is given, built from
+`terminalDoc/kit.tsx`, listed in `customMoves` and looked at with
+[`preview_terminal_moves`](06-mcp-server.md#preview_terminal_moves) before it submits. It is held to
+Bean Explainer's render-cost and import rules, and it may not read the frame itself, which is what lets
+the preview show four moments of it in one picture.
+
+The renderer's side is `src/scenes/installed/TerminalDoc.tsx` with `terminalDoc/`:
+
+- `contract.ts` holds the slots, sizes, limits, timings and how long each move takes.
+- `stage.ts` works out what is on stage at a frame; `moves.tsx` draws each move.
+- `kit.tsx` holds the helpers the shipped moves and the agent's moves share, and the two skins.
+- `backdrop.tsx` draws the ciphertext wall and the CRT glass on canvases.
+- `fonts.tsx` loads IBM Plex Mono and VT323 apart from the scene, for the preview.
+
+Every glyph sits in a cell 0.6 of its size wide whatever the font, so the validator's fit check is a
+character count and a letter can leave its cell to fly somewhere else. The wall is drawn to a canvas
+only when its flicker changes, with its fades baked into each glyph: in software GL a wall of DOM text
+under a mask gradient cost about 1.6 CPU-seconds a frame. The measured costs are in
+`TerminalDoc.tsx`'s header comment.
+
+`mcp/terminal_doc.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `terminal_doc` video has anything but the one `TerminalDoc` scene, from frame 0 for
+  `totalFrames`, or another style uses `TerminalDoc`.
+- A beat after the first does not start within 2 frames of a word, or lasts under 2 seconds.
+- A move names an unknown slot, size, tone or skin, a string does not fit the frame at its size, a
+  note wraps past 2 lines of 36 characters, a word holds a `^` (a power is a `number`), or a value is
+  out of its range.
+- Two elements share a slot, more than 4 elements are on screen at once, or a bracket reaches into a
+  taken slot below it. An `encode`'s box holds slot `b` while it plays and a bracket's note holds the
+  note slot to the cut, a bracket that reaches below its slot holds the slot below, and a `rearrange`
+  or `encode` holds its source's slot until the source's last letter has left it, against elements
+  before and after them.
+- A move acts on an element that is not on stage or has not finished its own move, or finishes less
+  than 15 frames before its beat's cut. A typed command or a custom move is given a glow, which
+  neither draws, or a custom move a bracket. A `rearrange` or `encode` takes its letters from a grid,
+  a typed command, a custom move or a number with an exponent, whose letters the scene cannot fly, or
+  from an element with a bracket, which would vanish in one frame.
+- A beat's push would scale a string past the frame's edges, or the beat also has a custom move,
+  which draws in fixed frame pixels and cannot follow the push.
+- Stage text repeats 4 or more narration words in a row.
+- A custom move has more than 6 per video, a shipped move's name, a `src` that is not this video's
+  `move-<name>` file, or a source that breaks Bean Explainer's rules, uses a CSS gradient, backdrop
+  filter or blend mode, a dynamic import, `performance.now`, Remotion's media or render-control parts,
+  state, effects or timers, or reads the frame itself (`terminal_doc.py::FORBIDDEN_SOURCE`). The
+  patterns read the raw file, comments included: a comment stripper that misreads a regex literal
+  would blank real code.
+- Nothing changes on stage for more than 3 seconds.
+
+`mcp/tests/test_terminal_doc.py` pins `terminal_doc.py` to `contract.ts` and to the pack. The pack's
+captions, with the skin's colours over them, fill every `subtitles` key the config leaves out: the
+[`log` look](09-remotion-project.md#captions). `validate_job` checks the custom move files again as
+they are on disk (`server.py::_td_custom_move_errors`). The text-layout audit samples each beat as if
+it were a scene. A Terminal Doc video can have a mascot; the skill keeps it below the captions, off
+the stage.
+
+The section [On-screen text is the exception](#on-screen-text-is-the-exception) does not apply to this
+style: its stage is text, and the echo rule above keeps it from repeating the captions.
 
 ---
 
@@ -695,6 +799,194 @@ as if each were a scene.
 
 ---
 
+## Storybook Atlas
+
+A Storybook Atlas video is one installed scene, `StorybookAtlas`, that spans the whole video: a vintage
+picture book told in 3 to 5 chapters. Each chapter opens with a plaque (a Roman numeral, a typed title,
+an italic byline, a wax seal) over a backdrop; a small mouse in a waistcoat, the guide, walks beside the
+story, and flat picture-book people and hatched props arrive on the narrator's words. The agent writes no
+scene code. Its props carry `storybookAtlas: {guide, cast, chapters, customProps}`, written with the
+`tubematic-storybook-atlas` skill, whose `reference/contract.md` documents every field, the backdrops,
+the people's knobs and the prop catalogue, and whose `reference/example-config.json` is the worked
+example.
+
+- A chapter has a `start` on a word, a `title`, a `byline`, a `backdrop` from a set of ten, and an
+  `enter`: `push` through a prop with a portal (a door, a porthole, the relay cabinet) into white, or a
+  hatched diagonal `wipe`.
+- The cast is at most four people, each made of knobs (build, skin, hair, face, hat, garment, colour)
+  on one rig and named by a tag printed under their feet. A person from history is shown by name and
+  costume, never by likeness. The guide is the same house character in every video; only its waistcoat
+  colour changes.
+
+| Event | What the scene draws |
+|---|---|
+| `guide`, `person` | The actor walks on twos to `x` at 9 px a frame, then holds a pose; a person's first event walks them in from the nearer edge (to x 540 when it gives none), `exit` walks them off |
+| `prop` | A library prop, or one the agent drew, pops, drops, slides, rises or fades in, and stays for the chapter |
+| `act` | The prop moves once (wobble, bounce, shake, spin, swing, pulse), gets a halo (`glow`), switches to its second drawing (`switch`), or runs through its drawings (`cycle`) |
+| `tag` | A small printed label under a prop |
+| `constellation` | A plate: stars drift into letters and gold strokes join them, then optionally redraw a second set of words |
+| `gauge` | A plate: a brass dial whose needle springs to a value past it and settles |
+| `morph` | A plate: an ink-dot galaxy scatters and regroups as a prop's silhouette or a word, then the drawing fades in |
+
+A plate opens over the stage behind brass shutters and nothing else happens on stage while it is open.
+
+Most props come from a library of 43, drawn once in the book's ink and checked by a person on a model
+sheet (the `StorybookSheet` composition, which also shows the guide, the people and the backdrops). For
+an object the story is about that the library lacks, the agent draws its own as a TSX component in
+`generated/<video_id>/prop-<name>.tsx`, lists it in `customProps` with its box, place, states and acts,
+and looks at it with [`render_storybook_props`](06-mcp-server.md#render_storybook_props). A custom prop
+can be a morph target and, with a `portal`, a push's way into the next chapter.
+
+The renderer's side is `src/scenes/installed/StorybookAtlas.tsx` with `storybookAtlas/`:
+
+- `contract.ts` holds the limits, timings and stage; the prop catalogue is written beside each drawing in
+  `props/`, and the pack's `extra` (catalogue, backdrops, poses, knobs) is a copy the validator reads.
+  `storybook-tools/sync-contract.mjs` writes that copy and the shared test cases from this code.
+- `stage.ts` works out what is on stage at a frame: walks, props and their states, plates and
+  transitions.
+- `bitmap.tsx` draws each picture once and reuses it: every backdrop, prop state and look of the guide
+  or a person is a bitmap, and a frame only moves, scales and fades bitmaps.
+- `plates.tsx` draws the three plates, `glyphs.ts` the constellation lettering (A to Z and 0 to 9 as
+  polylines on a 4 by 6 grid).
+- `StorybookPropPreview.tsx` is the picture `render_storybook_props` returns.
+
+On the CPU renderer a frame costs in proportion to how much fine detail the whole frame holds, because
+every frame is screenshotted and encoded, and each full-frame textured layer adds about 0.13
+CPU-seconds a frame however still it is. So the backdrop is the one full-frame picture: a canvas
+painted once, with the book's frame and vignette drawn into it, and there is no paper grain (noise over
+the hatching cost about 0.18 CPU-seconds a frame by itself). The live parts follow System Flow's
+rules: no SVG filter, gradient, pattern or `stroke-dasharray`. A plate repaints its canvas only while
+something on it moves. The whole worked example costs 0.34 CPU-seconds a frame (System Flow's 0.17,
+Bean Explainer's 0.28): the picture-book detail is the price, since a settled chapter alone costs
+about 0.30. The measurements are in `StorybookAtlas.tsx`'s header comment.
+
+`mcp/storybook_atlas.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `storybook_atlas` video has anything but the one `StorybookAtlas` scene, from frame 0 for
+  `totalFrames`, or another style uses `StorybookAtlas`.
+- There are fewer than 3 or more than 5 chapters, the first does not start at frame 0, a later one does
+  not start within 2 frames of a word, or a chapter lasts under 8 seconds.
+- A title does not fit 2 lines of 18 characters, a byline runs past 28, or a backdrop, coat, knob, pose,
+  prop, entrance or act is not in the catalogue or the video's `customProps`.
+- An event is not on a word, or comes in its chapter's last 20 frames; an act starts before its prop has
+  landed; a tag goes on a prop not yet on stage; a push has no portal prop on stage in the chapter
+  before; the guide is told to exit. A prop shows its latest tag, and a tag is checked from its own
+  frame. On one frame, a prop comes before an act or a tag that names it, in any listed order.
+- A plate lasts under 2.5 or over 8 seconds, overlaps another, is not closed 20 frames before its
+  chapter ends (the scene draws no plate during a push or a wipe), opens within 14 frames of a later
+  chapter's start, or anything else happens on stage while it is open; a constellation's words are not 1 or 2
+  words of letters and digits; a gauge's values are not between 0 and its maximum.
+- The cast is over four, more than two people are on stage at once, or a chapter holds more than six
+  props.
+- A prop reaches outside the stage, floor props or wall props overlap each other, two people or a
+  person and the guide stand in one place, someone stands inside a floor prop, two name tags touch, or
+  a tag runs off the frame.
+  Only where people stand still is checked; walking past is free.
+- A custom prop breaks Bean Explainer's rules for one (its count, id, `src` and box) or its source
+  imports anything but `react` and the style's `ink` and `palette`, or uses an SVG filter, a gradient,
+  a pattern of its own, SVG text, an image, a fetch, randomness, the clock or a timer, the page
+  (`window`, `document`, `globalThis`), `eval`, a `Function` constructor, a dynamic import or a network
+  call (`storybook_atlas.py::FORBIDDEN_SOURCE`, checked with comments removed and strings kept). SVG
+  text is refused because a prop is drawn into a bitmap, where the page's fonts do not reach. A dashed
+  stroke is allowed, unlike in Bean Explainer, because a bitmap is drawn once. The checks keep an
+  agent's ordinary mistakes out; they are not a sandbox, as for every agent-written scene.
+- Nothing new happens on stage for more than 4 seconds.
+
+`mcp/tests/test_storybook_atlas.py` pins `storybook_atlas.py` to `contract.ts` and `stage.ts` through
+the shared cases in `fixtures/storybook_atlas_contract.json`, which `stage.ts` itself generated. The
+pack's `captions` (the `label` caption background) fill every `subtitles` key the config leaves out.
+`validate_job` checks the custom prop files again as they are on disk
+(`server.py::_storybook_custom_prop_errors`). The text-layout audit samples each stretch between two
+events once things have arrived, leaving out the frames of a push or a wipe, where two chapters' text
+is on the page at once. A Storybook Atlas video can have a mascot; the skill keeps it small and
+to one side, away from the guide.
+
+## Under the Hood
+
+An Under the Hood video is one installed scene, `UnderTheHood`, that spans the whole video: close-up
+photographs of one physical object (plates), each pushing in slowly, with short capital labels joined
+to its parts by leader lines, outlines, gold field arcs, ticking counters, a big stat, a line chart,
+tiny footnotes and a house presenter who swaps whole poses in the bottom right. The captions are the
+shared caption layer in its `selection` look near the top. The agent writes no code for it. Its props
+carry `underTheHood: {plates}`, written with the `tubematic-under-the-hood` skill, whose
+`reference/contract.md` documents every field and whose `reference/example-config.json` is the worked
+example.
+
+The frame has fixed zones, so nothing the agent places can land on another: captions centred at 19% of
+the height, the plate band from 460 to 1350 px, the counter row and the footnote bottom left, the
+presenter bottom right.
+
+| Event | What the scene draws |
+|---|---|
+| `callout` | A capital label in a dark chip, with a line to a point of the photograph |
+| `outline` | A box or corner brackets over a region of the photograph, drawn on in 8 frames |
+| `arcs` | A fan of gold arcs rising from one point and bending toward another over 20 frames, with sparks; all of it holds still 65 frames after it starts |
+| `counters` | Up to four monospace values ticking to new ones in 4-frame steps; changed ones turn bold white |
+| `stat` | A huge numeral counting up, with a capital label and an optional chip |
+| `chart` | A line drawing left to right on a plate with no photograph, its head value shown large |
+| `footnote` | Tiny grey text such as "Magnified illustration" |
+| `pose` | The presenter swaps to one of nine poses, with one 50/50 dissolve frame |
+
+A plate is a photograph from `generate_image` or, for a chart, a plain dark panel. Every point the agent
+pins is [u, v] in the photograph's own space, read off `read_image`'s grid, and the scene projects it
+through the plate's camera (`contract.ts::projectAt`, the same mapping as
+`ImageFX.project()`), so a label stays on its part as the plate pushes in about 1% a second. A plate
+can enter by a zoom-through: the previous photograph rushes from 1x to 4x into a point over 6 frames,
+and its labels fade with it.
+
+The renderer's side is `src/scenes/installed/UnderTheHood.tsx` with `underTheHood/`:
+
+- `contract.ts` holds the limits, timings, zones and the projection.
+- `stage.ts` works out the plate, the camera and its transitions, the presenter's pose, mouth and
+  blink at a frame.
+- `presenter.tsx` draws the presenter from a pose table, and `sprite.tsx` draws each distinct look
+  once as a bitmap, as Bean Explainer's bean is. The mouth moves only while a word is spoken; it does
+  not lip-sync.
+- `PresenterSheet.tsx` is the presenter's model sheet, the `PresenterSheet` composition.
+
+The scene follows System Flow's rules (no SVG filter, gradient, pattern or `stroke-dasharray`; an
+arc's glow is a wider translucent stroke and the band's fade into the canvas is a stack of flat
+strips), sizes every overlay layer to the plate band, and holds the arcs and sparks still 65 frames
+after they start.
+Measured on the CPU renderer over the whole example video, it costs about 1.6 times System Flow's
+example, about the ratio Bean Explainer measured. About three quarters of that is the slow push itself:
+every frame is a new photograph to capture and encode, which the look requires.
+
+`mcp/under_the_hood.py` checks a config in `write_scene_config` and refuses it when:
+
+- An `under_the_hood` video has anything but the one `UnderTheHood` scene, from frame 0 for
+  `totalFrames`, or another style uses `UnderTheHood`.
+- A plate after the first does not start within 2 frames of a word, or lasts under 1.5 seconds, or the
+  video has more than 30 plates or more than 12 different photographs.
+- An image is not this video's `/public/<video_id>/images/` path, or a photograph at its `focus` and
+  `zoom` does not cover the plate band, so its edge would show.
+- A pinned point comes within 45 px of the band's edge (half its darkened fade) before its plate ends
+  (or, on a plate that zooms in, during its settle), or sits under a chip or the stat; a chip leaves the band or the side margins, sits within
+  40 px of its point, or overlaps another chip, the stat or the chart.
+- A plate holds more than 6 callouts, outlines, arc fans, stats and charts, or more than one counter
+  row, stat, chart or footnote; a callout, outline or arc is on a plate with no photograph, or a chart
+  on one with a photograph.
+- A pose is off a word or within 8 frames of the last; an event starts too late to finish and be read
+  before its plate ends (20 frames for text, plus the count of a stat or counters and the draw of a
+  chart; 6 frames earlier on a plate a zoom-through ends).
+- A stat or chart number is beyond 9999999 either way, a stat or a chart's value is too wide for the
+  frame, or a counter row's digits do not fit their columns. The widths are estimates from the bundled
+  fonts' typical characters, not their widest: a label of all M or W can still run past its chip, and
+  the text-layout audit reports that only when the overflow reaches other text.
+- Nothing new happens for more than 3 seconds, the stretch the AI review is told to report. A pose
+  that repeats the presenter's current pose does not count as new and is refused.
+
+`write_scene_config` reads each photograph's height over width from its file into the plate's
+`aspect`, because every pinned-point check depends on it; the agent never writes it. `validate_job`
+reads the photographs again and refuses a config whose stored aspect differs from its photograph's,
+which happens when a photograph is regenerated after the config was written.
+`generate_image` refuses a 13th new image name on an Under the Hood video before the paid call, and
+allows regenerating an existing one. `mcp/tests/test_under_the_hood.py` pins `under_the_hood.py` to
+`contract.ts` and to the pack. The pack's `captions` fill every `subtitles` key the config leaves out.
+The text-layout audit samples each plate as if it were a scene, and stops before a zoom-through.
+
+---
+
 ## Mascots
 
 A mascot is an optional on-screen character that reacts to the narration: it walks on, shows an
@@ -757,7 +1049,9 @@ The geometry constants in `mascots.py` are copies of the engine's, of `Subtitles
 `text_audit.py`'s. Agreement tests keep them in step.
 
 The mascot is drawn under the captions, so it cannot hide one. It can hide a scene's text, which
-[`validate_job` reports as a warning](#text-layout-warnings). A Cartoon 3D video cannot have a mascot.
+[`validate_job` reports as a warning](#text-layout-warnings). A Cartoon 3D or Under the Hood video
+cannot have a mascot: the first has no mascot layer, and the second's presenter stands where a
+mascot would.
 
 ---
 

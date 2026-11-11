@@ -3,8 +3,10 @@
 The suite covers the pure TypeScript helpers of the Remotion project's
 [Cartoon 3D kit](../09-remotion-project.md#the-cartoon-3d-kit) and of the
 [`SystemFlow`](../09-remotion-project.md#systemflow),
-[`BeanExplainer`](../09-remotion-project.md#beanexplainer) and
-[`Whiteboard`](../09-remotion-project.md#whiteboard) scenes. Each test file sits beside the code
+[`BeanExplainer`](../09-remotion-project.md#beanexplainer),
+[`Whiteboard`](../09-remotion-project.md#whiteboard),
+[`TerminalDoc`](../09-remotion-project.md#terminaldoc) and
+[`UnderTheHood`](../09-remotion-project.md#underthehood) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -20,6 +22,26 @@ does not run `npm test`, so run the suite yourself after you change either modul
 
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).
+
+## Storybook Atlas
+
+### `src/scenes/installed/storybookAtlas/storybookAtlas.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the glyphs, the plates' gauge and the prop library
+([Storybook Atlas](../10-scene-authoring.md#storybook-atlas)).
+
+- The constants, title wrapping and walks agree with the shared cases `mcp/tests/test_storybook_atlas.py`
+  runs.
+- The style pack lists the coats, backdrops, poses and knobs the renderer draws, and no others, and its
+  `extra.props` equals the catalogue the library declares beside its drawings; its captions use the
+  `label` background and the bundled serif.
+- Every library prop has a box, a place, at least one act, a second state when it can `switch` or
+  `cycle`, and a portal inside its box; the door and the porthole have portals. Every glyph the
+  contract allows can be lettered, and a nine-letter word fits its plate.
+- A `switch` shows the second drawing and stays there; a transform act runs for its length and stops;
+  the gauge needle overshoots and settles on its value with no remainder; a plate opens, holds and closes; the
+  example pushes out of its first chapter and wipes into its third; its events stay inside their
+  chapters.
 
 ## Bean Explainer
 
@@ -42,6 +64,38 @@ Covers `contract.ts`, `stage.ts`, the rig in `bean.tsx` and the prop library
 
 Trap: a remainder matters for render time. A spring that only approaches its rest repaints its
 layer on every frame, which on the CPU renderer cost more than drawing the bean.
+
+## Terminal Doc
+
+### `src/scenes/installed/terminalDoc/terminalDoc.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the letter map in `moves.tsx` and the kit
+([Terminal Doc](../10-scene-authoring.md#terminal-doc)).
+
+- The characters that fit at each size, a number's cells, note wrapping and every move's length
+  agree with the shared cases `mcp/tests/test_terminal_doc.py` runs.
+- The beat on screen is the last one started, and a beat starts empty. An `encode` hands its source's
+  letters to the new element. A later glow fades the earlier one out, the wall's level holds across
+  beats, and a push eases in and holds.
+- A `rearrange` flies each letter to the nearest cell holding the same character and makes the rest
+  from noise. Noise, scrambles and typing are pure functions of their seed and frame, so two renders
+  of a video draw the same frames.
+
+## Under the Hood
+
+### `src/scenes/installed/underTheHood/underTheHood.test.ts`
+
+Covers `contract.ts`, `stage.ts` and the presenter's pose table
+([Under the Hood](../10-scene-authoring.md#under-the-hood)).
+
+- Points, the photograph's box, the push, chip and stat boxes, the stat's text, the leader's start
+  and overlap are computed as in the shared cases `mcp/tests/test_under_the_hood.py` runs.
+- Every pose the contract lists has a drawing. The presenter starts idle and swaps on a pose's frame
+  with one dissolve frame; its mouth moves only while a word is spoken; it blinks for two frames.
+- The plate on screen changes at its start; the push grows the scale and keeps a pinned point on its
+  spot; a zoom-through rushes the outgoing plate into its `through` point, which holds still, and the
+  new plate settles from 1.25x; a cut cross-fades over its fade frames.
+- Counters tick in steps and settle on their value; a stat counts up to its value and stays there.
 
 ## System Flow
 

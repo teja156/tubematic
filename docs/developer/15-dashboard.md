@@ -219,7 +219,7 @@ What each page is for is in [The Dashboard: Pages](../user-guide/04-dashboard.md
 | `/projects` | `app/projects/page.tsx` | Two panes, with its own action dispatcher (see [Actions](#actions)). An expired domain carries a badge |
 | `/script-profiles` | `app/script-profiles/page.tsx` | Creates, polls and deletes through `/script-profiles`. See [Script profiles](08-scripting-and-voice.md#script-profiles) |
 | `/mascots` | `app/mascots/page.tsx` | The mascot library. `ProfilesNav.tsx` switches between it and Script Profiles under the one **Profiles** tab. Model sheets are `<img>` tags that point at `/mascot-sheets/...` |
-| `/socials`, `/analytics` | `app/socials/page.tsx`, `app/analytics/page.tsx` | See [Publishing surfaces](#publishing-surfaces). The Spend tab is `SpendCard.tsx` |
+| `/socials`, `/analytics` | `app/socials/page.tsx`, `app/analytics/page.tsx` | See [Publishing surfaces](#publishing-surfaces). The Spend tab is `SpendCard.tsx` and the Watch time tab is `WatchTimePanel.tsx` |
 | `/logs` | `app/logs/page.tsx` | Filters by service, minimum level, free text and row limit, with no live tail. It reads through the proxy, so the container needs no log mount |
 | `/settings` | `app/settings/page.tsx` | See [The settings page](#the-settings-page) |
 | `/login` | `app/login/page.tsx` | See [Signing in](#signing-in) |
@@ -349,7 +349,7 @@ row mounted could show one choice and send another.
 | Field | Approve Topic | Approve Script | Request Revision |
 |---|---|---|---|
 | `script_profile_id`, `visual_style` | Always | No | No |
-| `mascot_id` | When the mascot picker is shown. `""` for a Cartoon 3D video | No | No |
+| `mascot_id` | When the mascot picker is shown. `""` for a style that takes no mascot (Cartoon 3D, Under the Hood) | No | No |
 | `voice_id` | Only when a voice was picked | Always, the shown voice | No |
 | `agent_id` | Only when a different agent was picked | Same | Same |
 | `agent_model` | Always: the picked model, or the agent's default (`""` when the picker is disabled) | When picked, or when the agent changed | Same as Approve Script |
@@ -442,8 +442,8 @@ The rules are in `lib/mascots.ts`. A mascot is drawn on the GPU only, so the mas
 only while `GET /render/gpu` says `working`. A page that has not loaded the GPU status counts
 mascots as unavailable, the opposite of the visual-style rule, so that an untouched picker cannot
 send a mascot the API would refuse. "No mascot" stays selectable, and a held mascot that is not
-offered shows as unavailable. `approvalMascot` sends `""` for a Cartoon 3D video, which has no
-mascot layer.
+offered shows as unavailable. `approvalMascot` sends `""` for a style that takes no mascot
+(`styleTakesMascot`): Cartoon 3D, and any style the served list marks `mascot: false`.
 
 ### Agent, model and effort pickers
 
@@ -492,6 +492,12 @@ Effort:
 
 - Tabs: Topic, Script, Video, Publishing Results, Comments and Logs. Script, Video and Publishing
   Results appear once they have content. Logs is always present.
+- The Script tab opens with what the agent recorded with the script (`components/ScriptRecord.tsx`):
+  the formula, the type of the opening in use, the three openings drafted and the
+  [script warnings](08-scripting-and-voice.md#script-warnings). It is read-only and renders nothing
+  for a script with no record. It takes the labels from
+  [`GET /script-formulas`](05-http-api.md#get-script-formulas), fetched when a record is shown, and
+  shows the ids until that answers. A segment that carries a `beat` shows it above its text.
 - The sidebar holds the actions for the video's status (including Delete), a **Published to**
   section with a link to each live post, metadata, the cost breakdown (`CostBreakdown.tsx`) and the
   AI review feedback.
@@ -529,7 +535,7 @@ The video window adds, by status:
 
 | Status | Control |
 |---|---|
-| Any, once the video has publications | The Publishing Results tab: one row per target with platform, status, live URL and, for a failure, the reason |
+| Any, once the video has publications | The Publishing Results tab: one row per target with platform, status, live URL, the reason for a failure and, for a published post, its latest figures |
 | `FAILED` with publication rows | **Retry publishing**, where publishing is enabled. It refreshes in place when a live post was found and opens `PublishDialog` on `republish` |
 | `PARTIALLY_PUBLISHED` | **Mark as published…**, whether or not publishing is enabled, since it is the only way out. The confirm dialog shows the account count, the download-first warning and a **Download video** link, and waits until the publication rows have loaded |
 | `SCHEDULED` | **Scheduled for**, in the zone the time was picked in and in the host's zone when they differ. **Cancel schedule** (after a confirm) where publishing is enabled. A refusal is shown inline |
@@ -553,7 +559,8 @@ allowlist.
 
 The Analytics page's **Videos** tab:
 
-- An unreported metric shows a dash and sorts below a real 0.
+- An unreported metric shows a dash and sorts below a real 0. The watch columns (**Watched**,
+  **% watched**, **Stayed**) follow the same rule, and `lib/format.ts` formats them.
 - The graphs are `AnalyticsCharts.tsx`: views per platform, per account and gained per month. They
   follow the filters, and clicking a platform or account bar sets or clears that filter.
 - The platform and account bars are summed from the page's rows. The API's `by_platform` counts an
@@ -567,6 +574,23 @@ The Analytics page's **Videos** tab:
   `lib/platforms.ts::accountLabel` shows the account id with the platform.
 - The charts use plain elements and no charting library, so the unit suite can test them.
 
+The **Watch time** tab is `WatchTimePanel.tsx`, mounted while the tab is open:
+
+- Its first request names no account, and the API answers for the account with the most posts. The
+  account select re-reads for the account picked.
+- One response holds every grouping, so **Group by** changes the table without a request.
+- A group with fewer videos than the response's `min_group` is tagged `TOO FEW`. A figure reported
+  by only some of the group's videos shows `(n of videos)`, with `too few` added when `n` is under
+  `min_group`.
+- The table is drawn only while the response's account is the account the select names. A pick
+  that is still loading, or that failed, shows no table.
+- A measure no video reports shows a dash. When no measure is reported at all, a line names the
+  platform.
+
+In the video window, `PublicationFigures.tsx` lists a published post's counts and watch figures
+from `GET /videos/<id>/publications`. A figure the platform did not report reads "not reported", and
+a post with no snapshot yet shows one line saying so.
+
 ---
 
 ## Components
@@ -577,12 +601,13 @@ Components that a section above covers are left out of this table.
 |---|---|
 | `KanbanBoard.tsx`, `KanbanColumn.tsx`, `KanbanCard.tsx` | The board. A card shows a score dot (a dash when unscored), the display name, the `strategy` tag, relative age, a **STUCK** tag (`agent_stuck_at`), a scheduled post's time, a progress bar for in-flight statuses, and inline actions at checkpoints |
 | `AgentPickers.tsx` | Agent, model and effort controls for the New Video page and the Mascots create form |
-| `MascotPicker.tsx` | The per-video mascot select. Cartoon 3D locks it on "No mascot" |
+| `MascotPicker.tsx` | The per-video mascot select. A style that takes no mascot locks it on "No mascot" |
 | `CostBreakdown.tsx` | A video's cost per provider and model, from `GET /videos/<id>/costs` |
 | `SpendCard.tsx` | The Analytics page's **Spend** tab |
 | `CostsPanel.tsx`, `AutoPilotPanel.tsx`, `RenderersPanel.tsx` | See [The settings page](#the-settings-page) |
 | `LogList.tsx` | Record rendering shared by the Logs page and the video window's Logs tab |
 | `ReviseDialog.tsx` | The mandatory-comment prompt behind every Request Revision |
+| `ScriptRecord.tsx` | The Script tab's read-only block for what a script recorded: formula, openings and warnings. See [The video window](#the-video-window) |
 | `VoicePreviewButton.tsx` | Generates or replays a cached voice sample. One button toggles play and pause and follows the audio's own events. A change of voice or model resets it. Given a `modelId`, it previews that model |
 | `MiningSources.tsx` | Adds and removes YouTube URLs for mining. It mirrors the API's URL rule and adds a URL in the canonical `watch?v=` form. See [Mining sources](05-http-api.md#mining-sources) |
 | `TimeZoneProvider.tsx` | Fetches the host's timezone once and provides it through context. See [Time](#time) |
@@ -893,7 +918,7 @@ suite can test them without React.
 | `renderers.ts` | The renderer status chip, the GPU verdict, the device description and the **Nothing can render** condition |
 | `costs.ts` | The cost disclaimer, and money, credit, service, operation and stage labels |
 | `datetime.ts` | Timestamp formatting with an explicit timezone |
-| `format.ts` | `formatBytes`, in binary units so a figure matches `du -h` on the host |
+| `format.ts` | `formatBytes`, in binary units so a figure matches `du -h` on the host. `formatWatchSeconds` and `formatShare`, which render an unreported watch figure as a dash |
 | `platforms.ts` | Platform display names and the account label |
 | `utils.ts` | `cn`, `codePoints`, the stream URLs, and `isScored` and `scoreLabel` (a score of 0 means unscored) |
 | `session.ts`, `sessionCookie.ts`, `requestGuard.ts` | The session, the cookie name and lifetime with the post-login redirect rule, and the same-origin JSON check. `sessionCookie.ts` is separate because `middleware.ts` imports it and cannot read the secret files |

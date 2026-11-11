@@ -5,6 +5,8 @@ import { PlaceholderComposition } from "./Composition";
 import { TextLayoutProbe } from "./audit/TextLayoutProbe";
 import { MascotSheetComposition } from "./mascot/MascotSheet";
 import { BeanPropSheet, SHEET_PAGES } from "./scenes/installed/beanExplainer/BeanPropSheet";
+import { StorybookSheet, SHEET_PAGES as STORYBOOK_SHEET_PAGES } from "./scenes/installed/storybookAtlas/StorybookSheet";
+import { PresenterSheet } from "./scenes/installed/underTheHood/PresenterSheet";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
 // renders, plus a measurement probe. A separate composition rather than a prop
@@ -95,6 +97,33 @@ export const RemotionRoot: React.FC = () => {
         id="BeanPropSheet"
         component={BeanPropSheet}
         durationInFrames={SHEET_PAGES}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Storybook Atlas model sheet: one page per frame (the guide, the
+          people and their knobs, the backdrops as chapter frames, the prop
+          library), for a person to approve the style's fixed cast and kit. No
+          video uses it. */}
+      <Composition
+        id="StorybookSheet"
+        component={StorybookSheet}
+        durationInFrames={STORYBOOK_SHEET_PAGES}
+        calculateMetadata={({ props }) => ({ durationInFrames: props.hold === undefined ? STORYBOOK_SHEET_PAGES : ((props.frames as number | undefined) ?? 90) })}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Under the Hood presenter's model sheet: every pose, mouth and
+          blink, for a person to approve the fixed presenter. No video uses it. */}
+      <Composition
+        id="PresenterSheet"
+        component={PresenterSheet}
+        durationInFrames={1}
         fps={30}
         width={1080}
         height={1920}

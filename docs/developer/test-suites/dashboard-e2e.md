@@ -143,6 +143,9 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
   `TOPIC_APPROVED` with the runner-up as its style. The pick is seeded in the API container with
   `docker compose exec`, because only the agent's `choose_visual_style` writes one and the test
   stack runs no agent.
+- A video with a script record shows the formula and the opening type by the labels the real
+  `GET /script-formulas` returns, the openings and the warnings. A script written over HTTP then
+  clears the record. The record is seeded the same way, because only `update_video` writes one.
 
 Trap: the Voice and Voice model rows need the real API, because `voice_info` comes only from the
 single-video fetch and the list row the window opens on does not carry it.
@@ -243,11 +246,14 @@ spec runs the Automatic path only.
 
 ### `analytics.spec.ts`
 
-Covers the Analytics page's two tabs.
+Covers the Analytics page's three tabs.
 
 - At 1400px the graphs sit right of the table, a mouse wheel over the table scrolls the table and
   leaves the page still, and rows load 50 at a time. At 1000px the graphs stack above the table.
 - Clicking a platform bar sends the platform filter to the API.
+- At 1680px the list's ten columns fit its box. At 1680px and 1000px the page does not scroll
+  sideways, on the Videos tab or the Watch time tab, and the Watch time tab shows its `TOO FEW` tag.
+- The Watch time tab reads the real API, which has nothing published and says so.
 - The Spend tab shows this month and Today as days in the host's zone, and a backwards custom range
   is flagged and not sent.
 

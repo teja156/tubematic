@@ -11,10 +11,14 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ## v2.2.0
 
-2.2.0 adds three visual styles: System Flow, which turns a video into a diagram that builds itself
+2.2.0 adds six visual styles: System Flow, which turns a video into a diagram that builds itself
 while the narrator explains a system; Bean Explainer, a cartoon character that reacts to the
-narration among everyday props; and Whiteboard, which works an idea out on one big board, written
-and drawn as the narrator speaks. Auto now picks a video's style before its script is written.
+narration among everyday props; Whiteboard, which works an idea out on one big board, written
+and drawn as the narrator speaks; Storybook Atlas, a picture book that tells the story of an
+invention or an idea in chapters; Terminal Doc, a dark typographic documentary for codes, passwords
+and computing; and Under the Hood, close-up photographs of one object with labels pinned to its
+parts. Auto now picks a video's style before its script is written. Scripts are built on a
+formula chosen for each topic and end on their payoff.
 
 ### Upgrade notes
 
@@ -24,9 +28,16 @@ apply to this version.
 After you upgrade:
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode). The upgrade
-   installs new skills for System Flow, Bean Explainer, Whiteboard and Auto's style choice, and a
-   session started before it does not have them.
-2. Reload any dashboard tab that was open during the upgrade. A **Topics** page loaded before it
+   installs new skills for System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc,
+   Under the Hood and Auto's style choice, and a session started before it does not have them.
+   The script-writing skill is new too.
+2. Read your text in **Settings → Preferences**. A script now ends on its payoff unless that text
+   asks for a closing line. A sentence there that asks for one, such as a line asking viewers to
+   follow, still applies to every script, and the **Script** tab can list it under **Script
+   warnings**. Remove the sentence to stop it. If you want a closing line and have no such
+   sentence, add one: a script profile's sign-off does not put one there. See
+   [Preferences](https://docs.tubematic.ai/user-guide/settings#preferences).
+3. Reload any dashboard tab that was open during the upgrade. A **Topics** page loaded before it
    sets a domain's agent, model and effort back to **Automatic** when it saves another change to
    that domain.
 
@@ -45,10 +56,11 @@ sudo find ~/.tubematic-data/scenes/generated -type f -perm 600 -exec chmod 664 {
 
 If you go back to 2.1.x later:
 
-- A video set to System Flow, Bean Explainer or Whiteboard cannot render on 2.1.x. Finish it, or
-  switch it to another style while it waits at its topic, before you go back.
-- A domain whose default style is System Flow, Bean Explainer or Whiteboard starts its new videos on Auto under
-  2.1.x.
+- A video set to System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal Doc or Under the
+  Hood cannot render on 2.1.x. Finish it, or switch it to another style while it waits at its topic,
+  before you go back.
+- A domain whose default style is System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal
+  Doc or Under the Hood starts its new videos on Auto under 2.1.x.
 
 ### Added
 
@@ -79,15 +91,76 @@ If you go back to 2.1.x later:
   picture. It needs no image generation and no GPU. Choose it for a topic, on the **New Video**
   page, or as a domain's default; Auto can pick it for a topic that fits. See
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Storybook Atlas visual style (experimental). The video is a vintage picture book on hatched
+  paper, told by a calm storyteller in three to five chapters. Each chapter opens with a plaque (a
+  numeral, a title, a place or a date, a wax seal) over a hand-drawn room or landscape. A small mouse
+  in a waistcoat walks beside the story without speaking, and the people of the story walk in as flat
+  picture-book figures named by printed tags, never drawn as a likeness. Objects from a library of
+  about 40 (a relay computer, a telegraph, a printing press, a lighthouse, and any the agent draws for
+  the video in the same style) arrive on the narrator's words. Star lettering, a brass gauge or a
+  swirl of ink dots that becomes a picture mark the high points, and chapters change by a push
+  through a door or porthole or a hatched wipe. It suits the history of an invention, a discovery or
+  an idea, and needs no image generation and no GPU. Choose it for a topic, on the **New Video**
+  page, or as a domain's default; Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Terminal Doc visual style. The text is the picture: sparse monospace capitals on a dark,
+  mostly empty screen, where a password flies into a box marked HASH and comes out as a digest,
+  letters lift and rearrange into a new word, numbers resolve out of flickering noise, guesses race
+  until one matches, and thin brackets tie a claim to its quoted source. One word or number glows at
+  a time. The captions are typed into a terminal log strip. For retro computing topics the agent can
+  use an amber CRT look instead. When no built-in animation can show a step (a letter shift, two
+  strings combined), the agent writes one for the video and checks it before the render. It suits
+  ciphers and codes, passwords and hashes, encodings and famous unsolved codes, needs no image
+  generation and no GPU, and Auto can pick it. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
+- The Under the Hood visual style (experimental). A dark video that opens up one physical object:
+  close-up photographs of its parts push in slowly while short capital labels point at each part,
+  gold arcs show fields and flows, a fast zoom dives into a part and cuts to a closer
+  photograph, numbers tick and charts draw, and a cartoon presenter in the bottom corner reacts to
+  the narration. It suits how a device or a part works inside (a touchscreen, a battery, a lock, an
+  SSD) and the numbers behind one object, such as a part's price. It needs an OpenAI key and uses up
+  to 12 generated photographs per video; it needs no GPU. Its videos have no mascot: the presenter
+  takes the mascot's place. Choose it for a topic, on the **New Video**
+  page, or as a domain's default; Auto can pick it for a topic that fits. See
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles).
 - Captions can show the key word of a line in white on a red box. Bean Explainer videos use it.
+- Captions can be a small printed label: an ivory plate hugging one short phrase, with a diamond each
+  side. Storybook Atlas videos use it.
+- Captions can build word by word, with the word being spoken in bold, the earlier words in grey and
+  the key word in a blue selection box. Under the Hood videos use it.
 - A **Why this style** row in a video's window, when Auto picked the style: the agent's reason and
   the style that came second. At Script Ready, **Switch to …** takes that second style instead; the
   agent writes a new script for it, which is voiced when you approve it. See
   [What Auto does](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does).
+- Script formulas. The agent picks one of ten structures for each script from the kind of topic it
+  is: an outage is told as an incident, a process is followed step by step, a wrong belief is
+  stated and then broken. The **Script** tab shows the formula. See
+  [Script formulas](https://docs.tubematic.ai/user-guide/using-tubematic#script-formulas).
+- The agent drafts three different openings for a script and uses one. The **Script** tab lists
+  all three, so you can ask for another with **Revise**.
+- **Script warnings** on the **Script** tab: automatic checks on a script's words, such as an
+  ending that asks for a follow, a recap at the end, a first sentence that repeats the title, or a
+  length outside the formula's range. They are advice and do not stop you approving. See
+  [Read and approve scripts](https://docs.tubematic.ai/user-guide/using-tubematic#3-read-and-approve-scripts).
 - **Rendered by** and **Render time** rows in a video's window: which renderer made the video, on
   its GPU or its CPU, and how long the render took. They describe the last successful render. Videos
   rendered before this version show neither. See
   [Remote Renderers](https://docs.tubematic.ai/user-guide/remote-renderers).
+- Watch figures in **Analytics**. The **Videos** tab shows, for each post, the average length of a
+  view (**Watched**), that length as a share of the video (**% watched**) and the share of views in
+  which the viewer kept watching (**Stayed**), and can sort by each. A video's window shows the
+  same figures per post, with reach and saves. The figures come from readings Tubematic already
+  stored, so posts published before the upgrade show them too. Each platform reports its own set:
+  TikTok reports none, and a figure a platform did not report shows as a dash. Instagram's
+  **% watched** needs the video's length, which Tubematic stores from this version on, so it shows
+  for videos whose files still exist when you upgrade and for every video published afterwards.
+  See [Watch figures](https://docs.tubematic.ai/user-guide/publishing#watch-figures).
+- A **Watch time** tab in **Analytics**. It groups one account's posts by visual style, script
+  profile, domain, script length, script formula or opening, and shows the three watch figures for
+  each group, with the number of videos behind them. A group with fewer than 20 videos is marked as
+  too small to read. A video whose script was written before the upgrade has no formula or opening
+  on record and is grouped under **Not recorded**. See
+  [Comparing groups of videos](https://docs.tubematic.ai/user-guide/publishing#comparing-groups-of-videos).
 - A domain can have its own agent, model and effort. Every new video in the domain then starts on
   that agent, whichever research mode found the topic, and the shares on **Settings → Agents** apply
   to the domains left on **Automatic**. You can still change the agent on each video at a
@@ -100,12 +173,19 @@ If you go back to 2.1.x later:
 
 - Auto picks the style when the agent picks up an approved topic, before it writes the script, and
   can pick any style this install can make: Motion Graphics, Stick Explainer, Illustrated, System
-  Flow, Bean Explainer, Whiteboard, Cartoon 3D and every style added later. The script is then written for that style. Before,
+  Flow, Bean Explainer, Whiteboard, Under the Hood, Cartoon 3D and every style added later. The script is then written for that style. Before,
   Auto decided after the voice was made, could only choose between a dark canvas, a white canvas and
   Cartoon 3D, and never chose a named style. When no style clearly fits, Auto keeps that mixed
   approach. A video's card and window show the picked style after the word Auto.
 - A topic sent back for revision returns to Auto if Auto had picked its style, so the agent picks
   again for the revised topic.
+- Scripts follow the formula chosen for the topic. Before, every script had the same five parts
+  (hook, context, core content, takeaway, call to action) and aimed at about 235 words. A script
+  now ends on its payoff with no recap and no closing line, and its length follows its formula,
+  from under a minute to the three-minute limit. Scripts already written are not changed.
+- A script profile sets how a script sounds, and the formula sets its structure. Before, a
+  profile could also set the order of a script's parts and its sign-off. The agent now uses a
+  profile's signature phrases in some scripts and no single one in every script.
 - A domain's row on the **Topics** page is one line: its name, the defaults it has set, its topic
   and video counts, its status and the pause button. **Edit defaults** opens the visual style,
   mascot, voice, script profile and topic cap under the row. Before, those pickers sat on the row

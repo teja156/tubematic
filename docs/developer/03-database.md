@@ -83,12 +83,16 @@ One row per video, from proposed topic to published file.
 | `strategy` | TEXT NOT NULL | `manual` | `curriculum`, `trending`, `mining` or `manual` |
 | `producibility_score` | INTEGER NOT NULL | `0` | 1 to 10. The MCP `create_video` tool rejects a score below 5. `POST /videos` does not check it. A video submitted from the dashboard stores `0`, meaning unscored |
 | `script` | TEXT NOT NULL | `''` | The flat script, derived from `script_segments` |
-| `script_segments` | TEXT | | JSON array of `{id, voice, visual}` |
+| `script_segments` | TEXT | | JSON array of `{id, voice, visual}`, each optionally with `beat` |
+| `formula_id` | TEXT NOT NULL | `''` | The [formula](08-scripting-and-voice.md#formulas) the script follows. `''` means none on record |
+| `hook_type` | TEXT NOT NULL | `''` | The hook type of the opening the script uses, or `''` |
+| `hook_alternatives` | TEXT NOT NULL | `''` | JSON array of the three openings the agent drafted, `{type, text, kept, note}`, or `''` |
+| `script_warnings` | TEXT NOT NULL | `''` | JSON array of the [script warnings](08-scripting-and-voice.md#script-warnings) for the stored script, `{id, message}`. `''` when no script write has run the checks |
 | `tts_text` | TEXT NOT NULL | `''` | The text sent to ElevenLabs, after pronunciation substitution |
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
 | `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
-| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer`, `cartoon_3d` or `whiteboard`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
+| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `terminal_doc` or `under_the_hood`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
 | `resolved_visual_style` | TEXT NOT NULL | `''` | The canvas `auto` settled on: `dark` or `light`. Written once by the agent |
 | `resolved_renderer` | TEXT NOT NULL | `''` | The renderer an `auto` video uses: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
 | `style_pick` | TEXT NOT NULL | `''` | What Auto picked before the script: a style pack id (then also `visual_style`), `scenes` for the mixed scene system, or `''` when Auto has not decided or a person chose the style |
@@ -119,6 +123,7 @@ One row per video, from proposed topic to published file.
 | `last_render_renderer_name` | TEXT NOT NULL | `''` | That renderer's name at the time of the render, so a later rename or removal leaves it unchanged |
 | `last_render_on_gpu` | INTEGER NOT NULL | `0` | `1` when that render ran on the GPU |
 | `last_render_seconds` | REAL NOT NULL | `0` | The Remotion run as the renderer measured it, the figure `render_timings` keeps. It excludes fetching the bundle and uploading the mp4. `0` means not reported |
+| `duration_secs` | REAL | NULL | The video's length in seconds, stored from `timeline.json` by the worker's hourly pass, by `POST /analytics/refresh` and by `archive_video` as it deletes the files. NULL means not known. Analytics divides Instagram's watched seconds by it. See [Watch figures](14-publishing.md#watch-figures) |
 | `publish_title` | TEXT NOT NULL | `''` | The title the video is posted with, written by the agent with the script. Separate from `title` |
 | `publish_description` | TEXT NOT NULL | `''` | The post's description, written by the agent with the script |
 | `scheduled_at` | TEXT NOT NULL | `''` | When a scheduled post goes out, UTC. `''` means not scheduled. The worker moves a `SCHEDULED` video to `PUBLISHING` once it has passed. See [Scheduling a post](14-publishing.md#scheduling-a-post) |
@@ -143,8 +148,10 @@ first. Any write to the column changes render order.
 
 `motion_graphics`, `stick` and `illustrated` are permission sets: each names which scene
 vocabularies the video may draw from. `system_flow` makes the whole video one diagram scene written
-as data, `bean_explainer` one cartoon-bean scene written as data, and `whiteboard` one board
-scene written as data. `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
+as data, `bean_explainer` one cartoon-bean scene written as data, `whiteboard` one board
+scene written as data, `storybook_atlas` one picture-book scene in chapters written as data,
+`terminal_doc` one typographic scene written as data, and `under_the_hood` one scene of annotated
+close-up photographs written as data (it needs an OpenAI key). `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
 video) and needs a working GPU. `auto` leaves the choice to the agent. The values are checked in
 code against the style packs, and the column has no CHECK constraint, so a new style needs no
 migration.
@@ -503,7 +510,8 @@ The column reference is in [Publishing](14-publishing.md#schema).
   platform" is different from "reported as zero".
 - Each `video_metrics` row is a cumulative reading. Aggregate by taking each publication's latest
   row. Summing rows multiplies a view count by the number of polls.
-- `raw_json` keeps the whole payload, so a column added later can be filled from history.
+- `raw_json` keeps the whole payload. The [watch figures](14-publishing.md#watch-figures) are read
+  from it on request, so they cover every snapshot ever stored.
 
 ## `script_profiles` and `script_profile_transcripts`
 
@@ -720,6 +728,8 @@ only in the pre-migration backup.
 | `0020_style_pick.sql` | Adds `videos.style_pick`, `style_runner_up` and `style_reason`, `''` on every existing video | No |
 | `0021_last_render.sql` | Adds `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu` and `last_render_seconds`, empty on every existing video | No |
 | `0022_domain_agent.sql` | Adds `projects.default_agent_id`, `default_agent_model` and `default_agent_effort`, `''` on every existing domain | No |
+| `0023_script_record.sql` | Adds `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, `''` on every existing video | No |
+| `0024_video_duration.sql` | Adds `videos.duration_secs`, NULL on every existing video. The worker fills it for videos that have a publication and whose files exist, and archiving a video stores it | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so

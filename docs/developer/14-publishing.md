@@ -256,8 +256,9 @@ do inside.
 
 The routes that call postforme, and `POST /publishing/accounts`, start with `_publishing_context`.
 It answers `503` when `publishing_enabled` is false or `postforme_api_key` is unset, before any
-outbound call. `GET /videos/<id>/publications`, `publish-prefill`, `GET /analytics` and the two
-`/autopilot` routes read local data only and skip the check.
+outbound call. `GET /videos/<id>/publications`, `publish-prefill`, `GET /analytics`,
+`GET /analytics/watch-time` and the two `/autopilot` routes read local data only and skip the
+check.
 
 ### `POST /videos/<id>/publish-prefill`
 
@@ -375,7 +376,7 @@ who acted first wins.
 
 - Auto Pilot does not make an approval the dashboard would refuse
   (`worker.py::_auto_pilot_block_reason`): an `illustrated` topic with no OpenAI key stored, a topic
-  whose mascot was archived or withdrawn, a Cartoon 3D topic that holds a mascot, and a script its
+  whose mascot was archived or withdrawn, a Cartoon 3D or Under the Hood topic that holds a mascot, and a script its
   voice's model cannot speak. The video stays where it is with one comment.
 - `videos.auto_pilot_blocked` records `<status>@<updated_at>` for the arrival that was commented on,
   so the comment is written once per arrival. The check itself runs on every tick, so the video is
@@ -563,14 +564,17 @@ rate limit past the fifth target and lose those readings, and a time series cann
   has no likes or views field: `reactions_total` is stored as likes and `video_views` (or
   `media_views`) as views. An absent metric is stored as null, and an unknown platform yields all
   nulls.
-- The whole payload is kept in `raw_json`, so another column can be filled from it later.
+- The whole payload is kept in `raw_json`. The [watch figures](#watch-figures) are read from it.
+- The same pass first stores the length of published videos that have none
+  (`worker.py::_fill_video_durations`, see [Watch figures](#watch-figures)).
 
 ### `GET /analytics`
 
 The route reads local snapshots only. Each snapshot is a cumulative reading, so the query joins a
 publication to its latest snapshot with a `LIMIT 1` subquery. Summing snapshots would multiply the
 view count by the number of polls. Only views, likes, comments and shares are summed across
-platforms. Platform-specific metrics stay in `raw_json`.
+platforms. Platform-specific metrics stay in `raw_json`, and each publication row carries its own
+[watch figures](#watch-figures) read from there.
 
 `by_month` holds the views gained in each of the last 12 months (`ANALYTICS_MONTHS`). A month's
 figure is every post's latest reading before the month ended minus its latest reading before the
@@ -583,6 +587,78 @@ host's timezone.
 - A month can be negative, because platforms remove views. The dashboard draws no bar for it and
   shows the number on hover.
 - A reading with no view count is skipped, so the one before it stands.
+
+### Watch figures
+
+`postforme.py::extract_retention` reads six figures from a snapshot's `raw_json`. The table
+`_RETENTION_FIELDS` names each platform's keys and units.
+
+| Figure | YouTube | Instagram | Facebook | TikTok |
+|---|---|---|---|---|
+| `avg_watch_secs` | `averageViewDuration` (seconds) | `ig_reels_avg_watch_time` (milliseconds) | `video_avg_time_watched` (milliseconds) | None |
+| `watched_pct` | `averageViewPercentage` | `avg_watch_secs` over `videos.duration_secs` | `avg_watch_secs` over its own `video_length` | None |
+| `stayed_pct` | `engagedViews` over `views` | None | None | None |
+| `engaged_views` | `engagedViews` | None | None | None |
+| `reach` | None | `reach` | `reach` | None |
+| `saves` | None | `saved` | None | None |
+
+- A figure a platform does not report is null. Zero views gives a null `stayed_pct`.
+- A `watched_pct` of 0 is null, and so is an `avg_watch_secs` of 0 that comes with no share of the
+  platform's own. A platform sends 0 for a post it has not measured yet, and a 0 would enter a
+  group's median as a video nobody watched. Both are judged after rounding to one decimal. YouTube
+  reports whole seconds, so 0 seconds beside a share above 0 is kept.
+- A count of 0 (`reach`, `saves`, `engaged_views`) is kept, and so is a `stayed_pct` of 0 when the
+  post has views.
+- A value that is not a number, is negative or is above `_MAX_READING` is null, and so is a
+  computed figure above it. No payload makes the function raise.
+- A `watched_pct` above 100 is kept, because a looping Short is watched more than once.
+- A payload with seconds and no share or length of its own takes `videos.duration_secs` as the
+  length. A share of 0 counts as no share. Instagram's payloads are always in that case.
+- TikTok's metrics hold four counts and no watch figure. postforme reports more for a TikTok
+  Business connection, which Tubematic does not support.
+- Facebook's key names come from postforme's API reference.
+
+The figures are read when a route asks for them and are stored in no column. Every snapshot already
+holds its payload, so the figures cover the whole history, and a change to the mapping applies to
+every snapshot.
+
+Three routes return them: `GET /analytics` and `GET /videos/<id>/publications` on each publication
+row, and `GET /analytics/watch-time` grouped. `pipeline.py::_watch_figures` is the one place that
+parses a payload for them.
+
+Instagram reports no share and no video length, so its `watched_pct` needs `videos.duration_secs`.
+Two places store it from the video's `timeline.json`:
+
+- `pipeline.py::fill_video_durations`, called by the worker with the hourly analytics poll and by
+  `POST /analytics/refresh`, covers every video that has a publication, is not archived and has no
+  length yet. The share then shows while the video is still on disk.
+- `pipeline.py::archive_video` stores it in the statement that archives the video, because
+  archiving deletes `timeline.json`. This covers the retention sweep and a delete from the
+  dashboard.
+
+A timeline that cannot be read, or that gives a length above `MAX_STORED_DURATION_SECS`, leaves the
+length null. A video whose files were deleted before its length was stored keeps a null length, and
+its Instagram posts report no `watched_pct`.
+
+### `GET /analytics/watch-time`
+
+The route groups one account's published posts by visual style, script profile, domain, script
+length, formula and hook type, and returns every grouping in one response (`WATCH_DIMENSIONS`).
+`social_account_id` selects the account.
+Without it the route answers for the account with the most published posts. One account is read at
+a time because each platform counts a view and a watched second in its own way.
+
+- A group's figure for a measure is the median of the posts that report it, with `n`, the number of
+  those posts. `videos` counts every post in the group.
+- `min_group` is `pipeline.py::WATCH_MIN_GROUP` (20). The dashboard marks a group with fewer videos.
+- `pipeline.py::_watch_group_of` places a post in a group. A `visual_style` of `auto` or `''` reads
+  as "Mixed scenes", or as Cartoon 3D when `resolved_renderer` is `cartoon_3d`.
+- Script length is the word count of `videos.script` without its markup (`_script_words`), in the
+  bands of `SCRIPT_LENGTH_BANDS`.
+- The `formula` grouping reads `videos.formula_id` and the `hook_type` grouping reads
+  `videos.hook_type`. The labels come from `tubematic_core/formulas.py` (`label` and `HOOK_TYPES`).
+  An id that module does not know is shown as its own label, and `''` reads as "Not recorded".
+- Groups come largest first. Script length bands come shortest first.
 
 ### Analytics outlive the files
 

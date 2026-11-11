@@ -317,4 +317,52 @@ test.describe("VideoModal", () => {
     expect(after.visual_style).toBe("stick");
     expect(after.style_runner_up).toBe("system_flow");
   });
+
+  // What the agent records with a script (TMDEV-211). Only update_video
+  // writes it, and the test stack runs no agent, so the row is seeded in the
+  // API container like the style pick above. The labels come from the real
+  // GET /script-formulas, which is the part a unit test cannot show.
+  test("Script tab shows the formula, the openings and the warnings recorded with the script", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Script record` });
+    await patchVideo(video.id, { status: "SCRIPT_READY", script: "You renamed one file. It stops." });
+    const repoRoot = path.resolve(__dirname, "../../../..");
+    execSync(
+      `docker compose -f "${path.join(repoRoot, "docker-compose.test.yml")}" exec -T tubematic-api-test python3 -`,
+      {
+        cwd: repoRoot,
+        input: [
+          "import json, sqlite3",
+          "hooks = [{'type': 'problem', 'text': 'You renamed one file.', 'kept': True, 'note': ''},",
+          "         {'type': 'question', 'text': 'Why does the log stop?', 'kept': False, 'note': ''},",
+          "         {'type': 'myth', 'text': 'A rename is recorded.', 'kept': False, 'note': 'overclaims'}]",
+          "warnings = [{'id': 'closing_ask', 'message': 'The last sentence asks the viewer to follow.'}]",
+          "con = sqlite3.connect('/data/tubematic.db')",
+          "con.execute('UPDATE videos SET formula_id = ?, hook_type = ?, hook_alternatives = ?, '",
+          "            'script_warnings = ? WHERE id = ?',",
+          "            ('broken-expectation', 'problem', json.dumps(hooks), json.dumps(warnings), "
+            + `'${video.id}'))`,
+          "con.commit()",
+        ].join("\n"),
+        stdio: ["pipe", "inherit", "inherit"],
+      },
+    );
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    await expect(modal.getByTestId("script-formula")).toHaveText("Broken Expectation");
+    await expect(modal.getByTestId("script-hook-type")).toHaveText("The viewer's problem");
+    await expect(modal.getByTestId("script-hook-0")).toHaveAttribute("data-kept", "true");
+    await expect(modal.getByTestId("script-hook-2")).toContainText("Not used: overclaims");
+    await expect(modal.getByTestId("script-warning-closing_ask"))
+      .toContainText("The last sentence asks the viewer to follow.");
+
+    // A script written over HTTP replaces the words, so the record goes with it.
+    await patchVideo(video.id, { script: "Other words entirely." });
+    const after = await getVideo(video.id) as unknown as Record<string, unknown>;
+    expect(after.formula_id).toBe("");
+    expect(after.script_warnings).toEqual([]);
+  });
 });

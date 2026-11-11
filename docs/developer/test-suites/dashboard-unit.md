@@ -245,7 +245,9 @@ Covers `app/analytics/page.tsx`, the **Videos** tab.
 
 - The totals count published videos, and each publication has its own row.
 - Platform and account filters go to the API, from the menus and from a clicked graph bar.
-- An unreported metric renders a dash and sorts below a real 0.
+- An unreported metric renders a dash and sorts below a real 0. The watch columns do the same, a
+  share above 100% is shown as reported, and the legend says what a dash means.
+- The Watch time tab's panel mounts when its tab opens.
 - When the account-name lookup fails, the page shows the id with the platform and still filters.
 - The table renders 50 rows and adds 50 when its end comes into view of the table's own scroll box.
   A browser with no `IntersectionObserver` gets every row.
@@ -258,6 +260,25 @@ keeps its negative figure and draws no height.
 
 Trap: an entry with nothing reported comes last as a dash with no bar. An empty bar would claim that
 nobody watched.
+
+### `watch-time-panel.test.tsx`
+
+Covers `components/WatchTimePanel.tsx`, the Analytics page's **Watch time** tab.
+
+- The first request names no account and the select shows the account the API answered for.
+  Picking an account sends its id.
+- Changing **Group by** redraws the table from the same response.
+- The **Group by** list is the response's list of groupings, and a group whose `key` is the empty
+  string ("Not recorded") gets a row like any other.
+- A group under the response's `min_group` is tagged `TOO FEW` and still listed.
+- A figure only some of a group's videos report shows how many, with `too few` under the
+  threshold, and a figure none reports is a dash.
+- An error answer, and an answer of another shape, show an error line.
+- After a pick that fails, the table of the account shown before is gone, and it returns when that
+  account is picked again.
+
+Trap: a measure with `n` of 0 has a null median. Formatting it as a number would show 0, which says
+that nobody watched.
 
 ### `spend-card.test.tsx`
 
@@ -306,7 +327,7 @@ pickers on its rows.
 - [Mascot](../15-dashboard.md#mascot-picker): the picker is hidden when nothing can be picked.
   Mascots are disabled with the reason unless the GPU is working, and while the GPU status has not
   loaded. `mascot_id` travels with `approve-topic` only when the picker shows. Choosing Cartoon 3D
-  clears and locks the picker and sends an empty mascot.
+  or Under the Hood clears and locks the picker and sends an empty mascot.
 - A refused approval (`onAction` resolving `false`) brings the row back so the pick can be changed.
 - Every picker is found by its caption (`getByLabelText`), which proves the caption is the control's
   accessible name.
@@ -330,13 +351,17 @@ Covers `components/VideoModal.tsx`, [the video window](../15-dashboard.md#the-vi
   markup as the authored words.
 - The Video tab plays `/stream/<project_id>/<id>.mp4` whatever `video_path` holds.
 - The Actions block carries the same pickers as a Quick Actions row, under the same rules. The
-  mascot cases cover its caption, the GPU gate, the `approve-topic` payload and the Cartoon 3D lock.
+  mascot cases cover its caption, the GPU gate, the `approve-topic` payload and the lock for Cartoon
+  3D and Under the Hood.
 - Once the pickers are gone, their values show read-only. The Voice and Voice model rows come from
   `voice_info` and are hidden while the voice picker is up.
 - The Rendered by and Render time rows show the last render's renderer with GPU or CPU, fall back to
   the renderer id when no name was recorded, and are hidden on a video with no render recorded.
 - A scheduled video says when it goes out, in the zone it was picked in. **Cancel schedule** calls
   the API after a confirm, and the window offers no Delete.
+- The Publishing Results tab lists a published post's counts and watch figures, with "not reported"
+  in words where the platform gave none. A post with no snapshot shows one line saying so, and a
+  failed target shows no figures.
 
 Trap: the component stays mounted between videos. A pick made for one video (agent, effort, voice)
 must be forgotten when another opens, or the second video's approval writes it.
@@ -359,6 +384,17 @@ Covers the video window's **Why this style** row and **Switch to …** button
 - An Auto pick shows its reason and runner-up. A style a person chose shows neither.
 - The switch is offered only at `SCRIPT_READY` with a runner-up, posts to `/switch-style` after a
   confirm, does nothing when the confirm is declined, and shows the server's refusal.
+
+### `video-modal-script-record.test.tsx`
+
+Covers `components/ScriptRecord.tsx` on the video window's Script tab and `lib/scriptFormulas.ts`
+([The video window](../15-dashboard.md#the-video-window)).
+
+- A script with a record shows its formula and opening type by their labels, the three openings
+  with the one in use marked, and every warning.
+- A script with no record shows the segments and nothing else, and makes no request for the names.
+- The ids are shown when the names cannot be loaded, and for an id the list does not know.
+- A segment shows its `beat` label only when it has one. The block holds no control.
 
 ### `video-modal-retry-agent.test.tsx`
 
@@ -699,7 +735,8 @@ Covers `lib/mascots.ts` ([Mascot picker](../15-dashboard.md#mascot-picker)).
 - `mascotGate` is open only while the GPU is working.
 - `mascotOptions` keeps a held mascot that is still pickable selectable. One that is not pickable
   shows as unavailable and is never read as None.
-- `approvalMascot` sends no mascot for Cartoon 3D.
+- `approvalMascot` sends no mascot for Cartoon 3D, or for a style the served list marks `mascot:
+  false`; with the list not loaded it leaves the pick to the API.
 
 Trap: the gate fails closed while the GPU status has not loaded, the opposite of the visual-style
 rule. An untouched picker could otherwise send a mascot the API refuses.
