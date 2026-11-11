@@ -21,6 +21,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Illustrated** | Generated cartoon or rendered characters that stay the same from scene to scene | An OpenAI key |
 | **System Flow** | A dark canvas with one diagram per subject. Components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors while the narration explains each step. No people and no images | Nothing |
 | **Bean Explainer (experimental)** | A bald cartoon character with a thick outline reacts pose by pose to the narration on a bright colour field, while props and short handwritten labels build up beside it. No images | Nothing |
+| **Storybook Atlas (experimental)** | A vintage picture book told in chapters, each opened by a plaque over a hand-drawn room or landscape. A small mouse guide walks beside the story while its people, named by printed tags, and hatched objects arrive on the narrator's words. No images | Nothing |
 | **Terminal Doc** | A dark, mostly empty screen where the text is the picture: monospace capitals that scramble, rearrange and resolve out of noise, and quoted sources with citations. An amber CRT look suits retro computing topics. Captions are typed into a log strip. No images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 | **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
@@ -48,6 +49,11 @@ background would flash, and a viewer reads that as a broken render.
   how people behave, and "every X explained" lists, where each item gets its own section. The props
   come from a fixed library of everyday objects, so it suits subjects a phone, a coin, a clock or a
   sign can stand for better than specific real products or places. It is experimental.
+- Choose **Storybook Atlas** for the story of an invention, a discovery or an idea: how the first
+  program was written, where a word or an everyday thing came from, a person from history and what
+  they made. The script is written as a calm story in three to five chapters, and people appear as
+  picture-book figures recognised by their name and clothes, never by their face. It suits history
+  better than a list of tips or a mechanism explained part by part. It is experimental.
 - Choose **Terminal Doc** for topics that turn on a word, a key or a number: ciphers and codes,
   passwords and hashes, encodings, famous unsolved codes, what a computer does with text. It has no
   pictures of real things or people, so it does not suit places or life stories.
@@ -95,6 +101,10 @@ before the video renders. A Whiteboard video is the same again: the agent picks 
 draw for each step from a fixed set of layouts and a library of simple drawings, times it to the
 narration, and draws a simple one of its own, checked before use, when the library has nothing for
 an object such as a bicycle.
+A Storybook Atlas video works the same way too: the agent splits the narration into chapters, picks
+each chapter's room or landscape, dresses the people of the story, and times every walk, object and
+plate to the narration, drawing an object of its own when the library lacks one.
+
 A Terminal Doc video too: the agent picks the house look or the amber CRT
 look and times every word, number and bracket to the narration, and for a transformation no shipped
 animation shows (a letter shift, two strings combined) it writes one and checks it first.

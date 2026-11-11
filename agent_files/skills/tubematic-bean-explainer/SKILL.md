@@ -68,7 +68,8 @@ event is wrong. Fix every problem it lists, then write again.
   the config is written, with a box of 60 to 700 px a side, a text slot of at most 40 characters and at
   most 4 acts. The file default-exports the drawing, imports only `react`, `remotion` and
   `../../installed/beanExplainer/props/common` (or `bean`, `contract`) with `import` (never `require`),
-  and uses no filter, gradient, pattern, dashed stroke, image, fetch, randomness or clock.
+  and uses no filter, gradient, pattern, dashed stroke, image, media part, fetch, randomness, clock,
+  timer or page access (`reference/contract.md` lists them all). The check reads comments too.
 - **Never still:** something new (an event or a cut) at least every 3 seconds.
 
 ## Step 0 — read

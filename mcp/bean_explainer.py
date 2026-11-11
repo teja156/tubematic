@@ -87,14 +87,36 @@ FORBIDDEN_SOURCE = (
     (re.compile(r"<pattern\b"), "an SVG pattern: it multiplies the render time; use flat fills"),
     (re.compile(r"strokeDasharray|stroke-dasharray"), "a dashed stroke: it multiplies the render time"),
     (re.compile(r"Math\.random|Date\.now|new Date\b"), "randomness or the clock: every render must draw the same frames"),
-    (re.compile(r"<image\b|<img\b|<foreignObject\b|dangerouslySetInnerHTML|\bfetch\(|\bimport\("),
+    (re.compile(r"\bset(?:Timeout|Interval)\b|\brequestAnimationFrame\b"),
+     "a timer (setTimeout, setInterval, requestAnimationFrame): every render must draw the same frames"),
+    (re.compile(r"\bimport\s*\(|\bperformance\s*\.|\bcrypto\s*\."),
+     "a dynamic import, performance.now() or crypto: a drawing imports statically and draws the same frames "
+     "every render"),
+    # A drawing is DOM or SVG, so a gradient or a filter can also be a CSS
+    # string the SVG-shaped patterns above do not see; each is full-area work.
+    (re.compile(r"(?i)-gradient\s*\(|backdrop-?filter|mix-?blend-?mode"),
+     "a CSS gradient, backdrop filter or blend mode: it multiplies the render time; use flat colours"),
+    (re.compile(r"<image\b|<img\b|<foreignObject\b|dangerouslySetInnerHTML|\bfetch\b"),
      "an image, embedded HTML or a fetch: a prop is drawn from shapes only"),
+    # Remotion's media and render-control parts reach outside the drawing or
+    # hold the render.
+    (re.compile(r"\b(Img|Audio|Video|OffthreadVideo|IFrame|Html5Audio|Html5Video|staticFile|delayRender|continueRender|"
+                r"cancelRender|prefetch)\b"),
+     "a Remotion media or render-control part (Img, Audio, Video, staticFile, delayRender...): it draws "
+     "shapes only"),
+    (re.compile(r"\bglobalThis\b|\b(?:window|document|self|navigator)\s*[.\[]|\beval\s*\(|\bFunction\s*\(|"
+                r"new\s+Function\b|\bXMLHttpRequest\b|new\s+(?:WebSocket|Worker)\b"),
+     "the page (window, document, globalThis), eval, a Function constructor or a network call: it draws "
+     "shapes only"),
 )
-# Every way a module names another with import: `import x from`, a bare
-# `import "x"` and `export ... from` (require is refused outright above). A
+# Every way a module names another with import, anywhere on a line:
+# `import x from "m"`, `import x from"m"`, a bare `import "m"` and
+# `export ... from "m"` (require and a dynamic import are refused above). A
 # bare import of a missing module is not a type error, and webpack failing on
-# it would break every video's bundle.
-_IMPORT = re.compile(r"""^\s*(?:import|export)\b[^;]*?from\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']""", re.M)
+# it would break every video's bundle. The file is read as written, comments
+# included: a comment naming an import of another module is refused too, which
+# is safer than a comment stripper that code could hide behind.
+_IMPORT = re.compile(r"""\b(?:import|export)\b[^;"'`]*?\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']""")
 _ALLOWED_IMPORT = re.compile(r"^(react|remotion|\.\./\.\./installed/beanExplainer/(props/common|bean|contract))$")
 # Prop boxes at scale 1, in frame pixels: (width, height), every pixel the
 # drawing can reach (contract.ts says how they are measured). The text limits

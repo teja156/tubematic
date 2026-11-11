@@ -1,0 +1,744 @@
+{
+  "id": "storybook_atlas",
+  "label": "Storybook Atlas",
+  "order": 80,
+  "experimental": true,
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-storybook-atlas",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "review": "- This video is a Storybook Atlas, and the following are its intended, approved look: a vintage picture book on ivory paper with fine diagonal hatching inside a dark double-rule frame; a chapter plaque at the top with a Roman numeral, a typed title, an italic byline and a red wax seal; flat, stiff picture-book figures of people with thin dark outlines who walk on twos and hold simple poses (recognisable by name tag and costume, never by likeness); a small grey mouse in a waistcoat who walks beside the story and reacts without speaking; hatched flat props that pop, drop or slide in and stay; small italic name tags printed under people and props; framed plates that open behind brass shutters (gold star lettering on a navy sky, a brass gauge whose needle springs past its value and settles, ink dots that swirl and regroup into a picture or a word); a push through a door or porthole into white, or a hatched diagonal wipe, between chapters; one short phrase at a time on a small ivory caption label with a diamond each side, in place of large word-by-word captions. Do NOT report any of these as defects, and do not suggest photographs, realistic faces, smooth character animation, big captions or texture beyond the hatching: their absence is the style.\n- Do report: a prop, person or place that does not match what the narration names at that moment, a figure or prop that cannot be recognised, a tag or caption covering something, anything cut off at the frame edge, text too small to read on a phone, a plate whose lettering or number does not match the narration, and a stretch of more than about four seconds where nothing on screen changes.\n",
+  "captions": {
+    "background": "label",
+    "position": 0.805,
+    "color": "#2A2F33",
+    "fontFamily": "'EB Garamond', Garamond, serif",
+    "fontSize": 56,
+    "maxWords": 6
+  },
+  "script": "Every beat's `visual` is a **page** brief: the chapter's place, who is on stage (a person by name, or the guide), and the one object the line is about (\"Ada at her desk, Babbage's engine drawings pinned to the wall\").\n\nThe narration is a picture-book story told by a calm storyteller in the third person, in 3 to 5 chapters. Open on a time or a place (\"In the winter of 1843, in a London drawing room...\"). Each chapter is one stage of the story (the problem, the attempt, the turn, what it changed), and its first sentence is where the page turns, so start each chapter with a sentence that moves the story on (\"Then one afternoon...\", \"Years later...\"); the chapter's title and byline are chosen when the video is drawn, not spoken. A chapter must last at least 8 seconds, about 20 spoken words; a whole Short of 45 to 55 seconds is about 100 to 120 words. Introduce each person from history by name and role the first time (\"Charles Babbage, an inventor\"): there are at most four, and they appear by name and costume, never by likeness. Let one name or word carry the ending, because it is revealed in star lettering: say it in the last sentence, a few seconds before the end. Give at most one number that rises or hits a limit, because it becomes a gauge: a count or a measure with a natural top (a speed, a share, a count of things), not a ratio. Keep sentences short and concrete, about things a reader could point at in a picture. A small mouse guide walks beside the story without speaking: never write lines for it or about it. No hype, no lists of tips, no talking to the viewer as \"you\".",
+  "routing": {
+    "best_for": [
+      "the history of an invention, a discovery or an idea, told as a story",
+      "how a famous first happened: the first program, the first computer bug, the first flight",
+      "a person from history and the thing they made or found",
+      "the origin story of an everyday thing (a keyboard layout, the paper clip, time zones)"
+    ],
+    "avoid_for": [
+      "a mechanism explained part by part with no story in it (Stick fits it)",
+      "components passing requests, packets or data between them (System Flow fits it)",
+      "how a cipher, a code or text is transformed letter by letter, even inside a history (the mechanism is the subject)",
+      "an invented protagonist the viewer follows from scene to scene (Illustrated fits it)",
+      "a walk through one place in one continuous world (Cartoon 3D fits it)",
+      "a list of named items, tips or mistakes (Bean Explainer fits it)",
+      "a crime, a scam, a mystery or an investigation told from its evidence",
+      "real products, buildings or places the viewer came to see as pictures (Motion Graphics fits them)",
+      "fast news, hype or data-heavy charts"
+    ],
+    "signals": [
+      "the script moves through time, chapter by chapter, and can open on a date or a place",
+      "named people from the past appear by name and role, not by their faces",
+      "the story ends on a name, a word or a number worth revealing",
+      "one old object or machine is at the heart of the story",
+      "calm, curious storyteller narration"
+    ],
+    "moods": [
+      "warm",
+      "calm",
+      "nostalgic",
+      "curious"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  },
+  "extra": {
+    "coats": [
+      "blue",
+      "sage",
+      "brick",
+      "plum",
+      "mustard"
+    ],
+    "backdrops": [
+      "study",
+      "workshop",
+      "nightsky",
+      "laboratory",
+      "street",
+      "countryside",
+      "harbour",
+      "blueprint",
+      "factory",
+      "maproom"
+    ],
+    "guidePoses": [
+      "stand",
+      "walk1",
+      "walk2",
+      "walk3",
+      "walk4",
+      "point",
+      "look",
+      "think",
+      "surprised",
+      "hop"
+    ],
+    "personPoses": [
+      "stand",
+      "walk1",
+      "walk2",
+      "point",
+      "hold",
+      "think",
+      "surprised"
+    ],
+    "knobs": {
+      "build": [
+        "tall",
+        "short"
+      ],
+      "skin": [
+        "light",
+        "tan",
+        "brown",
+        "deep"
+      ],
+      "hair": [
+        "short",
+        "long",
+        "bun",
+        "curly",
+        "bald"
+      ],
+      "hairColor": [
+        "dark",
+        "brown",
+        "auburn",
+        "grey",
+        "fair"
+      ],
+      "face": [
+        "none",
+        "moustache",
+        "beard"
+      ],
+      "hat": [
+        "none",
+        "tophat",
+        "bowler",
+        "cap",
+        "bonnet"
+      ],
+      "garment": [
+        "frockcoat",
+        "suit",
+        "dress",
+        "labcoat",
+        "overalls",
+        "waistcoat"
+      ],
+      "color": [
+        "ink",
+        "navy",
+        "brick",
+        "moss",
+        "plum",
+        "ochre",
+        "cream",
+        "sky"
+      ]
+    },
+    "props": {
+      "lamp": {
+        "box": [
+          140,
+          232
+        ],
+        "place": "floor",
+        "states": 2,
+        "acts": [
+          "switch",
+          "glow",
+          "wobble"
+        ]
+      },
+      "door": {
+        "box": [
+          312,
+          500
+        ],
+        "place": "floor",
+        "states": 2,
+        "acts": [
+          "switch"
+        ],
+        "portal": [
+          0,
+          -226
+        ]
+      },
+      "lightbulb": {
+        "box": [
+          160,
+          228
+        ],
+        "place": "floor",
+        "states": 2,
+        "acts": [
+          "switch",
+          "glow",
+          "pulse",
+          "wobble"
+        ]
+      },
+      "battery": {
+        "box": [
+          140,
+          214
+        ],
+        "place": "floor",
+        "states": 1,
+        "acts": [
+          "wobble",
+          "bounce",
+          "pulse",
+          "glow"
+        ]
+      },
+      "gears": {
+        "box": [
+          290,
+          290
+        ],
+        "place": "wall",
+        "states": 1,
+        "acts": [
+          "spin",
+          "wobble",
+          "pulse"
+        ]
+      },
+      "telegraph": {
+        "box": [
+          270,
+          140
+        ],
+        "place": "floor",
+        "states": 3,
+        "acts": [
+          "cycle",
+          "wobble",
+          "bounce"
+        ]
+      },
+      "telephone": {
+        "box": [
+          200,
+          302
+        ],
+        "place": "floor",
+        "states": 3,
+        "acts": [
+          "cycle",
+          "shake",
+          "wobble"
+        ]
+      },
+      "radio": {
+        "box": [
+          240,
+          290
+        ],
+        "place": "floor",
+        "states": 2,
+        "acts": [
+          "switch",
+          "glow",
+          "shake",
+          "wobble"
+        ]
+      },
+      "typewriter": {
+        "box": [
+          290,
+          238
+        ],
+        "place": "floor",
+        "states": 3,
+        "acts": [
+          "cycle",
+          "shake",
+          "wobble"
+        ]
+      },
+      "punchcard": {
+        "box": [
+          324,
+          154
+        ],
+        "place": "wall",
+        "states": 1,
+        "acts": [
+          "wobble",
+          "bounce",
+          "pulse"
+        ]
+      },
+      "relaycabinet": {
+        "box": [
+          420,
+          540
+        ],
+        "place": "floor",
+        "states": 3,
+        "acts": [
+          "switch",
+          "cycle",
+          "shake",
+          "glow"
+        ],
+        "portal": [
+          0,
+          -313
+        ]
+      },
+      "terminal": {
+        "box": [
+          320,
+          310
+        ],
+        "place": "floor",
+        "states": 3,
+        "acts": [
+          "switch",
+          "cycle",
+          "glow",
+          "wobble"
+        ]
+      },
+      "microscope": {
+        "box": [
+          190,
+          274
+        ],
+        "place": "floor",
+        "states": 1,
+        "acts": [
+          "wobble",
+          "glow",
+          "pulse"
+        ]
+      },
+      "testtubes": {
+        "box": [
+          240,
+          214
+        ],
+        "place": "floor",
+        "states": 3,
+        "acts": [
+          "cycle",
+          "shake",
+          "glow",
+          "wobble"
+        ]
+      },
+      "magnifier": {
+        "box": [
+          214,
+          262
+        ],
+        "place": "wall",
+        "states": 1,
+        "acts": [
+          "wobble",
+          "pulse",
+          "bounce",
+          "glow"
+        ]
+      },
+      "telescope": {
+        "box": [
+          320,
+          330
+        ],
+        "place": "floor",
+        "states": 1,
+        "acts": [
+          "wobble",
+          "pulse"
+        ]
+      },
+      "compass": {
+        "box": [
+          180,
+          208
+        ],
+        "place": "wall",
+        "states": 3,
+        "acts": [
+          "cycle",
+          "wobble",
+          "pulse",
+          "glow"
+        ]
+      },
+      "globe": {
+        "box": [
+          250,
+          340
+        ],
+        "place": "floor",
+        "states": 5,
+        "acts": [
+          "cycle",
+          "wobble",
+          "pulse"
+        ]
+      },
+      "rocket": {
+        "box": [
+          260,
+          500
+        ],
+        "place": "floor",
+        "states": 2,
+        "acts": [
+          "switch",
+          "shake",
+          "wobble",
+          "glow"
+        ]
+      },
+      "starchart": {
+        "box": [
+          290,
+          350
+        ],
+        "place": "wall",
+        "states": 3,
+        "acts": [
+          "cycle",
+          "glow",
+          "wobble",
+          "swing"
+        ]
+      },
+      "coin": {
+        "box": [
+          160,
+          160
+        ],
+        "place": "wall",
+        "states": 1,
+        "acts": [
+          "spin",
+          "bounce",
+          "glow",
+          "pulse"
+        ]
+      },
+      "anvil": {
+        "box": [
+          280,
+          214
+        ],
+        "place": "floor",
+        "states": 1,
+        "acts": [
+          "shake",
+          "wobble",
+          "pulse"
+        ]
+      },
+      "book": {
+        "box": [
+          304,
+          254
+        ],
+        "place": "floor",
+        "states": 2,
+        "acts": [
+          "switch",
+          "wobble",
+          "glow"
+        ],
+        "portal": [
+          0,
+          -112
+        ]
+      },
+      "letter": {
+        "box": [
+          252,
+          270
+        ],
+        "place": "wall",
+        "states": 2,
+        "acts": [
+          "switch",
+          "bounce",
+          "wobble"
+        ]
+      },
+      "candle": {
+        "box": [
+          180,
+          240
+        ],
+        "place": "floor",
+        "states": 3,
+        "acts": [
+          "glow",
+          "cycle",
+          "wobble"
+        ]
+      },
+      "clock": {
+        "box": [
+          200,
+          334
+        ],
+        "place": "wall",
+        "states": 5,
+        "acts": [
+          "cycle",
+          "wobble",
+          "pulse"
+        ]
+      },
+      "map": {
+        "box": [
+          340,
+          222
+        ],
+        "place": "wall",
+        "states": 2,
+        "acts": [
+          "switch",
+          "pulse",
+          "glow",
+          "wobble"
+        ]
+      },
+      "scroll": {
+        "box": [
+          250,
+          318
+        ],
+        "place": "wall",
+        "states": 2,
+        "acts": [
+          "switch",
+          "wobble",
+          "glow"
+        ]
+      },
+      "quill": {
+        "box": [
+          160,
+          268
+        ],
+        "place": "floor",
+        "states": 1,
+        "acts": [
+          "wobble",
+          "bounce"
+        ]
+      },
+      "key": {
+        "box": [
+          250,
+          96
+        ],
+        "place": "wall",
+        "states": 1,
+        "acts": [
+          "spin",
+          "glow",
+          "bounce",
+          "wobble"
+        ]
+      },
+      "lock": {
+        "box": [
+          140,
+          272
+        ],
+        "place": "wall",
+        "states": 2,
+        "acts": [
+          "switch",
+          "shake",
+          "bounce"
+        ]
+      },
+      "chest": {
+        "box": [
+          292,
+          302
+        ],
+        "place": "floor",
+        "states": 2,
+        "acts": [
+          "switch",
+          "shake",
+          "glow",
+          "wobble"
+        ]
+      },
+      "porthole": {
+        "box": [
+          292,
+          266
+        ],
+        "place": "wall",
+        "states": 1,
+        "acts": [
+          "pulse",
+          "glow",
+          "wobble"
+        ],
+        "portal": [
+          0,
+          -132
+        ]
+      },
+      "window": {
+        "box": [
+          350,
+          356
+        ],
+        "place": "wall",
+        "states": 2,
+        "acts": [
+          "switch",
+          "glow"
+        ],
+        "portal": [
+          0,
+          -184
+        ]
+      },
+      "hourglass": {
+        "box": [
+          152,
+          238
+        ],
+        "place": "floor",
+        "states": 4,
+        "acts": [
+          "cycle",
+          "spin",
+          "wobble"
+        ]
+      },
+      "ship": {
+        "box": [
+          480,
+          480
+        ],
+        "place": "floor",
+        "states": 1,
+        "acts": [
+          "wobble",
+          "bounce"
+        ]
+      },
+      "train": {
+        "box": [
+          548,
+          404
+        ],
+        "place": "floor",
+        "states": 4,
+        "acts": [
+          "cycle",
+          "shake"
+        ]
+      },
+      "lighthouse": {
+        "box": [
+          400,
+          562
+        ],
+        "place": "floor",
+        "states": 2,
+        "acts": [
+          "switch",
+          "glow"
+        ]
+      },
+      "house": {
+        "box": [
+          400,
+          412
+        ],
+        "place": "floor",
+        "states": 2,
+        "acts": [
+          "switch",
+          "glow",
+          "wobble"
+        ]
+      },
+      "tree": {
+        "box": [
+          400,
+          530
+        ],
+        "place": "floor",
+        "states": 1,
+        "acts": [
+          "wobble",
+          "shake"
+        ]
+      },
+      "printingpress": {
+        "box": [
+          440,
+          540
+        ],
+        "place": "floor",
+        "states": 3,
+        "acts": [
+          "cycle",
+          "shake"
+        ]
+      },
+      "signpost": {
+        "box": [
+          340,
+          446
+        ],
+        "place": "floor",
+        "states": 1,
+        "acts": [
+          "wobble",
+          "shake"
+        ]
+      },
+      "lantern": {
+        "box": [
+          170,
+          320
+        ],
+        "place": "wall",
+        "states": 2,
+        "acts": [
+          "swing",
+          "switch",
+          "glow"
+        ]
+      }
+    }
+  }
+}
