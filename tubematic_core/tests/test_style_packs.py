@@ -50,7 +50,7 @@ def test_the_list_starts_with_auto_and_holds_every_pack():
     assert tvs.VISUAL_STYLES[0] == "auto"
     assert set(tvs.VISUAL_STYLES[1:]) == {p.stem for p in tvs.PACKS_DIR.glob("*.json")}
     assert {"motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow",
-            "bean_explainer"} <= set(tvs.VISUAL_STYLES)
+            "bean_explainer", "terminal_doc"} <= set(tvs.VISUAL_STYLES)
 
 
 def test_effective_canvas():
@@ -94,6 +94,22 @@ def test_bean_explainer():
     assert "review" in p and "captions" in p
     assert len(p["extra"]["props"]) >= 40
     assert tvs.effective_canvas("bean_explainer", "dark") == "light"
+
+
+def test_terminal_doc():
+    p = tvs.pack("terminal_doc")
+    assert p["renderer"] == "dom" and p["canvas"] == "dark"
+    assert p["authoring_skill"] == "tubematic-terminal-doc"
+    assert p["experimental"] is False
+    # the text is the picture: no figures, no line art, no generated characters
+    assert not any(p["allows"].values()) and not any(p["needs"].values())
+    assert "review" in p and p["captions"]["background"] == "log"
+    assert p["routing"]["images"] == 0
+    # each skin's caption changes are caption keys
+    assert set(p["extra"]["skins"]) == {"house", "crt"}
+    for skin in p["extra"]["skins"].values():
+        assert set(skin["captions"]) <= set(p["captions"]) | {"accent"}
+    assert tvs.effective_canvas("terminal_doc", "light") == "dark"
 
 
 def test_the_public_list_says_why_a_style_is_unavailable():
