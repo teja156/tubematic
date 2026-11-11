@@ -731,7 +731,8 @@ page body clips horizontal overflow.
   three seconds. Only the newest save for a field sets its state, so a late answer to an older save
   cannot overwrite a newer outcome.
 - `SavesProvider` wraps the page. It sums the states of every panel for the line at the top right,
-  and adds a `beforeunload` prompt while a save is in flight or a Preferences save is waiting.
+  and adds a `beforeunload` prompt while a save is in flight or a Preferences save is waiting. A
+  save still on its way when its tab is left stays counted until it is over.
 - Settings saves run through one queue (`useSerialQueue`). `POST /settings` answers with the whole
   settings object, so an answer that arrived after a newer one would put older values back on
   screen. Each request gives up after 30 seconds, or one hung request would hold every later change.
@@ -745,10 +746,12 @@ page body clips horizontal overflow.
   puts the field back to waiting.
 - A text field typed back to its stored value clears its refusal, and a focus and blur alone does
   not send a refused value again (for the Discord webhook that would run its check each time).
+  Enter, or an edit, sends it again.
 - A switch or a picker shows its new value while the save is on its way, and goes back to the
-  stored value if the API refuses it. A typed field keeps what was typed, red, with the reason
-  beside it, so the entry can be corrected while the stored value stays in force. An out-of-range
-  number is refused in the page and never sent.
+  stored value if the API refuses it. A typed field (`NumInput`, `SecretInput`, `TextInput`,
+  Preferences) keeps what was typed, red, with the reason beside it, so the entry can be corrected
+  while the stored value stays in force. A voice row and the Auto Pilot fields go back to the
+  stored value instead. An out-of-range number is refused in the page and never sent.
 - The voice roster and the default voice are saved in one request, because the API reads a default
   that is not in the roster as empty. Removing a voice offers **Undo**, which puts that one voice
   back into the roster as it is then, so a voice added since stays. It is the default again only if
@@ -783,7 +786,9 @@ Four tabs hold rows from their own tables and save through their own routes.
 
 Choosing the default agent, picking an agent's default model or effort, and changing a weight each
 write at once through `PATCH /agents/<id>`. The weight saves on blur or Enter, and a value outside
-0 to 100 stays in the field with the reason under the row and is never sent. The model list is read-only: the dashboard container has no agent
+0 to 100 stays in the field with the reason under the row and is never sent. The weight has its
+own status and error line, so a change to the effort or model does not wipe a refusal shown for
+it. The model list is read-only: the dashboard container has no agent
 binary to validate a new model against, so models change only when you run
 `python3 onboard.py --install-agent <name>` again on the host. Uninstalling is
 `python3 onboard.py --uninstall-agent <name>`, which also removes files the dashboard cannot reach.

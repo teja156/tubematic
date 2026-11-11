@@ -165,15 +165,22 @@ export default function SocialsPage() {
             {PLATFORM_LABEL[platform] ?? platform}
           </div>
           {list.map((account) => (
-            <label
+            // The save status sits outside the label: inside, clicking it
+            // would tick the box, and it would become part of the box's name.
+            <div
               key={account.id}
               data-testid={`account-row-${account.id}`}
               style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
                 border: "1px solid var(--border)", background: "var(--panel)",
                 marginBottom: 8, maxWidth: 640,
-                cursor: account.available ? "pointer" : "not-allowed",
                 opacity: account.available ? 1 : 0.55,
+              }}
+            >
+            <label
+              style={{
+                display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0,
+                cursor: account.available ? "pointer" : "not-allowed",
               }}
             >
               <input
@@ -188,7 +195,6 @@ export default function SocialsPage() {
               <span style={{ ...mono, fontSize: 12, color: "var(--ink)" }}>
                 @{account.username || account.id}
               </span>
-              <SaveStatus status={statuses.get(account.id)} testId={`account-save-status-${account.id}`} />
               {!account.available && (
                 <span
                   data-testid={`account-unavailable-${account.id}`}
@@ -215,6 +221,8 @@ export default function SocialsPage() {
                 </span>
               )}
             </label>
+            <SaveStatus status={statuses.get(account.id)} testId={`account-save-status-${account.id}`} />
+            </div>
           ))}
         </div>
       ))}

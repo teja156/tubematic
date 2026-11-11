@@ -1342,7 +1342,7 @@ describe("SettingsPage — agents tab", () => {
     const input = await screen.findByTestId("agent-weight-claude");
     fireEvent.change(input, { target: { value: "5" } });
     await act(async () => { fireEvent.blur(input); });
-    await waitFor(() => expect(screen.getByTestId("agent-error-claude").textContent).toContain("agent is busy"));
+    await waitFor(() => expect(screen.getByTestId("agent-weight-error-claude").textContent).toContain("agent is busy"));
     await act(async () => { fireEvent.blur(input); });
     await waitFor(() => expect(mutations(fn)).toHaveLength(2));
   });
@@ -1354,7 +1354,14 @@ describe("SettingsPage — agents tab", () => {
     fireEvent.change(input, { target: { value: "101" } });
     await act(async () => { fireEvent.keyDown(input, { key: "Enter" }); });
     expect(mutations(fn)).toHaveLength(0);
-    expect(screen.getByTestId("agent-error-claude").textContent).toMatch(/0 to 100/);
+    expect(screen.getByTestId("agent-weight-error-claude").textContent).toMatch(/0 to 100/);
+    expect(screen.getByTestId("saves-summary").textContent).toContain("1 change not saved");
+    // Another change on the same row does not wipe the weight's refusal.
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("agent-effort-claude"), { target: { value: "low" } });
+    });
+    await waitFor(() => expect(mutations(fn)).toHaveLength(1));
+    expect(screen.getByTestId("agent-weight-error-claude").textContent).toMatch(/0 to 100/);
     expect(screen.getByTestId("saves-summary").textContent).toContain("1 change not saved");
     // What was typed stays, so it can be corrected.
     expect((input as HTMLInputElement).value).toBe("101");
@@ -1682,9 +1689,14 @@ describe("SettingsPage — save behaviour", () => {
     // A focus and blur alone does not send the refused value again.
     await act(async () => { fireEvent.blur(url); });
     expect(held.count()).toBe(1);
+    // Enter sends it again: a value that failed for want of the API must be
+    // sendable without retyping it.
+    await act(async () => { fireEvent.keyDown(url, { key: "Enter" }); });
+    expect(held.count()).toBe(2);
+    await held.answer(1, { ok: false, status: 400, json: async () => ({ error: "must start with http" }) });
     fireEvent.change(url, { target: { value: "" } });
     await act(async () => { fireEvent.blur(url); });
-    expect(held.count()).toBe(1);
+    expect(held.count()).toBe(2);
     expect(screen.getByTestId("status-input-dashboard-base-url").textContent).toBe("");
   });
 

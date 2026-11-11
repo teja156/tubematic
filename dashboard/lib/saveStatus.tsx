@@ -105,9 +105,17 @@ export function useSaveStatus(): SaveStatusApi {
   const keys = useRef(new Set<string>());
   const states = useRef(new Map<string, SaveState>());
   const mounted = useRef(true);
+  // Keys with a `run` in progress, and the newest run started for each.
+  const running = useRef(new Set<string>());
+  const runs = useRef(new Map<string, number>());
 
   const set = useCallback((key: string, state: SaveState | null) => {
-    if (!mounted.current) return;
+    if (!mounted.current) {
+      // Unmounted with a save on its way (the field's tab was left): the page
+      // kept counting it, and stops once it is over.
+      if (state?.state !== "saving") ctx?.report(`${scope}:${key}`, null);
+      return;
+    }
     const timer = timers.current.get(key);
     if (timer) {
       clearTimeout(timer);
@@ -140,9 +148,10 @@ export function useSaveStatus(): SaveStatusApi {
     const timerMap = timers.current;
     const keySet = keys.current;
     return () => {
-      // Report the keys gone, or a field unmounted mid-save would hold the
-      // page's "Saving…" (and the leave-page prompt) for good.
-      keySet.forEach((k) => ctx?.report(`${scope}:${k}`, null));
+      // Report the keys gone, or a field unmounted would hold the page's
+      // "Saving…" (and the leave-page prompt) for good. A save still on its
+      // way stays counted until it is over (see `set`).
+      keySet.forEach((k) => { if (!running.current.has(k)) ctx?.report(`${scope}:${k}`, null); });
       keySet.clear();
       timerMap.forEach(clearTimeout);
       timerMap.clear();
@@ -154,14 +163,21 @@ export function useSaveStatus(): SaveStatusApi {
     const mine = (seq.current.get(key) ?? 0) + 1;
     seq.current.set(key, mine);
     set(key, { state: "saving", label });
+    const myRun = (runs.current.get(key) ?? 0) + 1;
+    runs.current.set(key, myRun);
+    running.current.add(key);
     let error: string | null;
     try {
       error = await fn();
     } catch (e) {
       error = e instanceof Error && e.message ? e.message : "could not reach the API";
     }
+    const last = runs.current.get(key) === myRun;
+    if (last) running.current.delete(key);
     if (seq.current.get(key) === mine) {
       set(key, error ? { state: "error", message: error } : { state: "saved" });
+    } else if (last && !mounted.current) {
+      ctx?.report(`${scope}:${key}`, null);
     }
     return !error;
   }, [set]);

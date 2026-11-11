@@ -176,7 +176,7 @@ function useBaseline<T>(value: T, status?: SaveState) {
 /** Commits a text field. Typed back to the stored value: nothing to send, and
  *  a refusal shown for it no longer applies. A value whose refusal is on
  *  screen is not sent again by a mere focus and blur (for the Discord webhook
- *  that would run its check again each time). */
+ *  that would run its check again each time); Enter or an edit sends it. */
 function commitText(
   v: string,
   baseline: { current: () => string; mark: (v: string) => void },
@@ -184,12 +184,15 @@ function commitText(
   status: SaveState | undefined,
   onCommit: (v: string) => void,
   onSame?: () => void,
+  force = false,
 ) {
   if (v === baseline.current()) {
     onSame?.();
     return;
   }
-  if (status?.state === "error" && v === lastSent.current) return;
+  // Enter always sends: a value that failed because the API could not be
+  // reached has to be sendable again without retyping it.
+  if (!force && status?.state === "error" && v === lastSent.current) return;
   baseline.mark(v);
   lastSent.current = v;
   onCommit(v);
@@ -305,10 +308,10 @@ function SecretInput({
     if (mayFollow(dirty.current, baseline.inFlight(), status)) setLocal(value);
   }, [value, status?.state]);
 
-  function commit() {
+  function commit(force = false) {
     setFocused(false);
     dirty.current = false;
-    commitText(local.trim(), baseline, lastSent, status, onCommit, onSame);
+    commitText(local.trim(), baseline, lastSent, status, onCommit, onSame, force);
   }
 
   return (
@@ -327,9 +330,9 @@ function SecretInput({
         aria-invalid={status?.state === "error"}
         aria-describedby={`status-${testId}`}
         onFocus={() => setFocused(true)}
-        onChange={(e) => { dirty.current = true; setLocal(e.target.value); }}
-        onBlur={commit}
-        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        onChange={(e) => { dirty.current = true; lastSent.current = null; setLocal(e.target.value); }}
+        onBlur={() => commit()}
+        onKeyDown={(e) => { if (e.key === "Enter") { commit(true); (e.target as HTMLInputElement).blur(); } }}
         style={{
           width: 220,
           background: "var(--input-bg, var(--panel))",
@@ -369,9 +372,9 @@ function TextInput({
     if (mayFollow(dirty.current, baseline.inFlight(), status)) setLocal(value);
   }, [value, status?.state]);
 
-  function commit() {
+  function commit(force = false) {
     dirty.current = false;
-    commitText(local.trim(), baseline, lastSent, status, onCommit, onSame);
+    commitText(local.trim(), baseline, lastSent, status, onCommit, onSame, force);
   }
 
   return (
@@ -386,9 +389,9 @@ function TextInput({
         spellCheck={false}
         aria-invalid={status?.state === "error"}
         aria-describedby={`status-${testId}`}
-        onChange={(e) => { dirty.current = true; setLocal(e.target.value); }}
-        onBlur={commit}
-        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        onChange={(e) => { dirty.current = true; lastSent.current = null; setLocal(e.target.value); }}
+        onBlur={() => commit()}
+        onKeyDown={(e) => { if (e.key === "Enter") { commit(true); (e.target as HTMLInputElement).blur(); } }}
         style={{
           width: 220,
           background: "var(--input-bg, var(--panel))",
@@ -1821,17 +1824,20 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
 
   useEffect(() => { load(); }, []);
 
-  async function mutate(id: string, init: RequestInit) {
+  /** `key` names the status and error line the outcome shows in: the row's
+   *  (the agent id), or the weight's own (`<id>:weight`), so a change to the
+   *  effort or model never wipes a refusal shown for the weight. */
+  async function mutate(id: string, init: RequestInit, key: string = id) {
     setBusy(id);
-    setErrors((e) => ({ ...e, [id]: "" }));
+    setErrors((e) => ({ ...e, [key]: "" }));
     // The row shows "Saving…" then "✓ Saved"; a refusal shows in its own
     // red line under the row, as it always has.
-    await statuses.run(id, async () => {
+    await statuses.run(key, async () => {
       try {
         const r = await apiFetch(`/agents/${id}`, { ...init, signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) });
         if (!r.ok) {
           const detail = await errorDetail(r);
-          setErrors((e) => ({ ...e, [id]: detail }));
+          setErrors((e) => ({ ...e, [key]: detail }));
           return detail;
         }
         // Reload rather than splice in the returned row: making one agent the
@@ -1840,7 +1846,7 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
         return null;
       } catch (e) {
         const detail = e instanceof Error ? e.message : "unreachable";
-        setErrors((prev) => ({ ...prev, [id]: detail }));
+        setErrors((prev) => ({ ...prev, [key]: detail }));
         return detail;
       } finally {
         setBusy(null);
@@ -1857,7 +1863,7 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    });
+    }, "weight" in body ? `${id}:weight` : id);
   }
 
   const mono = { fontFamily: "var(--mono)" } as const;
@@ -1969,16 +1975,19 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
                     onSave={(n) => patch(a.id, { weight: n })}
                     onInvalid={(message) => {
                       // Counted as not saved on the page line; the reason
-                      // shows in the row's own error line.
-                      statuses.fail(a.id, message);
-                      setErrors((e) => ({ ...e, [a.id]: message }));
+                      // shows in the weight's own error line.
+                      statuses.fail(`${a.id}:weight`, message);
+                      setErrors((e) => ({ ...e, [`${a.id}:weight`]: message }));
                     }}
                     onSame={() => {
-                      if (statuses.get(a.id)?.state !== "error") return;
-                      statuses.clear(a.id);
-                      setErrors((e) => ({ ...e, [a.id]: "" }));
+                      if (statuses.get(`${a.id}:weight`)?.state !== "error") return;
+                      statuses.clear(`${a.id}:weight`);
+                      setErrors((e) => ({ ...e, [`${a.id}:weight`]: "" }));
                     }}
                   />
+                  {statuses.get(`${a.id}:weight`)?.state !== "error" && (
+                    <SaveStatus status={statuses.get(`${a.id}:weight`)} testId={`status-agent-weight-${a.id}`} />
+                  )}
                   <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ ...mono, fontSize: 11, color: "var(--ink-2)" }}>default model</span>
                     {/* Controlled by models[0]: the API moves the pick to the
@@ -2018,6 +2027,11 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
                 {errors[a.id] && (
                   <div data-testid={`agent-error-${a.id}`} role="alert" style={{ ...mono, fontSize: 10.5, color: "var(--red)", marginTop: 8 }}>
                     {errors[a.id]}
+                  </div>
+                )}
+                {errors[`${a.id}:weight`] && (
+                  <div data-testid={`agent-weight-error-${a.id}`} role="alert" style={{ ...mono, fontSize: 10.5, color: "var(--red)", marginTop: 8 }}>
+                    Weight not saved: {errors[`${a.id}:weight`]}
                   </div>
                 )}
               </div>

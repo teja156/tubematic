@@ -470,11 +470,16 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
                 data-testid={`auto-pilot-project-toggle-${p.id}`}
                 type="checkbox"
                 checked={on}
+                aria-describedby={`auto-pilot-status-project-${p.id}`}
                 onChange={() => toggleProject(p.id)}
               />
               <span style={{ overflowWrap: "anywhere" }}>{p.name}</span>
-              <SaveStatus status={statuses.get(`project-${p.id}`)} testId={`auto-pilot-status-project-${p.id}`} id={`auto-pilot-status-project-${p.id}`} />
             </label>
+            {/* Outside the label: inside, clicking the status would tick the
+                box, and it would become part of the box's name. */}
+            <div style={{ marginLeft: 26 }}>
+              <SaveStatus status={statuses.get(`project-${p.id}`)} testId={`auto-pilot-status-project-${p.id}`} id={`auto-pilot-status-project-${p.id}`} />
+            </div>
             {on && (
               <div style={{ margin: "8px 0 0 26px" }}>
                 <div style={{ ...note, marginBottom: 6 }}>

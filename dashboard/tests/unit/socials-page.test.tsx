@@ -119,6 +119,8 @@ describe("SocialsPage", () => {
       .toHaveTextContent("Not saved: Publishing is disabled"));
     expect(screen.getByTestId("account-toggle-spc_ig")).not.toBeChecked();
     expect(screen.queryByTestId("socials-error")).toBeNull();
+    // The status is not part of the box's label: clicking it ticks nothing.
+    expect(screen.getByTestId("account-save-status-spc_ig").closest("label")).toBeNull();
   });
 
   it("flags an allowlisted account that is gone upstream", async () => {

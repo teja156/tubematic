@@ -19,8 +19,9 @@ Below it are fifteen tabs. Every change is saved as you make it, and no tab has 
 - The **Preferences** text saves a second after you stop typing.
 
 Beside each field you see **Saving…**, then **✓ Saved**. A value that is not allowed is not saved,
-and a message beside it or under its row says why. A number or text you typed stays in its field,
-marked red, so you can correct it. A switch or a list goes back to the stored value. The line at the top right of the page says **All changes saved**, **Saving…**, or how
+and a message beside it or under its row says why. On most tabs a number or text you typed stays in
+its field so you can correct it, and press Enter to send it again. A switch or a list goes back to
+the stored value, and so do the fields on **Auto Pilot** and a voice's name and ID. The line at the top right of the page says **All changes saved**, **Saving…**, or how
 many changes were not saved. While a change is still saving, the browser asks before you close or
 reload the page.
 

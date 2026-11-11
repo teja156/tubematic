@@ -103,6 +103,26 @@ describe("SavesProvider", () => {
   });
 });
 
+describe("a field gone with its save on its way", () => {
+  it("stays counted until that save is over", async () => {
+    let finish!: (v: string | null) => void;
+    function Field() {
+      const s = useSaveStatus();
+      return <button onClick={() => { void s.run("x", () => new Promise((r) => { finish = r; })); }}>go</button>;
+    }
+    function Summary() {
+      const { saving } = useSavesSummary();
+      return <span data-testid="sum">{saving}</span>;
+    }
+    const { rerender } = render(<SavesProvider><Field /><Summary /></SavesProvider>);
+    fireEvent.click(screen.getByText("go"));
+    rerender(<SavesProvider><Summary /></SavesProvider>);
+    expect(screen.getByTestId("sum").textContent).toBe("1");
+    await act(async () => { finish(null); });
+    expect(screen.getByTestId("sum").textContent).toBe("0");
+  });
+});
+
 describe("useSerialQueue", () => {
   it("starts each write only after the one before has answered, even a failed one", async () => {
     const { result } = renderHook(() => useSerialQueue());

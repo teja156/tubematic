@@ -175,7 +175,8 @@ Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-setti
   overwrite what is being typed. A new id on the default voice moves the default with it, and a
   refused new voice keeps what was typed in the add row.
 - A text field typed back to its stored value clears its refusal, and a focus and blur does not
-  send the refused value again. A refused agent weight can be sent again.
+  send the refused value again, while Enter does. A refused agent weight can be sent again, and its
+  refusal survives a change to the agent's effort.
 - The Publishing confirmation reads Auto Pilot fresh, so its warning shows after Auto Pilot was
   turned on in the same visit.
 - Turning Publishing on asks first, and Cancel saves nothing; turning it off does not ask.
@@ -266,7 +267,7 @@ Covers `app/socials/page.tsx` ([Publishing surfaces](../15-dashboard.md#publishi
   one way to clean a stale entry out.
 - Connect runs one at a time and falls back to a link when the browser blocks the tab.
 - A tick says "✓ Saved" beside the account. A refused tick shows the reason there, leaves the box
-  as it was and raises no page banner.
+  as it was and raises no page banner. The status sits outside the box's label.
 
 Trap: saving sends account ids only. Display data is read live on every load, and a stored username
 would be a second copy that goes stale.
@@ -596,7 +597,8 @@ Covers `lib/saveStatus.tsx` and the action on `components/Toast.tsx`
 - Only the newest save for a field sets its outcome, so an older answer arriving last does not
   replace it. Clearing every status leaves a save still in flight alone.
 - `SavesProvider` sums the states, asks before the browser tab closes only while something is
-  saving, and drops a field's state when its component goes away.
+  saving, and drops a field's state when its component goes away, except a save still on its way,
+  which stays counted until it is over.
 - The write queue starts each write after the one before has answered, a failed one included.
 - A toast's action runs once and closes the toast, and the toast stays long enough to be clicked.
 
