@@ -62,7 +62,7 @@ research stops before you have enough to choose from.
 
 The list of ElevenLabs voices videos can use. A new install starts with two, Teja and Adam.
 
-![Settings, Voice tab: two voices, each with a name, a voice ID, a model, a speed, a default marker and a preview button](../images/settings-voice.png)
+![Settings, Voice tab: two voices, each with a name, a voice ID, a model, a default marker and a preview button](../images/settings-voice.png)
 
 For each voice you set:
 

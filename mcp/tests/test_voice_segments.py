@@ -157,6 +157,16 @@ def test_each_run_hears_its_neighbours(job_db, recorder):
     assert last["previous_text"] == "Wait really?" and "next_text" not in last
 
 
+def test_context_is_the_authored_words_never_respellings_or_ipa(job_db, recorder):
+    """A v4 neighbour's IPA is sent to ElevenLabs as "/ph/"; a v2 run must not
+    be given that as text."""
+    job_db("v1", voice_id="t1", script_segments=[
+        _seg("s1", 'Meet <ipa ph="ˈvɑːɡɑːr">Vhagar</ipa> now.'),
+        _seg("s2", "Who is that?", voice_id="r1")])
+    server.generate_voice("v1", "")
+    assert recorder.payloads[1]["previous_text"] == "Meet Vhagar now."
+
+
 def test_a_v3_run_carries_no_context(job_db, recorder):
     job_db("v1", voice_id="t1", script_segments=[
         _seg("s1", "First words here."), _seg("s2", "Second words.", voice_id="a1")])

@@ -101,9 +101,9 @@ def _setting(key: str, default: str) -> str:
 
 
 def _narration_voices(row) -> list[str]:
-    """The names of the voices a video's narration is spoken in (TMDEV-216):
-    the video's own voice, then each other voice its segments name, in
-    script order. A voice no longer on the roster reads as its id."""
+    """The names of the voices a video's narration is spoken in (TMDEV-216),
+    in the order they first speak. A voice no longer on the roster reads as
+    its id."""
     try:
         roster = {v["voice_id"]: v.get("name") or v["voice_id"]
                   for v in json.loads(_setting("elevenlabs_voices", "[]"))}
@@ -114,9 +114,13 @@ def _narration_voices(row) -> list[str]:
         segments = json.loads(row["script_segments"]) if row["script_segments"] else []
     except ValueError:
         segments = []
-    ids = [video_voice] if video_voice else []
-    for seg in segments if isinstance(segments, list) else []:
-        vid = pipeline.tvoice.segment_voice_id(seg)
+    if not isinstance(segments, list) or not segments:
+        return [roster.get(video_voice, video_voice)] if video_voice else []
+    # The voices that actually speak: a video whose every segment names
+    # another voice is spoken by that voice alone.
+    ids = []
+    for vid, _ in pipeline.tvoice.segment_runs(
+            [s for s in segments if isinstance(s, dict)], video_voice):
         if vid and vid not in ids:
             ids.append(vid)
     return [roster.get(vid, vid) for vid in ids]

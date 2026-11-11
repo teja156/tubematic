@@ -168,3 +168,13 @@ def test_the_other_voices_of_a_script_are_listed(client, db_path):
     con.close()
     assert _info(client)["other_voices"] == [
         {"voice_id": "r1", "name": "Rachel", "model_id": "eleven_multilingual_v2"}]
+
+
+def test_a_changed_install_default_still_reports_the_voiced_model(client, db_path):
+    """Voiced on the old default (tagged with it); the default then changed.
+    The row must still show the model the audio was made with."""
+    _video(db_path, voice_id="")
+    tusage.record_usage(db_path, service="elevenlabs", model="eleven_v3", operation="voice",
+                        units={"credits": 100}, videos=["vid-1"], raw={"voice_id": "old"})
+    info = _info(client)
+    assert info["model_id"] == "eleven_v3" and info["model_voiced"] is True

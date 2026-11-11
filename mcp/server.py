@@ -4131,9 +4131,11 @@ _RUN_CONTEXT_CHARS = 200
 
 
 def _run_context_text(run: dict, last: bool) -> str:
-    """A neighbouring run's spoken words for previous_text / next_text: the
-    end of the run before, or the start of the run after, cut at a word."""
-    text = " ".join(_strip_non_spoken(run["tts_text"]).split())
+    """A neighbouring run's words for previous_text / next_text: the end of
+    the run before, or the start of the run after, cut at a word. The
+    authored words, never the run's tts_text: that holds respellings and, on
+    v3 and v4, IPA between slashes, which another model would read as text."""
+    text = " ".join(_strip_non_spoken(_join_segment_voice(run["segments"])).split())
     if len(text) <= _RUN_CONTEXT_CHARS:
         return text
     if last:

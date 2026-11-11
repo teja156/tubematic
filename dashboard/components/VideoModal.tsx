@@ -1027,7 +1027,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                               <select
                                 data-testid={`segment-voice-${seg.id}`}
                                 aria-label={`Voice for segment ${seg.id}`}
-                                value={seg.voice_id ?? ""}
+                                value={seg.voice_id && seg.voice_id !== videoVoiceId ? seg.voice_id : ""}
                                 disabled={segmentVoiceSaving !== null}
                                 onChange={(e) => handleSegmentVoice(seg.id, e.target.value)}
                                 style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--ink-2)", background: "transparent", border: "1px solid var(--border)", padding: "2px 6px", marginBottom: 6 }}

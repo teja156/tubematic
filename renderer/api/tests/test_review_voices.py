@@ -37,5 +37,18 @@ def test_the_narration_voices_come_from_the_video_and_its_segments(monkeypatch):
             {"id": "c", "voice": "z", "visual": "", "voice_id": "r1"}]
     assert render_results._narration_voices(_row("", segs)) == ["Teja", "Rachel"]
     assert render_results._narration_voices(_row("t1", segs[:1])) == ["Teja"]
-    gone = [{"id": "a", "voice": "x", "visual": "", "voice_id": "zz"}]
-    assert render_results._narration_voices(_row("t1", gone)) == ["Teja", "zz"]
+    gone = [{"id": "a", "voice": "x", "visual": "", "voice_id": "zz"},
+            {"id": "b", "voice": "y", "visual": ""}]
+    assert render_results._narration_voices(_row("t1", gone)) == ["zz", "Teja"]
+
+
+def test_a_video_whose_every_segment_has_another_voice_is_one_voice(monkeypatch):
+    """The video's own voice speaks nothing then, so the review must not be
+    told two voices speak."""
+    settings = {"elevenlabs_voices": json.dumps([
+        {"name": "Teja", "voice_id": "t1", "model_id": "eleven_v4"},
+        {"name": "Rachel", "voice_id": "r1", "model_id": "eleven_multilingual_v2"}]),
+        "elevenlabs_voice_id": "t1"}
+    monkeypatch.setattr(render_results, "_setting", lambda k, d: settings.get(k, d))
+    segs = [{"id": "a", "voice": "x", "visual": "", "voice_id": "r1"}]
+    assert render_results._narration_voices(_row("t1", segs)) == ["Rachel"]
