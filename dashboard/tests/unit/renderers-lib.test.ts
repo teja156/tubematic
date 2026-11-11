@@ -11,7 +11,7 @@
 import { describe, it, expect } from "vitest";
 import type { Renderer, RenderersList } from "@/lib/types";
 import {
-  canRender, computeLine, credentialExpired, describeDevice, gpuVerdict, hasGpu, isRenderersList, lastSeen,
+  canRender, computeLine, credentialExpired, describeDevice, formatRenderDuration, gpuVerdict, hasGpu, isRenderersList, lastSeen,
   nameError, nothingCanRender, rendererStatus, vramLine, anyProbePending,
 } from "@/lib/renderers";
 
@@ -166,5 +166,20 @@ describe("helpers", () => {
     expect(nameError("   ")).not.toBe("");
     expect(nameError("x".repeat(61))).toMatch(/60/);
     expect(nameError(` ${"x".repeat(60)} `)).toBe("");
+  });
+});
+
+describe("formatRenderDuration", () => {
+  it("reads seconds, minutes and hours", () => {
+    expect(formatRenderDuration(48)).toBe("48s");
+    expect(formatRenderDuration(0.4)).toBe("1s");
+    expect(formatRenderDuration(59.6)).toBe("1m 00s");
+    expect(formatRenderDuration(192.4)).toBe("3m 12s");
+    expect(formatRenderDuration(65)).toBe("1m 05s");
+    expect(formatRenderDuration(3840)).toBe("1h 04m");
+  });
+
+  it("is a dash when no time was reported", () => {
+    for (const v of [0, -5, NaN, Infinity, null, undefined]) expect(formatRenderDuration(v)).toBe("—");
   });
 });
