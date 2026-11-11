@@ -909,16 +909,13 @@ def _coerce_setting(key: str, raw) -> tuple:
             raise ValueError(f"{key} allows at most {MAX_VOICES} voices, got {len(parsed)}")
         names, ids = set(), set()
         for entry in parsed:
-            if not isinstance(entry, dict) or set(entry) != {"name", "voice_id", "model_id"}:
-                raise ValueError(f"Each entry in {key} must be {{name, voice_id, model_id}}, "
-                                 f"got {entry!r}")
+            # Shape, model and speed (TMDEV-216): the rules every roster
+            # reader shares. A speed on a model that ignores it is refused
+            # here, so a stored speed always changes the audio.
+            err = tvoice.roster_entry_error(entry)
+            if err:
+                raise ValueError(f"{key}: {err}")
             name, voice_id = entry["name"], entry["voice_id"]
-            # Type first: a list or dict is unhashable, and a TypeError here
-            # would escape both this 400 and _read_all_settings' fallback.
-            if not isinstance(entry["model_id"], str) \
-                    or entry["model_id"] not in DICTIONARY_COMPATIBLE_MODELS:
-                raise ValueError(f"Voice {name!r} in {key} has model_id {entry['model_id']!r}; "
-                                 f"it must be one of {sorted(DICTIONARY_COMPATIBLE_MODELS)}")
             if not isinstance(name, str) or not name.strip():
                 raise ValueError(f"Each voice name in {key} must be a non-empty string")
             if not isinstance(voice_id, str) or not voice_id.strip():
@@ -929,6 +926,9 @@ def _coerce_setting(key: str, raw) -> tuple:
                 raise ValueError(f"Duplicate voice_id {voice_id!r} in {key}")
             names.add(name)
             ids.add(voice_id)
+        # A speed of 1.0 is never stored: a roster nobody gave a speed keeps
+        # the exact shape older versions read, so a rollback still finds it.
+        parsed = [tvoice.normalize_roster_entry(e) for e in parsed]
         return (parsed, _json.dumps(parsed))
 
     if typ == "lexicon":
@@ -3964,6 +3964,21 @@ def create_pipeline_blueprint() -> Blueprint:
                          f"got {model_id!r}"
             }), 400
 
+        # The speed the preview speaks at (TMDEV-216): the body's, so Settings
+        # can preview a change before it is saved, else the voice's stored
+        # one. A stored speed is dropped when the body names a model that
+        # ignores it; a speed the body asks for on such a model is refused.
+        if isinstance(body, dict) and "speed" in body:
+            speed = body["speed"]
+            err = tvoice.speed_error(speed, model_id, voice["name"])
+            if err:
+                return jsonify({"error": err}), 400
+            speed = round(float(speed), 2)
+        else:
+            speed = tvoice.voice_speed(voice)
+            if model_id not in tvoice.SPEED_MODELS:
+                speed = tvoice.DEFAULT_SPEED
+
         api_key = _secret(settings, "elevenlabs_api_key", "ELEVENLABS_API_KEY")
         if not api_key:
             return jsonify({
@@ -3971,8 +3986,11 @@ def create_pipeline_blueprint() -> Blueprint:
                          "access. Add it on the Settings page."
             }), 503
 
+        # The key names the speed only when it is not the default, so every
+        # preview cached before speeds existed is still found.
+        speed_part = "" if speed == tvoice.DEFAULT_SPEED else f"|{speed:.2f}"
         cache_key = hashlib.sha256(
-            f"{voice_id}|{model_id}|{VOICE_PREVIEW_SAMPLE_TEXT}".encode()
+            f"{voice_id}|{model_id}{speed_part}|{VOICE_PREVIEW_SAMPLE_TEXT}".encode()
         ).hexdigest()[:16]
         preview_dir = OUTPUT_DIR / "voice-previews"
         preview_path = preview_dir / f"{cache_key}.mp3"
@@ -3988,6 +4006,8 @@ def create_pipeline_blueprint() -> Blueprint:
             "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
             "output_format": "mp3_44100_128",
         }
+        if speed != tvoice.DEFAULT_SPEED:
+            payload["voice_settings"]["speed"] = speed
         headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
         try:
             with _httpx.Client(timeout=60) as client:

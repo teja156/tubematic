@@ -545,7 +545,9 @@ def section_settings(settings: dict, include_content: bool) -> str:
         elif key == "elevenlabs_voices":
             try:
                 voices = json.loads(value or "[]")
-                shown = "; ".join(f"{v.get('voice_id', '')} ({v.get('model_id', '')})" for v in voices) \
+                shown = "; ".join(f"{v.get('voice_id', '')} ({v.get('model_id', '')}"
+                                  + (f", speed {v['speed']})" if "speed" in v else ")")
+                                  for v in voices) \
                     or "none"
             except (ValueError, AttributeError):
                 shown = f"<{len(value)} chars>"

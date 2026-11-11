@@ -1093,10 +1093,9 @@ def _get_voices() -> list[dict]:
     if not isinstance(parsed, list) or len(parsed) > MAX_VOICES:
         return []
     for entry in parsed:
-        if not isinstance(entry, dict) or set(entry) != {"name", "voice_id", "model_id"}:
-            return []
-        if not isinstance(entry["model_id"], str) \
-                or entry["model_id"] not in DICTIONARY_COMPATIBLE_MODELS:
+        # Shape, model and an optional speed (TMDEV-216): the rules all three
+        # roster readers share, in tubematic_core.voice_models.
+        if tvoice.roster_entry_error(entry):
             return []
         if not isinstance(entry["name"], str) or not entry["name"].strip():
             return []
