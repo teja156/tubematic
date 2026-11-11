@@ -219,7 +219,7 @@ What each page is for is in [The Dashboard: Pages](../user-guide/04-dashboard.md
 | `/projects` | `app/projects/page.tsx` | Two panes, with its own action dispatcher (see [Actions](#actions)). An expired domain carries a badge |
 | `/script-profiles` | `app/script-profiles/page.tsx` | Creates, polls and deletes through `/script-profiles`. See [Script profiles](08-scripting-and-voice.md#script-profiles) |
 | `/mascots` | `app/mascots/page.tsx` | The mascot library. `ProfilesNav.tsx` switches between it and Script Profiles under the one **Profiles** tab. Model sheets are `<img>` tags that point at `/mascot-sheets/...` |
-| `/socials`, `/analytics` | `app/socials/page.tsx`, `app/analytics/page.tsx` | See [Publishing surfaces](#publishing-surfaces). The Spend tab is `SpendCard.tsx` |
+| `/socials`, `/analytics` | `app/socials/page.tsx`, `app/analytics/page.tsx` | See [Publishing surfaces](#publishing-surfaces). The Spend tab is `SpendCard.tsx` and the Watch time tab is `WatchTimePanel.tsx` |
 | `/logs` | `app/logs/page.tsx` | Filters by service, minimum level, free text and row limit, with no live tail. It reads through the proxy, so the container needs no log mount |
 | `/settings` | `app/settings/page.tsx` | See [The settings page](#the-settings-page) |
 | `/login` | `app/login/page.tsx` | See [Signing in](#signing-in) |
@@ -515,7 +515,7 @@ The video window adds, by status:
 
 | Status | Control |
 |---|---|
-| Any, once the video has publications | The Publishing Results tab: one row per target with platform, status, live URL and, for a failure, the reason |
+| Any, once the video has publications | The Publishing Results tab: one row per target with platform, status, live URL, the reason for a failure and, for a published post, its latest figures |
 | `FAILED` with publication rows | **Retry publishing**, where publishing is enabled. It refreshes in place when a live post was found and opens `PublishDialog` on `republish` |
 | `PARTIALLY_PUBLISHED` | **Mark as published…**, whether or not publishing is enabled, since it is the only way out. The confirm dialog shows the account count, the download-first warning and a **Download video** link, and waits until the publication rows have loaded |
 | `SCHEDULED` | **Scheduled for**, in the zone the time was picked in and in the host's zone when they differ. **Cancel schedule** (after a confirm) where publishing is enabled. A refusal is shown inline |
@@ -539,7 +539,8 @@ allowlist.
 
 The Analytics page's **Videos** tab:
 
-- An unreported metric shows a dash and sorts below a real 0.
+- An unreported metric shows a dash and sorts below a real 0. The watch columns (**Watched**,
+  **% watched**, **Stayed**) follow the same rule, and `lib/format.ts` formats them.
 - The graphs are `AnalyticsCharts.tsx`: views per platform, per account and gained per month. They
   follow the filters, and clicking a platform or account bar sets or clears that filter.
 - The platform and account bars are summed from the page's rows. The API's `by_platform` counts an
@@ -552,6 +553,23 @@ The Analytics page's **Videos** tab:
   `GET /publishing/accounts?feeds=0` and are not stored. When that lookup fails,
   `lib/platforms.ts::accountLabel` shows the account id with the platform.
 - The charts use plain elements and no charting library, so the unit suite can test them.
+
+The **Watch time** tab is `WatchTimePanel.tsx`, mounted while the tab is open:
+
+- Its first request names no account, and the API answers for the account with the most posts. The
+  account select re-reads for the account picked.
+- One response holds every grouping, so **Group by** changes the table without a request.
+- A group with fewer videos than the response's `min_group` is tagged `TOO FEW`. A figure reported
+  by only some of the group's videos shows `(n of videos)`, with `too few` added when `n` is under
+  `min_group`.
+- The table is drawn only while the response's account is the account the select names. A pick
+  that is still loading, or that failed, shows no table.
+- A measure no video reports shows a dash. When no measure is reported at all, a line names the
+  platform.
+
+In the video window, `PublicationFigures.tsx` lists a published post's counts and watch figures
+from `GET /videos/<id>/publications`. A figure the platform did not report reads "not reported", and
+a post with no snapshot yet shows one line saying so.
 
 ---
 
@@ -880,7 +898,7 @@ suite can test them without React.
 | `renderers.ts` | The renderer status chip, the GPU verdict, the device description and the **Nothing can render** condition |
 | `costs.ts` | The cost disclaimer, and money, credit, service, operation and stage labels |
 | `datetime.ts` | Timestamp formatting with an explicit timezone |
-| `format.ts` | `formatBytes`, in binary units so a figure matches `du -h` on the host |
+| `format.ts` | `formatBytes`, in binary units so a figure matches `du -h` on the host. `formatWatchSeconds` and `formatShare`, which render an unreported watch figure as a dash |
 | `platforms.ts` | Platform display names and the account label |
 | `utils.ts` | `cn`, `codePoints`, the stream URLs, and `isScored` and `scoreLabel` (a score of 0 means unscored) |
 | `session.ts`, `sessionCookie.ts`, `requestGuard.ts` | The session, the cookie name and lifetime with the post-login redirect rule, and the same-origin JSON check. `sessionCookie.ts` is separate because `middleware.ts` imports it and cannot read the secret files |

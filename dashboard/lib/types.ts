@@ -401,6 +401,47 @@ export interface VideoPublication {
   published_at: string;
   created_at: string;
   updated_at: string;
+  // The post's latest snapshot (TMDEV-212). Optional: an API from before it
+  // answers without them, and a post nobody has read yet has them all null.
+  views?: number | null;
+  likes?: number | null;
+  comments?: number | null;
+  shares?: number | null;
+  fetched_at?: string | null;
+  avg_watch_secs?: number | null;
+  watched_pct?: number | null;
+  stayed_pct?: number | null;
+  engaged_views?: number | null;
+  reach?: number | null;
+  saves?: number | null;
+}
+
+/** A group's figure for one measure: the median of the `n` videos that report
+ *  it. `median` is null when none does. */
+export interface WatchMeasure {
+  median: number | null;
+  n: number;
+}
+
+export interface WatchGroup {
+  key: string;
+  label: string;
+  /** Every post in the group, whether or not it reports anything. */
+  videos: number;
+  avg_watch_secs: WatchMeasure;
+  watched_pct: WatchMeasure;
+  stayed_pct: WatchMeasure;
+}
+
+/** GET /analytics/watch-time: one account's watch figures, grouped each way. */
+export interface WatchTime {
+  accounts: { id: string; platform: string; videos: number }[];
+  social_account_id: string;
+  platform: string;
+  videos: number;
+  /** A group with fewer videos than this is too small to read. */
+  min_group: number;
+  dimensions: { id: string; label: string; groups: WatchGroup[] }[];
 }
 
 /** One metrics snapshot for one publication. A time series, not latest-only —
