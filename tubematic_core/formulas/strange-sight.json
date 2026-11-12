@@ -1,0 +1,90 @@
+{
+  "id": "strange-sight",
+  "order": 160,
+  "family": "explain",
+  "experimental": true,
+  "label": "Strange Sight, Hidden Cause",
+  "line": "Open on a strange act or object in the middle of happening, give the cause in the second sentence, chain what follows, turn once, and stop on the most specific detail.",
+  "best_for": [
+    "a curiosity about an animal, the body or an object, with one strange thing to show",
+    "an old practice that looks odd today"
+  ],
+  "also_for": [
+    "one object with a surprising job, told as what it is and what it does"
+  ],
+  "avoid_for": [
+    "a cause that takes more than a sentence or two",
+    "a sight the viewer has seen explained many times",
+    "anything with no single thing to look at"
+  ],
+  "signals": [
+    "there is one strange act or object to show",
+    "the cause fits in one sentence",
+    "it can be told in under a minute",
+    "a cost or a second fact turns it"
+  ],
+  "styles": [
+    "under_the_hood",
+    "illustrated",
+    "bean_explainer"
+  ],
+  "words": [
+    70,
+    150
+  ],
+  "beats": [
+    {
+      "name": "The sight",
+      "from": 0,
+      "to": 15,
+      "job": "The strange thing in the middle of happening. The why is held back."
+    },
+    {
+      "name": "Cause",
+      "from": 15,
+      "to": 45,
+      "job": "Why it is done or why it happens, plainly."
+    },
+    {
+      "name": "So",
+      "from": 45,
+      "to": 55,
+      "job": "What followed from it."
+    },
+    {
+      "name": "But",
+      "from": 55,
+      "to": 75,
+      "job": "The cost, or the second fact that turns it."
+    },
+    {
+      "name": "Verdict or number",
+      "from": 75,
+      "to": 100,
+      "job": "The most specific detail, then stop."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "scene",
+      "shape": "[Strange act, in progress]."
+    },
+    {
+      "type": "anomaly",
+      "shape": "Most [group] [normal limit]. [This one] does not."
+    },
+    {
+      "type": "claim",
+      "shape": "This is [thing]: [vivid description] that [what it does]."
+    }
+  ],
+  "holds": "The sight is on screen before it is explained, so the cause answers a question the viewer already has. The single turn in the second half gives a short script a second fact to wait for.",
+  "ending": "One line that turns the opening's feeling around, or the most specific number. Nothing after it.",
+  "pitfalls": [
+    "Explaining before showing",
+    "More than one turn",
+    "A closing moral",
+    "Padding past the band: this formula is short"
+  ],
+  "template": "[Strange act, in the middle of happening]. This is because [reason]. [Second reason]. So [consequence]. But [cost or hidden fact]. And [the most specific detail]."
+}

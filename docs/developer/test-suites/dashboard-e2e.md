@@ -149,6 +149,13 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
 - A video with a script record shows the formula and the opening type by the labels the real
   `GET /script-formulas` returns, the openings and the warnings. A script written over HTTP then
   clears the record. The record is seeded the same way, because only `update_video` writes one.
+- A video with a picked formula shows it after the word Auto, with its reason and runner-up, and
+  **Switch to …** moves it to `TOPIC_APPROVED` with the runner-up as its pick and as the person's
+  choice. **Use this opening** moves a video to `TOPIC_APPROVED` with that opening marked as the one
+  in use and a comment that names it. Both are seeded in the API container, because only the
+  agent's `choose_script_formula` and `update_video` write them.
+- A formula chosen in the window at `TOPIC_PROPOSED` is stored with the approval, from a picker
+  that lists the real formulas with the experimental ones marked.
 - The Topic tab shows a topic's angle with the kind label the real `GET /angle-kinds` returns.
   **Edit** stores a new sentence and kind and clears the score. After the topic is approved the
   block has no Edit button and the API refuses the same write.
@@ -233,7 +240,7 @@ Covers [the Topics page](../15-dashboard.md#the-topics-page).
   in the panel reopens it.
 - At 1280px a seed row with three chips is one line: the pause and **Edit defaults** buttons sit
   beside the name and chips, and the name keeps its width. The open panel sits under that line,
-  each of its eight controls has a caption and stays inside it, and opening it moves nothing on the
+  each of its nine controls has a caption and stays inside it, and opening it moves nothing on the
   line. At 1024px the line wraps and the buttons and controls stay inside the row.
 - A mining source added or removed survives a reload.
 
@@ -250,9 +257,10 @@ set here.
 
 Covers [the New Video page](../15-dashboard.md#the-new-video-page) against the real
 `POST /videos/manual`. A submission lands at `TOPIC_APPROVED` in the `manual` domain with a dash for
-its score, or at `TOPIC_PROPOSED` with auto-approve cleared. The stack installs no agents, so the
-spec runs the Automatic path only. A submission with no angle is stored with none, a typed angle
-needs its kind before the form submits, and a given angle is stored with score 0.
+its score, or at `TOPIC_PROPOSED` with auto-approve cleared. A formula picked on the form is stored
+as the video's formula choice. The stack installs no agents, so the spec runs the Automatic path
+only. A submission with no angle is stored with none, a typed angle needs its kind before the form
+submits, and a given angle is stored with score 0.
 
 ### `analytics.spec.ts`
 

@@ -1,7 +1,7 @@
 # Script writing
 
-The agent writes a script by following the `tubematic-script-writing-skill` skill and one
-[formula](../08-scripting-and-voice.md#formulas). What it writes is a model's work, so no unit test
+The agent writes a script by following the `tubematic-script-writing-skill` skill, in the
+[formula](../08-scripting-and-voice.md#formulas) picked for the video. What it writes is a model's work, so no unit test
 can judge it. Two things cover it: tests that keep the skill and the formula data in step, and a
 comparison you run by hand.
 
@@ -24,6 +24,7 @@ checklist and a failed project. Each topic is:
 |---|---|
 | `title`, `brief` | The topic as the agent sees it at `TOPIC_APPROVED`. The brief carries the facts a writer needs |
 | `shape` | The kind of topic it is, for a reader of the report |
+| `formula` | The formula the script is written in, as the router would pick it with experimental formulas off |
 
 Change the set rarely. A comparison across runs is only as good as the set staying the same.
 

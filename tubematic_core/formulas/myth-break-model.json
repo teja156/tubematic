@@ -2,6 +2,7 @@
   "id": "myth-break-model",
   "order": 40,
   "family": "explain",
+  "experimental": false,
   "label": "Myth, Break, Model",
   "line": "State the belief the viewer holds in its strongest form, break it in one line, then build the right model on a case the viewer is living through right now.",
   "best_for": [
@@ -14,6 +15,18 @@
   "avoid_for": [
     "a trivia correction with no mechanism behind it",
     "a myth already debunked everywhere: the debunk is the part people know"
+  ],
+  "signals": [
+    "most viewers hold the belief today",
+    "a named study, figure or source disproves it",
+    "there is a case where the belief seems to hold and a case where it fails",
+    "the correct model fits in one sentence"
+  ],
+  "styles": [
+    "whiteboard",
+    "under_the_hood",
+    "bean_explainer",
+    "storybook_atlas"
   ],
   "words": [
     120,

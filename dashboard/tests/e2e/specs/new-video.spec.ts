@@ -42,6 +42,24 @@ test.describe("New Video page", () => {
     await expect(card).not.toContainText("0/10");
   });
 
+  test("a formula picked on the form is the video's formula choice", async ({ page }) => {
+    await page.goto("/new-video");
+    const title = `[${uid}] Formula submission`;
+    await page.getByTestId("new-video-title").fill(title);
+    await page.getByTestId("new-video-topic").fill(`${title}: the full brief, several sentences long.`);
+    const formula = page.getByTestId("new-video-formula");
+    await expect(formula).toHaveValue("");
+    await expect(formula.locator("option", { hasText: "Incident File" })).toHaveCount(1);
+    await formula.selectOption("incident-file");
+    const [response] = await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/videos/manual") && r.request().method() === "POST"),
+      page.getByTestId("new-video-submit").click(),
+    ]);
+    expect(response.status()).toBe(201);
+    const video = await getVideo((await response.json()).id) as unknown as Record<string, unknown>;
+    expect(video.formula_choice).toBe("incident-file");
+  });
+
   test("unchecking auto-approve lands it at Topic Proposed", async ({ page }) => {
     const id = await submit(page, `[${uid}] Proposed submission`, false);
     expect((await getVideo(id)).status).toBe("TOPIC_PROPOSED");

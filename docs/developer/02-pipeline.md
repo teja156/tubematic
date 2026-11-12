@@ -37,6 +37,7 @@ flowchart TD
     TA -->|agent writes script| SR
     SR -->|"approve: voicing is paid for"| VO
     SR -->|"switch to Auto's runner-up style"| TA
+    SR -->|"switch the formula or the opening"| TA
     VO -->|agent calls generate_voice| VR
     VR -->|agent authors scenes,<br/>validates, submits| RQ
     RQ -->|renderer claims| RN
@@ -246,7 +247,7 @@ control.
 
 | Group | Fields | Settable while the video is at |
 |---|---|---|
-| Topic | `script_profile_id`, `visual_style`, `mascot_id` | `TOPIC_PROPOSED` only |
+| Topic | `script_profile_id`, `visual_style`, `mascot_id`, `formula_choice` | `TOPIC_PROPOSED` only |
 | Agent | `agent_id`, `agent_model`, `agent_effort` | Any human checkpoint: `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` |
 
 The topic group shapes what the script is, so a later change would leave a script that does not
@@ -294,6 +295,20 @@ its checks:
 - A move back to `TOPIC_PROPOSED` returns a style Auto picked to `auto`, so the revised topic is
   routed again, and clears the renderer and canvas recorded for an `auto` video's old scenes. A
   style a person chose is kept.
+
+`formula_choice` is the script formula a person chose for the video, or `''` for Auto. It is
+frozen because the formula is picked from it at `TOPIC_APPROVED` and the script is written in that
+pick. Three writes of the formula decision happen after the topic checkpoint
+([How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked)):
+
+- `choose_script_formula`, at `TOPIC_APPROVED` once the style is decided: the agent records the
+  pick, a runner-up and a reason, before any script exists.
+- [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula) and
+  [`POST /videos/<id>/switch-opening`](05-http-api.md#post-videosvideo_idswitch-opening), at
+  `SCRIPT_READY`: a person takes the runner-up formula, or another of the script's drafted
+  openings, and the video goes back to `TOPIC_APPROVED` for a new script.
+- A move back to `TOPIC_PROPOSED` and a style switch both drop the pick, so it is made again. A
+  person's `formula_choice` is kept.
 
 Two fields that follow from `visual_style` are write-once. The agent writes them through
 `update_video`, HTTP cannot write them, and a second, different value is refused:
@@ -415,8 +430,9 @@ and research files through the MCP server.
 A research run reports the subjects it dropped in the summary the agent ends on, which
 `scripts/poll.py` writes to its log. `mine_youtube_topics` returns its own in `not_filed`.
 
-The script-writing skill reads the angle from `get_video`, which adds `angle_formula`: the formula
-the kind points to ([Scripting and Voice](08-scripting-and-voice.md#the-topics-angle)).
+The formula router and the script-writing skill read the angle from `get_video`, which adds
+`angle_formula`: the formula the kind points to
+([Scripting and Voice](08-scripting-and-voice.md#the-topics-angle)).
 
 ### Domain pause
 

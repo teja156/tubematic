@@ -1,10 +1,12 @@
-"""Script formulas as data (TMDEV-211): one file per formula, checked at import.
+"""Script formulas as data (TMDEV-211, TMDEV-213): one file per formula, checked
+at import.
 
 The script-writing skill's reference files are rendered from these files, the
-script write checks a recorded formula and its hook types against them, and
-the band warning reads each formula's word band. A file that loads with a gap
-in it would therefore fail far from its cause: as a skill file with a hole, or
-as a warning that never fires.
+script write checks a recorded formula and its hook types against them, the
+band warning reads each formula's word band, and the router's candidate list
+is built from them. A file that loads with a gap in it would therefore fail
+far from its cause: as a skill file with a hole, a warning that never fires,
+or a formula Auto can never pick.
 """
 import copy
 import json
@@ -22,6 +24,9 @@ from tubematic_core import formulas as tf  # noqa: E402
 CORE = {"paradox-mechanism-reframe", "broken-expectation", "follow-the-flow", "myth-break-model",
         "why-dont-they-just", "incident-file", "scheme-machine", "anomaly-file", "scene-story",
         "escalating-ladder"}
+# Shipped as data, off for Auto until the setting turns them on.
+EXPERIMENTAL = {"normal-world-exploit", "result-then-rewind", "stake-first-list", "news-take",
+                "prize-and-barrier", "strange-sight", "test-case", "contender-champion"}
 
 
 def _valid() -> dict:
@@ -32,8 +37,11 @@ def _check(data, stem="broken-expectation"):
     return tf._check_formula(pathlib.Path(f"{stem}.json"), data)
 
 
-def test_the_ten_core_formulas_load_in_order():
-    assert set(tf.FORMULAS) == CORE
+def test_the_core_and_the_experimental_formulas_load_in_order():
+    assert set(tf.FORMULAS) == CORE | EXPERIMENTAL
+    assert {fid for fid, f in tf.FORMULAS.items() if f["experimental"]} == EXPERIMENTAL
+    # The core formulas come first, so a list cut short still holds them.
+    assert set(list(tf.FORMULAS)[:len(CORE)]) == CORE
     orders = [f["order"] for f in tf.FORMULAS.values()]
     assert orders == sorted(orders)
     assert set(tf.FORMULAS) == {p.stem for p in tf.FORMULAS_DIR.glob("*.json")}
@@ -56,8 +64,9 @@ def test_every_band_sits_inside_the_ceiling_and_beats_cover_the_whole_script():
 
 
 def test_no_formula_needs_a_second_voice():
-    # Dialogue formulas need a voice per segment, which the pipeline does not
-    # have. One slipping in would produce a script nobody can voice.
+    # A dialogue formula needs a second roster voice, and no formula field says
+    # so yet: on an install with one voice, routing could pick a script nobody
+    # can voice. The field comes with the first two-voice formula.
     for f in tf.FORMULAS.values():
         text = json.dumps(f).lower()
         assert "second voice" not in text and "dialogue" not in text, f["id"]
@@ -84,7 +93,9 @@ def test_word_band_and_label_answer_for_known_unknown_and_blank():
 def test_public_list_names_every_formula_and_hook_type():
     out = tf.public_list()
     assert [f["id"] for f in out["formulas"]] == list(tf.FORMULAS)
-    assert set(out["formulas"][0]) == {"id", "label", "family", "line", "words"}
+    assert set(out["formulas"][0]) == {"id", "label", "family", "line", "words", "experimental"}
+    assert [f["id"] for f in out["formulas"] if f["experimental"]] == \
+        [fid for fid in tf.FORMULAS if fid in EXPERIMENTAL]
     assert [h["id"] for h in out["hook_types"]] == list(tf.HOOK_TYPES)
 
 
@@ -115,6 +126,13 @@ def test_the_valid_formula_passes_the_check():
     (lambda d: d["hooks"][0].update(type="shout"), "hooks[0].type"),
     (lambda d: d["hooks"][1].update(type=d["hooks"][0]["type"]), "different type"),
     (lambda d: d.update(hooks=d["hooks"][:2]), "at least 3"),
+    (lambda d: d.update(experimental="no"), "experimental"),
+    (lambda d: d.pop("experimental"), "exactly the keys"),
+    (lambda d: d.update(signals=[]), "signals"),
+    (lambda d: d.update(styles=["system_flow", "no_such_style"]), "styles"),
+    (lambda d: d.update(styles=["system_flow", "system_flow"]), "styles"),
+    (lambda d: d.update(styles="system_flow"), "styles"),
+    (lambda d: d.update(styles=["auto"]), "styles"),
 ])
 def test_a_malformed_formula_is_refused_with_the_reason(mutate, message):
     data = _valid()
@@ -124,13 +142,17 @@ def test_a_malformed_formula_is_refused_with_the_reason(mutate, message):
     assert message in str(err.value)
 
 
-def test_the_decision_table_has_one_row_per_formula():
-    table = tf.decision_table_markdown()
-    rows = [line for line in table.splitlines()[2:] if line.strip()]
-    assert len(rows) == len(tf.FORMULAS)
+def test_every_style_a_formula_names_is_a_style_pack():
+    # Checked at import too; this names the file when a pack is renamed.
+    from tubematic_core import visual_styles as tvs
     for f in tf.FORMULAS.values():
-        assert f"(`{f['id']}`)" in table
-        assert f"{f['words'][0]} to {f['words'][1]}" in table
+        assert set(f["styles"]) <= set(tvs.PACKS), f["id"]
+
+
+def test_a_formula_may_suit_no_style_in_particular():
+    data = _valid()
+    data["styles"] = []
+    assert _check(data)["styles"] == []
 
 
 def test_a_reference_file_carries_every_part_of_its_formula():

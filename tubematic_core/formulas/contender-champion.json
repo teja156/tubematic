@@ -1,0 +1,89 @@
+{
+  "id": "contender-champion",
+  "order": 180,
+  "family": "ladder",
+  "experimental": true,
+  "label": "Contender, Then Champion",
+  "line": "Ask a superlative question, score a plausible candidate out loud, then bring in the winner nobody guessed and count past the candidate.",
+  "best_for": [
+    "a superlative with a countable measure and a winner that is not the obvious one"
+  ],
+  "also_for": [
+    "two things compared on one measure, when the expected one loses"
+  ],
+  "avoid_for": [
+    "a superlative whose winner everyone knows",
+    "a measure that cannot be counted",
+    "a ranking of many items: use a ladder"
+  ],
+  "signals": [
+    "the topic is a superlative",
+    "the measure can be counted",
+    "a plausible wrong guess exists",
+    "the real winner is not the obvious one"
+  ],
+  "styles": [
+    "storybook_atlas",
+    "whiteboard",
+    "system_flow"
+  ],
+  "words": [
+    160,
+    220
+  ],
+  "beats": [
+    {
+      "name": "Question",
+      "from": 0,
+      "to": 5,
+      "job": "The superlative, asked in one sentence."
+    },
+    {
+      "name": "The contender, scored",
+      "from": 5,
+      "to": 35,
+      "job": "Item by item, to a total."
+    },
+    {
+      "name": "Turn",
+      "from": 35,
+      "to": 40,
+      "job": "One line: that is still not the most."
+    },
+    {
+      "name": "The champion's case",
+      "from": 40,
+      "to": 90,
+      "job": "What counts against it first, then its tally, passing the contender."
+    },
+    {
+      "name": "Final score",
+      "from": 90,
+      "to": 100,
+      "job": "The number, and that it is the most."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "question",
+      "shape": "Which [thing] has the most [measure]? [Plausible contender] is a contender."
+    },
+    {
+      "type": "number",
+      "shape": "[Contender] has [N] [measure]. That is not the record."
+    },
+    {
+      "type": "claim",
+      "shape": "The [thing] with the most [measure] is not [the one you would guess]."
+    }
+  ],
+  "holds": "The contender's score gives the viewer a number to beat, and it stays in view while the champion's tally climbs past it.",
+  "ending": "The final score. Nothing after it.",
+  "pitfalls": [
+    "Facts in date order with no contender",
+    "Naming the champion before scoring the contender",
+    "A tally the viewer cannot follow item by item",
+    "An invented count"
+  ],
+  "template": "Which [thing] has the most [measure]? You would guess [candidate]: [tally], which makes [N]. But that is still not the most. Despite [handicap], [winner]: [tally, with one complication]. That makes [M], the most in the world."
+}

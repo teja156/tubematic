@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Video } from "@/lib/types";
 import {
   formulaLabel,
@@ -19,30 +19,34 @@ const caption: React.CSSProperties = {
 
 /** What the agent recorded with a video's script: the formula it follows, the
  *  three openings it drafted (the one in use marked) and the advisory checks'
- *  findings. Read-only. Renders nothing for a script with no record, which is
- *  every script written before scripts recorded one. */
-export function ScriptRecord({ video }: { video: Video }) {
-  const show = hasScriptRecord(video);
-  const [names, setNames] = useState<ScriptFormulaNames | null>(null);
+ *  findings. Renders nothing for a script with no record, which is every
+ *  script written before scripts recorded one.
+ *
+ *  names: the formula and hook type labels, or null while they load.
+ *  onSwitchOpening: given at Script Ready only. Each opening not in use then
+ *  gets a "Use this opening" button; it resolves to an error message, or ""
+ *  when the video went back to its agent to be rewritten from that opening. */
+export function ScriptRecord({ video, names, onSwitchOpening }: {
+  video: Video;
+  names: ScriptFormulaNames | null;
+  onSwitchOpening?: (index: number) => Promise<string>;
+}) {
+  const [switching, setSwitching] = useState<number | null>(null);
+  const [switchError, setSwitchError] = useState("");
 
-  useEffect(() => {
-    if (!show) return;
-    let cancelled = false;
-    fetch("/api/proxy/script-formulas", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!cancelled && Array.isArray(data?.formulas) && Array.isArray(data?.hook_types)) {
-          setNames(data as ScriptFormulaNames);
-        }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [show]);
-
-  if (!show) return null;
+  if (!hasScriptRecord(video)) return null;
   const formulaId = video.formula_id ?? "";
   const hooks = video.hook_alternatives ?? [];
   const warnings = video.script_warnings ?? [];
+
+  const chooseOpening = async (index: number) => {
+    if (!onSwitchOpening || switching !== null) return;
+    if (!window.confirm("Use this opening? The script is discarded and the agent rewrites it from this opening, in the same formula.")) return;
+    setSwitching(index);
+    setSwitchError("");
+    setSwitchError(await onSwitchOpening(index));
+    setSwitching(null);
+  };
 
   return (
     <div
@@ -90,8 +94,28 @@ export function ScriptRecord({ video }: { video: Video }) {
                   Not used: {hook.note}
                 </div>
               ) : null}
+              {onSwitchOpening && !hook.kept && (
+                <button
+                  type="button"
+                  data-testid={`use-opening-${i}`}
+                  disabled={switching !== null}
+                  onClick={() => chooseOpening(i)}
+                  style={{
+                    ...caption, marginTop: 6, padding: "4px 10px", background: "transparent",
+                    border: "1px solid var(--border)", color: "var(--ink-2)",
+                    cursor: switching !== null ? "default" : "pointer",
+                  }}
+                >
+                  {switching === i ? "Switching…" : "Use this opening"}
+                </button>
+              )}
             </div>
           ))}
+          {switchError && (
+            <p data-testid="switch-opening-error" className="font-mono text-[11px] text-amber-400" style={{ marginTop: 6 }}>
+              {switchError}
+            </p>
+          )}
         </div>
       )}
 

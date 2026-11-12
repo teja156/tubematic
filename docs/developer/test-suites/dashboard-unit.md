@@ -87,7 +87,7 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
   "Install defaults for everything", and the topic count against the cap. **Edit defaults** opens
   one row's panel and leaves the others closed.
 - The default pickers in a row's panel and in the add form (visual style, voice, script profile,
-  mascot) are found by their captions. A default that has left the roster or the profile list stays
+  formula, mascot) are found by their captions. A default that has left the roster or the profile list stays
   visible as removed or unavailable.
 - A save that cannot reach the API is reported and leaves the row as it was, and the next save
   still goes out, as it does after a write that threw. A refused topic cap is put back in its
@@ -101,6 +101,9 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
 - The topic cap field saves on blur and reverts an invalid entry. EXPIRED shows on any domain at
   its cap, and an expired seed hides ACTIVE and keeps PAUSED.
 - The add form's description keeps interior newlines and stops at 2000 code points.
+- The formula default offers Auto and every formula with experimental ones marked, a change
+  re-sends every other field, another edit keeps it, a new domain is created with the one picked,
+  and a stored formula the list does not know stays selected under its id.
 
 Trap: [`POST /projects`](../05-http-api.md#post-projects) replaces the whole row, so every edit
 re-sends every field. A field left out is reset by that edit: an omitted `default_mascot_id` returns
@@ -130,6 +133,7 @@ Covers the request body of [the New Video page](../15-dashboard.md#the-new-video
   reads as Automatic. A picked agent shows its own effort level and never the domain's model. With
   no agent list, the blank agent choice reads **Domain default** without a name, and so does the
   blank model choice when the domain names a model.
+- The formula picker offers Auto and every formula, and sends the one picked as `formula_choice`.
 - Submit is blocked with a title over 70 code points, and a refusal keeps the input.
 - The optional angle: an empty field sends no angle, a sentence is sent with its kind, and a
   sentence with no kind or over 300 characters blocks Submit. The field is not offered while the
@@ -181,6 +185,8 @@ Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-setti
   "No mascot" and a held value stay selectable. The same tab shows the Renderers panel.
 - The Retention tab's backlog line is left out when `/retention/backlog` fails, and the field stays
   usable.
+- The Preferences tab's **Experimental formulas** switch starts off and saves
+  `auto_experimental_formulas` alone.
 
 Trap: the Discord webhook URL is the credential, because anyone who holds it can post to the
 channel. Its input stays a masked field on the Notifications tab, off the API keys tab.
@@ -340,6 +346,8 @@ pickers on its rows.
   angle shows a dash, and rows at later statuses show neither.
 - Every picker is found by its caption (`getByLabelText`), which proves the caption is the control's
   accessible name.
+- Past `TOPIC_PROPOSED` a row names the video's formula beside its profile, by its label once the
+  names load. A list with no formula on any video shows none and makes no request for the names.
 
 Trap: a picker's shown value is recomputed on every render. A value captured at mount shows one
 voice and sends another when `/settings` answers late.
@@ -385,6 +393,29 @@ Trap: `publishingEnabled` defaults to off, so a page that does not fetch setting
 Covers the video window's Delete action: it is offered at the deletable statuses only, fires once
 after a confirm and deletes nothing on cancel. An archived video shows the Archived badge.
 
+### `video-modal-switch-formula.test.tsx`
+
+Covers the video window's **Formula** picker, **Formula** and **Why this formula** rows and
+**Switch to …** button, and `lib/scriptFormulas.ts`
+([The formula](../15-dashboard.md#the-formula)).
+
+- At `TOPIC_PROPOSED` the picker offers Auto and every formula with experimental ones marked,
+  starts on the formula the video holds, and is absent after the topic.
+- The approval carries `formula_choice` when the person changed it, `""` when they put the video
+  back on Auto, and no `formula_choice` when they left the picker alone.
+- After the topic the formula reads as the word Auto followed by its name for Auto's pick, and as
+  its name alone for a person's choice.
+  An approved topic with no pick reads "Auto (not yet chosen)", and a video scripted before
+  formulas existed shows no formula row.
+- A pick shows its reason and runner-up. The switch is offered only at `SCRIPT_READY` with a
+  runner-up, posts to `/switch-formula` after a confirm, does nothing when the confirm is declined,
+  and shows the server's refusal. The refusal is cleared when the window shows another video.
+- `videoFormulaLabel` reads the pick ahead of the stored script's formula, and `formulaOptions`
+  keeps a held formula the list does not know selectable.
+
+Trap: the approval sends `formula_choice` only when it changed. Sent on every approval, a held
+formula that the installed version dropped would be refused and block the approval.
+
 ### `video-modal-switch-style.test.tsx`
 
 Covers the video window's **Why this style** row and **Switch to …** button
@@ -403,7 +434,10 @@ Covers `components/ScriptRecord.tsx` on the video window's Script tab and `lib/s
   with the one in use marked, and every warning.
 - A script with no record shows the segments and nothing else, and makes no request for the names.
 - The ids are shown when the names cannot be loaded, and for an id the list does not know.
-- A segment shows its `beat` label only when it has one. The block holds no control.
+- A segment shows its `beat` label only when it has one.
+- At `SCRIPT_READY` each opening not in use has **Use this opening**, which posts its index to
+  `/switch-opening` after a confirm, does nothing when the confirm is declined, and shows the
+  server's refusal. Past `SCRIPT_READY` and on an archived video the block holds no control.
 
 ### `video-modal-topic-angle.test.tsx`
 
