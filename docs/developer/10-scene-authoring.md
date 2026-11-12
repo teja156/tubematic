@@ -194,7 +194,10 @@ video back to `TOPIC_APPROVED` for a new script. A video moved back to `TOPIC_PR
 `auto`, so its revised topic is routed again.
 
 `scenes` is the mixed scene system: every beat drawn from any vocabulary, on a canvas the agent
-chooses at `VOICE_READY`. Its renderer is always `dom`, recorded in `videos.resolved_renderer`. The
+chooses at `VOICE_READY`. Its routing block (`visual_styles.py::SCENES_ROUTING`) is scored like a
+pack's. It is the best answer when full-frame pictures of real things carry some beats and roles
+acted out by figures carry others (Motion Graphics draws no figures, Stick Explainer shows pictures
+only in panels), and the fallback when nothing reaches 3 points. Its renderer is always `dom`, recorded in `videos.resolved_renderer`. The
 agent chooses the canvas once, `update_video(resolved_visual_style="dark" | "light")`: `dark` when
 images carry the video (about a third or more of the beats are PHOTO or HYBRID) and `light` when
 roles, processes and diagrams carry it. A tie goes to `dark`. `write_scene_config` records it if the

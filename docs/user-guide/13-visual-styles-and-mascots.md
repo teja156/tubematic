@@ -40,8 +40,8 @@ background would flash, and a viewer reads that as a broken render.
 - Choose **Auto** when you have no preference.
 - Choose **Motion Graphics** for subjects you can photograph or diagram: places, machines, events,
   how data moves.
-- Choose **Stick Explainer** for walkthroughs with generic people in them: what a user clicks, what
-  an attacker tries, what a scientist measures.
+- Choose **Stick Explainer** for a process acted out by generic people in roles: what a user clicks,
+  what an attacker tries, how a kitchen team gets an order out, what a rescuer does in CPR.
 - Choose **Illustrated** when the video follows the same characters through several scenes. Each new
   pose is one more OpenAI image call, so this style costs more per video than the two above.
 - Choose **System Flow** for how a system works: a request crossing a network, the steps of a
@@ -89,10 +89,13 @@ and the video has no mascot, Cartoon 3D only while a GPU is working and the vide
 It may pick a style that generates images, which costs more per video. It does not pick a style for
 variety: the same kind of topic gets the same style every time.
 
-When no style clearly fits, the agent keeps **mixed scenes**. It then chooses a dark or a white
-canvas for the whole video once the voice exists (dark when images carry the video, white when
-roles, processes and diagrams do), and draws each part of the script in whatever way suits it: an
-image, a diagram, line-art figures or generated characters. A mixed video can combine what the named
+The agent keeps **mixed scenes** when the topic needs two things no single style has, such as
+full-frame pictures of a real bank next to stick figures acting out the run on it, or when no style
+clearly fits.
+A real event told only through its pictures and diagrams goes to Motion Graphics. The agent then
+chooses a dark or a white canvas for the whole video once the voice exists (dark when images carry
+the video, white when roles, processes and diagrams do), and draws each part of the script in
+whatever way suits it: an image, a diagram, line-art figures or generated characters. A mixed video can combine what the named
 styles keep apart. One on a dark canvas can use line-art figures for "the user" and "the server",
 which Motion Graphics leaves out. The agent uses generated characters only for a character the
 viewer must recognise across scenes, and only while an OpenAI key is stored.

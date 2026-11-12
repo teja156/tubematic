@@ -21,14 +21,19 @@ Each case is:
 `tubematic_core/tests/test_style_routing.py` checks it in CI: every id is a real outcome, and every
 pack and `scenes` is the first expectation of at least three topics.
 
+Most topics probe a pair of styles that could be confused (Bean Explainer and Storybook Atlas, Under
+the Hood and Whiteboard, a story style and Illustrated), or an older style next to a newer neighbour
+that is the wrong answer for it. The `note` names the pair. A probe in each direction is what shows
+whether a pack's `avoid_for` holds.
+
 A ticket that adds a pack adds at least three topics that expect it, and moves the topics whose
 `future` names it to `expect`. CI fails until it does.
 
 ## The eval
 
 `scripts/eval_style_routing.py` sends every topic through the routing skill's text and the candidate
-list `routing_candidates` builds (every style available), using the Claude Code CLI with no tools,
-and scores each pick:
+list `routing_candidates` builds (every style available), using the Claude Code CLI with no tools or,
+with `--openrouter <model>`, an OpenRouter model, and scores each pick:
 
 - **best**: the first expectation
 - **ok**: another expectation, or an `ok` outcome
@@ -37,10 +42,13 @@ and scores each pick:
 ```bash
 python3 scripts/eval_style_routing.py                          # sonnet, every topic
 python3 scripts/eval_style_routing.py --model opus --only DNS  # one model, matching topics
+python3 scripts/eval_style_routing.py --openrouter deepseek/deepseek-v4.1-flash
 ```
 
-It needs `claude` on the PATH and logged in, and nothing else: no install, no database. It makes one
-short call per topic. The report is Markdown, with a table of every pick and a section per wrong
+It needs `claude` on the PATH and logged in, or with `--openrouter` an OpenRouter key in
+`OPENROUTER_API_KEY`, and nothing else: no install, no database. It makes one short call per topic.
+Live agents often run cheaper models through OpenCode, so run the eval on one of those as well as on
+Sonnet; the OpenRouter report gives the run's cost. The report is Markdown, with a table of every pick and a section per wrong
 pick giving the agent's description of the topic and its scores. It goes to
 `docs_private/reports/style-routing/` unless `--out` names a file.
 

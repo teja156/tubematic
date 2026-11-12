@@ -253,10 +253,12 @@ If you go back to 2.1.x later:
 
 - Auto picks the style when the agent picks up an approved topic, before it writes the script, and
   can pick any style this install can make: Motion Graphics, Stick Explainer, Illustrated, System
-  Flow, Bean Explainer, Whiteboard, Under the Hood, Case File Story, Cartoon 3D and every style added later. The script is then written for that style. Before,
-  Auto decided after the voice was made, could only choose between a dark canvas, a white canvas and
-  Cartoon 3D, and never chose a named style. When no style clearly fits, Auto keeps that mixed
-  approach. A video's card and window show the picked style after the word Auto.
+  Flow, Bean Explainer, Whiteboard, Terminal Doc, Storybook Atlas, Under the Hood, Case File Story,
+  Cartoon 3D and every style added later. The script is then written for that style. Before, Auto
+  decided after the voice was made, could only choose between a dark canvas, a white canvas and
+  Cartoon 3D, and never chose a named style. Auto keeps that mixed approach when a topic needs both
+  full-frame pictures of real things and figures acting out its steps, which no single style has,
+  or when no style clearly fits. A video's card and window show the picked style after the word Auto.
 - A topic sent back for revision returns to Auto if Auto had picked its style, so the agent picks
   again for the revised topic.
 - Scripts follow the formula picked for the topic. Before, every script had the same five parts

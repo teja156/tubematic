@@ -39,7 +39,8 @@ Each entry is:
 | `available`, `unavailable_reason` | Whether this install and this video can have the style now |
 
 The last candidate is always `scenes`, the mixed scene system: each beat drawn with whatever suits
-it, on a canvas chosen later. It is the fallback when no style clearly fits.
+it, on a canvas chosen later. It is the fallback when no style clearly fits, and its own `best_for`
+names the topics it is the best answer for: those that need two treatments no single style has.
 
 Read the styles only from this list. Never pick a style from memory, from another video or from
 these instructions: the list changes as styles are added, and it is the only place that says what
@@ -87,7 +88,7 @@ Remove a candidate when:
 
 ## Step 3: Score the rest
 
-For each remaining candidate except `scenes`:
+For each remaining candidate, `scenes` included:
 
 - **`best_for`:** 3 points when the topic is squarely one of the listed kinds; 1 point when it is a
   close neighbour of one. Count only the best `best_for` entry, not every entry that touches it.
@@ -105,6 +106,11 @@ A candidate is a **clear fit** with at least 3 points.
 - When at least one candidate is a clear fit, pick the one with the most points.
 - When none is, pick `scenes`. Do not pick a style that half fits: a topic forced into a style made
   for something else is worse than the mixed scene system.
+- A style that carries only some of the beats half fits, however many points those beats earn it.
+  This applies only when the topic plainly needs two treatments no single candidate has, and the
+  first entry of `scenes`' `best_for` names that pair (for example full-frame pictures of real
+  things next to roles acted out by figures). Then `scenes` is the clear fit. Otherwise the most
+  points win.
 - When two clear fits are within 1 point of each other, break the tie (Step 5).
 
 ## Step 5: Break ties, in this order
@@ -122,9 +128,9 @@ The right style for this topic is right even if the last three videos used it.
 ## Step 6: Choose a runner-up
 
 The runner-up is the candidate a person is most likely to want instead: the next-highest available
-candidate with at least 1 point. When you picked a style, `scenes` is the runner-up if no other
-candidate scored. When you picked `scenes`, the runner-up is the best-scoring style, or `""` if none
-scored at all.
+candidate with at least 1 point, `scenes` included. When you picked a style and nothing else scored,
+the runner-up is `scenes`. When you picked `scenes`, the runner-up is the best-scoring style, or
+`""` if none scored at all.
 
 ## Step 7: Record it
 
