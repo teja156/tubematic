@@ -74,8 +74,8 @@ background would flash, and a viewer reads that as a broken render.
   without images. It is experimental.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
 - Choose **Whiteboard** for an idea worked out step by step: a formula built up, money arithmetic
-  such as interest or a percentage, a chain of causes that ends in one picture, two ideas side by
-  side. The script is written like a teacher at a board, one step per sentence, ending on one
+  such as interest or a percentage, an everyday chain of causes that ends in one picture, two ideas
+  side by side. The script is written like a teacher at a board, one step per sentence, ending on one
   sentence that sums the idea up.
 
 ### What Auto does
@@ -92,7 +92,10 @@ variety: the same kind of topic gets the same style every time.
 The agent keeps **mixed scenes** when the topic needs two things no single style has, such as
 full-frame pictures of a real bank next to stick figures acting out the run on it, or when no style
 clearly fits.
-A real event told only through its pictures and diagrams goes to Motion Graphics. The agent then
+A real event told only through its pictures and diagrams goes to Motion Graphics. So does a real
+failure with a technical cause, such as a rocket lost to a software bug: the agent rules out any
+style that cannot show the real rocket, however much of the topic is about a number or a line of
+code. The agent then
 chooses a dark or a white canvas for the whole video once the voice exists (dark when images carry
 the video, white when roles, processes and diagrams do), and draws each part of the script in
 whatever way suits it: an image, a diagram, line-art figures or generated characters. A mixed video can combine what the named

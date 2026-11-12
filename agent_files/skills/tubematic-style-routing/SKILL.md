@@ -32,6 +32,7 @@ Each entry is:
 | `id`, `label` | What you pass to `choose_visual_style`, and its name |
 | `routing.best_for` | The kinds of topic the style is made for. The strongest evidence |
 | `routing.avoid_for` | Topics the style must not get |
+| `routing.cannot_show` | What the style cannot put on screen at all |
 | `routing.signals` | Things that, when true of this topic's script, point to the style |
 | `routing.moods` | The tones the style suits. A tie-break only |
 | `images` | Generated images a video in this style costs, at most. A tie-break only |
@@ -70,7 +71,19 @@ have asked for a look when approving or revising the topic. Then write down, in 
 2. **People in it:** none, generic roles ("the user", "an attacker"), named real people, one
    protagonist, or recurring characters the viewer must recognise from scene to scene.
 3. **What must be seen:** pictures of real named things, a place moved through, a mechanism or
-   flow, numbers, text, or nothing concrete.
+   flow, numbers, text, or nothing concrete. Before you write it, answer one question: is the
+   whole video the story of one real failure, accident or disaster that happened to a named
+   machine, product, place or company (a launch that went wrong, a crash, an outage, a collapse),
+   one the viewer would want to see (the rocket, the aircraft, the control room, the trading floor,
+   the screens across the world)? If it is, pictures of that real thing are part of what must be
+   seen, whatever the brief's angle is: a brief built around one idea (a number, a unit, a line of
+   code) still tells the story of the real thing it happened to. Not this: a list of several
+   things, each one item; history told as a story that is not a failure (an invention, a
+   discovery, a famous first, a walk through a real place in the past), whose people and places
+   can be drawn; a flaw in a piece of software with nothing to see beyond its code and the
+   requests through it; and a real thing whose own text, code or number is the whole subject (a
+   famous cipher, an inscription, a number's limit), which is seen through that text. For these,
+   describe what must be seen as you would without this question.
 4. **Form:** how-it-works explainer, list, story, history, comparison, warning.
 5. **Mood:** the tone the narration wants (calm, curious, dramatic, playful, sober, warm).
 
@@ -85,6 +98,10 @@ Remove a candidate when:
   says so, so a person can fix the install.
 - One of its `avoid_for` entries plainly describes this topic. "Plainly" means a reader would agree
   at once; a stretch is not a match.
+- Its `cannot_show` plainly covers something you wrote under "what must be seen" in Step 1. A style
+  that cannot show the subject makes an unwatchable video however many points it would score. A
+  candidate with no `cannot_show` line has stated nothing; do not rule it out on this ground.
+  `scenes` is the fallback and is never ruled out on this ground either.
 
 ## Step 3: Score the rest
 
@@ -169,7 +186,8 @@ request: DNS, TCP and TLS, the load balancer, the app server, the database, and 
 - Step 1: a path something travels through a system; generic roles at most (the browser, the
   server); a flow must be seen; how-it-works; calm and curious.
 - Step 2: `world_3d` is unavailable (no working GPU) and its `avoid_for` says "pure mechanisms"
-  anyway. Nothing else is ruled out.
+  anyway. `photo_led`'s `cannot_show` is "figures acting out a step", which this topic does not
+  need, so it stays. Nothing else is ruled out.
 - Step 3: `flow_diagram`'s `best_for` has "how a request is handled" (3), and three of its signals
   hold (components that talk, a path a request travels, an architecture) (3): 6.
   `line_art`'s `best_for` has "mechanisms: how a thing works" (a close neighbour, 1) and one signal
@@ -184,7 +202,10 @@ request: DNS, TCP and TLS, the load balancer, the app server, the database, and 
 
 - [ ] `style_routing.decided` was `false` and the video is at `TOPIC_APPROVED`
 - [ ] Topic described on the five axes before reading the candidates
-- [ ] Unavailable candidates and plain `avoid_for` matches ruled out
+- [ ] Asked whether the topic is a real failure, accident or disaster of a named thing, and if so
+      put its pictures under "what must be seen"
+- [ ] Unavailable candidates, plain `avoid_for` matches and candidates whose `cannot_show` covers
+      what must be seen ruled out
 - [ ] Points counted from `best_for` and `signals` by meaning, not by shared words
 - [ ] A style picked only as a clear fit (3 points or more), otherwise `scenes`
 - [ ] Ties broken by specificity, a person's hint, mood, cost, then order

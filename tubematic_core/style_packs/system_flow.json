@@ -56,8 +56,10 @@
     ],
     "avoid_for": [
       "emotional or narrative stories",
-      "topics with no structure to diagram"
+      "topics with no structure to diagram",
+      "a real company's or machine's failure told as an event (Motion Graphics fits it)"
     ],
+    "cannot_show": "any picture of a real object, place or person: only labelled boxes, icons and the arrows between them",
     "signals": [
       "the script names components that talk to each other",
       "the subject is a path a request, packet or signal travels",

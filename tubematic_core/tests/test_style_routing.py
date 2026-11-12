@@ -64,8 +64,9 @@ def test_a_new_pack_becomes_a_candidate_with_no_other_edit(monkeypatch):
 
 def test_each_candidate_carries_its_routing_block_and_cost():
     for c in tvs.routing_candidates(True, "working", False):
-        for key in ("best_for", "avoid_for", "signals", "moods", "images"):
+        for key in ("best_for", "avoid_for", "cannot_show", "signals", "moods", "images"):
             assert key in c["routing"], (c["id"], key)
+        assert isinstance(c["routing"]["cannot_show"], str) and c["routing"]["cannot_show"].strip(), c["id"]
         assert c["images"] == c["routing"]["images"]
         assert c["authoring_skill"]
     assert _by_id(openai_key_set=True, gpu_status="working", has_mascot=False)["whiteboard"]["images"] == 0

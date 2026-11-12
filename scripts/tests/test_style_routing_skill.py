@@ -38,12 +38,12 @@ def test_the_skill_names_no_style():
 
 def test_the_skill_reads_every_routing_field_the_candidates_carry():
     text = _text()
-    for field in ("best_for", "avoid_for", "signals", "moods", "images", "available",
+    for field in ("best_for", "avoid_for", "cannot_show", "signals", "moods", "images", "available",
                   "unavailable_reason", "style_routing.candidates", "style_routing.decided",
                   "style_routing.domain"):
         assert field in text, field
     candidate = tvs.routing_candidates(True, "working", False)[0]
-    assert set(candidate["routing"]) >= {"best_for", "avoid_for", "signals", "moods", "images"}
+    assert set(candidate["routing"]) >= {"best_for", "avoid_for", "cannot_show", "signals", "moods", "images"}
 
 
 def test_the_fallback_it_names_is_the_real_one():
