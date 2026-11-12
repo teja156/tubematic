@@ -1540,6 +1540,22 @@ def _style_undecided(row) -> bool:
         and not (row["style_pick"] or "")
 
 
+def _insert_summary(video_id: str) -> dict | None:
+    """What the video's scene config holds of insert scenes (TMDEV-224), for
+    the video window: {count, seconds, styles}. None before a scene config is
+    written, or when it cannot be read."""
+    try:
+        cfg = _json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+    except (tjobs.UnsafePath, OSError, ValueError, TypeError):
+        return None
+    fps = cfg.get("fps") or 30
+    entries = [e for e in cfg.get("inserts") or [] if isinstance(e, dict)]
+    frames = sum(e.get("durationInFrames") or 0 for e in entries
+                 if isinstance(e.get("durationInFrames"), int))
+    styles = list(dict.fromkeys(str(e.get("style", "")) for e in entries))
+    return {"count": len(entries), "seconds": round(frames / fps, 1), "styles": styles}
+
+
 def _project_default_insert_mode(con, project_id) -> str:
     """The Inserts setting a new video in project_id starts with (TMDEV-224):
     the project's default_insert_mode, else "auto". Seeded for every video,
@@ -2912,6 +2928,7 @@ def create_pipeline_blueprint() -> Blueprint:
         video = _with_voice(_parse_video(dict(row)), settings)
         video["voice_info"] = _voice_info(con, video, settings)
         video["segment_voice_conflicts"] = _segment_voice_conflicts(video, settings)
+        video["insert_summary"] = _insert_summary(video_id)
         # Never clipped here — this is the route the dashboard's "read more"
         # and every agent-facing read resolve to.
         video["gemini_feedback_truncated"] = False

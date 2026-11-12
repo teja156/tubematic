@@ -305,6 +305,8 @@ Covers the per-video Inserts setting and the HTTP side of insert scenes
 - The review prompt names each insert's times with its style's insert review text, never a main
   style's; with no inserts it adds nothing.
 - `GET /visual-styles` marks insert styles and which styles host inserts.
+- A single video reports `insert_summary` (count, seconds, styles) from its scene config, and `null`
+  before one is written.
 
 ### `test_style_pick.py`
 

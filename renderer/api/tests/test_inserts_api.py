@@ -155,3 +155,16 @@ def test_the_visual_styles_list_marks_insert_styles(client):
     assert styles["cartoon_3d"]["inserts"] == {"host": False}
     assert styles["auto"]["inserts"]["host"] is True
     assert json.dumps(styles)  # serialisable as the dashboard reads it
+
+
+def test_a_video_reports_the_inserts_its_scene_config_holds(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(pipeline, "JOBS_DIR", tmp_path / "jobs")
+    vid = _video(client)
+    assert client.get(f"/videos/{vid}").get_json()["insert_summary"] is None
+    d = tmp_path / "jobs" / vid
+    d.mkdir(parents=True)
+    (d / "scene-config.json").write_text(json.dumps({"fps": 30, "inserts": [
+        {"style": "system_flow", "startFrame": 300, "durationInFrames": 240},
+        {"style": "terminal_doc", "startFrame": 900, "durationInFrames": 150}]}))
+    assert client.get(f"/videos/{vid}").get_json()["insert_summary"] == {
+        "count": 2, "seconds": 13.0, "styles": ["system_flow", "terminal_doc"]}
