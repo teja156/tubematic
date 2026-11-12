@@ -4,16 +4,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ToastKind = "success" | "error";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface Toast {
   id: number;
   kind: ToastKind;
   message: string;
+  action?: ToastAction;
 }
 
 /** Successes auto-dismiss; errors do not — a failed save is the one thing the
  *  user must not miss, and before this the page discarded non-ok responses
  *  silently and kept rendering stale state. */
 const SUCCESS_TTL_MS = 3000;
+/** A toast with an action (Undo) stays long enough to be clicked. */
+export const ACTION_TTL_MS = 8000;
 
 export function useToasts() {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -29,11 +37,11 @@ export function useToasts() {
     }
   }, []);
 
-  const push = useCallback((kind: ToastKind, message: string) => {
+  const push = useCallback((kind: ToastKind, message: string, action?: ToastAction) => {
     const id = nextId.current++;
-    setToasts((t) => [...t, { id, kind, message }]);
+    setToasts((t) => [...t, { id, kind, message, action }]);
     if (kind === "success") {
-      timers.current.set(id, setTimeout(() => dismiss(id), SUCCESS_TTL_MS));
+      timers.current.set(id, setTimeout(() => dismiss(id), action ? ACTION_TTL_MS : SUCCESS_TTL_MS));
     }
     return id;
   }, [dismiss]);
@@ -100,6 +108,25 @@ export function ToastStack({
             {t.kind === "error" ? "✕" : "✓"}
           </span>
           <span style={{ whiteSpace: "pre-wrap" }}>{t.message}</span>
+          {t.action && (
+            <button
+              type="button"
+              data-testid="toast-action"
+              onClick={(e) => {
+                // The toast body dismisses on click; the action must not
+                // reach it first and lose the toast before running.
+                e.stopPropagation();
+                onDismiss(t.id);
+                t.action!.onClick();
+              }}
+              style={{
+                marginLeft: "auto", background: "transparent", border: "none", padding: 0,
+                color: "var(--blue)", fontFamily: "var(--mono)", fontSize: 11.5, cursor: "pointer",
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
         </div>
       ))}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Agent, GpuStatus, Mascot, Settings, PipelineStatus, RetentionBacklog, Voice } from "@/lib/types";
 import { SectionLabel } from "@/components/SectionLabel";
 import { AutoPilotPanel } from "@/components/AutoPilotPanel";
@@ -8,6 +8,11 @@ import { RenderersPanel } from "@/components/RenderersPanel";
 import { CostsPanel } from "@/components/CostsPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastStack, useToasts } from "@/components/Toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SaveStatus, SavesSummaryLine } from "@/components/SaveStatus";
+import {
+  responseError, SavesProvider, useSaveStatus, useSerialQueue, type SaveState,
+} from "@/lib/saveStatus";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { formatDate, formatDateTime, formatRelative } from "@/lib/datetime";
@@ -17,6 +22,8 @@ import { codePoints } from "@/lib/utils";
 import { formatBytes } from "@/lib/format";
 
 const STATUS_POLL_MS = 30_000;
+// Longer than the Discord webhook check a save can include (5 s).
+const SAVE_TIMEOUT_MS = 30_000;
 
 // Max named voices in the roster (TMDEV-51). Keep in sync with
 // renderer/api/pipeline.py, mcp/server.py and onboard/config.py.
@@ -189,52 +196,134 @@ function TrendingSourcesEditor({
 }
 
 // ── Number input with save on blur/Enter ──────────────────────────────────────
+// Keeps what was typed when it is out of range or the API refuses it, so it can
+// be corrected; the stored value stays in force meanwhile.
+
+function fieldBorder(status: SaveState | undefined): string {
+  return status?.state === "error" ? "var(--red)" : "var(--border)";
+}
+
+/** What a field compares an edit with: the value on its way to the API, or
+ *  else the stored one. Comparing with the stored value alone would drop an
+ *  edit back to it made while another save was on its way, and would send an
+ *  Enter followed by a blur twice. */
+function useBaseline<T>(value: T, status?: SaveState) {
+  const sent = useRef<{ v: T } | null>(null);
+  // In flight until the stored value is the one sent last, or the field's
+  // saves are over (saved, refused). An answer to an older save in between
+  // changes nothing here.
+  useEffect(() => { if (sent.current && Object.is(sent.current.v, value)) sent.current = null; }, [value]);
+  useEffect(() => { if (status?.state !== "saving") sent.current = null; }, [status?.state]);
+  return {
+    current: () => (sent.current ? sent.current.v : value),
+    mark: (v: T) => { sent.current = { v }; },
+    inFlight: () => sent.current !== null,
+  };
+}
+
+/** Commits a text field. Typed back to the stored value: nothing to send, and
+ *  a refusal shown for it no longer applies. A value whose refusal is on
+ *  screen is not sent again by a mere focus and blur (for the Discord webhook
+ *  that would run its check again each time); Enter or an edit sends it. */
+function commitText(
+  v: string,
+  baseline: { current: () => string; mark: (v: string) => void },
+  lastSent: { current: string | null },
+  status: SaveState | undefined,
+  onCommit: (v: string) => void,
+  onSame?: () => void,
+  force = false,
+) {
+  if (v === baseline.current()) {
+    onSame?.();
+    return;
+  }
+  // Enter always sends: a value that failed because the API could not be
+  // reached has to be sendable again without retyping it.
+  if (!force && status?.state === "error" && v === lastSent.current) return;
+  baseline.mark(v);
+  lastSent.current = v;
+  onCommit(v);
+}
+
+/** Whether a field may show the stored value now: not while you have typed
+ *  something not yet committed, not while a save of it is on its way (an
+ *  older answer would put an older value in the box), and not while a refusal
+ *  is shown (what you typed stays, to be corrected). */
+function mayFollow(dirty: boolean, inFlight: boolean, status?: SaveState): boolean {
+  return !dirty && !inFlight && status?.state !== "error";
+}
 
 function NumInput({
   value,
   min,
   max,
   testId,
+  status,
   onCommit,
+  onInvalid,
+  onSame,
 }: {
   value: number;
   min: number;
   max: number;
   testId: string;
+  status?: SaveState;
   onCommit: (n: number) => void;
+  onInvalid?: (message: string) => void;
+  onSame?: () => void;
 }) {
   const [local, setLocal] = useState(String(value));
+  const baseline = useBaseline(value, status);
+  const dirty = useRef(false);
 
-  // keep in sync when parent state changes
-  useEffect(() => { setLocal(String(value)); }, [value]);
+  useEffect(() => {
+    if (mayFollow(dirty.current, baseline.inFlight(), status)) setLocal(String(value));
+  }, [value, status?.state]);
 
   function commit() {
-    const n = parseInt(local, 10);
-    if (!isNaN(n) && n >= min && n <= max) onCommit(n);
-    else setLocal(String(value)); // revert invalid
+    const text = local.trim();
+    const n = Number(text);
+    if (!/^-?\d+$/.test(text) || n < min || n > max) {
+      if (onInvalid) onInvalid(`must be a whole number from ${min} to ${max}`);
+      else setLocal(String(value)); // revert invalid
+      return;
+    }
+    dirty.current = false;
+    if (n === baseline.current()) {
+      onSame?.();
+      return;
+    }
+    baseline.mark(n);
+    onCommit(n);
   }
 
   return (
-    <input
-      data-testid={testId}
-      type="number"
-      min={min}
-      max={max}
-      value={local}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
-      style={{
-        width: 80,
-        background: "var(--input-bg, var(--panel))",
-        border: "1px solid var(--border)",
-        color: "var(--ink)",
-        fontFamily: "var(--mono)",
-        fontSize: 12,
-        padding: "6px 10px",
-        outline: "none",
-      }}
-    />
+    <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <SaveStatus status={status} testId={`status-${testId}`} id={`status-${testId}`} />
+      <input
+        data-testid={testId}
+        type="number"
+        min={min}
+        max={max}
+        value={local}
+        aria-invalid={status?.state === "error"}
+        aria-describedby={`status-${testId}`}
+        onChange={(e) => { dirty.current = true; setLocal(e.target.value); }}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
+        style={{
+          width: 80,
+          background: "var(--input-bg, var(--panel))",
+          border: `1px solid ${fieldBorder(status)}`,
+          color: "var(--ink)",
+          fontFamily: "var(--mono)",
+          fontSize: 12,
+          padding: "6px 10px",
+          outline: "none",
+        }}
+      />
+    </span>
   );
 }
 
@@ -247,48 +336,236 @@ function NumInput({
 function SecretInput({
   value,
   testId,
+  status,
   onCommit,
+  onSame,
 }: {
   value: string;
   testId: string;
+  status?: SaveState;
   onCommit: (v: string) => void;
+  onSame?: () => void;
 }) {
   const [local, setLocal] = useState(value);
   const [focused, setFocused] = useState(false);
+  const baseline = useBaseline(value, status);
+  const dirty = useRef(false);
+  const lastSent = useRef<string | null>(null);
 
-  useEffect(() => { setLocal(value); }, [value]);
+  useEffect(() => {
+    if (mayFollow(dirty.current, baseline.inFlight(), status)) setLocal(value);
+  }, [value, status?.state]);
 
-  function commit() {
+  function commit(force = false) {
     setFocused(false);
-    if (local !== value) onCommit(local.trim());
+    dirty.current = false;
+    commitText(local.trim(), baseline, lastSent, status, onCommit, onSame, force);
   }
 
   return (
-    <input
-      data-testid={testId}
-      // Only mask while unfocused: the stored value is already a mask, and
-      // hiding what the user is actively typing makes a mistyped key
-      // undebuggable without helping anyone.
-      type={focused ? "text" : "password"}
-      value={local}
-      placeholder="not set"
-      autoComplete="off"
-      spellCheck={false}
-      onFocus={() => setFocused(true)}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-      style={{
-        width: 220,
-        background: "var(--input-bg, var(--panel))",
-        border: "1px solid var(--border)",
-        color: "var(--ink)",
-        fontFamily: "var(--mono)",
-        fontSize: 12,
-        padding: "6px 10px",
-        outline: "none",
-      }}
-    />
+    <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <SaveStatus status={status} testId={`status-${testId}`} id={`status-${testId}`} />
+      <input
+        data-testid={testId}
+        // Only mask while unfocused: the stored value is already a mask, and
+        // hiding what the user is actively typing makes a mistyped key
+        // undebuggable without helping anyone.
+        type={focused ? "text" : "password"}
+        value={local}
+        placeholder="not set"
+        autoComplete="off"
+        spellCheck={false}
+        aria-invalid={status?.state === "error"}
+        aria-describedby={`status-${testId}`}
+        onFocus={() => setFocused(true)}
+        onChange={(e) => { dirty.current = true; lastSent.current = null; setLocal(e.target.value); }}
+        onBlur={() => commit()}
+        onKeyDown={(e) => { if (e.key === "Enter") { commit(true); (e.target as HTMLInputElement).blur(); } }}
+        style={{
+          width: 220,
+          background: "var(--input-bg, var(--panel))",
+          border: `1px solid ${fieldBorder(status)}`,
+          color: "var(--ink)",
+          fontFamily: "var(--mono)",
+          fontSize: 12,
+          padding: "6px 10px",
+          outline: "none",
+        }}
+      />
+    </span>
+  );
+}
+
+// ── Plain text input with save on blur/Enter ──────────────────────────────────
+
+function TextInput({
+  value,
+  testId,
+  status,
+  onCommit,
+  onSame,
+}: {
+  value: string;
+  testId: string;
+  status?: SaveState;
+  onCommit: (v: string) => void;
+  onSame?: () => void;
+}) {
+  const [local, setLocal] = useState(value);
+  const baseline = useBaseline(value, status);
+  const dirty = useRef(false);
+  const lastSent = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (mayFollow(dirty.current, baseline.inFlight(), status)) setLocal(value);
+  }, [value, status?.state]);
+
+  function commit(force = false) {
+    dirty.current = false;
+    commitText(local.trim(), baseline, lastSent, status, onCommit, onSame, force);
+  }
+
+  return (
+    <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <SaveStatus status={status} testId={`status-${testId}`} id={`status-${testId}`} />
+      <input
+        data-testid={testId}
+        type="text"
+        value={local}
+        placeholder="not set"
+        autoComplete="off"
+        spellCheck={false}
+        aria-invalid={status?.state === "error"}
+        aria-describedby={`status-${testId}`}
+        onChange={(e) => { dirty.current = true; lastSent.current = null; setLocal(e.target.value); }}
+        onBlur={() => commit()}
+        onKeyDown={(e) => { if (e.key === "Enter") { commit(true); (e.target as HTMLInputElement).blur(); } }}
+        style={{
+          width: 220,
+          background: "var(--input-bg, var(--panel))",
+          border: `1px solid ${fieldBorder(status)}`,
+          color: "var(--ink)",
+          fontFamily: "var(--mono)",
+          fontSize: 12,
+          padding: "6px 10px",
+          outline: "none",
+        }}
+      />
+    </span>
+  );
+}
+
+// ── Preferences text: saves a second after typing stops, and on blur ──────────
+
+const PREFERENCES_SAVE_DELAY_MS = 1000;
+
+function PreferencesEditor({
+  value,
+  status,
+  inputStyle,
+  onWaiting,
+  onSame,
+  onSave,
+}: {
+  value: string;
+  status?: SaveState;
+  inputStyle: React.CSSProperties;
+  onWaiting: () => void;
+  onSame: () => void;
+  onSave: (text: string) => void;
+}) {
+  const [local, setLocal] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Text typed since the last save was sent. While there is some, the answer
+  // to an earlier save must not replace what is in the box.
+  const unsent = useRef(false);
+  const latest = useRef(value);
+  const save = useRef(onSave);
+  save.current = onSave;
+  const baseline = useBaseline(value, status);
+
+  // The API stores the text trimmed. An answer that is only the box's text
+  // trimmed leaves the box alone, or a trailing space or line break you just
+  // typed would vanish under the cursor.
+  useEffect(() => {
+    if (!unsent.current && !baseline.inFlight() && status?.state !== "error"
+        && value !== latest.current.trim()) {
+      setLocal(value);
+      latest.current = value;
+    }
+  }, [value, status?.state]);
+
+  // An earlier save answering while newer text waits for its second must not
+  // read as all saved: the field goes back to waiting (and the page keeps its
+  // leave-page prompt). A refusal still shows as it is.
+  useEffect(() => {
+    if (status?.state === "saved" && unsent.current) onWaiting();
+  }, [status?.state]);
+
+  function flush() {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (!unsent.current) return;
+    unsent.current = false;
+    baseline.mark(latest.current);
+    save.current(latest.current);
+  }
+
+  // Leaving the tab or the page sends what is still waiting.
+  useEffect(() => () => flush(), []);
+
+  return (
+    <>
+      <textarea
+        data-testid="input-user-preferences"
+        value={local}
+        rows={14}
+        placeholder={"e.g.\nTopics: favour Linux internals; skip crypto.\nScripts: calm tone, no jokes, UK spelling.\nVisuals: prefer diagrams over stock-style photos."}
+        spellCheck={false}
+        aria-invalid={status?.state === "error"}
+        aria-describedby="status-input-user-preferences"
+        onChange={(e) => {
+          const chars = codePoints(e.target.value);
+          const next = chars.length > MAX_USER_PREFERENCES_CHARS
+            ? chars.slice(0, MAX_USER_PREFERENCES_CHARS).join("")
+            : e.target.value;
+          setLocal(next);
+          latest.current = next;
+          unsent.current = next !== baseline.current();
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = null;
+          if (unsent.current) {
+            onWaiting();
+            timer.current = setTimeout(flush, PREFERENCES_SAVE_DELAY_MS);
+          } else if (!baseline.inFlight()) {
+            // Typed back to what is stored: nothing left to send. With a save
+            // still on its way, its outcome is what shows.
+            onSame();
+          }
+        }}
+        onBlur={flush}
+        style={{
+          ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.5,
+          border: `1px solid ${fieldBorder(status)}`,
+        }}
+      />
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 4 }}>
+        <SaveStatus status={status} testId="status-input-user-preferences" id="status-input-user-preferences" />
+        <div
+          data-testid="user-preferences-count"
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 10.5,
+            color: codePoints(local).length >= MAX_USER_PREFERENCES_CHARS * 0.9
+              ? "var(--amber)" : "var(--mute)",
+          }}
+        >
+          {codePoints(local).length} / {MAX_USER_PREFERENCES_CHARS}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -313,123 +590,66 @@ function backlogText(b: RetentionBacklog): string {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-// One entry per settings group. `fields` is load-bearing, not documentation:
-// it scopes both what a tab's Save button sends and what counts as unsaved on
-// that tab, so the two can never drift apart.
+// One entry per settings group. Every change on every tab is saved the moment
+// it is made (TMDEV-218), so a tab carries no list of fields and nothing is
+// ever left unsaved when you switch tabs.
 //
 // Pipeline Control is deliberately absent — pause/resume is an operational
-// action against a different endpoint, and burying it behind a tab and a Save
-// button would make stopping the scheduler a three-click operation. It stays
-// pinned above the tabs and still applies immediately.
+// action against a different endpoint, and burying it behind a tab would make
+// stopping the scheduler a two-click operation. It stays pinned above the tabs.
 
 const TABS = [
-  { key: "ai-review", label: "AI Review",
-    fields: ["gemini_review_enabled", "ai_review_model", "ai_review_fps", "ai_review_max_loops"] },
-  { key: "research", label: "Research",
-    fields: ["max_curriculum_per_run", "max_trending_per_run", "max_mining_per_run",
-             "research_pending_cap", "max_research_runs_per_day", "trending_sources"] },
-  { key: "voice", label: "Voice",
-    fields: ["elevenlabs_voices", "elevenlabs_voice_id"] },
-  { key: "images", label: "Images",
-    fields: ["image_model", "character_model"] },
-  { key: "rendering", label: "Rendering",
-    fields: ["render_stall_timeout_secs", "render_timeout_secs", "max_render_retries", "watermark_enabled",
-             "default_mascot_id"] },
-  { key: "logs", label: "Logs", fields: ["log_retention_days"] },
-  { key: "retention", label: "Retention", fields: ["retention_days", "unpublished_retention_days"] },
-  { key: "api-keys", label: "API Keys",
-    fields: ["elevenlabs_api_key", "gemini_api_key", "openai_api_key", "youtube_transcript_api_key",
-             "postforme_api_key"] },
-  { key: "publishing", label: "Publishing",
-    fields: ["publishing_enabled"] },
-  { key: "notifications", label: "Notifications",
-    fields: ["discord_webhook_url", "notify_topic_proposed", "notify_script_ready",
-             "notify_video_ready", "notify_partially_published", "notify_failed",
-             "dashboard_base_url"] },
+  { key: "ai-review", label: "AI Review" },
+  { key: "research", label: "Research" },
+  { key: "voice", label: "Voice" },
+  { key: "images", label: "Images" },
+  { key: "rendering", label: "Rendering" },
+  { key: "logs", label: "Logs" },
+  { key: "retention", label: "Retention" },
+  { key: "api-keys", label: "API Keys" },
+  { key: "publishing", label: "Publishing" },
+  { key: "notifications", label: "Notifications" },
   // The research readouts are read-only; the two agent-session fields
   // (TMDEV-129) are the only settings here.
-  { key: "scheduling", label: "Scheduling",
-    fields: ["max_concurrent_agent_sessions", "agent_session_timeout_secs"] },
-  // No settings fields either — agents live in their own table and save
-  // through /agents, so they sit outside the Save/dirty machinery entirely.
-  { key: "agents", label: "Agents", fields: [] },
-  { key: "preferences", label: "Preferences", fields: ["user_preferences", "auto_experimental_formulas", "learned_routing"] },
-  // Model prices live in their own table and save through /prices, like the
-  // Agents tab — outside the Save/dirty machinery.
-  { key: "costs", label: "Costs", fields: [] },
+  { key: "scheduling", label: "Scheduling" },
+  // Agents live in their own table and save through /agents.
+  { key: "agents", label: "Agents" },
+  { key: "preferences", label: "Preferences" },
+  // Model prices live in their own table and save through /prices.
+  { key: "costs", label: "Costs" },
   // Auto Pilot saves its whole configuration through /autopilot as one
-  // document — outside the Save/dirty machinery, like Agents and Costs.
-  { key: "auto-pilot", label: "Auto Pilot", fields: [] },
-] as const satisfies ReadonlyArray<{ key: string; label: string; fields: readonly (keyof Settings)[] }>;
+  // document.
+  { key: "auto-pilot", label: "Auto Pilot" },
+] as const satisfies ReadonlyArray<{ key: string; label: string }>;
 
 type TabKey = (typeof TABS)[number]["key"];
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-// At module scope on purpose. Declared inside SettingsPage, it got a fresh
-// function identity on every render, so React treated it as a different
-// component type and remounted it -- replacing the <button> DOM node. Blurring
-// a NumInput commits into `draft`, which re-renders the parent, so clicking
-// SAVE straight from a focused number field swapped the button out between
-// mousedown and mouseup and the browser never synthesized a `click` at all:
-// the first click on SAVE silently did nothing.
-function SaveBar({
-  tabKey,
-  count,
-  saving,
-  onSave,
-}: {
-  tabKey: TabKey;
-  count: number;
-  saving: boolean;
-  onSave: (tabKey: TabKey) => void;
-}) {
+// The page-wide save status lives in a provider, so the page body sits one
+// level down: everything that saves reports to it from below.
+export default function SettingsPage() {
   return (
-    <div
-      style={{
-        display: "flex", alignItems: "center", gap: 14,
-        marginTop: 22, paddingTop: 16, borderTop: "1px solid var(--border)",
-      }}
-    >
-      <button
-        data-testid={`save-${tabKey}`}
-        disabled={!count || saving}
-        onClick={() => onSave(tabKey)}
-        style={{
-          fontFamily: "var(--mono)", fontSize: 11, fontWeight: 700,
-          letterSpacing: "0.06em", padding: "7px 20px",
-          border: `1px solid ${count ? "var(--amber)" : "var(--border)"}`,
-          background: count ? "rgba(245,158,11,0.10)" : "var(--panel)",
-          color: count ? "var(--amber)" : "var(--mute)",
-          cursor: count && !saving ? "pointer" : "not-allowed",
-          transition: "all .15s",
-        }}
-      >
-        {saving ? "SAVING…" : "SAVE"}
-      </button>
-      <span
-        data-testid={`dirty-${tabKey}`}
-        style={{
-          fontFamily: "var(--mono)", fontSize: 10.5, letterSpacing: "0.04em",
-          color: count ? "var(--amber)" : "var(--mute)",
-        }}
-      >
-        {count ? `${count} unsaved change${count === 1 ? "" : "s"}` : "No changes"}
-      </span>
-    </div>
+    <SavesProvider>
+      <SettingsBody />
+    </SavesProvider>
   );
 }
 
-export default function SettingsPage() {
+function SettingsBody() {
   const { timeZone, label: tzLabel } = useTimeZone();
   const [s, setS] = useState<Settings | null>(null);
   const [backlog, setBacklog] = useState<RetentionBacklog | null>(null);
   const [status, setStatus] = useState<PipelineStatus | null>(null);
-  const [saving, setSaving] = useState(false);
-  // Edits live here until Save; `s` stays exactly what the server last returned,
-  // so cancelling is just dropping the draft and every field has an unambiguous
-  // saved value to compare against.
-  const [draft, setDraft] = useState<Partial<Settings>>({});
+  // Switches and pickers show their new value while it is on its way; a
+  // refused change drops out of here and the stored value shows again.
+  const [optimistic, setOptimistic] = useState<Partial<Settings>>({});
+  const [confirmPublishing, setConfirmPublishing] = useState(false);
+  // Whether Auto Pilot is on, read when the Publishing confirmation opens;
+  // null until then, or if the read fails (the loaded settings then decide).
+  const [autoPilotOn, setAutoPilotOn] = useState<boolean | null>(null);
+  const statuses = useSaveStatus();
+  const enqueue = useSerialQueue();
   const [tab, setTab] = useState<TabKey>(TABS[0].key);
   const { toasts, push, dismiss } = useToasts();
   const [mascots, setMascots] = useState<Mascot[]>([]);
@@ -477,100 +697,147 @@ export default function SettingsPage() {
     return () => clearInterval(id);
   }, []);
 
-  /** Stage an edit. Nothing reaches the API until the tab's Save is clicked. */
-  function edit(partial: Partial<Settings>) {
-    setDraft((d) => ({ ...d, ...partial }));
-  }
-
-  /** The value to render: the staged edit if there is one, else the saved value.
-   *  `in` rather than a truthiness check — "" is a legitimate staged value for a
-   *  cleared API key. */
+  /** The value to render: one on its way to the API, else the stored value.
+   *  `in` rather than a truthiness check — false and "" are real values. */
   function val<K extends keyof Settings>(key: K): Settings[K] {
-    return (key in draft ? draft[key] : s![key]) as Settings[K];
+    return (key in optimistic ? optimistic[key] : s![key]) as Settings[K];
   }
 
-  function dirtyFields(tabKey: TabKey): (keyof Settings)[] {
-    const def = TABS.find((t) => t.key === tabKey)!;
-    return def.fields.filter((f) => f in draft);
-  }
-
-  async function saveTab(tabKey: TabKey) {
-    const fields = dirtyFields(tabKey);
-    if (!fields.length) return;
-    // Scoped to this tab rather than sending `draft` wholesale. Today the two
-    // are always identical, because requestTab discards a tab's edits when you
-    // leave it — so the draft never holds another tab's fields, and no test can
-    // distinguish them (a mutation to `partial = draft` passes the suite).
-    // Kept anyway: it makes Save correct on its own terms rather than by
-    // depending on that discard behaviour staying exactly as it is.
-    const partial = Object.fromEntries(fields.map((f) => [f, draft[f]]));
-    setSaving(true);
-    try {
+  /** Saves one change and shows its outcome beside the field named by
+   *  `statusKey`. Every save goes through one queue: POST /settings answers
+   *  with the whole settings object, so an answer that arrived after a newer
+   *  one would put the older values back on screen. */
+  function save(
+    partial: Partial<Settings>,
+    statusKey: string,
+    opts: { optimistic?: boolean; label?: string } = {},
+  ): Promise<boolean> {
+    const keys = Object.keys(partial) as (keyof Settings)[];
+    if (opts.optimistic) setOptimistic((o) => ({ ...o, ...partial }));
+    // Only this save's own value leaves: a newer change to the same key, made
+    // while this one was on its way, stays on screen.
+    const settle = () => setOptimistic((o) => {
+      const next = { ...o };
+      keys.forEach((k) => { if (next[k] === partial[k]) delete next[k]; });
+      return next;
+    });
+    return statuses.run(statusKey, () => enqueue(async () => {
+      // A hung request would hold every later change behind it in the queue.
       const r = await apiFetch("/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(partial),
-      });
-      if (r.ok) {
-        setS(await r.json());
-        // Clear only this tab's fields — another tab may hold edits the user
-        // has not saved yet, and dropping those silently is the bug the
-        // per-tab confirm exists to prevent.
-        setDraft((d) => {
-          const next = { ...d };
-          fields.forEach((f) => delete next[f]);
-          return next;
-        });
-        push("success", `Saved ${fields.length} setting${fields.length === 1 ? "" : "s"}.`);
-      } else {
-        // Previously a non-ok response was discarded and the page kept
-        // rendering stale state, so a rejected value looked like it applied.
-        let detail = `HTTP ${r.status}`;
-        try {
-          const body = await r.json();
-          if (body?.error) detail = body.error;
-        } catch { /* non-JSON error body — the status is all we have */ }
-        push("error", `Save failed — ${detail}`);
+        signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+      }).catch(() => null);
+      if (!r?.ok) {
+        settle();
+        return responseError(r);
       }
+      const body = await r.json().catch(() => null);
+      if (body && typeof body === "object" && !Array.isArray(body)) setS(body as Settings);
+      settle();
       loadStatus();
-    } catch (e) {
-      push("error", `Save failed — ${e instanceof Error ? e.message : "unreachable"}`);
-    } finally {
-      setSaving(false);
-    }
+      return null;
+    }), opts.label);
   }
 
-  function requestTab(next: string) {
-    if (next === tab) return;
-    if (dirtyFields(tab).length &&
-        !window.confirm("Discard unsaved changes on this tab?")) {
+  // The newest `val`, for an Undo clicked after later changes.
+  const valRef = useRef(val);
+  valRef.current = val;
+
+  /** Props for a NumInput bound to one settings key. */
+  function numField<K extends keyof Settings>(
+    key: K,
+    toStored: (n: number) => Settings[K] = (n) => n as Settings[K],
+  ) {
+    return {
+      status: statuses.get(key),
+      onCommit: (n: number) => { void save({ [key]: toStored(n) } as Partial<Settings>, key); },
+      onInvalid: (message: string) => statuses.fail(key, message),
+      // Typed back to what is stored: a refusal no longer applies. A save
+      // still on its way keeps its status.
+      onSame: () => clearError(key),
+    };
+  }
+
+  function clearError(key: string) {
+    if (statuses.get(key)?.state === "error") statuses.clear(key);
+  }
+
+  /** A switch or picker: saved on change, shown at once, snapped back if refused. */
+  function choose<K extends keyof Settings>(key: K, value: Settings[K]) {
+    void save({ [key]: value } as Partial<Settings>, key, { optimistic: true });
+  }
+
+  function togglePublishing() {
+    // Turning publishing on lets approved videos be posted (and, with Auto
+    // Pilot on, scheduled unattended), so it is confirmed first. Off saves at once.
+    if (val("publishing_enabled")) {
+      choose("publishing_enabled", false);
       return;
     }
-    // Leaving a tab drops its edits, so the discard the user just confirmed
-    // actually happens rather than lurking until some later Save.
-    const leaving = dirtyFields(tab);
-    if (leaving.length) {
-      setDraft((d) => {
-        const nextDraft = { ...d };
-        leaving.forEach((f) => delete nextDraft[f]);
-        return nextDraft;
-      });
+    setConfirmPublishing(true);
+    // Auto Pilot saves through its own route, so the settings loaded with the
+    // page can be out of date about it; the dialog's warning reads it fresh.
+    setAutoPilotOn(null);
+    apiFetch("/autopilot")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setAutoPilotOn(b && typeof b.enabled === "boolean" ? b.enabled : null))
+      .catch(() => {});
+  }
+
+  function saveVoices(voices: Voice[], defaultVoiceId: string, removed?: RemovedVoice): Promise<boolean> {
+    // The roster and the default go together: a default that is not in the
+    // roster reads back as "" (TMDEV-51), so splitting them could blank it.
+    return save(
+      { elevenlabs_voices: voices, elevenlabs_voice_id: defaultVoiceId },
+      "voices",
+      { optimistic: true },
+    ).then((ok) => {
+      if (ok && removed !== undefined) {
+        push("success", `Removed voice "${removed.voice.name}".`, {
+          label: "Undo",
+          onClick: () => { void restoreVoice(removed); },
+        });
+      }
+      return ok;
+    });
+  }
+
+  /** Puts one removed voice back into the roster as it is now, so a change
+   *  made after the removal is kept. It is the default again only if nothing
+   *  else became the default meanwhile. */
+  function restoreVoice(removed: RemovedVoice) {
+    const roster = valRef.current("elevenlabs_voices");
+    if (roster.some((v) => v.voice_id === removed.voice.voice_id)) return;
+    if (roster.length >= MAX_VOICES) {
+      push("error", `No room to put "${removed.voice.name}" back: the roster holds ${MAX_VOICES} voices.`);
+      return;
     }
+    const next = [...roster];
+    next.splice(Math.min(removed.index, next.length), 0, removed.voice);
+    const current = valRef.current("elevenlabs_voice_id");
+    saveVoices(next, removed.wasDefault && !current ? removed.voice.voice_id : current);
+  }
+
+  function changeTab(next: string) {
+    // A refused change shows beside its field; once the field is gone from the
+    // screen the stored value is what shows when it comes back.
+    statuses.clearAll();
     setTab(next as TabKey);
   }
 
   async function setPaused(paused: boolean) {
-    setSaving(true);
-    try {
+    await statuses.run("pipeline_paused", async () => {
       const r = await apiFetch("/pipeline/pause", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paused }),
-      });
-      if (r.ok) setS((p) => p ? { ...p, pipeline_paused: paused } : p);
-    } finally {
-      setSaving(false);
-    }
+      }).catch(() => null);
+      if (!r?.ok) return responseError(r);
+      setS((p) => p ? { ...p, pipeline_paused: paused } : p);
+      return null;
+    });
   }
 
   if (!s) return (
@@ -591,11 +858,17 @@ export default function SettingsPage() {
 
   return (
     <>
-      <SectionLabel label="Settings" count={saving ? "Saving…" : undefined} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+        <div style={{ flex: 1 }}>
+          <SectionLabel label="Settings" />
+        </div>
+        <SavesSummaryLine />
+      </div>
 
       {/* ── Section 1: Pipeline Control ── */}
       <SectionLabel label="Pipeline Control" />
       <Row label="Pipeline state" note="Pausing stops the scheduler from advancing new videos.">
+        <SaveStatus status={statuses.get("pipeline_paused")} testId="status-pipeline-paused" />
         <button
           data-testid="toggle-pipeline-pause"
           onClick={() => setPaused(!s.pipeline_paused)}
@@ -617,7 +890,7 @@ export default function SettingsPage() {
         </button>
       </Row>
 
-      <Tabs value={tab} onValueChange={requestTab}>
+      <Tabs value={tab} onValueChange={changeTab}>
         <TabsList
           style={{
             background: "var(--bg)",
@@ -639,17 +912,6 @@ export default function SettingsPage() {
           {TABS.map((t) => (
             <TabsTrigger key={t.key} value={t.key} data-testid={`tab-${t.key}`}>
               {t.label}
-              {/* A dot on the tab itself, so unsaved work on a tab you are not
-                  looking at is still visible. */}
-              {dirtyFields(t.key).length > 0 && (
-                <span
-                  data-testid={`tab-dirty-${t.key}`}
-                  aria-label="unsaved changes"
-                  style={{ color: "var(--amber)", marginLeft: 6 }}
-                >
-                  ●
-                </span>
-              )}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -677,9 +939,10 @@ export default function SettingsPage() {
           >
             Experimental
           </span>
+          <SaveStatus status={statuses.get("gemini_review_enabled")} testId="status-toggle-gemini-review" />
           <button
             data-testid="toggle-gemini-review"
-            onClick={() => edit({ gemini_review_enabled: !val("gemini_review_enabled") })}
+            onClick={() => choose("gemini_review_enabled", !val("gemini_review_enabled"))}
             style={{
               fontFamily: "var(--mono)",
               fontSize: 11,
@@ -697,10 +960,11 @@ export default function SettingsPage() {
           </button>
         </Row>
         <Row label="Review model" note="Which Gemini model reviews each rendered video. The 3.x models cost about 1.4x gemini-2.5-flash per video reviewed — far less than their 5x headline token price, since they tokenise video ~3.7x more cheaply.">
+          <SaveStatus status={statuses.get("ai_review_model")} testId="status-select-ai-review-model" />
           <select
             data-testid="select-ai-review-model"
             value={AI_REVIEW_MODELS.includes(val("ai_review_model")) ? val("ai_review_model") : AI_REVIEW_MODELS[0]}
-            onChange={(e) => edit({ ai_review_model: e.target.value })}
+            onChange={(e) => choose("ai_review_model", e.target.value)}
             style={inputStyle}
           >
             {AI_REVIEW_MODELS.map((m) => (
@@ -714,7 +978,7 @@ export default function SettingsPage() {
             min={1}
             max={MAX_AI_REVIEW_FPS}
             testId="input-ai-review-fps"
-            onCommit={(n) => edit({ ai_review_fps: n })}
+            {...numField("ai_review_fps")}
           />
         </Row>
         <Row label="Max review rounds" note="How many times the review can send a video back for revision before it is accepted regardless of findings.">
@@ -723,11 +987,10 @@ export default function SettingsPage() {
             min={1}
             max={MAX_AI_REVIEW_LOOPS}
             testId="input-ai-review-max-loops"
-            onCommit={(n) => edit({ ai_review_max_loops: n })}
+            {...numField("ai_review_max_loops")}
           />
         </Row>
       </div>
-          <SaveBar tabKey="ai-review" count={dirtyFields("ai-review").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 
         <TabsContent value="research">
@@ -739,7 +1002,7 @@ export default function SettingsPage() {
           min={0}
           max={50}
           testId="input-max-curriculum-per-run"
-          onCommit={(n) => edit({ max_curriculum_per_run: n })}
+          {...numField("max_curriculum_per_run")}
         />
       </Row>
       <Row label="Trending topics per run">
@@ -748,7 +1011,7 @@ export default function SettingsPage() {
           min={0}
           max={50}
           testId="input-max-trending-per-run"
-          onCommit={(n) => edit({ max_trending_per_run: n })}
+          {...numField("max_trending_per_run")}
         />
       </Row>
       <Row label="Mining topics per run">
@@ -757,7 +1020,7 @@ export default function SettingsPage() {
           min={0}
           max={50}
           testId="input-max-mining-per-run"
-          onCommit={(n) => edit({ max_mining_per_run: n })}
+          {...numField("max_mining_per_run")}
         />
       </Row>
       <Row
@@ -769,7 +1032,7 @@ export default function SettingsPage() {
           min={0}
           max={50}
           testId="input-research-pending-cap"
-          onCommit={(n) => edit({ research_pending_cap: n })}
+          {...numField("research_pending_cap")}
         />
       </Row>
       <Row
@@ -781,7 +1044,7 @@ export default function SettingsPage() {
           min={0}
           max={50}
           testId="input-max-research-runs-per-day"
-          onCommit={(n) => edit({ max_research_runs_per_day: n })}
+          {...numField("max_research_runs_per_day")}
         />
       </Row>
 
@@ -792,10 +1055,10 @@ export default function SettingsPage() {
       </div>
       <TrendingSourcesEditor
         sources={val("trending_sources")}
-        onSave={(next) => edit({ trending_sources: next })}
+        onSave={(next) => choose("trending_sources", next)}
         saving={false}
       />
-          <SaveBar tabKey="research" count={dirtyFields("research").length} saving={saving} onSave={saveTab} />
+      <SaveStatus status={statuses.get("trending_sources")} testId="status-trending-sources" />
         </TabsContent>
 
         <TabsContent value="voice">
@@ -809,10 +1072,11 @@ export default function SettingsPage() {
       <VoicesEditor
         voices={val("elevenlabs_voices")}
         defaultVoiceId={val("elevenlabs_voice_id")}
-        onSave={(voices, defaultVoiceId) => edit({ elevenlabs_voices: voices, elevenlabs_voice_id: defaultVoiceId })}
+        onSave={saveVoices}
         saving={false}
         inputStyle={inputStyle}
       />
+      <SaveStatus status={statuses.get("voices")} testId="status-voices" />
       <div data-testid="voice-model-legend" style={{ marginBottom: 8, fontFamily: "var(--mono)", fontSize: 10, color: "var(--mute)", letterSpacing: "0.04em", lineHeight: 1.6 }}>
         {/* Pronunciation is not a separate setting (TMDEV-26): the term
             lexicon and inline <respell> tags work on every model. A voice's
@@ -823,7 +1087,6 @@ export default function SettingsPage() {
         so changing a voice&apos;s model can stop scripts already written for it from being approved
         with it — request a revision on those.
       </div>
-          <SaveBar tabKey="voice" count={dirtyFields("voice").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 
         <TabsContent value="images">
@@ -833,10 +1096,11 @@ export default function SettingsPage() {
         label="Image model"
         note="The OpenAI model that draws scene images (the generate_image MCP tool). OpenAI grants model access per project, so the OpenAI key's project must have access to the model chosen here."
       >
+        <SaveStatus status={statuses.get("image_model")} testId="status-select-image-model" />
         <select
           data-testid="select-image-model"
           value={val("image_model")}
-          onChange={(e) => edit({ image_model: e.target.value })}
+          onChange={(e) => choose("image_model", e.target.value)}
           style={inputStyle}
         >
           {OPENAI_IMAGE_MODELS.map((m) => (
@@ -848,10 +1112,11 @@ export default function SettingsPage() {
         label="Character model"
         note="Draws the Illustrated style's transparent characters (the generate_character MCP tool). OpenAI grants model access per project, so the OpenAI key's project must have access to the model chosen here."
       >
+        <SaveStatus status={statuses.get("character_model")} testId="status-select-character-model" />
         <select
           data-testid="select-character-model"
           value={val("character_model")}
-          onChange={(e) => edit({ character_model: e.target.value })}
+          onChange={(e) => choose("character_model", e.target.value)}
           style={inputStyle}
         >
           {OPENAI_IMAGE_MODELS.map((m) => (
@@ -859,7 +1124,6 @@ export default function SettingsPage() {
           ))}
         </select>
       </Row>
-          <SaveBar tabKey="images" count={dirtyFields("images").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 
         <TabsContent value="rendering">
@@ -874,7 +1138,7 @@ export default function SettingsPage() {
           min={1}
           max={120}
           testId="input-render-stall-timeout-mins"
-          onCommit={(mins) => edit({ render_stall_timeout_secs: mins * 60 })}
+          {...numField("render_stall_timeout_secs", (mins) => mins * 60)}
         />
       </Row>
       <Row
@@ -886,7 +1150,7 @@ export default function SettingsPage() {
           min={1}
           max={600}
           testId="input-render-timeout-mins"
-          onCommit={(mins) => edit({ render_timeout_secs: mins * 60 })}
+          {...numField("render_timeout_secs", (mins) => mins * 60)}
         />
       </Row>
       <Row
@@ -898,16 +1162,17 @@ export default function SettingsPage() {
           min={0}
           max={10}
           testId="input-max-render-retries"
-          onCommit={(n) => edit({ max_render_retries: n })}
+          {...numField("max_render_retries")}
         />
       </Row>
       <Row
         label="Watermark"
         note={'Burn the "Made with tubematic.ai" mark into the top-right corner of every rendered video. Applies to renders that start after saving; videos already rendered are not changed.'}
       >
+        <SaveStatus status={statuses.get("watermark_enabled")} testId="status-toggle-watermark" />
         <button
           data-testid="toggle-watermark"
-          onClick={() => edit({ watermark_enabled: !val("watermark_enabled") })}
+          onClick={() => choose("watermark_enabled", !val("watermark_enabled"))}
           style={{
             fontFamily: "var(--mono)",
             fontSize: 11,
@@ -928,11 +1193,12 @@ export default function SettingsPage() {
         label="Default mascot (experimental)"
         note="The mascot new videos start with, unless their domain has its own. Off by default. A video only gets one while the GPU is working, and never on Cartoon 3D. Draw and approve mascots on the Profiles tab."
       >
+        <SaveStatus status={statuses.get("default_mascot_id")} testId="status-select-default-mascot" />
         <select
           data-testid="select-default-mascot"
           title={mascotGateNote(mascotGate(gpu)) || undefined}
           value={val("default_mascot_id") ?? ""}
-          onChange={(e) => edit({ default_mascot_id: e.target.value })}
+          onChange={(e) => choose("default_mascot_id", e.target.value)}
           style={{
             fontFamily: "var(--mono)", fontSize: 11, padding: "7px 8px", maxWidth: 260,
             background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--border-2)",
@@ -943,7 +1209,6 @@ export default function SettingsPage() {
           ))}
         </select>
       </Row>
-          <SaveBar tabKey="rendering" count={dirtyFields("rendering").length} saving={saving} onSave={saveTab} />
           <RenderersPanel />
         </TabsContent>
 
@@ -959,10 +1224,9 @@ export default function SettingsPage() {
           min={MIN_LOG_RETENTION_DAYS}
           max={MAX_LOG_RETENTION_DAYS}
           testId="input-log-retention-days"
-          onCommit={(n) => edit({ log_retention_days: n })}
+          {...numField("log_retention_days")}
         />
       </Row>
-          <SaveBar tabKey="logs" count={dirtyFields("logs").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 
         <TabsContent value="retention">
@@ -977,7 +1241,7 @@ export default function SettingsPage() {
           min={MIN_RETENTION_DAYS}
           max={MAX_RETENTION_DAYS}
           testId="input-retention-days"
-          onCommit={(n) => edit({ retention_days: n })}
+          {...numField("retention_days")}
         />
       </Row>
       <Row
@@ -989,7 +1253,7 @@ export default function SettingsPage() {
           min={MIN_RETENTION_DAYS}
           max={MAX_RETENTION_DAYS}
           testId="input-unpublished-retention-days"
-          onCommit={(n) => edit({ unpublished_retention_days: n })}
+          {...numField("unpublished_retention_days")}
         />
       </Row>
       {backlog && (
@@ -1000,7 +1264,6 @@ export default function SettingsPage() {
           {backlogText(backlog)}
         </div>
       )}
-          <SaveBar tabKey="retention" count={dirtyFields("retention").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 
         <TabsContent value="api-keys">
@@ -1021,11 +1284,12 @@ export default function SettingsPage() {
           <SecretInput
             value={val(key)}
             testId={`input-${key.replace(/_/g, "-")}`}
-            onCommit={(v) => edit({ [key]: v } as Partial<Settings>)}
+            status={statuses.get(key)}
+            onCommit={(v) => { void save({ [key]: v } as Partial<Settings>, key); }}
+            onSame={() => clearError(key)}
           />
         </Row>
       ))}
-          <SaveBar tabKey="api-keys" count={dirtyFields("api-keys").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 
         <TabsContent value="publishing">
@@ -1036,9 +1300,10 @@ export default function SettingsPage() {
           label="Publishing"
           note="Publish approved videos to YouTube, Instagram, TikTok and Facebook via postforme.dev. Every publish is something you click and confirm, unless a project is on Auto Pilot (its own tab), which posts unattended. Needs the postforme.dev key on the API Keys tab."
         >
+          <SaveStatus status={statuses.get("publishing_enabled")} testId="status-toggle-publishing" />
           <button
             data-testid="toggle-publishing"
-            onClick={() => edit({ publishing_enabled: !val("publishing_enabled") })}
+            onClick={togglePublishing}
             style={{
               fontFamily: "var(--mono)",
               fontSize: 11,
@@ -1059,7 +1324,6 @@ export default function SettingsPage() {
           Pick which connected accounts Tubematic may post to on the Socials page.
         </p>
       </div>
-          <SaveBar tabKey="publishing" count={dirtyFields("publishing").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 
         <TabsContent value="notifications">
@@ -1079,22 +1343,24 @@ export default function SettingsPage() {
           <SecretInput
             value={val("discord_webhook_url")}
             testId="input-discord-webhook-url"
-            onCommit={(v) => edit({ discord_webhook_url: v })}
+            status={statuses.get("discord_webhook_url")}
+            onSame={() => clearError("discord_webhook_url")}
+            onCommit={(v) => {
+              void save({ discord_webhook_url: v }, "discord_webhook_url",
+                        { label: v ? "Checking the webhook…" : undefined });
+            }}
           />
         </Row>
         <Row
           label="Dashboard URL"
           note="Used to link back from a notification, e.g. http://192.168.1.20:3000. Leave blank for messages with no links — this container cannot know what address you reach it by."
         >
-          <input
-            data-testid="input-dashboard-base-url"
-            type="text"
+          <TextInput
             value={val("dashboard_base_url")}
-            placeholder="not set"
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(e) => edit({ dashboard_base_url: e.target.value })}
-            style={{ ...inputStyle, width: 220 }}
+            testId="input-dashboard-base-url"
+            status={statuses.get("dashboard_base_url")}
+            onCommit={(v) => { void save({ dashboard_base_url: v }, "dashboard_base_url"); }}
+            onSame={() => clearError("dashboard_base_url")}
           />
         </Row>
 
@@ -1112,9 +1378,10 @@ export default function SettingsPage() {
            "Rendering or publishing gave up and the video needs you — says why."],
         ] as const).map(([key, label, note]) => (
           <Row key={key} label={label} note={note}>
+            <SaveStatus status={statuses.get(key)} testId={`status-toggle-${key.replace(/_/g, "-")}`} />
             <button
               data-testid={`toggle-${key.replace(/_/g, "-")}`}
-              onClick={() => edit({ [key]: !val(key) } as Partial<Settings>)}
+              onClick={() => choose(key, !val(key))}
               style={{
                 fontFamily: "var(--mono)",
                 fontSize: 11,
@@ -1137,7 +1404,6 @@ export default function SettingsPage() {
           or so of the event, even while a video is rendering.
         </p>
       </div>
-          <SaveBar tabKey="notifications" count={dirtyFields("notifications").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 
         <TabsContent value="scheduling">
@@ -1176,7 +1442,7 @@ export default function SettingsPage() {
           min={1}
           max={MAX_CONCURRENT_AGENT_SESSIONS}
           testId="input-max-concurrent-agent-sessions"
-          onCommit={(n) => edit({ max_concurrent_agent_sessions: n })}
+          {...numField("max_concurrent_agent_sessions")}
         />
       </Row>
       <Row
@@ -1188,10 +1454,9 @@ export default function SettingsPage() {
           min={1}
           max={600}
           testId="input-agent-session-timeout-mins"
-          onCommit={(mins) => edit({ agent_session_timeout_secs: mins * 60 })}
+          {...numField("agent_session_timeout_secs", (mins) => mins * 60)}
         />
       </Row>
-          <SaveBar tabKey="scheduling" count={dirtyFields("scheduling").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 
         <TabsContent value="agents">
@@ -1206,42 +1471,22 @@ export default function SettingsPage() {
         yours. Write them for any stage (topics, scripts, voice, visuals); each run applies only the
         parts that fit what it is doing. They cannot override a human checkpoint.
       </p>
-      <textarea
-        data-testid="input-user-preferences"
-        value={(val("user_preferences") ?? "")}
-        rows={14}
-        placeholder={"e.g.\nTopics: favour Linux internals; skip crypto.\nScripts: calm tone, no jokes, UK spelling.\nVisuals: prefer diagrams over stock-style photos."}
-        spellCheck={false}
-        onChange={(e) => {
-          const chars = codePoints(e.target.value);
-          edit({
-            user_preferences: chars.length > MAX_USER_PREFERENCES_CHARS
-              ? chars.slice(0, MAX_USER_PREFERENCES_CHARS).join("")
-              : e.target.value,
-          });
-        }}
-        style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.5 }}
+      <PreferencesEditor
+        value={val("user_preferences") ?? ""}
+        status={statuses.get("user_preferences")}
+        inputStyle={inputStyle}
+        onWaiting={() => statuses.pending("user_preferences")}
+        onSame={() => statuses.clear("user_preferences")}
+        onSave={(text) => { void save({ user_preferences: text }, "user_preferences"); }}
       />
-      <div
-        data-testid="user-preferences-count"
-        style={{
-          fontFamily: "var(--mono)",
-          fontSize: 10.5,
-          textAlign: "right",
-          marginTop: 4,
-          color: codePoints(val("user_preferences") ?? "").length >= MAX_USER_PREFERENCES_CHARS * 0.9
-            ? "var(--amber)" : "var(--mute)",
-        }}
-      >
-        {codePoints(val("user_preferences") ?? "").length} / {MAX_USER_PREFERENCES_CHARS}
-      </div>
       <Row
         label="Experimental formulas"
         note="Let Auto pick script formulas marked experimental. Off, Auto chooses among the core formulas only, and an experimental one is used only where you choose it yourself: as a domain's formula on Topics, or for one video at Topic Proposed. Applies to the next video picked for."
       >
+        <SaveStatus status={statuses.get("auto_experimental_formulas")} testId="status-toggle-experimental-formulas" />
         <button
           data-testid="toggle-experimental-formulas"
-          onClick={() => edit({ auto_experimental_formulas: !val("auto_experimental_formulas") })}
+          onClick={() => choose("auto_experimental_formulas", !val("auto_experimental_formulas"))}
           style={{
             fontFamily: "var(--mono)",
             fontSize: 11,
@@ -1262,9 +1507,10 @@ export default function SettingsPage() {
         label="Learn from watch figures"
         note="Let Auto prefer the script formulas that hold your viewers in a domain, read from your own published videos' share watched. It only chooses among formulas that fit the topic, counts a formula once at least 20 of the domain's videos with figures use it on one account, and every fourth pick tries a formula with too few videos. Off, or with publishing off, Auto chooses from the topic alone."
       >
+        <SaveStatus status={statuses.get("learned_routing")} testId="status-toggle-learned-routing" />
         <button
           data-testid="toggle-learned-routing"
-          onClick={() => edit({ learned_routing: !val("learned_routing") })}
+          onClick={() => choose("learned_routing", !val("learned_routing"))}
           style={{
             fontFamily: "var(--mono)",
             fontSize: 11,
@@ -1281,11 +1527,10 @@ export default function SettingsPage() {
           {val("learned_routing") ? "ON" : "OFF"}
         </button>
       </Row>
-          <SaveBar tabKey="preferences" count={dirtyFields("preferences").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 
         <TabsContent value="costs">
-          <CostsPanel inputStyle={inputStyle} />
+          <CostsPanel inputStyle={inputStyle} notify={(message, action) => push("success", message, action)} />
         </TabsContent>
 
         <TabsContent value="auto-pilot">
@@ -1310,12 +1555,65 @@ export default function SettingsPage() {
         <br />
         All displayed timestamps use the host's timezone: <span data-testid="settings-tz" style={{ color: "var(--amber)" }}>{tzLabel}</span>.
       </div>
+      <Dialog open={confirmPublishing} onOpenChange={(v) => !v && setConfirmPublishing(false)}>
+        <DialogContent
+          data-testid="publishing-confirm"
+          className="border-[#1e1e30] bg-[#0d0d1a] text-[#f0f0ff]"
+          style={{ maxWidth: 520 }}
+        >
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15, fontWeight: 600 }}>Turn on publishing?</DialogTitle>
+          </DialogHeader>
+          <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--dim)", margin: 0 }}>
+            Approved videos get a Publish button, and each publish you start asks you first.
+          </p>
+          {(autoPilotOn ?? s.auto_pilot_enabled) && (
+            <p data-testid="publishing-confirm-auto-pilot"
+               style={{ fontSize: 13, lineHeight: 1.6, color: "var(--amber)", margin: 0 }}>
+              Auto Pilot is on: videos it approves in its projects start being scheduled to post,
+              without asking.
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <button
+              data-testid="publishing-confirm-cancel"
+              onClick={() => setConfirmPublishing(false)}
+              style={{
+                fontFamily: "var(--mono)", fontSize: 11, padding: "7px 14px", cursor: "pointer",
+                background: "transparent", border: "1px solid var(--border-2)", color: "var(--dim)",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              data-testid="publishing-confirm-ok"
+              onClick={() => {
+                setConfirmPublishing(false);
+                choose("publishing_enabled", true);
+              }}
+              style={{
+                fontFamily: "var(--mono)", fontSize: 11, padding: "7px 14px", cursor: "pointer",
+                background: "transparent", border: "1px solid var(--amber)", color: "var(--amber)",
+              }}
+            >
+              Turn on publishing
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }
 
 // ── Voices roster editor (TMDEV-51) ───────────────────────────────────────────
+
+/** A voice just removed, with what Undo needs to put it back. */
+interface RemovedVoice {
+  voice: Voice;
+  index: number;
+  wasDefault: boolean;
+}
 
 // What a model adds on top of the lexicon and <respell>, which every model takes.
 function modelNote(model: string): string {
@@ -1358,6 +1656,7 @@ function VoiceRow({
           if (name.trim() && name !== voice.name) onCommit({ name: name.trim() });
           else setName(voice.name);
         }}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         style={{ ...inputStyle, width: 140 }}
       />
       <input
@@ -1370,6 +1669,7 @@ function VoiceRow({
           if (voiceId.trim() && voiceId !== voice.voice_id) onCommit({ voice_id: voiceId.trim() });
           else setVoiceId(voice.voice_id);
         }}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         style={{ ...inputStyle, width: 180 }}
       />
       <select
@@ -1419,7 +1719,8 @@ function VoicesEditor({
 }: {
   voices: Voice[];
   defaultVoiceId: string;
-  onSave: (voices: Voice[], defaultVoiceId: string) => void;
+  /** Resolves to whether the change was stored. */
+  onSave: (voices: Voice[], defaultVoiceId: string, removed?: RemovedVoice) => Promise<boolean>;
   saving: boolean;
   inputStyle: React.CSSProperties;
 }) {
@@ -1429,7 +1730,11 @@ function VoicesEditor({
   const [newSpeed, setNewSpeed] = useState(1);
 
   function commitRow(index: number, patch: Partial<Voice>) {
-    onSave(voices.map((v, i) => (i === index ? withSpeed({ ...v, ...patch }) : v)), defaultVoiceId);
+    // A new voice id on the default voice moves the default with it, or the
+    // default would point at an id no longer in the roster and read as none.
+    const wasDefault = voices[index].voice_id === defaultVoiceId;
+    const nextDefault = wasDefault && patch.voice_id ? patch.voice_id : defaultVoiceId;
+    onSave(voices.map((v, i) => (i === index ? withSpeed({ ...v, ...patch }) : v)), nextDefault);
   }
 
   function removeRow(index: number) {
@@ -1437,17 +1742,22 @@ function VoicesEditor({
     onSave(
       voices.filter((_, i) => i !== index),
       defaultVoiceId === removedId ? "" : defaultVoiceId,
+      { voice: voices[index], index, wasDefault: defaultVoiceId === removedId },
     );
   }
 
   function addVoice() {
     if (!newName.trim() || !newId.trim() || voices.length >= MAX_VOICES) return;
-    onSave([...voices, withSpeed({ name: newName.trim(), voice_id: newId.trim(),
-                                   model_id: newModel, speed: newSpeed })],
-           defaultVoiceId);
-    setNewName("");
-    setNewId("");
-    setNewSpeed(1);
+    // The row empties only once the voice is stored: refused, what you typed
+    // (a long ElevenLabs id) is still there to correct.
+    void onSave([...voices, withSpeed({ name: newName.trim(), voice_id: newId.trim(),
+                                        model_id: newModel, speed: newSpeed })],
+                defaultVoiceId).then((ok) => {
+      if (!ok) return;
+      setNewName("");
+      setNewId("");
+      setNewSpeed(1);
+    });
   }
 
   return (
@@ -1523,8 +1833,8 @@ function VoicesEditor({
 // agent's model list against the real binary. This container has no agent
 // binary, so the model list is read-only here, and installing or uninstalling
 // an agent is host-side too. Only the default agent, the weight and which of
-// the agent's models is its default are editable, each saved immediately on its
-// own endpoint rather than through the tab Save machinery above.
+// the agent's models is its default are editable, each saved the moment it
+// changes on its own endpoint, PATCH /agents/<id>.
 
 // Keep in sync with the weight bounds PATCH /agents enforces (renderer/api/).
 const MAX_AGENT_WEIGHT = 100;
@@ -1547,17 +1857,43 @@ function AgentWeight({
   disabled,
   inputStyle,
   onSave,
+  onInvalid,
+  onSame,
 }: {
   agent: Agent;
   disabled: boolean;
   inputStyle: React.CSSProperties;
-  onSave: (n: number) => void;
+  /** Resolves once the save is over, whatever became of it. */
+  onSave: (n: number) => Promise<unknown>;
+  onInvalid: (message: string) => void;
+  /** Typed back to the stored weight: a refusal shown for it no longer applies. */
+  onSame: () => void;
 }) {
   const [local, setLocal] = useState(String(agent.weight));
-  useEffect(() => { setLocal(String(agent.weight)); }, [agent.weight]);
-  const n = Number(local);
-  const valid = /^\d+$/.test(local.trim()) && n <= MAX_AGENT_WEIGHT;
-  const changed = valid && n !== agent.weight;
+  // The weight on its way, so Enter then blur sends it once. Cleared when
+  // that save is over, so the same number can be sent again after a refusal.
+  const sent = useRef<number | null>(null);
+  useEffect(() => { setLocal(String(agent.weight)); sent.current = null; }, [agent.weight]);
+
+  // Saved on blur or Enter, like every number on this page. An out-of-range
+  // value stays in the box with the reason beside it, and is never sent.
+  function commit() {
+    const text = local.trim();
+    const n = Number(text);
+    if (!/^\d+$/.test(text) || n > MAX_AGENT_WEIGHT) {
+      onInvalid(`weight must be a whole number from 0 to ${MAX_AGENT_WEIGHT}`);
+      return;
+    }
+    if (n === agent.weight) {
+      sent.current = null;
+      onSame();
+      return;
+    }
+    if (n === sent.current) return;
+    sent.current = n;
+    void onSave(n).finally(() => { if (sent.current === n) sent.current = null; });
+  }
+
   return (
     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--ink-2)" }}>weight</span>
@@ -1569,22 +1905,10 @@ function AgentWeight({
         value={local}
         disabled={disabled}
         onChange={(e) => setLocal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
         style={{ ...inputStyle, width: 70 }}
       />
-      <button
-        data-testid={`agent-weight-save-${agent.id}`}
-        disabled={disabled || !changed}
-        onClick={() => onSave(n)}
-        style={{
-          fontFamily: "var(--mono)", fontSize: 11, padding: "4px 10px",
-          color: changed && !disabled ? "var(--amber)" : "var(--mute)",
-          background: "transparent",
-          border: `1px solid ${changed && !disabled ? "var(--amber)" : "var(--border)"}`,
-          cursor: changed && !disabled ? "pointer" : "not-allowed",
-        }}
-      >
-        Save
-      </button>
     </span>
   );
 }
@@ -1597,6 +1921,7 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
   const [loadError, setLoadError] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const statuses = useSaveStatus();
 
   async function load() {
     try {
@@ -1613,24 +1938,34 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
 
   useEffect(() => { load(); }, []);
 
-  async function mutate(id: string, init: RequestInit) {
+  /** `key` names the status and error line the outcome shows in: the row's
+   *  (the agent id), or the weight's own (`<id>:weight`), so a change to the
+   *  effort or model never wipes a refusal shown for the weight. */
+  async function mutate(id: string, init: RequestInit, key: string = id) {
     setBusy(id);
-    setErrors((e) => ({ ...e, [id]: "" }));
-    try {
-      const r = await apiFetch(`/agents/${id}`, init);
-      if (!r.ok) {
-        const detail = await errorDetail(r);
-        setErrors((e) => ({ ...e, [id]: detail }));
-        return;
+    setErrors((e) => ({ ...e, [key]: "" }));
+    // The row shows "Saving…" then "✓ Saved"; a refusal shows in its own
+    // red line under the row, as it always has.
+    await statuses.run(key, async () => {
+      try {
+        const r = await apiFetch(`/agents/${id}`, { ...init, signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) });
+        if (!r.ok) {
+          const detail = await errorDetail(r);
+          setErrors((e) => ({ ...e, [key]: detail }));
+          return detail;
+        }
+        // Reload rather than splice in the returned row: making one agent the
+        // default clears is_default on whichever agent held it before.
+        await load();
+        return null;
+      } catch (e) {
+        const detail = e instanceof Error ? e.message : "unreachable";
+        setErrors((prev) => ({ ...prev, [key]: detail }));
+        return detail;
+      } finally {
+        setBusy(null);
       }
-      // Reload rather than splice in the returned row: making one agent the
-      // default clears is_default on whichever agent held it before.
-      await load();
-    } catch (e) {
-      setErrors((prev) => ({ ...prev, [id]: e instanceof Error ? e.message : "unreachable" }));
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   function patch(
@@ -1642,7 +1977,7 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    });
+    }, "weight" in body ? `${id}:weight` : id);
   }
 
   const mono = { fontFamily: "var(--mono)" } as const;
@@ -1752,7 +2087,21 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
                     disabled={disabled}
                     inputStyle={inputStyle}
                     onSave={(n) => patch(a.id, { weight: n })}
+                    onInvalid={(message) => {
+                      // Counted as not saved on the page line; the reason
+                      // shows in the weight's own error line.
+                      statuses.fail(`${a.id}:weight`, message);
+                      setErrors((e) => ({ ...e, [`${a.id}:weight`]: message }));
+                    }}
+                    onSame={() => {
+                      if (statuses.get(`${a.id}:weight`)?.state !== "error") return;
+                      statuses.clear(`${a.id}:weight`);
+                      setErrors((e) => ({ ...e, [`${a.id}:weight`]: "" }));
+                    }}
                   />
+                  {statuses.get(`${a.id}:weight`)?.state !== "error" && (
+                    <SaveStatus status={statuses.get(`${a.id}:weight`)} testId={`status-agent-weight-${a.id}`} />
+                  )}
                   <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ ...mono, fontSize: 11, color: "var(--ink-2)" }}>default model</span>
                     {/* Controlled by models[0]: the API moves the pick to the
@@ -1784,9 +2133,19 @@ function AgentsPanel({ inputStyle }: { inputStyle: React.CSSProperties }) {
                   </span>
                 </div>
 
+                {statuses.get(a.id)?.state !== "error" && (
+                  <div style={{ marginTop: 8 }}>
+                    <SaveStatus status={statuses.get(a.id)} testId={`status-agent-${a.id}`} />
+                  </div>
+                )}
                 {errors[a.id] && (
-                  <div data-testid={`agent-error-${a.id}`} style={{ ...mono, fontSize: 10.5, color: "var(--red)", marginTop: 8 }}>
+                  <div data-testid={`agent-error-${a.id}`} role="alert" style={{ ...mono, fontSize: 10.5, color: "var(--red)", marginTop: 8 }}>
                     {errors[a.id]}
+                  </div>
+                )}
+                {errors[`${a.id}:weight`] && (
+                  <div data-testid={`agent-weight-error-${a.id}`} role="alert" style={{ ...mono, fontSize: 10.5, color: "var(--red)", marginTop: 8 }}>
+                    Weight not saved: {errors[`${a.id}:weight`]}
                   </div>
                 )}
               </div>

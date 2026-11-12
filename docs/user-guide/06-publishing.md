@@ -40,6 +40,7 @@ On the **Socials** page:
 2. Approve the connection. The flow ends on a postforme.dev page.
 3. Go back to the dashboard and press **Refresh accounts list**.
 4. Tick the account. A new account arrives unticked, and Tubematic posts only to ticked accounts.
+   The tick saves at once, and **✓ Saved** shows beside the account.
 
 If your browser blocks the new tab, the page shows a link to open instead. If the platform is not
 enabled in your postforme project, the page shows postforme's message saying so.

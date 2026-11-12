@@ -350,7 +350,8 @@ Run these checks through the method you set up, from a device other than the Tub
 2. Sign in. Over HTTPS, the browser's developer tools show the `tm_session` cookie with **Secure**
    ticked (in Chrome: Application → Cookies). Over Twingate's `http://` it is not ticked, which is
    expected.
-3. Save something. Change a value in Settings and press **SAVE**, or pause and resume the pipeline.
+3. Save something. Change a value in Settings and wait for **✓ Saved** beside it, or pause and
+   resume the pipeline.
    A `403 cross-site request refused` means something between the browser and the dashboard is
    rewriting the request.
 4. Play a video in the Library and drag the playhead. If seeking works, range requests get through.
