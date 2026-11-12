@@ -518,6 +518,8 @@ Covers `get_timeline`, the agent's read of `timeline.json`.
 - Each segment carries its beat and its role. A beat split over two segments owes its change once,
   where it starts, and the formula's `first_frame` comes back with the segments. A video whose
   formula is not known keeps its beat labels and has no role past the opening.
+- Each segment carries `insert`, the insert style the script marked it with (`""` for the main
+  style); a stored segment the read cannot use gets `""`.
 - An unknown video, a missing file, malformed JSON and a `video_id` shaped like a path are errors.
 
 ### `test_subtitles.py`
