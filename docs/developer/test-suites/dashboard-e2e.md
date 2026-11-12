@@ -165,8 +165,9 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
   agent's `choose_script_formula` and `update_video` write them.
 - A formula chosen in the window at `TOPIC_PROPOSED` is stored with the approval, from a picker
   that lists the real formulas with the experimental ones marked.
-- A voice speed picked at `SCRIPT_READY` is stored with **Approve Script**, and Details shows it
-  once the video is at `VOICE_READY`.
+- A voice speed picked at `SCRIPT_READY` is stored with **Approve Script**. The row shown after
+  voicing reads the speed `generate_voice` records, so the unit tests cover it: the stack runs no
+  agent to voice.
 - The Topic tab shows a topic's angle with the kind label the real `GET /angle-kinds` returns.
   **Edit** stores a new sentence and kind and clears the score. After the topic is approved the
   block has no Edit button and the API refuses the same write.
