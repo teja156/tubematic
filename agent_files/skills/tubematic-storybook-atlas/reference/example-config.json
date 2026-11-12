@@ -53,6 +53,12 @@
        "backdrop": "laboratory",
        "events": [
         {
+         "type": "guide",
+         "at": 0,
+         "x": 300,
+         "facing": "right"
+        },
+        {
          "type": "prop",
          "at": 101,
          "id": "cabinet",

@@ -55,6 +55,10 @@ _ALLOWS = ("figures", "line_art", "generated_characters")
 _NEEDS = ("openai_key", "gpu")
 _NEED_MESSAGES = {"openai_key": ("openai_key",), "gpu": ("gpu", "gpu_unknown")}
 _ROUTING = ("best_for", "avoid_for", "signals")
+# How a style shows the script's beats on screen (TMDEV-215): what frame 0 is,
+# what a turn or a re-opening looks like, what the payoff gets, how it ends.
+# The scene author reads it from get_video's style.picture.
+PICTURE_KEYS = ("opening", "turn", "payoff", "ending")
 
 # Auto's other outcome besides a pack: keep the mixed scene system, where the
 # agent draws each beat from any vocabulary and settles the canvas at scene
@@ -78,6 +82,21 @@ SCENES_ROUTING = {
     "moods": [],
     "images": 6,
     "images_per_video": "a few, only where a beat needs a picture",
+}
+
+
+# The picture duties of Auto's mixed scene system, which has no pack.
+SCENES_PICTURE = {
+    "opening": ("Scene 1 shows the subject of the first sentence from frame 0, already moving: a "
+                "diagram already building, a photograph already pushing in, a figure mid-action. "
+                "Never a title card, a blank or black frame, or an abstract gradient."),
+    "turn": ("A new scene starts on the first word of a turn or a re-opening, and its picture is "
+             "visibly different from the scene before (a new image, the diagram's next state, a new "
+             "place). Never merge that segment into the scene before it."),
+    "payoff": ("The payoff scene gets the video's strongest picture: the hero image, the largest "
+               "element, the diagram fully built."),
+    "ending": ("Hold on the payoff picture to the last frame. No closing card, logo, recap or "
+               "sign-off after it."),
 }
 
 
@@ -129,6 +148,10 @@ def _check_pack(path: pathlib.Path, data) -> dict:
     for key in ("review",):
         if key in data and not (isinstance(data[key], str) and data[key].strip()):
             fail(f"{key}, when present, must be a non-empty string")
+    picture = data.get("picture")
+    if not isinstance(picture, dict) or set(picture) != set(PICTURE_KEYS) \
+            or not all(isinstance(v, str) and v.strip() for v in picture.values()):
+        fail(f"picture must be an object with exactly the keys {PICTURE_KEYS}, each a non-empty string")
     if "captions" in data and not isinstance(data["captions"], dict):
         fail("captions, when present, must be an object (scene-config subtitles defaults)")
     routing = data.get("routing")
@@ -329,7 +352,8 @@ def public_list(openai_key_set: bool, gpu_status: str) -> list[dict]:
 
 def agent_view(visual_style: str) -> dict:
     """What the agent needs to know about one video's style, for get_video:
-    who authors it, what it may contain and which canvas it fixes. "auto"
+    who authors it, what it may contain, which canvas it fixes, and how it
+    shows the script's opening, turns, payoff and ending (picture). "auto"
     (or an unknown value) authors through the scene-config skill, which
     settles the renderer and the canvas itself."""
     p = pack(visual_style)
@@ -338,10 +362,11 @@ def agent_view(visual_style: str) -> dict:
         return {"id": chosen, "label": "Auto" if chosen == AUTO else chosen,
                 "renderer": None, "canvas": None,
                 "authoring_skill": "tubematic-scene-config",
-                "allows": {k: True for k in _ALLOWS}, "script": ""}
+                "allows": {k: True for k in _ALLOWS}, "script": "",
+                "picture": dict(SCENES_PICTURE)}
     return {"id": p["id"], "label": p["label"], "renderer": p["renderer"], "canvas": p["canvas"],
             "authoring_skill": p["authoring_skill"], "allows": dict(p["allows"]),
-            "script": p.get("script", "")}
+            "script": p.get("script", ""), "picture": dict(p["picture"])}
 
 
 # ── Auto's routing (TMDEV-203) ───────────────────────────────────────────────

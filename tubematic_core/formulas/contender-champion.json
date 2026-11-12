@@ -48,7 +48,8 @@
       "name": "Turn",
       "from": 35,
       "to": 40,
-      "job": "One line: that is still not the most."
+      "job": "One line: that is still not the most.",
+      "role": "turn"
     },
     {
       "name": "The champion's case",
@@ -60,7 +61,8 @@
       "name": "Final score",
       "from": 90,
       "to": 100,
-      "job": "The number, and that it is the most."
+      "job": "The number, and that it is the most.",
+      "role": "payoff"
     }
   ],
   "hooks": [
@@ -79,6 +81,7 @@
   ],
   "holds": "The contender's score gives the viewer a number to beat, and it stays in view while the champion's tally climbs past it.",
   "ending": "The final score. Nothing after it.",
+  "first_frame": "The question and the contender's empty counter or bar, which stays on screen while the champion's grows past it.",
   "pitfalls": [
     "Facts in date order with no contender",
     "Naming the champion before scoring the contender",

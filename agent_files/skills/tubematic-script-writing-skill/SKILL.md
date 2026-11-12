@@ -187,8 +187,9 @@ arranges beats; these rules decide whether the beats work.
    something that can be drawn in motion, or states two facts that cannot both be true. No
    greeting, no definition, no "in this video", no date followed by a life history, no tool name
    with nothing happening to it.
-2. **The title asks; the voice starts inside the answer.** Never read the publish title back. The
-   first sentence continues from where the title stops.
+2. **The title and the opening are a pair.** The publish title states the question or the stake;
+   the voice starts inside the answer, and the first sentence continues from where the title stops.
+   Neither repeats the other.
 3. **Name the subject early, hold the answer late.** By the end of the second sentence the viewer
    knows what this is about. What they do not have yet is the answer, the name or the number. One
    subject, one question.
@@ -214,8 +215,8 @@ arranges beats; these rules decide whether the beats work.
     The formula's Ending section says what the payoff is for its structure. The only sentence that
     may follow it is the closing line Step 1 describes.
 11. **Write sentences that can be drawn.** Concrete nouns. The first segment's picture is the
-    subject of its first sentence. Pointing words ("watch this", "here") only where the same
-    segment's `visual` brief shows the thing pointed at.
+    subject of its first sentence, as the formula's First frame section describes it. Pointing words
+    ("watch this", "here") only where the same segment's `visual` brief shows the thing pointed at.
 12. **Vary.** No fixed opener, no fixed closer, no sentence that would fit any topic. Two scripts
     in one domain should not open or close the same way.
 13. **Length follows the formula** (Step 3).
@@ -269,8 +270,10 @@ optional `beat` (full shape in Step 5). The mapping from the formula's beats to 
   diagrammatic, or both — Step 7). A beat needing both a photographic moment and a separate
   standalone diagram is two segments, since each segment's `visual` drives one downstream scene.
 - **A long beat splits** into several segments, one per visual idea (the steps of a mechanism, the
-  rungs of a ladder). Two short beats that share one picture (a re-ask, a turn sentence) may share
-  a segment; label it with the first.
+  rungs of a ladder). Two short beats that share one picture may share a segment, labelled with
+  the first, unless the second has an on-screen duty in the formula's Beats table (a turn, a
+  re-opening, the payoff): that beat starts a segment of its own, so the picture can change on its
+  first word.
 - A beat's share of the script applies to its segments combined.
 - Most scripts come to five to nine segments.
 
@@ -591,6 +594,18 @@ are part of the invented situation.
   permitted too: a stick figure *is* such a marker, so it is for generic roles only. The moment the
   subject has a name, the brief is photographic again.
 
+### The first segment, and the beats the picture marks
+
+The first segment's `visual` brief asks for the first frame: what the first sentence names, already
+moving, as the formula's **First frame** section describes it ("the failure happening: the wrong
+output coming out", never "a title over the logo"). The scene author opens on exactly that.
+
+A segment whose beat has an on-screen duty in the formula's Beats table (a turn, a re-opening, the
+payoff) is where the picture must change, and its brief names the change: what is new on screen at
+its first word ("cut to the same kitchen, now dark"), and for the payoff, the strongest picture of the
+video. Start such a beat on a segment of its own, so the change can land on its first word. The beat
+name you give the segment is what tells the scene author which is which.
+
 ### Do not ask for on-screen text
 
 **The finished video carries burned-in subtitles of the narration.** Every word of the `voice` is
@@ -642,8 +657,10 @@ weak pair is what they start from. `update_video` refuses a script without both.
   `title`, and need not match it.
 - **Description** — 2–3 sentences saying what the viewer will learn. On Instagram, TikTok and
   Facebook it is shown under the title as one caption, so it must read on its own.
-- **The title asks; the script answers.** The script's first sentence must not read the title
-  back (Step 4, rule 2). `update_video` returns a warning when it does.
+- **The title and the opening are a pair** (Step 4, rule 2). The title states the question or the
+  stake, and the script's first sentence continues from where it stops. Neither reads the other back:
+  not the sentence repeating the title, and not a title copying a short first sentence. `update_video`
+  returns a `title_repeat` warning for either.
 - No hashtags, no emoji, no markdown, and no pronunciation markup — this is read, not spoken.
 - A selected script profile does not change these rules; its voice may colour the wording.
 

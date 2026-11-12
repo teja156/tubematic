@@ -318,7 +318,9 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
     snaps = sorted(set(word_starts))
 
     def on_word(frame: int) -> bool:
-        return not snaps or any(abs(frame - w) <= SNAP_FRAMES for w in snaps)
+        # Frame 0 opens the video and comes before the first word: what the
+        # first frame shows (the bean posed, a prop) may start there.
+        return frame == 0 or not snaps or any(abs(frame - w) <= SNAP_FRAMES for w in snaps)
 
     # ── the whole video ──
     if "field" in data and data["field"] not in extra["fields"]:

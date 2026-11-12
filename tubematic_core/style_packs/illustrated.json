@@ -18,6 +18,12 @@
   "messages": {
     "openai_key": "OpenAI API key not set. The illustrated visual style needs it — Gemini has no transparency option, so there is no fallback. Add an OpenAI key on the dashboard Settings page, or choose another visual style."
   },
+  "picture": {
+    "opening": "Scene 1 shows the subject of the first sentence from frame 0, already moving: the generated character mid-pose or the image already pushing in. Never a title card, a blank frame or an abstract gradient.",
+    "turn": "A new scene starts on the first word of a turn or a re-opening, and its picture is visibly different from the scene before (a new image, the diagram's next state, a new place). Never merge that segment into the scene before it.",
+    "payoff": "The payoff scene gets the video's strongest picture: the hero image, the largest element, the diagram fully built.",
+    "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
+  },
   "routing": {
     "best_for": [
       "recurring characters the viewer must recognise across scenes"

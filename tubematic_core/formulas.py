@@ -4,9 +4,11 @@ A formula is a JSON file in `formulas/`, named for the formula's id. It says
 which topics it suits and which it does not, the visual styles whose picture
 it suits, how long the script runs, the beats in order with each beat's share
 of the script, the shapes its opening can take, what holds the viewer, how it
-ends, and a fill-in template. A formula is structure only: how a line sounds
-belongs to the script profile, and what a segment shows belongs to the visual
-style.
+ends, what its first frame shows, which beats are the turn, the re-openings
+and the payoff (each beat's optional role, which the scene author reads from
+get_timeline), and a fill-in template. A formula is structure only: how a line
+sounds belongs to the script profile, and what a segment shows belongs to the
+visual style.
 
 A video's formula is chosen once, before its script, from the candidates
 `routing_candidates` lists (get_video's formula_routing). The script-writing
@@ -76,11 +78,23 @@ ROTATION_WINDOW = 2
 EXPERIMENTAL_OFF = ("experimental formulas are off for Auto (the setting "
                     "auto_experimental_formulas)")
 
-_TEXT_KEYS = ("label", "line", "holds", "ending", "template")
+_TEXT_KEYS = ("label", "line", "holds", "ending", "first_frame", "template")
 _LIST_KEYS = ("best_for", "also_for", "avoid_for", "signals", "pitfalls")
 _KEYS = {"id", "order", "family", "experimental", "styles", "words", "beats", "hooks",
          *_TEXT_KEYS, *_LIST_KEYS}
 MIN_HOOK_SHAPES = 3
+
+# What a beat can be to the picture, beside its name. The scene author reads a
+# segment's role from get_timeline and puts a visible change on the first word
+# of a turn or a re-opening, and the video's strongest picture on the payoff.
+# A beat with no role carries no picture duty beyond its own brief.
+BEAT_ROLES = {
+    "turn": "the turn: a visible change on its first word",
+    "reopen": "a re-opening: a visible change on its first word",
+    "payoff": "the payoff: the video's strongest picture",
+}
+# The payoff is the answer the script holds back, so it sits in the second half.
+PAYOFF_FROM_MIN = 50
 
 
 class FormulaError(ValueError):
@@ -147,8 +161,11 @@ def _check_formula(path: pathlib.Path, data) -> dict:
         fail("beats must be a list of at least three beats")
     at = 0
     for i, beat in enumerate(beats):
-        if not isinstance(beat, dict) or set(beat) != {"name", "from", "to", "job"}:
-            fail(f"beats[{i}] must have exactly the keys name, from, to, job")
+        if not isinstance(beat, dict) or not ({"name", "from", "to", "job"} <= set(beat)
+                                               <= {"name", "from", "to", "job", "role"}):
+            fail(f"beats[{i}] must have the keys name, from, to, job and, optionally, role")
+        if "role" in beat and beat["role"] not in BEAT_ROLES:
+            fail(f"beats[{i}].role must be one of {sorted(BEAT_ROLES)}")
         if not all(isinstance(beat[k], str) and beat[k].strip() for k in ("name", "job")):
             fail(f"beats[{i}] name and job must be non-empty strings")
         one_line(beat["name"], f"beats[{i}].name")
@@ -165,6 +182,13 @@ def _check_formula(path: pathlib.Path, data) -> dict:
     names = [b["name"] for b in beats]
     if len(set(names)) != len(names):
         fail("two beats share a name")
+    roles = [b.get("role") for b in beats]
+    if roles.count("turn") > 1:
+        fail("at most one beat may be the turn")
+    if roles.count("payoff") != 1:
+        fail("exactly one beat must be the payoff")
+    if next(b for b in beats if b.get("role") == "payoff")["from"] < PAYOFF_FROM_MIN:
+        fail(f"the payoff beat must start at {PAYOFF_FROM_MIN} percent or later")
     hooks = data["hooks"]
     if not isinstance(hooks, list):
         fail("hooks must be a list")
@@ -223,6 +247,31 @@ def label(formula_id: str) -> str:
     return formula["label"] if formula else (formula_id or "")
 
 
+def beat_key(name) -> str:
+    """A beat name as it is compared: case and spacing do not matter, so a
+    segment labelled "the turn" still finds the formula's "The turn"."""
+    return " ".join(str(name or "").casefold().split())
+
+
+def beat_names(formula_id: str) -> tuple:
+    """A formula's beat names, in order; () for no formula or an unknown one."""
+    formula = FORMULAS.get(formula_id or "")
+    return tuple(b["name"] for b in formula["beats"]) if formula else ()
+
+
+def beat_roles(formula_id: str) -> dict:
+    """{beat name: role} for the beats of a formula that have one; {} for no
+    formula or an unknown one (a script written before formulas)."""
+    formula = FORMULAS.get(formula_id or "")
+    return {b["name"]: b["role"] for b in formula["beats"] if "role" in b} if formula else {}
+
+
+def first_frame(formula_id: str) -> str:
+    """What a formula's first frame shows; "" for no formula or an unknown one."""
+    formula = FORMULAS.get(formula_id or "")
+    return formula["first_frame"] if formula else ""
+
+
 def public_list() -> dict:
     """What GET /script-formulas serves: enough to label a video's record."""
     return {
@@ -278,9 +327,15 @@ def reference_markdown(formula: dict) -> str:
            "## Beats", "",
            "In this order. A share is the part of the script's words the beat covers; hold each "
            "within a few points.", "",
-           "| Beat | Share of the script | Its job |", "|---|---|---|"]
-    out += [f"| {b['name']} | {b['from']} to {b['to']}% | {b['job']} |" for b in formula["beats"]]
-    out += ["", "## Openings", "",
+           "| Beat | Share of the script | Its job | On screen |", "|---|---|---|---|"]
+    out += [f"| {b['name']} | {b['from']} to {b['to']}% | {b['job']} | "
+            f"{BEAT_ROLES[b['role']] if 'role' in b else '-'} |" for b in formula["beats"]]
+    out += ["", "A segment's `visual` brief for a beat with an on-screen duty names the change "
+            "it asks for. The scene author reads the same duty from the timeline.", "",
+            "## First frame", "",
+            f"{formula['first_frame']} Segment 1's `visual` brief asks for this picture, already "
+            "moving, and it is the subject of the first sentence.", "",
+            "## Openings", "",
             "Draft one opening from each of three shapes. The type goes in `hooks[].type`.", "",
             "| Type (`type`) | Shape |", "|---|---|"]
     out += [f"| {HOOK_TYPES[h['type']]} (`{h['type']}`) | {h['shape']} |" for h in formula["hooks"]]

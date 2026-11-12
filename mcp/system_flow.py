@@ -48,6 +48,7 @@ TIMING = {
     "targetWithin": 30,
     "labelTypeDelay": 6,
     "labelTypeFrames": 2,
+    "openWithin": 3,
 }
 TONES = ("structure", "relation", "ok", "fault")
 EVENT_TYPES = ("node", "edge", "packet", "focus", "chip", "fault")

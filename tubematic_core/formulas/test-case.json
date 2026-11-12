@@ -55,19 +55,22 @@
       "name": "Where the rules run out",
       "from": 45,
       "to": 80,
-      "job": "The part of the rules that does not settle the case at first, and the source that does."
+      "job": "The part of the rules that does not settle the case at first, and the source that does.",
+      "role": "turn"
     },
     {
       "name": "Precedent",
       "from": 80,
       "to": 92,
-      "job": "A known case the rules did settle."
+      "job": "A known case the rules did settle.",
+      "role": "reopen"
     },
     {
       "name": "The case answered",
       "from": 92,
       "to": 100,
-      "job": "The last sentence."
+      "job": "The last sentence.",
+      "role": "payoff"
     }
   ],
   "hooks": [
@@ -86,6 +89,7 @@
   ],
   "holds": "The case is on screen from the first second and is not answered until the last, so every rule is heard as evidence for or against it.",
   "ending": "The case's answer. Nothing after it.",
+  "first_frame": "The concrete case on screen from the first second, drawn so the same picture can come back for the answer.",
   "pitfalls": [
     "Answering the case early",
     "Rules listed with no case to test them on",

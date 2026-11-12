@@ -47,7 +47,8 @@
       "name": "The biggest claim",
       "from": 25,
       "to": 35,
-      "job": "In plain terms."
+      "job": "In plain terms.",
+      "role": "reopen"
     },
     {
       "name": "On the surface, yes",
@@ -59,13 +60,15 @@
       "name": "The catch",
       "from": 55,
       "to": 80,
-      "job": "One detail from a source that limits it."
+      "job": "One detail from a source that limits it.",
+      "role": "turn"
     },
     {
       "name": "The take",
       "from": 80,
       "to": 100,
-      "job": "Who gains, who loses, or the honest limits."
+      "job": "Who gains, who loses, or the honest limits.",
+      "role": "payoff"
     }
   ],
   "hooks": [
@@ -84,6 +87,7 @@
   ],
   "holds": "The event is in the first sentence, so nothing is spent on backstory. The viewer stays to learn whether the claim is true, and the catch re-opens it once the evidence seems to settle it.",
   "ending": "The take, or the honest limits of the news. No forecast stated as fact.",
+  "first_frame": "The named product, company or person from the first sentence, with the one number the news is about.",
   "pitfalls": [
     "Opening on the backstory",
     "Leaving the event after promising it",

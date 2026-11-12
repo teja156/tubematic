@@ -42,19 +42,22 @@
       "name": "Wrong suspect 1",
       "from": 15,
       "to": 25,
-      "job": "The obvious thing to blame."
+      "job": "The obvious thing to blame.",
+      "role": "reopen"
     },
     {
       "name": "Wrong suspect 2",
       "from": 25,
       "to": 32,
-      "job": "The next thing to blame. It happens there too."
+      "job": "The next thing to blame. It happens there too.",
+      "role": "reopen"
     },
     {
       "name": "Turn",
       "from": 32,
       "to": 38,
-      "job": "One short sentence: nothing is broken, the tool is answering a different question."
+      "job": "One short sentence: nothing is broken, the tool is answering a different question.",
+      "role": "turn"
     },
     {
       "name": "Mechanism",
@@ -66,7 +69,8 @@
       "name": "Root cause",
       "from": 78,
       "to": 93,
-      "job": "One sentence the viewer can repeat."
+      "job": "One sentence the viewer can repeat.",
+      "role": "payoff"
     },
     {
       "name": "Callback",
@@ -91,6 +95,7 @@
   ],
   "holds": "One question (why did it fail?) held until the root cause. Every beat is joined to the next by 'but' or 'so'. The two wrong suspects are the re-openings; the viewer's own objection, spoken aloud, can be a third.",
   "ending": "The callback to the title's phrase, or the general rule the case stands for. A one-line fix is allowed.",
+  "first_frame": "The failure happening: the exact input going in and the wrong output coming out, with the real values readable.",
   "pitfalls": [
     "Naming the mechanism in the first sentence",
     "A symptom the viewer cannot picture or reproduce",

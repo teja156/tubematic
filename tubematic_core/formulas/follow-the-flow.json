@@ -50,13 +50,15 @@
       "name": "Stages 2 to 4",
       "from": 28,
       "to": 80,
-      "job": "One or two sentences each. What it does first, its name second. One contrast or one corrected misconception on the way."
+      "job": "One or two sentences each. What it does first, its name second. One contrast or one corrected misconception on the way.",
+      "role": "reopen"
     },
     {
       "name": "Last stage",
       "from": 80,
       "to": 92,
-      "job": "The most vivid or most surprising stage, kept for last."
+      "job": "The most vivid or most surprising stage, kept for last.",
+      "role": "payoff"
     },
     {
       "name": "Callback",
@@ -81,6 +83,7 @@
   ],
   "holds": "The count or the path is the progress bar: the viewer always knows how far the end is. The pull is 'what happens next to me', so no extra question has to be made up. The biggest obstacle or the strangest stage goes last.",
   "ending": "The last stage's detail, or the callback to the action. Never a summary of the stages.",
+  "first_frame": "Contact already made: the viewer's action under way at its first moment, with the path or the count it starts visible.",
   "pitfalls": [
     "Ordering by textbook category",
     "Name, then definition, then example, repeated for every part",

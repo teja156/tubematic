@@ -12,16 +12,22 @@ Start on the moment of failure or its price. Rewind to an ordinary person making
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| Cold open | 0 to 8% | The fatal action said casually, or the price as a number. |
-| Rewind | 8 to 22% | A time stamp, the organisation in one line, and an unnamed person (by role) about to make the call. |
-| Alarm 1 and the wrong call | 22 to 40% | The first symptom and a reasonable wrong assumption. |
-| Alarm 2 | 40 to 60% | It gets worse. One sentence explains the one mechanism the story needs here. |
-| The act | 60 to 70% | The spoken re-opening: the fix they reached for, or the fatal action again, now understood. |
-| Cause | 70 to 85% | A chain of three steps. |
-| Before and after | 85 to 95% | The number pair: what it was, what it became. |
-| Kicker | 95 to 100% | One dry line. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| Cold open | 0 to 8% | The fatal action said casually, or the price as a number. | - |
+| Rewind | 8 to 22% | A time stamp, the organisation in one line, and an unnamed person (by role) about to make the call. | - |
+| Alarm 1 and the wrong call | 22 to 40% | The first symptom and a reasonable wrong assumption. | a re-opening: a visible change on its first word |
+| Alarm 2 | 40 to 60% | It gets worse. One sentence explains the one mechanism the story needs here. | a re-opening: a visible change on its first word |
+| The act | 60 to 70% | The spoken re-opening: the fix they reached for, or the fatal action again, now understood. | the turn: a visible change on its first word |
+| Cause | 70 to 85% | A chain of three steps. | - |
+| Before and after | 85 to 95% | The number pair: what it was, what it became. | the payoff: the video's strongest picture |
+| Kicker | 95 to 100% | One dry line. | - |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The fatal action in progress (the command being typed, the switch being thrown) or the cost as a number racing up and locking. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

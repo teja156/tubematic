@@ -27,6 +27,12 @@
     "uppercase": true
   },
   "script": "Every beat's `visual` is a **text** brief: the one string, number or quoted source on stage and what happens to it (`\"SUNSHINE flies into a HASH box and comes out as a hex digest\"`, `\"the keyspace 208,827,064,576 resolves out of noise\"`). The video is typography throughout, so a role (\"an attacker\", \"the server\") is never drawn: it is named in the narration while the stage shows the string it acts on.\n\nThe narration is a sober documentary voice over a mostly empty dark frame. Name the exact string, key, hash, number or date the viewer should watch, because it becomes the picture: \"the word SUNSHINE\", \"two hundred and eight billion\", \"in 1990\". Give each sentence one transformation (a word is hashed, letters are swapped, a number is counted) and give a number its own sentence when it is the punchline. When a claim needs a source, say where it comes from (\"a 2023 benchmark\"), because it becomes a bracket note with a citation. Never write a beat that needs a person, a place or a photograph: this style has none.",
+  "picture": {
+    "opening": "Beat 1 has the string or number the first sentence names already changing at frame 0: typing, resolving out of noise or flying into a box, over the ciphertext wall. Never an empty screen waiting for its first line.",
+    "turn": "A new beat on the first word of a turn or a re-opening (a collapse cut where the subject changes), or a push, a bracket or a wall change in the current beat at that moment.",
+    "payoff": "The answer as the largest thing on stage (size xl), with a push in and the one glow.",
+    "ending": "Hold the payoff beat to the last frame. No sign-off line and no clear at the end."
+  },
   "routing": {
     "best_for": [
       "cryptography, ciphers and codes",

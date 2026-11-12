@@ -12,15 +12,21 @@ Two true facts about a thing the viewer owns that cannot both be true. Give the 
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| Paradox | 0 to 7% | Two facts about the viewer's own object that seem incompatible, in one sentence. |
-| Question and one-line answer | 7 to 15% | Ask what it is really doing and answer in one line: not the thing the viewer assumed, this other thing. The what is given; the how is held back. |
-| Scene that will fail | 15 to 20% | One everyday scene with the viewer in it, which the mechanism will break later. |
-| Mechanism | 20 to 55% | Four to six steps, one concrete noun in each. One real number or name in the whole script. |
-| Turn | 55 to 65% | 'But': the scene from the third beat fails, and the mechanism is the reason. |
-| That is also why | 65 to 82% | Two more things the viewer has lived through that the same mechanism explains. |
-| Reframe | 82 to 100% | Turn the opening belief upside down in two sentences, then stop. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| Paradox | 0 to 7% | Two facts about the viewer's own object that seem incompatible, in one sentence. | - |
+| Question and one-line answer | 7 to 15% | Ask what it is really doing and answer in one line: not the thing the viewer assumed, this other thing. The what is given; the how is held back. | - |
+| Scene that will fail | 15 to 20% | One everyday scene with the viewer in it, which the mechanism will break later. | a re-opening: a visible change on its first word |
+| Mechanism | 20 to 55% | Four to six steps, one concrete noun in each. One real number or name in the whole script. | - |
+| Turn | 55 to 65% | 'But': the scene from the third beat fails, and the mechanism is the reason. | the turn: a visible change on its first word |
+| That is also why | 65 to 82% | Two more things the viewer has lived through that the same mechanism explains. | a re-opening: a visible change on its first word |
+| Reframe | 82 to 100% | Turn the opening belief upside down in two sentences, then stop. | the payoff: the video's strongest picture |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The paradox drawn literally, both facts on screen at once: the thing that works where it should not, beside the thing that fails where it should work. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

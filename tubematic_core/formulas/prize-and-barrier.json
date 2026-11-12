@@ -43,13 +43,15 @@
       "name": "However",
       "from": 16,
       "to": 20,
-      "job": "One line: getting it is not easy."
+      "job": "One line: getting it is not easy.",
+      "role": "turn"
     },
     {
       "name": "The lucky exception",
       "from": 20,
       "to": 40,
-      "job": "Where it already works, and why there. End on the tease as one image."
+      "job": "Where it already works, and why there. End on the tease as one image.",
+      "role": "reopen"
     },
     {
       "name": "The more, the better",
@@ -61,7 +63,8 @@
       "name": "The barrier",
       "from": 70,
       "to": 90,
-      "job": "The cost or the limit that grows with it, as a number."
+      "job": "The cost or the limit that grows with it, as a number.",
+      "role": "payoff"
     },
     {
       "name": "Who is trying",
@@ -86,6 +89,7 @@
   ],
   "holds": "The prize stays in view while the barrier is held back, so the viewer keeps asking why not. The exception shows it is possible, which makes the barrier a real answer when it comes.",
   "ending": "Who is trying to change it, or what would have to change. No promise about when.",
+  "first_frame": "The prize as one big number, set against a scale the viewer knows.",
   "pitfalls": [
     "Opening on the cost or the difficulty",
     "Reasons joined by 'also' with no single barrier",

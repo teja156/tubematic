@@ -65,7 +65,7 @@
         {
          "type": "node",
          "node": "browser",
-         "at": 16
+         "at": 0
         },
         {
          "type": "edge",

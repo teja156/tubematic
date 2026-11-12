@@ -176,7 +176,14 @@ const SceneWithFades: React.FC<{
 
   const opacity = Math.min(fadeInOpacity, fadeOutOpacity);
 
-  return <AbsoluteFill style={{ opacity }}>{children}</AbsoluteFill>;
+  // data-tm-layer marks the scene layer apart from the captions, watermark and
+  // mascot drawn over it, so the text-layout audit can measure what the scene
+  // itself shows on its first frame. An attribute changes nothing on screen.
+  return (
+    <AbsoluteFill style={{ opacity }} data-tm-layer="scene">
+      {children}
+    </AbsoluteFill>
+  );
 };
 
 // ── Generated scene registry / lazy loader ─────────────────────────────────

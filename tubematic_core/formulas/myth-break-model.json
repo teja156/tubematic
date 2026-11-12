@@ -43,7 +43,8 @@
       "name": "The break",
       "from": 8,
       "to": 12,
-      "job": "One line: that is wrong, or that stopped being true."
+      "job": "One line: that is wrong, or that stopped being true.",
+      "role": "turn"
     },
     {
       "name": "Case A",
@@ -55,19 +56,22 @@
       "name": "Case B",
       "from": 35,
       "to": 60,
-      "job": "Where it fails. One real named source, study or number."
+      "job": "Where it fails. One real named source, study or number.",
+      "role": "reopen"
     },
     {
       "name": "Tie to the viewer",
       "from": 60,
       "to": 75,
-      "job": "The thing the viewer is doing right now is case B. Or the viewer's objection, spoken."
+      "job": "The thing the viewer is doing right now is case B. Or the viewer's objection, spoken.",
+      "role": "reopen"
     },
     {
       "name": "The precise truth",
       "from": 75,
       "to": 90,
-      "job": "One sentence."
+      "job": "One sentence.",
+      "role": "payoff"
     },
     {
       "name": "Second sting or action",
@@ -92,6 +96,7 @@
   ],
   "holds": "The belief is the viewer's own, so the answer has to overturn something they hold. A pair of contrasting cases carries the middle. The viewer's objection, spoken at about three fifths, re-opens the question.",
   "ending": "The precise statement, then a second sting or one concrete action. No moral.",
+  "first_frame": "The belief as the viewer remembers it, drawn the familiar way, so it can be struck out on the word that breaks it.",
   "pitfalls": [
     "Confirming the myth at length before breaking it",
     "A hedge where the verdict belongs",

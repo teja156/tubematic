@@ -12,12 +12,18 @@ The stake first, then the question and the count, then three items with one conc
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| Stake | 0 to 20% | The pain or the figure that makes the list necessary. |
-| Question and count | 20 to 28% | How to reverse it, and how many things there are. Say the last one is the odd one. |
-| Items | 28 to 90% | One vivid name and one concrete tool or number each, the least expected last. |
-| The odd one, explained | 90 to 100% | Why the last item holds. Stop there. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| Stake | 0 to 20% | The pain or the figure that makes the list necessary. | - |
+| Question and count | 20 to 28% | How to reverse it, and how many things there are. Say the last one is the odd one. | a re-opening: a visible change on its first word |
+| Items | 28 to 90% | One vivid name and one concrete tool or number each, the least expected last. | - |
+| The odd one, explained | 90 to 100% | Why the last item holds. Stop there. | the payoff: the video's strongest picture |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The stake as a picture or a number, beside a numbered row whose last slot is a question mark. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

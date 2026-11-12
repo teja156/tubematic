@@ -12,13 +12,19 @@ One question tied to something the viewer does, then the parts in the order thin
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| The action | 0 to 8% | The viewer does the thing, and the first step is already moving. |
-| Stage 1 | 8 to 28% | The first part, in the order the system itself works, with a count if there is one. |
-| Stages 2 to 4 | 28 to 80% | One or two sentences each. What it does first, its name second. One contrast or one corrected misconception on the way. |
-| Last stage | 80 to 92% | The most vivid or most surprising stage, kept for last. |
-| Callback | 92 to 100% | Back to the action the script opened on, in one clause. Then stop. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| The action | 0 to 8% | The viewer does the thing, and the first step is already moving. | - |
+| Stage 1 | 8 to 28% | The first part, in the order the system itself works, with a count if there is one. | - |
+| Stages 2 to 4 | 28 to 80% | One or two sentences each. What it does first, its name second. One contrast or one corrected misconception on the way. | a re-opening: a visible change on its first word |
+| Last stage | 80 to 92% | The most vivid or most surprising stage, kept for last. | the payoff: the video's strongest picture |
+| Callback | 92 to 100% | Back to the action the script opened on, in one clause. Then stop. | - |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+Contact already made: the viewer's action under way at its first moment, with the path or the count it starts visible. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

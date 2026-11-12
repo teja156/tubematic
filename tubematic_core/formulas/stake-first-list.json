@@ -43,7 +43,8 @@
       "name": "Question and count",
       "from": 20,
       "to": 28,
-      "job": "How to reverse it, and how many things there are. Say the last one is the odd one."
+      "job": "How to reverse it, and how many things there are. Say the last one is the odd one.",
+      "role": "reopen"
     },
     {
       "name": "Items",
@@ -55,7 +56,8 @@
       "name": "The odd one, explained",
       "from": 90,
       "to": 100,
-      "job": "Why the last item holds. Stop there."
+      "job": "Why the last item holds. Stop there.",
+      "role": "payoff"
     }
   ],
   "hooks": [
@@ -74,6 +76,7 @@
   ],
   "holds": "The stake makes the list worth sitting through, the count tells the viewer how far along they are, and the promise about the last item holds them to the end.",
   "ending": "The last item and why it holds, then stop.",
+  "first_frame": "The stake as a picture or a number, beside a numbered row whose last slot is a question mark.",
   "pitfalls": [
     "The bare list label as the opening",
     "Items of equal weight with nothing saved for last",

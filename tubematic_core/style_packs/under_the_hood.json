@@ -31,6 +31,12 @@
     "maxWords": 4
   },
   "script": "Every beat's `visual` is a **close-up** brief: which part of the physical object is in the photograph, and what is drawn on it (\"macro of the screen's edge, label GLASS and ELECTRODES, gold field arcs bend up toward the fingertip\"). The video is one real object taken apart by the camera, so every beat shows a part of that object, a number about it, or a chart of a value changing over time; a role (\"the user\") is the narrator talking to you, never a figure on screen.\n\nThe narration walks into one physical thing: start from the object the viewer holds or knows, then go one layer deeper per sentence (the glass, the grid under it, the charge in the grid), naming each part the moment it is shown, because each name becomes a label pinned to it. Quote the real numbers (a voltage, a size in micrometres, a price, a percentage) and say them as numerals, because each becomes a ticking counter or a big stat. When a value changed over time, say the start and the end (\"from 2 dollars to 9 in a year\"), which becomes a chart. Plan at most twelve photographs for the whole video: a new photograph when the camera goes a layer deeper, not one per sentence. Do not write beats about people, places or history that has nothing physical to show; this style has only the object and the presenter.",
+  "picture": {
+    "opening": "Plate 1 is the photograph of the part the first sentence names, pushing in from frame 0, with an outline or arcs drawing on it.",
+    "turn": "A new plate on the first word of a turn or a re-opening (a zoom through the part where it goes inside), or an outline, arcs or a stat arriving at that moment.",
+    "payoff": "The plate with the answer, its stat or chart the largest element on it.",
+    "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
+  },
   "routing": {
     "best_for": [
       "how a physical device or one of its parts really works inside (a touchscreen, a keyboard switch, a battery, a lock, an SSD, a fridge)",
