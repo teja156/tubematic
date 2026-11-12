@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-10T05:22:03Z",
+  "generated_at": "2026-11-12T06:20:42Z",
   "models": {
     "gemini/gemini-2.5-flash": {
       "rates": {
@@ -88,10 +88,10 @@
     },
     "openai/gpt-5.6-sol": {
       "rates": {
-        "cache_read": 4e-07,
-        "cache_write": 5e-06,
-        "input": 4e-06,
-        "output": 2e-05
+        "cache_read": 4.4e-07,
+        "cache_write": 5.5e-06,
+        "input": 4.4e-06,
+        "output": 2.2e-05
       },
       "source": "openrouter",
       "tiered": true
