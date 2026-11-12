@@ -267,6 +267,15 @@ If you go back to 2.1.x later:
   and video counts, its status and the pause button. **Edit defaults** opens the visual style,
   mascot, voice, script profile and topic cap under the row. Before, those pickers sat on the row
   itself.
+- Every setting on the dashboard saves as you change it. Before, most **Settings** tabs kept your
+  changes until you pressed a **SAVE** button at the bottom of the tab, and leaving the page threw
+  them away without asking, while other pages saved at once. Now a switch or a list saves on
+  click and a number or text field when you press Enter or click elsewhere, with **Saving…** and
+  **✓ Saved** beside it, or the reason a value was not saved. A line at the top of **Settings**
+  says whether every change is saved. Turning **Publishing** on now asks you to confirm.
+  Removing a voice, a mining source or a price you entered offers **Undo** for a few seconds. On
+  the **Topics** page a change that is refused shows on the domain's row instead of in a browser
+  alert, and the **Socials** page shows beside each account that its tick was saved.
 - Research files a topic only when it has an angle and scores 5 or more twice: for how well the
   pipeline can show it, and for how strong its angle is. Before, only the first score counted. A
   research run can therefore file fewer topics than its limit. The agent ends each run with a

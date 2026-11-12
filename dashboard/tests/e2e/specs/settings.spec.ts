@@ -2,10 +2,10 @@ import { test, expect } from "@playwright/test";
 import { API_AUTH, BASE, createProject, getSettings, previewVoice, setSettings } from "../fixtures/seed";
 
 
-// ── Tab + Save helpers ──────────────────────────────────────────────────────
-// Settings are grouped into tabs and committed by an explicit Save button, so
-// a test opens the relevant tab, edits, then saves. Pause/resume and voice
-// preview are actions rather than settings and still apply immediately.
+// ── Tab + save helpers ──────────────────────────────────────────────────────
+// Settings are grouped into tabs and every change saves itself (TMDEV-218):
+// numbers and text on blur or Enter, switches and pickers on change. A test
+// opens the relevant tab, edits, then waits for the save to land.
 
 const TAB_OF: Record<string, string> = {
   "toggle-gemini-review": "ai-review",
@@ -28,9 +28,11 @@ async function gotoTab(page: import("@playwright/test").Page, tab: string) {
   await page.getByTestId(`tab-${tab}`).click();
 }
 
-async function save(page: import("@playwright/test").Page, tab: string) {
-  await page.getByTestId(`save-${tab}`).click();
-  await expect(page.getByTestId("toast-success")).toBeVisible({ timeout: 5_000 });
+/** Waits until the change just made is saved: a "✓ Saved" beside it, and the
+ *  page's line back at "All changes saved". */
+async function settled(page: import("@playwright/test").Page) {
+  await expect(page.getByText("✓ Saved").first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId("saves-summary")).toHaveText(/All changes saved/);
 }
 
 test.describe("Settings page", () => {
@@ -65,7 +67,7 @@ test.describe("Settings page", () => {
 
     await page.getByTestId("select-ai-review-model").selectOption("gemini-3.6-flash");
 
-    await save(page, "ai-review");
+    await settled(page);
     expect((await getSettings()).ai_review_model).toBe("gemini-3.6-flash");
   });
 
@@ -77,7 +79,7 @@ test.describe("Settings page", () => {
     await input.fill("20");
     await input.press("Enter");
 
-    await save(page, "ai-review");
+    await settled(page);
     expect((await getSettings()).ai_review_fps).toBe(20);
   });
 
@@ -115,7 +117,7 @@ test.describe("Settings page", () => {
     await input.press("Enter");
 
     // Verify via API that it was saved
-    await save(page, "rendering");
+    await settled(page);
     const settings = await getSettings();
     expect(settings.max_render_retries).toBe(4);
   });
@@ -128,7 +130,7 @@ test.describe("Settings page", () => {
     await input.fill("45");
     await input.press("Enter");
 
-    await save(page, "rendering");
+    await settled(page);
     const settings = await getSettings();
     expect(settings.render_timeout_secs).toBe(2700);
   });
@@ -173,7 +175,7 @@ test.describe("Settings page", () => {
     await timeout.fill("30");
     await timeout.press("Enter");
 
-    await save(page, "scheduling");
+    await settled(page);
     const settings = await getSettings();
     expect(settings.max_concurrent_agent_sessions).toBe(1);
     expect(settings.agent_session_timeout_secs).toBe(1800);
@@ -190,7 +192,7 @@ test.describe("Settings page", () => {
     await input.fill("3");
     await input.press("Enter");
 
-    await save(page, "research");
+    await settled(page);
     const settings = await getSettings();
     expect(settings.max_research_runs_per_day).toBe(3);
   });
@@ -216,12 +218,10 @@ test.describe("Settings page", () => {
 
     await gotoTab(page, "research");
 
-    // The checkbox stages the change; the POST happens on Save.
-    await page.getByTestId("trending-source-checkbox-lobsters").locator("input").click();
-
+    // The checkbox saves on its own: the click is the POST.
     const [request] = await Promise.all([
       page.waitForRequest((req) => req.url().includes("/settings") && req.method() === "POST"),
-      page.getByTestId("save-research").click(),
+      page.getByTestId("trending-source-checkbox-lobsters").locator("input").click(),
     ]);
 
     const body = request.postDataJSON();
@@ -250,7 +250,7 @@ test.describe("Settings page", () => {
     await expect(page.getByTestId("voice-model-1")).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId("voice-model-1").selectOption("eleven_v3");
-    await save(page, "voice");
+    await settled(page);
 
     const settings = await getSettings();
     expect(settings.elevenlabs_voices).toEqual([
@@ -274,7 +274,7 @@ test.describe("Settings page", () => {
       await expect(page.getByTestId("voice-speed-1")).toBeDisabled();
 
       await page.getByTestId("voice-speed-0").selectOption("1.15");
-      await save(page, "voice");
+      await settled(page);
       expect((await getSettings()).elevenlabs_voices).toEqual([
         { name: "Narrator", voice_id: "voice-abc123", model_id: "eleven_multilingual_v2", speed: 1.15 },
         { name: "Teja", voice_id: "voice-t1", model_id: "eleven_v4" },
@@ -302,7 +302,7 @@ test.describe("Settings page", () => {
     await expect(model.locator("option")).toHaveText(["gpt-image-2.5-flare", "gpt-image-2.5-sunburst"]);
 
     await model.selectOption("gpt-image-2.5-sunburst");
-    await save(page, "images");
+    await settled(page);
     expect((await getSettings()).image_model).toBe("gpt-image-2.5-sunburst");
   });
 
@@ -312,7 +312,7 @@ test.describe("Settings page", () => {
     await expect(page.getByTestId("select-character-model")).toHaveValue("gpt-image-2.5-flare");
 
     await page.getByTestId("select-character-model").selectOption("gpt-image-2.5-sunburst");
-    await save(page, "images");
+    await settled(page);
 
     expect((await getSettings()).character_model).toBe("gpt-image-2.5-sunburst");
   });
@@ -332,7 +332,7 @@ test.describe("Settings page", () => {
       await page.getByTestId("voice-add-id").fill("voice-abc123");
       await page.getByTestId("voice-add").click();
 
-      await save(page, "voice");
+      await settled(page);
       const settings = await getSettings();
       expect(settings.elevenlabs_voices).toEqual([{ name: "Narrator", voice_id: "voice-abc123", model_id: "eleven_multilingual_v2" }]);
     });
@@ -347,7 +347,7 @@ test.describe("Settings page", () => {
       await page.getByTestId("voice-name-0").fill("Main Narrator");
       await page.getByTestId("voice-name-0").blur();
 
-      await save(page, "voice");
+      await settled(page);
       const settings = await getSettings();
       expect(settings.elevenlabs_voices).toEqual([{ name: "Main Narrator", voice_id: "voice-abc123", model_id: "eleven_multilingual_v2" }]);
     });
@@ -365,7 +365,7 @@ test.describe("Settings page", () => {
 
       await page.getByTestId("voice-default-1").locator("input").click();
 
-      await save(page, "voice");
+      await settled(page);
       const settings = await getSettings();
       expect(settings.elevenlabs_voice_id).toBe("voice-def456");
     });
@@ -380,7 +380,7 @@ test.describe("Settings page", () => {
 
       await page.getByTestId("voice-remove-0").click();
 
-      await save(page, "voice");
+      await settled(page);
       const settings = await getSettings();
       expect(settings.elevenlabs_voices).toEqual([]);
       expect(settings.elevenlabs_voice_id).toBe("");
@@ -427,19 +427,45 @@ test.describe("Settings page", () => {
       expect(body.error).toContain("not in elevenlabs_voices");
     });
   });
-  test("an edit is not persisted until Save is clicked", async ({ page }) => {
+  test("an edit saves itself with no Save button, and survives a reload", async ({ page }) => {
     await gotoTab(page, "rendering");
+    await expect(page.getByTestId("save-rendering")).toHaveCount(0);
     const input = page.getByTestId("input-max-render-retries");
     await input.fill("6");
     await input.press("Enter");
-
-    // Staged only — the API still holds the old value.
-    await page.waitForTimeout(500);
-    expect((await getSettings()).max_render_retries).toBe(1);
-    await expect(page.getByTestId("tab-dirty-rendering")).toBeVisible();
-
-    await save(page, "rendering");
+    await expect(page.getByTestId("status-input-max-render-retries")).toHaveText("✓ Saved");
     expect((await getSettings()).max_render_retries).toBe(6);
+
+    await page.reload();
+    await page.getByTestId("tab-rendering").click();
+    await expect(page.getByTestId("input-max-render-retries")).toHaveValue("6");
+  });
+
+  test("a value out of range is not saved, and says why beside the field", async ({ page }) => {
+    await gotoTab(page, "rendering");
+    const input = page.getByTestId("input-max-render-retries");
+    await input.fill("99");
+    await input.press("Enter");
+    await expect(page.getByTestId("status-input-max-render-retries"))
+      .toHaveText("Not saved: must be a whole number from 0 to 10");
+    await expect(page.getByTestId("saves-summary")).toHaveText(/1 change not saved/);
+    expect((await getSettings()).max_render_retries).toBe(1);
+  });
+
+  test("turning publishing on asks first; Cancel leaves it off", async ({ page }) => {
+    await setSettings({ publishing_enabled: false });
+    await gotoTab(page, "publishing");
+    await page.getByTestId("toggle-publishing").click();
+    await expect(page.getByTestId("publishing-confirm")).toBeVisible();
+    await page.getByTestId("publishing-confirm-cancel").click();
+    await expect(page.getByTestId("toggle-publishing")).toHaveText("OFF");
+    expect((await getSettings()).publishing_enabled).toBe(false);
+
+    await page.getByTestId("toggle-publishing").click();
+    await page.getByTestId("publishing-confirm-ok").click();
+    await settled(page);
+    expect((await getSettings()).publishing_enabled).toBe(true);
+    await setSettings({ publishing_enabled: false });
   });
 
   test("every settings tab stays on screen at a narrower desktop width", async ({ page }) => {
@@ -468,21 +494,27 @@ test.describe("Settings page", () => {
     await expect(page.getByTestId("auto-pilot-disclaimer")).toContainText("no human review");
     await expect(page.getByTestId("toggle-auto-pilot")).toHaveText("OFF");
 
+    // Selecting a project while Auto Pilot is off approves nothing: it saves at once.
     await page.getByTestId(`auto-pilot-project-toggle-${id}`).check();
+    await expect(page.getByTestId(`auto-pilot-status-project-${id}`)).toHaveText("✓ Saved");
     await page.getByTestId("toggle-auto-pilot").click();
-    await page.getByTestId("select-auto-pilot-gap-unit").selectOption("minutes");
-    await page.getByTestId("input-auto-pilot-gap").fill("90");
-    await page.getByTestId("input-auto-pilot-gap").blur();
-    await page.getByTestId("input-auto-pilot-max-in-flight").fill("3");
-    await page.getByTestId("save-auto-pilot").click();
 
-    // Nothing is saved until the dialog is confirmed.
+    // Turning it on is not saved until the dialog is confirmed.
     await expect(page.getByTestId("auto-pilot-confirm")).toBeVisible();
     await expect(page.getByTestId("auto-pilot-confirm-disclaimer")).toContainText("posts publicly");
     expect((await getSettings()).auto_pilot_enabled).toBe(false);
 
     await page.getByTestId("auto-pilot-confirm-ok").click();
-    await expect(page.getByTestId("auto-pilot-status")).toHaveText("Saved.");
+    await expect(page.getByTestId("auto-pilot-status-enabled")).toHaveText("✓ Saved");
+    // Switching the unit only changes how the gap reads; the number then saves.
+    await page.getByTestId("select-auto-pilot-gap-unit").selectOption("minutes");
+    await expect(page.getByTestId("input-auto-pilot-gap")).toHaveValue("240");
+    await page.getByTestId("input-auto-pilot-gap").fill("90");
+    await page.getByTestId("input-auto-pilot-gap").press("Enter");
+    await expect(page.getByTestId("auto-pilot-status-gap")).toHaveText("✓ Saved");
+    await page.getByTestId("input-auto-pilot-max-in-flight").fill("3");
+    await page.getByTestId("input-auto-pilot-max-in-flight").press("Enter");
+    await expect(page.getByTestId("auto-pilot-status-max-in-flight")).toHaveText("✓ Saved");
     const saved = await (await request.get(`${BASE}/autopilot`, { headers: API_AUTH })).json();
     expect(saved.enabled).toBe(true);
     expect(saved.gap_mins).toBe(90);
@@ -507,7 +539,8 @@ test.describe("Settings page", () => {
     await box.fill("Topics: favour Linux internals.\nScripts: calm tone.");
     await expect(page.getByTestId("user-preferences-count")).toHaveText("51 / 6000");
 
-    await save(page, "preferences");
+    // Saved a second after typing stops.
+    await settled(page);
     expect((await getSettings()).user_preferences)
       .toBe("Topics: favour Linux internals.\nScripts: calm tone.");
 

@@ -115,7 +115,7 @@ export function MiningSources({ urls, saving, error, onChange }: MiningSourcesPr
       )}
 
       {error && (
-        <div style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--red)", letterSpacing: "0.08em", marginBottom: 12 }}>
+        <div role="alert" style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--red)", letterSpacing: "0.08em", marginBottom: 12 }}>
           ✕ {error}
         </div>
       )}

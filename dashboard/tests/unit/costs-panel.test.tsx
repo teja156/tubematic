@@ -2,8 +2,8 @@
  * Settings → Costs (TMDEV-107). Guards that each model shows where its rate
  * came from, that the last successful sync time and a failed sync are both
  * visible, that Sync now posts to the sync route, that an unpriced model can be
- * given a price — typed per million tokens and sent per token — and that only
- * a manual rate offers Reset.
+ * given a price — typed per million tokens and sent per token — that only
+ * a manual rate offers Reset, and that a reset can be undone (TMDEV-218).
  */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -39,6 +39,8 @@ function stub() {
     if (url.endsWith("/prices/sync"))
       return Promise.resolve({ ok: true, json: async () => ({ ok: true, updated: ["x"],
                                                               rejected: [] }) });
+    if (url.includes("/prices/override") && init?.method === "DELETE")
+      return Promise.resolve({ ok: true, json: async () => ({ ok: true }) });
     if (url.endsWith("/prices/override") && init?.method === "POST")
       return Promise.resolve({ ok: true, json: async () => ({ ok: true, repriced: 4 }) });
     return Promise.resolve({ ok: true, json: async () => TABLE });
@@ -87,6 +89,7 @@ describe("CostsPanel", () => {
     render(<CostsPanel inputStyle={{}} />);
     fireEvent.click(await screen.findByTestId("costs-add-gemini-9-flash"));
     fireEvent.change(screen.getByTestId("price-input-input"), { target: { value: "0.5" } });
+    expect(screen.getByTestId("price-save")).toHaveTextContent("Set price");
     fireEvent.click(screen.getByTestId("price-save"));
     await waitFor(() => expect(fn).toHaveBeenCalledWith("/api/proxy/prices/override",
                                                         expect.objectContaining({ method: "POST" })));
@@ -102,5 +105,38 @@ describe("CostsPanel", () => {
     await screen.findByTestId("price-row-gpt-5.6-sol");
     expect(screen.getByTestId("price-reset-gpt-5.6-sol")).toBeInTheDocument();
     expect(screen.queryByTestId("price-reset-gemini-2.5-flash")).toBeNull();
+  });
+
+  it("resets a manual price at once and offers an Undo that sets the same rates again", async () => {
+    const fn = stub();
+    // After the reset the table lists the model's synced price again.
+    const base = fn.getMockImplementation()!;
+    let reset = false;
+    fn.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/prices/override") && init?.method === "DELETE") reset = true;
+      if (url.endsWith("/prices") && reset) {
+        return Promise.resolve({ ok: true, json: async () => ({ ...TABLE, models: TABLE.models.map((m) =>
+          m.model === "gpt-5.6-sol" ? { ...m, source: "openrouter" } : m) }) });
+      }
+      return base(url, init);
+    });
+    const notify = vi.fn();
+    render(<CostsPanel inputStyle={{}} notify={notify} />);
+    fireEvent.click(await screen.findByTestId("price-reset-gpt-5.6-sol"));
+    await waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
+    expect(fn).toHaveBeenCalledWith(
+      "/api/proxy/prices/override?service=openai&model=gpt-5.6-sol",
+      expect.objectContaining({ method: "DELETE" }));
+    const [message, action] = notify.mock.calls[0];
+    expect(message).toBe("Reset the manual price of gpt-5.6-sol.");
+    expect(action.label).toBe("Undo");
+
+    action.onClick();
+    await waitFor(() => expect(fn).toHaveBeenCalledWith("/api/proxy/prices/override",
+                                                        expect.objectContaining({ method: "POST" })));
+    const call = fn.mock.calls.find(([u, i]) => String(u).endsWith("/prices/override") &&
+                                                 (i as RequestInit)?.method === "POST");
+    expect(JSON.parse(String((call![1] as RequestInit).body)))
+      .toEqual({ service: "openai", model: "gpt-5.6-sol", rates: { input: 2e-6 } });
   });
 });

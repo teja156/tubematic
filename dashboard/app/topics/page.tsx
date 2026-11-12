@@ -14,6 +14,9 @@ import { codePoints } from "@/lib/utils";
 import { SectionLabel } from "@/components/SectionLabel";
 import { MiningSources } from "@/components/MiningSources";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
+import { SaveStatus } from "@/components/SaveStatus";
+import { ToastStack, useToasts } from "@/components/Toast";
+import { responseError, useSaveStatus, useSerialQueue, type SaveState } from "@/lib/saveStatus";
 import { formulaOptions, type ScriptFormulaNames } from "@/lib/scriptFormulas";
 import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 
@@ -158,9 +161,11 @@ const MAX_TOPIC_CAP = 750;
 const MAX_DOMAIN_DESCRIPTION_CHARS = 2000;
 
 // Commits on blur or Enter, like Settings' number fields, so typing "300" is
-// one save rather than three. An entry outside the bounds reverts.
-function DomainCapInput({ testId, value, onCommit }: {
+// one save rather than three. An entry outside the bounds is kept, with the
+// reason on the domain's line, so it can be corrected.
+function DomainCapInput({ testId, value, onCommit, onInvalid }: {
   testId: string; value: number; onCommit: (next: number) => Promise<boolean>;
+  onInvalid: (message: string) => void;
 }) {
   const [local, setLocal] = useState(String(value));
   useEffect(() => { setLocal(String(value)); }, [value]);
@@ -173,7 +178,7 @@ function DomainCapInput({ testId, value, onCommit }: {
       const revert = () => setLocal(String(value));
       if (n !== value) onCommit(n).then((saved) => { if (!saved) revert(); }, revert);
     } else {
-      setLocal(String(value));
+      onInvalid(`topic cap must be a whole number from ${MIN_TOPIC_CAP} to ${MAX_TOPIC_CAP}`);
     }
   }
   return (
@@ -352,12 +357,17 @@ const badgeStyle = {
 // status. The defaults themselves sit in a panel under the line, opened by
 // "Edit defaults". Seven pickers and a cap on the line itself left no room
 // for the name, and nowhere to say which videos each default applies to.
-function DomainRow({ project, videoCounts, onToggle, onSave, lists, canIllustrate, gpu }: {
+function DomainRow({ project, videoCounts, status, onToggle, onSave, onInvalid, lists, canIllustrate, gpu }: {
   project: Project;
   videoCounts: Record<string, number>;
+  /** How the last change to this domain went: shown on the line itself, so a
+   *  refusal is seen with the panel closed too. */
+  status?: SaveState;
   onToggle: (id: string, next: ProjectStatus) => void;
   /** Resolves to whether the change was stored. */
   onSave: (id: string, patch: Partial<Project>) => Promise<boolean>;
+  /** An entry refused before it is sent, shown like a refused save. */
+  onInvalid: (id: string, message: string) => void;
   lists: DomainLists;
   canIllustrate: boolean;
   gpu: GpuStatus | null;
@@ -503,6 +513,8 @@ function DomainRow({ project, videoCounts, onToggle, onSave, lists, canIllustrat
           </>
         )}
 
+        <SaveStatus status={status} testId={`domain-save-status-${project.id}`} />
+
         <button
           type="button"
           data-testid={`domain-edit-${project.id}`}
@@ -556,6 +568,7 @@ function DomainRow({ project, videoCounts, onToggle, onSave, lists, canIllustrat
                   testId={`domain-cap-${project.id}`}
                   value={project.topic_cap ?? 100}
                   onCommit={(next) => onSave(project.id, { topic_cap: next })}
+                  onInvalid={(message) => onInvalid(project.id, message)}
                 />
                 <span data-testid={`domain-topic-count-${project.id}`} style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", whiteSpace: "nowrap" }}>
                   {project.topic_count ?? 0} filed
@@ -822,7 +835,7 @@ function ModeToggles({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-// What an alert calls the field a refused save was about, when the API gave
+// What the message beside the domain calls the field a refused save was about, when the API gave
 // no reason of its own.
 const SAVED_FIELD: Record<string, string> = {
   default_visual_style: "style",
@@ -870,13 +883,20 @@ export default function TopicsPage() {
   const [activeStrategies, setActiveStrategies] = useState<string[]>(["curriculum", "trending", "mining"]);
   const [miningUrls, setMiningUrls] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [savingModes, setSavingModes] = useState(false);
   const [modesError, setModesError] = useState<string | null>(null);
   // Assumed until /research/strategies answers, so a slow load never shows the
   // toggle greyed out on an install that has the key.
   const [miningAvailable, setMiningAvailable] = useState(true);
   const [savingMining, setSavingMining] = useState(false);
   const [miningError, setMiningError] = useState<string | null>(null);
+  const statuses = useSaveStatus();
+  const { toasts, push, dismiss } = useToasts();
+  // The newest list, for an Undo clicked after later changes.
+  const miningUrlsRef = useRef<string[]>([]);
+  miningUrlsRef.current = miningUrls;
+  const storedMiningRef = useRef<string[]>([]);
+  const miningInFlight = useRef(0);
+  const enqueueMining = useSerialQueue();
   // Illustrated is disabled as a domain default when no OpenAI key is stored.
   // Fetched apart from loadAll so a failed settings read changes nothing but
   // this: the API refuses the style itself, so true is the safe fallback.
@@ -918,6 +938,7 @@ export default function TopicsPage() {
     }
     if (miningRes.ok) {
       const m: { youtube_urls: string[] } = await miningRes.json();
+      storedMiningRef.current = m.youtube_urls;
       setMiningUrls(m.youtube_urls);
     }
     setLoading(false);
@@ -958,28 +979,28 @@ export default function TopicsPage() {
   }, []);
 
   function handleToggleDomain(id: string, next: ProjectStatus) {
-    void queued(id, async () => {
+    void statuses.run(id, () => queued(id, async () => {
       const r = await apiFetch(`/projects/${id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: next }),
         signal: AbortSignal.timeout(DOMAIN_WRITE_TIMEOUT_MS),
       }).catch(() => null);
-      // A refusal is reported, not shown as success: only a curriculum seed can
-      // be paused, and the row may have stopped being one since this page loaded.
+      // A refusal is reported beside the domain, not shown as success: only a
+      // curriculum seed can be paused, and the row may have stopped being one
+      // since this page loaded.
       if (!r?.ok) {
-        const body = r ? await r.json().catch(() => ({})) : {};
-        alert(body.error ?? "Could not change this domain's status");
-        return;
+        return r ? responseError(r) : "could not change this domain's status";
       }
       setProjects((prev) => prev.map((p) => p.id === id ? { ...p, status: next } : p));
-    });
+      return null;
+    }));
   }
 
   function saveDomain(id: string, patch: Partial<Project>): Promise<boolean> {
-    return queued(id, async () => {
+    return statuses.run(id, () => queued(id, async () => {
       const project = projectsRef.current.find((p) => p.id === id);
-      if (!project) return false;
+      if (!project) return "this domain is no longer listed";
       const next = { ...project, ...patch };
       // POST /projects is an upsert, and its ON CONFLICT clause overwrites every
       // column it is given — so the unchanged fields have to be sent back or
@@ -1006,8 +1027,9 @@ export default function TopicsPage() {
       // the row keeps showing what is stored.
       if (!r?.ok) {
         const body = r ? await r.json().catch(() => ({})) : {};
-        alert(body.error ?? `Could not change this domain's ${SAVED_FIELD[Object.keys(patch)[0]] ?? "settings"}`);
-        return false;
+        return typeof body.error === "string" && body.error
+          ? body.error
+          : `could not change this domain's ${SAVED_FIELD[Object.keys(patch)[0]] ?? "settings"}`;
       }
       // The saved row carries the topic count and expiry as they are now. The
       // count loaded with the page can be stale (research may have filed since),
@@ -1016,52 +1038,86 @@ export default function TopicsPage() {
       const saved = await r.json().catch(() => null);
       const fresh = saved && saved.id === id ? (saved as Project) : {};
       setProjects((prev) => prev.map((p) => p.id === id ? { ...p, ...patch, ...fresh } : p));
-      return true;
-    });
+      return null;
+    }));
   }
 
   async function handleModeChange(next: string[]) {
-    setSavingModes(true);
     setModesError(null);
-    const res = await apiFetch("/research/strategies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ strategies: next }),
-    });
-    if (res.ok) {
-      setActiveStrategies(next);
-    } else {
+    await statuses.run("modes", async () => {
+      const res = await apiFetch("/research/strategies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ strategies: next }),
+      }).catch(() => null);
+      if (res?.ok) {
+        setActiveStrategies(next);
+        return null;
+      }
       // Nothing was stored, so the toggles keep showing what is in effect.
-      const body = await res.json().catch(() => ({}));
-      setModesError(typeof body.error === "string" && body.error
+      const body = res ? await res.json().catch(() => ({})) : {};
+      const message = typeof body.error === "string" && body.error
         ? body.error
-        : "Failed to save research modes — changes were not persisted.");
-    }
-    setSavingModes(false);
+        : "Failed to save research modes — changes were not persisted.";
+      setModesError(message);
+      return message;
+    });
   }
 
-  async function handleMiningUrlsChange(next: string[]) {
-    const prev = miningUrls;
+  // Mining saves run one at a time: each sends a whole list, so two side by
+  // side would race, and the screen could show the answer that lost.
+  function handleMiningUrlsChange(next: string[]) {
     setMiningUrls(next);
     setSavingMining(true);
     setMiningError(null);
-    const res = await apiFetch("/research/mining-sources", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ youtube_urls: next }),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setMiningUrls(prev);
-      // The API's 400 names the entries it refused; say that, not just "failed".
-      setMiningError(typeof body.error === "string" && body.error
-        ? body.error
-        : "Failed to save mining sources — changes were not persisted.");
-    } else if (Array.isArray(body.youtube_urls)) {
+    miningInFlight.current += 1;
+    return enqueueMining(() => saveMiningUrls(next));
+  }
+
+  async function saveMiningUrls(next: string[]) {
+    // What is stored when this save goes out, not what the screen shows.
+    const prev = storedMiningRef.current;
+    const removed = prev.filter((u) => !next.includes(u));
+    const ok = await statuses.run("mining", async () => {
+      const res = await apiFetch("/research/mining-sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtube_urls: next }),
+      }).catch(() => null);
+      const body = res ? await res.json().catch(() => ({})) : {};
+      if (!res?.ok) {
+        setMiningUrls(prev);
+        // The API's 400 names the entries it refused; say that, not just "failed".
+        const message = typeof body.error === "string" && body.error
+          ? body.error
+          : "Failed to save mining sources — changes were not persisted.";
+        setMiningError(message);
+        return message;
+      }
       // The list as stored: canonical and deduplicated by the API.
-      setMiningUrls(body.youtube_urls);
+      const stored = Array.isArray(body.youtube_urls) ? body.youtube_urls as string[] : next;
+      storedMiningRef.current = stored;
+      setMiningUrls(stored);
+      return null;
+    });
+    miningInFlight.current -= 1;
+    if (miningInFlight.current === 0) setSavingMining(false);
+    // A removal applies at once. Undo puts that one URL back into the list as
+    // it is then, so a change made after the removal is kept.
+    if (ok && removed.length === 1 && next.length === prev.length - 1) {
+      const url = removed[0];
+      const index = prev.indexOf(url);
+      push("success", `Removed ${url}.`, {
+        label: "Undo",
+        onClick: () => {
+          const current = miningUrlsRef.current;
+          if (current.includes(url)) return;
+          const restored = [...current];
+          restored.splice(Math.min(index, restored.length), 0, url);
+          void handleMiningUrlsChange(restored);
+        },
+      });
     }
-    setSavingMining(false);
   }
 
   const seedDomains = projects.filter((p) => p.is_curriculum_seed === 1);
@@ -1074,12 +1130,17 @@ export default function TopicsPage() {
       {/* Research Modes */}
       <section style={{ marginBottom: 32 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: "var(--mute)", marginBottom: 10 }}>
-          Research Modes{savingModes ? " — saving…" : ""}
+          Research Modes
+          {statuses.get("modes")?.state !== "error" && (
+            <span style={{ marginLeft: 10, textTransform: "none", letterSpacing: "normal" }}>
+              <SaveStatus status={statuses.get("modes")} testId="modes-save-status" />
+            </span>
+          )}
         </div>
         <ModeToggles active={activeStrategies} miningAvailable={miningAvailable}
                      onChange={handleModeChange} />
         {modesError && (
-          <div data-testid="mode-error" style={{ marginTop: 8, fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--red)", letterSpacing: "0.04em" }}>
+          <div data-testid="mode-error" role="alert" style={{ marginTop: 8, fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--red)", letterSpacing: "0.04em" }}>
             {modesError}
           </div>
         )}
@@ -1093,6 +1154,11 @@ export default function TopicsPage() {
       <section style={{ marginBottom: 32 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: "var(--mute)", marginBottom: 10 }}>
           Mining Sources
+          {statuses.get("mining")?.state !== "error" && (
+            <span style={{ marginLeft: 10, textTransform: "none", letterSpacing: "normal" }}>
+              <SaveStatus status={statuses.get("mining")} testId="mining-save-status" />
+            </span>
+          )}
         </div>
         <MiningSources
           urls={miningUrls}
@@ -1125,7 +1191,7 @@ export default function TopicsPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 24 }}>
           {seedDomains.map((p) => (
-            <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onSave={saveDomain} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+            <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
           ))}
         </div>
       )}
@@ -1138,11 +1204,12 @@ export default function TopicsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {otherDomains.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onSave={saveDomain} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
             ))}
           </div>
         </section>
       )}
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

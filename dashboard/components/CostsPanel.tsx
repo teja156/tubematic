@@ -3,18 +3,21 @@
 // Settings → Costs (TMDEV-107): the model prices every table-priced call is
 // costed with, where each came from, and the controls to sync or correct them.
 //
-// Self-contained like AgentsPanel — it reads and writes its own routes and
-// sits outside the settings form's Save/dirty machinery. Rates are shown and
-// typed per million tokens (what every pricing page quotes) and stored per
-// token.
+// Self-contained like AgentsPanel — it reads and writes its own routes. A
+// price is set from a small form (several rates at once make one price); a
+// reset applies at once and can be undone. Rates are shown and typed per
+// million tokens (what every pricing page quotes) and stored per token.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ModelPrice, PriceTable } from "@/lib/types";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { formatDateTime } from "@/lib/datetime";
 import { COST_DISCLAIMER, perMillion, serviceLabel } from "@/lib/costs";
+import { SaveStatus } from "@/components/SaveStatus";
+import { useSaveStatus } from "@/lib/saveStatus";
+import type { ToastAction } from "@/components/Toast";
 
 function apiFetch(path: string, init?: RequestInit) {
   return fetch(`/api/proxy${path}`, { cache: "no-store", ...init });
@@ -109,7 +112,7 @@ function RateEditor({
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button type="button" data-testid="price-save" disabled={busy} style={button} onClick={save}>
-          {busy ? "Saving…" : "Save manual rate"}
+          {busy ? "Setting…" : "Set price"}
         </button>
         <button type="button" data-testid="price-cancel" style={{ ...button, color: "var(--dim)" }}
                 onClick={onCancel}>
@@ -120,7 +123,11 @@ function RateEditor({
   );
 }
 
-export function CostsPanel({ inputStyle }: { inputStyle: CSSProperties }) {
+export function CostsPanel({ inputStyle, notify }: {
+  inputStyle: CSSProperties;
+  /** Shows a message with an action (the page's toast), for Undo. */
+  notify?: (message: string, action: ToastAction) => void;
+}) {
   const { timeZone } = useTimeZone();
   const [table, setTable] = useState<PriceTable | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -130,6 +137,10 @@ export function CostsPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   const [editing, setEditing] = useState<{ service: string; model: string;
                                            rates: Record<string, number> } | null>(null);
   const [busy, setBusy] = useState(false);
+  const statuses = useSaveStatus();
+  // The newest table, for an Undo clicked after later changes.
+  const tableRef = useRef<PriceTable | null>(null);
+  tableRef.current = table;
 
   async function load() {
     try {
@@ -162,20 +173,35 @@ export function CostsPanel({ inputStyle }: { inputStyle: CSSProperties }) {
     }
   }
 
+  /** Sets a manual price. Reports the refusal, or null once it is stored. */
+  async function setPrice(service: string, model: string, rates: Record<string, number>) {
+    setActionError("");
+    let refused: string | null = null;
+    await statuses.run("prices", async () => {
+      try {
+        const r = await apiFetch("/prices/override", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ service, model, rates }),
+        });
+        if (!r.ok) refused = await errorDetail(r);
+      } catch (e) {
+        refused = e instanceof Error ? e.message : "unreachable";
+      }
+      if (refused) {
+        setActionError(refused);
+        return refused;
+      }
+      await load();
+      return null;
+    });
+    return refused;
+  }
+
   async function saveManual(rates: Record<string, number>) {
     if (!editing) return;
     setBusy(true);
-    setActionError("");
     try {
-      const r = await apiFetch("/prices/override", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ service: editing.service, model: editing.model, rates }),
-      });
-      if (!r.ok) { setActionError(await errorDetail(r)); return; }
-      setEditing(null);
-      await load();
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : "unreachable");
+      if ((await setPrice(editing.service, editing.model, rates)) === null) setEditing(null);
     } finally {
       setBusy(false);
     }
@@ -184,9 +210,26 @@ export function CostsPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   async function reset(m: ModelPrice) {
     setActionError("");
     const q = `service=${encodeURIComponent(m.service)}&model=${encodeURIComponent(m.model)}`;
-    const r = await apiFetch(`/prices/override?${q}`, { method: "DELETE" }).catch(() => null);
-    if (!r || !r.ok) { setActionError(r ? await errorDetail(r) : "unreachable"); return; }
-    await load();
+    const ok = await statuses.run("prices", async () => {
+      const r = await apiFetch(`/prices/override?${q}`, { method: "DELETE" }).catch(() => null);
+      if (!r || !r.ok) {
+        const detail = r ? await errorDetail(r) : "unreachable";
+        setActionError(detail);
+        return detail;
+      }
+      await load();
+      return null;
+    });
+    // The manual rates are gone from the table now; Undo sets them again.
+    if (ok) notify?.(`Reset the manual price of ${m.model}.`, {
+      label: "Undo",
+      onClick: () => {
+        // A price set by hand again since the reset stays as it is.
+        const now = tableRef.current?.models.find((x) => x.service === m.service && x.model === m.model);
+        if (now?.source === "manual") return;
+        void setPrice(m.service, m.model, m.rates);
+      },
+    });
   }
 
   return (
@@ -223,6 +266,9 @@ export function CostsPanel({ inputStyle }: { inputStyle: CSSProperties }) {
               {syncing ? "Syncing…" : "Sync now"}
             </button>
             {syncNote && <span data-testid="costs-sync-note" style={note}>{syncNote}</span>}
+            {statuses.get("prices")?.state !== "error" && (
+              <SaveStatus status={statuses.get("prices")} testId="costs-status" />
+            )}
           </div>
           {table.last_sync_error && (
             <div data-testid="costs-sync-error" style={{ ...note, color: "var(--amber)" }}>
@@ -254,7 +300,7 @@ export function CostsPanel({ inputStyle }: { inputStyle: CSSProperties }) {
           )}
 
           {actionError && (
-            <div data-testid="costs-action-error" style={{ ...note, color: "var(--amber)" }}>
+            <div data-testid="costs-action-error" role="alert" style={{ ...note, color: "var(--amber)" }}>
               {actionError}
             </div>
           )}

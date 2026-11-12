@@ -4,10 +4,11 @@
 // checkpoint, which accounts each posts to, and how fast.
 //
 // Self-contained like CostsPanel — it reads and writes /autopilot as one
-// document and sits outside the settings form's Save/dirty machinery, so the
-// switch can never be saved "on" over a project list that failed to save.
+// document, so the switch can never be saved "on" over a project list that
+// failed to save. Every change saves itself (TMDEV-218); a change that would
+// approve videos (switching on, adding a project) is confirmed first.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { Project, SocialAccount } from "@/lib/types";
 import { SectionLabel } from "@/components/SectionLabel";
@@ -17,12 +18,16 @@ import {
   ceilingStatus, gapMins, needsConfirmation, newlyApproved, splitGap,
 } from "@/lib/autoPilot";
 import type { AutoPilotConfig, AutoPilotState, GapUnit } from "@/lib/autoPilot";
+import { SaveStatus } from "@/components/SaveStatus";
+import { responseError, useSaveStatus, useSerialQueue } from "@/lib/saveStatus";
 
 function apiFetch(path: string, init?: RequestInit) {
   return fetch(`/api/proxy${path}`, { cache: "no-store", ...init });
 }
 
 const mono = { fontFamily: "var(--mono)" } as const;
+// Long enough for the API; a hung request would hold every later change.
+const SAVE_TIMEOUT_MS = 30_000;
 const note: CSSProperties = { ...mono, fontSize: 10, color: "var(--mute)", letterSpacing: "0.02em" };
 const row: CSSProperties = {
   display: "flex", alignItems: "center", gap: 16, padding: "10px 0",
@@ -65,6 +70,58 @@ export function Disclaimer({ testId }: { testId: string }) {
   );
 }
 
+function configOf(state: AutoPilotState): AutoPilotConfig {
+  return { enabled: state.enabled, gap_mins: state.gap_mins, max_in_flight: state.max_in_flight,
+           projects: state.projects, account_limits: state.account_limits };
+}
+
+/** A whole number saved on blur or Enter. Out of range, it stays as typed and
+ *  is not sent. At module scope so a re-render never remounts it (TMDEV-93). */
+function NumberCell({ testId, value, max, inputStyle, describedBy, onCommit, onInvalid, onSame }: {
+  testId: string;
+  value: number;
+  max: number;
+  inputStyle: CSSProperties;
+  describedBy: string;
+  onCommit: (n: number) => void;
+  onInvalid: (message: string) => void;
+  /** Typed back to the value set: a refusal shown for it no longer applies. */
+  onSame: () => void;
+}) {
+  const [text, setText] = useState(String(value));
+  // Follows the stored value only when it changes. Run on mount as well, a
+  // late effect would put the stored number back over one just typed.
+  const shown = useRef(value);
+  useEffect(() => {
+    if (shown.current === value) return;
+    shown.current = value;
+    setText(String(value));
+  }, [value]);
+  function commit() {
+    const n = Number(text.trim());
+    if (!/^\d+$/.test(text.trim()) || n > max) {
+      onInvalid(`must be a whole number from 0 to ${max}`);
+      return;
+    }
+    if (n === value) onSame();
+    else onCommit(n);
+  }
+  return (
+    <input
+      data-testid={testId}
+      aria-describedby={describedBy}
+      type="number"
+      min={0}
+      max={max}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
+      style={{ ...inputStyle, width: 80 }}
+    />
+  );
+}
+
 export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   const [saved, setSaved] = useState<AutoPilotState | null>(null);
   const [draft, setDraft] = useState<AutoPilotConfig | null>(null);
@@ -74,18 +131,47 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   // null = publishing is off or postforme is unreachable: no accounts to offer.
   const [accounts, setAccounts] = useState<SocialAccount[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  // The change waiting on the confirmation dialog: the whole next document and
+  // the field it came from.
+  const [confirming, setConfirming] = useState<{ next: AutoPilotConfig; key: string } | null>(null);
+  const statuses = useSaveStatus();
+  const enqueue = useSerialQueue();
+  // Saves sent and not yet answered. Only the answer to the last one is put
+  // on screen whole; an earlier answer would undo the edits made after it.
+  const inFlight = useRef(0);
+  const savedRef = useRef<AutoPilotState | null>(null);
+  // The newest document sent and not yet answered, and the fields whose save
+  // failed since the panel last matched what is stored.
+  const sentRef = useRef<AutoPilotConfig | null>(null);
+  const failed = useRef(new Set<string>());
+  // The gap as the field shows it, for answers that arrive later, and
+  // whether it holds typing not yet committed.
+  const gapShown = useRef<{ text: string; unit: GapUnit }>({ text: "", unit: "hours" });
+  gapShown.current = { text: gapText, unit: gapUnit };
+  const gapDirty = useRef(false);
 
-  function adopt(state: AutoPilotState) {
-    setSaved(state);
-    setDraft({ enabled: state.enabled, gap_mins: state.gap_mins,
-               max_in_flight: state.max_in_flight,
-               projects: state.projects, account_limits: state.account_limits });
-    const gap = splitGap(state.gap_mins);
+  function showGap(mins: number) {
+    const gap = splitGap(mins);
     setGapUnit(gap.unit);
     setGapText(String(gap.value));
+  }
+
+  /** Puts a gap in the field, unless you are typing in it or it already
+   *  shows that gap: an answer to another save must neither wipe a gap being
+   *  typed nor switch the unit you picked. */
+  function followGap(mins: number) {
+    if (gapDirty.current) return;
+    const { text, unit } = gapShown.current;
+    if (Math.round(gapMins(Number(text), unit)) === mins && text.trim() !== "") return;
+    showGap(mins);
+  }
+
+  function adopt(state: AutoPilotState, initial = false) {
+    setSaved(state);
+    savedRef.current = state;
+    setDraft(configOf(state));
+    if (initial) showGap(state.gap_mins);
+    else followGap(state.gap_mins);
   }
 
   useEffect(() => {
@@ -102,7 +188,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
           setError((state && state.error) || `Could not load Auto Pilot (HTTP ${ap.status}).`);
           return;
         }
-        adopt(state);
+        adopt(state, true);
         const list = await pr.json();
         setProjects(Array.isArray(list) ? list : []);
         const accts = ac.ok ? await ac.json() : null;
@@ -115,15 +201,19 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   }, []);
 
   // The worker schedules and releases posts while this tab sits open. Only the
-  // count is refreshed: the draft and the saved configuration it is compared
-  // against are left alone, so unsaved edits stay unsaved and stay dirty.
+  // count is refreshed: the draft and the saved configuration are left alone, so
+  // a change still on its way is never undone by a refresh.
   useEffect(() => {
     const id = setInterval(async () => {
       try {
         const r = await apiFetch("/autopilot");
         const body = await r.json();
         if (r.ok && isState(body))
-          setSaved((s) => (s ? { ...s, in_flight: body.in_flight } : s));
+          setSaved((s) => {
+            const next = s ? { ...s, in_flight: body.in_flight } : s;
+            savedRef.current = next;
+            return next;
+          });
       } catch {
         // A missed refresh keeps the last count; the next one tries again.
       }
@@ -136,85 +226,129 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
   }
   if (!draft || !saved) return null;
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify({
-    enabled: saved.enabled, gap_mins: saved.gap_mins, max_in_flight: saved.max_in_flight,
-    projects: saved.projects, account_limits: saved.account_limits,
-  });
   const selected = Object.keys(draft.projects);
   const accountName = (a: SocialAccount) => `@${a.username || a.id} (${a.platform})`;
 
-  function edit(partial: Partial<AutoPilotConfig>) {
-    setMessage(null);
-    setDraft((d) => (d ? { ...d, ...partial } : d));
+  /** Saves the whole document with one change applied. `key` names the field
+   *  whose status shows the outcome. A change that would approve videos waits
+   *  for the confirmation dialog. */
+  /** The configuration in force once the saves on their way land: the newest
+   *  document sent, else the stored one. Confirmation, the dialog and Cancel
+   *  all read this, so a change made while a confirmed "on" is still on its
+   *  way neither asks again nor is undone by a Cancel. */
+  function current(): AutoPilotState {
+    return sentRef.current ? { ...saved!, ...sentRef.current } : saved!;
+  }
+
+  function apply(partial: Partial<AutoPilotConfig>, key: string) {
+    const next = { ...draft!, ...partial };
+    setDraft(next);
+    if (needsConfirmation(current(), next)) setConfirming({ next, key });
+    else void save(next, key);
+  }
+
+  function save(next: AutoPilotConfig, key: string) {
+    inFlight.current += 1;
+    sentRef.current = next;
+    return statuses.run(key, () => enqueue(async () => {
+      const r = await apiFetch("/autopilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+        signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+      }).catch(() => null);
+      inFlight.current -= 1;
+      const refused = !r?.ok ? await responseError(r) : null;
+      const body = refused === null ? await r!.json().catch(() => null) : null;
+      if (refused !== null || !isState(body)) {
+        failed.current.add(key);
+        // With nothing after it, what is stored stays in force and the panel
+        // shows it again. A later save carries this change too and decides.
+        if (inFlight.current === 0) {
+          // Every change that failed is now off the panel, so no later save
+          // carries it: its message stays until the field changes again.
+          failed.current.clear();
+          sentRef.current = null;
+          if (savedRef.current) {
+            setDraft(configOf(savedRef.current));
+            followGap(savedRef.current.gap_mins);
+          }
+        }
+        return refused ?? "the API sent back something that is not a configuration";
+      }
+      if (inFlight.current === 0) {
+        sentRef.current = null;
+        adopt(body);
+        // Every earlier change rode in this document, so an earlier failure
+        // no longer stands.
+        failed.current.forEach((k) => { if (k !== key) statuses.clear(k); });
+        failed.current.clear();
+      } else {
+        setSaved(body);
+        savedRef.current = body;
+      }
+      return null;
+    }));
+  }
+
+  function cancelConfirm() {
+    // Nothing was sent: the panel goes back to what is in force, saves still
+    // on their way included.
+    setConfirming(null);
+    if (saved) {
+      const base = current();
+      setDraft(configOf(base));
+      followGap(base.gap_mins);
+    }
   }
 
   function commitGap(text: string, unit: GapUnit) {
-    const value = parseInt(text, 10);
-    const mins = gapMins(value, unit);
-    if (isNaN(value) || value < 0 || mins > MAX_AUTO_PILOT_GAP_MINS) {
-      const gap = splitGap(draft!.gap_mins);
-      setGapUnit(gap.unit);
-      setGapText(String(gap.value));
+    const t = text.trim();
+    gapDirty.current = false;
+    // Hours may carry a fraction (1.5 hours is 90 minutes); minutes are whole.
+    const ok = unit === "hours" ? /^\d+(\.\d+)?$/.test(t) : /^\d+$/.test(t);
+    const mins = Math.round(gapMins(Number(t), unit));
+    if (!ok || mins > MAX_AUTO_PILOT_GAP_MINS) {
+      statuses.fail("gap", `must be from 0 minutes to ${MAX_AUTO_PILOT_GAP_MINS / 60 / 24} days`);
+      // Kept as typed, to be corrected: no answer may replace it meanwhile.
+      gapDirty.current = true;
       return;
     }
-    edit({ gap_mins: mins });
+    if (mins === draft!.gap_mins) {
+      // Typed back to what is set: a refusal no longer applies. An Enter
+      // followed by a blur lands here too, and must leave the save on its
+      // way, and its outcome, alone.
+      if (statuses.get("gap")?.state === "error") statuses.clear("gap");
+      return;
+    }
+    apply({ gap_mins: mins }, "gap");
   }
 
-  function setCeiling(text: string) {
-    const n = parseInt(text, 10);
-    if (isNaN(n) || n < 0 || n > MAX_AUTO_PILOT_IN_FLIGHT) return;
-    edit({ max_in_flight: n });
+  /** Shows the same gap in the other unit. Saves nothing: the number has not
+   *  changed, only how it reads. */
+  function changeGapUnit(unit: GapUnit) {
+    const mins = draft!.gap_mins;
+    gapDirty.current = false;
+    setGapUnit(unit);
+    setGapText(unit === "hours" ? String(Math.round((mins / 60) * 100) / 100) : String(mins));
+    if (statuses.get("gap")?.state === "error") statuses.clear("gap");
   }
 
   function toggleProject(pid: string) {
     const next = { ...draft!.projects };
     if (pid in next) delete next[pid];
     else next[pid] = [];
-    edit({ projects: next });
+    apply({ projects: next }, `project-${pid}`);
   }
 
   function toggleAccount(pid: string, aid: string) {
     const current = draft!.projects[pid] ?? [];
     const next = current.includes(aid) ? current.filter((a) => a !== aid) : [...current, aid];
-    edit({ projects: { ...draft!.projects, [pid]: next.sort() } });
+    apply({ projects: { ...draft!.projects, [pid]: next.sort() } }, `project-${pid}`);
   }
 
-  function setLimit(aid: string, text: string) {
-    const n = parseInt(text, 10);
-    if (isNaN(n) || n < 0 || n > MAX_AUTO_PILOT_DAILY) return;
-    edit({ account_limits: { ...draft!.account_limits, [aid]: n } });
-  }
-
-  async function save() {
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await apiFetch("/autopilot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
-      });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok || !isState(body)) {
-        setError(`Save failed — ${(body && body.error) || `HTTP ${r.status}`}`);
-        return;
-      }
-      adopt(body);
-      setMessage("Saved.");
-    } catch {
-      setError("Save failed — could not reach the API.");
-    } finally {
-      setBusy(false);
-      setConfirming(false);
-    }
-  }
-
-  function requestSave() {
-    if (needsConfirmation(saved!, draft!)) setConfirming(true);
-    else save();
-  }
-
-  const approvedNow = newlyApproved(saved, draft);
+  const inForce = current();
+  const approvedNow = confirming ? newlyApproved(inForce, confirming.next) : 0;
   const ceiling = ceilingStatus(saved);
 
   return (
@@ -231,9 +365,10 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
             every checkpoint. Pausing the pipeline pauses Auto Pilot.
           </div>
         </div>
+        <SaveStatus status={statuses.get("enabled")} testId="auto-pilot-status-enabled" id="auto-pilot-status-enabled" />
         <button
           data-testid="toggle-auto-pilot"
-          onClick={() => edit({ enabled: !draft.enabled })}
+          onClick={() => apply({ enabled: !draft.enabled }, "enabled")}
           style={{
             ...button,
             border: `1px solid ${draft.enabled ? "var(--amber)" : "var(--border)"}`,
@@ -255,12 +390,15 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
             the daily number keeps posts at a steady time of day.
           </div>
         </div>
+        <SaveStatus status={statuses.get("gap")} testId="auto-pilot-status-gap" id="auto-pilot-status-gap" />
         <input
           data-testid="input-auto-pilot-gap"
+          aria-describedby="auto-pilot-status-gap"
           type="number"
           min={0}
+          step="any"
           value={gapText}
-          onChange={(e) => setGapText(e.target.value)}
+          onChange={(e) => { gapDirty.current = true; setGapText(e.target.value); }}
           onBlur={() => commitGap(gapText, gapUnit)}
           onKeyDown={(e) => { if (e.key === "Enter") commitGap(gapText, gapUnit); }}
           style={{ ...inputStyle, width: 80 }}
@@ -268,11 +406,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
         <select
           data-testid="select-auto-pilot-gap-unit"
           value={gapUnit}
-          onChange={(e) => {
-            const unit = e.target.value as GapUnit;
-            setGapUnit(unit);
-            commitGap(gapText, unit);
-          }}
+          onChange={(e) => changeGapUnit(e.target.value as GapUnit)}
           style={{ ...inputStyle, width: 110 }}
         >
           <option value="minutes">minutes</option>
@@ -298,14 +432,16 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
             </div>
           )}
         </div>
-        <input
-          data-testid="input-auto-pilot-max-in-flight"
-          type="number"
-          min={0}
-          max={MAX_AUTO_PILOT_IN_FLIGHT}
+        <SaveStatus status={statuses.get("max_in_flight")} testId="auto-pilot-status-max-in-flight" id="auto-pilot-status-max-in-flight" />
+        <NumberCell
+          testId="input-auto-pilot-max-in-flight"
           value={draft.max_in_flight}
-          onChange={(e) => setCeiling(e.target.value)}
-          style={{ ...inputStyle, width: 80 }}
+          max={MAX_AUTO_PILOT_IN_FLIGHT}
+          inputStyle={inputStyle}
+          onCommit={(n) => apply({ max_in_flight: n }, "max_in_flight")}
+          describedBy="auto-pilot-status-max-in-flight"
+          onInvalid={(message) => statuses.fail("max_in_flight", message)}
+          onSame={() => { if (statuses.get("max_in_flight")?.state === "error") statuses.clear("max_in_flight"); }}
         />
       </div>
 
@@ -334,10 +470,16 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
                 data-testid={`auto-pilot-project-toggle-${p.id}`}
                 type="checkbox"
                 checked={on}
+                aria-describedby={`auto-pilot-status-project-${p.id}`}
                 onChange={() => toggleProject(p.id)}
               />
               <span style={{ overflowWrap: "anywhere" }}>{p.name}</span>
             </label>
+            {/* Outside the label: inside, clicking the status would tick the
+                box, and it would become part of the box's name. */}
+            <div style={{ marginLeft: 26 }}>
+              <SaveStatus status={statuses.get(`project-${p.id}`)} testId={`auto-pilot-status-project-${p.id}`} id={`auto-pilot-status-project-${p.id}`} />
+            </div>
             {on && (
               <div style={{ margin: "8px 0 0 26px" }}>
                 <div style={{ ...note, marginBottom: 6 }}>
@@ -397,41 +539,25 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
                   Auto post how many videos per day. 0 means Auto Pilot never posts here.
                 </div>
               </div>
-              <input
-                data-testid={`auto-pilot-limit-${a.id}`}
-                type="number"
-                min={0}
-                max={MAX_AUTO_PILOT_DAILY}
+              <SaveStatus status={statuses.get(`limit-${a.id}`)} testId={`auto-pilot-status-limit-${a.id}`} id={`auto-pilot-status-limit-${a.id}`} />
+              <NumberCell
+                testId={`auto-pilot-limit-${a.id}`}
                 value={draft.account_limits[a.id] ?? saved.default_daily_limit}
-                onChange={(e) => setLimit(a.id, e.target.value)}
-                style={{ ...inputStyle, width: 80 }}
+                max={MAX_AUTO_PILOT_DAILY}
+                inputStyle={inputStyle}
+                onCommit={(n) => apply({ account_limits: { ...draft.account_limits, [a.id]: n } }, `limit-${a.id}`)}
+                describedBy={`auto-pilot-status-limit-${a.id}`}
+                onInvalid={(message) => statuses.fail(`limit-${a.id}`, message)}
+                onSame={() => {
+                  if (statuses.get(`limit-${a.id}`)?.state === "error") statuses.clear(`limit-${a.id}`);
+                }}
               />
             </div>
           ))}
         </>
       )}
 
-      {error && (
-        <div data-testid="auto-pilot-error" style={{ ...mono, fontSize: 11, color: "var(--red)", marginTop: 10 }}>
-          {error}
-        </div>
-      )}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }}>
-        <button
-          data-testid="save-auto-pilot"
-          disabled={!dirty || busy}
-          onClick={requestSave}
-          style={{ ...button, color: "var(--blue)", opacity: !dirty || busy ? 0.5 : 1,
-                   cursor: !dirty || busy ? "default" : "pointer" }}
-        >
-          {busy ? "SAVING…" : "SAVE"}
-        </button>
-        <span data-testid="auto-pilot-status" style={note}>
-          {dirty ? "Unsaved changes" : message ?? "No changes"}
-        </span>
-      </div>
-
-      <Dialog open={confirming} onOpenChange={(v) => !v && setConfirming(false)}>
+      <Dialog open={confirming !== null} onOpenChange={(v) => !v && cancelConfirm()}>
         <DialogContent
           data-testid="auto-pilot-confirm"
           className="border-[#1e1e30] bg-[#0d0d1a] text-[#f0f0ff]"
@@ -439,7 +565,7 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
         >
           <DialogHeader>
             <DialogTitle style={{ fontSize: 15, fontWeight: 600 }}>
-              {saved.enabled ? "Add these projects to Auto Pilot?" : "Turn on Auto Pilot?"}
+              {inForce.enabled ? "Add these projects to Auto Pilot?" : "Turn on Auto Pilot?"}
             </DialogTitle>
           </DialogHeader>
           <Disclaimer testId="auto-pilot-confirm-disclaimer" />
@@ -451,13 +577,19 @@ export function AutoPilotPanel({ inputStyle }: { inputStyle: CSSProperties }) {
               : "Nothing is waiting at a checkpoint in the selected projects right now."}
           </p>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button data-testid="auto-pilot-confirm-cancel" onClick={() => setConfirming(false)}
+            <button data-testid="auto-pilot-confirm-cancel" onClick={cancelConfirm}
                     style={{ ...button, color: "var(--dim)" }}>
               Cancel
             </button>
-            <button data-testid="auto-pilot-confirm-ok" disabled={busy} onClick={save}
+            <button
+              data-testid="auto-pilot-confirm-ok"
+              onClick={() => {
+                const c = confirming!;
+                setConfirming(null);
+                void save(c.next, c.key);
+              }}
                     style={{ ...button, border: "1px solid var(--amber)", color: "var(--amber)" }}>
-              {saved.enabled ? "Add to Auto Pilot" : "Turn on Auto Pilot"}
+              {inForce.enabled ? "Add to Auto Pilot" : "Turn on Auto Pilot"}
             </button>
           </div>
         </DialogContent>
