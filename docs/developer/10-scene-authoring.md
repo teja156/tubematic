@@ -120,15 +120,17 @@ style.
 | `authoring_skill` | The skill that authors a video in this style; `get_video` returns it as `style.authoring_skill` |
 | `review` | Optional. The style's own block for the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses) |
 | `captions` | Optional. The `subtitles` settings `write_scene_config` fills in when a config has none |
-| `routing` | What Auto reads to pick a style: `best_for`, `avoid_for`, `signals`, and the optional `moods` and `images` (below) |
+| `routing` | What Auto reads to pick a style: `best_for`, `avoid_for`, `cannot_show`, `signals`, and the optional `moods` and `images` (below) |
 | `script` | Optional. How to write the narration and each segment's `visual` brief for this style; `get_video` returns it as `style.script` and the script-writing skill follows it |
 | `picture` | `{opening, turn, payoff, ending}`: how the style shows the first frame, a turn or re-opening, the payoff, and how a video in it ends. `get_video` returns it as `style.picture`; [The opening and the beats](#the-opening-and-the-beats) says how it is used |
 | `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's and Storybook Atlas's cast and prop catalogues or Whiteboard's doodle library |
 
-The `routing` block lists what the style suits (`best_for`), what it must not get (`avoid_for`) and
-the signals in a topic or script that point to it (`signals`). Two fields are optional: `moods`, the
-tones the style suits, and `images`, a whole number of generated images a video costs at most (0
-when absent). [How Auto picks a style](#how-auto-picks-a-style) reads all five.
+The `routing` block lists what the style suits (`best_for`), what it must not get (`avoid_for`),
+one sentence saying what it cannot put on screen at all (`cannot_show`, such as "any picture of a
+real thing" for a style that draws only text), and the signals in a topic or script that point to
+it (`signals`). Two fields are optional: `moods`, the tones the style suits, and `images`, a whole
+number of generated images a video costs at most (0 when absent).
+[How Auto picks a style](#how-auto-picks-a-style) reads all six.
 
 `tubematic_core/tests/test_style_packs.py` pins every gate's answer for each style, `auto`, a blank
 value and an unknown one. Adding a style is a new pack file, the style's renderer work and its
@@ -160,7 +162,7 @@ written for the style: a walk through a system, a story, a list. The
 flowchart TD
     A["TOPIC_APPROVED<br/>visual_style = auto"] --> B["get_video:<br/>style_routing.candidates"]
     B --> C["describe the topic<br/>on fixed axes"]
-    C --> D["rule out: unavailable,<br/>a plain avoid_for match"]
+    C --> D["rule out: unavailable,<br/>a plain avoid_for match,<br/>cannot_show covers what must be seen"]
     D --> E["score: best_for 3 or 1,<br/>each signal 1"]
     E --> F{"a clear fit?<br/>3 points or more"}
     F -->|yes| G["the highest; ties by<br/>specificity, a person's hint,<br/>mood, images, order"]

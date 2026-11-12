@@ -26,6 +26,14 @@ the Hood and Whiteboard, a story style and Illustrated), or an older style next 
 that is the wrong answer for it. The `note` names the pair. A probe in each direction is what shows
 whether a pack's `avoid_for` holds.
 
+The real-event topics are failures with a technical cause (a rocket, a spacecraft, a trading firm,
+an outage), each with a brief written the way research writes one: one idea, often a number, and a
+beat list. They expect Motion Graphics and accept mixed scenes and Storybook Atlas. They exist
+because a brief built around a number reads as a number story, and the text and diagram styles
+scored highest on it until the skill asked whether the topic is a real failure of a named thing and
+each pack stated what it `cannot_show`. A topic about the same number with no event in it is the
+negative control: it still expects Terminal Doc.
+
 A ticket that adds a pack adds at least three topics that expect it, and moves the topics whose
 `future` names it to `expect`. CI fails until it does.
 

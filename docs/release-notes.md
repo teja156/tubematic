@@ -9,6 +9,24 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ---
 
+## v2.3.0
+
+### Upgrade notes
+
+1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode) after you
+   upgrade. The skill Auto uses to pick a video's style changed, and a session started before the
+   upgrade keeps the old one.
+
+### Fixed
+
+- Auto picked a text or diagram style, such as Terminal Doc or Whiteboard, for a real failure with
+  a technical cause, such as a rocket destroyed by a software bug or a trading firm ruined by one
+  server. The video showed numbers and boxes and never the rocket or the firm. Auto now picks a
+  style that can show the real thing, usually Motion Graphics, and rules out any style that cannot
+  show what the topic needs. A video whose style was already picked keeps it.
+  [How Auto picks a style](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does)
+  has the details.
+
 ## v2.2.0
 
 2.2.0 adds seven visual styles: System Flow, which turns a video into a diagram that builds itself
