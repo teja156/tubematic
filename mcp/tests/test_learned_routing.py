@@ -143,7 +143,8 @@ def test_the_pick_records_what_the_figures_said_about_it(evidence):
     out = server.choose_script_formula("vid_1", GOOD, REASON, runner_up=OTHER)
     record = json.loads(_evidence())
     assert record == {"formula": GOOD, "mode": "learned", "measure": "watched_pct",
-                      "standing": "better", "points": 2, "videos": MIN, "accounts": 1}
+                      "standing": "better", "points": 2, "videos": MIN, "accounts": 1,
+                      "min_group": MIN}
     assert out["learned"] == record
 
 

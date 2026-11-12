@@ -296,7 +296,8 @@ def test_active_learning_gives_every_formula_its_points(con):
     assert on["formulas"][C] == {"points": 0, "standing": watch.THIN, "videos": 0}
     record = json.loads(watch.evidence_record(on, A))
     assert record == {"formula": A, "mode": "learned", "measure": "watched_pct",
-                      "standing": "better", "points": 2, "videos": MIN, "accounts": 1}
+                      "standing": "better", "points": 2, "videos": MIN, "accounts": 1,
+                      "min_group": MIN}
 
 
 def test_a_trial_pick_moves_the_points_to_thin_formulas(con):

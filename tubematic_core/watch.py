@@ -389,4 +389,5 @@ def evidence_record(learning: dict, formula_id: str) -> str:
     return json.dumps({"formula": formula_id, "mode": learning["mode"],
                        "measure": learning["measure"], "standing": entry["standing"],
                        "points": entry["points"], "videos": entry["videos"],
-                       "accounts": learning.get("accounts", 0)}, sort_keys=True)
+                       "accounts": learning.get("accounts", 0),
+                       "min_group": learning["min_group"]}, sort_keys=True)
