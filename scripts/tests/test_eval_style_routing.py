@@ -190,3 +190,45 @@ def test_openrouter_keeps_a_reply_completed_just_past_the_deadline(monkeypatch):
     monkeypatch.setattr(ev.urllib.request, "urlopen", lambda req, timeout: _Resp(body))
     answer, err, cost = ev.ask_openrouter("v", "s", "m", 5, "k")
     assert answer["style"] == "stick" and err == "" and cost == 0.001
+
+
+# ── the insert step (TMDEV-224) ─────────────────────────────────────────────
+
+def test_the_insert_prompt_carries_the_decided_main_style_and_the_insert_candidates():
+    candidates = tvs.routing_candidates(True, "working", False)
+    inserts = tvs.insert_candidates(True, "working")
+    prompt = ev.build_insert_prompt(CASE, "whiteboard", candidates, inserts)
+    video = json.loads(prompt.split("```json\n")[1].split("\n```")[0])
+    assert video["visual_style"] == "whiteboard" and video["style_routing"]["decided"] is True
+    routing = video["insert_routing"]
+    assert routing["decided"] is False and routing["host"] is True and routing["transition"] == "push"
+    assert [c["id"] for c in routing["candidates"]] == list(tvs.INSERT_STYLES)
+    scenes = json.loads(ev.build_insert_prompt(CASE, "scenes", candidates, inserts)
+                        .split("```json\n")[1].split("\n```")[0])
+    assert scenes["visual_style"] == "auto" and scenes["insert_routing"]["host"] is True
+
+
+def test_insert_verdicts():
+    expect_flow = {**CASE, "inserts_expect": ["system_flow"]}
+    assert ev.insert_verdict(expect_flow, ["system_flow"]) == "right"
+    assert ev.insert_verdict(expect_flow, []) == "wrong"
+    assert ev.insert_verdict(expect_flow, ["system_flow", "terminal_doc"]) == "wrong"
+    assert ev.insert_verdict({**expect_flow, "inserts_ok": ["terminal_doc"]},
+                             ["system_flow", "terminal_doc"]) == "right"
+    assert ev.insert_verdict({**CASE, "inserts_expect": []}, []) == "right"
+    assert ev.insert_verdict({**CASE, "inserts_expect": []}, ["terminal_doc"]) == "wrong"
+    assert ev.insert_verdict(CASE, ["terminal_doc"]) == "-"  # no expectation
+
+
+def test_the_report_counts_inserts_and_lists_wrong_ones():
+    rows = [{"case": {**CASE, "inserts_expect": ["system_flow"]}, "style": "whiteboard", "verdict": "best",
+             "inserts": ["system_flow"], "insert_verdict": "right"},
+            {"case": {**CASE, "title": "T2", "inserts_expect": []}, "style": "stick", "verdict": "ok",
+             "inserts": ["terminal_doc"], "insert_verdict": "wrong", "beats": "b", "insert_reason": "r"}]
+    report = ev.render_report(rows, "sonnet", "2026-11-12 12:00")
+    assert "Inserts as expected: 1/2" in report and "## Wrong inserts" in report and "### T2" in report
+
+
+def test_the_insert_step_reads_the_insert_routing_skill():
+    assert ev.INSERT_SKILL.name == "SKILL.md" and ev.INSERT_SKILL.parent.name == "tubematic-insert-routing"
+    assert ev.INSERT_SKILL.is_file()

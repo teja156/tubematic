@@ -5,8 +5,11 @@ Sends every topic in tubematic_core/tests/fixtures/style_routing_cases.json
 through the same instructions the agent follows (the tubematic-style-routing
 skill) and the same candidate list it reads (get_video's
 style_routing.candidates, here with every style available), using the Claude
-Code CLI. Then it scores each pick against the topic's expected styles and
-writes a Markdown report.
+Code CLI. Then, for a main style that takes inserts, it asks the
+tubematic-insert-routing skill which insert styles the script may use, a
+second short call per topic (TMDEV-224; --no-inserts skips it). It scores the
+pick against the topic's expected styles and the inserts against its
+inserts_expect, and writes a Markdown report.
 
 Run it by hand before and after a style pack lands, and compare the reports.
 It needs no Tubematic install and no database; it needs `claude` on PATH,
@@ -42,9 +45,11 @@ from concurrent.futures import ThreadPoolExecutor
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
+from tubematic_core import inserts as tinserts  # noqa: E402
 from tubematic_core import visual_styles as tvs  # noqa: E402
 
 SKILL = REPO / "agent_files" / "skills" / "tubematic-style-routing" / "SKILL.md"
+INSERT_SKILL = REPO / "agent_files" / "skills" / "tubematic-insert-routing" / "SKILL.md"
 CASES = REPO / "tubematic_core" / "tests" / "fixtures" / "style_routing_cases.json"
 DEFAULT_OUT_DIR = REPO / "docs_private" / "reports" / "style-routing"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -60,6 +65,60 @@ calling choose_visual_style and add_comment, answer with ONLY one JSON object an
 The skill:
 
 """
+
+
+INSERT_INSTRUCTION = """\
+You are the Tubematic agent running the tubematic-insert-routing skill below for one video. Its
+main style is already decided. You have no tools in this run. Do every step of the skill in your
+head, then, instead of calling choose_inserts and add_comment, answer with ONLY one JSON object and
+nothing else:
+
+{"inserts": ["<insert style id>", ...], "reason": "<one sentence>", "beats": "<your beat list, one line>"}
+
+The skill:
+
+"""
+
+
+def build_insert_prompt(case: dict, style: str, candidates: list[dict],
+                        insert_candidates: list[dict]) -> str:
+    """The insert step's question (TMDEV-224): the video as get_video returns
+    it once the main style is decided, with its insert_routing."""
+    visual_style = tvs.AUTO if style == tvs.SCENES else style
+    host = tvs.hosts_inserts(visual_style)
+    video = {
+        "video_id": "vid_eval",
+        "status": "TOPIC_APPROVED",
+        "visual_style": visual_style,
+        "title": case["title"],
+        "topic": case["brief"],
+        "comments": [],
+        "style_routing": {"decided": True, "pick": style, "candidates": candidates},
+        "insert_mode": "auto",
+        "insert_styles": None,
+        "insert_routing": {
+            "decided": False, "mode": "auto", "styles": None, "reason": "",
+            "host": host["host"], "transition": host.get("transition", ""),
+            "max_styles": tinserts.MAX_STYLES_PER_VIDEO,
+            "limits": {"target_seconds": tinserts.TARGET_SECONDS, "max_seconds": tinserts.MAX_SECONDS,
+                       "max_share": round(tinserts.MAX_SHARE, 3),
+                       "min_main_gap_seconds": tinserts.MIN_MAIN_GAP_SECONDS},
+            "candidates": insert_candidates,
+        },
+    }
+    return (f"get_video(\"vid_eval\") returned:\n\n```json\n{json.dumps(video, indent=2)}\n```\n\n"
+            "Decide this video's inserts.")
+
+
+def insert_verdict(case: dict, chosen: list[str]) -> str:
+    """"right" when the chosen insert styles are the expected ones (plus any
+    in inserts_ok), "wrong" otherwise, "-" when the topic expects nothing in
+    particular ("any", or no inserts_expect)."""
+    expect = case.get("inserts_expect", "any")
+    if expect == "any":
+        return "-"
+    allowed = set(expect) | set(case.get("inserts_ok", []))
+    return "right" if set(expect) <= set(chosen) <= allowed else "wrong"
 
 
 def build_prompt(case: dict, candidates: list[dict]) -> str:
@@ -114,7 +173,7 @@ def ask(prompt: str, system: str, model: str, timeout: int,
 
 
 def ask_openrouter(prompt: str, system: str, model: str, timeout: int,
-                   key: str) -> tuple[dict | None, str, float]:
+                   key: str, answer_key: str = "style") -> tuple[dict | None, str, float]:
     """The same question through OpenRouter's chat completions. Returns the
     answer, an error and the call's cost in dollars (0 when not reported)."""
     body = json.dumps({"model": model, "messages": [{"role": "system", "content": system},
@@ -150,7 +209,7 @@ def ask_openrouter(prompt: str, system: str, model: str, timeout: int,
         result = data["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError):
         return None, f"no answer: {json.dumps(data)[-300:]}", cost
-    answer = parse_answer(result)
+    answer = parse_answer(result, answer_key)
     return answer, "" if answer else f"no JSON answer: {result[-300:]}", cost
 
 
@@ -176,15 +235,26 @@ def render_report(rows: list[dict], model: str, started: str, cost: float = 0.0)
         f"- Best or acceptable: {ok}/{n} ({ok * 100 // max(n, 1)}%)",
         f"- Errors: {failed}",
         *([f"- Cost: ${cost:.4f}"] if cost else []),
+    ]
+    scored = [r for r in rows if r.get("insert_verdict") in ("right", "wrong")]
+    if scored:
+        right = sum(r["insert_verdict"] == "right" for r in scored)
+        lines.append(f"- Inserts as expected: {right}/{len(scored)} ({right * 100 // len(scored)}%)")
+    lines += [
         "",
-        "| Topic | Expected | Also OK | Picked | Runner-up | Verdict | Reason |",
-        "|---|---|---|---|---|---|---|",
+        "| Topic | Expected | Also OK | Picked | Runner-up | Verdict | Inserts expected | Inserts | Inserts verdict | Reason |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
         c = r["case"]
         reason = (r.get("reason") or r.get("error") or "").replace("|", "/").replace("\n", " ")
+        expect = c.get("inserts_expect", "any")
+        expect = "any" if expect == "any" else (", ".join(expect) or "none")
+        chosen = r.get("inserts")
+        chosen = "-" if chosen is None else (", ".join(chosen) or "none")
         lines.append(f"| {c['title']} | {', '.join(c['expect'])} | {', '.join(c['ok']) or '-'} | "
-                     f"{r.get('style') or '-'} | {r.get('runner_up') or '-'} | {r['verdict']} | {reason} |")
+                     f"{r.get('style') or '-'} | {r.get('runner_up') or '-'} | {r['verdict']} | "
+                     f"{expect} | {chosen} | {r.get('insert_verdict', '-')} | {reason} |")
     wrong = [r for r in rows if r["verdict"] == "wrong"]
     if wrong:
         lines += ["", "## Wrong picks", ""]
@@ -193,6 +263,15 @@ def render_report(rows: list[dict], model: str, started: str, cost: float = 0.0)
                       f"- Expected {r['case']['expect'][0]}, picked {r['style']}",
                       f"- Description: {r.get('description', '')}",
                       f"- Scores: {json.dumps(r.get('scores', {}))}", ""]
+    wrong_inserts = [r for r in rows if r.get("insert_verdict") == "wrong"]
+    if wrong_inserts:
+        lines += ["", "## Wrong inserts", ""]
+        for r in wrong_inserts:
+            lines += [f"### {r['case']['title']}", "",
+                      f"- Main style {r.get('style')}; expected inserts "
+                      f"{r['case'].get('inserts_expect')}, chose {r.get('inserts')}",
+                      f"- Beats: {r.get('beats', '')}",
+                      f"- Reason: {r.get('insert_reason', '')}", ""]
     return "\n".join(lines) + "\n"
 
 
@@ -206,6 +285,8 @@ def main(argv=None) -> int:
     ap.add_argument("--jobs", type=int, default=3, help="topics routed at once (default: 3)")
     ap.add_argument("--timeout", type=int, default=300, help="seconds per topic (default: 300)")
     ap.add_argument("--out", default="", help=f"report path (default: {DEFAULT_OUT_DIR}/<time>-<model>.md)")
+    ap.add_argument("--no-inserts", action="store_true",
+                    help="skip the insert step (one call per topic instead of two)")
     args = ap.parse_args(argv)
 
     key = ""
@@ -224,6 +305,8 @@ def main(argv=None) -> int:
         return 2
     candidates = tvs.routing_candidates(openai_key_set=True, gpu_status="working", has_mascot=False)
     system = INSTRUCTION + SKILL.read_text()
+    insert_system = INSERT_INSTRUCTION + INSERT_SKILL.read_text()
+    insert_candidates = tvs.insert_candidates(openai_key_set=True, gpu_status="working")
     started = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     def run(case):
@@ -243,8 +326,37 @@ def main(argv=None) -> int:
                "reason": str(answer.get("reason", "")), "description": str(answer.get("description", "")),
                "scores": answer.get("scores", {}), "cost": cost}
         row["verdict"] = verdict(case, style) if style in tvs.ROUTE_CHOICES else "wrong"
-        print(f"  {row['verdict']:5}  {case['title']}  -> {style}", flush=True)
+        if not args.no_inserts and style in tvs.ROUTE_CHOICES:
+            row.update(route_inserts(case, style))
+            cost += row.pop("insert_cost", 0.0)
+            row["cost"] = cost
+        print(f"  {row['verdict']:5}  {case['title']}  -> {style}"
+              f"  inserts {row.get('inserts')} ({row.get('insert_verdict', '-')})", flush=True)
         return row
+
+    def route_inserts(case, style):
+        """The insert step for one topic, after its main pick."""
+        visual_style = tvs.AUTO if style == tvs.SCENES else style
+        if not tvs.hosts_inserts(visual_style)["host"]:
+            return {"inserts": [], "insert_reason": "the main style takes no inserts",
+                    "insert_verdict": insert_verdict(case, [])}
+        prompt = build_insert_prompt(case, style, candidates, insert_candidates)
+        cost = 0.0
+        try:
+            if args.openrouter:
+                answer, err, cost = ask_openrouter(prompt, insert_system, args.openrouter, args.timeout,
+                                                   key, answer_key="inserts")
+            else:
+                answer, err = ask(prompt, insert_system, args.model, args.timeout, key="inserts")
+        except subprocess.TimeoutExpired:
+            answer, err = None, f"timed out after {args.timeout} s"
+        if not answer or not isinstance(answer.get("inserts"), list):
+            return {"inserts": None, "insert_reason": err or "no inserts list", "insert_verdict": "error",
+                    "insert_cost": cost}
+        chosen = [str(i).strip() for i in answer["inserts"]]
+        return {"inserts": chosen, "insert_reason": str(answer.get("reason", "")),
+                "beats": str(answer.get("beats", "")), "insert_verdict": insert_verdict(case, chosen),
+                "insert_cost": cost}
 
     print(f"Routing {len(cases)} topics with {model}...", flush=True)
     with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:

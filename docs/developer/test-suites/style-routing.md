@@ -45,8 +45,15 @@ python3 scripts/eval_style_routing.py --model opus --only DNS  # one model, matc
 python3 scripts/eval_style_routing.py --openrouter deepseek/deepseek-v4.1-flash
 ```
 
+For a picked style that takes insert scenes, a second short call runs the `tubematic-insert-routing`
+skill with the insert candidates `insert_candidates` builds, and the chosen insert styles are scored
+against the topic's `inserts_expect`: **right** when every expected insert style is chosen and
+nothing outside `inserts_expect` and `inserts_ok` is, **wrong** otherwise. `--no-inserts` skips that
+call ([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
+
 It needs `claude` on the PATH and logged in, or with `--openrouter` an OpenRouter key in
-`OPENROUTER_API_KEY`, and nothing else: no install, no database. It makes one short call per topic.
+`OPENROUTER_API_KEY`, and nothing else: no install, no database. It makes one or two short calls per
+topic.
 Live agents often run cheaper models through OpenCode, so run the eval on one of those as well as on
 Sonnet; the OpenRouter report gives the run's cost. The report is Markdown, with a table of every pick and a section per wrong
 pick giving the agent's description of the topic and its scores. It goes to
@@ -56,5 +63,5 @@ Run it before and after a change to a pack's `routing` block, the routing skill 
 and compare the two reports. Results vary between runs of the same model, so read a change of one
 or two picks as noise and a change across several topics as a real effect.
 
-`scripts/tests/test_eval_style_routing.py` covers the eval's prompt, parsing and scoring without
-calling a model.
+`scripts/tests/test_eval_style_routing.py` covers the eval's prompts (the main pick and the insert
+step), parsing and scoring without calling a model.
