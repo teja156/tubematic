@@ -701,6 +701,13 @@ OPENAI_ONLY_IMAGES_MIGRATION = 16
 # lease), and a new API recreated first would wait for a renderer that is not
 # there yet — see the --no-stop refusal in run_upgrade.
 RENDER_GATEWAY_MIGRATION = 19
+# The migration that makes System Flow and Terminal Doc insert styles
+# (TMDEV-224). It sends unvoiced videos in them back to Auto at TOPIC_APPROVED;
+# an old MCP server recreated last would let an agent pick System Flow again
+# through the old choose_visual_style, and an old poller would script the
+# re-routed videos without deciding their inserts — see the --no-stop refusal
+# in run_upgrade.
+INSERTS_MIGRATION = 29
 
 
 def _worker_split_pending() -> bool:
@@ -882,6 +889,12 @@ def run_upgrade(*, dry_run: bool, force: bool, no_stop: bool, install_mode: str 
                  "database and renders through the API's new render gateway, and old and new "
                  "containers recreated one at a time would have an old renderer claiming "
                  "videos beside the gateway. Re-run without --no-stop.")
+        return 1
+    if no_stop and applied < INSERTS_MIGRATION:
+        rep.warn("--no-stop is refused for this upgrade: it makes System Flow and Terminal Doc "
+                 "insert styles and sends videos not yet voiced in them back to Auto, and old "
+                 "containers recreated one at a time could pick those styles again for them. "
+                 "Re-run without --no-stop.")
         return 1
 
     errors = [i for i in checks.check_prerequisites(mode=mode)
