@@ -168,8 +168,11 @@ def test_the_domains_figures_only_break_a_tie_between_openings():
     assert "`formula_routing.learned.openings`" in part
     assert part.index("`formula_routing.recent.hook_types`") < part.index(
         "`formula_routing.learned.openings`")
-    assert "The list only breaks a tie" in part
-    assert "never wins because its type did well on other videos" in part
+    assert "The list only breaks\n   a tie" in part
+    assert "never wins because its type did well on other\n   videos" in part
+    # A trial pick empties the list; an unlisted type ranks as even.
+    assert "counting a type that is not in the list as `even`" in part
+    assert "The list is empty on a\n   trial pick" in part
 
 
 def test_a_style_that_names_people_may_name_them():

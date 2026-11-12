@@ -1338,15 +1338,18 @@ def get_video(video_id: str) -> dict:
 
     learned: what this install's own watch figures (share of the video
     watched) say in the video's domain, at TOPIC_APPROVED and
-    REVISION_REQUESTED: {active, mode, measure, min_group, accounts,
+    REVISION_REQUESTED: {active, mode, stamp, measure, min_group, accounts,
     openings}. active is false when learning is off, publishing is off or no
     formula has min_group videos with figures on one account; then every
-    candidate's learned points are 0. mode is "learned" (the figures count) or
-    "explore" (a trial pick: formulas with too few videos get the points).
+    candidate's learned points are 0 and mode and stamp are "". mode is
+    "learned" (the figures count) or "explore" (a trial pick: formulas with
+    too few videos get the points, and openings is []). Pass stamp to
+    choose_script_formula as learned_stamp when you added the points.
     Each candidate carries learned: {points, standing, videos}; the points are
     added only to a formula that already fits the topic. openings ranks the
-    opening types with enough videos, each {type, label, standing, videos};
-    standing is better, even, mixed (accounts disagree) or worse.
+    opening types with enough videos, each {type, label, standing, videos},
+    also while active is false; standing is better, even, mixed (accounts
+    disagree) or worse.
     """
     _init_db()
     with _conn() as con:
@@ -3604,7 +3607,7 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
 
 @mcp.tool
 def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: str = "",
-                          repeat_reason: str = "", learned_mode: str = "") -> dict:
+                          repeat_reason: str = "", learned_stamp: str = "") -> dict:
     """Record the script formula for a video, before its script is written.
 
     Call this from the tubematic-formula-routing skill, once, at
@@ -3640,26 +3643,23 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
     formula_id both ""), to give it one. Returns formula_pick (the formula to write in), formula_runner_up,
     chosen_by ("auto" or "person"), the formula's label and word band, and
     reference: the file to read in the script-writing skill's directory.
-    learned_mode: get_video().formula_routing.learned.mode when learned.active
-    is true and you added the candidates' learned points ("learned" or
-    "explore"), else "". The tool works the figures out again when it records
-    the pick and refuses when the mode has changed since your read (another
-    video in the domain was picked in between): read get_video again and
-    decide again.
+    learned_stamp: get_video().formula_routing.learned.stamp when learned.active
+    is true and you added the candidates' learned points, else "". The tool
+    works the figures out again when it records the pick and refuses when they
+    changed since your read (another pick in the domain, a settings change or
+    new analytics): read get_video again and decide again. Not checked on a
+    video with a person's formula choice, where the figures change nothing.
 
     It also returns learned: what the domain's watch figures said about your
     formula ({mode, standing, points, videos, accounts, ...}), stored for the
-    dashboard, or {} when the pick was made without them (learned_mode "", or
+    dashboard, or {} when the pick was made without them (learned_stamp "", or
     a person chose the formula).
     """
     formula = (formula or "").strip()
     runner_up = (runner_up or "").strip()
     reason = " ".join((reason or "").split())
     repeat_reason = " ".join((repeat_reason or "").split())
-    learned_mode = (learned_mode or "").strip()
-    if learned_mode not in ("", "learned", "explore"):
-        return {"error": f"Invalid learned_mode {learned_mode!r}. Pass "
-                         "get_video().formula_routing.learned.mode, or \"\""}
+    learned_stamp = (learned_stamp or "").strip()
     ids = list(tformulas.FORMULAS)
     if formula not in tformulas.FORMULAS:
         return {"error": f"Invalid formula {formula!r}. Must be one of: {', '.join(ids)}"}
@@ -3720,19 +3720,20 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
         # cannot move between this read and the record it sets. A record is
         # kept only for a pick the agent scored with these figures: with a
         # person's choice the script is not in the agent's formula and nothing
-        # leaned on them, and a pick made without learned_mode (an older skill,
-        # or learning off when the agent read) added no points.
+        # leaned on them, and a pick made without learned_stamp (an older
+        # skill, or learning off when the agent read) added no points. The
+        # stamp covers the mode and every formula's points, so a record never
+        # describes figures other than the ones the agent scored with.
         evidence = ""
-        if learned_mode:
+        if learned_stamp and not choice:
             learning = _routing_learning(con, row["project_id"], video_id)
-            if not learning["active"] or learning["mode"] != learned_mode:
-                now_mode = learning["mode"] if learning["active"] else "inactive"
-                return {"error": f"This domain's watch figures changed since you read get_video "
-                                 f"(learned mode was {learned_mode!r}, is now {now_mode!r}): "
-                                 "another pick was recorded in between. Read get_video again "
-                                 "and decide again from its formula_routing."}
-            if not choice:
-                evidence = twatch.evidence_record(learning, formula)
+            if learning["stamp"] != learned_stamp:
+                return {"error": "This domain's watch figures changed since you read get_video "
+                                 f"(learned.stamp was {learned_stamp!r}, is now "
+                                 f"{learning['stamp']!r}: another pick in the domain, a settings "
+                                 "change or new analytics). Read get_video again and decide "
+                                 "again from its formula_routing."}
+            evidence = twatch.evidence_record(learning, formula)
         for role, fid in (("formula", formula), ("runner_up", runner_up)):
             if fid and not candidates[fid]["available"]:
                 return {"error": f"{role} {fid!r} ({candidates[fid]['label']}) is not available: "

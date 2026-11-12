@@ -172,10 +172,10 @@ scored.
 ```
 choose_script_formula(video_id, formula=<id>, reason=<one sentence>, runner_up=<id or "">,
                       repeat_reason=<one sentence, only for a recent formula>,
-                      learned_mode=<formula_routing.learned.mode, or "">)
+                      learned_stamp=<formula_routing.learned.stamp, or "">)
 ```
 
-- `learned_mode` is `formula_routing.learned.mode` when `learned.active` was `true` and you added
+- `learned_stamp` is `formula_routing.learned.stamp` when `learned.active` was `true` and you added
   the points in Step 3b, and `""` otherwise.
 
 - `reason` is one sentence of at most 300 characters, written for the person who approves the
@@ -201,9 +201,10 @@ If the call refuses:
 - **a recent formula with no `repeat_reason`:** go back to Step 4. Take another clear fit, or call
   again with `repeat_reason` when there is none.
 - **the domain's watch figures changed since you read `get_video`:** another video of the domain
-  was picked in between. Read `get_video` again and go back to Step 3b with the new points.
+  was picked in between, a setting changed or new analytics arrived. Read `get_video` again and go
+  back to Step 3b with the new points and `stamp`.
 - **`formula_routing` has no `learned`, or a candidate has no `learned`:** the server is older than
-  these instructions. Count its points as 0 and pass no `learned_mode`.
+  these instructions. Count its points as 0 and pass no `learned_stamp`.
 - **`get_video` has no `formula_routing`, or the tool does not exist:** the server is older than
   these instructions. Take `follow-the-flow` for an explanation or `scene-story` for a true case,
   add a comment saying the formula could not be recorded before the script, and go on to the

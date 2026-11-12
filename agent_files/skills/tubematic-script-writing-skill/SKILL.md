@@ -249,8 +249,10 @@ Then:
    When that still leaves two, read `formula_routing.learned.openings`: the types of opening
    with enough of this domain's videos to read, each with its `standing` (`better`, `even`,
    `mixed` or `worse` at holding this domain's viewers) and `videos`. Keep the one whose type
-   stands better there. The list only breaks a tie: an opening that is weaker for this topic
-   never wins because its type did well on other videos.
+   stands better there, counting a type that is not in the list as `even`. The list is empty on a
+   trial pick, and then nothing breaks the tie but the order of your drafts. The list only breaks
+   a tie: an opening that is weaker for this topic never wins because its type did well on other
+   videos.
 3. The kept opening is the start of the first segment's `voice`, word for word.
 
 **When a person switched the opening.** A human comment that begins "Opening switched to" means a

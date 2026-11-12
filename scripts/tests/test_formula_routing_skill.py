@@ -68,7 +68,7 @@ def test_the_skill_reads_every_field_the_candidates_carry():
 def test_the_skill_calls_the_tool_with_its_real_arguments_and_limit():
     text = _text()
     assert "choose_script_formula(video_id, formula=" in text
-    for arg in ("reason=", "runner_up=", "repeat_reason=", "learned_mode="):
+    for arg in ("reason=", "runner_up=", "repeat_reason=", "learned_stamp="):
         assert arg in text, arg
     assert f"at most {tf.REASON_MAX_CHARS} characters" in text
     for key in ("`formula_pick`", "`chosen_by`", "`reference`"):

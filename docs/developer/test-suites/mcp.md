@@ -812,17 +812,17 @@ Covers [Learned routing](../08-scripting-and-voice.md#learned-routing) through t
 - The setting `learned_routing` off, `publishing_enabled` off, or a domain with no evidence gives 0
   points everywhere and stores `''`. At a status where nothing is picked or written, the figures are
   not read.
-- A pick with `learned_mode` stores what the figures said about its formula, also when it was not
-  favoured. A pick without it, or on a video with a person's choice, stores `''` and uses no trial
-  slot.
-- A `learned_mode` that differs from the one read under the lock (another pick landed since the
-  read, or learning is now off) is refused and nothing is written. An unknown `learned_mode` is
-  refused.
+- A pick with `learned_stamp` stores what the figures said about its formula, also when it was not
+  favoured. A pick without it stores `''`. On a video with a person's choice nothing is checked,
+  `''` is stored and no trial slot is used.
+- A stamp that differs from the one worked out under the lock is refused and nothing is written:
+  a pick recorded in between, new figures, and learning switched off each change it.
 - Every fourth pick in a domain is a trial pick, which gives the points to formulas with too few
-  videos. A return to `TOPIC_PROPOSED` clears the record with the pick.
+  videos and empties the openings list. A return to `TOPIC_PROPOSED` clears the record with the
+  pick.
 
 Trap: the record is worked out by the server under the pick's write lock, and only for a pick the
-agent says it scored in the same mode. Without that check, a session that read two videos before
+agent scored with the same stamp. Without that check, a session that read two videos before
 picking either would score the second with learned points while its record called it a trial pick.
 
 ### `test_choose_visual_style.py`

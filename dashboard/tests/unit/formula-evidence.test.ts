@@ -36,13 +36,13 @@ describe("formulaEvidenceLine", () => {
     expect(formulaEvidenceLine(record({ standing: "mixed", points: 0 }), NAMES))
       .toContain("the accounts disagree");
     expect(formulaEvidenceLine(record({ standing: "thin", points: 0, videos: 0 }), NAMES))
-      .toContain("fewer than 20 of this domain's videos with figures use Follow the Flow");
+      .toContain("Follow the Flow has fewer than 20 of this domain's videos with figures on any one account");
   });
 
   it("calls a trial pick a trial pick", () => {
     expect(formulaEvidenceLine(record({ mode: "explore", standing: "thin", points: 2 }), NAMES))
-      .toBe("A trial pick: fewer than 20 of this domain's videos with watch figures use Follow the "
-        + "Flow, so Auto tried it to learn how it holds viewers.");
+      .toBe("A trial pick: Follow the Flow has fewer than 20 of this domain's videos with watch "
+        + "figures on any one account, so Auto tried it to learn how it holds viewers.");
     expect(formulaEvidenceLine(record({ mode: "explore", points: 0 }), NAMES))
       .toBe("A trial pick, made without this domain's watch figures.");
   });

@@ -93,10 +93,11 @@ def test_a_group_under_the_minimum_does_not_count(con):
     _many(con, A, 60, MIN - 1)
     _many(con, B, 40, MIN)
     ev = _ev(con)
-    assert ev["formulas"][A]["standing"] == watch.THIN
-    assert ev["formulas"][A]["figures"] == MIN - 1
+    assert A not in ev["formulas"]
     assert ev["formulas"][B]["standing"] in watch.STANDINGS
     assert ev["active"] is True
+    on = watch.routing_learning(con, "dom", "new", True, NOW)
+    assert on["formulas"][A]["standing"] == watch.THIN
 
 
 def test_an_account_with_too_few_posts_in_the_domain_gives_no_evidence(con):
@@ -320,3 +321,46 @@ def test_a_trial_pick_moves_the_points_to_thin_formulas(con):
     assert on["mode"] == "explore"
     assert on["formulas"][A]["points"] == 0 and on["formulas"][B]["points"] == 0
     assert on["formulas"][C]["points"] == 2
+
+
+# ── round-2 rules ───────────────────────────────────────────────────────────
+
+def test_a_formula_this_version_dropped_does_not_switch_learning_on(con):
+    _many(con, "a-formula-a-later-version-dropped", 60, MIN)
+    _many(con, A, 40, MIN - 1)
+    assert _ev(con)["active"] is False
+    assert watch.routing_learning(con, "dom", "new", True, NOW)["active"] is False
+
+
+def test_openings_reach_the_writer_before_any_formula_counts(con):
+    # Opening types are few, so a type gathers enough videos long before a
+    # formula does. No formula counts here, so no formula gets points.
+    for i, formula in enumerate(list(tf.FORMULAS)[:8]):
+        _many(con, formula, 60, 4, hook="question")
+        _many(con, formula, 40, 4, hook="problem")
+    on = watch.routing_learning(con, "dom", "new", True, NOW)
+    assert on["active"] is False and on["formulas"] == {} and on["stamp"] == ""
+    assert [o["type"] for o in on["openings"]] == ["question", "problem"]
+    assert watch.evidence_record(on, A) == ""
+
+
+def test_a_trial_pick_sets_the_opening_figures_aside_too(con):
+    _many(con, A, 60, MIN, hook="question")
+    _many(con, B, 40, MIN, hook="problem")
+    assert watch.routing_learning(con, "dom", "new", True, NOW)["openings"]
+    _picked(con, 3)
+    trial = watch.routing_learning(con, "dom", "new", True, NOW)
+    assert trial["mode"] == "explore" and trial["openings"] == []
+
+
+def test_the_stamp_changes_with_the_mode_and_with_any_formulas_points(con):
+    _many(con, A, 60, MIN)
+    _many(con, B, 40, MIN)
+    first = watch.routing_learning(con, "dom", "new", True, NOW)["stamp"]
+    assert first.startswith("learned-")
+    assert watch.routing_learning(con, "dom", "new", True, NOW)["stamp"] == first
+    _many(con, C, 70, MIN)   # C now counts: its points change, and so do the others' standings
+    second = watch.routing_learning(con, "dom", "new", True, NOW)["stamp"]
+    assert second != first and second.startswith("learned-")
+    _picked(con, 3)
+    assert watch.routing_learning(con, "dom", "new", True, NOW)["stamp"].startswith("explore-")

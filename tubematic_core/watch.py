@@ -10,6 +10,7 @@ snapshot ever taken.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -268,13 +269,13 @@ def domain_evidence(con, project_id: str, now: datetime | None = None) -> dict:
     better, even or worse by its median against that baseline. Medians, so one
     outlier cannot carry a group.
 
-    Returns {active, accounts, formulas: {id: {standing, videos, accounts,
-    figures}}, openings: [{type, label, standing, videos}]}. `figures` is the
-    most posts with a figure the formula has on any one account; `videos`
-    counts the distinct videos behind its counted groups and `accounts` the
-    accounts those groups are on. The top-level `accounts` counts the accounts
-    with a baseline. `active` is true when any
-    formula has a counted group.
+    Returns {active, accounts, formulas: {id: {standing, videos, accounts}},
+    openings: [{type, label, standing, videos}]}. A group's `videos` counts the
+    distinct videos behind it where it counted, and its `accounts` the accounts
+    where it counted. The top-level `accounts` counts the accounts with a
+    baseline. `active` is true when a formula this version ships has a counted
+    group: a formula a later version dropped can still be in the figures and
+    must not switch learning on.
     """
     now = now or datetime.now(timezone.utc)
     cutoff = now - timedelta(days=LEARN_MIN_AGE_DAYS)
@@ -293,10 +294,14 @@ def domain_evidence(con, project_id: str, now: datetime | None = None) -> dict:
         by_account.setdefault(row["social_account_id"], []).append(
             (row["formula_id"] or "", row["hook_type"] or "", row["video_id"], share))
 
-    groups = {"formula": {}, "hook": {}}  # key -> {"standings": [], "videos": set(), "figures": 0}
-    # standings holds one entry per account where the group counted.
+    # key -> {"standings": one per account where the group counted, "videos": set()}
+    groups = {"formula": {}, "hook": {}}
     accounts = 0
     for posts in by_account.values():
+        if len(posts) < WATCH_MIN_GROUP:
+            continue
+        accounts += 1
+        baseline = median(sorted(share for *_rest, share in posts))
         per = {"formula": {}, "hook": {}}
         for formula, hook, video, share in posts:
             for dim, key in (("formula", formula), ("hook", hook)):
@@ -304,34 +309,22 @@ def domain_evidence(con, project_id: str, now: datetime | None = None) -> dict:
                     per[dim].setdefault(key, []).append((video, share))
         for dim in per:
             for key, items in per[dim].items():
-                entry = groups[dim].setdefault(key, {"standings": [], "videos": set(), "figures": 0})
-                entry["figures"] = max(entry["figures"], len(items))
-        if len(posts) < WATCH_MIN_GROUP:
-            continue
-        accounts += 1
-        baseline = median(sorted(share for *_rest, share in posts))
-        for dim in per:
-            for key, items in per[dim].items():
                 if len(items) < WATCH_MIN_GROUP:
                     continue
-                entry = groups[dim][key]
+                entry = groups[dim].setdefault(key, {"standings": [], "videos": set()})
                 entry["standings"].append(_standing(median(sorted(s for _v, s in items)) / baseline))
                 entry["videos"].update(v for v, _s in items)
 
     def summary(entry):
         return {"standing": _combined(entry["standings"]), "videos": len(entry["videos"]),
-                "accounts": len(entry["standings"]),
-                "figures": entry["figures"]}
+                "accounts": len(entry["standings"])}
 
     formulas = {key: summary(entry) for key, entry in groups["formula"].items()}
-    openings = [
-        {"type": key, "label": tformulas.HOOK_TYPES.get(key, key), **summary(entry)}
-        for key, entry in groups["hook"].items() if entry["standings"]]
+    openings = [{"type": key, "label": tformulas.HOOK_TYPES.get(key, key),
+                 **{k: v for k, v in summary(entry).items() if k != "accounts"}}
+                for key, entry in groups["hook"].items()]
     openings.sort(key=lambda o: (STANDINGS.index(o["standing"]), -o["videos"], o["type"]))
-    for opening in openings:
-        del opening["figures"]
-        del opening["accounts"]
-    return {"active": any(f["standing"] != THIN for f in formulas.values()),
+    return {"active": any(fid in tformulas.FORMULAS for fid in formulas),
             "accounts": accounts, "formulas": formulas, "openings": openings}
 
 
@@ -352,22 +345,35 @@ def points(standing: str, mode: str) -> int:
     return LEARNED_POINTS.get(standing, 0)
 
 
+def _stamp(mode: str, formulas: dict) -> str:
+    """A short fingerprint of what the router scores with: the mode and every
+    formula's points. choose_script_formula compares the stamp the agent read
+    with the one it works out under its write lock."""
+    body = json.dumps({fid: f["points"] for fid, f in formulas.items()}, sort_keys=True)
+    return f"{mode}-{hashlib.sha256(body.encode()).hexdigest()[:10]}"
+
+
 def routing_learning(con, project_id: str, video_id: str, enabled: bool,
                      now: datetime | None = None) -> dict:
     """get_video's formula_routing.learned, before the candidates take their
-    points: {active, mode, measure, min_group, openings, formulas}.
+    points: {active, mode, stamp, measure, min_group, accounts, openings,
+    formulas}.
 
-    enabled: the setting learned_routing and publishing both on. Off, or a
-    domain with no counted group, is {"active": False, ...} with no formulas:
-    every candidate then gets 0 points and routing is as it was before.
+    enabled: the setting learned_routing and publishing both on. Off is
+    {"active": False, ...} with nothing in it. On, `active` is the formulas'
+    evidence: inactive, every candidate gets 0 points and routing is as it was
+    before, though `openings` still lists opening types with enough videos. A
+    trial pick sets the figures aside for openings too, so `openings` is []
+    there: otherwise the favoured type would be used more and look ever more
+    certain, the loop the trial picks exist to break.
     """
-    off = {"active": False, "mode": "", "measure": LEARN_MEASURE,
+    off = {"active": False, "mode": "", "stamp": "", "measure": LEARN_MEASURE,
            "min_group": WATCH_MIN_GROUP, "accounts": 0, "openings": [], "formulas": {}}
     if not enabled or not project_id:
         return off
     evidence = domain_evidence(con, project_id, now)
     if not evidence["active"]:
-        return off
+        return {**off, "accounts": evidence["accounts"], "openings": evidence["openings"]}
     mode = learning_mode(con, project_id, video_id)
     formulas = {}
     for fid in tformulas.FORMULAS:
@@ -375,9 +381,11 @@ def routing_learning(con, project_id: str, video_id: str, enabled: bool,
         formulas[fid] = {"points": points(entry["standing"], mode),
                          "standing": entry["standing"], "videos": entry["videos"],
                          "accounts": entry["accounts"]}
-    return {"active": True, "mode": mode, "measure": LEARN_MEASURE,
-            "min_group": WATCH_MIN_GROUP, "accounts": evidence["accounts"],
-            "openings": evidence["openings"], "formulas": formulas}
+    return {"active": True, "mode": mode, "stamp": _stamp(mode, formulas),
+            "measure": LEARN_MEASURE, "min_group": WATCH_MIN_GROUP,
+            "accounts": evidence["accounts"],
+            "openings": [] if mode == "explore" else evidence["openings"],
+            "formulas": formulas}
 
 
 def candidate_learning(learning: dict, formula_id: str) -> dict:

@@ -276,7 +276,7 @@ is `tubematic_core/formulas.py::routing_candidates` at `TOPIC_APPROVED` before t
 domain's previous two videos, newest first.
 
 `learned` is what the domain's own watch figures say, read at `TOPIC_APPROVED` and
-`REVISION_REQUESTED` only: `{active, mode, measure, min_group, accounts, openings}` (`mode` is `""` while inactive), where
+`REVISION_REQUESTED` only: `{active, mode, stamp, measure, min_group, accounts, openings}` (`mode` and `stamp` are `""` while inactive), where
 `openings` lists the opening types with a counted group as `{type, label, standing, videos}`. At
 any other status it is `{active: false}`. Each candidate carries `learned: {points, standing,
 videos}`, with 0 points for every candidate while learning is inactive. The rule is in
@@ -482,7 +482,7 @@ the new `visual_style` and `style`, so the agent writes the script for it in the
 
 ### `choose_script_formula`
 
-`choose_script_formula(video_id, formula, reason, runner_up="", repeat_reason="", learned_mode="")` records the
+`choose_script_formula(video_id, formula, reason, runner_up="", repeat_reason="", learned_stamp="")` records the
 script formula for a video, at `TOPIC_APPROVED`, after the style is decided and before the script
 is written. The [tubematic-formula-routing skill](08-scripting-and-voice.md#how-a-formula-is-picked)
 calls it.
@@ -495,7 +495,7 @@ calls it.
 - `runner_up` is another candidate, or `""`. The dashboard offers it as a switch at `SCRIPT_READY`
   ([`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula)).
 - `repeat_reason` is one sentence, passed only for a formula marked `recent`.
-- `learned_mode` is `formula_routing.learned.mode` when the agent added the candidates' learned
+- `learned_stamp` is `formula_routing.learned.stamp` when the agent added the candidates' learned
   points, else `""`.
 
 It refuses an unknown or unavailable `formula` or `runner_up`, a video at `TOPIC_APPROVED` whose
@@ -504,10 +504,10 @@ style is not decided, a `recent` formula with no `repeat_reason` on a video with
 `REVISION_REQUESTED`. At `REVISION_REQUESTED` it replaces the pick, or gives a video scripted
 before picks existed its first one, and refuses a video whose pick is a person's choice. The values it read from the row
 are repeated in the `UPDATE`'s `WHERE`, and the setting and the domain's recent formulas are read
-after the write lock is taken (`BEGIN IMMEDIATE`). With a `learned_mode`, the tool reads the domain's
-watch figures under the same lock, refuses when the mode differs from what it reads (or learning is
-now inactive), and stores `formula_evidence` for `formula`. With no `learned_mode`, or on a video
-with a `formula_choice`, it stores `''`
+after the write lock is taken (`BEGIN IMMEDIATE`). With a `learned_stamp` on a video with no
+`formula_choice`, the tool reads the domain's watch figures under the same lock, refuses when the
+stamp differs from the one it works out, and stores `formula_evidence` for `formula`. With no
+`learned_stamp`, or on a video with a `formula_choice`, it checks nothing and stores `''`
 ([Learned routing](08-scripting-and-voice.md#learned-routing)).
 
 The result carries `formula_pick`, `formula_runner_up`, `formula_reason`, `chosen_by` (`auto` or

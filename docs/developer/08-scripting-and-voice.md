@@ -224,8 +224,9 @@ and scores the picks. You run it by hand; see
 An install's own analytics are the only retention data it has. Learned routing reads them: in
 each domain, the formulas and the opening types that hold that domain's viewers get points in the
 router and a place in the writer's choice of opening. The rule is code in
-`tubematic_core/watch.py`, shared by the API and the MCP server, so the two cannot disagree. The
-same module holds the [watch figure](14-publishing.md#watch-figures) reader and `WATCH_MIN_GROUP`.
+`tubematic_core/watch.py`, run by the MCP server. The same module holds the
+[watch figure](14-publishing.md#watch-figures) reader, `median` and `WATCH_MIN_GROUP`, which the
+API's **Watch time** figures use too, so the two processes read a post's figures the same way.
 
 `watch.py::domain_evidence` reads the latest snapshot of every published post of the domain's
 videos and takes its share watched (`LEARN_MEASURE`, `watched_pct`). Seconds watched would favour
@@ -266,16 +267,21 @@ at `TOPIC_APPROVED` and `REVISION_REQUESTED`, where a formula is picked or a scr
 
 The script-writing skill reads `formula_routing.learned.openings`, the opening types with a
 counted group, ranked. It is the last tie-break between two openings, after the quality of the
-opening and after the domain's recent types.
+opening and after the domain's recent types, and an unlisted type ranks as `even`. Opening types
+are few, so they gather enough videos before any formula does: the list is filled whenever learning
+is on, also while no formula counts. A trial pick empties it, so the favoured opening type does not
+gather videos and certainty the way an unchecked formula would.
 
-The skill passes the mode it scored with as `choose_script_formula`'s `learned_mode`. The tool
-works the figures out again under its write lock, refuses the pick when the mode has changed since
-the agent read it (another pick in the domain landed in between, which moves the trial-pick count),
-and stores `formula_evidence`, which the video window shows under **Why this formula**. The agent
-never supplies the record. No record is stored for a pick made without `learned_mode` (learning was
-off when the agent read, or an older skill) or for a video with a `formula_choice`, whose script is
-written in the person's formula whatever the figures say. Such a pick does not count toward the
-trial picks either.
+`get_video` gives `learned.stamp`, a short fingerprint of the mode and every formula's points
+(`watch.py::_stamp`). The skill passes it as `choose_script_formula`'s `learned_stamp` when it added
+the points. The tool works the figures out again under its write lock and refuses the pick when
+the stamp differs: another pick in the domain moved the trial-pick count, a setting changed, or new
+analytics moved a standing. It then stores `formula_evidence`, which the video window shows under
+**Why this formula**, so the record always describes the figures the agent scored with. The agent
+never supplies the record. No record is stored for a pick made without `learned_stamp` (learning
+was off when the agent read, or an older skill) or for a video with a `formula_choice`, whose
+script is written in the person's formula whatever the figures say; the stamp is not checked there.
+Such a pick does not count toward the trial picks either.
 
 ### The topic's angle
 

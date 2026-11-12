@@ -117,7 +117,7 @@ export function formulaEvidenceLine(raw: string | undefined, names: ScriptFormul
   const behind = `${plural(ev.videos, "video", "videos")} on ${plural(ev.accounts, "account", "accounts")}`;
   if (ev.mode === "explore") {
     return ev.standing === "thin"
-      ? `A trial pick: fewer than ${ev.min_group} of this domain's videos with watch figures use ${label}, so Auto tried it to learn how it holds viewers.`
+      ? `A trial pick: ${label} has fewer than ${ev.min_group} of this domain's videos with watch figures on any one account, so Auto tried it to learn how it holds viewers.`
       : "A trial pick, made without this domain's watch figures.";
   }
   switch (ev.standing) {
@@ -130,6 +130,6 @@ export function formulaEvidenceLine(raw: string | undefined, names: ScriptFormul
     case "mixed":
       return `This install's watch figures were read: for ${label} the accounts disagree (${behind}), so they did not count.`;
     default:
-      return `This install's watch figures were read: fewer than ${ev.min_group} of this domain's videos with figures use ${label}, so they did not count.`;
+      return `This install's watch figures were read: ${label} has fewer than ${ev.min_group} of this domain's videos with figures on any one account, so they did not count.`;
   }
 }

@@ -90,6 +90,11 @@ def _evidence(vid="vid_1"):
                            (vid,)).fetchone()[0]
 
 
+def _stamp(vid="vid_1"):
+    """The stamp the skill passes: get_video's formula_routing.learned.stamp."""
+    return server.get_video(vid)["formula_routing"]["learned"]["stamp"]
+
+
 def _candidates(routing):
     return {c["id"]: c for c in routing["candidates"]}
 
@@ -127,6 +132,7 @@ def test_a_domain_with_no_evidence_routes_as_before(evidence):
     _video(project="empty")
     routing = server.get_video("vid_1")["formula_routing"]
     assert routing["learned"]["active"] is False and routing["learned"]["openings"] == []
+    assert routing["learned"]["stamp"] == ""
     server.choose_script_formula("vid_1", GOOD, REASON)
     assert _evidence() == ""
 
@@ -140,8 +146,10 @@ def test_the_figures_are_not_read_where_nothing_is_picked_or_written(evidence):
 
 def test_the_pick_records_what_the_figures_said_about_it(evidence):
     _video()
+    stamp = _stamp()
+    assert stamp.startswith("learned-")
     out = server.choose_script_formula("vid_1", GOOD, REASON, runner_up=OTHER,
-                                       learned_mode="learned")
+                                       learned_stamp=stamp)
     record = json.loads(_evidence())
     assert record == {"formula": GOOD, "mode": "learned", "measure": "watched_pct",
                       "standing": "better", "points": 2, "videos": MIN, "accounts": 1,
@@ -151,22 +159,23 @@ def test_the_pick_records_what_the_figures_said_about_it(evidence):
 
 def test_a_pick_the_figures_do_not_favour_still_records_them(evidence):
     _video()
-    server.choose_script_formula("vid_1", OTHER, REASON, learned_mode="learned")
+    server.choose_script_formula("vid_1", OTHER, REASON, learned_stamp=_stamp())
     assert json.loads(_evidence())["standing"] == watch.THIN
 
 
-def test_with_a_persons_choice_no_record_is_stored_and_no_trial_is_used(evidence):
+def test_with_a_persons_choice_no_record_is_stored_and_nothing_is_checked(evidence):
     # The script is written in the person's formula whatever the figures say,
-    # so nothing leaned on them, and the pick must not use up a trial slot.
+    # so nothing leaned on them, the pick must not use up a trial slot, and a
+    # stale stamp is no reason to refuse it.
     _video(choice=OTHER)
-    out = server.choose_script_formula("vid_1", GOOD, REASON, learned_mode="learned")
+    out = server.choose_script_formula("vid_1", GOOD, REASON, learned_stamp="learned-stale")
     assert out["formula_pick"] == OTHER and out["learned"] == {}
     assert _evidence() == ""
     _video("vid_2")
     assert server.get_video("vid_2")["formula_routing"]["learned"]["mode"] == "learned"
 
 
-def test_a_pick_made_without_learned_mode_stores_no_record(evidence):
+def test_a_pick_made_without_a_stamp_stores_no_record(evidence):
     # An older skill, or a session that read learning as inactive: it added no
     # points, so the dashboard must not say the pick leaned on figures.
     _video()
@@ -174,64 +183,74 @@ def test_a_pick_made_without_learned_mode_stores_no_record(evidence):
     assert "error" not in out and out["learned"] == {} and _evidence() == ""
 
 
-def test_a_mode_that_changed_since_the_read_is_refused_and_nothing_is_written(evidence):
+def _no_pick():
+    with server._conn() as con:
+        return con.execute("SELECT formula_pick FROM videos WHERE id = 'vid_1'").fetchone()[0] == ""
+
+
+def test_a_pick_recorded_in_between_is_refused_and_nothing_is_written(evidence):
+    # A session reads several videos first, then picks: by the time it picks
+    # the last one, the earlier picks have moved the trial count.
     for n in range(3):
         _video(f"v{n}")
-    # The session reads both videos' modes, then records two picks.
     _video()
-    seen = server.get_video("vid_1")["formula_routing"]["learned"]["mode"]
-    assert seen == "learned"
+    seen = _stamp()
     for n in range(3):
         assert "error" not in server.choose_script_formula(
-            f"v{n}", OTHER, REASON, repeat_reason=REPEAT, learned_mode="learned")
-    out = server.choose_script_formula("vid_1", GOOD, REASON, learned_mode=seen)
-    assert "watch figures changed" in out["error"] and "'explore'" in out["error"]
-    assert _evidence() == ""
-    with server._conn() as con:
-        assert con.execute("SELECT formula_pick FROM videos WHERE id = 'vid_1'").fetchone()[0] == ""
+            f"v{n}", OTHER, REASON, repeat_reason=REPEAT, learned_stamp=_stamp(f"v{n}"))
+    out = server.choose_script_formula("vid_1", GOOD, REASON, learned_stamp=seen)
+    assert "watch figures changed" in out["error"] and "explore-" in out["error"]
+    assert _evidence() == "" and _no_pick()
 
 
-def test_a_learned_mode_with_learning_now_off_is_refused(evidence):
+def test_new_figures_since_the_read_are_refused(evidence):
+    # Same mode, other points: the record would describe figures the agent
+    # did not score with.
     _video()
+    seen = _stamp()
+    _published(OTHER, 70, MIN)
+    out = server.choose_script_formula("vid_1", GOOD, REASON, learned_stamp=seen)
+    assert "watch figures changed" in out["error"] and _no_pick()
+
+
+def test_a_stamp_with_learning_now_off_is_refused(evidence):
+    _video()
+    seen = _stamp()
     _setting("learned_routing", "false")
-    out = server.choose_script_formula("vid_1", GOOD, REASON, learned_mode="learned")
-    assert "'inactive'" in out["error"]
-
-
-def test_an_unknown_learned_mode_is_refused(evidence):
-    _video()
-    assert "Invalid learned_mode" in server.choose_script_formula(
-        "vid_1", GOOD, REASON, learned_mode="greedy")["error"]
+    out = server.choose_script_formula("vid_1", GOOD, REASON, learned_stamp=seen)
+    assert "watch figures changed" in out["error"] and _no_pick()
 
 
 def test_every_fourth_pick_in_the_domain_is_a_trial_pick(evidence):
     modes = []
     for n in range(5):
         vid = _video(f"v{n}")
-        modes.append(server.get_video(vid)["formula_routing"]["learned"]["mode"])
+        learned = server.get_video(vid)["formula_routing"]["learned"]
+        modes.append(learned["mode"])
         out = server.choose_script_formula(vid, OTHER, REASON, repeat_reason=REPEAT,
-                                           learned_mode=modes[-1])
+                                           learned_stamp=learned["stamp"])
         assert "error" not in out
         assert json.loads(_evidence(vid))["mode"] == modes[-1]
     assert modes == ["learned", "learned", "learned", "explore", "learned"]
-    vid = _video("v3b")
-    assert server.get_video(vid)["formula_routing"]["learned"]["mode"] == "learned"
 
 
-def test_a_trial_pick_gives_the_points_to_formulas_with_too_few_videos(evidence):
+def test_a_trial_pick_gives_the_points_to_thin_formulas_and_sets_openings_aside(evidence):
     for n in range(3):
-        assert "error" not in server.choose_script_formula(_video(f"v{n}"), OTHER, REASON,
+        vid = _video(f"v{n}")
+        assert "error" not in server.choose_script_formula(vid, OTHER, REASON,
                                                            repeat_reason=REPEAT,
-                                                           learned_mode="learned")
+                                                           learned_stamp=_stamp(vid))
     _video()
-    cands = _candidates(server.get_video("vid_1")["formula_routing"])
+    routing = server.get_video("vid_1")["formula_routing"]
+    cands = _candidates(routing)
     assert cands[GOOD]["learned"]["points"] == 0
     assert cands[OTHER]["learned"]["points"] == 2
+    assert routing["learned"]["openings"] == []
 
 
 def test_a_return_to_the_topic_clears_the_record_with_the_pick(evidence):
     _video()
-    server.choose_script_formula("vid_1", GOOD, REASON, learned_mode="learned")
+    server.choose_script_formula("vid_1", GOOD, REASON, learned_stamp=_stamp())
     assert _evidence() != ""
     with server._conn() as con:
         con.execute("UPDATE videos SET status = 'SCRIPT_READY' WHERE id = 'vid_1'")
