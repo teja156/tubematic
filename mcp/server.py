@@ -8746,7 +8746,7 @@ def get_timeline(video_id: str, include_words: bool = False) -> dict:
     opt-in to keep the common-case payload small.
 
     Returns {video_id, total_frames, fps, first_frame, segments[, words]},
-    where segments is [{id, startFrame, endFrame, beat, role}] — empty if the
+    where segments is [{id, startFrame, endFrame, beat, role, insert}] — empty if the
     video predates segmented scripts. beat is the formula beat the script
     gave the segment ("" when none). role is what the segment owes the
     picture: "opening" for the first segment; "turn", "reopen" or "payoff"
@@ -8754,7 +8754,9 @@ def get_timeline(video_id: str, include_words: bool = False) -> dict:
     turn or a re-opening needs a visible change on its first word, the payoff
     the video's strongest picture (the style's own way of doing each is in
     get_video's style.picture). first_frame is the formula's line on what the
-    first frame shows ("" when the video has no formula on record).
+    first frame shows ("" when the video has no formula on record). insert is
+    the insert style the script marked the segment with ("" for the main
+    style): the scene author puts one insert scene inside each marked segment.
     Returns {"error": ...} if the video doesn't exist or voice
     hasn't been generated yet (timeline.json not written).
     """
@@ -8789,6 +8791,12 @@ def get_timeline(video_id: str, include_words: bool = False) -> dict:
         # A stored segment the annotation cannot read: hand back the spans
         # unlabelled rather than failing the read.
         segments = [{**s, "beat": "", "role": ""} for s in raw_segments if isinstance(s, dict)]
+    # The insert style each segment is marked with, "" for the main style
+    # (TMDEV-224): the scene author puts one insert inside each marked segment.
+    marks = {s["id"]: tinserts.mark_of(s) for s in _parsed_segments(row["script_segments"])
+             if isinstance(s, dict) and isinstance(s.get("id"), str)}
+    segments = [{**s, "insert": marks.get(s.get("id"), "") if isinstance(s.get("id"), str) else ""}
+                for s in segments]
     result = {
         "video_id": video_id,
         "total_frames": timeline.get("totalFrames"),

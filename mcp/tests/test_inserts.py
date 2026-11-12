@@ -430,3 +430,23 @@ def test_the_text_audit_samples_each_insert_and_names_it():
     assert all(600 <= p["first"] < 840 for p in insert_passes if p["scene"] == 1)
     assert text_audit._unit_label(cfg, 1) == "insert 1 (system_flow)"
     assert text_audit._unit_label(cfg, 0) == "scene 0 (vid/Main)"
+
+
+def test_get_timeline_names_each_segments_insert(video):
+    vid = video()
+    segs = server.get_timeline(vid)["segments"]
+    assert [s["insert"] for s in segs] == ["", "", "system_flow", "", ""]
+
+
+def test_the_inserts_skills_worked_example_passes():
+    """The example in agent_files/skills/tubematic-inserts is what agents copy;
+    it must pass the insert style's own check over its window."""
+    import re
+    import system_flow
+    skill = (pathlib.Path(__file__).resolve().parents[2]
+             / "agent_files/skills/tubematic-inserts/SKILL.md").read_text()
+    block = re.findall(r"```json\n(\"inserts\": \[.*?\])\n```", skill, re.S)[-1]
+    entry = json.loads("{" + block + "}")["inserts"][0]
+    words = list(range(600, 900, 10))
+    assert system_flow.check_insert(entry, FPS, words, ICONS) == []
+    assert entry["durationInFrames"] <= tinserts.TARGET_SECONDS * FPS
