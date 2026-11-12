@@ -1,4 +1,4 @@
-"""Advisory checks on a script's words (TMDEV-211).
+"""Advisory checks on a script's words (TMDEV-211, TMDEV-213).
 
 `check` reads a script as plain spoken text and returns a list of warnings.
 A warning never refuses a write and never changes a status: the script write
@@ -35,6 +35,8 @@ TITLE_MIN_WORDS = 3
 RECENT_SCRIPTS = 30
 # How many opening words of the closing sentence make it "the same closing".
 CLOSING_WORDS = 3
+# How many opening words of the first sentence make it "the same opening".
+OPENING_WORDS = 3
 
 _A = r"(?:'|’)"  # an apostrophe, straight or curly
 
@@ -141,12 +143,21 @@ def closing_opening(text: str) -> tuple:
     return tuple(head) if len(head) == CLOSING_WORDS else ()
 
 
+def opening_words(text: str) -> tuple:
+    """The first words of a script's first sentence, or () when that sentence
+    has fewer than OPENING_WORDS words."""
+    sents = sentences(text)
+    head = words(sents[0])[:OPENING_WORDS] if sents else []
+    return tuple(head) if len(head) == OPENING_WORDS else ()
+
+
 def _warn(warn_id: str, message: str) -> dict:
     return {"id": warn_id, "message": message}
 
 
 def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_hook: str = "",
-          recent_scripts=(), beats=()) -> list[dict]:
+          recent_scripts=(), hook_type: str = "", recent_hook_types=(),
+          beats=()) -> list[dict]:
     """Warnings for one script, as [{"id", "message"}], in a fixed order.
 
     script: the spoken text, markup already removed.
@@ -155,6 +166,9 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
     kept_hook: the text of the opening the writer kept, markup removed, or "".
     recent_scripts: spoken texts of the same domain's earlier scripts, newest
         first; only the first RECENT_SCRIPTS are read.
+    hook_type: the type of the opening the writer kept, or "".
+    recent_hook_types: the kept opening types of the domain's previous videos,
+        newest first; only the first tformulas.ROTATION_WINDOW are read.
     beats: each segment's beat label, in order ("" for none).
     """
     sents = sentences(script)
@@ -199,6 +213,19 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
                          "The first sentence repeats the publish title. The title and the opening "
                          "are a pair: the title states the question or the stake, and the first "
                          "sentence continues from where it stops."))
+    start = opening_words(script)
+    if start:
+        same = sum(opening_words(s) == start for s in list(recent_scripts)[:RECENT_SCRIPTS])
+        if same:
+            out.append(_warn("opening_repeat",
+                             f"The script opens with \"{' '.join(start)}\", like {same} of this "
+                             "domain's recent scripts."))
+    if hook_type and hook_type in list(recent_hook_types)[:tformulas.ROTATION_WINDOW]:
+        out.append(_warn("hook_type_repeat",
+                         f"The opening is a {tformulas.HOOK_TYPES.get(hook_type, hook_type)} "
+                         "opening, like one of this domain's previous "
+                         f"{tformulas.ROTATION_WINDOW} videos. Vary the type of opening from "
+                         "video to video where another type fits the topic honestly."))
     if _RUNUP.search(script):
         out.append(_warn("staged_runup",
                          "A staged run-up (\"Here's the thing\", \"Here's the catch\") announces "

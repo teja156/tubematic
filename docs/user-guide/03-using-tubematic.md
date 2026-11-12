@@ -29,6 +29,8 @@ Before you approve, set the choices that are fixed from then on:
 - the **angle**, if you want the video to open on something else. Open the topic and press **Edit**
   on its **Topic** tab,
 - the **script profile**, if you want a particular writing style,
+- the **formula**, in the video's window, if you want a particular script structure. Left on
+  **Auto**, the agent picks one for the topic (see [Script formulas](#script-formulas)),
 - the **visual style** and, optionally, a **mascot**
   (see [Visual Styles and Mascots](13-visual-styles-and-mascots.md)),
 - the **voice**, if you want one that uses a different ElevenLabs model. The agent writes the script
@@ -42,10 +44,10 @@ Press **Read** to open the script. The agent leaves a comment explaining what it
 
 Above the script, the **Script** tab shows what the agent built it on:
 
-- **Formula** is the structure the agent chose for this topic. See
-  [Script formulas](#script-formulas).
+- **Formula** is the structure the script follows. See [Script formulas](#script-formulas).
 - **Openings considered** lists the three openings the agent drafted, with the one it used marked.
-  To have the script start with another one, press **Revise** and say which.
+  To have the script start with another one, press **Use this opening** under it. The agent
+  rewrites the script from that opening, in the same formula.
 - **Script warnings** are automatic checks on the script's words, such as an ending that asks
   viewers to follow, or a script longer than its formula runs. They are advice for you and the
   agent, and you can approve a script that has them.
@@ -141,7 +143,7 @@ script and records it on the video. When your topic offers none, the agent says 
 and writes the script from the topic alone. The same happens to a topic that was proposed before
 angles existed.
 
-![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button and its Edit defaults button. The first domain is open and shows its style, voice, agent and topic cap](../images/topics.png)
+![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button and its Edit defaults button. The second domain is open and shows its style, voice, formula, agent and topic cap](../images/topics.png)
 
 ### Adding a domain
 
@@ -279,8 +281,43 @@ profile's structure or its sign-off.
 ## Script formulas
 
 A formula is the structure of a script: its parts in order, how it opens, where it turns and how
-it ends. The agent picks one for each video from the kind of topic it is, then writes the script
-in your script profile's voice.
+it ends. Each video gets one before its script is written, and the agent then writes the script
+in that formula and in your script profile's voice.
+
+### How a video gets its formula
+
+Left on **Auto**, the agent picks the formula once the topic is approved and the visual style is
+known. It scores every formula against the kind of topic it is, and it avoids the formula of the
+domain's previous two videos when another one fits, so a domain's videos do not all share one
+structure. The opening varies in the same way.
+
+You can choose the formula yourself in two places:
+
+- For one video, with the **Formula** picker in its window at Topic Proposed, or on the
+  **New Video** page.
+- For a domain, with the **Formula** picker under **Edit defaults** on its row on the **Topics**
+  page. Every new video in
+  the domain then starts with that formula, whichever research mode found it.
+
+Your choice is the formula the script is written in. The agent still records the formula it would
+have picked, with its reason.
+
+### Changing the formula at Script Ready
+
+In the video's window, **Formula** names the formula and **Why this formula** gives the reason and
+the runner-up. The formula's name follows the word Auto when the agent picked it.
+
+- **Switch to <runner-up>** has the script rewritten in the runner-up formula. On a video whose
+  formula you chose, the runner-up is the formula Auto would have picked, or Auto's second choice
+  when Auto picked the same formula as you.
+- **Use this opening**, on the **Script** tab, has the script rewritten from another of the three
+  openings.
+
+Both discard the current script, and the agent writes a new one on its next session. For a new
+video nothing has been paid for at this point. For a video you sent back for revision after it was
+voiced, the new script is voiced again when you approve it.
+
+### The formulas
 
 | Formula | The agent picks it for |
 |---|---|
@@ -294,6 +331,20 @@ in your script profile's voice.
 | Anomaly File | Evidence that looked wrong: every gauge normal during a failure, a record that should not exist |
 | Scene Story | One person inside one moment: a near miss, a strange true incident, an ordinary life in a big event |
 | Escalating Ladder | Something with a natural measure: size, cost, speed, time to break, risk, depth |
+
+These formulas are experimental. Auto picks them only while **Experimental formulas** is on in
+[Preferences](05-settings.md#preferences). You can choose one yourself at any time.
+
+| Formula | Suits |
+|---|---|
+| Normal World, Then the Exploit | A weakness or a class of attack on a system that otherwise works |
+| Result First, Then Rewind | The rise or the fall of a product, a company or a technology |
+| Stake-First List | Practical advice or a set of checks |
+| News Take | Something that happened in the last few weeks, with one actor and one surprising act |
+| Prize and Barrier | A "why do we not have this yet" topic |
+| Strange Sight, Hidden Cause | A curiosity about an animal, the body or an object, with one strange thing to show |
+| Test Case, Answered Last | A system of rules, tested on one famous case |
+| Contender, Then Champion | A superlative with a countable measure and a winner that is not the obvious one |
 
 Each formula has its own length, so scripts are not all the same length. The agent writes every
 script to fit inside three minutes.

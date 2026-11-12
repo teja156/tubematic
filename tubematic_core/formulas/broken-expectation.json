@@ -2,6 +2,7 @@
   "id": "broken-expectation",
   "order": 20,
   "family": "explain",
+  "experimental": false,
   "label": "Broken Expectation",
   "line": "Open on a failure the viewer has had or can reproduce in ten seconds. Blame two wrong suspects, then name the real mechanism and close on the phrase the title used.",
   "best_for": [
@@ -14,6 +15,17 @@
   "avoid_for": [
     "architecture and concept topics with no visible symptom",
     "a tip with nothing failing"
+  ],
+  "signals": [
+    "the viewer can reproduce the failure themselves",
+    "a tool reports success while something is wrong",
+    "there is a literal output, message or screen to show",
+    "the cause is one rule"
+  ],
+  "styles": [
+    "terminal_doc",
+    "system_flow",
+    "under_the_hood"
   ],
   "words": [
     130,

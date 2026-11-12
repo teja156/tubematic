@@ -2,6 +2,7 @@
   "id": "paradox-mechanism-reframe",
   "order": 10,
   "family": "explain",
+  "experimental": false,
   "label": "Paradox, Mechanism, Reframe",
   "line": "Two true facts about a thing the viewer owns that cannot both be true. Give the answer in one line early, show how it works, and end by turning the opening belief upside down.",
   "best_for": [
@@ -14,6 +15,17 @@
   "avoid_for": [
     "an object the viewer has never held or wondered about",
     "a topic with no paradox the viewer has felt: a definition with a 'but' added is not one"
+  ],
+  "signals": [
+    "the viewer has held or used the thing",
+    "two facts about it seem unable to both be true",
+    "the explanation is a mechanism of four to six steps",
+    "the answer changes how the viewer sees the thing"
+  ],
+  "styles": [
+    "under_the_hood",
+    "system_flow",
+    "bean_explainer"
   ],
   "words": [
     150,

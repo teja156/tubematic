@@ -359,3 +359,88 @@ def test_a_bad_beat_label_is_refused(video, beat):
 def test_segments_without_a_beat_label_are_fine(video):
     segs = [{k: v for k, v in s.items() if k != "beat"} for s in segments()]
     assert "error" not in write(video, script_segments=segs, formula_id=FORMULA, hooks=hooks())
+
+
+# --- the script follows the formula picked for it (TMDEV-213) ------------------
+
+def _pick(video, formula):
+    with server._conn() as con:
+        con.execute("UPDATE videos SET formula_pick = ? WHERE id = ?", (formula, video))
+
+
+def test_a_script_in_another_formula_than_the_pick_is_refused(video):
+    _pick(video, "scene-story")
+    result = write(video, formula_id=FORMULA, hooks=hooks())
+    assert "scene-story" in result["error"] and "formula_routing" in result["error"]
+    assert _row()["script"] in ("", None) and _row()["formula_id"] == ""
+
+
+def test_a_script_in_the_picked_formula_is_written(video):
+    _pick(video, FORMULA)
+    result = write(video, formula_id=FORMULA, hooks=hooks())
+    assert "error" not in result and _row()["formula_id"] == FORMULA
+
+
+def test_with_no_pick_on_record_any_formula_is_taken(video):
+    # A video scripted before picks existed, or a writer on an older skill.
+    result = write(video, formula_id=FORMULA, hooks=hooks())
+    assert "error" not in result and _row()["formula_id"] == FORMULA
+
+
+def test_new_words_beside_a_pick_must_carry_the_record(video):
+    # Written with no record, the script would clear it and slip past the
+    # Script Ready check under a formula nobody recorded.
+    _pick(video, "scene-story")
+    result = write(video)
+    assert "formula_id='scene-story'" in result["error"] and _row()["script"] in ("", None)
+
+
+def test_new_words_beside_a_persons_choice_must_carry_the_record(video):
+    with server._conn() as con:
+        con.execute("UPDATE videos SET formula_choice = 'scene-story' WHERE id = ?", (video,))
+    assert "formula_id='scene-story'" in write(video)["error"]
+
+
+def test_a_script_with_no_record_is_written_when_nothing_is_bound(video):
+    result = write(video)
+    assert "error" not in result and "no_formula" in warning_ids(result)
+
+
+def test_a_pronunciation_fix_is_not_checked_against_the_pick(video):
+    write(video, formula_id=FORMULA, hooks=hooks())
+    _pick(video, "scene-story")   # a switch that has not been rewritten yet
+    assert "error" not in write(video)
+
+
+# --- the opening varies across a domain (TMDEV-213) ----------------------------
+
+def test_an_opening_type_the_domain_just_used_is_flagged(video):
+    _insert("older", project_id="git", script="Other words entirely. And an end.",
+            created="2025-12-01T00:00:00Z")
+    with server._conn() as con:
+        con.execute("UPDATE videos SET hook_type = 'problem' WHERE id = 'older'")
+    assert "hook_type_repeat" in warning_ids(write(video, formula_id=FORMULA, hooks=hooks()))
+    with server._conn() as con:
+        con.execute("UPDATE videos SET hook_type = 'question' WHERE id = 'older'")
+    assert "hook_type_repeat" not in warning_ids(write(video, formula_id=FORMULA, hooks=hooks()))
+
+
+def test_an_opening_that_starts_like_the_domains_scripts_is_flagged(video):
+    _insert("older", project_id="git", script="You renamed one branch. Then it broke.",
+            created="2025-12-01T00:00:00Z")
+    assert "opening_repeat" in warning_ids(write(video, formula_id=FORMULA, hooks=hooks()))
+
+
+def test_a_persons_choice_binds_when_no_pick_was_recorded(video):
+    # A writer that skipped the pick (an older skill) must not replace a
+    # formula a person chose.
+    with server._conn() as con:
+        con.execute("UPDATE videos SET formula_choice = 'scene-story' WHERE id = ?", (video,))
+    result = write(video, formula_id=FORMULA, hooks=hooks())
+    assert "scene-story" in result["error"] and _row()["formula_id"] == ""
+
+
+def test_a_choice_of_a_formula_this_version_lacks_does_not_bind(video):
+    with server._conn() as con:
+        con.execute("UPDATE videos SET formula_choice = 'retired-formula' WHERE id = ?", (video,))
+    assert "error" not in write(video, formula_id=FORMULA, hooks=hooks())

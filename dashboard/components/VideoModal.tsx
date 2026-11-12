@@ -36,6 +36,8 @@ import { formatRenderDuration } from "@/lib/renderers";
 import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { ScriptRecord } from "@/components/ScriptRecord";
+import { formulaLabel, formulaOptions, hasFormula, hasScriptRecord, videoFormulaLabel } from "@/lib/scriptFormulas";
+import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 import { TopicAngle } from "@/components/TopicAngle";
 import { angleScoreLabel } from "@/lib/angles";
 
@@ -342,6 +344,11 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const visualStyles = useVisualStyles();
   const { timeZone, label: tzLabel } = useTimeZone();
   const [video, setVideo] = useState<Video | null>(null);
+  // Formula names for the picker at the topic and for the labels after it.
+  // Not asked for on a video that has no formula anywhere: a script written
+  // before formulas existed shows nothing extra and costs no request.
+  const formulaNames = useScriptFormulaNames(
+    !!video && (video.status === "TOPIC_PROPOSED" || hasFormula(video) || hasScriptRecord(video)));
   const [reviseOpen, setReviseOpen] = useState(false);
   // null = untouched, like the agent picks below; the shown voice is derived
   // (see lib/voices.ts), so it follows the roster even when that answers late.
@@ -350,6 +357,10 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // own generic style. So the picker shows whenever there is at least one
   // profile, and always carries the none option.
   const [selectedProfile, setSelectedProfile] = useState("");
+  // The formula a person chooses for the video at the topic; "" = Auto. Sent
+  // with the approval only when it differs from what the video holds, so a
+  // held formula a later version dropped is never re-sent and refused.
+  const [selectedFormula, setSelectedFormula] = useState("");
   // Frozen after TOPIC_PROPOSED alongside the profile and the model.
   const [selectedStyle, setSelectedStyle] = useState<Video["visual_style"]>("auto");
   const [selectedMascot, setSelectedMascot] = useState("");
@@ -387,6 +398,8 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // saved or cancelled, since the approval does not carry the draft.
   const [angleEditorOpen, setAngleEditorOpen] = useState(false);
   const [switchStyleError, setSwitchStyleError] = useState("");
+  const [switchingFormula, setSwitchingFormula] = useState(false);
+  const [switchFormulaError, setSwitchFormulaError] = useState("");
   const [retryingAgent, setRetryingAgent] = useState(false);
   const [retryAgentError, setRetryAgentError] = useState("");
   // Where this video actually went (TMDEV-83). Replaces videos.youtube_url as
@@ -468,6 +481,8 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     setVideo(seed);
     setPickedVoice(null);
     setSelectedProfile(seed.script_profile_id ?? "");
+    setSelectedFormula(seed.formula_choice ?? "");
+    setSwitchFormulaError("");
     setSelectedStyle(seed.visual_style ?? "auto");
     setSelectedMascot(seed.mascot_id ?? "");
     // Seeded from the inbox row's picks when its Revise opened this modal,
@@ -830,6 +845,54 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     }
   };
 
+  // Switch to the formula that came second. The formula is picked before the
+  // script; at Script Ready, before the script is approved, the runner-up can
+  // be taken instead. The video goes back to its agent to rewrite the script.
+  const formulaRunnerUp = video.formula_runner_up ?? "";
+  const formulaSwitchable = !archived && video.status === "SCRIPT_READY"
+    && (video.formula_pick ?? "") !== "" && formulaRunnerUp !== "";
+  const handleSwitchFormula = async () => {
+    if (switchingFormula) return;
+    const to = formulaLabel(formulaRunnerUp, formulaNames);
+    if (!window.confirm(`Switch this video to ${to}? The script is discarded and the agent rewrites it in ${to}.`)) return;
+    setSwitchingFormula(true);
+    setSwitchFormulaError("");
+    try {
+      const res = await fetch(`/api/proxy/videos/${video.id}/switch-formula`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const body = await res.json().catch(() => ({}));
+      // The modal stays mounted between videos: an answer for one that is no
+      // longer on screen must not show under another video's button.
+      if (!res.ok && shownVideoId.current === video.id) {
+        setSwitchFormulaError(body.error ?? "Switching the formula failed.");
+      }
+      refreshVideo(video.id);
+    } catch {
+      if (shownVideoId.current === video.id) setSwitchFormulaError("Switching the formula failed.");
+    } finally {
+      setSwitchingFormula(false);
+    }
+  };
+  // Have the script rewritten from another of its drafted openings. Resolves
+  // to an error message, or "" when the video went back to its agent.
+  const handleSwitchOpening = async (index: number): Promise<string> => {
+    try {
+      const res = await fetch(`/api/proxy/videos/${video.id}/switch-opening`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index }),
+      });
+      const body = await res.json().catch(() => ({}));
+      refreshVideo(video.id);
+      return res.ok ? "" : (body.error ?? "Switching the opening failed.");
+    } catch {
+      return "Switching the opening failed.";
+    }
+  };
+
   return (
     <>
       <Dialog open={!!seed} onOpenChange={(v) => !v && onClose()}>
@@ -983,7 +1046,12 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                 {/* Script */}
                 {video.script && (
                   <TabsContent value="script" className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
-                    <ScriptRecord video={video} />
+                    <ScriptRecord
+                      key={video.id}
+                      video={video}
+                      names={formulaNames}
+                      onSwitchOpening={!archived && video.status === "SCRIPT_READY" ? handleSwitchOpening : undefined}
+                    />
                     {video.script_segments && video.script_segments.length > 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                         {video.script_segments.map((seg, i) => (
@@ -1377,6 +1445,19 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           </select>
                         </PickerField>
                       )}
+                      <PickerField label="Formula">
+                        <select
+                          data-testid="video-modal-formula-select"
+                          value={selectedFormula}
+                          onChange={(e) => setSelectedFormula(e.target.value)}
+                          title="The structure the script is written in. Auto picks one from the topic."
+                          className="w-full rounded border border-[#2a2a42] bg-[#131325] px-3 py-2 text-sm text-[#f0f0ff]"
+                        >
+                          {formulaOptions(formulaNames, selectedFormula).map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </PickerField>
                       {voicePickers}
                       {agentPickers}
                       {angleEditorOpen && (
@@ -1384,7 +1465,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           Save or cancel the angle on the Topic tab first.
                         </div>
                       )}
-                      <ActionBtn fullWidth variant="primary" disabled={angleEditorOpen} onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
+                      <ActionBtn fullWidth variant="primary" disabled={angleEditorOpen} onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(selectedFormula !== (video.formula_choice ?? "") ? { formula_choice: selectedFormula } : {}), ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
                         Approve Topic
                       </ActionBtn>
                       <ActionBtn fullWidth variant="danger" onClick={() => { onAction(video.id, "reject-topic", video); onClose(); }}>
@@ -1589,6 +1670,47 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                         ? (profileName || video.script_profile_id)
                         : <span style={{ color: "var(--dim)" }}>None — generic style</span>}
                     />
+                    {/* Left out for a video past its script that has no formula
+                        anywhere: it was scripted before formulas existed, and
+                        "not yet chosen" would be untrue of it. */}
+                    {(hasFormula(video) || video.status === "TOPIC_APPROVED") && (
+                      <MetaRow
+                        label="Formula"
+                        value={<span data-testid="video-formula">{videoFormulaLabel(video, formulaNames)}</span>}
+                      />
+                    )}
+                    {(video.formula_pick ?? "") !== "" && (
+                      <MetaRow
+                        label="Why this formula"
+                        value={
+                          <span data-testid="formula-pick-reason">
+                            {video.formula_reason || "—"}
+                            {formulaRunnerUp && (
+                              <span style={{ display: "block", color: "var(--dim)", marginTop: 4 }}>
+                                Runner-up: {formulaLabel(formulaRunnerUp, formulaNames)}
+                              </span>
+                            )}
+                          </span>
+                        }
+                      />
+                    )}
+                    {formulaSwitchable && (
+                      <div data-testid="switch-formula" style={{ padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
+                        <ActionBtn
+                          fullWidth
+                          variant="ghost"
+                          disabled={switchingFormula}
+                          onClick={handleSwitchFormula}
+                        >
+                          {switchingFormula ? "Switching…" : `Switch to ${formulaLabel(formulaRunnerUp, formulaNames)}`}
+                        </ActionBtn>
+                        {switchFormulaError && (
+                          <p data-testid="switch-formula-error" className="font-mono text-[11px] text-amber-400">
+                            {switchFormulaError}
+                          </p>
+                        )}
+                      </div>
+                    )}
                     {/* The agent group has live pickers at every checkpoint
                         of a non-archived video, so it is read-only here only
                         where no picker is shown. */}

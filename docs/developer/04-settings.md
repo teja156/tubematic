@@ -220,6 +220,17 @@ written by `python3 onboard.py --install-agent <name>`. A video's own choices ar
 at install time and are not kept in a catalog in the repo. See
 [The Agent Layer](07-agent-layer.md#agents).
 
+### Script formulas
+
+| Key | Type | Default | Bounds | Read by |
+|---|---|---|---|---|
+| `auto_experimental_formulas` | bool | `false` | | The MCP `choose_script_formula` tool and `get_video`, on every call |
+
+`auto_experimental_formulas` lets Auto pick a script
+[formula](08-scripting-and-voice.md#how-a-formula-is-picked) marked `experimental`. While it is
+off, such a formula is used only where a person chose it: a domain's `default_formula_id` or a
+video's `formula_choice`.
+
 ### User preferences
 
 | Key | Type | Default | Bounds | Read by |

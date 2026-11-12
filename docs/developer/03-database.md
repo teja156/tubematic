@@ -91,6 +91,10 @@ One row per video, from proposed topic to published file.
 | `hook_type` | TEXT NOT NULL | `''` | The hook type of the opening the script uses, or `''` |
 | `hook_alternatives` | TEXT NOT NULL | `''` | JSON array of the three openings the agent drafted, `{type, text, kept, note}`, or `''` |
 | `script_warnings` | TEXT NOT NULL | `''` | JSON array of the [script warnings](08-scripting-and-voice.md#script-warnings) for the stored script, `{id, message}`. `''` when no script write has run the checks |
+| `formula_choice` | TEXT NOT NULL | `''` | The formula a person chose for the video, or `''` for Auto. Seeded from the domain's `default_formula_id`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for a formula switch at `SCRIPT_READY` |
+| `formula_pick` | TEXT NOT NULL | `''` | The formula the script is written in, decided before the script. `''` means not decided. See [How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked) |
+| `formula_runner_up` | TEXT NOT NULL | `''` | The formula that came second, offered as a switch at `SCRIPT_READY`, or `''` |
+| `formula_reason` | TEXT NOT NULL | `''` | One sentence on why the formula was picked |
 | `tts_text` | TEXT NOT NULL | `''` | The text sent to ElevenLabs, after pronunciation substitution |
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
@@ -276,6 +280,7 @@ A domain. Every video files into one, whatever its research mode.
 | `default_agent_id` | TEXT NOT NULL | `''` | The agent every new video in the domain starts on, whatever its `strategy`. `''` means the video is dealt an agent by weight |
 | `default_agent_model` | TEXT NOT NULL | `''` | One of that agent's models. `''` means the agent's default model |
 | `default_agent_effort` | TEXT NOT NULL | `''` | One of the five effort levels. `''` means the agent's own level |
+| `default_formula_id` | TEXT NOT NULL | `''` | The [formula](08-scripting-and-voice.md#formulas) every new video in the domain is written in, whatever its `strategy`. `''` means Auto: a formula is picked for each video |
 | `topic_cap` | INTEGER NOT NULL | `100` | How many topics the domain may ever hold, 25 to 750. See [Topic cap](02-pipeline.md#topic-cap) |
 | `created_at` | TEXT NOT NULL | | |
 
@@ -284,8 +289,8 @@ stored is kept. The limit is low because `list_projects` returns every domain's 
 every research run.
 
 The defaults are copied into the video's own columns (`videos.voice_id`,
-`videos.script_profile_id`, `videos.agent_id` and so on) when the video is created. Changing one
-does not reach videos already filed.
+`videos.script_profile_id`, `videos.agent_id`, `videos.formula_choice` and so on) when the video is
+created. Changing one does not reach videos already filed.
 
 - `default_visual_style` and `default_script_profile_id` apply to `curriculum` videos only, because
   curriculum is the one research mode that produces a series. A `default_visual_style` of `''` is
@@ -299,6 +304,9 @@ does not reach videos already filed.
   weight. `default_agent_model` is skipped when the agent's `models` does not hold it.
   `default_agent_effort` applies to whichever agent the video gets. See
   [Assignment](07-agent-layer.md#assignment).
+- `default_formula_id` applies to every new video, like the voice. One that is no formula in the
+  installed version seeds nothing. An experimental formula is allowed here whatever the
+  `auto_experimental_formulas` setting says, because the setting covers what Auto may pick.
 
 The API and the MCP server check `topic_cap`, because SQLite cannot add a `CHECK` to an existing
 table. Every video ever filed counts, archived and rejected included. At the cap the domain is
@@ -734,6 +742,7 @@ only in the pre-migration backup.
 | `0022_domain_agent.sql` | Adds `projects.default_agent_id`, `default_agent_model` and `default_agent_effort`, `''` on every existing domain | No |
 | `0023_script_record.sql` | Adds `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, `''` on every existing video | No |
 | `0024_video_duration.sql` | Adds `videos.duration_secs`, NULL on every existing video. The worker fills it for videos that have a publication and whose files exist, and archiving a video stores it | No |
+| `0025_formula_pick.sql` | Adds `videos.formula_choice`, `formula_pick`, `formula_runner_up` and `formula_reason` and `projects.default_formula_id`, `''` on every existing row | No |
 | `0026_topic_angle.sql` | Adds `videos.angle`, `angle_kind` and `angle_score`, empty and 0 on every existing video | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file

@@ -1800,6 +1800,23 @@ describe("SettingsPage — log retention (TMDEV-86)", () => {
 describe("SettingsPage — user preferences (TMDEV-117)", () => {
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+  it("lets Auto use experimental formulas only once the switch is on", async () => {
+    stubFetch();
+    await renderTab("preferences");
+    const toggle = screen.getByTestId("toggle-experimental-formulas");
+    expect(toggle.textContent).toBe("OFF");
+    fireEvent.click(toggle);
+    expect(toggle.textContent).toBe("ON");
+    await clickSave("preferences");
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      expect.stringContaining("/settings"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ auto_experimental_formulas: true }),
+      }),
+    );
+  });
+
   it("shows the stored preferences in a textbox on their own tab", async () => {
     stubFetch({ ...MOCK_SETTINGS, user_preferences: "Scripts: calm tone." });
     await renderTab("preferences");

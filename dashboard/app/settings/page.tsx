@@ -305,7 +305,7 @@ const TABS = [
   // No settings fields either — agents live in their own table and save
   // through /agents, so they sit outside the Save/dirty machinery entirely.
   { key: "agents", label: "Agents", fields: [] },
-  { key: "preferences", label: "Preferences", fields: ["user_preferences"] },
+  { key: "preferences", label: "Preferences", fields: ["user_preferences", "auto_experimental_formulas"] },
   // Model prices live in their own table and save through /prices, like the
   // Agents tab — outside the Save/dirty machinery.
   { key: "costs", label: "Costs", fields: [] },
@@ -1187,6 +1187,29 @@ export default function SettingsPage() {
       >
         {codePoints(val("user_preferences") ?? "").length} / {MAX_USER_PREFERENCES_CHARS}
       </div>
+      <Row
+        label="Experimental formulas"
+        note="Let Auto pick script formulas marked experimental. Off, Auto chooses among the core formulas only, and an experimental one is used only where you choose it yourself: as a domain's formula on Topics, or for one video at Topic Proposed. Applies to the next video picked for."
+      >
+        <button
+          data-testid="toggle-experimental-formulas"
+          onClick={() => edit({ auto_experimental_formulas: !val("auto_experimental_formulas") })}
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            padding: "7px 16px",
+            border: `1px solid ${val("auto_experimental_formulas") ? "var(--green)" : "var(--border)"}`,
+            background: val("auto_experimental_formulas") ? "rgba(74,222,128,0.1)" : "var(--panel)",
+            color: val("auto_experimental_formulas") ? "var(--green)" : "var(--mute)",
+            cursor: "pointer",
+            transition: "all .15s",
+          }}
+        >
+          {val("auto_experimental_formulas") ? "ON" : "OFF"}
+        </button>
+      </Row>
           <SaveBar tabKey="preferences" count={dirtyFields("preferences").length} saving={saving} onSave={saveTab} />
         </TabsContent>
 

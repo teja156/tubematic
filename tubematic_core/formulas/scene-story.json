@@ -2,6 +2,7 @@
   "id": "scene-story",
   "order": 90,
   "family": "story",
+  "experimental": false,
   "label": "Scene Story",
   "line": "Put a person, named only by role, inside an act already under way. Turn it with 'but when' inside the first fifth, hold the reveal to the last quarter, and stop on a hard fact.",
   "best_for": [
@@ -14,6 +15,17 @@
   "avoid_for": [
     "a biography or a survey of a period",
     "invented first-person testimony"
+  ],
+  "signals": [
+    "one person is at the centre",
+    "it turns on one moment or one decision",
+    "the facts are documented",
+    "a larger fact rides on the story"
+  ],
+  "styles": [
+    "storybook_atlas",
+    "bean_explainer",
+    "illustrated"
   ],
   "words": [
     90,

@@ -2,6 +2,7 @@
   "id": "follow-the-flow",
   "order": 30,
   "family": "explain",
+  "experimental": false,
   "label": "Follow the Flow",
   "line": "One question tied to something the viewer does, then the parts in the order things happen, each term named only after its job, closed by a callback to the action.",
   "best_for": [
@@ -15,6 +16,18 @@
   "avoid_for": [
     "a classification with no order (record types, permission bits): follow one example through, or use a ladder",
     "a process that needs three ideas explained before anything moves"
+  ],
+  "signals": [
+    "the subject moves through stages in a fixed order",
+    "each stage hands something to the next",
+    "the topic is phrased as what happens when",
+    "the interest is in the steps, with no paradox and no failure"
+  ],
+  "styles": [
+    "system_flow",
+    "under_the_hood",
+    "storybook_atlas",
+    "whiteboard"
   ],
   "words": [
     90,

@@ -145,16 +145,19 @@ send the script writer to a reference file that is not there, so the test reads 
 Covers `tubematic_core/formulas.py` and the files in `tubematic_core/formulas/`
 ([Formulas](../08-scripting-and-voice.md#formulas)).
 
-- Every formula file loads, in `order`. Each offers at least three openings of different hook types,
-  its word band sits inside the ceiling, and its beats cover the script from 0 to 100 percent.
+- Every formula file loads, in `order`, with the formulas that are not experimental first. Each
+  offers at least three openings of different hook types, its word band sits inside the ceiling,
+  and its beats cover the script from 0 to 100 percent.
 - A malformed file is refused with the reason: a wrong id, a missing or extra key, a bad band, a gap
   between beats, two beats of one name, a beat name longer than a segment's label may be, a `|` or
-  a line break in a text, an unknown hook type, two openings of one type, an unknown beat role, two
-  turns, no payoff or two, a payoff in the first half, a blank `first_frame`.
+  a line break in a text, an unknown hook type, two openings of one type, an `experimental` that is
+  not a boolean, no `signals`, a `styles` entry that is no style pack or is listed twice, an unknown
+  beat role, two turns, no payoff or two, a payoff in the first half, a blank `first_frame`.
 - Every formula has one payoff in its second half, at most one turn and a `first_frame`, and
   `beat_roles` and `first_frame` answer for a known, an unknown and a blank id.
-- The decision table has one row per formula, and a rendered reference file carries every part of
-  its formula, each beat's duty to the picture and its First frame section.
+- A formula may name no style. A rendered reference file carries every part of its formula, each
+  beat's duty to the picture and its First frame section.
+- `public_list` says which formulas are experimental.
 - The files hold no ticket id and no link, because they are rendered into skill files that ship in
   the release archive.
 
@@ -171,7 +174,9 @@ Covers `tubematic_core/script_checks.py`
   first sentence, a segment beat the formula does not have (case and spacing aside), a staged
   run-up, no turn in
   the middle, a length outside the band or past the ceiling, a kept opening that is not the
-  script's opening, a closing shared with the domain's recent scripts.
+  script's opening, a closing shared with the domain's recent scripts, an opening that starts like
+  one of the domain's recent scripts, a kept opening whose type the domain's previous two videos
+  used.
 - Each check stays quiet on text that only uses its words: "follow" and "subscribe" as ordinary
   verbs about the subject, an ask in the middle of the script, a callback that explains the title.
 - The band allows `BAND_SLACK` and no more. A script with no formula, or with a formula this version
@@ -180,6 +185,8 @@ Covers `tubematic_core/script_checks.py`
   title before a name (`Dr.`, `St.`) does not end one. A sentence that ends on a short word ("in
   C.", "at 3 a.m.") still ends. A long run of dots and a long run of titles are read in linear time.
 - A closing line the preferences asked for is not a repeat: the sentence before it is compared.
+- The opening type is compared with the previous `ROTATION_WINDOW` videos only, and a script with
+  no recorded type is not compared.
 
 Trap: the quiet half matters as much as the firing half. The list is shown to a person and handed to
 the agent, so a check that fires on a sound script teaches both to ignore it.
@@ -203,6 +210,32 @@ the fixed topic set in `tests/fixtures/style_routing_cases.json`
 Trap: the three-topic minimum fails CI for a new pack until its ticket adds topics for it. That is
 what keeps the topic set growing with the packs, so the hand-run eval
 ([Style routing](style-routing.md)) measures every style.
+
+### `test_formula_routing.py`
+
+Covers the candidate list formula routing reads (`formulas.py::routing_candidates`) and the fixed
+topic set in `tests/fixtures/formula_routing_cases.json`
+([How a formula is picked](../08-scripting-and-voice.md#how-a-formula-is-picked)).
+
+- Every formula is a candidate in formula order, and a formula added at run time becomes one with
+  no other edit. Each candidate carries what the router scores by, and the list shares no state
+  with the loaded formulas.
+- An experimental formula is unavailable until the setting allows it. A person's own choice is
+  available whatever the setting says.
+- `suits_style` follows the formula's own `styles` list, is false for `auto`, `scenes` and an
+  unknown style, and removes no candidate. `recent` marks the formulas passed in and ignores an id
+  that is no formula.
+- `PICK_RESET_SET` names the three pick columns and leaves `formula_choice` and `formula_id` alone.
+- Every topic names only real formulas and styles. Every formula that is not experimental is the
+  first expectation of at least three topics routed with the setting off, every experimental
+  formula has a topic, and a topic expects an experimental formula first only when it is marked to
+  be routed with the setting on.
+
+Trap: the three-topic minimum fails CI for a new formula until its change adds topics for it, so
+the hand-run eval ([Formula routing](formula-routing.md)) measures every formula.
+
+Trap: the reset must not name `formula_choice`. A return to the topic that emptied it would put a
+video a person chose a formula for back on Auto.
 
 ### `test_visual_style.py`
 
@@ -419,6 +452,18 @@ Covers `0022`: `projects.default_agent_id`, `default_agent_model` and `default_a
 
 Trap: `''` on `default_agent_id` means the weighted deal, which is how every domain's videos were
 assigned before the upgrade, so the migration has no backfill.
+### `test_formula_pick_migration.py`
+
+Covers `0025`: `videos.formula_choice`, `formula_pick`, `formula_runner_up` and `formula_reason`,
+and `projects.default_formula_id`.
+
+- Existing videos keep their status, script, recorded formula, style and style pick, and read `''`
+  in the four new columns. An existing domain reads `''`, which is Auto.
+- A second run changes nothing, and a new video starts with no choice and no pick.
+
+Trap: `''` means Auto for a choice and not decided for a pick, which is true of every row before
+the upgrade, so the migration has no backfill. A video already scripted keeps the formula recorded
+with its script and is not sent back to be picked for.
 
 ### `test_script_record_migration.py`
 

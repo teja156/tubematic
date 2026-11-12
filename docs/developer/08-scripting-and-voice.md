@@ -73,8 +73,9 @@ is stored, and the write returns a [warning](#script-warnings) that the human se
 ## Formulas
 
 A formula is a script's structure: its beats in order, each beat's share of the script, the shapes
-its opening can take, where the turn and the payoff fall, how it ends, and its word band. The agent
-chooses one per script from the shape of the topic, before it writes a word. A formula says nothing
+its opening can take, where the turn and the payoff fall, how it ends, and its word band. One is
+picked for each video before its script is written (see
+[How a formula is picked](#how-a-formula-is-picked)). A formula says nothing
 about how a line sounds (the [script profile](#script-profiles) does) or what a segment shows (the
 visual style does).
 
@@ -86,8 +87,11 @@ malformed file stops the process at start. The MCP server and the API both impor
 |---|---|
 | `id`, `label`, `order` | The id equals the file name. `order` sorts the list and is unique |
 | `family` | `explain`, `story` or `ladder` |
+| `experimental` | `true` for a formula that ships as data and that Auto may pick only while the setting `auto_experimental_formulas` is on |
 | `line` | The formula in one sentence |
 | `best_for`, `also_for`, `avoid_for` | Kinds of topic it is the first choice for, also fits, and does not suit |
+| `signals` | Statements about a topic that point to the formula when they are true of it. At least one |
+| `styles` | Ids of the [style packs](10-scene-authoring.md#style-packs) whose picture the formula suits. May be empty. An id that is no pack fails the load |
 | `words` | `[min, max]`, the word band. The maximum is at most `WORD_CEILING` |
 | `beats` | `[{name, from, to, job, role?}]`. `from` and `to` are percentages of the script's words, and the beats cover 0 to 100 with no gap. `role` is the beat's duty to the picture (below) |
 | `hooks` | `[{type, shape}]`. At least three opening shapes, each of a different hook type |
@@ -107,28 +111,121 @@ because a beat's name describes the beat and does not say where the picture must
 beat is matched to the formula's names whatever its case and spacing, and a label the formula does
 not have raises the `beat_unknown` script warning.
 
-The agent reads formulas as text. `scripts/gen_formula_references.py` renders one reference file per
-formula into the skill's `formulas/` folder, and the table in the skill's `SKILL.md` that maps the
-shape of a topic to a formula. The agent reads the table, picks a formula, and reads that formula's
-file only. To change a formula, edit its JSON file and run the script.
+The script writer reads a formula as text. `scripts/gen_formula_references.py` renders one reference
+file per formula into the script-writing skill's `formulas/` folder, and the skill reads the file of
+the video's formula only. To change a formula, edit its JSON file and run the script.
 `scripts/tests/test_script_writing_skill.py` fails while the generated text differs from the data.
 
-To add a formula, add its file and run the script. `update_video` then accepts the id and
-`GET /script-formulas` lists it. A formula that needs a second voice cannot ship, because a video
-has one voice.
+To add a formula, add its file and run the script. The formula is then a candidate for the pick,
+`update_video` accepts the id and `GET /script-formulas` lists it. A formula that is not
+experimental also needs three topics in the routing topic set (see
+[Formula routing tests](test-suites/formula-routing.md)). A formula that needs a second voice cannot
+ship, because a video has one voice.
+
+### How a formula is picked
+
+A video's formula is decided once, at `TOPIC_APPROVED`, after its visual style and before its
+script. The `tubematic-formula-routing` skill makes the choice from data and
+[`choose_script_formula`](06-mcp-server.md#choose_script_formula) records it. The script-writing
+skill then writes in the pick. On a video whose formula is decided (a pick, or with no pick a
+person's `formula_choice`), `update_video` refuses a `formula_id` that differs from it and a write
+of new words with no record at all. `set_video_status` refuses `SCRIPT_READY`, `VOICING` and
+`VOICE_READY` while the stored script's `formula_id` is not the pick: a formula switch leaves another formula
+there and an opening switch clears it, so the video moves on only after a rewrite records it.
+
+```mermaid
+flowchart TD
+    A["TOPIC_APPROVED, style decided"] --> B["get_video: formula_routing.candidates"]
+    B --> C["Skill: describe the topic, rule out, score"]
+    C --> D{"Best fit used by the domain's previous two videos?"}
+    D -- "no" --> G["choose_script_formula"]
+    D -- "yes, another formula fits" --> E["Take the other formula"]
+    D -- "yes, nothing else fits" --> F["Keep it and pass repeat_reason"]
+    E --> G
+    F --> G
+    G --> H{"A person chose a formula?"}
+    H -- "no" --> I["formula_pick = the agent's formula"]
+    H -- "yes" --> J["formula_pick = the person's choice; runner-up = the agent's formula"]
+    I --> K["Script written in formula_pick"]
+    J --> K
+```
+
+Four columns on the video hold the decision (see [`videos`](03-database.md#videos)):
+
+| Column | Meaning |
+|---|---|
+| `formula_choice` | The formula a person chose, or `''` for Auto. Seeded from the domain's `default_formula_id` when the video is filed, by every creation path. Writable at `TOPIC_PROPOSED` |
+| `formula_pick` | The formula the script is written in. `''` until the pick is made |
+| `formula_runner_up` | The formula that came second, or `''` |
+| `formula_reason` | One sentence on why, at most `REASON_MAX_CHARS` characters as the agent writes it |
+
+`formulas.py::routing_candidates` builds the candidate list `get_video` returns as
+`formula_routing.candidates`: every formula with its `line`, `best_for`, `also_for`, `avoid_for`,
+`signals` and `words`, and these marks:
+
+| Mark | Meaning |
+|---|---|
+| `suits_style` | The formula's `styles` names the video's visual style. The skill gives it one point. A style removes no candidate, because a style pack's own `script` text already outranks the formula |
+| `recent` | The formula is the one of either of the domain's `ROTATION_WINDOW` most recently filed other videos that have a formula (the pick, else the one recorded with the script). A video back at `TOPIC_PROPOSED` or rejected does not count |
+| `available`, `unavailable_reason` | `false` for an experimental formula while `auto_experimental_formulas` is off. A person's own choice is available whatever the setting says |
+
+`get_video` returns the candidates to a video at `TOPIC_APPROVED` with no pick and to a video at
+`REVISION_REQUESTED` whose pick is not a person's choice, and an empty list otherwise, which keeps several thousand tokens out of every
+other session.
+
+`choose_script_formula` enforces these rules:
+
+- The visual style is decided first. At `TOPIC_APPROVED` the tool refuses a video still on `auto`
+  with no `style_pick`. A revision is past that point, so the check does not apply there.
+- The pick is made once at `TOPIC_APPROVED`. At `REVISION_REQUESTED` the agent may call the tool
+  again for a revision whose comment asks for another structure, which replaces the pick, and for
+  a video scripted before picks existed, which gets its first one. A video whose pick is a
+  person's choice is refused there.
+- The `formula` argument is the agent's own best formula. On a video with a `formula_choice` the
+  tool writes the person's choice as `formula_pick`, stores the agent's formula as the runner-up
+  when the two differ, and starts the reason with "Auto would have picked". The agent cannot
+  replace a person's choice.
+- A `recent` formula is refused unless the call carries `repeat_reason`, one sentence on why no
+  other formula fits. A domain whose videos share one structure reads as templated. The rule is
+  skipped on a video with a `formula_choice`, where the agent's formula is only the runner-up.
+- An unavailable `formula` or `runner_up` is refused.
+
+These events change a pick:
+
+| Event | What happens |
+|---|---|
+| The video returns to `TOPIC_PROPOSED` (`set_video_status` or `PATCH /videos/<id>`) | `formulas.py::PICK_RESET_SET` empties `formula_pick`, `formula_runner_up` and `formula_reason`. `formula_choice` stays |
+| [`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style) | The same reset, so the formula is picked again for the new style |
+| [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula) | The pick and the runner-up swap, `formula_choice` becomes the new pick, and the video returns to `TOPIC_APPROVED` to be rewritten |
+| A `script` written through [`PATCH /videos/<id>`](05-http-api.md#patch-videosvideo_id) | `PICK_RESET_SET` empties the pick with the script's record, because a script written by hand follows no formula. `formula_choice` stays |
+| [`POST /videos/<id>/switch-opening`](05-http-api.md#post-videosvideo_idswitch-opening) | The pick stays, or becomes the script's `formula_id` on a video with no pick. Another stored opening is marked as the one in use, `formula_id` is cleared, and the video returns to `TOPIC_APPROVED` to be rewritten from it |
+
+A pick or a choice that names a formula the installed version does not have counts as none, so
+the video is picked for again. A video scripted before picks existed has an empty `formula_pick`. A script revision keeps its
+stored `formula_id`, and one with no stored `formula_id` runs the routing skill first. An agent
+running an older skill against the current server writes its own formula, or none, which is
+accepted unless a person chose a formula for the video; then it is refused and the video waits for
+a session that runs the current skills. Both switches refuse a video still on `auto` with no
+`style_pick`, because sending it back to `TOPIC_APPROVED` would pick its style again.
+
+`scripts/eval_formula_routing.py` runs the skill over a fixed topic set with the Claude Code CLI
+and scores the picks. You run it by hand; see
+[Formula routing tests](test-suites/formula-routing.md).
 
 ### The topic's angle
 
 A video can arrive at the script writer with an [angle](02-pipeline.md#topic-angle): one sentence
 saying what the opening will use, and its kind. `get_video` returns them with `angle_formula`, the
-formula the kind is the first choice for (`tubematic_core/angles.py::ANGLE_KINDS`). The skill uses
-them in two places:
+formula the kind is the first choice for (`tubematic_core/angles.py::ANGLE_KINDS`). The angle is
+used in two places:
 
-- Choosing the formula. With an angle, the kind answers what kind of thing the topic is, and the
-  agent starts from `angle_formula`. The skill's other rules still apply: a formula whose opening
-  the topic cannot fill with real facts is passed over, and the visual style's `script` text
-  outranks the formula. With no angle the agent works the kind out from the topic.
-- Drafting the openings. All three openings are built on the angle, each from a different shape of
+- Picking the formula ([How a formula is picked](#how-a-formula-is-picked)). With an angle,
+  `tubematic-formula-routing` takes `angle_kind` as the topic's shape and gives `angle_formula`
+  the points of a squarely matched kind of topic. Its other rules still apply: a formula ruled out
+  by its `avoid_for`, one the topic cannot fill with real facts, and rotation can pass it over, and
+  a person's choice outranks it. With no angle the router works the shape out from the topic. An
+  angle rewritten in a script revision sends the video through the router again.
+- Drafting the openings, in the script-writing skill. All three openings are built on the angle, each from a different shape of
   the formula. The angle sentence is a note to the agent and is not spoken.
 
 A video has no angle when its topic came without one and the agent found none at pickup, or when
@@ -154,7 +251,8 @@ A closing line (a follow ask, a sign-off) is written only when the install's
 
 `update_video` takes two more arguments in the call that writes `script_segments`:
 
-- `formula_id`: the formula the script follows.
+- `formula_id`: the formula the script follows. On a video with a `formula_pick` it must equal the
+  pick.
 - `hooks`: the three openings the agent drafted, as `[{type, text, kept, note}]`. `type` is one of
   the formula's hook types, `text` is the opening's spoken words, `kept` is true on the one the
   script uses, and `note` (optional) says why another was dropped.
@@ -195,6 +293,8 @@ it on the Script tab. A fault inside a check is logged and the script is stored 
 | `greeting_opener` | A greeting or an agenda line in the first two sentences |
 | `title_repeat` | The first sentence holds most of the publish title's words, or the title holds most of a short first sentence's words |
 | `beat_unknown` | A segment's `beat` is not a beat name of the recorded formula, so its picture duty is lost |
+| `opening_repeat` | The first sentence opens with the same three words as the first sentence of one of the same domain's 30 newest other scripts |
+| `hook_type_repeat` | The kept opening's type is the type of either of the domain's previous `ROTATION_WINDOW` videos that recorded one |
 | `staged_runup` | A phrase that announces a turn ("Here's the thing") |
 | `no_turn` | No turn word in the middle of the script |
 | `over_ceiling` | More than `WORD_CEILING` words |
