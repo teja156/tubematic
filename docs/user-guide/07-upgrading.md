@@ -23,15 +23,15 @@ Download the new release into a new directory, beside the old one, and run `upgr
 one:
 
 ```bash
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/tubematic-v2.1.1.tar.gz
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.2.0/tubematic-v2.2.0.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.2.0/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
-tar xzf tubematic-v2.1.1.tar.gz
-cd tubematic-v2.1.1
+tar xzf tubematic-v2.2.0.tar.gz
+cd tubematic-v2.2.0
 python3 upgrade.py
 ```
 
-Use the version you are moving to in place of `v2.1.1`.
+Use the version you are moving to in place of `v2.2.0`.
 
 Keep the old directory until `upgrade.py` finishes. Your scheduled job runs from the old directory
 until `upgrade.py` points it at the new one. When it finishes, `upgrade.py` names the old directory

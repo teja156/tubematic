@@ -223,15 +223,15 @@ The first release with remote renderers is 2.1.0. Use `curl` or `wget`, whicheve
 With `curl`:
 
 ```bash
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/tubematic_remote_renderer.py
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.2.0/tubematic_remote_renderer.py
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.2.0/CHECKSUMS.txt
 ```
 
 With `wget`:
 
 ```bash
-wget https://github.com/teja156/tubematic/releases/download/v2.1.1/tubematic_remote_renderer.py
-wget https://github.com/teja156/tubematic/releases/download/v2.1.1/CHECKSUMS.txt
+wget https://github.com/teja156/tubematic/releases/download/v2.2.0/tubematic_remote_renderer.py
+wget https://github.com/teja156/tubematic/releases/download/v2.2.0/CHECKSUMS.txt
 ```
 
 Then check the download:
@@ -242,7 +242,7 @@ sha256sum -c CHECKSUMS.txt --ignore-missing   # must say: tubematic_remote_rende
 
 `CHECKSUMS.txt` also lists the release tarball, and `--ignore-missing` skips it.
 
-If your main runs a later version, put that version in place of `v2.1.1` in both addresses. The
+If your main runs a later version, put that version in place of `v2.2.0` in both addresses. The
 dashboard's top bar shows the version.
 
 ### 3 · Run it
