@@ -175,8 +175,9 @@ choose_script_formula(video_id, formula=<id>, reason=<one sentence>, runner_up=<
                       learned_stamp=<formula_routing.learned.stamp, or "">)
 ```
 
-- `learned_stamp` is `formula_routing.learned.stamp` when `learned.active` was `true` and you added
-  the points in Step 3b, and `""` otherwise.
+- `learned_stamp` is `formula_routing.learned.stamp` whenever `learned.active` was `true`, also
+  when Step 3b changed nothing (no clear fit, or only clear fits with 0 points), and `""` when it
+  was `false`.
 
 - `reason` is one sentence of at most 300 characters, written for the person who approves the
   script: the feature of the topic that decided it ("A dated outage with a public account of

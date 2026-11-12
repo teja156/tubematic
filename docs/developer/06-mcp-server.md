@@ -495,8 +495,8 @@ calls it.
 - `runner_up` is another candidate, or `""`. The dashboard offers it as a switch at `SCRIPT_READY`
   ([`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula)).
 - `repeat_reason` is one sentence, passed only for a formula marked `recent`.
-- `learned_stamp` is `formula_routing.learned.stamp` when the agent added the candidates' learned
-  points, else `""`.
+- `learned_stamp` is `formula_routing.learned.stamp` whenever `learned.active` is `true`, else
+  `""`.
 
 It refuses an unknown or unavailable `formula` or `runner_up`, a video at `TOPIC_APPROVED` whose
 style is not decided, a `recent` formula with no `repeat_reason` on a video with no

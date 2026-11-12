@@ -383,3 +383,12 @@ def test_the_mode_of_a_stored_record():
     assert watch.record_mode(json.dumps({"mode": "learned"})) == "learned"
     for raw in ("", None, "{broken", "[]", json.dumps({"mode": "other"})):
         assert watch.record_mode(raw) == ""
+
+
+@pytest.mark.parametrize("baseline, group", [(22.0, 24.2), (11.0, 12.1), (12.0, 13.2), (19.0, 20.9)])
+def test_a_median_at_exactly_the_margin_counts(baseline, group):
+    # Shares are stored to one decimal, so a group at exactly 1.10x or 0.90x of
+    # its baseline is common, and float division puts some of them a hair short.
+    assert watch._standing(group, baseline) == "better"
+    assert watch._standing(round(baseline * 0.9, 1), baseline) == "worse"
+    assert watch._standing(round(group - 0.1, 1), baseline) == "even"

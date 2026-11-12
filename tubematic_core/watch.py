@@ -237,10 +237,14 @@ def _parse_utc(stamp):
     return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
 
 
-def _standing(ratio: float) -> str:
-    if ratio >= 1 + LEARN_MARGIN:
+def _standing(group: float, baseline: float) -> str:
+    """A group's median against its account's baseline. Shares are stored to
+    one decimal, so a median at exactly the margin is common; the small
+    allowance keeps float division (24.2 / 22.0 = 1.0999...) from moving it
+    to the wrong side."""
+    if group >= baseline * (1 + LEARN_MARGIN) - 1e-9:
         return "better"
-    if ratio <= 1 - LEARN_MARGIN:
+    if group <= baseline * (1 - LEARN_MARGIN) + 1e-9:
         return "worse"
     return "even"
 
@@ -312,7 +316,7 @@ def domain_evidence(con, project_id: str, now: datetime | None = None) -> dict:
                 if len(items) < WATCH_MIN_GROUP:
                     continue
                 entry = groups[dim].setdefault(key, {"standings": [], "videos": set()})
-                entry["standings"].append(_standing(median(sorted(s for _v, s in items)) / baseline))
+                entry["standings"].append(_standing(median(sorted(s for _v, s in items)), baseline))
                 entry["videos"].update(v for v, _s in items)
 
     def summary(entry):

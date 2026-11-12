@@ -297,6 +297,17 @@ known. It scores every formula against the kind of topic it is, and it avoids th
 domain's previous two videos when another one fits, so a domain's videos do not all share one
 structure. The opening varies in the same way.
 
+You can choose the formula yourself in two places:
+
+- For one video, with the **Formula** picker in its window at Topic Proposed, or on the
+  **New Video** page.
+- For a domain, with the **Formula** picker under **Edit defaults** on its row on the **Topics**
+  page. Every new video in
+  the domain then starts with that formula, whichever research mode found it.
+
+Your choice is the formula the script is written in. The agent still records the formula it would
+have picked, with its reason.
+
 ### Learning from your own viewers
 
 Once your videos are published and Tubematic reads their analytics, Auto also learns which
@@ -314,17 +325,6 @@ strong, it keeps the type that holds the domain's viewers better.
 
 With publishing off, or before a domain has enough published videos, Auto picks from the topic
 alone. **Learn from watch figures** in [Preferences](05-settings.md#preferences) switches it off.
-
-You can choose the formula yourself in two places:
-
-- For one video, with the **Formula** picker in its window at Topic Proposed, or on the
-  **New Video** page.
-- For a domain, with the **Formula** picker under **Edit defaults** on its row on the **Topics**
-  page. Every new video in
-  the domain then starts with that formula, whichever research mode found it.
-
-Your choice is the formula the script is written in. The agent still records the formula it would
-have picked, with its reason.
 
 ### Changing the formula at Script Ready
 

@@ -271,11 +271,12 @@ counted group, ranked. It is the last tie-break between two openings, after the 
 opening and after the domain's recent types, and an unlisted or `mixed` type ranks as `even`. Opening types
 are few, so they gather enough videos before any formula does: the list is filled whenever learning
 is on, also while no formula counts. A trial pick empties it, so the favoured opening type does not
-gather videos and certainty the way an unchecked formula would.
+gather videos and certainty the way an unchecked formula would. Once a pick is decided, the list
+follows the mode stored with it, and a pick with no record reads as a learned one.
 
 `get_video` gives `learned.stamp`, a short fingerprint of the mode and every formula's points
-(`watch.py::_stamp`). The skill passes it as `choose_script_formula`'s `learned_stamp` when it added
-the points. The tool works the figures out again under its write lock and refuses the pick when
+(`watch.py::_stamp`). The skill passes it as `choose_script_formula`'s `learned_stamp` whenever
+learning is active, so every such pick is counted toward the trial picks. The tool works the figures out again under its write lock and refuses the pick when
 the stamp differs: another pick in the domain moved the trial-pick count, a setting changed, or new
 analytics moved a standing. It then stores `formula_evidence`, which the video window shows under
 **Why this formula**, so the record always describes the figures the agent scored with. The agent

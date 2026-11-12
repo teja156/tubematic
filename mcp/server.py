@@ -1343,8 +1343,10 @@ def get_video(video_id: str) -> dict:
     formula has min_group videos with figures on one account; then every
     candidate's learned points are 0 and mode and stamp are "". mode is
     "learned" (the figures count) or "explore" (a trial pick: formulas with
-    too few videos get the points, and openings is []). Pass stamp to
-    choose_script_formula as learned_stamp when you added the points.
+    too few videos get the points). openings is [] for a trial pick: before
+    the pick when mode is "explore", after it when the pick was made as one.
+    Pass stamp to choose_script_formula as learned_stamp whenever active is
+    true.
     Each candidate carries learned: {points, standing, videos}; the points are
     added only to a formula that already fits the topic. openings ranks the
     opening types with enough videos, each {type, label, standing, videos},
@@ -1514,7 +1516,9 @@ def _formula_routing(video: dict) -> dict:
     if status in ("TOPIC_APPROVED", "REVISION_REQUESTED"):
         # With a pick decided, the writer's openings follow the mode the pick
         # was made in, never the domain's count since.
-        held = twatch.record_mode(video.get("formula_evidence")) if pick else ""
+        # A pick with no record (a person's choice, or one made without the
+        # figures) was never a trial pick.
+        held = (twatch.record_mode(video.get("formula_evidence")) or "learned") if pick else ""
         with _conn() as con:
             learning = _routing_learning(con, video.get("project_id"), video["id"], held)
     if ((status == "TOPIC_APPROVED" and not pick)
@@ -3647,8 +3651,8 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
     formula_id both ""), to give it one. Returns formula_pick (the formula to write in), formula_runner_up,
     chosen_by ("auto" or "person"), the formula's label and word band, and
     reference: the file to read in the script-writing skill's directory.
-    learned_stamp: get_video().formula_routing.learned.stamp when learned.active
-    is true and you added the candidates' learned points, else "". The tool
+    learned_stamp: get_video().formula_routing.learned.stamp whenever
+    learned.active is true, also when the points changed nothing, else "". The tool
     works the figures out again when it records the pick and refuses when they
     changed since your read (another pick in the domain, a settings change or
     new analytics): read get_video again and decide again. Not checked on a

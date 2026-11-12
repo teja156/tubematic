@@ -271,3 +271,17 @@ def test_a_trial_picks_openings_stay_aside_after_later_picks_move_the_count(evid
     server.choose_script_formula(vid, GOOD, REASON, learned_stamp=_stamp(vid))
     # The script of the trial pick is still to be written: no openings.
     assert server.get_video("vid_1")["formula_routing"]["learned"]["openings"] == []
+
+
+def test_a_pick_with_no_record_keeps_its_openings_at_a_trial_position(evidence):
+    # A person's choice never stores a record, so it was never a trial pick,
+    # whatever position the domain's count is at when its script is written.
+    for n in range(3):
+        vid = _video(f"v{n}")
+        server.choose_script_formula(vid, OTHER, REASON, repeat_reason=REPEAT,
+                                     learned_stamp=_stamp(vid))
+    _video(choice=GOOD)
+    server.choose_script_formula("vid_1", GOOD, REASON, learned_stamp=_stamp())
+    assert _evidence() == ""
+    learned = server.get_video("vid_1")["formula_routing"]["learned"]
+    assert learned["mode"] == "explore" and learned["openings"]
