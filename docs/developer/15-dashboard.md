@@ -482,7 +482,10 @@ existed costs no request.
   word Auto followed by the formula's name. Past the topic, a script with no pick and no record
   reads as "No formula" even when a person chose one, because a script written by hand follows
   none.
-- A picked formula shows a **Why this formula** row with `formula_reason` and the runner-up. At
+- A picked formula shows a **Why this formula** row with `formula_reason` and the runner-up. When
+  the video's `formula_evidence` is set, a line under the reason says whether the pick leaned on
+  the install's watch figures, was a trial pick, or read figures that did not favour it, with the
+  videos and accounts behind them (`lib/scriptFormulas.ts::formulaEvidenceLine`). At
   Script Ready, when there is a runner-up, the modal adds a **Switch to …** button. After a confirm
   it calls [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula).
 - At Script Ready each opening on the Script tab that is not in use has a **Use this opening**
@@ -840,7 +843,7 @@ page body clips horizontal overflow.
   The API stores the text trimmed, and an answer that is only the box's text trimmed leaves the box
   alone, or a trailing space or line break would vanish under the cursor. See
   [User preferences](07-agent-layer.md#user-preferences). Under it, **Experimental formulas** switches
-  `auto_experimental_formulas`.
+  `auto_experimental_formulas` and **Learn from watch figures** switches `learned_routing`.
 - API keys render through `SecretInput`, a password field that unmasks only while focused. It shows
   what the server returned: a mask or an empty string. Sending an unchanged mask changes nothing on
   the server. Clearing the field and leaving it sends an empty string, which removes the key.

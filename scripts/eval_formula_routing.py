@@ -44,6 +44,7 @@ from eval_style_routing import ask, verdict  # noqa: E402
 from tubematic_core import angles as tangles  # noqa: E402
 from tubematic_core import formulas as tformulas  # noqa: E402
 from tubematic_core import visual_styles as tvs  # noqa: E402
+from tubematic_core import watch as twatch  # noqa: E402
 
 SKILL = REPO / "agent_files" / "skills" / "tubematic-formula-routing" / "SKILL.md"
 CASES = REPO / "tubematic_core" / "tests" / "fixtures" / "formula_routing_cases.json"
@@ -64,10 +65,43 @@ The skill:
 """
 
 
+def _with_learning(candidates: list, given) -> tuple:
+    """The candidates with their learned points, and formula_routing.learned,
+    as the server sends them. A case with no `learned` is a domain with no
+    figures: every candidate has 0 points. A case's `learned` is
+    {"mode": "learned" | "explore", "points": {formula id: points}}. In
+    "learned" mode a formula it does not name is thin with 0 points; in
+    "explore" mode a formula with the trial points is thin and every other one
+    is counted."""
+    if not given:
+        for c in candidates:
+            c["learned"] = {"points": 0, "standing": "", "videos": 0}
+        return candidates, {"active": False, "mode": "", "stamp": "", "measure": twatch.LEARN_MEASURE,
+                            "min_group": twatch.WATCH_MIN_GROUP, "accounts": 0, "openings": []}
+    counted = {"points": 0, "standing": "even", "videos": twatch.WATCH_MIN_GROUP + 4}
+    thin = {"points": 0, "standing": twatch.THIN, "videos": 0}
+    for c in candidates:
+        named = c["id"] in given["points"]
+        pts = given["points"].get(c["id"], 0)
+        if given["mode"] == "learned":
+            # As the server: a formula the figures name is counted, the rest are thin.
+            base = {2: "better", -1: "worse"}.get(pts, "even") if named else twatch.THIN
+            c["learned"] = {**(counted if named else thin), "points": pts, "standing": base}
+        else:
+            # A trial pick: the points go to the thin formulas, every other one is counted.
+            c["learned"] = {**thin, "points": pts} if pts == twatch.EXPLORE_POINTS else dict(counted)
+    return candidates, {"active": True, "mode": given["mode"], "stamp": f"{given['mode']}-eval",
+                        "measure": twatch.LEARN_MEASURE,
+                        "min_group": twatch.WATCH_MIN_GROUP, "accounts": 1, "openings": []}
+
+
 def build_prompt(case: dict) -> str:
     """get_video as the skill reads it: a video at TOPIC_APPROVED whose style
     is decided and whose formula is not."""
     style = case.get("style", "")
+    candidates, learned = _with_learning(
+        tformulas.routing_candidates(style, bool(case.get("experimental")), case.get("recent", [])),
+        case.get("learned"))
     video = {
         "video_id": "vid_eval",
         "status": "TOPIC_APPROVED",
@@ -83,9 +117,9 @@ def build_prompt(case: dict) -> str:
         "style_routing": {"decided": True, "pick": style or tvs.SCENES},
         "formula_routing": {
             "decided": False, "pick": "", "runner_up": "", "reason": "", "choice": "",
-            "candidates": tformulas.routing_candidates(
-                style, bool(case.get("experimental")), case.get("recent", [])),
+            "candidates": candidates,
             "recent": {"formulas": list(case.get("recent", [])), "hook_types": []},
+            "learned": learned,
         },
     }
     return (f"get_video(\"vid_eval\") returned:\n\n```json\n{json.dumps(video, indent=2)}\n```\n\n"

@@ -249,7 +249,7 @@ videos.
 | `mascot` | `{id, name, version}` or `null` |
 | `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script, picture}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config`, `script` is `""` and `picture` is the mixed scenes' block |
 | `style_routing` | The style decision `auto` makes before the script: `{decided, pick, runner_up, reason, candidates, domain}`. See [How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style) |
-| `formula_routing` | The formula decision made before the script: `{decided, pick, runner_up, reason, choice, candidates, recent}`. See [How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked) |
+| `formula_routing` | The formula decision made before the script: `{decided, pick, runner_up, reason, choice, candidates, recent, learned}`. See [How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked) |
 
 At `VOICE_READY` the operator skill invokes the skill named in `style.authoring_skill`.
 
@@ -274,6 +274,13 @@ written in, and `choice` is the formula a person chose for the video (`""` for A
 is `tubematic_core/formulas.py::routing_candidates` at `TOPIC_APPROVED` before the pick and at
 `REVISION_REQUESTED` unless the pick is a person's choice, and `[]` otherwise. `recent` is `{formulas, hook_types}`: the formulas and the kept opening types of the
 domain's previous two videos, newest first.
+
+`learned` is what the domain's own watch figures say, read at `TOPIC_APPROVED` and
+`REVISION_REQUESTED` only: `{active, mode, stamp, measure, min_group, accounts, openings}` (`mode` and `stamp` are `""` while inactive), where
+`openings` lists the opening types with a counted group as `{type, label, standing, videos}`. At
+any other status it is `{active: false}`. Each candidate carries `learned: {points, standing,
+videos}`, with 0 points for every candidate while learning is inactive. The rule is in
+[Learned routing](08-scripting-and-voice.md#learned-routing).
 
 ### `create_video`
 
@@ -340,8 +347,8 @@ A move to `TOPIC_PROPOSED` (a topic revision) gives a style `auto` picked back t
 same `UPDATE`: `visual_style` returns to `auto` and the three `style_*` columns are cleared, so the
 revised topic is routed again after its next approval. On every `auto` video the two `resolved_*`
 columns are cleared too. A style a person chose is kept, with its recorded canvas. The same
-`UPDATE` empties `formula_pick`, `formula_runner_up` and `formula_reason`, so the formula is picked
-again for the revised topic. A person's `formula_choice` is kept.
+`UPDATE` empties `formula_pick`, `formula_runner_up`, `formula_reason` and `formula_evidence`, so
+the formula is picked again for the revised topic. A person's `formula_choice` is kept.
 
 A move to `SCRIPT_READY`, `VOICING` or `VOICE_READY` is refused while a `formula_pick` is set and
 the stored script's `formula_id` is not it. The refusal for `VOICING` and `VOICE_READY` tells the
@@ -475,7 +482,7 @@ the new `visual_style` and `style`, so the agent writes the script for it in the
 
 ### `choose_script_formula`
 
-`choose_script_formula(video_id, formula, reason, runner_up="", repeat_reason="")` records the
+`choose_script_formula(video_id, formula, reason, runner_up="", repeat_reason="", learned_stamp="")` records the
 script formula for a video, at `TOPIC_APPROVED`, after the style is decided and before the script
 is written. The [tubematic-formula-routing skill](08-scripting-and-voice.md#how-a-formula-is-picked)
 calls it.
@@ -488,6 +495,8 @@ calls it.
 - `runner_up` is another candidate, or `""`. The dashboard offers it as a switch at `SCRIPT_READY`
   ([`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula)).
 - `repeat_reason` is one sentence, passed only for a formula marked `recent`.
+- `learned_stamp` is `formula_routing.learned.stamp` whenever `learned.active` is `true`, else
+  `""`.
 
 It refuses an unknown or unavailable `formula` or `runner_up`, a video at `TOPIC_APPROVED` whose
 style is not decided, a `recent` formula with no `repeat_reason` on a video with no
@@ -495,11 +504,15 @@ style is not decided, a `recent` formula with no `repeat_reason` on a video with
 `REVISION_REQUESTED`. At `REVISION_REQUESTED` it replaces the pick, or gives a video scripted
 before picks existed its first one, and refuses a video whose pick is a person's choice. The values it read from the row
 are repeated in the `UPDATE`'s `WHERE`, and the setting and the domain's recent formulas are read
-after the write lock is taken (`BEGIN IMMEDIATE`).
+after the write lock is taken (`BEGIN IMMEDIATE`). With a `learned_stamp` on a video with no
+`formula_choice`, the tool reads the domain's watch figures under the same lock, refuses when the
+stamp differs from the one it works out, and stores `formula_evidence` for `formula`. With no
+`learned_stamp`, or on a video with a `formula_choice`, it checks nothing and stores `''`
+([Learned routing](08-scripting-and-voice.md#learned-routing)).
 
 The result carries `formula_pick`, `formula_runner_up`, `formula_reason`, `chosen_by` (`auto` or
-`person`), the formula's `label` and `words`, and `reference`, the file the script-writing skill
-reads.
+`person`), the formula's `label` and `words`, `reference`, the file the script-writing skill
+reads, and `learned`, the stored evidence as an object (`{}` when there is none).
 
 ### `add_comment`
 

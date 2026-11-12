@@ -313,12 +313,14 @@ pick on any `visual_style` write would erase every Auto pick at its first approv
 
 Covers `POST /videos/<id>/switch-formula`, `POST /videos/<id>/switch-opening`, `formula_choice` on
 `PATCH` and on the two creation routes, `default_formula_id` on `POST /projects`, and the
-`auto_experimental_formulas` setting
+`auto_experimental_formulas` and `learned_routing` settings
 ([How a formula is picked](../08-scripting-and-voice.md#how-a-formula-is-picked)).
 
 - The formula switch moves the video to `TOPIC_APPROVED`, swaps the pick and the runner-up, makes
   the new pick the person's choice and adds a human comment. A second switch goes back, and an
-  experimental runner-up needs no setting.
+  experimental runner-up needs no setting. It empties `formula_evidence`, which the opening switch
+  keeps, and the video read carries it.
+- `learned_routing` is on by default and takes only a boolean.
 - The opening switch marks the chosen opening as the one in use, clears its note, sets `hook_type`,
   moves the video to `TOPIC_APPROVED` and adds a human comment that quotes the opening. It keeps a
   held pick and clears `formula_id`, so the old script cannot move on before a rewrite. A video scripted before formulas were picked can use it and gets its script's formula
@@ -337,7 +339,7 @@ Covers `POST /videos/<id>/switch-formula`, `POST /videos/<id>/switch-opening`, `
   whatever its strategy, a formula sent with the video wins over it, and a default that is no
   formula seeds nothing. A New Video submission takes its own pick, or the Manual Videos domain's
   default.
-- The setting defaults to off and takes a boolean. `GET /script-formulas` says which formulas are
+- `auto_experimental_formulas` defaults to off and takes a boolean. `GET /script-formulas` says which formulas are
   experimental.
 
 Both switches are refused on a video on `auto` with no style pick, which a switch would send back
@@ -552,7 +554,8 @@ skipped. `video_metrics` is a time series, so a skipped reading is lost and not 
 
 ### `test_watch_time.py`
 
-Covers the [watch figures](../14-publishing.md#watch-figures): `postforme.extract_retention`, the
+Covers the [watch figures](../14-publishing.md#watch-figures): `postforme.extract_retention` (which
+`postforme.py` imports from `tubematic_core/watch.py`), the
 publication rows of `GET /analytics` and `GET /videos/<id>/publications`,
 `GET /analytics/watch-time`, and the worker storing a published video's length.
 

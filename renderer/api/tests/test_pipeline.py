@@ -2667,7 +2667,7 @@ def test_user_preferences_with_a_nul_are_rejected(client, db_path):
 
 def test_agent_model_is_no_longer_a_settings_key(client):
     assert "agent_model" not in pipeline.SETTINGS_SPEC
-    assert len(pipeline.SETTINGS_SPEC) == 45
+    assert len(pipeline.SETTINGS_SPEC) == 46
     assert "agent_model" not in json.loads(client.get("/settings").data)
 
 

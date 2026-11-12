@@ -113,8 +113,11 @@ def test_a_candidate_list_never_shares_state_with_the_formulas():
     assert tf.routing_candidates()[0]["words"] == list(tf.FORMULAS[first[0]["id"]]["words"])
 
 
-def test_the_reset_names_the_three_pick_columns_and_not_the_persons_choice():
-    assert tf.PICK_RESET_SET == "formula_pick = '', formula_runner_up = '', formula_reason = ''"
+def test_the_reset_names_the_pick_columns_and_not_the_persons_choice():
+    # The pick, its runner-up, its reason and what the watch figures said
+    # about it (TMDEV-217) go together.
+    assert tf.PICK_RESET_SET == ("formula_pick = '', formula_runner_up = '', formula_reason = '', "
+                                 "formula_evidence = ''")
     assert "formula_choice" not in tf.PICK_RESET_SET
     assert "formula_id" not in tf.PICK_RESET_SET
 
@@ -176,3 +179,14 @@ def test_cases_with_an_angle_use_real_kinds_and_some_cases_have_none():
         # The angle's formula is the expected one, so the eval measures
         # whether the router takes the angle's lead.
         assert tangles.formula_for(case["angle_kind"]) == case["expect"][0], case["title"]
+
+
+def test_a_learned_case_names_real_formulas_and_a_known_mode():
+    learned = [c for c in CASES if "learned" in c]
+    assert {c["learned"]["mode"] for c in learned} == {"learned", "explore"}
+    for case in learned:
+        assert set(case["learned"]["points"]) <= set(tf.FORMULAS), case["title"]
+        # The expected formula is one the topic fits; a case where the points
+        # alone would carry a formula that does not fit must still expect the
+        # fitting one.
+        assert case["expect"][0] in tf.FORMULAS

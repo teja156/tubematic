@@ -402,8 +402,13 @@ test.describe("VideoModal", () => {
     await patchVideo(video.id, { status: "SCRIPT_READY", script: "# Hello world" });
     seedFormula(video.id,
       "visual_style = 'system_flow', formula_pick = 'follow-the-flow', formula_runner_up = 'scene-story', "
-        + "formula_reason = 'A request moves through fixed stages.', formula_id = 'follow-the-flow'",
-      "()");
+        + "formula_reason = 'A request moves through fixed stages.', formula_id = 'follow-the-flow', "
+        // What the watch figures said about the pick; the switch clears it.
+        // The JSON goes in as a bound parameter: its quotes would end the
+        // Python string the SQL is written into.
+        + "formula_evidence = ?",
+      "(json.dumps({'formula': 'follow-the-flow', 'mode': 'learned', 'standing': 'better', "
+        + "'points': 2, 'videos': 24, 'accounts': 1, 'min_group': 20}),)");
 
     await page.goto("/");
     const card = page.getByTestId(`kanban-card-${video.id}`);
@@ -413,6 +418,8 @@ test.describe("VideoModal", () => {
     await expect(modal.getByTestId("video-formula")).toHaveText("Auto — Follow the Flow");
     await expect(modal.getByTestId("formula-pick-reason")).toContainText("A request moves through fixed stages.");
     await expect(modal.getByTestId("formula-pick-reason")).toContainText("Runner-up: Scene Story");
+    await expect(modal.getByTestId("formula-pick-evidence")).toContainText(
+      "Leaned on this install's watch figures: Follow the Flow held more of each video");
 
     page.once("dialog", (d) => d.accept());
     await modal.getByRole("button", { name: "Switch to Scene Story" }).click();
@@ -421,6 +428,7 @@ test.describe("VideoModal", () => {
     expect(after.formula_pick).toBe("scene-story");
     expect(after.formula_runner_up).toBe("follow-the-flow");
     expect(after.formula_choice).toBe("scene-story");
+    expect(after.formula_evidence).toBe("");
   });
 
   test("Use this opening sends the video back to scripting with that opening in use", async ({ page }) => {

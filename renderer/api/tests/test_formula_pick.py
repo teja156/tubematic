@@ -108,6 +108,44 @@ def test_the_switch_never_edits_the_stored_script(client, db_path):
                                                            "formula_id": "follow-the-flow"}
 
 
+EVIDENCE = json.dumps({"formula": "follow-the-flow", "mode": "learned", "points": 2})
+
+
+def _set_evidence(db_path, value=EVIDENCE):
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET formula_evidence = ? WHERE id = 'vid_1'", (value,))
+    con.commit()
+    con.close()
+
+
+def test_the_switch_clears_what_the_watch_figures_said_about_the_old_pick(client, db_path):
+    # The record is about the formula switched away from (TMDEV-217).
+    _video(db_path)
+    _set_evidence(db_path)
+    assert client.post("/videos/vid_1/switch-formula", json={}).status_code == 200
+    assert _row(db_path, cols=("formula_evidence",)) == {"formula_evidence": ""}
+
+
+def test_an_opening_switch_keeps_the_record_of_the_formula_it_keeps(client, db_path):
+    _video(db_path)
+    _set_evidence(db_path)
+    assert client.post("/videos/vid_1/switch-opening", json={"index": 1}).status_code == 200
+    assert _row(db_path, cols=("formula_evidence",)) == {"formula_evidence": EVIDENCE}
+
+
+def test_the_video_read_carries_the_record(client, db_path):
+    _video(db_path)
+    _set_evidence(db_path)
+    assert client.get("/videos/vid_1").get_json()["formula_evidence"] == EVIDENCE
+
+
+def test_learned_routing_is_an_install_setting_on_by_default(client):
+    assert client.get("/settings").get_json()["learned_routing"] is True
+    assert client.post("/settings", json={"learned_routing": False}).status_code == 200
+    assert client.get("/settings").get_json()["learned_routing"] is False
+    assert client.post("/settings", json={"learned_routing": "no"}).status_code == 400
+
+
 def test_a_second_switch_goes_back(client, db_path):
     _video(db_path)
     client.post("/videos/vid_1/switch-formula", json={})

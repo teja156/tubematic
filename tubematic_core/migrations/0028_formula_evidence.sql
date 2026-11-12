@@ -1,0 +1,14 @@
+-- 0028 — what the install's own watch figures said when a formula was picked
+-- (TMDEV-217).
+--
+-- Formula routing reads which formulas hold this install's viewers in the
+-- video's domain (tubematic_core.watch) and adds points to the formulas that
+-- fit the topic. choose_script_formula records here what it read, for the
+-- "Why this formula" row at Script Ready: JSON with the formula, the mode
+-- ("learned", or "explore" for a trial pick), the measure, the formula's
+-- standing, its points, and the videos and accounts behind it.
+--
+-- '' = the pick was made with no evidence (learning off, publishing off, or
+-- too few videos with figures). No backfill: that is true of every pick made
+-- before this migration. Every reset of the pick empties it too.
+ALTER TABLE videos ADD COLUMN formula_evidence TEXT NOT NULL DEFAULT '';

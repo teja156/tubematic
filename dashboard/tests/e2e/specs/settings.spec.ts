@@ -53,6 +53,7 @@ test.describe("Settings page", () => {
       max_concurrent_agent_sessions: 3,
       agent_session_timeout_secs: 5400,
       auto_pilot_enabled: false,
+      learned_routing: true,
     });
   });
 
@@ -531,6 +532,19 @@ test.describe("Settings page", () => {
       headers: API_AUTH,
       data: { enabled: false, gap_mins: 240, max_in_flight: 0, projects: {}, account_limits: {} },
     });
+  });
+
+  test("learning from watch figures switches off on one click and stays off after a reload", async ({ page }) => {
+    await gotoTab(page, "preferences");
+    const toggle = page.getByTestId("toggle-learned-routing");
+    await expect(toggle).toHaveText("ON");
+    await toggle.click();
+    await expect(page.getByTestId("status-toggle-learned-routing")).toHaveText("✓ Saved");
+    expect((await getSettings()).learned_routing).toBe(false);
+
+    await page.reload();
+    await page.getByTestId("tab-preferences").click();
+    await expect(page.getByTestId("toggle-learned-routing")).toHaveText("OFF");
   });
 
   test("user preferences persist with their line breaks, and the API enforces the cap", async ({ page, request }) => {

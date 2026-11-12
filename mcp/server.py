@@ -79,6 +79,7 @@ try:
     from tubematic_core import script_checks as tchecks
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
+    from tubematic_core import watch as twatch
     from tubematic_core import youtube as tyoutube
 except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.py
     sys.path.insert(0, str(REPO_ROOT))
@@ -93,6 +94,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
     from tubematic_core import script_checks as tchecks
     from tubematic_core import usage as tusage
     from tubematic_core import voice_models as tvoice
+    from tubematic_core import watch as twatch
     from tubematic_core import youtube as tyoutube
 
 # Sibling modules, imported only after the guard above: cartoon imports
@@ -1319,7 +1321,8 @@ def get_video(video_id: str) -> dict:
 
     formula_routing: the script formula decision, made once at TOPIC_APPROVED
     after the style and before the script by the tubematic-formula-routing
-    skill: {decided, pick, runner_up, reason, choice, candidates, recent}.
+    skill: {decided, pick, runner_up, reason, choice, candidates, recent,
+    learned}.
     pick is the formula the script is written in ("" until decided); the
     script's formula_id must equal it. choice is the formula a person chose
     for this video ("" = Auto): it becomes the pick whatever Auto prefers.
@@ -1332,6 +1335,23 @@ def get_video(video_id: str) -> dict:
     REVISION_REQUESTED (unless its pick is a person's choice), gets the list. recent is {formulas, hook_types}: the formulas and the kept
     opening types of the domain's previous two videos, newest first. Record a
     decision with choose_script_formula.
+
+    learned: what this install's own watch figures (share of the video
+    watched) say in the video's domain, at TOPIC_APPROVED and
+    REVISION_REQUESTED: {active, mode, stamp, measure, min_group, accounts,
+    openings}. active is false when learning is off, publishing is off or no
+    formula has min_group videos with figures on one account; then every
+    candidate's learned points are 0 and mode and stamp are "". mode is
+    "learned" (the figures count) or "explore" (a trial pick: formulas with
+    too few videos get the points). openings is [] for a trial pick: before
+    the pick when mode is "explore", after it when the pick was made as one.
+    Pass stamp to choose_script_formula as learned_stamp whenever active is
+    true.
+    Each candidate carries learned: {points, standing, videos}; the points are
+    added only to a formula that already fits the topic. openings ranks the
+    opening types with enough videos, each {type, label, standing, videos},
+    also while active is false; standing is better, even, mixed (accounts
+    disagree) or worse.
     """
     _init_db()
     with _conn() as con:
@@ -1383,6 +1403,21 @@ def _style_routing(video: dict) -> dict:
 def _experimental_formulas_allowed() -> bool:
     """The setting that lets Auto pick an experimental formula."""
     return _get_setting("auto_experimental_formulas", "false").strip().lower() == "true"
+
+
+def _learning_enabled() -> bool:
+    """Learned routing reads the install's watch figures: the setting
+    learned_routing on, and publishing on (with it off nothing new is
+    measured, and routing stays as it is with no figures)."""
+    return (_get_setting("learned_routing", "true").strip().lower() == "true"
+            and _get_setting("publishing_enabled", "false").strip().lower() == "true")
+
+
+def _routing_learning(con, project_id, video_id: str, pick_mode: str = "") -> dict:
+    """What the domain's watch figures add to formula routing
+    (tubematic_core.watch.routing_learning)."""
+    return twatch.routing_learning(con, project_id or "", video_id, _learning_enabled(),
+                                   pick_mode=pick_mode)
 
 
 def _recent_domain_formulas(project_id, video_id: str) -> dict:
@@ -1475,11 +1510,25 @@ def _formula_routing(video: dict) -> dict:
     # the pick, and in a revision (which may re-pick, or pick for a video
     # scripted before picks existed).
     status = video.get("status")
+    # The watch figures matter where a formula is picked and a script written,
+    # so only those statuses pay for reading them.
+    learning = {"active": False}
+    if status in ("TOPIC_APPROVED", "REVISION_REQUESTED"):
+        # With a pick decided, the writer's openings follow the mode the pick
+        # was made in, never the domain's count since.
+        # A pick with no record (a person's choice, or one made without the
+        # figures) was never a trial pick.
+        held = (twatch.record_mode(video.get("formula_evidence")) or "learned") if pick else ""
+        with _conn() as con:
+            learning = _routing_learning(con, video.get("project_id"), video["id"], held)
     if ((status == "TOPIC_APPROVED" and not pick)
             or (status == "REVISION_REQUESTED" and not (pick and choice))):
         candidates = tformulas.routing_candidates(
             (video.get("visual_style") or "").strip(), _experimental_formulas_allowed(),
             recent["formulas"], choice)
+        for candidate in candidates:
+            candidate["learned"] = twatch.candidate_learning(learning, candidate["id"])
+    learned = {k: v for k, v in learning.items() if k != "formulas"}
     return {
         "decided": bool(pick),
         "pick": pick,
@@ -1488,6 +1537,7 @@ def _formula_routing(video: dict) -> dict:
         "choice": choice,
         "candidates": candidates,
         "recent": recent,
+        "learned": learned,
     }
 
 
@@ -3565,7 +3615,7 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
 
 @mcp.tool
 def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: str = "",
-                          repeat_reason: str = "") -> dict:
+                          repeat_reason: str = "", learned_stamp: str = "") -> dict:
     """Record the script formula for a video, before its script is written.
 
     Call this from the tubematic-formula-routing skill, once, at
@@ -3601,11 +3651,23 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
     formula_id both ""), to give it one. Returns formula_pick (the formula to write in), formula_runner_up,
     chosen_by ("auto" or "person"), the formula's label and word band, and
     reference: the file to read in the script-writing skill's directory.
+    learned_stamp: get_video().formula_routing.learned.stamp whenever
+    learned.active is true, also when the points changed nothing, else "". The tool
+    works the figures out again when it records the pick and refuses when they
+    changed since your read (another pick in the domain, a settings change or
+    new analytics): read get_video again and decide again. Not checked on a
+    video with a person's formula choice, where the figures change nothing.
+
+    It also returns learned: what the domain's watch figures said about your
+    formula ({mode, standing, points, videos, accounts, ...}), stored for the
+    dashboard, or {} when the pick was made without them (learned_stamp "", or
+    a person chose the formula).
     """
     formula = (formula or "").strip()
     runner_up = (runner_up or "").strip()
     reason = " ".join((reason or "").split())
     repeat_reason = " ".join((repeat_reason or "").split())
+    learned_stamp = (learned_stamp or "").strip()
     ids = list(tformulas.FORMULAS)
     if formula not in tformulas.FORMULAS:
         return {"error": f"Invalid formula {formula!r}. Must be one of: {', '.join(ids)}"}
@@ -3662,6 +3724,24 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
         candidates = {c["id"]: c for c in tformulas.routing_candidates(
             style, _experimental_formulas_allowed(),
             _recent_domain_formulas(row["project_id"], video_id)["formulas"], choice)}
+        # Read under the same lock as the write, so the exploration count
+        # cannot move between this read and the record it sets. A record is
+        # kept only for a pick the agent scored with these figures: with a
+        # person's choice the script is not in the agent's formula and nothing
+        # leaned on them, and a pick made without learned_stamp (an older
+        # skill, or learning off when the agent read) added no points. The
+        # stamp covers the mode and every formula's points, so a record never
+        # describes figures other than the ones the agent scored with.
+        evidence = ""
+        if learned_stamp and not choice:
+            learning = _routing_learning(con, row["project_id"], video_id)
+            if learning["stamp"] != learned_stamp:
+                return {"error": "This domain's watch figures changed since you read get_video "
+                                 f"(learned.stamp was {learned_stamp!r}, is now "
+                                 f"{learning['stamp']!r}: another pick in the domain, a settings "
+                                 "change or new analytics). Read get_video again and decide "
+                                 "again from its formula_routing."}
+            evidence = twatch.evidence_record(learning, formula)
         for role, fid in (("formula", formula), ("runner_up", runner_up)):
             if fid and not candidates[fid]["available"]:
                 return {"error": f"{role} {fid!r} ({candidates[fid]['label']}) is not available: "
@@ -3686,10 +3766,11 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
             stored = f"{stored} Repeats a recent formula: {repeat_reason}"
         cur = con.execute(
             "UPDATE videos SET formula_pick = ?, formula_runner_up = ?, formula_reason = ?, "
+            "formula_evidence = ?, "
             "updated_at = ? WHERE id = ? AND archived_at IS NULL AND status = ? "
             "AND COALESCE(formula_choice, '') = ? AND COALESCE(formula_pick, '') = ? "
             "AND COALESCE(visual_style, '') = ? AND COALESCE(style_pick, '') = ?",
-            (pick, runner, stored, _now(), video_id, row["status"], row["formula_choice"] or "",
+            (pick, runner, stored, evidence, _now(), video_id, row["status"], row["formula_choice"] or "",
              held_raw, row["visual_style"] or "", row["style_pick"] or ""))
         if cur.rowcount == 0:
             return {"error": "The video changed while the call was in flight (its status, style "
@@ -3697,7 +3778,8 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
     return {"video_id": video_id, "formula_pick": pick, "formula_runner_up": runner,
             "formula_reason": stored, "chosen_by": "person" if choice else "auto",
             "label": candidates[pick]["label"], "words": candidates[pick]["words"],
-            "reference": f"formulas/{pick}.md"}
+            "reference": f"formulas/{pick}.md",
+            "learned": json.loads(evidence) if evidence else {}}
 
 
 @mcp.tool

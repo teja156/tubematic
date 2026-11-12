@@ -801,6 +801,36 @@ as the switch.
 Trap: rotation is enforced by the tool. Left to the skill's prose, a model that skipped the step
 would give a domain the same structure every time, with nothing recording that it did.
 
+### `test_learned_routing.py`
+
+Covers [Learned routing](../08-scripting-and-voice.md#learned-routing) through the MCP surface:
+`get_video`'s `formula_routing.learned`, each candidate's `learned` points, and the
+`formula_evidence` record `choose_script_formula` stores.
+
+- With evidence, a better formula has 2 points, a worse one -1 and an untried one 0, every formula
+  is a candidate, and the opening types come ranked. `learned` carries no per-formula table.
+- The setting `learned_routing` off, `publishing_enabled` off, or a domain with no evidence gives 0
+  points everywhere and stores `''`. At a status where nothing is picked or written, the figures are
+  not read.
+- A pick with `learned_stamp` stores what the figures said about its formula, also when it was not
+  favoured. A pick without it stores `''`. On a video with a person's choice nothing is checked,
+  `''` is stored and no trial slot is used.
+- A stamp that differs from the one worked out under the lock is refused and nothing is written:
+  a pick recorded in between, new figures, and learning switched off each change it.
+- Every fourth pick in a domain is a trial pick, which gives the points to formulas with too few
+  videos and empties the openings list. A trial pick's openings stay empty after later picks in
+  the domain move the count, and a pick with no record keeps its openings when the count sits on a
+  trial position. A return to `TOPIC_PROPOSED` clears the record with the pick.
+- What the figures can decide, with the agent's fit scores given and the skill's Steps 3b, 4.1
+  and 5 applied in the test (`_skill_decides`, pinned to the skill's wording): a worse formula
+  leading by 3 on fit loses to the better one, which is picked and recorded as `better` with 2
+  points. With the widest swing (2 against -1) the figures decide up to a fit gap of 4, and from 5
+  the better fit keeps the pick. On a trial pick the standing breaks no tie.
+
+Trap: the record is worked out by the server under the pick's write lock, and only for a pick the
+agent scored with the same stamp. Without that check, a session that read two videos before
+picking either would score the second with learned points while its record called it a trial pick.
+
 ### `test_choose_visual_style.py`
 
 Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back

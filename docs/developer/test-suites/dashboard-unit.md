@@ -211,7 +211,8 @@ Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-setti
 - The Retention tab's backlog line is left out when `/retention/backlog` fails, and the field stays
   usable.
 - The Preferences tab's **Experimental formulas** switch starts off and saves
-  `auto_experimental_formulas` alone.
+  `auto_experimental_formulas` alone. **Learn from watch figures** shows the stored
+  `learned_routing`, saves it alone on the click, and shows **✓ Saved** beside it.
 
 Trap: the Discord webhook URL is the credential, because anyone who holds it can post to the
 channel. Its input stays a masked field on the Notifications tab, off the API keys tab.
@@ -449,9 +450,24 @@ Covers the video window's **Formula** picker, **Formula** and **Why this formula
   and shows the server's refusal. The refusal is cleared when the window shows another video.
 - `videoFormulaLabel` reads the pick ahead of the stored script's formula, and `formulaOptions`
   keeps a held formula the list does not know selectable.
+- A pick whose `formula_evidence` is set shows its line under the reason, and one made without
+  figures shows none.
 
 Trap: the approval sends `formula_choice` only when it changed. Sent on every approval, a held
 formula that the installed version dropped would be refused and block the approval.
+
+### `formula-evidence.test.ts`
+
+Covers `lib/scriptFormulas.ts::formulaEvidenceLine`, the **Why this formula** line on what the
+install's watch figures said ([Learned routing](../08-scripting-and-voice.md#learned-routing)).
+
+- An empty or unreadable record shows nothing.
+- A pick that leaned on the figures names the formula and the videos and accounts behind it. A
+  worse, even, mixed or thin standing each says the figures were read and how they came out.
+- A trial pick says it is one. The formula's id stands in while the names have not loaded.
+
+Trap: the record is the server's JSON. A record the page cannot read shows no line, because a
+line made up from a broken record would tell the person a pick leaned on figures it never read.
 
 ### `video-modal-switch-style.test.tsx`
 

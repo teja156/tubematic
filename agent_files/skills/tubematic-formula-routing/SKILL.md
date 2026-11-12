@@ -42,6 +42,7 @@ is:
 | `recent` | It is the formula of one of the domain's previous two videos |
 | `experimental` | The formula is new. Never a reason to skip an available one |
 | `available`, `unavailable_reason` | Whether Auto may pick it on this install now |
+| `learned` | What this install's own viewers say about it in this domain: `{points, standing, videos}` (Step 3b) |
 
 Read the formulas only from this list. Never pick a formula from memory, from another video or
 from these instructions: the list changes as formulas are added, and it is the only place that
@@ -49,6 +50,11 @@ says what each is for and whether this install lets you pick it.
 
 `formula_routing.recent` is `{formulas, hook_types}`: the formulas and the types of opening of the
 domain's previous two videos, newest first.
+
+`formula_routing.learned` is what the domain's published videos say: `active` is `true` when
+some formula has enough videos with watch figures to read, and `mode` is `"learned"` or
+`"explore"`. When `active` is `false`, every candidate's `learned.points` is 0 and routing is
+exactly as below without Step 3b.
 
 `formula_routing.choice` is the formula a person chose for this video, or `""`. **When it is set,
 route exactly as below and pass your own best formula.** The tool writes the script's formula as
@@ -112,13 +118,34 @@ When in doubt, do not count it.
 
 A candidate is a **clear fit** with at least 3 points.
 
+## Step 3b: Add what this install's viewers say
+
+Only now, and **only to the clear fits**, add each one's `learned.points`. A candidate that is not
+a clear fit gets nothing, whatever its points: a formula that does not fit the topic is never
+picked for how other videos did. Whether a candidate is a clear fit is decided by the Step 3
+points alone, before this step.
+
+The server works the points out from the share of the video viewers watched, compared inside
+each account the domain posts to:
+
+- In `"learned"` mode, a formula that holds this domain's viewers clearly better than the domain's
+  videos as a whole has 2, one that holds them clearly worse has -1, and the rest 0.
+- In `"explore"` mode (every fourth pick in a domain with figures), the figures are set aside
+  and a formula with too few videos to read has 2. This is how the install keeps learning about
+  formulas it has not tried; take the points as they are.
+
+Never add points of your own for what you believe works, and never read the figures as a reason
+a formula fits. `learned.standing` is `better`, `even`, `mixed` (the accounts disagree), `worse`
+or `thin` (too few videos); `learned.videos` is how many videos are behind it.
+
 ## Step 4: Decide, and rotate
 
-1. Take the clear fit with the most points. When two are within 1 point, break the tie (Step 5).
+1. Take the clear fit with the most points, counting Step 3b. When two are within 1 point, break the tie (Step 5).
 2. **Rotation.** When that candidate is `recent` and another clear fit is not, take the best clear
    fit that is not `recent`: a domain whose videos all share one structure reads as templated.
    Only when no other candidate is a clear fit, keep the `recent` one and pass `repeat_reason`
-   (Step 7): one sentence on why nothing else fits this topic.
+   (Step 7): one sentence on why nothing else fits this topic. How well a formula holds viewers
+   is never a `repeat_reason`.
    When `formula_routing.choice` is set, skip this rotation step: the script is written in the
    person's choice, and your formula is recorded only as what Auto would have picked.
 3. When no candidate is a clear fit: `follow-the-flow` for an explanation, `scene-story` for a
@@ -126,13 +153,18 @@ A candidate is a **clear fit** with at least 3 points.
 
 ## Step 5: Break ties, in this order
 
-1. **The opening.** The candidate whose opening this topic can fill most concretely with the real
+1. **The figures.** In `"learned"` mode, the candidate whose `learned.standing` ranks higher:
+   `better`, then `even`, `mixed` and `thin` alike, then `worse`. This is how the domain's viewers
+   decide between two formulas that fit the topic about equally well. Skip it in `"explore"` mode,
+   where the points already went to the formulas with too few videos, and when learning is not
+   active.
+2. **The opening.** The candidate whose opening this topic can fill most concretely with the real
    facts from Step 1.
-2. **A person's hint.** The domain's description or a comment asks for a structure one candidate
+3. **A person's hint.** The domain's description or a comment asks for a structure one candidate
    has.
-3. **The style.** `suits_style` is `true`.
-4. **Length.** The shorter band (the lower maximum in `words`).
-5. **Order.** The earlier candidate in the list.
+4. **The style.** `suits_style` is `true`.
+5. **Length.** The shorter band (the lower maximum in `words`).
+6. **Order.** The earlier candidate in the list.
 
 ## Step 6: Choose a runner-up
 
@@ -144,8 +176,13 @@ scored.
 
 ```
 choose_script_formula(video_id, formula=<id>, reason=<one sentence>, runner_up=<id or "">,
-                      repeat_reason=<one sentence, only for a recent formula>)
+                      repeat_reason=<one sentence, only for a recent formula>,
+                      learned_stamp=<formula_routing.learned.stamp, or "">)
 ```
+
+- `learned_stamp` is `formula_routing.learned.stamp` whenever `learned.active` was `true`, also
+  when Step 3b changed nothing (no clear fit, or only clear fits with 0 points), and `""` when it
+  was `false`.
 
 - `reason` is one sentence of at most 300 characters, written for the person who approves the
   script: the feature of the topic that decided it ("A dated outage with a public account of
@@ -156,7 +193,8 @@ choose_script_formula(video_id, formula=<id>, reason=<one sentence>, runner_up=<
   directory. `update_video` refuses a script recorded under any other formula.
 
 Then `add_comment(video_id, "agent", …)` with your Step 1 shape in one line and the top three
-candidates with their points, for example `Picked X (6) over Y (4) and Z (2)`. When the script is
+candidates with their points, for example `Picked X (6) over Y (4) and Z (2)`. When Step 3b added
+points, give them separately: `Picked X (4+2 from this domain's figures) over Y (5)`. When the script is
 written in a person's choice, say so: `Written in W (chosen by a person); Auto's pick was X (6)`.
 
 If the call refuses:
@@ -168,6 +206,11 @@ If the call refuses:
   decide again from the new list.
 - **a recent formula with no `repeat_reason`:** go back to Step 4. Take another clear fit, or call
   again with `repeat_reason` when there is none.
+- **the domain's watch figures changed since you read `get_video`:** another video of the domain
+  was picked in between, a setting changed or new analytics arrived. Read `get_video` again and go
+  back to Step 3b with the new points and `stamp`.
+- **`formula_routing` has no `learned`, or a candidate has no `learned`:** the server is older than
+  these instructions. Count its points as 0 and pass no `learned_stamp`.
 - **`get_video` has no `formula_routing`, or the tool does not exist:** the server is older than
   these instructions. Take `follow-the-flow` for an explanation or `scene-story` for a true case,
   add a comment saying the formula could not be recorded before the script, and go on to the
@@ -210,6 +253,8 @@ service was down. `formula_routing.recent.formulas` is `["case-timeline", "belie
   (3) and `suits_style` (1): 7. `walk-the-path` has "a failure that proceeds step by step" in
   `also_for` (1), one signal (1), `suits_style` (1) and the style's shape (1): 4. `one-person` has
   a close neighbour (1) and one signal (1): 2.
+- Step 3b: `formula_routing.learned.active` is `false` (the domain has too few videos with
+  figures), so nothing is added.
 - Step 4: `case-timeline` wins but is `recent`. `walk-the-path` is a clear fit and is not: take
   it.
 - Step 6: the runner-up is `case-timeline` (7).
@@ -227,6 +272,8 @@ service was down. `formula_routing.recent.formulas` is `["case-timeline", "belie
 - [ ] Unavailable candidates, plain `avoid_for` matches and formulas the facts cannot fill ruled
       out
 - [ ] Points counted by meaning from `best_for`, `also_for`, the angle, `signals` and the style
+- [ ] `learned.points` added to the clear fits only, and to nothing else
+- [ ] Two clear fits within 1 point decided first by `learned.standing` in `"learned"` mode
 - [ ] A `recent` formula passed over for another clear fit, or kept with `repeat_reason`
 - [ ] Your own best formula passed, also when a person chose one
 - [ ] `choose_script_formula` called with a one-sentence reason and a runner-up

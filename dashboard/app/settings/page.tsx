@@ -1503,6 +1503,30 @@ function SettingsBody() {
           {val("auto_experimental_formulas") ? "ON" : "OFF"}
         </button>
       </Row>
+      <Row
+        label="Learn from watch figures"
+        note="Let Auto prefer the script formulas that hold your viewers in a domain, read from your own published videos' share watched. It only chooses among formulas that fit the topic, counts a formula once at least 20 of the domain's videos with figures use it on one account, and every fourth pick tries a formula with too few videos. Off, or with publishing off, Auto chooses from the topic alone."
+      >
+        <SaveStatus status={statuses.get("learned_routing")} testId="status-toggle-learned-routing" />
+        <button
+          data-testid="toggle-learned-routing"
+          onClick={() => choose("learned_routing", !val("learned_routing"))}
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            padding: "7px 16px",
+            border: `1px solid ${val("learned_routing") ? "var(--green)" : "var(--border)"}`,
+            background: val("learned_routing") ? "rgba(74,222,128,0.1)" : "var(--panel)",
+            color: val("learned_routing") ? "var(--green)" : "var(--mute)",
+            cursor: "pointer",
+            transition: "all .15s",
+          }}
+        >
+          {val("learned_routing") ? "ON" : "OFF"}
+        </button>
+      </Row>
         </TabsContent>
 
         <TabsContent value="costs">

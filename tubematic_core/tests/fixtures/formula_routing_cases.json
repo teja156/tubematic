@@ -1,5 +1,5 @@
 {
- "_about": "The fixed topic set formula routing is checked against. Topics no install owns. expect: the right formula(s), best first; ok: also acceptable; style: the video's visual style, when the case has one; angle, angle_kind: the topic's angle, as research files it; a case without them is a topic with no angle. experimental: true = the case is routed with the setting auto_experimental_formulas on, and may expect an experimental formula. A new formula's change adds its topics here. Read by tubematic_core/tests/test_formula_routing.py and scripts/eval_formula_routing.py.",
+ "_about": "The fixed topic set formula routing is checked against. Topics no install owns. expect: the right formula(s), best first; ok: also acceptable; style: the video's visual style, when the case has one; angle, angle_kind: the topic's angle, as research files it; a case without them is a topic with no angle. experimental: true = the case is routed with the setting auto_experimental_formulas on, and may expect an experimental formula. A new formula's change adds its topics here. Read by tubematic_core/tests/test_formula_routing.py and scripts/eval_formula_routing.py. learned: {mode, points: {formula id: points}} = the domain's watch figures as the server hands them over (learned routing); a case without it is a domain with no figures. A learned case checks that the points move the pick only among formulas that fit the topic.",
  "cases": [
   {
    "title": "How noise-cancelling headphones make quiet by adding sound",
@@ -422,6 +422,57 @@
     "escalating-ladder"
    ],
    "experimental": true
+  },
+  {
+   "title": "How a fridge stays cold by pumping heat out of the box",
+   "brief": "A fridge makes nothing cold: it carries heat out. A liquid refrigerant evaporates in pipes inside the box and takes heat with it, a compressor squeezes the gas so it gets hot, and the coils at the back give that heat to the kitchen before the liquid goes round again. That is why the back of a fridge is warm and why an open fridge door heats the room.",
+   "expect": [
+    "follow-the-flow"
+   ],
+   "ok": [
+    "paradox-mechanism-reframe"
+   ],
+   "learned": {
+    "mode": "learned",
+    "points": {
+     "follow-the-flow": 2,
+     "paradox-mechanism-reframe": -1
+    }
+   }
+  },
+  {
+   "title": "What happens to a letter between the post box and the door",
+   "brief": "A letter dropped in a post box is collected in the evening, taken to a sorting centre where a machine reads the postcode and sprays a barcode on it, sorted again at the delivery office into the order of a postman's walk, and delivered the next morning. Each stage hands on to the next, and a wrong postcode sends it back to be read by a person.",
+   "expect": [
+    "follow-the-flow"
+   ],
+   "ok": [],
+   "learned": {
+    "mode": "learned",
+    "points": {
+     "scene-story": 2,
+     "scheme-machine": 2,
+     "follow-the-flow": 0
+    }
+   }
+  },
+  {
+   "title": "Cracking your knuckles does not give you arthritis",
+   "brief": "Many people believe cracking knuckles causes arthritis. The sound is a gas bubble collapsing in the fluid of the joint. A doctor cracked the knuckles of only one hand for sixty years and found no arthritis in either hand, and larger studies found no link between the habit and arthritis.",
+   "expect": [
+    "myth-break-model"
+   ],
+   "ok": [
+    "test-case"
+   ],
+   "learned": {
+    "mode": "explore",
+    "points": {
+     "incident-file": 2,
+     "scheme-machine": 2,
+     "anomaly-file": 2
+    }
+   }
   }
  ]
 }

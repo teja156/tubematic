@@ -68,7 +68,7 @@ def test_the_skill_reads_every_field_the_candidates_carry():
 def test_the_skill_calls_the_tool_with_its_real_arguments_and_limit():
     text = _text()
     assert "choose_script_formula(video_id, formula=" in text
-    for arg in ("reason=", "runner_up=", "repeat_reason="):
+    for arg in ("reason=", "runner_up=", "repeat_reason=", "learned_stamp="):
         assert arg in text, arg
     assert f"at most {tf.REASON_MAX_CHARS} characters" in text
     for key in ("`formula_pick`", "`chosen_by`", "`reference`"):
@@ -92,7 +92,8 @@ def test_a_persons_choice_is_routed_around_never_overridden():
 def test_the_skill_handles_every_refusal_the_tool_makes():
     text = _text()
     for case in ("already picked", "the style is not decided", "not available",
-                 "a recent formula with no `repeat_reason`", "has no `formula_routing`"):
+                 "a recent formula with no `repeat_reason`", "has no `formula_routing`",
+                 "the domain's watch figures changed since you read `get_video`"):
         assert case in text, case
 
 
@@ -149,3 +150,36 @@ def test_a_dropped_formula_sends_a_revision_to_the_router():
     assert "unless it is not among\n     `formula_routing.candidates`" in writer
     assert "not among `formula_routing.candidates`" in operator
     assert "not among the candidates" in _text()
+
+
+def test_learned_points_go_only_to_formulas_that_already_fit():
+    # TMDEV-217: a formula that does not fit the topic is never picked for how
+    # other videos did. The clear-fit line is drawn before the points are added.
+    text = _text()
+    assert "## Step 3b: Add what this install's viewers say" in text
+    assert "**only to the clear fits**, add each one's `learned.points`" in text
+    assert "decided by the Step 3\npoints alone, before this step" in text
+    assert text.index("A candidate is a **clear fit**") < text.index("## Step 3b")
+    assert "- [ ] `learned.points` added to the clear fits only, and to nothing else" in text
+    assert ("- [ ] Two clear fits within 1 point decided first by `learned.standing` in "
+            "`\"learned\"` mode") in text
+
+
+def test_the_skill_knows_both_learning_modes_and_an_older_server():
+    text = _text()
+    for phrase in ('`"learned"` mode', '`"explore"` mode', "`formula_routing.learned`",
+                   "take the points as they are", "has no `learned`",
+                   "How well a formula holds viewers\n   is never a `repeat_reason`"):
+        assert phrase in text, phrase
+
+
+def test_the_skill_states_the_points_the_server_gives():
+    from tubematic_core import watch
+    text = _text()
+    assert watch.LEARNED_POINTS == {"better": 2, "worse": -1} and watch.EXPLORE_POINTS == 2
+    assert watch.EXPLORE_EVERY == 4
+    assert "clearly better than the domain's\n  videos as a whole has 2" in text
+    assert "clearly worse has -1" in text
+    assert "every fourth pick in a domain with figures" in text
+    for standing in (*watch.STANDINGS, watch.THIN):
+        assert f"`{standing}`" in text, standing

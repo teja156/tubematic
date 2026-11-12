@@ -149,9 +149,9 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
 - A video with a script record shows the formula and the opening type by the labels the real
   `GET /script-formulas` returns, the openings and the warnings. A script written over HTTP then
   clears the record. The record is seeded the same way, because only `update_video` writes one.
-- A video with a picked formula shows it after the word Auto, with its reason and runner-up, and
-  **Switch to …** moves it to `TOPIC_APPROVED` with the runner-up as its pick and as the person's
-  choice. **Use this opening** moves a video to `TOPIC_APPROVED` with that opening marked as the one
+- A video with a picked formula shows it after the word Auto, with its reason, the line on what
+  the watch figures said, and the runner-up, and **Switch to …** moves it to `TOPIC_APPROVED` with
+  the runner-up as its pick and as the person's choice, and empties `formula_evidence`. **Use this opening** moves a video to `TOPIC_APPROVED` with that opening marked as the one
   in use and a comment that names it. Both are seeded in the API container, because only the
   agent's `choose_script_formula` and `update_video` write them.
 - A formula chosen in the window at `TOPIC_PROPOSED` is stored with the approval, from a picker
@@ -288,6 +288,8 @@ Covers [the settings page](../15-dashboard.md#the-settings-page) against the rea
 - Every change saves itself with no Save button, and each tab's values persist through a reload.
   A value out of range is not stored and says why beside the field.
 - Turning Publishing on asks first, and Cancel leaves it off.
+- **Learn from watch figures** switches `learned_routing` off on one click and stays off through a
+  reload.
 - A voice's model is stored on that voice only, and the preview endpoint refuses an unknown model
   before any ElevenLabs call.
 - A voice's speed persists, its select is disabled on `eleven_v4`, and the API refuses a speed

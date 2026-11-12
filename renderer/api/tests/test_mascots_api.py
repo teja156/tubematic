@@ -473,7 +473,7 @@ def test_a_symlinked_builtin_sheet_is_refused(client, db_path, tmp_path, monkeyp
 # ---------- the install default ----------
 
 def test_default_mascot_id_is_a_setting_that_must_be_pickable(client, db_path):
-    assert len(pipeline.SETTINGS_SPEC) == 45
+    assert len(pipeline.SETTINGS_SPEC) == 46
     _gpu(db_path, "working")
     assert client.get("/settings").get_json()["default_mascot_id"] == ""
     _mascot(db_path, "wip", status="PENDING", approved=0)

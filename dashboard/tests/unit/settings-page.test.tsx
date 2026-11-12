@@ -2151,6 +2151,24 @@ describe("SettingsPage — user preferences (TMDEV-117)", () => {
     );
   });
 
+  it("shows learning from watch figures as stored and saves it switched off on the click", async () => {
+    stubFetch({ ...MOCK_SETTINGS, learned_routing: true });
+    await renderTab("preferences");
+    const toggle = screen.getByTestId("toggle-learned-routing");
+    expect(toggle.textContent).toBe("ON");
+    fireEvent.click(toggle);
+    expect(toggle.textContent).toBe("OFF");
+    await flushSaves();
+    expect(screen.getByTestId("status-toggle-learned-routing").textContent).toBe("✓ Saved");
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      expect.stringContaining("/settings"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ learned_routing: false }),
+      }),
+    );
+  });
+
   it("shows the stored preferences in a textbox on their own tab", async () => {
     stubFetch({ ...MOCK_SETTINGS, user_preferences: "Scripts: calm tone." });
     await renderTab("preferences");

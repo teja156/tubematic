@@ -182,6 +182,11 @@ export interface Video {
   formula_pick?: string;
   formula_runner_up?: string;
   formula_reason?: string;
+  /** What this install's watch figures said when the formula was picked:
+   *  JSON written by the server, or '' when the pick was made without them
+   *  (read by lib/scriptFormulas.ts::formulaEvidenceLine). Optional for the
+   *  same reason as tts_text. */
+  formula_evidence?: string;
   /** The video's last successful render (TMDEV-206): the renderer's id and
    *  its name at the time ('' = no render recorded, which every video
    *  rendered before 2.2.0 reads as), whether it rendered on the GPU (1/0),
@@ -380,6 +385,9 @@ export interface Settings {
   /** Whether Auto may pick a script formula marked experimental. Off by
    *  default. Optional: an older API does not send it. */
   auto_experimental_formulas?: boolean;
+  /** Whether formula routing reads this install's own watch figures. On by
+   *  default. Optional: an older API does not send it. */
+  learned_routing?: boolean;
   /** The mascot new videos start with unless their domain says otherwise;
    *  '' = none. Optional: an older API does not send it. */
   default_mascot_id?: string;
