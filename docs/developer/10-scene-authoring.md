@@ -143,7 +143,7 @@ number of generated images a video costs at most (0 when absent), and `yields_ti
 style that loses a close call to any style without it (`motion_graphics`, labelled Photo Explainer,
 is the plain photo style the richer styles should win close calls from).
 [How Auto picks a style](#how-auto-picks-a-style) reads all seven. An insert style's `routing`
-describes beats rather than topics, because the insert-routing skill scores beats
+describes beats, because the insert-routing skill scores beats
 ([Main styles and inserts](#main-styles-and-inserts)).
 
 `tubematic_core/tests/test_style_packs.py` pins every gate's answer for each style, `auto`, a blank
