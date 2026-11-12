@@ -1344,8 +1344,7 @@
       "ok": [
         "terminal_doc",
         "stick",
-        "scenes",
-        "motion_graphics"
+        "scenes"
       ],
       "future": "",
       "note": "Negative control for the real-failure rule: a real, named bug, but nothing to see beyond the requests and the bytes, so a diagram style stays right."
