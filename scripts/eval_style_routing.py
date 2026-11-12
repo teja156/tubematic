@@ -81,8 +81,8 @@ def build_prompt(case: dict, candidates: list[dict]) -> str:
             "Pick this video's style.")
 
 
-def parse_answer(text: str) -> dict | None:
-    """The last JSON object in the model's answer that names a style, or None."""
+def parse_answer(text: str, key: str = "style") -> dict | None:
+    """The last JSON object in the model's answer that holds `key`, or None."""
     decoder = json.JSONDecoder()
     found = None
     for m in re.finditer(r"\{", text):
@@ -90,12 +90,13 @@ def parse_answer(text: str) -> dict | None:
             out, _ = decoder.raw_decode(text, m.start())
         except ValueError:
             continue
-        if isinstance(out, dict) and "style" in out:
+        if isinstance(out, dict) and key in out:
             found = out
     return found
 
 
-def ask(prompt: str, system: str, model: str, timeout: int) -> tuple[dict | None, str]:
+def ask(prompt: str, system: str, model: str, timeout: int,
+        key: str = "style") -> tuple[dict | None, str]:
     with tempfile.TemporaryDirectory() as cwd:  # no project CLAUDE.md, no skills folder
         proc = subprocess.run(
             ["claude", "-p", "--output-format", "json", "--model", model, "--tools", "",
@@ -108,7 +109,7 @@ def ask(prompt: str, system: str, model: str, timeout: int) -> tuple[dict | None
         result = json.loads(proc.stdout).get("result", "")
     except ValueError:
         result = proc.stdout
-    answer = parse_answer(result)
+    answer = parse_answer(result, key)
     return answer, "" if answer else f"no JSON answer: {result[-300:]}"
 
 

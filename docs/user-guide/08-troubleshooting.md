@@ -164,6 +164,16 @@ happens when you change a voice's model after its script was written.
 Keep a voice that can speak the script, or press **Revise** and name the voice you want. The agent
 rewrites the script for it. Nothing is charged for a refused approval.
 
+The same applies to a segment's own voice on the **Script** tab: a voice that cannot speak that
+segment's markup is greyed out, and approval is refused when a segment's voice had its model changed
+since the script was written. Give the segment another voice, or request a revision.
+
+### "Ignores speed"
+
+You set a speed on a voice whose model is `eleven_v3` or `eleven_v4`. Those models ignore speed, so
+Tubematic refuses it. Keep the speed at 1.00x, or move the voice to a model that honours speed (see
+[Voice](05-settings.md#voice)).
+
 ### A video is stuck in Voicing
 
 Tubematic adds a "Stuck in VOICING" comment when a video has waited in Voicing for three poll

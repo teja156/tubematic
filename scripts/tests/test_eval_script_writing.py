@@ -14,7 +14,7 @@ import eval_script_writing as ev  # noqa: E402
 from tubematic_core import formulas as tformulas  # noqa: E402
 
 TOPIC = {"title": "Why 0.1 plus 0.2 is not 0.3", "brief": "Binary fractions.",
-         "shape": "a tool did something that looks wrong"}
+         "shape": "a tool did something that looks wrong", "formula": "broken-expectation"}
 ANSWER = {
     "script_segments": [
         {"id": "seg-1", "beat": "The symptom", "visual": "a terminal",
@@ -35,8 +35,10 @@ def test_the_topic_set_is_usable_and_names_no_install():
     assert len(topics) >= 10
     assert len({t["title"] for t in topics}) == len(topics)
     for t in topics:
-        assert set(t) == {"title", "brief", "shape"}
+        assert set(t) == {"title", "brief", "shape", "formula"}
         assert all(isinstance(t[k], str) and t[k].strip() for k in t)
+        # The pick a fresh install's router could make: a core formula.
+        assert not tformulas.FORMULAS[t["formula"]]["experimental"], t["title"]
         assert len(t["title"]) <= 70      # the dashboard's display-title limit
 
 
@@ -47,6 +49,9 @@ def test_the_prompt_carries_the_video_as_the_skill_reads_it():
     assert video["title"] == TOPIC["title"] and video["topic"] == TOPIC["brief"]
     assert video["script_profile_id"] == "" and video["style"]["script"] == ""
     assert video["pronunciation_mode"] == "respell"
+    # The formula is picked before the writer runs; the prompt carries the pick.
+    assert video["formula_routing"]["decided"] is True
+    assert video["formula_routing"]["pick"] == TOPIC["formula"]
     assert '"user_preferences": ""' in prompt
 
 
@@ -55,7 +60,7 @@ def test_the_new_side_carries_every_formula_file_and_the_old_side_none():
     assert new.startswith("---\nname: tubematic-script-writing-skill")
     for fid in tformulas.FORMULAS:
         assert f"=== formulas/{fid}.md ===" in new
-    assert "Use only the one for the formula you choose" in new
+    assert "Use only the one for this video's formula" in new
 
 
 def test_the_old_side_is_read_from_git(monkeypatch):

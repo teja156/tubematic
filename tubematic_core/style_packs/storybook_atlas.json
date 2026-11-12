@@ -25,6 +25,12 @@
     "maxWords": 6
   },
   "script": "Every beat's `visual` is a **page** brief: the chapter's place, who is on stage (a person by name, or the guide), and the one object the line is about (\"Ada at her desk, Babbage's engine drawings pinned to the wall\").\n\nThe narration is a picture-book story told by a calm storyteller in the third person, in 3 to 5 chapters. Open on a time or a place (\"In the winter of 1843, in a London drawing room...\"). Each chapter is one stage of the story (the problem, the attempt, the turn, what it changed), and its first sentence is where the page turns, so start each chapter with a sentence that moves the story on (\"Then one afternoon...\", \"Years later...\"); the chapter's title and byline are chosen when the video is drawn, not spoken. A chapter must last at least 8 seconds, about 20 spoken words; a whole Short of 45 to 55 seconds is about 100 to 120 words. Introduce each person from history by name and role the first time (\"Charles Babbage, an inventor\"): there are at most four, and they appear by name and costume, never by likeness. Let one name or word carry the ending, because it is revealed in star lettering: say it in the last sentence, a few seconds before the end. Give at most one number that rises or hits a limit, because it becomes a gauge: a count or a measure with a natural top (a speed, a share, a count of things), not a ratio. Keep sentences short and concrete, about things a reader could point at in a picture. A small mouse guide walks beside the story without speaking: never write lines for it or about it. No hype, no lists of tips, no talking to the viewer as \"you\".",
+  "picture": {
+    "opening": "Chapter 1 has something moving from frame 0 in front of its backdrop: the guide walking, a person entering or the subject's prop arriving. The plaque is the chapter's title, not the opening picture.",
+    "turn": "A new chapter on the first word of a turn or a re-opening (a push through a portal or a wipe), or a person, a prop or a plate (constellation, gauge, morph) arriving at that moment.",
+    "payoff": "The plate or prop that is the answer, in the centre of the stage, with the guide reacting to it.",
+    "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
+  },
   "routing": {
     "best_for": [
       "the history of an invention, a discovery or an idea, told as a story",

@@ -25,6 +25,12 @@
     "maxWords": 3
   },
   "script": "Every beat's `visual` is a **component** brief: which components are on screen, what travels between them, and the one value worth showing (a port, a latency, `200 OK`). The video is a diagram throughout, so a role (\"the user\", \"an attacker\") is a component with an icon, never a figure.\n\nThe narration is the diagram's script. Write it as a walk through a system: name each component the moment it matters, one step per sentence, in the order things travel, and say the reply's path back when there is one. Keep each subject to about nine components; when the subject changes (from the request to the defence, say), start a new sentence, because the diagram cuts to a new board there. Name the values a viewer should see (an address, a status code, a port), since each becomes a label on the connector. Never write a beat that needs a person, a place or a photograph: this style has none.",
+  "picture": {
+    "opening": "Board 1 has the component the first sentence names on screen from frame 0: a node event at frame 0, growing in while the headline types above it. Never the headline alone over an empty board.",
+    "turn": "A new board on the first word of a turn or a re-opening, or a focus push onto the component it is about with a packet or a fault on it at that moment.",
+    "payoff": "The board that shows the whole answer: the path the narration built, lit end to end, with the focus on the component the answer names.",
+    "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
+  },
   "routing": {
     "best_for": [
       "networking and protocols",

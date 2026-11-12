@@ -12,15 +12,21 @@ Open on a failure the viewer has had or can reproduce in ten seconds. Blame two 
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| The symptom | 0 to 15% | The exact input and the wrong output, with real values, happening to the viewer. |
-| Wrong suspect 1 | 15 to 25% | The obvious thing to blame. |
-| Wrong suspect 2 | 25 to 32% | The next thing to blame. It happens there too. |
-| Turn | 32 to 38% | One short sentence: nothing is broken, the tool is answering a different question. |
-| Mechanism | 38 to 78% | Two or three facts, each with a number or a named part. |
-| Root cause | 78 to 93% | One sentence the viewer can repeat. |
-| Callback | 93 to 100% | The title's phrase, now explained. A one-line fix may follow, because it is the payoff. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| The symptom | 0 to 15% | The exact input and the wrong output, with real values, happening to the viewer. | - |
+| Wrong suspect 1 | 15 to 25% | The obvious thing to blame. | a re-opening: a visible change on its first word |
+| Wrong suspect 2 | 25 to 32% | The next thing to blame. It happens there too. | a re-opening: a visible change on its first word |
+| Turn | 32 to 38% | One short sentence: nothing is broken, the tool is answering a different question. | the turn: a visible change on its first word |
+| Mechanism | 38 to 78% | Two or three facts, each with a number or a named part. | - |
+| Root cause | 78 to 93% | One sentence the viewer can repeat. | the payoff: the video's strongest picture |
+| Callback | 93 to 100% | The title's phrase, now explained. A one-line fix may follow, because it is the payoff. | - |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The failure happening: the exact input going in and the wrong output coming out, with the real values readable. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

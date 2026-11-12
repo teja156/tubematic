@@ -17,7 +17,7 @@
        "events": [
         {
          "type": "word",
-         "at": 6,
+         "at": 0,
          "id": "ctx",
          "slot": "context",
          "text": "WHAT THE SERVER KEEPS",

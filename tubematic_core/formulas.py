@@ -1,16 +1,21 @@
 """Script formulas: the structures a script can follow, one data file per formula.
 
 A formula is a JSON file in `formulas/`, named for the formula's id. It says
-which topics it suits, how long the script runs, the beats in order with each
-beat's share of the script, the shapes its opening can take, what holds the
-viewer, how it ends, and a fill-in template. A formula is structure only: how
-a line sounds belongs to the script profile, and what a segment shows belongs
-to the visual style.
+which topics it suits and which it does not, the visual styles whose picture
+it suits, how long the script runs, the beats in order with each beat's share
+of the script, the shapes its opening can take, what holds the viewer, how it
+ends, what its first frame shows, which beats are the turn, the re-openings
+and the payoff (each beat's optional role, which the scene author reads from
+get_timeline), and a fill-in template. A formula is structure only: how a line
+sounds belongs to the script profile, and what a segment shows belongs to the
+visual style.
 
-The script-writing skill's `formulas/<id>.md` files and its decision table are
-rendered from this data (scripts/gen_formula_references.py; a test keeps them
-equal), the MCP server checks a script's recorded formula and hook types
-against it, and the dashboard reads the labels through GET /script-formulas.
+A video's formula is chosen once, before its script, from the candidates
+`routing_candidates` lists (get_video's formula_routing). The script-writing
+skill's `formulas/<id>.md` files are rendered from this data
+(scripts/gen_formula_references.py; a test keeps them equal), the MCP server
+checks a script's recorded formula and hook types against it, and the
+dashboard reads the labels through GET /script-formulas.
 
 Free of Flask and of I/O beyond reading the files once at import. A malformed
 file raises at import, so a bad file stops the process at start-up rather than
@@ -18,6 +23,8 @@ at the first script that names it.
 """
 import json
 import pathlib
+
+from . import visual_styles as _styles
 
 FORMULAS_DIR = pathlib.Path(__file__).resolve().parent / "formulas"
 
@@ -58,10 +65,38 @@ BEAT_NAME_MAX_LEN = 60
 RECORD_CLEAR_SET = ("formula_id = '', hook_type = '', hook_alternatives = '', "
                     "script_warnings = ''")
 
-_TEXT_KEYS = ("label", "line", "holds", "ending", "template")
-_LIST_KEYS = ("best_for", "also_for", "avoid_for", "pitfalls")
-_KEYS = {"id", "order", "family", "words", "beats", "hooks", *_TEXT_KEYS, *_LIST_KEYS}
+# The SQL that empties the formula decision made before the script (migration
+# 0025), so it is made again: the pick, its runner-up, the reason and what the
+# watch figures said (0028). For a video that goes back to its topic or gets a
+# new visual style. A person's own choice (formula_choice) is not part of it and
+# stays.
+PICK_RESET_SET = ("formula_pick = '', formula_runner_up = '', formula_reason = '', "
+                  "formula_evidence = ''")
+# The longest reason choose_script_formula stores: one sentence.
+REASON_MAX_CHARS = 300
+# How many of a domain's previous videos a formula may not repeat.
+ROTATION_WINDOW = 2
+# Why a candidate cannot be picked by Auto.
+EXPERIMENTAL_OFF = ("experimental formulas are off for Auto (the setting "
+                    "auto_experimental_formulas)")
+
+_TEXT_KEYS = ("label", "line", "holds", "ending", "first_frame", "template")
+_LIST_KEYS = ("best_for", "also_for", "avoid_for", "signals", "pitfalls")
+_KEYS = {"id", "order", "family", "experimental", "styles", "words", "beats", "hooks",
+         *_TEXT_KEYS, *_LIST_KEYS}
 MIN_HOOK_SHAPES = 3
+
+# What a beat can be to the picture, beside its name. The scene author reads a
+# segment's role from get_timeline and puts a visible change on the first word
+# of a turn or a re-opening, and the video's strongest picture on the payoff.
+# A beat with no role carries no picture duty beyond its own brief.
+BEAT_ROLES = {
+    "turn": "the turn: a visible change on its first word",
+    "reopen": "a re-opening: a visible change on its first word",
+    "payoff": "the payoff: the video's strongest picture",
+}
+# The payoff is the answer the script holds back, so it sits in the second half.
+PAYOFF_FROM_MIN = 50
 
 
 class FormulaError(ValueError):
@@ -109,6 +144,16 @@ def _check_formula(path: pathlib.Path, data) -> dict:
             one_line(item, key)
     if not data["best_for"]:
         fail("best_for must name at least one kind of topic")
+    if not data["signals"]:
+        fail("signals must hold at least one statement a topic can be checked against")
+    if not isinstance(data["experimental"], bool):
+        fail("experimental must be true or false")
+    styles = data["styles"]
+    # A style a formula names has to exist: the router marks a candidate as
+    # suiting the video's style by this list, and a misspelt id never matches.
+    if not isinstance(styles, list) or len(set(map(str, styles))) != len(styles) \
+            or not all(isinstance(s, str) and s in _styles.PACKS for s in styles):
+        fail(f"styles must be a list of different visual style ids from {sorted(_styles.PACKS)}")
     words = data["words"]
     if not (isinstance(words, list) and len(words) == 2 and all(is_int(w) for w in words)
             and WORD_FLOOR <= words[0] < words[1] <= WORD_CEILING):
@@ -118,8 +163,11 @@ def _check_formula(path: pathlib.Path, data) -> dict:
         fail("beats must be a list of at least three beats")
     at = 0
     for i, beat in enumerate(beats):
-        if not isinstance(beat, dict) or set(beat) != {"name", "from", "to", "job"}:
-            fail(f"beats[{i}] must have exactly the keys name, from, to, job")
+        if not isinstance(beat, dict) or not ({"name", "from", "to", "job"} <= set(beat)
+                                               <= {"name", "from", "to", "job", "role"}):
+            fail(f"beats[{i}] must have the keys name, from, to, job and, optionally, role")
+        if "role" in beat and beat["role"] not in BEAT_ROLES:
+            fail(f"beats[{i}].role must be one of {sorted(BEAT_ROLES)}")
         if not all(isinstance(beat[k], str) and beat[k].strip() for k in ("name", "job")):
             fail(f"beats[{i}] name and job must be non-empty strings")
         one_line(beat["name"], f"beats[{i}].name")
@@ -136,6 +184,13 @@ def _check_formula(path: pathlib.Path, data) -> dict:
     names = [b["name"] for b in beats]
     if len(set(names)) != len(names):
         fail("two beats share a name")
+    roles = [b.get("role") for b in beats]
+    if roles.count("turn") > 1:
+        fail("at most one beat may be the turn")
+    if roles.count("payoff") != 1:
+        fail("exactly one beat must be the payoff")
+    if next(b for b in beats if b.get("role") == "payoff")["from"] < PAYOFF_FROM_MIN:
+        fail(f"the payoff beat must start at {PAYOFF_FROM_MIN} percent or later")
     hooks = data["hooks"]
     if not isinstance(hooks, list):
         fail("hooks must be a list")
@@ -194,30 +249,72 @@ def label(formula_id: str) -> str:
     return formula["label"] if formula else (formula_id or "")
 
 
+def beat_key(name) -> str:
+    """A beat name as it is compared: case and spacing do not matter, so a
+    segment labelled "the turn" still finds the formula's "The turn"."""
+    return " ".join(str(name or "").casefold().split())
+
+
+def beat_names(formula_id: str) -> tuple:
+    """A formula's beat names, in order; () for no formula or an unknown one."""
+    formula = FORMULAS.get(formula_id or "")
+    return tuple(b["name"] for b in formula["beats"]) if formula else ()
+
+
+def beat_roles(formula_id: str) -> dict:
+    """{beat name: role} for the beats of a formula that have one; {} for no
+    formula or an unknown one (a script written before formulas)."""
+    formula = FORMULAS.get(formula_id or "")
+    return {b["name"]: b["role"] for b in formula["beats"] if "role" in b} if formula else {}
+
+
+def first_frame(formula_id: str) -> str:
+    """What a formula's first frame shows; "" for no formula or an unknown one."""
+    formula = FORMULAS.get(formula_id or "")
+    return formula["first_frame"] if formula else ""
+
+
 def public_list() -> dict:
     """What GET /script-formulas serves: enough to label a video's record."""
     return {
         "formulas": [{"id": f["id"], "label": f["label"], "family": f["family"],
-                      "line": f["line"], "words": list(f["words"])}
+                      "line": f["line"], "words": list(f["words"]),
+                      "experimental": f["experimental"]}
                      for f in FORMULAS.values()],
         "hook_types": [{"id": k, "label": v} for k, v in HOOK_TYPES.items()],
     }
 
 
-def _cell(items: list) -> str:
-    return "; ".join(items) if items else "-"
+def routing_candidates(style_id: str = "", allow_experimental: bool = False, recent=(),
+                       person_choice: str = "") -> list:
+    """Every formula as a candidate for one video's pick, in formula order.
 
+    style_id: the video's visual style; a formula that names it in `styles`
+        is marked `suits_style`. A ranking signal, never a filter.
+    allow_experimental: the setting auto_experimental_formulas.
+    recent: the formulas of the domain's previous ROTATION_WINDOW videos; a
+        formula among them is marked `recent`.
+    person_choice: the formula a person chose for the video, or "". It is
+        available whatever the setting says.
 
-def decision_table_markdown() -> str:
-    """The script-writing skill's table for choosing a formula from the shape
-    of a topic. One row per formula, in formula order."""
-    lines = ["| Formula (`formula_id`) | First choice when the topic is | Also fits | Not for | Words |",
-             "|---|---|---|---|---|"]
+    The lists are copies, so a caller cannot change the loaded formulas.
+    """
+    recent = set(recent)
+    out = []
     for f in FORMULAS.values():
-        lines.append(f"| **{f['label']}** (`{f['id']}`) | {_cell(f['best_for'])} | "
-                     f"{_cell(f['also_for'])} | {_cell(f['avoid_for'])} | "
-                     f"{f['words'][0]} to {f['words'][1]} |")
-    return "\n".join(lines) + "\n"
+        off = f["experimental"] and not allow_experimental and f["id"] != person_choice
+        out.append({
+            "id": f["id"], "label": f["label"], "family": f["family"],
+            "experimental": f["experimental"], "line": f["line"],
+            "best_for": list(f["best_for"]), "also_for": list(f["also_for"]),
+            "avoid_for": list(f["avoid_for"]), "signals": list(f["signals"]),
+            "words": list(f["words"]),
+            "suits_style": bool(style_id) and style_id in f["styles"],
+            "recent": f["id"] in recent,
+            "available": not off,
+            "unavailable_reason": EXPERIMENTAL_OFF if off else "",
+        })
+    return out
 
 
 def reference_markdown(formula: dict) -> str:
@@ -232,9 +329,15 @@ def reference_markdown(formula: dict) -> str:
            "## Beats", "",
            "In this order. A share is the part of the script's words the beat covers; hold each "
            "within a few points.", "",
-           "| Beat | Share of the script | Its job |", "|---|---|---|"]
-    out += [f"| {b['name']} | {b['from']} to {b['to']}% | {b['job']} |" for b in formula["beats"]]
-    out += ["", "## Openings", "",
+           "| Beat | Share of the script | Its job | On screen |", "|---|---|---|---|"]
+    out += [f"| {b['name']} | {b['from']} to {b['to']}% | {b['job']} | "
+            f"{BEAT_ROLES[b['role']] if 'role' in b else '-'} |" for b in formula["beats"]]
+    out += ["", "A segment's `visual` brief for a beat with an on-screen duty names the change "
+            "it asks for. The scene author reads the same duty from the timeline.", "",
+            "## First frame", "",
+            f"{formula['first_frame']} Segment 1's `visual` brief asks for this picture, already "
+            "moving, and it is the subject of the first sentence.", "",
+            "## Openings", "",
             "Draft one opening from each of three shapes. The type goes in `hooks[].type`.", "",
             "| Type (`type`) | Shape |", "|---|---|"]
     out += [f"| {HOOK_TYPES[h['type']]} (`{h['type']}`) | {h['shape']} |" for h in formula["hooks"]]

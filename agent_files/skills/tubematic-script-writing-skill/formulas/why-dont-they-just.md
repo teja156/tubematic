@@ -12,14 +12,20 @@ Name the obvious fix the viewer would suggest, then the rule of the system that 
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| The obvious fix | 0 to 8% | The question as the viewer would ask it: why not just do the obvious thing? |
-| Catch-up and irony | 8 to 25% | One clause on who or what this is, for a newcomer, plus an irony that sharpens the question. |
-| Re-ask | 25 to 30% | The question again, shorter. |
-| The rule | 30 to 60% | The rule that blocks the fix, with its source and one concrete picture of it at work. |
-| Proof by exception | 60 to 85% | Who or what managed it anyway, and what made that case different. |
-| The rule as meaning | 85 to 100% | What the rule says about the system, or one dry line that answers the first question again. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| The obvious fix | 0 to 8% | The question as the viewer would ask it: why not just do the obvious thing? | - |
+| Catch-up and irony | 8 to 25% | One clause on who or what this is, for a newcomer, plus an irony that sharpens the question. | - |
+| Re-ask | 25 to 30% | The question again, shorter. | a re-opening: a visible change on its first word |
+| The rule | 30 to 60% | The rule that blocks the fix, with its source and one concrete picture of it at work. | the turn: a visible change on its first word |
+| Proof by exception | 60 to 85% | Who or what managed it anyway, and what made that case different. | a re-opening: a visible change on its first word |
+| The rule as meaning | 85 to 100% | What the rule says about the system, or one dry line that answers the first question again. | the payoff: the video's strongest picture |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The obvious fix being tried and failing on screen, never a picture of the problem standing still. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

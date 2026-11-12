@@ -12,14 +12,22 @@ A change applies to the next piece of work. You do not restart anything.
 The switch at the top, **Pipeline state**, pauses and resumes the pipeline. It applies when you
 click it. See [Pausing everything](03-using-tubematic.md#pausing-everything).
 
-Below it are fifteen tabs. On most tabs your edits wait until you press that tab's **SAVE**:
+Below it are fifteen tabs. Every change is saved as you make it, and no tab has a Save button:
 
-- A tab with unsaved edits shows an amber dot.
-- **SAVE** saves that tab only.
-- If one value is not allowed, nothing on the tab is saved, and a message names the problem.
+- A switch, a list or a tick box saves when you change it.
+- A number or a text field saves when you press Enter or click elsewhere.
+- The **Preferences** text saves a second after you stop typing.
 
-Three tabs work differently. **Agents** and **Costs** apply each change as you make it. **Auto
-Pilot** has its own **SAVE** and asks you to confirm.
+Beside each field you see **Saving…**, then **✓ Saved**. A value that is not allowed is not saved,
+and a message beside it or under its row says why. On most tabs a number or text you typed stays in
+its field so you can correct it, and press Enter to send it again. A switch or a list goes back to
+the stored value, and so do the fields on **Auto Pilot** and a voice's name and ID. The line at the top right of the page says **All changes saved**, **Saving…**, or how
+many changes were not saved. While a change is still saving, the browser asks before you close or
+reload the page.
+
+A few changes ask you first, because they act outside the dashboard: turning **Publishing** on,
+turning **Auto Pilot** on or adding a domain to it, and removing a renderer. Removing a voice or
+resetting a price you entered takes effect at once and offers **Undo** for a few seconds.
 
 ---
 
@@ -62,17 +70,27 @@ research stops before you have enough to choose from.
 
 The list of ElevenLabs voices videos can use. A new install starts with two, Teja and Adam.
 
-![Settings, Voice tab: two voices, each with a name, a voice ID, a model, a default marker and a preview button](../images/settings-voice.png)
+![Settings, Voice tab: three voices, each with a name, a voice ID, a model, a speed, a default marker and a preview button; the two on eleven_v4 and eleven_v3 stay at 1.00x and the third is at 1.15x](../images/settings-voice.png)
 
 For each voice you set:
 
 - a name, which is what the pickers show,
 - the voice's ElevenLabs ID, from your ElevenLabs voice library,
-- the ElevenLabs model it speaks with.
+- the ElevenLabs model it speaks with,
+- its speed, from 0.70x to 1.20x. 1.00x is ElevenLabs' normal pace.
 
 Mark one voice as **default**. Videos use it unless their domain or you choose another. The **▶**
-button plays a sample, which spends a few ElevenLabs credits the first time you play it for a voice
-and model.
+button plays a sample, which spends a few ElevenLabs credits the first time you play it for a voice,
+model and speed.
+
+Speed works on `eleven_multilingual_v2`, `eleven_flash_v2_5`, `eleven_turbo_v2_5`, `eleven_flash_v2`
+and `eleven_turbo_v2`. `eleven_v3` and `eleven_v4` ignore it, so the speed stays at 1.00x on a voice
+with those models. A speed of 1.15x is close to the pace of popular narrated Shorts, about 180 words
+a minute.
+
+A script can give some of its lines to a second voice from this list, for example a viewer's
+objection spoken aloud. You need at least two voices for that. See
+[Read and approve scripts](03-using-tubematic.md#3-read-and-approve-scripts).
 
 You can have up to 10 voices.
 
@@ -169,7 +187,8 @@ disk. A failed video cannot be retried once it is archived.
 One field each for ElevenLabs, Gemini, OpenAI, youtube-transcript.io and postforme.dev.
 
 A stored key shows as dots and its last four characters. Type over it to replace it, or clear the
-field to remove it, then press **SAVE**. The new key is used from the next call.
+field to remove it. The key saves when you press Enter or click elsewhere, and is used from the
+next call.
 
 This page stores a key without checking it with its provider. To have a key checked as you enter it,
 run `python3 onboard.py --step install_config`.
@@ -181,7 +200,7 @@ Keys are stored in the database file in plain text. See
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Publishing** | Off | Lets you post approved videos from the dashboard. Needs the postforme.dev key |
+| **Publishing** | Off | Lets you post approved videos from the dashboard. Needs the postforme.dev key. Turning it on asks you to confirm first |
 
 See [Publishing](06-publishing.md).
 
@@ -252,6 +271,15 @@ Visuals: prefer diagrams over stock-style photos.
 The agent receives the text on every run and applies the parts that fit what it is doing. A
 preference cannot make the agent skip one of your approvals.
 
+**Experimental formulas**, below the text box, lets Auto pick the
+[script formulas](03-using-tubematic.md#the-formulas) marked experimental. It is off by default.
+While it is off, an experimental formula is used only where you chose it yourself.
+
+**Learn from watch figures** lets Auto prefer the formulas that hold your viewers in a domain,
+read from your own published videos (see
+[Learning from your own viewers](03-using-tubematic.md#learning-from-your-own-viewers)). It is on
+by default and changes nothing until a domain has enough published videos with figures.
+
 A script ends on its payoff. To have scripts end with a closing line, ask for one here:
 
 ```
@@ -281,9 +309,9 @@ update.
 | Button | What it does |
 |---|---|
 | **Sync now** | Updates the prices now |
-| **Override** | Sets a price for a model yourself |
-| **Reset** | Removes your price and goes back to the synced one |
-| **Add price** | Sets a price for a model that has calls and no price. Those calls are then counted in every total |
+| **Override** | Opens a small form for your own price. **Set price** stores it |
+| **Reset** | Removes your price and goes back to the synced one. **Undo** puts your price back |
+| **Add price** | Opens the same form for a model that has calls and no price. Those calls are then counted in every total |
 
 A call with no price is counted separately beside each total until you add a price.
 

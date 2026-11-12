@@ -357,6 +357,44 @@ def test_a_script_its_voice_cannot_speak_is_not_approved(env):
     assert len(_comments(env, "v")) == 1
 
 
+@pytest.mark.parametrize("roster", [
+    # The segment's own voice moved to v4, which cannot speak its <break/>.
+    [{"name": "V4", "voice_id": "v4", "model_id": "eleven_v4"},
+     {"name": "Other", "voice_id": "o1", "model_id": "eleven_v4"}],
+    # The segment's own voice left the roster.
+    [{"name": "V4", "voice_id": "v4", "model_id": "eleven_v4"}],
+])
+def test_a_segment_voice_that_cannot_speak_its_segment_is_not_approved(env, roster):
+    """The same check the approving PATCH makes (TMDEV-216): every segment
+    against the voice that speaks it."""
+    _auto_pilot(env, {"auto": []})
+    _setting(env, "elevenlabs_voices", json.dumps(roster))
+    _setting(env, "elevenlabs_voice_id", "v4")
+    _video(env, "v", "SCRIPT_READY", voice_id="v4", script="Hi. Wait what.",
+           script_segments=json.dumps([
+               {"id": "s1", "voice": "Hi.", "visual": ""},
+               {"id": "s2", "voice": 'Wait <break time="0.4s" /> what.', "visual": "",
+                "voice_id": "o1"}]))
+    worker._sweep_auto_pilot()
+    assert _row(env, "v")["status"] == "SCRIPT_READY"
+    assert len(_comments(env, "v")) == 1
+
+
+def test_a_two_voice_script_that_fits_each_voice_is_approved(env):
+    _auto_pilot(env, {"auto": []})
+    _setting(env, "elevenlabs_voices", json.dumps(
+        [{"name": "V4", "voice_id": "v4", "model_id": "eleven_v4"},
+         {"name": "V2", "voice_id": "v2", "model_id": "eleven_multilingual_v2"}]))
+    _setting(env, "elevenlabs_voice_id", "v4")
+    _video(env, "v", "SCRIPT_READY", voice_id="v4", script="Hi. Wait what.",
+           script_segments=json.dumps([
+               {"id": "s1", "voice": "Hi [pause] there.", "visual": ""},
+               {"id": "s2", "voice": 'Wait <break time="0.4s" /> what.', "visual": "",
+                "voice_id": "v2"}]))
+    worker._sweep_auto_pilot()
+    assert _row(env, "v")["status"] == "VOICING"
+
+
 def test_a_failing_sweep_never_escapes_the_worker_loop(env):
     # An escaping exception restarts the container, which the render
     # reconciliation counts as a render failure.

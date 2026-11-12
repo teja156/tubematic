@@ -2,6 +2,7 @@
   "id": "paradox-mechanism-reframe",
   "order": 10,
   "family": "explain",
+  "experimental": false,
   "label": "Paradox, Mechanism, Reframe",
   "line": "Two true facts about a thing the viewer owns that cannot both be true. Give the answer in one line early, show how it works, and end by turning the opening belief upside down.",
   "best_for": [
@@ -14,6 +15,17 @@
   "avoid_for": [
     "an object the viewer has never held or wondered about",
     "a topic with no paradox the viewer has felt: a definition with a 'but' added is not one"
+  ],
+  "signals": [
+    "the viewer has held or used the thing",
+    "two facts about it seem unable to both be true",
+    "the explanation is a mechanism of four to six steps",
+    "the answer changes how the viewer sees the thing"
+  ],
+  "styles": [
+    "under_the_hood",
+    "system_flow",
+    "bean_explainer"
   ],
   "words": [
     150,
@@ -36,7 +48,8 @@
       "name": "Scene that will fail",
       "from": 15,
       "to": 20,
-      "job": "One everyday scene with the viewer in it, which the mechanism will break later."
+      "job": "One everyday scene with the viewer in it, which the mechanism will break later.",
+      "role": "reopen"
     },
     {
       "name": "Mechanism",
@@ -48,19 +61,22 @@
       "name": "Turn",
       "from": 55,
       "to": 65,
-      "job": "'But': the scene from the third beat fails, and the mechanism is the reason."
+      "job": "'But': the scene from the third beat fails, and the mechanism is the reason.",
+      "role": "turn"
     },
     {
       "name": "That is also why",
       "from": 65,
       "to": 82,
-      "job": "Two more things the viewer has lived through that the same mechanism explains."
+      "job": "Two more things the viewer has lived through that the same mechanism explains.",
+      "role": "reopen"
     },
     {
       "name": "Reframe",
       "from": 82,
       "to": 100,
-      "job": "Turn the opening belief upside down in two sentences, then stop."
+      "job": "Turn the opening belief upside down in two sentences, then stop.",
+      "role": "payoff"
     }
   ],
   "hooks": [
@@ -79,6 +95,7 @@
   ],
   "holds": "Two questions are open inside the first fifth: the paradox, and a scene that has not failed yet. Because the answer arrives early, the viewer stays for the how. The question re-opens at the scene, at the turn and at the first 'also why'.",
   "ending": "The reframe: the belief the paradox planted, stated the other way round as a fact. No recap of the mechanism and no lesson.",
+  "first_frame": "The paradox drawn literally, both facts on screen at once: the thing that works where it should not, beside the thing that fails where it should work.",
   "pitfalls": [
     "Naming the mechanism's technical term before the viewer has seen it work",
     "Ending on a summary of the mechanism where the turned-around belief belongs",

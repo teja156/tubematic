@@ -2429,5 +2429,47 @@
    ],
    "sum": 14586.439
   }
+ },
+ "schedule_open": {
+  "data": {
+   "regions": [
+    {
+     "startFrame": 0,
+     "layout": "pair",
+     "items": [
+      {
+       "id": "c",
+       "kind": "doodle",
+       "slot": "left",
+       "doodle": "coin",
+       "label": "all 110",
+       "at": 0
+      },
+      {
+       "id": "t",
+       "kind": "text",
+       "slot": "right",
+       "text": "Compound interest",
+       "at": 30
+      }
+     ]
+    }
+   ],
+   "recapFrame": 200
+  },
+  "out": [
+   {
+    "region": 0,
+    "id": "c",
+    "start": -15,
+    "dur": 41
+   },
+   {
+    "region": 0,
+    "id": "t",
+    "start": 42,
+    "dur": 30
+   }
+  ]
  }
 }

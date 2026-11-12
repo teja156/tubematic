@@ -39,6 +39,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - the normal host-side case
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from tubematic_core import jobfiles as tjobs
+from tubematic_core import voice_models as tvoice  # noqa: E402
 
 # Fallbacks for when the settings rows are absent, which is the normal case
 # here: vqa/make_seed_db.py deliberately seeds only the keys that differ from
@@ -86,8 +87,8 @@ def review_video(video_id: str, root: Path, run_review=None) -> tuple[str, Path]
     con = sqlite3.connect(str(db_path))
     try:
         row = con.execute(
-            "SELECT video_path, scene_config_path, status, script, tts_text, project_id"
-            " FROM videos WHERE id = ?",
+            "SELECT video_path, scene_config_path, status, script, tts_text, project_id,"
+            " voice_id, script_segments FROM videos WHERE id = ?",
             (video_id,),
         ).fetchone()
         # VQA-7: the review model and sampling rate are settings-table values
@@ -98,14 +99,16 @@ def review_video(video_id: str, root: Path, run_review=None) -> tuple[str, Path]
         # meaningless.
         settings = dict(con.execute(
             "SELECT key, value FROM settings WHERE key IN "
-            "('ai_review_model', 'ai_review_fps', 'gemini_api_key')"
+            "('ai_review_model', 'ai_review_fps', 'gemini_api_key',"
+            " 'elevenlabs_voices', 'elevenlabs_voice_id')"
         ).fetchall())
     finally:
         con.close()
 
     if row is None:
         raise SystemExit(f"No video found with id {video_id!r}")
-    video_path, scene_config_path, status, script_text, tts_text, project_id = row
+    (video_path, scene_config_path, status, script_text, tts_text, project_id,
+     voice_id, segments_json) = row
     if not video_path:
         raise SystemExit(f"Video {video_id} has not been rendered yet (current status: {status})")
     if not scene_config_path:
@@ -136,6 +139,7 @@ def review_video(video_id: str, root: Path, run_review=None) -> tuple[str, Path]
     # deliberate <respell> substitution from being reported as a defect.
     result = run_review(str(host_video_path), scene_config,
                         script_text=script_text or "", tts_text=tts_text or "",
+                        voices=_narration_voices(voice_id, segments_json, settings),
                         model=settings.get("ai_review_model", _DEFAULT_REVIEW_MODEL),
                         fps=settings.get("ai_review_fps", _DEFAULT_REVIEW_FPS),
                         api_key=settings.get("gemini_api_key", "")
@@ -148,6 +152,30 @@ def review_video(video_id: str, root: Path, run_review=None) -> tuple[str, Path]
     review_path.write_text(feedback.strip() + "\n")
 
     return feedback, review_path
+
+
+def _narration_voices(voice_id, segments_json, settings) -> list:
+    """The voices that speak the video, by name, in the order they first
+    speak: the same list the render worker gives the review
+    (render_results.py::_narration_voices), so a second voice on purpose is
+    not reported as a defect here either (TMDEV-216)."""
+    try:
+        roster = {v["voice_id"]: v.get("name") or v["voice_id"]
+                  for v in json.loads(settings.get("elevenlabs_voices") or "[]")}
+    except (ValueError, TypeError, KeyError, AttributeError):
+        roster = {}
+    video_voice = voice_id or settings.get("elevenlabs_voice_id", "")
+    try:
+        segments = json.loads(segments_json) if segments_json else []
+    except ValueError:
+        segments = []
+    if not isinstance(segments, list) or not segments:
+        return [roster.get(video_voice, video_voice)] if video_voice else []
+    ids = []
+    for vid, _ in tvoice.segment_runs([s for s in segments if isinstance(s, dict)], video_voice):
+        if vid and vid not in ids:
+            ids.append(vid)
+    return [roster.get(vid, vid) for vid in ids]
 
 
 def main(argv=None) -> None:

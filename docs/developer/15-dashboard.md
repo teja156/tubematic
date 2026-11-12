@@ -254,6 +254,8 @@ because a sentence cannot be stored without its kind. A typed sentence with no k
 - Once an agent is picked, its default model is pinned, as approving a topic pins it.
 - The voice picker's **Default** names the voice the API will give the video: the Manual Videos
   domain's default voice while it is on the roster, otherwise the install default.
+- The **Formula** picker defaults to **Auto**, which sends an empty `formula_choice`. The API then
+  gives the video the Manual Videos domain's default formula when it has one.
 - The title counter counts code points, as the API does.
 - Every submission is filed into the Manual Videos domain and is unscored, which the board shows as
   a dash. See [Where topics come from](02-pipeline.md#where-topics-come-from).
@@ -270,14 +272,15 @@ The Mascots page's create form uses the same agent, model and effort controls
 - Writes to one domain run one at a time: each change on its row, and a pause or resume. Each is
   built from the row as the write before it left it, because the route replaces the whole row. Two
   changes sent side by side would each carry the other's field as it was, and one would be lost.
-  A refused change, or one that did not reach the API within 30 seconds, is reported in an alert
-  and the row keeps what is stored.
+  A refused change, or one that did not reach the API within 30 seconds, is reported on the
+  domain's line ("Not saved:" and the reason, through `SaveStatus`) and the row keeps what is
+  stored. The line shows it with the panel closed too.
 - A closed row is one line: the name, a chip for each default the domain sets
   (`lib/domains.ts::domainChips`), the topic and video counts, the status and the pause button. The
   panel is rendered only while its row is open.
 - The panel groups the controls as Look, Narration, Agent and Limits, each with a sentence that
   says which videos it reaches. The add form renders the Look, Narration and Agent groups from the
-  same component, `DomainDefaults`.
+  same component, `DomainDefaults`. Narration holds the voice, the script profile and the formula.
 - The agent picker lists the live agents after **Automatic (dealt by weight)**. Changing the agent
   clears the model in the same save, because the API refuses a model from another agent's list. A
   blank model follows the agent's default at the time each video is filed. An agent that is
@@ -286,11 +289,21 @@ The Mascots page's create form uses the same agent, model and effort controls
   and counts code points. On a domain row the description stays on one truncated line.
 - A deleted default profile shows as "Unavailable profile", because the profile list omits deleted
   profiles.
-- Illustrated is disabled while no OpenAI key is stored. A refused change is shown in an alert.
+- The **Formula** select offers Auto and every formula from
+  [`GET /script-formulas`](05-http-api.md#get-script-formulas), with experimental ones marked. A
+  stored formula the list does not hold stays in the select under its id
+  (`lib/scriptFormulas.ts::formulaOptions`), so the row does not read as Auto while it holds a
+  value.
+- Illustrated is disabled while no OpenAI key is stored. A refused change is shown on the domain's
+  line like any other.
+- The research modes and the mining list show the same status in their headings. Mining saves run
+  one at a time, because each sends the whole list. Removing a mining URL saves at once and offers
+  **Undo** in a toast, which puts that URL back.
 - The Mining toggle is disabled, with the reason on hover, while `GET /research/strategies` reports
   `mining_available: false`. The masked key in `/settings` reads as unset for a key supplied only
   through the API's environment, so the page does not use it.
-- The **Topic cap** field saves on blur or Enter, and an out-of-range entry reverts. "N filed" is
+- The **Topic cap** field saves on blur or Enter. An out-of-range entry stays in the field with the
+  reason on the domain's line, and is not sent. "N filed" is
   `topic_count`, which includes archived and rejected videos ([Topic cap](02-pipeline.md#topic-cap)).
 - An expired seed domain shows EXPIRED without ACTIVE. PAUSED still shows, because resuming alone
   would not reopen the domain.
@@ -395,6 +408,14 @@ a script is written for its voice's model.
 - A shown voice that is not on the roster (removed since it was chosen, or none) is listed first and
   disabled, so the select cannot display a different voice from the one in force.
 - The Pipeline and Projects pages pass the roster to the video window. Library does not.
+- A voice with a speed other than 1.0 is labelled with it ("1.15x").
+
+On the Script tab at `SCRIPT_READY`, when the roster has a second voice, each segment has its own
+voice select. Its first option is the video's voice, and a voice listed in the video's
+`segment_voice_conflicts` for that segment is disabled with the reason as hover text. A pick sends
+`PATCH /videos/<id>` with `segment_voices` and reloads the video (see
+[A segment's voice](05-http-api.md#a-segments-voice)). At other statuses a segment with its own
+voice shows that voice's name, and Details lists the video's other voices under **Other voices**.
 
 Wherever no voice picker is shown, and on every archived video, the video window's Details shows a
 read-only **Voice** and **Voice model** from the video's `voice_info`. The model is the one
@@ -443,6 +464,35 @@ with `style_reason` and the runner-up. At Script Ready, when there is a runner-u
 [`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style), which sends the
 video back to its agent to rewrite the script, and shows the server's reason when it refuses. The
 Quick Actions row shows the label only: its controls already wrap at narrow widths.
+
+### The formula
+
+`lib/scriptFormulas.ts` holds the rules and `lib/useScriptFormulas.ts::useScriptFormulaNames` fetches
+[`GET /script-formulas`](05-http-api.md#get-script-formulas) once per mount. A component asks for
+the names only while something on screen needs them, so a list of videos scripted before formulas
+existed costs no request.
+
+- At `TOPIC_PROPOSED` the video modal has a **Formula** picker (`formulaOptions`). The approval
+  carries `formula_choice` only when the person changed it, so a held formula that the installed
+  version does not have is not sent back and refused. The Quick Actions row has no formula picker,
+  because its controls already wrap at narrow widths.
+- After the topic, `videoFormulaLabel` names the formula beside the script profile, in the modal
+  and on the Quick Actions row. It reads `formula_pick` first and `formula_id` second, because after
+  a switch the stored script is the one about to be replaced. A formula Auto picked reads as the
+  word Auto followed by the formula's name. Past the topic, a script with no pick and no record
+  reads as "No formula" even when a person chose one, because a script written by hand follows
+  none.
+- A picked formula shows a **Why this formula** row with `formula_reason` and the runner-up. When
+  the video's `formula_evidence` is set, a line under the reason says whether the pick leaned on
+  the install's watch figures, was a trial pick, or read figures that did not favour it, with the
+  videos and accounts behind them (`lib/scriptFormulas.ts::formulaEvidenceLine`). At
+  Script Ready, when there is a runner-up, the modal adds a **Switch to …** button. After a confirm
+  it calls [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula).
+- At Script Ready each opening on the Script tab that is not in use has a **Use this opening**
+  button. After a confirm it calls
+  [`POST /videos/<id>/switch-opening`](05-http-api.md#post-videosvideo_idswitch-opening). Both
+  switches send the video back to its agent to rewrite the script, and both show the server's
+  reason when it refuses.
 
 ### Mascot picker
 
@@ -502,10 +552,11 @@ Effort:
   Results appear once they have content. Logs is always present.
 - The Script tab opens with what the agent recorded with the script (`components/ScriptRecord.tsx`):
   the formula, the type of the opening in use, the three openings drafted and the
-  [script warnings](08-scripting-and-voice.md#script-warnings). It is read-only and renders nothing
-  for a script with no record. It takes the labels from
-  [`GET /script-formulas`](05-http-api.md#get-script-formulas), fetched when a record is shown, and
-  shows the ids until that answers. A segment that carries a `beat` shows it above its text.
+  [script warnings](08-scripting-and-voice.md#script-warnings). It renders nothing for a script
+  with no record. Its one control is **Use this opening**, at Script Ready (see
+  [The formula](#the-formula)). The modal passes it the labels from
+  [`GET /script-formulas`](05-http-api.md#get-script-formulas) and it shows the ids until they
+  arrive. A segment that carries a `beat` shows it above its text.
 - The Topic tab opens with the topic's [angle](02-pipeline.md#topic-angle)
   (`components/TopicAngle.tsx`): the sentence, its kind and its score. At `TOPIC_PROPOSED` on a
   video that is not archived, **Edit** (or **Add angle**) opens a text box with a 300-character
@@ -566,7 +617,8 @@ Library's, show when each post goes out, in the zone it was picked in
 **Partially published** state.
 
 The Socials page lists postforme accounts by platform with a checkbox each, which edits the
-allowlist.
+allowlist. Each tick saves at once, and the outcome shows beside the account. The page's banner is
+for a list that could not load.
 
 - It shows `NOT CONNECTED` for an allowlisted account that postforme does not list. Such an entry
   can only be unticked.
@@ -627,13 +679,14 @@ Components that a section above covers are left out of this table.
 | `CostsPanel.tsx`, `AutoPilotPanel.tsx`, `RenderersPanel.tsx` | See [The settings page](#the-settings-page) |
 | `LogList.tsx` | Record rendering shared by the Logs page and the video window's Logs tab |
 | `ReviseDialog.tsx` | The mandatory-comment prompt behind every Request Revision |
-| `ScriptRecord.tsx` | The Script tab's read-only block for what a script recorded: formula, openings and warnings. See [The video window](#the-video-window) |
+| `ScriptRecord.tsx` | The Script tab's block for what a script recorded: formula, openings and warnings, with **Use this opening** at Script Ready. See [The video window](#the-video-window) |
 | `TopicAngle.tsx` | The Topic tab's block for the topic's angle, with its editor at `TOPIC_PROPOSED`. See [The video window](#the-video-window) |
 | `VoicePreviewButton.tsx` | Generates or replays a cached voice sample. One button toggles play and pause and follows the audio's own events. A change of voice or model resets it. Given a `modelId`, it previews that model |
 | `MiningSources.tsx` | Adds and removes YouTube URLs for mining. It mirrors the API's URL rule and adds a URL in the canonical `watch?v=` form. See [Mining sources](05-http-api.md#mining-sources) |
 | `TimeZoneProvider.tsx` | Fetches the host's timezone once and provides it through context. See [Time](#time) |
 | `VisualStylesProvider.tsx` | Fetches the visual-style list once and provides it through context. See [Visual-style picker](#visual-style-picker) |
-| `Toast.tsx` | `useToasts()` and a stack renderer. Success toasts dismiss after 3 s. Error toasts stay |
+| `Toast.tsx` | `useToasts()` and a stack renderer. Success toasts dismiss after 3 s. Error toasts stay. A toast can carry an action (**Undo**); it then stays 8 s, and clicking the action does not reach the toast's dismiss-on-click first |
+| `SaveStatus.tsx` | `SaveStatus`, the "Saving…" / "✓ Saved" / "Not saved: reason" text beside a field, and `SavesSummaryLine`, the Settings page's line. See [The settings page](#the-settings-page) |
 | `SummaryStrip.tsx` | Six stat tiles: Topics Awaiting, Scripts Ready, Videos Ready, In Pipeline, Published, Failed |
 | `StatusBadge.tsx`, `SectionLabel.tsx` | The coloured dot and label for each of the 16 statuses, and the section heading rule |
 | `TopBar.tsx` | Sticky navigation, the disk figure (`DiskUsage.tsx`), version badge, timezone badge, health indicator and **Sign out**. Renders nothing on `/login` |
@@ -731,18 +784,66 @@ already been saved.
 
 What each tab holds is in [Settings](../user-guide/05-settings.md).
 
-The pause switch sits above the tabs and applies at once through its own endpoint, with no Save.
+The pause switch sits above the tabs and applies at once through its own endpoint.
 
-Most tabs are staged. Edits collect in a local draft, and nothing reaches the API until that tab's
-**Save** is pressed. Each entry in `app/settings/page.tsx::TABS` lists its `fields`. That list
-scopes both what the tab's Save sends and what counts as unsaved on the tab, so the two cannot
-differ. A tab with unsaved edits shows an amber dot, and switching away asks for confirmation. The
-tab row wraps onto a second line on a narrow window, because the page body clips horizontal
-overflow.
+Every change on every tab saves itself, and the page has no Save button and no draft. A switch, a
+picker or a tick box saves on change. A number or a text field saves on blur or Enter. The
+Preferences text saves one second after the last keystroke, and at once on blur, on a tab switch
+or when you go to another dashboard page. Closing the browser tab with text still waiting gets the
+browser's leave-page prompt. The tab row wraps onto a second line on a narrow window, because the
+page body clips horizontal overflow.
 
-- On Voice, each roster row has its own model picker and preview button.
-- Preferences is one textbox with a live count against the 6000-character cap. See
-  [User preferences](07-agent-layer.md#user-preferences).
+- `lib/saveStatus.tsx::useSaveStatus` holds each field's state: saving, saved, or refused with the
+  API's reason. `components/SaveStatus.tsx` draws it beside the field, and "✓ Saved" clears after
+  three seconds. Only the newest save for a field sets its state, so a late answer to an older save
+  cannot overwrite a newer outcome.
+- `SavesProvider` wraps the page. It sums the states of every panel for the line at the top right,
+  and adds a `beforeunload` prompt while a save is in flight or a Preferences save is waiting. A
+  save still on its way when its tab is left stays counted until it is over.
+- Settings saves run through one queue (`useSerialQueue`). `POST /settings` answers with the whole
+  settings object, so an answer that arrived after a newer one would put older values back on
+  screen. Each request gives up after 30 seconds, or one hung request would hold every later change.
+- A field compares an edit with the value on its way to the API, or else the stored one
+  (`useBaseline`). Comparing with the stored value alone would drop an edit back to it made while
+  another save was on its way, and would send an Enter followed by a blur twice.
+- A field shows a new stored value only when you have typed nothing it has not sent, no save of it
+  is on its way, and no refusal is shown (`mayFollow`). An answer to an older save would otherwise
+  put an older value in the box while you type. A Preferences save waiting for its second does not
+  hide the outcome of one already on its way, and an earlier save answering while newer text waits
+  puts the field back to waiting.
+- A text field typed back to its stored value clears its refusal, and a focus and blur alone does
+  not send a refused value again (for the Discord webhook that would run its check each time).
+  Enter, or an edit, sends it again.
+- A switch or a picker shows its new value while the save is on its way, and goes back to the
+  stored value if the API refuses it. A typed field (`NumInput`, `SecretInput`, `TextInput`,
+  Preferences) keeps what was typed, red, with the reason beside it, so the entry can be corrected
+  while the stored value stays in force. A voice row and the Auto Pilot fields go back to the
+  stored value instead. An out-of-range number is refused in the page and never sent.
+- The voice roster and the default voice are saved in one request, because the API reads a default
+  that is not in the roster as empty. Removing a voice offers **Undo**, which puts that one voice
+  back into the roster as it is then, so a voice added since stays. It is the default again only if
+  no other voice became the default meanwhile. A new id on the default voice moves the default with
+  it. The add row empties only once a new voice is stored, so a refused one keeps what was typed.
+- Turning Publishing on opens a confirmation: with Auto Pilot on, it starts scheduling posts that
+  nobody approves one by one. The dialog reads `GET /autopilot` when it opens, because Auto Pilot
+  saves through its own route and the settings loaded with the page can be out of date about it.
+  Turning Publishing off saves at once.
+- Switching tabs never asks, because nothing is ever left unsaved. It clears the refusal messages,
+  because their fields leave the screen with the tab.
+- The input components and `SaveStatus` are declared at module scope. Declared inside the page,
+  they get a new identity on every render and React remounts them, which loses a click made while
+  a field blurs.
+
+- On Voice, each roster row has its own model picker, speed select and preview button. The speed
+  select is disabled on a model outside `SPEED_MODELS` (copied from
+  `tubematic_core/voice_models.py` and pinned by a test), a voice moved to such a model loses its
+  speed, and a speed of 1.00 is not sent. The preview plays the row's model and speed.
+- Preferences is one textbox (`PreferencesEditor`) with a live count against the 6000-character
+  cap. It keeps its own text, so the answer to an earlier save never replaces what is being typed.
+  The API stores the text trimmed, and an answer that is only the box's text trimmed leaves the box
+  alone, or a trailing space or line break would vanish under the cursor. See
+  [User preferences](07-agent-layer.md#user-preferences). Under it, **Experimental formulas** switches
+  `auto_experimental_formulas` and **Learn from watch figures** switches `learned_routing`.
 - API keys render through `SecretInput`, a password field that unmasks only while focused. It shows
   what the server returned: a mask or an empty string. Sending an unchanged mask changes nothing on
   the server. Clearing the field and leaving it sends an empty string, which removes the key.
@@ -750,12 +851,15 @@ overflow.
   through the same `SecretInput`. Saving a non-empty URL probes it: see
   [Notifications](../user-guide/05-settings.md#notifications).
 
-Four tabs hold rows from their own tables and write outside the staging.
+Four tabs hold rows from their own tables and save through their own routes.
 
 ### Agents
 
-Choosing the default agent, picking an agent's default model and saving a weight each write at once
-through `PATCH /agents/<id>`. The model list is read-only: the dashboard container has no agent
+Choosing the default agent, picking an agent's default model or effort, and changing a weight each
+write at once through `PATCH /agents/<id>`. The weight saves on blur or Enter, and a value outside
+0 to 100 stays in the field with the reason under the row and is never sent. The weight has its
+own status and error line, so a change to the effort or model does not wipe a refusal shown for
+it. The model list is read-only: the dashboard container has no agent
 binary to validate a new model against, so models change only when you run
 `python3 onboard.py --install-agent <name>` again on the host. Uninstalling is
 `python3 onboard.py --uninstall-agent <name>`, which also removes files the dashboard cannot reach.
@@ -765,7 +869,10 @@ See [HTTP API](05-http-api.md#agents).
 
 `RenderersPanel.tsx` reads `GET /renderers`, and each button (Enable or Disable, Rename, Remove for
 a remote renderer, Test GPU) writes at once through the [renderers routes](05-http-api.md#renderers).
-Its rules are pure functions in `lib/renderers.ts`.
+Its rules are pure functions in `lib/renderers.ts`. A new name saves on Enter or blur, and Escape
+or **Cancel** drops it. **Cancel** stops its `mousedown`, and a blur from the field towards
+**Cancel** is skipped, so the field does not save the name **Cancel** is about to drop. Tabbing on
+past **Cancel** without pressing it saves the name.
 
 - One card per renderer, the built-in one first.
 - `rendererStatus` picks the status chip: the first of *disabled*, *credential expired*, *needs
@@ -788,26 +895,42 @@ Its rules are pure functions in `lib/renderers.ts`.
 ### Costs
 
 Model prices are rows in their own table. See [Costs](../user-guide/05-settings.md#costs) and
-[HTTP API](05-http-api.md#costs).
+[HTTP API](05-http-api.md#costs). A price is set from a small form with **Set price**, because
+several rates make one price. **Reset** applies at once and offers **Undo**, which sets the same
+rates again unless a price was set by hand since.
 
 ### Auto Pilot
 
-`AutoPilotPanel.tsx` saves the whole configuration to `POST /autopilot` in one request. What the
-settings mean is in [Auto Pilot](14-publishing.md#auto-pilot).
+`AutoPilotPanel.tsx` saves the whole configuration to `POST /autopilot` on every change, with the
+status beside the field that changed. What the settings mean is in
+[Auto Pilot](14-publishing.md#auto-pilot).
+
+- Changes run through one queue, and only the answer to the last one is applied to the whole
+  panel. An earlier answer would undo a change made while it was on its way.
+- A refused change shows the reason. With no save after it, the panel goes back to the stored
+  configuration. A later save carries the change too and decides, and once one succeeds an earlier
+  failure is cleared, because its change was stored with it.
+- Whether a change needs confirming, what the dialog says and what **Cancel** goes back to are all
+  read from the newest document sent (`current`), so a change made while a confirmed "on" is still
+  on its way does not ask again, and **Cancel** does not undo a change still on its way.
+- Switching the gap between minutes and hours shows the same gap in the other unit and saves
+  nothing. Hours may carry a fraction. An answer to another save does not replace a gap being
+  typed, and does not switch the unit you picked when the gap is the same.
 
 - The warning stays on screen above the switch and is repeated in the confirmation. Its wording is
   `lib/autoPilot.ts::AUTO_PILOT_DISCLAIMER`.
 - A save that widens what Auto Pilot acts on is confirmed first: turning it on, or adding a domain
   while it is on (`needsConfirmation`). The dialog says how many videos wait at a checkpoint in the
   newly covered domains (`newlyApproved`), because they are approved as soon as the save lands.
+  Confirming saves; **Cancel** sends nothing and puts the panel back to the stored configuration.
   Turning it off, removing a domain, or changing accounts, numbers or the gap saves at once.
 - The panel refuses to render a response that is not an Auto Pilot configuration. A proxy error
   read as "off, nothing selected" could otherwise be saved over the real configuration.
 - An account chosen earlier that is not offered any more (switched off on Socials, disconnected, or
   publishing turned off) stays listed under its domain, ticked and marked as not available, so it
   can be unticked.
-- The panel re-reads the in-progress count every 20 seconds and updates only that number, so
-  unsaved edits survive. `ceilingStatus` says when the limit is holding new videos back.
+- The panel re-reads the in-progress count every 20 seconds and updates only that number, so a
+  change on its way or a number being typed is never undone. `ceilingStatus` says when the limit is holding new videos back.
 
 ---
 
@@ -937,6 +1060,7 @@ suite can test them without React.
 | `angles.ts` | The kind list fetched from `GET /angle-kinds`, a kind's label, the angle score's label and the sentence's length limit |
 | `videoStatus.ts` | Which statuses can be deleted, when Retry publishing, Mark as published and Retry agent are offered, and `patchVideo` |
 | `autoPilot.ts` | The disclaimer, the bounds, when a save needs confirmation and how many videos it would approve |
+| `saveStatus.tsx` | Each field's save state (`useSaveStatus`), the page-wide sum and leave-page prompt (`SavesProvider`), the one-at-a-time write queue (`useSerialQueue`) and an error body's reason (`responseError`) |
 | `renderers.ts` | The renderer status chip, the GPU verdict, the device description and the **Nothing can render** condition |
 | `costs.ts` | The cost disclaimer, and money, credit, service, operation and stage labels |
 | `datetime.ts` | Timestamp formatting with an explicit timezone |

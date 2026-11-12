@@ -18,11 +18,12 @@ const TextLayoutAudit: React.FC<{
   sceneConfigPath: string;
   timelinePath: string;
   audioPath: string;
-}> = ({ sceneConfigPath, timelinePath, audioPath }) => {
+  visualFrames?: number[];
+}> = ({ sceneConfigPath, timelinePath, audioPath, visualFrames }) => {
   return (
     <AbsoluteFill>
       <CompositionBuilder sceneConfigPath={sceneConfigPath} timelinePath={timelinePath} audioPath={audioPath} />
-      <TextLayoutProbe />
+      <TextLayoutProbe visualFrames={visualFrames ?? []} />
     </AbsoluteFill>
   );
 };

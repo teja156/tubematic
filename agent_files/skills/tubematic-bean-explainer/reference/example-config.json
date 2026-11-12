@@ -46,7 +46,7 @@
        "events": [
         {
          "type": "pose",
-         "frame": 6,
+         "frame": 0,
          "who": "narrator",
          "pose": "wave",
          "face": "happy",

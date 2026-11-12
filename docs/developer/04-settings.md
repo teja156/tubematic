@@ -173,7 +173,7 @@ makes no more Gemini calls than that in one run
 
 | Key | Type | Default | Bounds | Read by |
 |---|---|---|---|---|
-| `elevenlabs_voices` | voice_list | `[]` | At most 10 entries of `{name, voice_id, model_id}`. Names and ids are unique and non-empty. `model_id` is a supported ElevenLabs model | Voice generation, voice previews, and every check of a video's or domain's voice |
+| `elevenlabs_voices` | voice_list | `[]` | At most 10 entries of `{name, voice_id, model_id}` with an optional `speed`. Names and ids are unique and non-empty. `model_id` is a supported ElevenLabs model | Voice generation, voice previews, and every check of a video's or domain's voice |
 | `elevenlabs_voice_id` | str | `""` | `""` or a roster voice. See [above](#the-default-voice-invariant-is-enforced-on-read) | Voice generation, for a video with no voice of its own |
 | `pronunciation_lexicon` | lexicon | `[]` | At most 500 `{term, respell}` entries. `term` is unique. `respell` has no whitespace | The MCP `generate_voice` tool, when it builds the text to speak |
 
@@ -184,6 +184,8 @@ makes no more Gemini calls than that in one run
   ([The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice)).
 - A video whose `voice_id` has left the roster fails before any ElevenLabs call. It does not fall
   back to the install default.
+- A voice's `speed` is 0.7 to 1.2 in steps of 0.05, allowed only on a model that honours it, and
+  never stored at 1.0 ([Speed](08-scripting-and-voice.md#speed)).
 - A `respell` should be one plain word that spells the sound. See
   [Respelling and the lexicon](08-scripting-and-voice.md#respelling-and-the-lexicon).
 
@@ -219,6 +221,23 @@ written by `python3 onboard.py --install-agent <name>`. A video's own choices ar
 `videos.agent_model` and `videos.agent_effort`. Model names are probed against the installed CLI
 at install time and are not kept in a catalog in the repo. See
 [The Agent Layer](07-agent-layer.md#agents).
+
+### Script formulas
+
+| Key | Type | Default | Bounds | Read by |
+|---|---|---|---|---|
+| `auto_experimental_formulas` | bool | `false` | | The MCP `choose_script_formula` tool and `get_video`, on every call |
+| `learned_routing` | bool | `true` | | The MCP `choose_script_formula` tool and `get_video`, on every call |
+
+`auto_experimental_formulas` lets Auto pick a script
+[formula](08-scripting-and-voice.md#how-a-formula-is-picked) marked `experimental`. While it is
+off, such a formula is used only where a person chose it: a domain's `default_formula_id` or a
+video's `formula_choice`.
+
+`learned_routing` lets formula routing read the install's own watch figures (see
+[Learned routing](08-scripting-and-voice.md#learned-routing)). It is on by default because it
+changes nothing until a domain has enough published videos with figures. With
+`publishing_enabled` off it reads as off.
 
 ### User preferences
 

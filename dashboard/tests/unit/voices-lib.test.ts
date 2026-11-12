@@ -43,3 +43,23 @@ describe("voiceMissing", () => {
     expect(voiceMissing(ROSTER, "")).toBe(true);
   });
 });
+
+describe("speed and segment voices (TMDEV-216)", () => {
+  it("a voice label names a speed only when it is not the default", async () => {
+    const { voiceLabel } = await import("@/lib/voices");
+    expect(voiceLabel({ name: "A", voice_id: "a", model_id: "eleven_multilingual_v2" }))
+      .toBe("A · eleven_multilingual_v2");
+    expect(voiceLabel({ name: "A", voice_id: "a", model_id: "eleven_multilingual_v2", speed: 1.15 }))
+      .toBe("A · eleven_multilingual_v2 · 1.15x");
+    expect(voiceLabel({ name: "A", voice_id: "a", model_id: "eleven_multilingual_v2", speed: 1 }))
+      .toBe("A · eleven_multilingual_v2");
+  });
+
+  it("a segment's conflict comes from the API's map", async () => {
+    const { segmentVoiceConflict } = await import("@/lib/voices");
+    const video = { segment_voice_conflicts: { s1: { r1: "no [pause] on v2" } } };
+    expect(segmentVoiceConflict(video, "s1", "r1")).toBe("no [pause] on v2");
+    expect(segmentVoiceConflict(video, "s1", "t1")).toBe("");
+    expect(segmentVoiceConflict({}, "s2", "r1")).toBe("");
+  });
+});

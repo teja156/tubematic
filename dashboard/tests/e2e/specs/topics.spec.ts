@@ -148,7 +148,7 @@ test.describe("Topics page", () => {
   // (creation makes a live transcript call), so the list is stubbed in the
   // browser and seeding is left to the API suites. What only a real browser
   // shows is the layout: the line must stay one line at 1280px with the widest
-  // content it gets, and the panel's eight controls must stay inside the row.
+  // content it gets, and the panel's nine controls must stay inside the row.
   test("a domain row stays one line at 1280px and opens its labelled defaults under it", async ({ page }) => {
     const slug = `labels-domain-${uid}`;
     await createProject({ id: slug, name: `Labels Domain ${uid}`, is_curriculum_seed: true,
@@ -208,7 +208,8 @@ test.describe("Topics page", () => {
     // title as well as a caption.
     const captions = panel.locator("label > span:first-child");
     await expect(captions).toHaveText(["Visual style", "Mascot (exp.)", "Default voice",
-                                       "Script profile", "Agent", "Model", "Effort", "Topic cap"]);
+                                       "Script profile", "Formula", "Agent", "Model", "Effort",
+                                       "Topic cap"]);
     for (const caption of await captions.all()) await expect(caption).toBeVisible();
     const profile = page.getByTestId(`domain-profile-${slug}`);
     await expect(profile.locator(`option[value="sp-${uid}"]`)).toHaveCount(1);
@@ -223,7 +224,7 @@ test.describe("Topics page", () => {
       expect(panelBox.x).toBeGreaterThanOrEqual(rowBox.x);
       expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
       for (const id of ["domain-style", "domain-mascot", "domain-voice", "domain-profile",
-                        "domain-agent", "domain-agent-model", "domain-agent-effort", "domain-cap"]) {
+                        "domain-formula", "domain-agent", "domain-agent-model", "domain-agent-effort", "domain-cap"]) {
         const box = (await page.getByTestId(`${id}-${slug}`).boundingBox())!;
         expect(box.x, id).toBeGreaterThanOrEqual(panelBox.x);
         expect(box.x + box.width, id).toBeLessThanOrEqual(panelBox.x + panelBox.width);

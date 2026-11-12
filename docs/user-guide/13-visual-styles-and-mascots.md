@@ -106,7 +106,8 @@ name, or Mixed scenes with its canvas once chosen. Until the agent has chosen, i
 style that came second.
 
 At Script Ready you can take the runner-up instead: **Switch to …** in the video's window sends the
-video back to the agent, which writes a new script for that style. The old script is discarded. For
+video back to the agent, which picks the script's [formula](03-using-tubematic.md#script-formulas)
+again and writes a new script for that style. The old script is discarded. For
 a new video nothing has been paid for at this point; for a video you sent back for revision after it
 was voiced, the new script is voiced again when you approve it. To give the style back to Auto entirely, request a revision of the
 topic: a revised topic returns to Auto, and the agent picks again after you approve it.

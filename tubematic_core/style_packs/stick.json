@@ -15,6 +15,12 @@
     "openai_key": false,
     "gpu": false
   },
+  "picture": {
+    "opening": "Scene 1 shows the subject of the first sentence from frame 0, already moving: the figure mid-action in its situation, or the object it is dealing with. Never a title card or an empty page.",
+    "turn": "A new scene starts on the first word of a turn or a re-opening, and its picture is visibly different from the scene before (a new image, the diagram's next state, a new place). Never merge that segment into the scene before it.",
+    "payoff": "The payoff scene gets the video's strongest picture: the hero image, the largest element, the diagram fully built.",
+    "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
+  },
   "routing": {
     "best_for": [
       "a process acted out step by step by generic people or roles (a kitchen team, a rescuer, the user and an attacker)",

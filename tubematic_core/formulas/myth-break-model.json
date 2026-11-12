@@ -2,6 +2,7 @@
   "id": "myth-break-model",
   "order": 40,
   "family": "explain",
+  "experimental": false,
   "label": "Myth, Break, Model",
   "line": "State the belief the viewer holds in its strongest form, break it in one line, then build the right model on a case the viewer is living through right now.",
   "best_for": [
@@ -14,6 +15,18 @@
   "avoid_for": [
     "a trivia correction with no mechanism behind it",
     "a myth already debunked everywhere: the debunk is the part people know"
+  ],
+  "signals": [
+    "most viewers hold the belief today",
+    "a named study, figure or source disproves it",
+    "there is a case where the belief seems to hold and a case where it fails",
+    "the correct model fits in one sentence"
+  ],
+  "styles": [
+    "whiteboard",
+    "under_the_hood",
+    "bean_explainer",
+    "storybook_atlas"
   ],
   "words": [
     120,
@@ -30,7 +43,8 @@
       "name": "The break",
       "from": 8,
       "to": 12,
-      "job": "One line: that is wrong, or that stopped being true."
+      "job": "One line: that is wrong, or that stopped being true.",
+      "role": "turn"
     },
     {
       "name": "Case A",
@@ -42,19 +56,22 @@
       "name": "Case B",
       "from": 35,
       "to": 60,
-      "job": "Where it fails. One real named source, study or number."
+      "job": "Where it fails. One real named source, study or number.",
+      "role": "reopen"
     },
     {
       "name": "Tie to the viewer",
       "from": 60,
       "to": 75,
-      "job": "The thing the viewer is doing right now is case B. Or the viewer's objection, spoken."
+      "job": "The thing the viewer is doing right now is case B. Or the viewer's objection, spoken.",
+      "role": "reopen"
     },
     {
       "name": "The precise truth",
       "from": 75,
       "to": 90,
-      "job": "One sentence."
+      "job": "One sentence.",
+      "role": "payoff"
     },
     {
       "name": "Second sting or action",
@@ -79,6 +96,7 @@
   ],
   "holds": "The belief is the viewer's own, so the answer has to overturn something they hold. A pair of contrasting cases carries the middle. The viewer's objection, spoken at about three fifths, re-opens the question.",
   "ending": "The precise statement, then a second sting or one concrete action. No moral.",
+  "first_frame": "The belief as the viewer remembers it, drawn the familiar way, so it can be struck out on the word that breaks it.",
   "pitfalls": [
     "Confirming the myth at length before breaking it",
     "A hedge where the verdict belongs",

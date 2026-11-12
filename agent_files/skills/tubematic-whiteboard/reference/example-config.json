@@ -17,20 +17,20 @@
        "layout": "stack",
        "items": [
         {
-         "id": "title",
-         "kind": "text",
-         "slot": "1",
-         "text": "Compound interest",
-         "big": true,
-         "at": 6
-        },
-        {
          "id": "bag",
          "kind": "doodle",
          "slot": "2",
          "doodle": "piggy_bank",
          "label": "$100 saved",
          "ink": "blue",
+         "at": 0
+        },
+        {
+         "id": "title",
+         "kind": "text",
+         "slot": "1",
+         "text": "Compound interest",
+         "big": true,
          "at": 43
         },
         {

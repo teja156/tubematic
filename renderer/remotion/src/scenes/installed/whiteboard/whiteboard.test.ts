@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { BOARD, FLOOR, LAYOUTS, doodleShare, itemFloor, itemNatural, textWidth, wrapText, type DoodleItem, type Layout, type PlacedItem, type WBItem, type WhiteboardData } from "./contract";
+import { BOARD, FLOOR, LAYOUTS, TIMING, doodleShare, itemFloor, itemNatural, textWidth, wrapText, type DoodleItem, type Layout, type PlacedItem, type WBItem, type WhiteboardData } from "./contract";
 import { arrowEnds, fitProblem, placeItem, regionOrigin, type Pt } from "./layout";
 import { schedule } from "./schedule";
 import { DOODLES, DOODLE_NAMES, LIBRARY_DEFS, expandDoodle, type DoodleDef } from "./doodles";
@@ -60,6 +60,13 @@ describe("the shared contract cases", () => {
   it("schedules the marker the way the validator does", () => {
     const out = schedule(CASES.schedule.data as WhiteboardData).map((s) => ({ region: s.region, id: s.item.id, start: s.start, dur: s.dur }));
     expect(out).toEqual(CASES.schedule.out);
+  });
+
+  it("starts the item that opens the video before frame 0, so the first frame shows it", () => {
+    const data = CASES.schedule_open.data as WhiteboardData;
+    const out = schedule(data).map((s) => ({ region: s.region, id: s.item.id, start: s.start, dur: s.dur }));
+    expect(out).toEqual(CASES.schedule_open.out);
+    expect(out[0].start).toBe(-TIMING.openLead);
   });
 });
 

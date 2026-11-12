@@ -12,14 +12,20 @@ Put a person, named only by role, inside an act already under way. Turn it with 
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| The act | 0 to 15% | A pronoun or a role, in the middle of doing something. No name and no date with a life history. |
-| But when | 15 to 30% | The first change of direction. |
-| Escalation | 30 to 55% | Remove the ways out. Plant one detail for later. |
-| False relief | 55 to 65% | It seems to be over. |
-| Reveal | 65 to 85% | As a plain noun or a look back: bigger than the threat the viewer knew about. |
-| Last line | 85 to 100% | A hard fact, an ironic clause or a what-if. Never a moral. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| The act | 0 to 15% | A pronoun or a role, in the middle of doing something. No name and no date with a life history. | - |
+| But when | 15 to 30% | The first change of direction. | a re-opening: a visible change on its first word |
+| Escalation | 30 to 55% | Remove the ways out. Plant one detail for later. | - |
+| False relief | 55 to 65% | It seems to be over. | the turn: a visible change on its first word |
+| Reveal | 65 to 85% | As a plain noun or a look back: bigger than the threat the viewer knew about. | the payoff: the video's strongest picture |
+| Last line | 85 to 100% | A hard fact, an ironic clause or a what-if. Never a moral. | - |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The sensation or the object the person is dealing with, in motion. Never the cause, and never a title. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 
