@@ -85,3 +85,21 @@ def test_a_topic_with_an_angle_carries_it_as_get_video_does_and_one_without_carr
         ("A card with no battery signs a payment.", "process", "follow-the-flow")
     without = _video(CASE)
     assert (without["angle"], without["angle_kind"], without["angle_formula"]) == ("", "", "")
+
+
+def test_a_case_without_figures_is_routed_with_no_points():
+    routing = _video(CASE)["formula_routing"]
+    assert routing["learned"]["active"] is False
+    assert all(c["learned"]["points"] == 0 for c in routing["candidates"])
+
+
+def test_a_learned_case_hands_over_its_points_as_the_server_does():
+    case = {**CASE, "learned": {"mode": "learned", "points": {"scene-story": 2,
+                                                             "follow-the-flow": -1}}}
+    routing = _video(case)["formula_routing"]
+    assert routing["learned"]["active"] is True and routing["learned"]["mode"] == "learned"
+    cands = {c["id"]: c for c in routing["candidates"]}
+    assert cands["scene-story"]["learned"]["points"] == 2
+    assert cands["scene-story"]["learned"]["standing"] == "better"
+    assert cands["follow-the-flow"]["learned"]["standing"] == "worse"
+    assert cands["incident-file"]["learned"] == {"points": 0, "standing": "even", "videos": 24}

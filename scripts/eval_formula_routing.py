@@ -44,6 +44,7 @@ from eval_style_routing import ask, verdict  # noqa: E402
 from tubematic_core import angles as tangles  # noqa: E402
 from tubematic_core import formulas as tformulas  # noqa: E402
 from tubematic_core import visual_styles as tvs  # noqa: E402
+from tubematic_core import watch as twatch  # noqa: E402
 
 SKILL = REPO / "agent_files" / "skills" / "tubematic-formula-routing" / "SKILL.md"
 CASES = REPO / "tubematic_core" / "tests" / "fixtures" / "formula_routing_cases.json"
@@ -64,10 +65,34 @@ The skill:
 """
 
 
+def _with_learning(candidates: list, given) -> tuple:
+    """The candidates with their learned points, and formula_routing.learned,
+    as the server sends them. A case with no `learned` is a domain with no
+    figures: every candidate has 0 points. A case's `learned` is
+    {"mode": "learned" | "explore", "points": {formula id: points}}; a formula
+    it does not name has 0."""
+    if not given:
+        for c in candidates:
+            c["learned"] = {"points": 0, "standing": "", "videos": 0}
+        return candidates, {"active": False, "mode": "", "measure": twatch.LEARN_MEASURE,
+                            "min_group": twatch.WATCH_MIN_GROUP, "openings": []}
+    standing = {2: "better", -1: "worse"} if given["mode"] == "learned" else {2: twatch.THIN}
+    for c in candidates:
+        pts = given["points"].get(c["id"], 0)
+        c["learned"] = {"points": pts, "standing": standing.get(pts, "even"),
+                        "videos": 0 if standing.get(pts) == twatch.THIN else
+                        twatch.WATCH_MIN_GROUP + 4}
+    return candidates, {"active": True, "mode": given["mode"], "measure": twatch.LEARN_MEASURE,
+                        "min_group": twatch.WATCH_MIN_GROUP, "accounts": 1, "openings": []}
+
+
 def build_prompt(case: dict) -> str:
     """get_video as the skill reads it: a video at TOPIC_APPROVED whose style
     is decided and whose formula is not."""
     style = case.get("style", "")
+    candidates, learned = _with_learning(
+        tformulas.routing_candidates(style, bool(case.get("experimental")), case.get("recent", [])),
+        case.get("learned"))
     video = {
         "video_id": "vid_eval",
         "status": "TOPIC_APPROVED",
@@ -83,9 +108,9 @@ def build_prompt(case: dict) -> str:
         "style_routing": {"decided": True, "pick": style or tvs.SCENES},
         "formula_routing": {
             "decided": False, "pick": "", "runner_up": "", "reason": "", "choice": "",
-            "candidates": tformulas.routing_candidates(
-                style, bool(case.get("experimental")), case.get("recent", [])),
+            "candidates": candidates,
             "recent": {"formulas": list(case.get("recent", [])), "hook_types": []},
+            "learned": learned,
         },
     }
     return (f"get_video(\"vid_eval\") returned:\n\n```json\n{json.dumps(video, indent=2)}\n```\n\n"

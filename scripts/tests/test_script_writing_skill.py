@@ -161,6 +161,17 @@ def test_the_openings_vary_and_a_persons_switch_is_honoured():
     assert "word for word" in part and "Do not draft new openings" in part
 
 
+def test_the_domains_figures_only_break_a_tie_between_openings():
+    # TMDEV-217: the writer reads which opening types hold this domain's
+    # viewers, after the quality of the opening and after variety.
+    part = _section("### Three openings, then one", "### Segments")
+    assert "`formula_routing.learned.openings`" in part
+    assert part.index("`formula_routing.recent.hook_types`") < part.index(
+        "`formula_routing.learned.openings`")
+    assert "The list only breaks a tie" in part
+    assert "never wins because its type did well on other videos" in part
+
+
 def test_a_style_that_names_people_may_name_them():
     part = _section("### The grammar", "### Three openings, then one")
     assert "by name where `style.script` asks for names" in part
