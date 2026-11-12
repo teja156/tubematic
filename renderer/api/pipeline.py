@@ -59,6 +59,7 @@ try:
     from tubematic_core import usage as tusage
     from tubematic_core import version as tversion
     from tubematic_core import voice_models as tvoice
+    from tubematic_core import watch as twatch
     from tubematic_core import youtube as tyoutube
 except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
@@ -75,6 +76,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     from tubematic_core import usage as tusage
     from tubematic_core import version as tversion
     from tubematic_core import voice_models as tvoice
+    from tubematic_core import watch as twatch
     from tubematic_core import youtube as tyoutube
 
 SETTINGS_SPEC = {
@@ -144,6 +146,11 @@ SETTINGS_SPEC = {
     # person chooses one (a domain's default, or a video's own formula). The
     # MCP server reads it per pick, so it applies to the next video.
     "auto_experimental_formulas": ("bool", "false"),
+    # Whether formula routing reads the install's own watch figures (TMDEV-217,
+    # tubematic_core.watch). On by default: it changes nothing until a domain
+    # has enough published videos with figures, and publishing off reads as
+    # off. The MCP server reads it per pick.
+    "learned_routing": ("bool", "true"),
     # The "Made with tubematic.ai" mark burned into every render (TMDEV-141).
     # A setting, and deliberately NOT a scene-config.json key: the agent writes
     # that file and has no tool that writes settings, so only a human can
@@ -2121,8 +2128,9 @@ def _watch_figures(platform: str, raw_json, duration_secs) -> dict:
 # others from the same account.
 
 # A group with fewer videos than this is shown, and marked as too small to
-# read. One video that did unusually well moves a small group's figure a lot.
-WATCH_MIN_GROUP = 20
+# read. The MCP server's formula routing counts groups by the same number, so
+# it is defined once, in tubematic_core.watch.
+WATCH_MIN_GROUP = twatch.WATCH_MIN_GROUP
 
 WATCH_MEASURES = ("avg_watch_secs", "watched_pct", "stayed_pct")
 
@@ -2225,10 +2233,7 @@ def _watch_groups(rows: list, dimension: str) -> list:
     return out
 
 
-def _median(values: list) -> float:
-    """Median of a sorted, non-empty list."""
-    mid = len(values) // 2
-    return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
+_median = twatch.median
 
 
 def _publish_platforms(api_key: str, account_ids: list) -> dict:
@@ -3534,6 +3539,8 @@ def create_pipeline_blueprint() -> Blueprint:
             cur = con.execute(
                 "UPDATE videos SET formula_pick = ?, formula_runner_up = ?, formula_choice = ?, "
                 "formula_reason = ?, status = 'TOPIC_APPROVED', agent_no_progress_count = 0, "
+                # What the watch figures said was about the formula switched away from.
+                "formula_evidence = '', "
                 "agent_stuck_at = NULL, updated_at = ? WHERE id = ? AND archived_at IS NULL "
                 "AND status = 'SCRIPT_READY' AND formula_pick = ? AND formula_runner_up = ?",
                 (target, pick, target, f"Switched by a person from {old} to {new}.", now,

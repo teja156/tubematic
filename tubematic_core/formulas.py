@@ -66,10 +66,12 @@ RECORD_CLEAR_SET = ("formula_id = '', hook_type = '', hook_alternatives = '', "
                     "script_warnings = ''")
 
 # The SQL that empties the formula decision made before the script (migration
-# 0025), so it is made again: the pick, its runner-up and the reason. For a
-# video that goes back to its topic or gets a new visual style. A person's own
-# choice (formula_choice) is not part of it and stays.
-PICK_RESET_SET = "formula_pick = '', formula_runner_up = '', formula_reason = ''"
+# 0025), so it is made again: the pick, its runner-up, the reason and what the
+# watch figures said (0028). For a video that goes back to its topic or gets a
+# new visual style. A person's own choice (formula_choice) is not part of it and
+# stays.
+PICK_RESET_SET = ("formula_pick = '', formula_runner_up = '', formula_reason = '', "
+                  "formula_evidence = ''")
 # The longest reason choose_script_formula stores: one sentence.
 REASON_MAX_CHARS = 300
 # How many of a domain's previous videos a formula may not repeat.
