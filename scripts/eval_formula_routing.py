@@ -74,7 +74,7 @@ def _with_learning(candidates: list, given) -> tuple:
     if not given:
         for c in candidates:
             c["learned"] = {"points": 0, "standing": "", "videos": 0}
-        return candidates, {"active": False, "mode": "", "measure": twatch.LEARN_MEASURE,
+        return candidates, {"active": False, "mode": "", "stamp": "", "measure": twatch.LEARN_MEASURE,
                             "min_group": twatch.WATCH_MIN_GROUP, "openings": []}
     standing = {2: "better", -1: "worse"} if given["mode"] == "learned" else {2: twatch.THIN}
     for c in candidates:
@@ -82,7 +82,8 @@ def _with_learning(candidates: list, given) -> tuple:
         c["learned"] = {"points": pts, "standing": standing.get(pts, "even"),
                         "videos": 0 if standing.get(pts) == twatch.THIN else
                         twatch.WATCH_MIN_GROUP + 4}
-    return candidates, {"active": True, "mode": given["mode"], "measure": twatch.LEARN_MEASURE,
+    return candidates, {"active": True, "mode": given["mode"], "stamp": f"{given['mode']}-eval",
+                        "measure": twatch.LEARN_MEASURE,
                         "min_group": twatch.WATCH_MIN_GROUP, "accounts": 1, "openings": []}
 
 
