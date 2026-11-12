@@ -520,6 +520,17 @@ def test_a_cartoon_video_holding_a_mascot_is_refused(env):
     assert tmascots.MASCOT_NOT_ON_CARTOON_3D in _comments(env)[-1] and "tubi" in _comments(env)[-1]
 
 
+def test_an_under_the_hood_video_holding_a_mascot_is_refused(env):
+    """The API and the MCP server never leave the pair; a row written another way is refused here."""
+    from tubematic_core import mascots as tmascots
+    _gpu(env)
+    _seed(env, visual_style="under_the_hood", mascot_id="tubi", mascot_version=1)
+    assert env.client.post("/v1/claim", json={}, headers=B).status_code == 204
+    v = _video(env)
+    assert v["status"] == "FAILED" and v["render_fail_count"] == 0
+    assert tmascots.no_mascot_error("under_the_hood") in _comments(env)[-1] and "tubi" in _comments(env)[-1]
+
+
 @pytest.mark.parametrize("version, code, why", [
     (0, "code", "no version of mascot 'm1' is pinned"),
     (2, None, "has no version 2"),
@@ -1150,6 +1161,75 @@ def test_a_success_with_no_output_is_an_error(env):
     assert v["status"] == "RENDER_QUEUED" and v["render_fail_count"] == 1 and v["renderer_id"] == ""
     assert "output missing" in _comments(env)[-1]
     assert _sql(env, "SELECT * FROM render_timings") == []
+    assert _last_render(env) == ("", "", 0, 0)
+
+
+# The video's record of its last successful render (TMDEV-206): the lease is
+# released by the success result, so this is the only place the video keeps
+# who made it.
+
+def _last_render(env):
+    v = _video(env)
+    return (v["last_render_renderer_id"], v["last_render_renderer_name"], v["last_render_on_gpu"],
+            v["last_render_seconds"])
+
+
+def _render_again(env):
+    """The same video back in the queue (a revision's re-render) and claimed
+    again by the built-in renderer."""
+    _sql(env, "UPDATE videos SET status = 'RENDER_QUEUED', render_uploaded_at = '' WHERE id = 'vid-1'")
+    _beat(env)
+    reply = env.client.post("/v1/claim", json={}, headers=B)
+    assert reply.status_code == 200, reply.data
+    env.claim = reply.get_json()["claim_id"]
+
+
+def test_a_success_records_the_renderer_and_the_render_time(env):
+    _claimed(env)
+    _upload(env)
+    _result(env, outcome="success", on_gpu=True, frames=90, seconds=45.5)
+    assert _last_render(env) == ("builtin", "Built-in renderer", 1, 45.5)
+
+
+def test_the_next_success_overwrites_the_record_and_a_failure_does_not(env):
+    _claimed(env)
+    _upload(env)
+    _result(env, outcome="success", on_gpu=True, frames=90, seconds=45.0)
+    _render_again(env)
+    _upload(env)
+    _result(env, outcome="success", on_gpu=False, frames=90, seconds=30.0)
+    assert _last_render(env) == ("builtin", "Built-in renderer", 0, 30.0)
+    _render_again(env)
+    _result(env, outcome="stalled", error="Render stalled: no progress for 600s", on_gpu=True)
+    assert _video(env)["status"] == "RENDER_QUEUED"
+    assert _last_render(env) == ("builtin", "Built-in renderer", 0, 30.0)
+
+
+@pytest.mark.parametrize("timing", [{}, {"frames": 90}, {"frames": 90, "seconds": 0},
+                                    {"frames": 90, "seconds": "45"}, {"frames": 90, "seconds": True},
+                                    {"frames": 0, "seconds": 45.0}])
+def test_a_success_with_no_usable_time_still_records_the_renderer(env, timing):
+    _claimed(env)
+    _upload(env)
+    _result(env, outcome="success", on_gpu=False, **timing)
+    assert _last_render(env) == ("builtin", "Built-in renderer", 0, 0)
+    assert _sql(env, "SELECT * FROM render_timings") == []
+
+
+def test_the_recorded_name_is_the_one_at_render_time(env):
+    _claimed(env)
+    _upload(env)
+    _result(env, outcome="success", on_gpu=False, frames=90, seconds=45.0)
+    _sql(env, "UPDATE renderers SET name = 'Renamed' WHERE id = 'builtin'")
+    assert _last_render(env)[1] == "Built-in renderer"
+
+
+def test_a_result_for_a_lost_claim_records_nothing(env):
+    _claimed(env)
+    _upload(env)
+    _sql(env, "UPDATE videos SET render_claim_id = 'someone-else' WHERE id = 'vid-1'")
+    assert _result(env, outcome="success", on_gpu=True, frames=90, seconds=45.0).status_code == 403
+    assert _last_render(env) == ("", "", 0, 0)
 
 
 @pytest.mark.parametrize("outcome, status", [
@@ -1163,6 +1243,15 @@ def test_each_failure_outcome_routes_as_before(env, outcome, status):
     assert v["status"] == status and v["render_fail_count"] == 1
     assert v["renderer_id"] == "" and v["render_lease_until"] == "" and v["render_claim_id"] == ""
     assert _comments(env) == ["Render failed: Render stalled: no progress for 600s"]
+
+
+def test_a_failed_render_that_timed_out_in_the_browser_is_requeued_once(env):
+    _claimed(env)
+    _result(env, outcome="failed", error="Error: Timeout (30000ms) exceeded rendering the component initially.",
+            on_gpu=False, gpu_ok=None)
+    v = _video(env)
+    assert v["status"] == "RENDER_QUEUED" and v["render_fail_count"] == 0 and v["renderer_id"] == ""
+    assert _comments(env)[-1].startswith("Render timed out inside the browser, so it was re-queued once")
 
 
 def test_a_failure_past_the_retry_cap_fails(env):
@@ -1782,6 +1871,7 @@ def test_a_remote_renderer_claims_renders_and_uploads(env):
     assert _result(env, h, outcome="success", frames=90, seconds=9.0).status_code == 200
     assert _video(env)["render_uploaded_at"]
     assert _sql(env, "SELECT renderer_id FROM render_timings")[0]["renderer_id"] == rid
+    assert _last_render(env) == (rid, "Studio PC", 0, 9.0)
 
 
 # ── real TLS ──────────────────────────────────────────────────────────────────

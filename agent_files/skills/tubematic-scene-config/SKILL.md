@@ -50,8 +50,10 @@ correct and re-spends `generate_image` on every image beat.
    components you reach for. Settling it late means re-authoring scenes you have already written.
 2. Call `get_timeline(video_id)` — **never** read `timeline.json` directly; `timeline_path` (from
    `get_video`) is container-absolute and unreadable from the agent sandbox or the host. Returns
-   `total_frames`, `fps`, and `segments` (empty for pre-segment videos — see the legacy fallback
-   below, which needs `get_timeline(video_id, include_words=True)` instead)
+   `total_frames`, `fps`, `first_frame`, and `segments` with each segment's `beat` and `role`
+   (empty for pre-segment videos — see the legacy fallback below, which needs
+   `get_timeline(video_id, include_words=True)` instead). The roles are what the picture owes each
+   segment: see **The Opening and the Beats** below
 3. Call `list_scene_files(source="all")` — see **Reusing Existing Scenes** below before planning
    layout. Pass `video_id=<a prior video>` to browse that video's own generated scenes; with no
    `video_id` filter, the generated half of the list is capped at the 50 most recently modified.
@@ -204,14 +206,22 @@ renders. Reference the result the same way as a freshly-authored scene (`source`
 
 ## Visual Registers
 
-`visual_style` on the video is, for four of its five values, a **permission set**, not a look. It
-says which vocabularies you may draw from, and which canvas the video is painted on. It does *not*
-decide any beat's treatment — that still follows the beat's subject, exactly as it always has.
+`visual_style` on the video is `auto` or the id of a style. For the three scene styles
+(`motion_graphics`, `stick`, `illustrated`) it is a **permission set**, not a look. It says which
+vocabularies you may draw from, and which canvas the video is painted on. It does *not* decide any
+beat's treatment — that still follows the beat's subject, exactly as it always has.
 
-The fifth value is different in kind. `cartoon_3d` does not restrict the scene system, it
-**replaces** it: the whole video is one painted 3D world written as code for that video against the renderer's kit, with no scene components
-at all. It is not this skill's work. A video at `cartoon_3d` is authored by the **tubematic-cartoon3d**
-skill; stop here and invoke it.
+Some styles are different in kind: they do not restrict the scene system, they **replace** it.
+`cartoon_3d` is one painted 3D world written as code for that video against the renderer's kit;
+`system_flow` is one diagram scene whose boards, nodes and packets are written as data;
+`bean_explainer` is one cartoon-bean scene whose sections, shots, poses and props are written as
+data; `whiteboard` is one board scene whose regions of writing and doodles are written as data;
+`storybook_atlas` is one picture-book scene whose chapters, people and props are written as
+data, `terminal_doc` is one typographic scene whose beats and moves are written as data,
+`under_the_hood` is one scene of close-up photographs with labels, arcs and counters pinned to them,
+written as data, and `case_file_story` is one scene of painted stills with meters and number cards,
+written as data. None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
+when it is not `tubematic-scene-config`, stop here and invoke that skill.
 
 Read `visual_style` from `get_video`:
 
@@ -221,10 +231,20 @@ Read `visual_style` from `get_video`:
 | `stick` | Light | **Hand-drawn** `StickFigure` line art, line-art diagrams, generated imagery **in panels**. |
 | `illustrated` | **You choose** | Characters are **generated illustrated assets** (`generate_character`) rather than line art. You pick the drawing style *and* the canvas from the topic. |
 | `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
-| `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery, **or the Cartoon 3D world**. |
+| `system_flow` | Dark | Nothing here: the whole video is the one `SystemFlow` diagram scene, written as data by the tubematic-system-flow skill. |
+| `bean_explainer` | Its own colour field | Nothing here: the whole video is the one `BeanExplainer` scene, written as data by the tubematic-bean-explainer skill. |
+| `whiteboard` | Light | Nothing here: the whole video is the one `Whiteboard` board scene, written as data by the tubematic-whiteboard skill. |
+| `storybook_atlas` | Its own paper | Nothing here: the whole video is the one `StorybookAtlas` scene, written as data by the tubematic-storybook-atlas skill. |
+| `terminal_doc` | Dark | Nothing here: the whole video is the one `TerminalDoc` scene, written as data by the tubematic-terminal-doc skill. |
+| `under_the_hood` | Dark | Nothing here: the whole video is the one `UnderTheHood` scene, written as data by the tubematic-under-the-hood skill. |
+| `case_file_story` | Dark | Nothing here: the whole video is the one `CaseFileStory` scene, written as data by the tubematic-case-file-story skill. |
+| `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery. This is the **mixed scene system**: the style-routing skill picked it before the script because no single style fit. |
 
-The three named DOM options are restrictions; `cartoon_3d` is another renderer. `auto` is the
-absence of a restriction: **you pick the register, the renderer included.**
+The three named scene styles are restrictions; `cartoon_3d`, `system_flow`, `bean_explainer`,
+`whiteboard`, `storybook_atlas`, `terminal_doc`, `under_the_hood` and `case_file_story` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
+than the mixed scene system (a style it picked is the video's `visual_style` by now), or when the
+video was scripted before Auto picked styles. It is the absence of a restriction: **you pick the
+register.**
 
 ### A permission is not an instruction
 
@@ -270,32 +290,17 @@ the render — a black figure on a dark canvas is a silhouette of nothing.
 
 ### Resolving `auto`
 
-Under `auto` you first choose **the renderer**, once, before any scene exists, and then, on the
-scene renderer, **the canvas**, once. Nothing else is fixed: every beat still picks its own
-treatment.
+Under `auto` the style is already settled as the mixed scene system, so the renderer is the scene
+components (`dom`). You choose **the canvas**, once. Nothing else is fixed: every beat still picks
+its own treatment. A 3D world is a style of its own, which the style-routing skill picks before the
+script, so it is never yours to choose here.
 
-**The renderer first.** Ask what carries the video:
+**One exception, from before Auto picked styles:** if `get_video` says `resolved_renderer` is
+`cartoon_3d`, that video was made a Cartoon 3D Short by an earlier version of this skill. Stop here
+and invoke the **tubematic-cartoon3d** skill, which authors the world.
 
-| The video is carried by | Renderer | Why |
-|---|---|---|
-| **A place and people moving through it** — a story, a walkthrough with a protagonist, anything where *where this happens* matters | **Cartoon 3D** (`cartoon_3d`) | A world with depth, a camera moving through it, characters that walk and react. Nothing else here does continuous motion |
-| **Recurring characters the viewer must recognise**, but no place | Scenes (`dom`), generated character art, canvas from the topic | Recognition across scenes is what the image calls buy |
-| **Real, specific subjects the viewer came to see** — screenshots, products, people, places as images | Scenes (`dom`), full-bleed imagery, dark canvas | What `motion_graphics` gives |
-| **Mechanism** — how a thing works, processes, architecture, data flow | Scenes (`dom`), diagrams and line art, light canvas | What `stick` gives. A 3D world adds nothing to a packet diagram |
-
-**Choosing Cartoon 3D is an instruction, not a permission.** It commits the whole video, and
-reversing it costs every scene. Choose it when the spine is genuinely a place, not because it is
-the most capable option, and never part-way through. Before choosing it read `cartoon_3d_available`
-from the `get_video` result you already have: when it is `false` no renderer's GPU is working
-and the world cannot be rendered, so take the scene renderer whatever the table says, and say in
-the handback that a world was wanted but the install cannot render one.
-
-**A video with a mascot (`get_video().mascot` is set) never takes Cartoon 3D under `auto`:** the mascot is a flat
-overlay and has no place in a 3D world, so choose `dom` whatever the table says.
-
-Record the renderer with `update_video(video_id, resolved_renderer="cartoon_3d" | "dom")`
-**before** you author anything; it is written once. For `cartoon_3d`, stop here and invoke the
-**tubematic-cartoon3d** skill, which authors the world. For `dom`, continue:
+Otherwise record the renderer with `update_video(video_id, resolved_renderer="dom")` **before** you
+author anything, unless `resolved_renderer` already says `dom` (it is written once), and continue:
 
 1. Classify every segment by subject as usual (see **Images**), allowing STICK for role beats.
 2. Choose the canvas by asking **what carries this video**:
@@ -705,6 +710,31 @@ How to direct it:
 - **Be consistent with the scenes.** Do not leave an empty spot for it that no one sees, and do not tell the
   scenes' content about it (no "the mascot points at this").
 
+## The Opening and the Beats
+
+The script's formula decides which moments carry the video, and `get_timeline` hands them to you.
+Every segment it returns has a `beat` (the formula beat the script gave it, `""` when none) and a
+`role`, and the result has `first_frame`, the formula's line on what the first frame shows (`""`
+when the video has no formula on record). `get_video`'s `style.picture` says how this style does
+each of the four things below; follow it where it is more specific than this section.
+
+| `role` | What the picture owes it |
+|---|---|
+| `opening` (the first segment) | **The first frame.** Frame 0 shows what the first sentence names, already moving: an image already pushing in, a diagram already building, a figure mid-action, following `first_frame` when it is set. Never a title card, a black or empty frame, an abstract gradient, or a frame that fills in from nothing. One subject owns a large share of the frame, and something happens to it before about 3 seconds. |
+| `turn`, `reopen` | **A visible change on its first word.** The segment starts a new scene whose picture is visibly different from the scene before (a new image, the diagram's next state, a new place). Never merge it into the scene before it under reconciliation rule 1 below, even when it is short. |
+| `payoff` | **The video's strongest picture.** The hero image, the largest element, the diagram fully built. Spend the image you care most about here. |
+| `""` | Nothing beyond its own `visual` brief. |
+
+**The ending holds on the payoff picture.** No closing card, logo, recap or sign-off scene after it:
+a segment after the payoff keeps the payoff's picture or its scene's motion, unless
+`style.picture.ending` says the style ends another way. A video whose segments carry no `beat`, or
+whose formula is not on record, has only the `opening` role: the first-frame rule still applies.
+
+`validate_job` checks the parts of this it can see from data and returns them in `warnings`. A
+first frame with nothing but text or a backdrop on it, or with nothing moving by frame 6, is
+measured in a browser. A turn, re-opening or payoff with no scene starting within about 0.4 s of its
+first word is read from the config. Treat them as you treat the text-layout warnings.
+
 ## Scene Frequency
 
 **There is no target scene count and no target scene length.** Cut when the visual idea changes,
@@ -836,7 +866,7 @@ entirely.
 | `fontFamily` | container default | A CSS family, or one of `Inter`, `Oswald`, `Roboto`, `Montserrat` |
 | `fontSize` | `62` | 28–120 |
 | `color` | `null` | `null` follows the canvas — black on light, white on dark. Set one only for a real reason |
-| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"` or `"none"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes |
+| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"`, `"none"` or `"log"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look; `"log"` (typed into a terminal log strip) is the Terminal Doc look |
 | `position` | `0.78` | Vertical centre as a fraction of frame height |
 | `uppercase` | `false` | |
 
@@ -886,7 +916,9 @@ come through as exactly one scene each. Deviate from it only in these cases:
 
 1. **A very short segment.** First try merging it with the adjacent segment (before or
    after — whichever is the better narrative fit) into one scene, but *only* if the two segments'
-   `visual` briefs describe content that can genuinely share a single continuous scene (e.g. one
+   `visual` briefs describe content that can genuinely share a single continuous scene, and never
+   when the merge would put a `turn`, `reopen` or `payoff` segment's first word inside a running
+   scene (see **The Opening and the Beats**) (e.g. one
    extends or continues the other's broll/animation idea). A merged scene's span is the union of
    the two segments' frame ranges — its far boundary (the side facing the segment *not* merged
    in) is still a segment boundary, so this never violates rule 3 below. If the two `visual`
@@ -1228,6 +1260,11 @@ Before handing back to the operator:
 - [ ] `totalFrames` matches `timeline.totalFrames` exactly
 - [ ] No scene exceeds `totalFrames`
 - [ ] Scenes cover frame 0 → `totalFrames` with no gaps
+- [ ] Frame 0 shows what the first sentence names, already moving; no title card, no empty or
+      black frame, no abstract gradient (**The Opening and the Beats**)
+- [ ] Every `turn` and `reopen` segment starts a new scene with a visibly different picture; the
+      `payoff` segment has the video's strongest picture; nothing comes after it but its own
+      picture, unless `style.picture.ending` says otherwise
 - [ ] Every newly-authored or copied `src` value written via `write_scene_file(video_id, ...)` —
       confirm with `list_scene_files(source="generated", video_id=video_id)`; every `installed/`
       reuse has `"source": "installed"` set

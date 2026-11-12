@@ -597,10 +597,10 @@ errs towards refusing. It recognises a generic arrow function's type parameters 
 - A comment, template or attribute value that never closes is not treated as one, so what follows
   it is lexed as code. A stray quote does not hide the lines after it.
 
-Two more cases refuse for the same reason as an import, because the renderer could not compile
-the file either:
+Two more cases refuse, because the check cannot tell whether the file imports the component:
 
-- a generated scene the upgrade cannot read (fix the file's permissions),
+- a generated scene the upgrade cannot read. The refusal prints the
+  `sudo find … -perm 600 -exec chmod 664 {} +` command that makes root-owned `0600` scenes readable,
 - a module path with an escape that cannot be decoded (an octal escape, or a malformed `\x` or
   `\u`), which TypeScript also rejects.
 

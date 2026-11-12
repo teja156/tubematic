@@ -138,8 +138,8 @@ render is not handed out.
   (`voice_file_path`, `timeline_path`, `scene_config_path`) whose file (`audio.mp3`,
   `timeline.json`, `scene-config.json`) is absent, or whose value is empty because that step did not
   finish. Images are optional and are not checked.
-- A Cartoon 3D video that also holds a mascot, and a mascot video whose pinned code cannot be read,
-  go to `FAILED`
+- A Cartoon 3D, Under the Hood or Case File Story video that also holds a mascot, and a mascot video whose pinned
+  code cannot be read, go to `FAILED`
   ([The mascot's code](20-gpu-and-remote-renderers.md#the-mascots-code)).
 
 The gateway derives every source path from the video's id (`tubematic_core/jobfiles.py`) and does
@@ -229,7 +229,7 @@ wait, and a stop from the gateway ends it.
 
 | `outcome` | Sent when | The gateway |
 |---|---|---|
-| `success` | Remotion exited 0 and the upload landed | Records `video_path` and `render_uploaded_at`, adds a `render_timings` row (frames, seconds, GPU or CPU) and releases the claim. The [AI review](21-ai-review.md) finishes the video |
+| `success` | Remotion exited 0 and the upload landed | Records `video_path` and `render_uploaded_at`, adds a `render_timings` row (frames, seconds, GPU or CPU), writes the video's `last_render_*` record and releases the claim. The [AI review](21-ai-review.md) finishes the video |
 | `failed` | Remotion exited non-zero | `REVISION_REQUESTED` |
 | `stalled`, `timeout` | The render stopped advancing, or ran past the ceiling | `RENDER_QUEUED` |
 | `error` | Anything else: no bundle, a failed upload, an exception in the renderer | `RENDER_QUEUED` |
@@ -282,8 +282,8 @@ take another call's child, so it uses the process-group kill alone.
 | `RENDER_QUEUED → RENDERING` | A claim |
 | `RENDER_QUEUED → REVISION_REQUESTED` | Refused at the claim: a job file is missing |
 | `RENDER_QUEUED → FAILED` | Refused at the claim (an unusable id or path, Cartoon 3D with a mascot, no mascot code), or a GPU-only video no renderer can take |
-| `RENDERING → REVISION_REQUESTED` | A failed render (Remotion exited non-zero) within `max_render_retries` |
-| `RENDERING → RENDER_QUEUED` | A stall, a timeout or a renderer error within `max_render_retries`. Also a restarted renderer and an expired lease |
+| `RENDERING → REVISION_REQUESTED` | A failed render (Remotion exited non-zero) within `max_render_retries`, except a video's first page timeout |
+| `RENDERING → RENDER_QUEUED` | A stall, a timeout or a renderer error within `max_render_retries`. Also a restarted renderer, an expired lease, and a video's first page timeout |
 | `RENDERING → FAILED` | `render_fail_count > max_render_retries`, or a GPU-only render whose GPU failed its re-test |
 | `RENDERING → VIDEO_READY` | Uploaded, and the review is off, failed, found nothing, or ran past `ai_review_max_loops` |
 | `RENDERING → REVISION_REQUESTED` | Uploaded, and the review returned a finding within `ai_review_max_loops`. Also an unexpected exception in the review step |
@@ -296,6 +296,19 @@ A hung render and a failed render take different routes. A stall or a timeout re
 `RENDER_QUEUED` for an automatic retry, because nothing about the job is known to be wrong. A render
 in which Remotion exited non-zero goes to `REVISION_REQUESTED`, because an agent can read the error
 and fix a scene.
+
+A page timeout is the exception. When Remotion exits because the page did not answer in time
+("Timeout (30000ms) exceeded rendering the component", "Timed out evaluating page function";
+`render_results.py::is_page_timeout`), the cause is as often a machine short of memory or CPU as a
+scene that never finishes loading. The first time a video fails this way it returns to
+`RENDER_QUEUED` as it is, with a comment that starts "Render timed out inside the browser, so it was
+re-queued once as it is" (`requeue_page_timeout`). That retry adds nothing to `render_fail_count`:
+with the default cap of 1, a counted retry would send the next failure to `FAILED`, and a scene
+that hangs would never reach the agent. The comment is what bounds it, so a second page timeout of
+the same video takes the usual counted route, with a "Render failed" comment that says it timed out
+a second time: `REVISION_REQUESTED`, or `FAILED` when earlier failures (a stall, a lost renderer)
+already used `max_render_retries`. A GPU-only render whose GPU failed its re-test goes to `FAILED`
+before this rule applies.
 
 `max_render_retries` (default 1) caps render retries only. Each failed result and each
 [lost render](20-gpu-and-remote-renderers.md#leases-restarts-and-lost-renderers) adds one to
@@ -337,12 +350,26 @@ composition, and the built-in renderer's container is the one on the main instal
 GPU. The built-in renderer therefore runs `renderer/remotion/cartoon-tools/stills-server.mjs` as a
 child process. A remote renderer has no `/jobs` volume and runs none.
 
-- The project is bundled once and one Chromium stays open, so a still takes a few seconds. A cold
-  software-GL still in the MCP container takes 25 to 30.
+- It starts with nothing bundled and no browser. The first still bundles the project and opens one
+  Chromium, which then stay, so the stills after it take a few seconds each. A cold software-GL
+  still in the MCP container takes 25 to 30.
+- Ten minutes after the last request (`STILLS_IDLE_MS`) it closes the browser and deletes the
+  bundle, and the next still builds them again. Only Cartoon 3D authoring asks it for stills, so on
+  an install that never uses Cartoon 3D it stays a Node process of about 100 MB.
+- If that first bundle or the browser fails, it answers `503` with `startFailed` and exits. The
+  client (`src/cartoon3d/gate/stills.ts`) then renders the stills itself, as it does when no server
+  answers or the server dies in the middle of a request, and `_ensure_stills_server` starts the
+  server again.
 - It starts with the GL options a render gets (`_gl_options`), so a GPU test that passes moves it
   onto the GPU and one that fails moves it back.
-- It serves the `/jobs` volume (mounted read-only) as its public directory, so a video's files are
+- It serves the `/jobs` volume as its public directory, so a video's files are
   `/public/<video_id>/…` with nothing copied.
+- It writes each still to the path the request names, so the renderer mounts `/jobs` read-write.
+  Its port takes requests with no credential, so `cartoon-tools/out-path.mjs::planRequest` checks
+  every file a request would write before it bundles or opens a browser, and the server answers 400
+  to a path outside `/jobs/<video_id>/cartoon/`, a path through any symlink, or frames that are not
+  non-negative integers. It checks again once the request's turn comes, since renders are
+  serialised, and then writes only the files that were checked.
 - It listens on `TUBEMATIC_STILLS_PORT` (4455) on the Compose network only. The MCP container
   reaches it as `TUBEMATIC_STILLS_SERVER`, and renders its stills locally when it does not answer.
 - It renders one still at a time and shares the GPU with renders.
@@ -379,9 +406,22 @@ decides, and the Remotion side measures:
 - `renderer/remotion/audit/run-text-layout-audit.mjs` bundles the project, selects the
   `TextLayoutAudit` composition and samples frames.
 
+For a mixed-scenes video the probe also lists the scene layer's pictures on frames 0 and 6, and
+`mcp/text_audit.py` warns when the first frame has no subject or does not move. That pass is
+described under [Text-layout warnings](10-scene-authoring.md#text-layout-warnings).
+
 The thresholds are in `mcp/text_audit.py`: an opacity floor of 0.9, a minimum overlap of 15% of the
 smaller box's area, five samples per scene, a 45-frame allowance at a scene's start before anything
 counts as settled, the 150/170/60/60 safe zone, and a 180-second timeout.
+
+A System Flow video's one scene changes its diagram at every board, so the audit samples each board
+as if it were a scene, with the same allowance at each board's start. A Bean Explainer video's one
+scene is sampled the same way, shot by shot, a Whiteboard video's region by region and once more
+for the closing pull-back, a Terminal Doc video's beat by beat, an Under the Hood video's plate
+by plate, ending before a zoom-through takes a plate's labels away, and a Case File Story video's
+beat by beat, from the frame a card's last part has appeared. A Storybook Atlas video's one
+scene is sampled once in each stretch between two of its events (twice in a long one), after things
+have arrived, and never during a push or a wipe between chapters.
 
 A Cartoon 3D video skips the audit. Its one scene is a painted canvas with no text rectangles, and
 the composition draws its captions. Its checks are the typecheck and the beat gate in

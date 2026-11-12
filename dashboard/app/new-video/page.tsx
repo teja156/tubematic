@@ -6,8 +6,14 @@ import type { Agent, GpuStatus, Project, ScriptProfile, Video, VisualStyle, Voic
 import { SectionLabel } from "@/components/SectionLabel";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { AgentPickers, Field, resolvePickedModel, selectStyle } from "@/components/AgentPickers";
+import { effortOptionLabel } from "@/lib/agents";
+import { NO_DOMAIN_DEFAULTS, domainAgent, domainDefaults } from "@/lib/domains";
 import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
 import { voiceLabel } from "@/lib/voices";
+import { ANGLE_MAX_CHARS, angleLength, cleanAngle, fetchAngleKinds, type AngleKind } from "@/lib/angles";
+import { useVisualStyles } from "@/components/VisualStylesProvider";
+import { formulaOptions } from "@/lib/scriptFormulas";
+import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 
 // The fixed domain every submission here is filed into. Keep in sync:
 // renderer/api/pipeline.py MANUAL_PROJECT_ID.
@@ -33,6 +39,7 @@ const inputStyle = {
 } as const;
 
 export default function NewVideoPage() {
+  const visualStyles = useVisualStyles();
   // undefined until /agents answers, and left so if it never does.
   const [agents, setAgents] = useState<Agent[] | undefined>(undefined);
   const [agentsFailed, setAgentsFailed] = useState(false);
@@ -42,18 +49,30 @@ export default function NewVideoPage() {
   // with when no voice is picked (TMDEV-121). "" until the domain has one —
   // it only exists after the first manual video.
   const [manualVoiceId, setManualVoiceId] = useState("");
+  // The manual domain's other defaults; the agent, model and effort among them
+  // are what Automatic means on this page.
+  const [manualDefaults, setManualDefaults] = useState(NO_DOMAIN_DEFAULTS);
   const [canIllustrate, setCanIllustrate] = useState(true);
   const [gpu, setGpu] = useState<GpuStatus | null>(null);
   const [profiles, setProfiles] = useState<ScriptProfile[]>([]);
 
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
+  // Optional: what the opening will use. Left empty, the agent finds an angle
+  // when it picks the video up. null kinds = the list has not loaded, and the
+  // field is not offered: a sentence cannot be saved without its kind.
+  const [angle, setAngle] = useState("");
+  const [angleKind, setAngleKind] = useState("");
+  const [angleKinds, setAngleKinds] = useState<AngleKind[] | null>(null);
   // "" is Automatic: no agent_id is sent and the API deals one by weight.
   const [agentId, setAgentId] = useState("");
   // null = untouched, the idiom every per-video picker uses.
   const [model, setModel] = useState<string | null>(null);
   const [effort, setEffort] = useState("");
   const [profileId, setProfileId] = useState("");
+  // "" is Auto: a formula is picked for the video from its topic.
+  const [formula, setFormula] = useState("");
+  const formulaNames = useScriptFormulaNames(true);
   const [style, setStyle] = useState<VisualStyle>("auto");
   const [voiceId, setVoiceId] = useState("");
   const [approve, setApprove] = useState(true);
@@ -65,6 +84,7 @@ export default function NewVideoPage() {
   // One-shot, not polled — the same reasoning as PipelineClient: these change
   // on other pages, and a stale list only lasts until the next page load.
   useEffect(() => {
+    fetchAngleKinds().then(setAngleKinds);
     apiFetch("/agents")
       .then((r) => r.json())
       .then((data: Agent[]) => {
@@ -89,6 +109,7 @@ export default function NewVideoPage() {
       .then((rows: Project[]) => {
         const manual = Array.isArray(rows) ? rows.find((p) => p.id === MANUAL_PROJECT_ID) : undefined;
         setManualVoiceId(manual?.default_voice_id ?? "");
+        if (manual) setManualDefaults(domainDefaults(manual));
       })
       .catch(() => {});
     apiFetch("/script-profiles")
@@ -103,6 +124,26 @@ export default function NewVideoPage() {
   // model stays "" (its default). A picked agent's model is pinned, as
   // approving a topic pins it, so the row records which model made the video.
   const resolvedModel = resolvePickedModel(picked, model);
+  // What Automatic resolves to here: the manual domain's agent while it is
+  // live, with its model while the agent still offers it, and the domain's
+  // effort. The API seeds a submission the same way (POST /videos/manual), and
+  // deals by weight when the domain names no live agent. Picking an agent on
+  // this page takes none of the three from the domain.
+  const domainLive = domainAgent(agents, manualDefaults.default_agent_id);
+  const domainModel = domainLive?.models.includes(manualDefaults.default_agent_model)
+    ? manualDefaults.default_agent_model : "";
+  // While the agent list has not loaded (or failed), whether the domain's
+  // agent is live is unknown, so the agent and model choices only say that
+  // the domain has one.
+  const unlisted = agents === undefined && manualDefaults.default_agent_id !== "";
+  const automatic = {
+    agent: domainLive ? `Domain default (${domainLive.name})`
+      : unlisted ? "Domain default" : "Automatic (dealt by weight)",
+    model: domainModel ? `${domainModel} (domain default)`
+      : unlisted && manualDefaults.default_agent_model ? "Domain default" : "Agent default",
+    effort: manualDefaults.default_agent_effort
+      ? `${manualDefaults.default_agent_effort} (domain default)` : effortOptionLabel(domainLive),
+  };
   const readyProfiles = profiles.filter((p) => p.status === "READY");
   // What "Default" resolves to: the manual domain's voice while it is still in
   // the roster (the API skips a stale one the same way), else the install's.
@@ -114,7 +155,11 @@ export default function NewVideoPage() {
   // emoji is one character there and two in .length — which would disable
   // submit for a title the API accepts.
   const titleLen = Array.from(title.trim()).length;
-  const canSubmit = titleLen > 0 && titleLen <= TITLE_MAX && topic.trim() !== "" && !submitting;
+  const angleText = cleanAngle(angle);
+  const angleLen = angleLength(angle);
+  // No sentence is fine. A sentence needs its kind and has to fit.
+  const angleOk = angleText === "" || (angleKind !== "" && angleLen <= ANGLE_MAX_CHARS);
+  const canSubmit = titleLen > 0 && titleLen <= TITLE_MAX && topic.trim() !== "" && angleOk && !submitting;
 
   async function submit() {
     if (!canSubmit) return;
@@ -129,8 +174,10 @@ export default function NewVideoPage() {
       agent_model: resolvedModel,
       agent_effort: effort,
       script_profile_id: profileId,
+      formula_choice: formula,
       visual_style: style,
       voice_id: voiceId,
+      ...(angleText ? { angle: angleText, angle_kind: angleKind } : {}),
     };
     try {
       const r = await apiFetch("/videos/manual", {
@@ -148,6 +195,8 @@ export default function NewVideoPage() {
       // usually wants the same agent and style for each.
       setTitle("");
       setTopic("");
+      setAngle("");
+      setAngleKind("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit the video.");
     } finally {
@@ -181,10 +230,46 @@ export default function NewVideoPage() {
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             rows={6}
-            placeholder="What the video is about, the angle, and anything it must cover"
+            placeholder="What the video is about, and anything it must cover"
             style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }}
           />
         </Field>
+
+        {/* Two fields, each with its own label: one label around both controls
+            would give the text box a name that includes every kind. */}
+        {angleKinds && (
+          <>
+            <Field
+              label="Angle (optional)"
+              note={`${angleLen}/${ANGLE_MAX_CHARS} — one sentence saying what the opening will use. Leave it empty and the agent finds one.`}
+            >
+              <textarea
+                data-testid="new-video-angle"
+                value={angle}
+                onChange={(e) => setAngle(e.target.value)}
+                aria-invalid={angleLen > ANGLE_MAX_CHARS}
+                rows={2}
+                placeholder="The backup reported success for a year while it copied an empty folder"
+                style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5, borderColor: angleLen > ANGLE_MAX_CHARS ? "var(--red)" : "var(--border-2)" }}
+              />
+            </Field>
+            <Field label="Angle kind" note="Needed once an angle is written">
+              <select
+                data-testid="new-video-angle-kind"
+                value={angleKind}
+                onChange={(e) => setAngleKind(e.target.value)}
+                disabled={angleText === ""}
+                aria-invalid={angleText !== "" && angleKind === ""}
+                style={{ ...inputStyle, borderColor: angleText !== "" && angleKind === "" ? "var(--red)" : "var(--border-2)" }}
+              >
+                <option value="">{angleText === "" ? "Choose once the angle is written" : "Choose the angle's kind"}</option>
+                {angleKinds.map((k) => (
+                  <option key={k.id} value={k.id}>{k.label}</option>
+                ))}
+              </select>
+            </Field>
+          </>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
           <AgentPickers
@@ -197,6 +282,7 @@ export default function NewVideoPage() {
             onModel={setModel}
             onEffort={setEffort}
             testIdPrefix="new-video"
+            automatic={automatic}
           />
 
           <Field label="Script profile">
@@ -211,6 +297,20 @@ export default function NewVideoPage() {
             </select>
           </Field>
 
+          <Field label="Formula">
+            <select
+              data-testid="new-video-formula"
+              value={formula}
+              onChange={(e) => setFormula(e.target.value)}
+              title="The structure the script is written in. Auto picks one from the topic."
+              style={selectStyle}
+            >
+              {formulaOptions(formulaNames, formula).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </Field>
+
           <Field label="Visual style">
             <select
               data-testid="new-video-style"
@@ -218,7 +318,7 @@ export default function NewVideoPage() {
               onChange={(e) => setStyle(e.target.value as VisualStyle)}
               style={selectStyle}
             >
-              {styleOptions(canIllustrate, gpu).map((o) => (
+              {styleOptions(visualStyles, canIllustrate, gpu, style).map((o) => (
                 <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
               ))}
             </select>

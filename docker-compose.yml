@@ -271,8 +271,9 @@ services:
   # and this container never migrates anything. What stays:
   # - scenes-generated: renders compile the shared generated-scene tree, as
   #   before (a remote renderer stages the bundle's copy instead);
-  # - /jobs, read-only: the Cartoon 3D stills server it runs for the MCP
-  #   container reads a video's job files; renders use the bundle;
+  # - /jobs, read-write: the Cartoon 3D stills server it runs for the MCP
+  #   container reads a video's job files and writes the stills the MCP tools
+  #   ask for, under <video>/cartoon/ only (out-path.mjs); renders use the bundle;
   # - /logs: its own JSONL trail for the dashboard's Logs page.
   # It authenticates with builtin_renderer_token and trusts exactly the
   # gateway certificate in render_tls_cert (never the TLS key).
@@ -282,7 +283,7 @@ services:
     restart: unless-stopped
     command: python3 /app/api/render_agent.py
     volumes:
-      - jobs-data:/jobs:ro
+      - jobs-data:/jobs
       - scenes-generated:/app/remotion/src/scenes/generated
       - logs-data:/logs
       - /etc/localtime:/etc/localtime:ro

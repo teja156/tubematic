@@ -301,7 +301,7 @@ misplaced, overlapping or cut off.
 
 
 def _register_block(canvas: str, figures: bool = False, line_art: bool = False,
-                    cartoon_3d: bool = False) -> str:
+                    cartoon_3d: bool = False, style_block: str = "") -> str:
     """The style contract for what this video was deliberately produced as.
 
     Empty for an unknown canvas rather than guessing: a wrong contract here is
@@ -311,7 +311,16 @@ def _register_block(canvas: str, figures: bool = False, line_art: bool = False,
     `figures` and `line_art` are separate because they are separate
     permissions: an illustrated video has figures but no line art. See the
     blocks above for why collapsing them is not safe in either direction.
+
+    `style_block` is the review text a style pack carries (TMDEV-196). A style
+    that replaces the scene system with its own look (System Flow) says what
+    that look is, so the reviewer does not loop a video on its own design; it
+    takes the place of the canvas and figure blocks, which describe the scene
+    system's styles.
     """
+    if style_block.strip():
+        return ("INTENDED VISUAL STYLE — read this before judging any visual.\n"
+                + style_block.rstrip("\n") + "\n" + _STILL_JUDGE + "\n")
     if cartoon_3d:
         return ("INTENDED VISUAL STYLE — read this before judging any visual.\n"
                 + _CARTOON3D_BLOCK + _STILL_JUDGE + "\n")
@@ -393,6 +402,26 @@ def _reference_text_block(script_text: str, tts_text: str) -> str:
     return (
         "No script reference is available for this video — judge pronunciation against the\n"
         "burned-in captions on screen instead."
+    )
+
+
+def _voices_block(voices) -> str:
+    """A note that the narration is spoken in more than one voice on purpose
+    (TMDEV-216), or "" for one voice, which keeps a one-voice prompt exactly
+    as it was.
+
+    The negative control for a second voice: without it a reviewer can report
+    the change of speaker as a defect, and any finding routes the video to a
+    revision and a paid re-voice."""
+    names = [str(v) for v in voices or () if str(v).strip()]
+    if len(names) < 2:
+        return ""
+    return (
+        f"\n\nVoices: this narration is spoken by {len(names)} different voices "
+        f"({', '.join(names)}). The script gives some lines to another voice on purpose, for\n"
+        "example a viewer's objection or a second speaker in a dialogue. A change of speaker\n"
+        "between lines is CORRECT BY DESIGN and is not a defect. Judge each voice's delivery\n"
+        "on its own."
     )
 
 
@@ -514,7 +543,8 @@ def run_ai_review(video_path: str, scene_config: dict, *,
                    script_text: str = "", tts_text: str = "",
                    model: str = "", fps=0, api_key: str = "",
                    canvas: str = "", figures: bool = False,
-                   line_art: bool = False, cartoon_3d: bool = False) -> dict:
+                   line_art: bool = False, cartoon_3d: bool = False,
+                   style_block: str = "", voices=()) -> dict:
     """Run a Gemini quality review on a rendered video.
 
     Args:
@@ -548,6 +578,9 @@ def run_ai_review(video_path: str, scene_config: dict, *,
         api_key: Gemini credential. Passed in for the same reason as `model`
             — the key now lives in the settings table (TMDEV-73) and this
             module must stay DB-free. Empty falls back to env.
+        voices: the names of the voices the narration is spoken in, in the
+            order they first speak. Two or more add the note that a change of
+            speaker is intended (TMDEV-216); fewer add nothing.
 
     Returns:
         {"overall": str, "must_fix": list[dict], "suggestions": list[dict], "feedback": str,
@@ -649,9 +682,10 @@ def run_ai_review(video_path: str, scene_config: dict, *,
         top=SAFE_ZONE_TOP,
         bottom=SAFE_ZONE_BOTTOM,
         sampled_fps=sampling_fps or 1,
-        register_block=_register_block(canvas, figures, line_art, cartoon_3d),
+        register_block=_register_block(canvas, figures, line_art, cartoon_3d, style_block),
         scene_config_json=json.dumps(scene_config, indent=2),
-        reference_text_block=_reference_text_block(script_text, tts_text),
+        reference_text_block=(_reference_text_block(script_text, tts_text)
+                              + _voices_block(voices)),
     )
     # `video_metadata` is a sibling of `file_data` on the same part, not a key
     # inside it — Google's own docs have shown it nested, which silently fails.

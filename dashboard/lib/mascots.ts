@@ -1,4 +1,4 @@
-import type { GpuStatus, Mascot } from "./types";
+import type { GpuStatus, Mascot, VisualStyleInfo } from "./types";
 
 /**
  * Mascot helpers shared by the Mascots page and every picker.
@@ -71,7 +71,14 @@ export function showMascotPicker(mascots: Pick<Mascot, "pickable">[], current: s
   return current !== "" || mascots.some((m) => m.pickable);
 }
 
-/** The mascot_id an approve-topic carries: Cartoon 3D has no mascot layer. */
-export function approvalMascot(style: string | undefined, picked: string): string {
-  return style === "cartoon_3d" ? "" : picked;
+/** Whether a video of `style` may carry a mascot: not Cartoon 3D (its 3D world
+ *  has no mascot layer), nor a style whose pack takes none (Under the Hood). */
+export function styleTakesMascot(style: string | undefined, styles: Pick<VisualStyleInfo, "id" | "mascot">[] | null): boolean {
+  if (style === "cartoon_3d") return false;
+  return (styles ?? []).find((s) => s.id === style)?.mascot !== false;
+}
+
+/** The mascot_id an approve-topic carries: "" for a style that takes no mascot. */
+export function approvalMascot(style: string | undefined, picked: string, styles: Pick<VisualStyleInfo, "id" | "mascot">[] | null = null): string {
+  return styleTakesMascot(style, styles) ? picked : "";
 }

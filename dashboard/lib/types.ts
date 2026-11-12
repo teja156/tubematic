@@ -18,11 +18,25 @@ export type VideoStatus =
 
 export type Strategy = "curriculum" | "trending" | "mining" | "manual";
 export type ProjectStatus = "active" | "paused";
-/** Which visual register a video is produced in. "auto" means the agent picks
- *  one, video-wide, at scene-config time and records it in
- *  resolved_visual_style. Keep in sync: mcp/server.py and
- *  renderer/api/pipeline.py's VISUAL_STYLES. */
-export type VisualStyle = "auto" | "motion_graphics" | "stick" | "illustrated" | "cartoon_3d";
+/** Which visual style a video is produced in: "auto" (the agent picks) or the
+ *  id of a style pack. The list is data (tubematic_core/style_packs/), served
+ *  by GET /visual-styles, so this is a plain string. */
+export type VisualStyle = string;
+
+/** One row of GET /visual-styles. `available` and `unavailable_reason` are the
+ *  API's answer when the list was fetched; pickers recompute availability from
+ *  `needs` against the settings and GPU status each page loads fresh. */
+export interface VisualStyleInfo {
+  id: string;
+  label: string;
+  experimental: boolean;
+  canvas: "dark" | "light" | null;
+  needs: { openai_key: boolean; gpu: boolean };
+  /** False for a style whose videos take no mascot (Cartoon 3D, Under the Hood); absent means true. */
+  mascot?: boolean;
+  available?: boolean;
+  unavailable_reason?: string;
+}
 /** Which renderer `auto` settled on (videos.resolved_renderer): "" until the agent chose. */
 export type ResolvedRenderer = "" | "dom" | "cartoon_3d";
 export type CommentAuthor = "human" | "agent";
@@ -33,6 +47,28 @@ export interface ScriptSegment {
   id: string;
   voice: string;
   visual: string;
+  /** The formula beat this segment belongs to, when the writer labelled it. */
+  beat?: string;
+  /** A roster voice that speaks this segment instead of the video's voice
+   *  (TMDEV-216). Absent means the video's voice. Dropped on write when equal
+   *  to the video's voice, but a later change of the video's voice can make
+   *  it equal, which reads the same as absent. */
+  voice_id?: string;
+}
+
+/** One of the three openings the writer drafted for a script. `kept` marks
+ *  the one the script uses; `note` says why another was dropped. */
+export interface ScriptHook {
+  type: string;
+  text: string;
+  kept: boolean;
+  note?: string;
+}
+
+/** One finding of the advisory script checks. */
+export interface ScriptWarning {
+  id: string;
+  message: string;
 }
 
 export interface Voice {
@@ -42,6 +78,9 @@ export interface Voice {
    *  install-wide model: the model, and so the markup a script may use,
    *  follows the voice. */
   model_id: string;
+  /** ElevenLabs speed (TMDEV-216). Absent means 1.0; only models in
+   *  SPEED_MODELS honour it, and the API refuses it on any other. */
+  speed?: number;
 }
 
 export interface VoiceInfo {
@@ -55,6 +94,9 @@ export interface VoiceInfo {
    *  before usage was recorded. "" when neither is known. */
   model_id: string;
   model_voiced: boolean;
+  /** The other voices this video's segments name (TMDEV-216), in script
+   *  order; name and model are "" for one no longer on the roster. */
+  other_voices?: { voice_id: string; name: string; model_id: string }[];
 }
 
 export interface Comment {
@@ -103,6 +145,57 @@ export interface Video {
    *  '' until it has. Meaningless unless visual_style is "auto". */
   resolved_visual_style?: string;
   resolved_renderer?: ResolvedRenderer;
+  /** What Auto picked for the style before the script (TMDEV-203): a style
+   *  id (then also the video's visual_style), "scenes" for the mixed scene
+   *  system, or '' when Auto has not decided or a person chose the style. */
+  style_pick?: string;
+  /** The candidate that came second; the Switch button at Script Ready offers it. */
+  style_runner_up?: string;
+  /** Auto's one-sentence reason for the pick. */
+  style_reason?: string;
+  /** What the topic gives the video's opening: one sentence, its kind (an id
+   *  from GET /angle-kinds) and how strong the agent scored it, 0-10 with 0 =
+   *  unscored. '' and 0 when the topic has no angle: a person's own topic, or
+   *  one filed before 2.2.0. A person edits the sentence and the kind at
+   *  Topic Proposed only. Optional for the same reason as tts_text. */
+  angle?: string;
+  angle_kind?: string;
+  angle_score?: number;
+  /** What the agent recorded with the script: the formula it follows ('' =
+   *  none on record, which every script written before 2.2.0 reads as), the
+   *  type of the opening it uses, the three openings drafted, and the script
+   *  checks' findings. The lists are [] when there is nothing.
+   *  Optional for the same reason as tts_text. */
+  formula_id?: string;
+  hook_type?: string;
+  hook_alternatives?: ScriptHook[] | null;
+  script_warnings?: ScriptWarning[] | null;
+  /** The formula decision made before the script. formula_choice: the
+   *  formula a person chose for the video ('' = Auto), settable at the topic.
+   *  formula_pick: the formula the script is written in ('' = not decided
+   *  yet, which every video scripted before 2.2.0 also reads as); the
+   *  person's choice when there is one, else Auto's. formula_runner_up: the
+   *  one that came second, offered as a switch at Script Ready.
+   *  formula_reason: one sentence on why. Optional for the same reason as
+   *  tts_text. */
+  formula_choice?: string;
+  formula_pick?: string;
+  formula_runner_up?: string;
+  formula_reason?: string;
+  /** What this install's watch figures said when the formula was picked:
+   *  JSON written by the server, or '' when the pick was made without them
+   *  (read by lib/scriptFormulas.ts::formulaEvidenceLine). Optional for the
+   *  same reason as tts_text. */
+  formula_evidence?: string;
+  /** The video's last successful render (TMDEV-206): the renderer's id and
+   *  its name at the time ('' = no render recorded, which every video
+   *  rendered before 2.2.0 reads as), whether it rendered on the GPU (1/0),
+   *  and the Remotion run in seconds as the renderer measured it (0 = not
+   *  reported). Optional for the same reason as tts_text. */
+  last_render_renderer_id?: string;
+  last_render_renderer_name?: string;
+  last_render_on_gpu?: number;
+  last_render_seconds?: number;
   /** Scheduled agent sessions in a row that left this video at the status
    *  they found it at (TMDEV-129). Reset by any progress. Optional for the
    *  same reason as tts_text above. */
@@ -146,6 +239,10 @@ export interface Video {
    *  refuses such a voice with a 409, so a picker that disables these can
    *  never disagree with the server. Empty for an unscripted video. */
   voice_conflicts?: Record<string, string>;
+  /** Per segment id, the roster voices that cannot speak that segment's
+   *  markup, with the reason (TMDEV-216): what the Script tab's segment
+   *  picker greys out. Only at SCRIPT_READY, on single-video responses. */
+  segment_voice_conflicts?: Record<string, Record<string, string>>;
   /** The voice and model for the modal's read-only rows (TMDEV-147). Only on
    *  single-video responses (GET/PATCH /videos/<id>), never in a list. */
   voice_info?: VoiceInfo;
@@ -177,6 +274,18 @@ export interface Project {
   /** The mascot new videos here start with: '' = the install default,
    *  "none" = no mascot even if the install has a default. */
   default_mascot_id?: string;
+  /** The agent every new video filed into this domain starts on, whatever its
+   *  sourcing mode; '' means Automatic (the video is dealt an agent by
+   *  weight). A video can still be moved at a checkpoint. */
+  default_agent_id?: string;
+  /** One of that agent's models; '' means the agent's own default. */
+  default_agent_model?: string;
+  /** One of AGENT_EFFORTS; '' means the agent's own level. Needs no agent. */
+  default_agent_effort?: string;
+  /** The script formula every new video filed into this domain is written
+   *  in, whatever its sourcing mode; '' = Auto. Changing it never touches
+   *  videos already filed. */
+  default_formula_id?: string;
   /** How many topics the domain may ever hold, 25–750 (100 by default). */
   topic_cap?: number;
   /** Every video ever filed into the domain, archived and rejected included —
@@ -273,6 +382,12 @@ export interface Settings {
   /** Burn the "Made with tubematic.ai" mark into every render. Human-only:
    *  nothing in scene-config.json can switch it. */
   watermark_enabled: boolean;
+  /** Whether Auto may pick a script formula marked experimental. Off by
+   *  default. Optional: an older API does not send it. */
+  auto_experimental_formulas?: boolean;
+  /** Whether formula routing reads this install's own watch figures. On by
+   *  default. Optional: an older API does not send it. */
+  learned_routing?: boolean;
   /** The mascot new videos start with unless their domain says otherwise;
    *  '' = none. Optional: an older API does not send it. */
   default_mascot_id?: string;
@@ -344,6 +459,47 @@ export interface VideoPublication {
   published_at: string;
   created_at: string;
   updated_at: string;
+  // The post's latest snapshot (TMDEV-212). Optional: an API from before it
+  // answers without them, and a post nobody has read yet has them all null.
+  views?: number | null;
+  likes?: number | null;
+  comments?: number | null;
+  shares?: number | null;
+  fetched_at?: string | null;
+  avg_watch_secs?: number | null;
+  watched_pct?: number | null;
+  stayed_pct?: number | null;
+  engaged_views?: number | null;
+  reach?: number | null;
+  saves?: number | null;
+}
+
+/** A group's figure for one measure: the median of the `n` videos that report
+ *  it. `median` is null when none does. */
+export interface WatchMeasure {
+  median: number | null;
+  n: number;
+}
+
+export interface WatchGroup {
+  key: string;
+  label: string;
+  /** Every post in the group, whether or not it reports anything. */
+  videos: number;
+  avg_watch_secs: WatchMeasure;
+  watched_pct: WatchMeasure;
+  stayed_pct: WatchMeasure;
+}
+
+/** GET /analytics/watch-time: one account's watch figures, grouped each way. */
+export interface WatchTime {
+  accounts: { id: string; platform: string; videos: number }[];
+  social_account_id: string;
+  platform: string;
+  videos: number;
+  /** A group with fewer videos than this is too small to read. */
+  min_group: number;
+  dimensions: { id: string; label: string; groups: WatchGroup[] }[];
 }
 
 /** One metrics snapshot for one publication. A time series, not latest-only —
@@ -417,6 +573,9 @@ export interface PatchVideoBody {
   agent_model?: string;
   agent_effort?: string;
   visual_style?: VisualStyle;
+  /** Per segment id, a roster voice_id or "" for the video's voice
+   *  (TMDEV-216). Sent on its own, only at SCRIPT_READY. */
+  segment_voices?: Record<string, string>;
   onlyIfCurrentStatus?: VideoStatus;
 }
 

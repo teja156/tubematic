@@ -32,6 +32,10 @@ whose GPU test passed. How main estimates this is in
 The built-in renderer keeps taking work. Disable it on the dashboard if you want main to render
 nothing.
 
+To see which renderer made a video, open the video. Its Details list **Rendered by** (the
+renderer's name, then GPU or CPU) and **Render time** for its last successful render. Videos
+rendered before version 2.2.0 show neither.
+
 ---
 
 ## How it works
@@ -201,24 +205,45 @@ turns them on.
 ### 2 · Get the script onto the renderer machine
 
 The script is `tubematic_remote_renderer.py`. It is one file, and the renderer machine needs no
-Tubematic install. Copy it from main's install directory, where every install has it under
-`scripts/`:
+Tubematic install. Get it in one of two ways.
+
+#### Copy it from main
+
+Every install has the script under `scripts/`. On main, from the install directory:
 
 ```bash
-# on main, from the install directory
 scp scripts/tubematic_remote_renderer.py you@renderer-host:
 ```
 
-Or download it, with its checksum, from the release your main runs. The first release with remote
-renderers is 2.1.0:
+#### Download it from GitHub
+
+On the renderer machine, download the script and its checksums from the release your main runs.
+The first release with remote renderers is 2.1.0. Use `curl` or `wget`, whichever the machine has.
+
+With `curl`:
 
 ```bash
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.0/tubematic_remote_renderer.py
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.0/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/tubematic_remote_renderer.py
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/CHECKSUMS.txt
+```
+
+With `wget`:
+
+```bash
+wget https://github.com/teja156/tubematic/releases/download/v2.1.1/tubematic_remote_renderer.py
+wget https://github.com/teja156/tubematic/releases/download/v2.1.1/CHECKSUMS.txt
+```
+
+Then check the download:
+
+```bash
 sha256sum -c CHECKSUMS.txt --ignore-missing   # must say: tubematic_remote_renderer.py: OK
 ```
 
 `CHECKSUMS.txt` also lists the release tarball, and `--ignore-missing` skips it.
+
+If your main runs a later version, put that version in place of `v2.1.1` in both addresses. The
+dashboard's top bar shows the version.
 
 ### 3 · Run it
 

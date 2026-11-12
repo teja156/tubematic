@@ -19,11 +19,20 @@
 // current bundle was made from, and re-bundles when it differs: an edit to a video's code is seen by its next still
 // (~20 s once), an unchanged tree costs a directory walk.
 //           GET  /health                   {ok, bundled, browser, public, gl, chromeMode}
+// An out or outDir must lie under <public>/<video>/cartoon/ (out-path.mjs), or the request is answered 400 with
+// nothing drawn: the port has no credential, and in production the public directory is the read-write /jobs volume.
 // Responses: JSON {ok, out | outs, ms, logs}. Browser console lines are collected per request and returned as
 // `logs` (what `npx remotion still` never shows).
+//
+// It starts empty: the first still bundles the project and opens the browser, and STILLS_IDLE_MS after the last
+// request it closes the browser and deletes the bundle again. If that first bundle or the browser fails, it answers
+// 503 with startFailed and exits, so the client renders the stills itself and the renderer starts the server again. The renderer runs this server on every install, but
+// only Cartoon 3D authoring asks it for anything, and a bundle of every generated scene plus an idle Chromium held
+// several hundred megabytes on installs that never use it.
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
+import { planRequest } from "./out-path.mjs";
 import { bundle } from "@remotion/bundler";
 import { openBrowser, renderStill, selectComposition } from "@remotion/renderer";
 import { enableTailwind } from "@remotion/tailwind-v4";
@@ -47,11 +56,14 @@ const chromiumOptions = { gl: GL, enableMultiProcessOnLinux: MULTI, disableWebSe
 const browserOptions = { chromiumOptions, chromeMode: CHROME_MODE, browserExecutable: BROWSER, logLevel: "error" };
 
 const GENERATED = path.join(ROOT, "src/scenes/generated");
+const STILLS_IDLE_MS = 10 * 60 * 1000;
 
 let serveUrl = null;
 let bundledStamp = null;
 let browser = null;
 let busy = Promise.resolve();
+let idleTimer = null;
+let startFailed = null;
 
 /** a stamp of the generated source tree: every file's path, size and mtime, in a fixed order */
 export const treeStamp = (dir) => {
@@ -81,9 +93,11 @@ const rebundle = async () => {
   console.log(`[stills] bundled in ${Date.now() - t} ms: ${serveUrl} (public ${PUBLIC})`);
 };
 
-/** re-bundle when the generated source tree changed since the current bundle */
+/** bundle when there is none, or re-bundle when the generated source tree changed since the current bundle */
 const freshen = async () => {
-  if (treeStamp(GENERATED) !== bundledStamp) {
+  if (!serveUrl) {
+    await rebundle();
+  } else if (treeStamp(GENERATED) !== bundledStamp) {
     console.log("[stills] generated source changed: re-bundling");
     await rebundle();
   }
@@ -114,6 +128,29 @@ const one = async (composition, inputProps, frame, out, scale, attempt = 0) => {
   return logs;
 };
 
+/** let go of the browser and the bundle; the next request builds them again */
+const release = async () => {
+  try { await browser?.close({ silent: true }); } catch { /* already gone */ }
+  browser = null;
+  if (serveUrl) fs.rmSync(serveUrl, { recursive: true, force: true });
+  serveUrl = null;
+  bundledStamp = null;
+  console.log("[stills] idle: browser closed and bundle deleted");
+};
+
+/** (re)arm the idle timer. The release queues behind any request still running, and does nothing if a request
+ *  came in since the timer was armed (one that ran longer than the idle time touches again when it ends). */
+let lastUse = 0;
+const touch = () => {
+  lastUse = Date.now();
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    const idle = () => (Date.now() - lastUse >= STILLS_IDLE_MS ? release() : undefined);
+    busy = busy.then(idle, idle);
+  }, STILLS_IDLE_MS);
+  idleTimer.unref();
+};
+
 const json = (res, code, body) => {
   res.writeHead(code, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -127,36 +164,61 @@ const body = (req) => new Promise((resolve, reject) => {
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
-      return json(res, 200, { ok: true, bundled: !!serveUrl, browser: !!browser, public: PUBLIC, gl: GL, chromeMode: CHROME_MODE });
+      return json(res, 200, { ok: !startFailed, bundled: !!serveUrl, browser: !!browser, public: PUBLIC, gl: GL, chromeMode: CHROME_MODE });
     }
-    if (req.method === "POST" && req.url === "/rebundle") { await (busy = busy.then(rebundle)); return json(res, 200, { ok: true }); }
+    if (req.method === "POST" && req.url === "/rebundle") { touch(); await (busy = busy.then(rebundle)); return json(res, 200, { ok: true }); }
     if (req.method === "POST" && (req.url === "/still" || req.url === "/stills")) {
       const b = await body(req);
+      // every file goes under <public>/<video>/cartoon/: checked before any bundle or browser, and the loop below
+      // writes exactly the targets checked here
+      const plan = planRequest(PUBLIC, req.url, b);
+      if (plan.error) return json(res, 400, { ok: false, error: plan.error });
       const t = Date.now();
       const scale = b.scale ?? 1;
       const comp = b.composition ?? "Composition";
       const props = b.props ?? {};
       const work = async () => {
-        await freshen();
-        if (req.url === "/still") {
-          fs.mkdirSync(path.dirname(b.out), { recursive: true });
-          const logs = await one(comp, props, b.frame ?? 0, b.out, scale);
-          return { ok: true, out: b.out, ms: Date.now() - t, logs };
+        try {
+          await freshen();
+          await ensureBrowser();
+        } catch (e) {
+          // With no bundle or no browser to fall back on, this server cannot draw anything: say so, and exit so the
+          // renderer starts it again. The client renders the stills itself meanwhile, as when no server answers.
+          if (!serveUrl || !browser) throw Object.assign(e instanceof Error ? e : new Error(String(e)), { startFailed: true });
+          throw e;
         }
-        fs.mkdirSync(b.outDir, { recursive: true });
+        // again now that the request has had its turn: renders are serialised, and a link planted while it waited
+        // would otherwise go unchecked
+        const again = planRequest(PUBLIC, req.url, b);
+        if (again.error) throw Object.assign(new Error(again.error), { refused: true });
         const outs = [];
         const logs = [];
-        for (const f of b.frames) {
-          const out = path.join(b.outDir, `${b.prefix ?? "f"}${String(f).padStart(4, "0")}.png`);
-          logs.push(...(await one(comp, props, f, out, scale)));
+        for (const { frame, out } of again.targets) {
+          fs.mkdirSync(path.dirname(out), { recursive: true });
+          logs.push(...(await one(comp, props, frame, out, scale)));
           outs.push(out);
         }
+        if (req.url === "/still") return { ok: true, out: outs[0], ms: Date.now() - t, logs };
         return { ok: true, outs, ms: Date.now() - t, logs };
       };
       // renders are serialised: one browser, one GPU
       const p = busy.then(work, work);
       busy = p.then(() => {}, () => {});
-      return json(res, 200, await p);
+      touch();
+      try {
+        return json(res, 200, await p);
+      } catch (e) {
+        if (e?.refused) return json(res, 400, { ok: false, error: e.message });
+        if (!e?.startFailed) throw e;
+        startFailed = String(e?.message ?? e);
+        console.log(`[stills] could not start (${startFailed}); exiting so the renderer starts it again`);
+        json(res, 503, { ok: false, startFailed: true, error: startFailed });
+        if (serveUrl) fs.rmSync(serveUrl, { recursive: true, force: true });
+        setTimeout(() => process.exit(1), 100);
+        return;
+      } finally {
+        touch();
+      }
     }
     json(res, 404, { ok: false, error: "unknown route" });
   } catch (e) {
@@ -164,8 +226,6 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-await rebundle();
-await ensureBrowser();
 server.listen(PORT, HOST, () => console.log(`[stills] listening on http://${HOST}:${PORT}`));
 const bye = async () => { try { await browser?.close({ silent: true }); } catch { /* already gone */ } process.exit(0); };
 process.on("SIGINT", bye);

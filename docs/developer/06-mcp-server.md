@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 48 tools
+## The 54 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -102,6 +102,8 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`create_video`](#create_video) | File a topic at `TOPIC_PROPOSED` |
 | [`set_video_status`](#set_video_status) | Guarded status write |
 | [`update_video`](#update_video) | Partial update: script, publish text, voice, agent, style |
+| [`choose_visual_style`](#choose_visual_style) | Record the style `auto` picks, before the script |
+| [`choose_script_formula`](#choose_script_formula) | Record the script formula, after the style and before the script |
 | [`add_comment`](#add_comment) | Add an agent comment |
 
 ### Domain tools
@@ -132,6 +134,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`generate_image`](#generate_image) | Generate a scene image |
 | [`generate_character`](#generate_character) | Generate a transparent character cut-out |
 | [`read_image`](#read_image) | Return a stored image as a picture |
+| [`preview_doodles`](#preview_doodles) | Draw a Whiteboard video's own doodles as a picture |
 
 ### Scene and render tools
 
@@ -141,6 +144,9 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`read_scene_file`](#read_scene_file) | Read one scene's source |
 | [`delete_scene_file`](#delete_scene_file) | Delete one generated scene or module |
 | [`list_scene_files`](#list_scene_files) | List generated and installed scenes |
+| [`render_bean_props`](#render_bean_props) | Render a Bean Explainer video's own props as a picture |
+| [`render_storybook_props`](#render_storybook_props) | Render a Storybook Atlas video's own props as a picture |
+| [`preview_terminal_moves`](#preview_terminal_moves) | Render a Terminal Doc video's own moves as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
 | [`get_timeline`](#get_timeline) | Read `timeline.json` |
@@ -187,23 +193,30 @@ The calls one video takes when it has no mascot and is not Cartoon 3D:
 
 1. `get_video(video_id)` returns the status, the comments, the `pronunciation_mode` to write for
    and the `script_profile_id`.
-2. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
-3. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…)` stores the
-   script and the text the video is posted with.
-4. `upsert_pronunciation_lexicon(entries=[…])` registers recurring terms, if the script has any.
-5. `add_comment(video_id, "agent", …)` says what was written.
-6. `set_video_status(video_id, "SCRIPT_READY", only_if_current_status="TOPIC_APPROVED")` stops at
+2. `choose_visual_style(video_id, style, reason, runner_up)` records the style `auto` picks, when
+   `style_routing.decided` is `false`. The script is then written for that style.
+3. `choose_script_formula(video_id, formula, reason, runner_up)` records the script formula,
+   when `formula_routing.decided` is `false`. The script is then written in the returned
+   `formula_pick`.
+4. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
+5. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…,
+   formula_id=…, hooks=[…])` stores the script, the text the video is posted with, the picked formula
+   and the openings the script was built on. It returns `warnings`, which the agent reads before it
+   moves on.
+6. `upsert_pronunciation_lexicon(entries=[…])` registers recurring terms, if the script has any.
+7. `add_comment(video_id, "agent", …)` says what was written.
+8. `set_video_status(video_id, "SCRIPT_READY", only_if_current_status="TOPIC_APPROVED")` stops at
    the script checkpoint. A human approves, which moves the video to `VOICING`.
-7. `generate_voice(video_id, script)` writes the audio and the timeline and moves the video to
+9. `generate_voice(video_id, script)` writes the audio and the timeline and moves the video to
    `VOICE_READY`.
-8. `get_timeline(video_id)` returns each segment's frame span.
-9. `list_scene_files(source="installed")` lists the reusable scene library.
-10. `generate_image(video_id, image_name, prompt)` creates each image and returns its `public_path`.
-11. `read_image(video_id, image_name)` shows the image, so a bad one is replaced before a render.
-12. `write_scene_file(video_id, scene_name, tsx_content)` writes each new scene and returns its `src`.
-13. `write_scene_config(video_id, config)` writes `scene-config.json`.
-14. `validate_job(video_id)` returns `errors` to fix and `warnings` to judge.
-15. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
+10. `get_timeline(video_id)` returns each segment's frame span, beat and role.
+11. `list_scene_files(source="installed")` lists the reusable scene library.
+12. `generate_image(video_id, image_name, prompt)` creates each image and returns its `public_path`.
+13. `read_image(video_id, image_name)` shows the image, so a bad one is replaced before a render.
+14. `write_scene_file(video_id, scene_name, tsx_content)` writes each new scene and returns its `src`.
+15. `write_scene_config(video_id, config)` writes `scene-config.json`.
+16. `validate_job(video_id)` returns `errors` to fix and `warnings` to judge.
+17. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
 
 ---
 
@@ -224,30 +237,75 @@ videos.
 |---|---|
 | `comments` | The comment thread |
 | `publish_title`, `publish_description` | The text written with the script |
+| `angle`, `angle_kind`, `angle_score` | The [topic's angle](02-pipeline.md#topic-angle): the sentence, its kind and its score. `""` and `0` when the video has none |
+| `angle_formula` | The formula `angle_kind` is the first choice for, from `ANGLE_KINDS`, or `""` with no angle. The formula router starts from it |
+| `formula_id`, `hook_type` | The formula the script follows and the type of the opening it uses, or `""` |
+| `hook_alternatives`, `script_warnings` | The three openings drafted and the checks' findings for the stored script, as lists. `[]` when there are none. See [What a script records](08-scripting-and-voice.md#what-a-script-records) |
 | `claimed_by`, `claim_expires_in_secs` | The live scene-work claim, or `null` |
 | `voice` | `{voice_id, name, model_id, source}` or `null` |
 | `elevenlabs_model_id`, `pronunciation_mode` | What the script is written for. Both follow from `voice` |
-| `illustrated_available` | `true` when an OpenAI key is stored. The key is not returned |
+| `illustrated_available` | `true` when an OpenAI key is stored, which Illustrated, Under the Hood and Case File Story need. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
+| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script, picture}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config`, `script` is `""` and `picture` is the mixed scenes' block |
+| `style_routing` | The style decision `auto` makes before the script: `{decided, pick, runner_up, reason, candidates, domain}`. See [How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style) |
+| `formula_routing` | The formula decision made before the script: `{decided, pick, runner_up, reason, choice, candidates, recent, learned}`. See [How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked) |
+
+At `VOICE_READY` the operator skill invokes the skill named in `style.authoring_skill`.
 
 `mascot.version` is the pinned version, or the mascot's current approved version until the first
 scene-config is written.
 
 The flags are on `get_video` because a scheduled session is scoped to one video. Under `auto`, the
 scene-config skill reads `illustrated_available` before it chooses generated character art (when it
-is `false`, characters are line art and `generate_character` is not called) and
-`cartoon_3d_available` before it resolves the renderer to Cartoon 3D. Under a forced `illustrated`
-style it makes no check: the style can be chosen only while a key is stored, and
+is `false`, characters are line art and `generate_character` is not called). Under a forced
+`illustrated` style it makes no check: the style can be chosen only while a key is stored, and
 `generate_character` refuses before any spend if the key has gone.
+
+`style_routing.decided` is `true` once `auto` has picked (`pick` is a style id, or `scenes` for the
+mixed scene system) and whenever a person chose the style. `candidates` is
+`tubematic_core/visual_styles.py::routing_candidates`: every style pack in pack order, then
+`scenes`, each with its `routing` block, its generated-image count and whether this install and
+this video can have it (`available`, `unavailable_reason`). `domain` is the `{name, description}`
+of the video's domain.
+
+`formula_routing.decided` is `true` once a formula is picked. `pick` is the formula the script is
+written in, and `choice` is the formula a person chose for the video (`""` for Auto). `candidates`
+is `tubematic_core/formulas.py::routing_candidates` at `TOPIC_APPROVED` before the pick and at
+`REVISION_REQUESTED` unless the pick is a person's choice, and `[]` otherwise. `recent` is `{formulas, hook_types}`: the formulas and the kept opening types of the
+domain's previous two videos, newest first.
+
+`learned` is what the domain's own watch figures say, read at `TOPIC_APPROVED` and
+`REVISION_REQUESTED` only: `{active, mode, stamp, measure, min_group, accounts, openings}` (`mode` and `stamp` are `""` while inactive), where
+`openings` lists the opening types with a counted group as `{type, label, standing, videos}`. At
+any other status it is `{active: false}`. Each candidate carries `learned: {points, standing,
+videos}`, with 0 points for every candidate while learning is inactive. The rule is in
+[Learned routing](08-scripting-and-voice.md#learned-routing).
 
 ### `create_video`
 
-`create_video(project_id, topic, strategy, producibility_score, title="", voice_id="")` files a
+`create_video(project_id, topic, strategy, producibility_score, title="", voice_id="", angle=None,
+angle_kind=None, angle_score=None)` files a
 video at `TOPIC_PROPOSED`. It refuses a score below 5, an unknown `strategy`, a `voice_id` that is
 not on the roster, an unknown `project_id`, and a paused or expired `project_id` unless `strategy`
 is `manual` (see [Domain pause](02-pipeline.md#domain-pause) and
 [Topic cap](02-pipeline.md#topic-cap)).
+
+The three angle arguments are the [topic's angle](02-pipeline.md#topic-angle). The tool refuses:
+
+- a `curriculum`, `trending` or `mining` topic with no `angle` and `angle_kind`, or with an
+  `angle_score` from 1 to 4. The message tells the agent to leave the subject out and name it in
+  its run summary. An `angle_score` of 0 or left out is refused with a message asking for the score,
+  because 0 means unscored and an agent that forgot the argument has an angle.
+- on any `strategy`: `angle` or `angle_kind` without the other, an `angle_kind` that is not a kind,
+  an `angle` over 300 characters, and an `angle_score` that is not a whole number from 0 to 10.
+
+A `manual` topic may carry no angle, and its angle may have any score. `None` in any of the three
+reads as absent. On a `manual` topic so do the words in `NO_ANGLE_WORDS` (`none`, `n/a` and the
+like) as the sentence, or as the kind when no sentence is sent (`sent_no_angle`, read before the
+kind is cleaned). A real sentence with `none` as its kind keeps its sentence and is refused for the
+kind, and a `manual` topic with no sentence and no kind is stored with score 0 whatever
+score was sent. A kind is stored by its id whatever its spelling (`tubematic_core.angles.clean_kind`).
 
 What a new video starts with:
 
@@ -259,10 +317,15 @@ What a new video starts with:
 - `mascot_id`: the domain's `default_mascot_id`, else the install's, whatever the `strategy`. It is
   set only while some renderer's GPU test passed, and not on a `cartoon_3d` video. Seeding does not
   refuse a video.
-- `agent_id`: the agent the video is pinned to (see [Assignment](07-agent-layer.md#assignment)).
+- `agent_id` and `agent_model`: the domain's `default_agent_id` while that agent is live, with
+  `default_agent_model` while the agent's `models` holds it, whatever the `strategy`. Otherwise
+  the agent is dealt, and the model is `""` (see [Assignment](07-agent-layer.md#assignment)).
+- `agent_effort`: the domain's `default_agent_effort`, whichever agent the video gets.
+- `formula_choice`: the domain's `default_formula_id` while that is a formula, whatever the
+  `strategy`. `""` means a formula is picked for the video before its script.
 
-The result carries those five fields. A `title` over 70 characters is clipped and the result
-carries a `warning` (see [Video titles](#video-titles)).
+The result carries those eight fields and the stored angle. A `title` over 70 characters is
+clipped and the result carries a `warning` (see [Video titles](#video-titles)).
 
 ### `set_video_status`
 
@@ -280,18 +343,46 @@ It refuses:
   was picked (a human chooses another, or none), or when the video is Cartoon 3D, by its style or
   its resolved renderer, and holds a mascot. Both checks are repeated in the `UPDATE`'s `WHERE`.
 
+A move to `TOPIC_PROPOSED` (a topic revision) gives a style `auto` picked back to `auto`, in the
+same `UPDATE`: `visual_style` returns to `auto` and the three `style_*` columns are cleared, so the
+revised topic is routed again after its next approval. On every `auto` video the two `resolved_*`
+columns are cleared too. A style a person chose is kept, with its recorded canvas. The same
+`UPDATE` empties `formula_pick`, `formula_runner_up`, `formula_reason` and `formula_evidence`, so
+the formula is picked again for the revised topic. A person's `formula_choice` is kept.
+
+A move to `SCRIPT_READY`, `VOICING` or `VOICE_READY` is refused while a `formula_pick` is set and
+the stored script's `formula_id` is not it. The refusal for `VOICING` and `VOICE_READY` tells the
+agent that a new formula means a new script for a person to approve. A formula switch leaves another formula there and an opening
+switch clears it, until the agent rewrites the script; handing the video on first would show one
+formula over a script in another. The check is repeated in the `UPDATE`'s `WHERE`.
+
 ### `update_video`
 
 `update_video(video_id, title=…, script=…, script_segments=…, youtube_url=…, video_version=…,
 gemini_feedback=…, voice_id=…, agent_id=…, agent_model=…, agent_effort=…, script_profile_id=…,
 visual_style=…, resolved_visual_style=…, resolved_renderer=…, publish_title=…,
-publish_description=…, mascot_id=…)` is a partial update. An archived video returns
-`video_archived`.
+publish_description=…, mascot_id=…, formula_id=…, hooks=…, angle=…, angle_kind=…, angle_score=…)`
+is a partial update. An archived video returns `video_archived`.
+
+The topic's angle:
+
+- `angle` and `angle_kind` are passed together, in every call that carries any of the three. No
+  score floor applies. A call with no `angle_score` stores 0, because the stored score described
+  the earlier sentence. `""` for both removes the angle.
+- The write is allowed at `TOPIC_PROPOSED`, at `REVISION_REQUESTED`, and at `TOPIC_APPROVED` while
+  the video has no angle (`ANGLE_WRITE_STATUSES`). The last case is the fill the operator skill
+  makes when it picks up a video whose topic came without one.
+- The `UPDATE` repeats the status in its `WHERE`, and at `TOPIC_APPROVED` also `angle = ''`. A
+  video that moved on, or that got an angle meanwhile, is left as it is and the call says why.
+- At `TOPIC_APPROVED`, sending the angle the video already has is not a write: the other fields of
+  the call are applied, and `updated_fields` leaves the angle out.
 
 Script and voice:
 
-- `script_segments` is validated against the model of the video's voice, and the flat `script` is
-  derived from it. `<phoneme>` tags are refused for a voice whose model would strip them. See
+- `script_segments` is validated segment by segment against the model of the voice that speaks it,
+  and the flat `script` is derived from it. `<phoneme>` tags are refused for a voice whose model
+  would strip them. A segment's optional `voice_id` must be on the roster, and one equal to the
+  video's voice is dropped. See
   [Scripting and Voice](08-scripting-and-voice.md#the-model-follows-the-voice).
 - Any write of `script_segments` or `script` must carry `publish_title` (at most 100 characters,
   YouTube's limit) and `publish_description` (at most 2000, which keeps the combined caption under
@@ -299,6 +390,17 @@ Script and voice:
   if the stored pair is blank. The pair is required because the Publish dialog opens on it.
 - Writing a script pins the voice it resolved to onto a video that had none, or that was passed
   `voice_id=""`.
+- `formula_id` and `hooks` are passed together, with `script_segments`. They record the formula the
+  script follows and the three openings the agent drafted. A malformed record is refused, and a
+  script with no record is accepted. On a video with a `formula_pick`, a `formula_id` that differs
+  from the pick is refused, because the pick is what the person sees at `SCRIPT_READY`. With no
+  pick, a person's `formula_choice` binds the same way. On such a video a write that changes the
+  words must carry the record. See
+  [What a script records](08-scripting-and-voice.md#what-a-script-records).
+- A call that changes a script's spoken words, or carries a record, returns `warnings` beside
+  `updated_fields`: the [script warnings](08-scripting-and-voice.md#script-warnings) for the stored
+  script, which the same call saves on the video. A warning does not refuse the write. A
+  pronunciation fix returns none.
 - A `voice_id` whose model cannot speak the stored script is refused, except at `TOPIC_PROPOSED`,
   where the script is still to be rewritten. To move a scripted video to such a voice, pass it with
   the rewritten `script_segments` and the publish pair in one call.
@@ -306,15 +408,23 @@ Script and voice:
 Fields writable only at `TOPIC_PROPOSED`:
 
 - `script_profile_id` must name a `READY` profile that is not deleted.
-- `visual_style="illustrated"` is refused while no OpenAI key is stored, with the HTTP route's
-  message. Only OpenAI draws its characters, and `generate_character`, the other place the key is
-  checked, runs after the style is frozen.
+- `visual_style="illustrated"`, `"under_the_hood"` or `"case_file_story"` is refused while no OpenAI
+  key is stored, with the style pack's message. Only OpenAI draws their characters, photographs and
+  paintings, and the image tools,
+  the other place the key is checked, run after the style is frozen.
 - `visual_style="cartoon_3d"` is refused unless some renderer's GPU test passed. The message names
   the fix: the GPU step, or Test GPU when a renderer has not tested yet. Writing it clears the
   mascot in the same update.
 - A new `mascot_id` must exist, be approved and not archived, and some renderer's GPU test must
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
-  mascot is not refused. A mascot is refused on a `cartoon_3d` video.
+  mascot is not refused. A mascot is refused on a `cartoon_3d`, `under_the_hood` or `case_file_story` video
+  (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to one of those styles clears the stored one.
+- A `visual_style` different from the stored one clears the record of a style `auto` picked
+  (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
+  scenes (`resolved_renderer`, `resolved_visual_style`). The same value again keeps them, because the
+  dashboard re-sends the picker on every approval. A call that writes `visual_style` together with
+  either `resolved_*` field is refused. A mascot is judged against the renderer the video will have
+  after the write, so a changed style is not refused for a Cartoon 3D renderer it clears.
 
 Fields writable at any human checkpoint (`TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY`):
 
@@ -333,14 +443,76 @@ Fields the agent writes once, at scene-config time. A second, different value is
 
 - `resolved_visual_style` is the canvas the agent settled on (`dark` or `light`). It is refused
   when `visual_style` already fixes the canvas.
-- `resolved_renderer` is the renderer `auto` settled on (`dom` or `cartoon_3d`). It is refused when
-  `visual_style` already names the renderer. `cartoon_3d` needs the same working GPU and a video
-  with no mascot.
+- `resolved_renderer` is the renderer an `auto` video uses (`dom` or `cartoon_3d`). `auto` reaches
+  Cartoon 3D by picking the `cartoon_3d` style with `choose_visual_style`, so a video still at
+  `auto` when its scenes are written records `dom`. `cartoon_3d` is kept for a video that recorded
+  it before `auto` picked styles, and refused on a video `auto` routed to mixed scenes
+  (`style_pick` is `scenes`); `write_scene_config` refuses a Cartoon 3D scene there for the same
+  reason. It is refused when `visual_style` already names the renderer.
+  `cartoon_3d` needs the same working GPU and a video with no mascot.
 
 A `title` over 70 characters is rejected. The tool takes none of the four job-path columns:
 `generate_voice`, `write_scene_config` and the render gateway write those, and FastMCP refuses a
 call that passes one as an unexpected argument, so nothing is applied (see
 [Path columns](03-database.md#path-columns)).
+
+### `choose_visual_style`
+
+`choose_visual_style(video_id, style, reason, runner_up="")` records the style `auto` picks for a
+video, once, at `TOPIC_APPROVED`, before the script is written. The
+[tubematic-style-routing skill](10-scene-authoring.md#how-auto-picks-a-style) calls it. It is the
+only write of the style after the topic checkpoint.
+
+- `style` is a candidate id from `style_routing.candidates`. A style pack's id is written into
+  `visual_style`, so the script, the gates, the AI review prompt and the authoring skill all read the
+  picked style. `scenes` leaves `visual_style` at `auto`. The same `UPDATE` clears
+  `resolved_renderer` and `resolved_visual_style`, which belong to scenes the new script replaces.
+- `reason` is one sentence of at most 300 characters (`STYLE_REASON_MAX_CHARS`). The dashboard
+  shows it beside the choice.
+- `runner_up` is another candidate, or `""`. The dashboard offers it as a switch at `SCRIPT_READY`
+  ([`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style)).
+
+It refuses a `style` or `runner_up` that is not available (no OpenAI key, no working GPU, a mascot
+on a 3D-world style), a video not at `TOPIC_APPROVED`, a style a person chose, and a second
+decision. Every condition on the row is repeated in the `UPDATE`'s `WHERE`, so a status change, a
+style write or a mascot committed between the check and the write leaves the video untouched. It
+reads what the install can make after taking the write lock (`BEGIN IMMEDIATE`), so a key removed in
+Settings or a GPU probe result cannot commit between that check and the write. The result carries
+the new `visual_style` and `style`, so the agent writes the script for it in the same session.
+
+### `choose_script_formula`
+
+`choose_script_formula(video_id, formula, reason, runner_up="", repeat_reason="", learned_stamp="")` records the
+script formula for a video, at `TOPIC_APPROVED`, after the style is decided and before the script
+is written. The [tubematic-formula-routing skill](08-scripting-and-voice.md#how-a-formula-is-picked)
+calls it.
+
+- `formula` is the candidate the agent judges best, from `formula_routing.candidates`. On a video
+  with a `formula_choice`, the tool writes the person's choice as `formula_pick` and stores
+  `formula` as the runner-up when the two differ.
+- `reason` is one sentence of at most 300 characters (`formulas.py::REASON_MAX_CHARS`). The
+  dashboard shows it beside the choice.
+- `runner_up` is another candidate, or `""`. The dashboard offers it as a switch at `SCRIPT_READY`
+  ([`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula)).
+- `repeat_reason` is one sentence, passed only for a formula marked `recent`.
+- `learned_stamp` is `formula_routing.learned.stamp` whenever `learned.active` is `true`, else
+  `""`.
+
+It refuses an unknown or unavailable `formula` or `runner_up`, a video at `TOPIC_APPROVED` whose
+style is not decided, a `recent` formula with no `repeat_reason` on a video with no
+`formula_choice`, a second pick at `TOPIC_APPROVED`, and any status other than `TOPIC_APPROVED` and
+`REVISION_REQUESTED`. At `REVISION_REQUESTED` it replaces the pick, or gives a video scripted
+before picks existed its first one, and refuses a video whose pick is a person's choice. The values it read from the row
+are repeated in the `UPDATE`'s `WHERE`, and the setting and the domain's recent formulas are read
+after the write lock is taken (`BEGIN IMMEDIATE`). With a `learned_stamp` on a video with no
+`formula_choice`, the tool reads the domain's watch figures under the same lock, refuses when the
+stamp differs from the one it works out, and stores `formula_evidence` for `formula`. With no
+`learned_stamp`, or on a video with a `formula_choice`, it checks nothing and stores `''`
+([Learned routing](08-scripting-and-voice.md#learned-routing)).
+
+The result carries `formula_pick`, `formula_runner_up`, `formula_reason`, `chosen_by` (`auto` or
+`person`), the formula's `label` and `words`, `reference`, the file the script-writing skill
+reads, and `learned`, the stored evidence as an object (`{}` when there is none).
 
 ### `add_comment`
 
@@ -375,10 +547,12 @@ domain to one readable call. The skill compares briefs. An unknown `project_id` 
 
 `upsert_project(project_id, name, description=None, is_curriculum_seed=None, status=None,
 default_visual_style=None, default_voice_id=None, default_script_profile_id=None, topic_cap=None,
-default_mascot_id=None)` is a partial update. An omitted field is left alone on a domain that
-exists, and takes the creation default (`""`, `False`, `"active"`, a cap of 100) on a new one. Pass
-`""` to clear `description`, `default_visual_style`, `default_voice_id` or
-`default_script_profile_id`. Each caller names one or two fields (one command converts a domain
+default_mascot_id=None, default_agent_id=None, default_agent_model=None,
+default_agent_effort=None, default_formula_id=None)` is a partial update. An omitted field is left
+alone on a domain that exists, and takes the creation default (`""`, `False`, `"active"`, a cap of
+100) on a new one. Pass `""` to clear `description`, `default_visual_style`, `default_voice_id`,
+`default_script_profile_id`, `default_agent_id`, `default_agent_model`, `default_agent_effort` or
+`default_formula_id`. Each caller names one or two fields (one command converts a domain
 into a curriculum seed, another files a video into it), so a full replace would blank the rest. The
 HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
 
@@ -389,14 +563,22 @@ HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
 - `description` may run to several paragraphs and at most 2000 characters.
 - `default_voice_id` must be on the roster.
 - `default_script_profile_id` must name a `READY` profile that is not deleted.
-- `default_visual_style` set to `illustrated` needs a stored OpenAI key, and set to `cartoon_3d`
-  a renderer whose GPU test passed.
+- `default_visual_style` set to `illustrated`, `under_the_hood` or `case_file_story` needs a stored OpenAI key, and set
+  to `cartoon_3d` a renderer whose GPU test passed.
 - `default_mascot_id` is `""` (inherit the install's default mascot), `"none"` (no mascot even if
   the install has a default) or an approved mascot that is not archived. A new id also needs a
   renderer whose GPU is `working`.
+- `default_formula_id` is a [formula](08-scripting-and-voice.md#formulas) id, or `""` for Auto. It
+  is a person's choice for the domain, so an agent sets it only when a person asked for it.
 
-The description limit and the four defaults are checked only when the value changes. Re-sending a
-stored value that has since become invalid is not refused.
+- `default_agent_id` is a live agent's id, or `""` for the weighted deal. `default_agent_model` is
+  one of that agent's models and is refused without an agent. Changing the agent without passing a
+  model clears the stored model, because it belongs to the other agent's list. `""` for the model
+  is accepted while the stored agent is uninstalled.
+- `default_agent_effort` is one of the five effort levels and needs no agent.
+
+The description limit, the five defaults above it and the agent with its model are checked only
+when the value changes. Re-sending a stored value that has since become invalid is not refused.
 
 ### `set_project_status`
 
@@ -431,8 +613,14 @@ spends ElevenLabs credits. It returns
 writes.
 
 The request is `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/with-timestamps` with
-`{stability: 0.5, similarity_boost: 0.75}` and `output_format: "mp3_44100_128"`.
-`enable_ssml_parsing` is sent only when the outgoing text contains a `<phoneme` tag.
+`{stability: 0.5, similarity_boost: 0.75}` and `output_format: "mp3_44100_128"`. A voice with a
+`speed` other than 1.0 adds it to those settings. `enable_ssml_parsing` is sent only when the
+outgoing text contains a `<phoneme` tag.
+
+A script whose segments name more than one voice is voiced in runs, one request per run of
+consecutive same-voice segments, then joined with `ffmpeg` (see
+[A voice per segment](08-scripting-and-voice.md#a-voice-per-segment)). Every run is checked before
+the first request. `credits` in the result is the sum over the runs.
 
 The voice is the video's own `voice_id`, else the install default, and the model is that voice's
 `model_id` (see [The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice)).
@@ -483,7 +671,7 @@ ledger, including a regeneration that overwrites an earlier image.
 
 ### `generate_image`
 
-`generate_image(video_id, image_name, prompt, aspect_ratio="9:16")` calls
+`generate_image(video_id, image_name, prompt, aspect_ratio="9:16", reference="")` calls
 `POST https://api.openai.com/v1/images/generations` with the model in the `image_model` setting
 (`gpt-image-2.5-flare` by default, or `gpt-image-2.5-sunburst`). A stored `image_model` outside that
 list is refused by name before any request. The result carries the path on disk and the
@@ -493,7 +681,34 @@ OpenAI takes explicit sizes, so three aspect ratios exist: `9:16` is 1088×1920,
 and `16:9` is 1920×1088. Any other `aspect_ratio` is refused before the call. Both dimensions must
 divide by 16, so 1088×1920 stands in for the 1080×1920 frame and is cover-cropped a few pixels per
 side. The scene skill tells the agent to leave the default alone, because any other ratio is
-cropped hard to fit the frame.
+cropped hard to fit the frame. The Under the Hood skill asks for `1:1`, because its plates are drawn
+at their own shape in a band narrower than the frame.
+
+On an `under_the_hood` video the tool refuses a new `image_name` once the video's images folder and
+its calls in flight hold 12 pictures, the pack's `routing.images`, before any request; regenerating an
+existing name is allowed (`server.py::_image_cap_error`). A call reserves its name under a lock before
+the request and releases it when it ends, so parallel calls cannot each take the last slot and a
+failed call does not keep one. A `case_file_story` video is capped the same way at 16 stills. Its lead
+sheet has a slot of its own, so the pack's `routing.images` is 17.
+
+`reference` is for a `case_file_story` video; any other video refuses it. With one, the picture is
+made from a reference picture through `POST https://api.openai.com/v1/images/edits`, with the same
+model and sizes, which keeps the story's lead the same character in every still:
+
+| Call | Reference picture | Result |
+|---|---|---|
+| `image_name="lead"`, `reference="house"` | The house lead's sheet shipped in `mcp/case_file_assets/` | The video's lead sheet, always 16:9. The prompt is the outfit |
+| `reference="lead"`, or another image of the video | That image | A still with the lead painted into the scene the prompt describes, always 9:16 |
+| No `reference` | None | A still with no lead in it, always 9:16 |
+
+On such a video the tool adds the pack's fixed text to the prompt: the lead's description before
+the scene and the painting style after it. It refuses, before any request, a lead sheet asked for
+without `reference="house"`, the house sheet used for another picture, and a reference that is not
+yet a picture of the video, and a picture named `house`, the name kept for the house sheet
+(`server.py::_case_file_image_plan`). The result carries `reference`. A call with a reference
+waits up to 600 seconds for OpenAI's response, as `generate_character` does, and a reserved slot
+lasts 900 seconds, longer than that wait.
+The reasons are in [Case File Story](10-scene-authoring.md#the-lead-and-the-stills).
 
 ### `generate_character`
 
@@ -513,7 +728,20 @@ the catalog rejects it.
 `read_image(video_id, image_name, grid=True)` returns the image itself after a text block. With
 `grid`, it overlays a labelled grid in normalised `[u, v]` coordinates (0 to 1 across and down the
 image), so the agent can read off an anchor point for an overlay. The grid is drawn on a copy in
-memory. `cartoon_still`, `cartoon_read_still` and `render_mascot_sheets` also return pictures.
+memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets`, `render_bean_props`,
+`preview_doodles`, `render_storybook_props` and `preview_terminal_moves` also return pictures.
+
+### `preview_doodles`
+
+`preview_doodles(doodles)` takes the doodles a Whiteboard video defines for itself (`{name:
+strokes}`, the format of `props.whiteboard.doodles`), checks each one with the per-doodle rules
+`write_scene_config` applies (`whiteboard.check_doodles`), and returns the names and a picture: each
+doodle in a labelled cell over a faint 0-100 grid, beside the shipped `coin` and `car` in grey for
+scale. It needs no video and writes nothing. `mcp/doodle_preview.py` draws the sheet with Pillow
+from the same expanded geometry the renderer uses, without the hand wobble, so a call takes
+milliseconds. It exists because no check can tell whether a drawing reads as the object it is meant
+to be ([Whiteboard](10-scene-authoring.md#whiteboard)). The board-level rules (every defined doodle drawn by an item,
+every item's doodle defined) apply only at `write_scene_config`.
 
 ---
 
@@ -530,14 +758,21 @@ one directory deep at most (`story.ts`, `sets/street.ts`), is written beside the
 its own video is refused, because that composed name already means the video's root module.
 
 The file is written beside its target and moved over it, so a failed write leaves the last good
-file. A video that is `RENDER_QUEUED` or `RENDERING` is refused with `status_mismatch`, because the
-renderer bundles the generated tree while it renders.
+file. The temporary file gets the mode a plain `open()` would give it (`0o666` less the umask), so
+the host user can read a scene the root-run MCP container wrote. A video that is `RENDER_QUEUED`
+or `RENDERING` is refused with `status_mismatch`, because the renderer bundles the generated tree
+while it renders.
 
 ### `read_scene_file`
 
 `read_scene_file(scene_name, video_id="", source="generated")` returns a scene's source.
 `scene_name` is the bare stem, or the composed `"<video_id>/<scene_name>"` that `list_scene_files`
-returns. `source="installed"` reads the installed library.
+returns. `source="installed"` reads the installed library. An installed name may also be a path
+inside an installed scene's folder, up to three parts (`beanExplainer/props/lifeProps`,
+`storybookAtlas/props/things`), which is how a Bean Explainer or Storybook Atlas agent reads the
+library props it models its own on, and a Terminal Doc agent reads the kit its moves are built
+from (`terminalDoc/kit`). The path must match
+`_INSTALLED_NESTED` and resolve inside the installed library.
 
 A Cartoon 3D module is named bare with its `video_id` (`sets/street.ts`) or composed as
 `list_scene_files` lists it (`<video_id>/sets/street.ts`). `delete_scene_file` uses the same parser
@@ -555,6 +790,48 @@ A Cartoon 3D module is named bare with its `video_id` (`sets/street.ts`) or comp
 only for a legacy flat scene. It is refused with `status_mismatch` while the video is queued or
 rendering. This tool does not look the video up, so a given `video_id` has its shape checked before
 any path is built, and the target must stay inside `generated/`.
+
+### `render_bean_props`
+
+`render_bean_props(video_id)` renders the props a Bean Explainer video's agent drew for it (the
+config's `customProps`, so `write_scene_config` comes first) and returns the picture after a JSON
+block. Each prop is drawn at rest and over four moments of its first act, with its declared box
+outlined in red, so ink outside the box shows a box too small for the layout checks
+([Bean Explainer](10-scene-authoring.md#bean-explainer)).
+
+- `mcp/bean_preview.py::render_preview` runs `renderer/remotion/bean-tools/render-props.mjs` on
+  software GL in this container. The script writes a bundle entry per call that imports only this
+  video's prop files, so another video's broken scene cannot fail it.
+- The render holds `_heavy_checks_lock`, the lock `validate_job`'s typecheck holds, so previews and
+  typechecks run one at a time; a call that waits longer than `HEAVY_CHECK_WAIT_SECS` returns an
+  error and renders nothing. The render's own timeout (`bean_preview.py::TIMEOUT_SECS`, 240 s) is
+  shorter than that wait, so a `validate_job` queued behind a preview gets its turn. A preview killed
+  on its timeout leaves its bundle folder in `bean-tools/.tmp/`, which the next preview removes.
+
+### `render_storybook_props`
+
+`render_storybook_props(video_id)` renders the props a Storybook Atlas video's agent drew for it (the
+config's `customProps`, so `write_scene_config` comes first) on the book's paper and returns the
+picture after a JSON block. Each prop has a row (two a row above four props): every state with its
+declared box outlined in red and a line under it saying whether the drawing fits the box, the guide
+beside it at the same scale, and its first state again on a night-navy swatch for the dark backdrops
+([Storybook Atlas](10-scene-authoring.md#storybook-atlas)). It runs the same way as
+`render_bean_props`: `bean_preview.py::render_preview` with `script=STORYBOOK_SCRIPT` runs
+`renderer/remotion/storybook-tools/render-props.mjs` on software GL, under the same lock and
+timeouts, and a killed preview leaves its folder in `storybook-tools/.tmp/`.
+
+### `preview_terminal_moves`
+
+`preview_terminal_moves(video_id)` renders the moves a Terminal Doc video's agent wrote for it (the
+config's `customMoves`, so `write_scene_config` comes first) and returns the picture after a JSON
+block. Each move is drawn at four moments, from its first frame to its last, cropped to the slot box
+it draws in and outlined in red, with the text the config gives it, on the video's skin
+([Terminal Doc](10-scene-authoring.md#terminal-doc)). A move draws from the frame it is given, never
+from `useCurrentFrame`, which is what lets one still show four moments of it.
+
+`mcp/terminal_preview.py::render_preview` runs `renderer/remotion/terminal-tools/render-moves.mjs`
+the way [`render_bean_props`](#render_bean_props) runs its script: software GL, a bundle entry per
+call that imports only this video's move files, the same `_heavy_checks_lock` and the same timeouts.
 
 ### `list_scene_files`
 
@@ -587,6 +864,49 @@ It checks:
   `totalFrames`. Its beat sheet (the list of beats, each a frame range) tiles the video in order
   from frame 0 to the last frame with no gap or overlap, because a frame outside every beat is a
   frame no gate judges.
+- A `system_flow` video holds the one installed `SystemFlow` scene, and its diagram passes
+  `mcp/system_flow.py` (boards on word starts, node and row limits, label lengths, icons, an acyclic
+  connected graph, events in a drawable order, no still stretch over 3.5 seconds). No other style may
+  use `SystemFlow`. Its `subtitles` are filled from the style pack when the config has none. The
+  rules are in [System Flow](10-scene-authoring.md#system-flow).
+- A `whiteboard` video holds the one installed `Whiteboard` scene, and its board passes
+  `mcp/whiteboard.py` (regions and items on word starts, slots and fit, doodle names, arrows that
+  cross nothing, a marker that can keep up, no still stretch over 3.5 seconds, a recap long enough
+  for every region's number and at most 8 seconds). No other style may use `Whiteboard`. Its `subtitles` are filled from the style pack when
+  the config has none. The rules are in [Whiteboard](10-scene-authoring.md#whiteboard).
+- A `bean_explainer` video holds the one installed `BeanExplainer` scene, and its sections and shots
+  pass `mcp/bean_explainer.py` (cuts and poses on word starts, the prop library, the video's own
+  props and their files, the other catalogues, a layout with no label over a prop or a bean, labels that do not repeat the narration,
+  no still stretch over 3 seconds). No other style may use `BeanExplainer`. The style pack's caption
+  settings fill every `subtitles` key the config leaves out. The rules are in
+  [Bean Explainer](10-scene-authoring.md#bean-explainer).
+- A `storybook_atlas` video holds the one installed `StorybookAtlas` scene, and its chapters pass
+  `mcp/storybook_atlas.py` (chapters and events on word starts, the catalogue, the video's own props
+  and their files, plates, people and tags that do not stand in one place, no still stretch over 4
+  seconds). No other style may use `StorybookAtlas`. The style pack's caption settings fill every
+  `subtitles` key the config leaves out. The rules are in
+  [Storybook Atlas](10-scene-authoring.md#storybook-atlas).
+- A `terminal_doc` video holds the one installed `TerminalDoc` scene, and its beats and moves pass
+  `mcp/terminal_doc.py` (cuts on word starts, one element per slot, at most 4 on screen, strings that
+  fit, moves in a playable order and finished before the cut, stage text that does not repeat the
+  narration, the video's own moves and their files, no still stretch over 3 seconds). No other style
+  may use `TerminalDoc`. The style pack's caption settings, in the skin's colours, fill every
+  `subtitles` key the config leaves out. The rules are in [Terminal Doc](10-scene-authoring.md#terminal-doc).
+- An `under_the_hood` video holds the one installed `UnderTheHood` scene, and its plates and events
+  pass `mcp/under_the_hood.py` (plates and poses on word starts, at most 12 different photographs,
+  each covering the plate band, pinned points that stay visible through the push, chips inside the
+  band with no overlaps, per-plate limits, no still stretch over 3 seconds). No other style may use
+  `UnderTheHood`. Each plate's `aspect` is read from its photograph, and the style pack's caption
+  settings fill every `subtitles` key the config leaves out. The rules are in
+  [Under the Hood](10-scene-authoring.md#under-the-hood).
+- A `case_file_story` video holds the one installed `CaseFileStory` scene, and its meters and beats
+  pass `mcp/case_file_story.py` (beats, punch-ins and card parts on word starts, at most 16
+  different stills and never the lead sheet, a term card before the one closing choice, text within
+  its limits, no still stretch over 4 seconds). No other style may use `CaseFileStory`. The style
+  pack's caption settings fill every `subtitles` key the config leaves out. The rules are in
+  [Case File Story](10-scene-authoring.md#case-file-story).
+- `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
+  `subtitles.look` is `plain`, `selection` or `fill`.
 
 It records two things in the same transaction as the rename of the staged file into place:
 
@@ -606,7 +926,12 @@ rename puts the previous file back before the lock is released.
 ### `get_timeline`
 
 `get_timeline(video_id, include_words=False)` reads `timeline.json`. Word-level timings are opt-in,
-because the array is large.
+because the array is large. It returns `{video_id, total_frames, fps, first_frame, segments[,
+words]}`. Each segment is `{id, startFrame, endFrame, beat, role}`: `beat` is the formula beat the
+script gave the segment, and `role` is what the picture owes it (`opening`, `turn`, `reopen`,
+`payoff` or `""`). `first_frame` is the formula's line on what the first frame shows, `""` when the
+video has no formula on record. See
+[The opening and the beats](10-scene-authoring.md#the-opening-and-the-beats).
 
 ---
 
@@ -615,7 +940,7 @@ because the array is large.
 ### `validate_job`
 
 `validate_job(video_id)` returns `{passed, errors, warnings}`, and `passed` depends only on
-`errors`. The agent calls it before `submit_render`. It runs eleven checks in order:
+`errors`. The agent calls it before `submit_render`. It runs fourteen checks in order:
 
 1. `audio.mp3`, `timeline.json` and `scene-config.json` exist in `<jobs>/<video_id>/`. The location
    is derived from the id and is not read from the stored path columns. A column that is still empty
@@ -636,18 +961,39 @@ because the array is large.
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
    and the [beat gate](#cartoon_beat_gate) has passed for the source on disk. An open gate is one
    error naming the tool that closes it. A symlink anywhere in the source tree fails the check.
-9. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
+9. A Bean Explainer or Storybook Atlas video's own props: each file its `customProps` names exists
+   and still passes the source rules `write_scene_config` applied, since the agent may have redrawn
+   it since (`server.py::_bean_custom_prop_errors`, `server.py::_storybook_custom_prop_errors`).
+10. A Terminal Doc video's own moves, the same way (`server.py::_td_custom_move_errors`).
+11. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
    `write_scene_config` already checked the cues (see
    [the `mascot` key](10-scene-authoring.md#mascots)).
-10. `npx tsc --noEmit` passes over the whole Remotion project, with a 60-second timeout. The first
-    20 lines of a failure are reported. The check is skipped if `npx` is unavailable. It covers
-    every video's scenes, so a type error in one of them blocks every render.
-11. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
+12. A typecheck of this video's scenes passes: `npx tsc --noEmit -p` with a temporary config that
+    extends `tsconfig.json` and includes the video's own `generated/<video_id>/` directory and any
+    other generated file its config names. `tsc` follows their imports, so the installed components
+    and kits they use are checked too. Other videos' scenes are not: the generated tree holds every
+    video the install has made, and a whole-project check grows with it (60 seconds and 1.6 GB per
+    call on a 349-video install, against about 3 seconds and 0.3 GB for one video). The timeout is
+    60 seconds (`TYPECHECK_TIMEOUT_SECS`). On a timeout the whole process group is killed, because
+    `npx` runs `tsc` as a child of its own, and the error asks the agent to call again. The first
+    20 lines of a failure are reported. The check is skipped if `npx` is unavailable or the video
+    has no generated scenes.
+13. The [text-layout audit](11-rendering-and-review.md#the-text-layout-audit), which is advisory.
     It runs when the checks above found no errors, the `text_layout_audit_enabled` setting is on
     and the video is not Cartoon 3D (a painted canvas has no text rects to measure). Its findings
     go to `warnings`. For a mascot video it also
     reports measured text that may sit under the mascot's box at a sampled frame (the box is the
-    engine's whole canvas, emote headroom included).
+    engine's whole canvas, emote headroom included). For a mixed-scenes video it also measures the
+    pictures on frames 0 and 6.
+14. The [picture checks](10-scene-authoring.md#picture-warnings), which are advisory and read the
+    scene-config and the timeline only: a data-driven style's opening with no subject, and a turn,
+    re-opening or payoff with nothing new on screen near its first word. Their findings go to
+    `warnings` after the audit's, whether or not the audit ran.
+
+Checks 12 and 13 each start a Node process (`tsc`, or a webpack bundle and a browser), and several
+agent sessions can validate at once. The MCP server runs them for one `validate_job` call at a time
+(`_heavy_checks_lock`). A call that waits longer than 300 seconds (`HEAVY_CHECK_WAIT_SECS`) for the
+others returns an error that says nothing is wrong with the video and asks for another call.
 
 ### `submit_render`
 
@@ -806,12 +1152,15 @@ voice to −14 LUFS at the video's length (`cartoon-tools/audio/mix.py`, numpy a
 | `agents` | The live agents, each `{id, name, models, effort, is_default, weight}` |
 | `user_preferences` | The operator's standing preferences (`""` when none) |
 | `illustrated_available`, `cartoon_3d_available`, `mascots_available` | The flags `get_video` returns |
+| `visual_styles` | Every visual style, as [`GET /visual-styles`](05-http-api.md#get-visual-styles) returns them |
 | `spend` | This calendar month's (UTC) spend from the usage ledger |
 | `scene_claims` | Every live scene-work claim |
 
 - Each entry of `elevenlabs_voices` adds a derived `pronunciation_mode`, the one `get_video` would
   report for a video on that voice, so a revision that changes the voice can write for a model
-  `get_video` does not report yet. The stored roster keeps its `{name, voice_id, model_id}` shape.
+  `get_video` does not report yet, and a segment with its own voice is written for that voice's
+  model. The stored roster keeps its `{name, voice_id, model_id}` shape, with a `speed` on a voice
+  that has one.
 - `agents` lets a skill offer a video's agent's models and name the effort level it will otherwise
   run at. The HTTP `/pipeline/status` has no such field. The poller reads `GET /agents`.
 - `spend` is split into videos, research and other agent sessions, with the unpriced-call count and
@@ -880,9 +1229,18 @@ The tool enforces the mining cap itself:
   whether or not they filed anything, so URLs that return nothing do not cost one call each on
   every run. The next run carries on from the next URL.
 - Every prompt lists the 200 most recent video topics, every status included, as already covered.
+- The prompt asks for an angle with each candidate (`angle`, `angle_kind`, `angle_score`). The
+  kinds and the score signals in it are `tubematic_core.angles.prompt_text()`, the text the
+  topic-research skill carries.
+- Candidates are filed strongest first, ranked by `producibility_score` plus `angle_score`.
+- A candidate's kind goes through `clean_kind` like any other, and a score that is fractional,
+  quoted, too large or not a number becomes a whole number or 0. Gemini's reply cannot be asked
+  for again, so an odd shape costs at most that one candidate.
 - A candidate is not filed, and comes back in `not_filed` with its reason, when it repeats an
   existing topic (70% or more of its significant words in common, after dropping stop-words and
-  plurals), scores below 5, or arrives after the target is full.
+  plurals), scores below 5, has no angle, has an angle that is malformed or scores below 5, or
+  arrives after the target is full.
+- Each entry of `topics` in the result carries the angle the topic was filed with.
 - A domain that fills or is paused by another writer during the run ends the run at the first
   refusal. No further URL is asked, and the topics left over come back in `not_filed`.
 - One run happens at a time. A call made while another is running is refused with an error, because

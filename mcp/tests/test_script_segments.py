@@ -137,7 +137,7 @@ def test_update_video_derives_script_from_segments(job_db):
 
     result = server.update_video("vid_1", script_segments=segments, **PUBLISH)
 
-    assert result == {"video_id": "vid_1", "updated_fields": ["script", "publish_title", "publish_description", "script_segments"]}
+    assert {k: result[k] for k in ("video_id", "updated_fields")} == {"video_id": "vid_1", "updated_fields": ["script", "publish_title", "publish_description", "script_segments"]}
     with server._conn() as con:
         row = con.execute("SELECT script, script_segments FROM videos WHERE id = ?", ("vid_1",)).fetchone()
     assert row["script"] == "Hello there. This is segment two."
@@ -160,7 +160,7 @@ def test_update_video_derives_script_stripping_phoneme_tags(job_db):
 
     result = server.update_video("vid_1b", script_segments=segments, **PUBLISH)
 
-    assert result == {"video_id": "vid_1b", "updated_fields": ["script", "publish_title", "publish_description", "script_segments"]}
+    assert {k: result[k] for k in ("video_id", "updated_fields")} == {"video_id": "vid_1b", "updated_fields": ["script", "publish_title", "publish_description", "script_segments"]}
     with server._conn() as con:
         row = con.execute("SELECT script FROM videos WHERE id = ?", ("vid_1b",)).fetchone()
     assert row["script"] == "The word Madison is here."
@@ -222,7 +222,7 @@ def test_update_video_derives_script_keeping_respell_authored_word(job_db):
 
     result = server.update_video("vid_r1", script_segments=segments, **PUBLISH)
 
-    assert result == {"video_id": "vid_r1", "updated_fields": ["script", "publish_title", "publish_description", "script_segments"]}
+    assert {k: result[k] for k in ("video_id", "updated_fields")} == {"video_id": "vid_r1", "updated_fields": ["script", "publish_title", "publish_description", "script_segments"]}
     with server._conn() as con:
         row = con.execute("SELECT script FROM videos WHERE id = ?", ("vid_r1",)).fetchone()
     assert row["script"] == "Only Vhagar could match it."
@@ -312,7 +312,7 @@ def test_update_video_flat_script_still_works(job_db):
 
     result = server.update_video("vid_5", script="A plain flat script.", **PUBLISH)
 
-    assert result == {"video_id": "vid_5", "updated_fields": ["script", "publish_title", "publish_description"]}
+    assert {k: result[k] for k in ("video_id", "updated_fields")} == {"video_id": "vid_5", "updated_fields": ["script", "publish_title", "publish_description"]}
     with server._conn() as con:
         row = con.execute("SELECT script, script_segments FROM videos WHERE id = ?", ("vid_5",)).fetchone()
     assert row["script"] == "A plain flat script."

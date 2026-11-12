@@ -90,6 +90,12 @@ you also set:
 You cannot add or remove a model on that tab, because the dashboard has no CLI to check one with.
 Use `--install-agent` for that.
 
+To give one domain's videos to one agent, press **Edit defaults** on the domain's row on the
+**Topics** page and choose the **Agent**. You can also choose a **Model** from that agent's list
+and an **Effort**. Every new video in the domain then starts on that agent, and the shares apply
+to the domains you leave on **Automatic**. If you uninstall the agent, the domain's new videos go
+back to being shared.
+
 To change one video's agent, model or effort, use the pickers on the video at Topic Proposed, Script
 Ready or Video Ready. Picking a different agent resets the model to that agent's default.
 
@@ -149,9 +155,11 @@ Claude Code and OpenCode have these slash commands:
 Codex has no slash commands. Ask in plain words, for example "show the Tubematic pipeline status".
 It has the same tools and skills.
 
-`/tubematic-submit-new-job` differs from the New Video page in two ways. The agent scores the topic
-first and declines one that scores below 5, with advice on how to reframe it. It also files the
-video in a matching domain, where the New Video page files it under **Manual Videos**.
+`/tubematic-submit-new-job` differs from the New Video page in three ways. The agent scores the topic
+first and declines one that scores below 5, with advice on how to reframe it. It looks for the
+topic's [angle](03-using-tubematic.md#the-angle) and files it with the video; a topic with no angle
+is filed without one. It also files the video in a matching domain, where the New Video page files
+it under **Manual Videos**.
 
 ### Getting help from the agent
 

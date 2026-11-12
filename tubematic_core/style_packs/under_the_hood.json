@@ -1,0 +1,101 @@
+{
+  "id": "under_the_hood",
+  "label": "Under the Hood",
+  "order": 90,
+  "experimental": true,
+  "renderer": "dom",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-under-the-hood",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": true,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "openai_key": "OpenAI API key not set. The Under the Hood visual style is built on generated close-up photographs of the object, and only OpenAI makes them. Add an OpenAI key on the dashboard Settings page, or choose another visual style.",
+    "mascot": "Mascots are not available in the Under the Hood style: it has its own presenter in the corner a mascot would use. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is an Under the Hood explainer, and the following are its intended, approved look: a near-black canvas; captions near the top that appear word by word, the word being spoken in bold white and the earlier words of the line in grey, with a thin blue selection box and two small round handles around the key word; a photoreal close-up (macro) photograph of the object filling the middle of the frame, fading into the black at its top and bottom edges and pushing in slowly the whole time; short capital labels in small dark chips joined to a point on the photograph by a thin straight line with a dot at its end; thin blue or gold boxes and brackets drawn over parts of the photograph; thin glowing gold arcs that rise from one part of the photograph and bend toward another, with a few sparks; a fast zoom into a point of the photograph that cuts to a closer photograph; monospace numbers that tick to new values (changed digits bold white, unchanged ones grey); a huge numeral with a capital label under it; a thin line chart drawing itself left to right on a plain dark panel with the latest value shown large; tiny grey footnotes such as 'Magnified illustration' or 'Values illustrative'; one flat cartoon presenter with a thick dark outline in the bottom right corner, cut off at the waist, swapping whole poses in one frame and moving only the mouth while the narration speaks. Do NOT report any of these as defects, and do not suggest adding more characters, smooth character animation, background music cues or texture: their absence is the style.\n- Do report: a label or line pointing at a part of the photograph that is not the part the label names, a photograph that does not show what the narration describes at that moment (the wrong object, a mangled cross-section, garbled text or a logo printed in the picture), a label, number or chip overlapping another or cut off at the frame edge, a caption over a label, the presenter covering a label or a number, text too small to read on a phone, a pose that contradicts the line, and a stretch of more than about three seconds where nothing on screen changes apart from the slow push.\n",
+  "captions": {
+    "look": "selection",
+    "background": "none",
+    "position": 0.19,
+    "color": "#F7F7F7",
+    "fontFamily": "'Space Grotesk', system-ui, sans-serif",
+    "fontSize": 60,
+    "maxWords": 4
+  },
+  "script": "Every beat's `visual` is a **close-up** brief: which part of the physical object is in the photograph, and what is drawn on it (\"macro of the screen's edge, label GLASS and ELECTRODES, gold field arcs bend up toward the fingertip\"). The video is one real object taken apart by the camera, so every beat shows a part of that object, a number about it, or a chart of a value changing over time; a role (\"the user\") is the narrator talking to you, never a figure on screen.\n\nThe narration walks into one physical thing: start from the object the viewer holds or knows, then go one layer deeper per sentence (the glass, the grid under it, the charge in the grid), naming each part the moment it is shown, because each name becomes a label pinned to it. Quote the real numbers (a voltage, a size in micrometres, a price, a percentage) and say them as numerals, because each becomes a ticking counter or a big stat. When a value changed over time, say the start and the end (\"from 2 dollars to 9 in a year\"), which becomes a chart. Plan at most twelve photographs for the whole video: a new photograph when the camera goes a layer deeper, not one per sentence. Do not write beats about people, places or history that has nothing physical to show; this style has only the object and the presenter.",
+  "picture": {
+    "opening": "Plate 1 is the photograph of the part the first sentence names, pushing in from frame 0, with an outline or arcs drawing on it.",
+    "turn": "A new plate on the first word of a turn or a re-opening (a zoom through the part where it goes inside), or an outline, arcs or a stat arriving at that moment.",
+    "payoff": "The plate with the answer, its stat or chart the largest element on it.",
+    "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
+  },
+  "routing": {
+    "best_for": [
+      "how a physical device or one of its parts really works inside (a touchscreen, a keyboard switch, a battery, a lock, an SSD, a fridge)",
+      "computer hardware and gadgets taken apart layer by layer",
+      "everyday physics of one object you can hold, shown magnified",
+      "the real numbers behind one object: sizes, voltages, prices and percentages that tick or chart",
+      "a price or market figure tied to one physical thing (why RAM, eggs or gold got expensive)"
+    ],
+    "avoid_for": [
+      "abstract ideas with nothing physical to magnify (maths, logic, psychology)",
+      "components passing requests, packets or data between them (System Flow draws those)",
+      "reasoning or a calculation worked out step by step on paper (Whiteboard fits it)",
+      "a product, person or place the viewer came to see whole, with no inside to open (Motion Graphics fits it)",
+      "a process acted out by generic roles (Stick Explainer fits it)",
+      "stories with characters, history told as events, or lists of everyday habits",
+      "a list of unrelated facts, tips or trivia about a thing that never opens it up (Bean Explainer fits it)"
+    ],
+    "signals": [
+      "the subject is one physical device, part or material",
+      "the title asks how X really works, or what is inside X",
+      "a magnified view, a cross-section or a layer under the surface would reveal the mechanism",
+      "the script quotes measured numbers about the object (micrometres, volts, percent, a price)",
+      "a value about the object changes over time and can be charted"
+    ],
+    "moods": [
+      "technical",
+      "energetic",
+      "premium",
+      "curious"
+    ],
+    "images_per_video": "up to 12 generated close-up photographs",
+    "images": 12
+  },
+  "extra": {
+    "poses": [
+      "idle",
+      "point",
+      "present",
+      "think",
+      "surprise",
+      "hands_on_head",
+      "thumbs",
+      "shrug",
+      "explain"
+    ],
+    "events": [
+      "callout",
+      "outline",
+      "arcs",
+      "counters",
+      "stat",
+      "chart",
+      "footnote",
+      "pose"
+    ],
+    "tones": [
+      "white",
+      "blue",
+      "gold"
+    ]
+  }
+}

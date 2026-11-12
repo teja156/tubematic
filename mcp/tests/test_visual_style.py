@@ -25,6 +25,7 @@ import json
 import pytest
 
 import server
+from sample_angle import ANGLE
 from builtin_gpu import store_builtin_probe
 
 
@@ -104,7 +105,7 @@ def test_visual_style_is_frozen_after_the_topic_checkpoint(db):
 
 def test_an_unknown_visual_style_is_refused(db):
     _video("vid_c")
-    result = server.update_video("vid_c", visual_style="whiteboard")
+    result = server.update_video("vid_c", visual_style="watercolour")
     assert "Invalid visual_style" in result["error"]
     assert _read("vid_c", "visual_style") == "auto"
 
@@ -258,7 +259,7 @@ def test_only_a_forced_motion_graphics_excludes_figures(db):
 
 def test_a_curriculum_video_inherits_its_domains_default(db):
     _project("proj_seed", default_style="stick")
-    result = server.create_video("proj_seed", "A topic", "curriculum", 7)
+    result = server.create_video("proj_seed", "A topic", "curriculum", 7, **ANGLE)
     assert result["visual_style"] == "stick"
     assert _read(result["video_id"], "visual_style") == "stick"
 
@@ -268,21 +269,21 @@ def test_a_trending_video_in_the_same_domain_does_not_inherit(db):
     strategy that produces a series. A one-off filed into the same domain
     starts at auto like any other."""
     _project("proj_seed2", default_style="stick")
-    result = server.create_video("proj_seed2", "A topic", "trending", 7)
+    result = server.create_video("proj_seed2", "A topic", "trending", 7, **ANGLE)
     assert result["visual_style"] == "auto"
 
 
 def test_a_domain_with_no_default_leaves_curriculum_videos_on_auto(db):
     _project("proj_plain", default_style="")
-    result = server.create_video("proj_plain", "A topic", "curriculum", 7)
+    result = server.create_video("proj_plain", "A topic", "curriculum", 7, **ANGLE)
     assert result["visual_style"] == "auto"
 
 
 def test_a_corrupt_stored_default_falls_back_to_auto(db):
     """A hand-edited or downgraded row must not be able to make create_video
     write a style nothing understands."""
-    _project("proj_bad", default_style="whiteboard")
-    result = server.create_video("proj_bad", "A topic", "curriculum", 7)
+    _project("proj_bad", default_style="watercolour")
+    result = server.create_video("proj_bad", "A topic", "curriculum", 7, **ANGLE)
     assert result["visual_style"] == "auto"
 
 
@@ -692,3 +693,36 @@ def test_resolved_renderer_needs_the_gpu_too_and_only_auto_resolves(db):
     _video("vid_r4")
     assert "error" not in server.update_video("vid_r4", resolved_renderer="dom")
     assert server.get_video("vid_r4")["resolved_renderer"] == "dom"
+
+
+def test_the_mcp_server_uses_the_shared_style_rules():
+    """Style packs (TMDEV-196): the MCP server imports the style list and its
+    gates from tubematic_core.visual_styles instead of carrying a copy, so the
+    agent and the dashboard cannot disagree about what a style allows."""
+    from tubematic_core import visual_styles as tvs
+    for name in ("VISUAL_STYLES", "CANVAS_BY_STYLE", "RENDERERS", "effective_canvas", "figures_allowed",
+                 "line_art_allowed", "characters_allowed", "cartoon_3d_gpu_error", "gpu_probe_status",
+                 "ILLUSTRATED_NEEDS_OPENAI_KEY", "CARTOON3D_NEEDS_GPU", "CARTOON3D_GPU_UNKNOWN"):
+        assert getattr(server, name) is getattr(tvs, name), name
+
+
+def test_get_video_names_the_skill_that_authors_the_style(db):
+    vid = _video()
+    assert server.get_video(vid)["style"]["authoring_skill"] == "tubematic-scene-config"
+    assert server.update_video(vid, visual_style="system_flow").get("error") is None
+    style = server.get_video(vid)["style"]
+    assert style["authoring_skill"] == "tubematic-system-flow"
+    assert style["canvas"] == "dark" and style["allows"]["figures"] is False
+
+
+def test_get_video_names_the_whiteboard_skill(db):
+    vid = _video()
+    assert server.update_video(vid, visual_style="whiteboard").get("error") is None
+    style = server.get_video(vid)["style"]
+    assert style["authoring_skill"] == "tubematic-whiteboard"
+    assert style["canvas"] == "light" and style["allows"]["figures"] is False
+
+
+def test_the_pipeline_status_lists_every_style(db):
+    rows = server.get_pipeline_status()["visual_styles"]
+    assert [r["id"] for r in rows] == list(server.VISUAL_STYLES)

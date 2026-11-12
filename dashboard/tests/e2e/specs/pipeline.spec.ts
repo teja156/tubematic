@@ -380,6 +380,42 @@ test.describe("Pipeline board", () => {
       const title = await actionCard.getByTitle("Click to open").boundingBox();
       expect(title!.width).toBeGreaterThanOrEqual(200);
     });
+
+    // The angle is one more line in the title column and two more pieces in
+    // the meta line. Neither may widen the column or push a button off.
+    test("a topic row shows its angle and still fits at 1280px", async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      const angle = "A connection costs three packets before one byte of the page moves, and a "
+        + "flood of connections left at the second packet is enough to take a server down, "
+        + "which is the longest kind of sentence an angle is allowed to be on a narrow row.";
+      const video = await createVideo({
+        topic: `[${uid}] Topic row angle`, angle, angle_kind: "broken_expectation", angle_score: 8,
+      });
+
+      await page.goto("/");
+      const actionCard = page.getByTestId(`action-card-${video.id}`);
+      await expect(actionCard).toBeVisible({ timeout: 10_000 });
+      const line = actionCard.getByTestId(`angle-line-${video.id}`);
+      await expect(line).toHaveText(angle);
+      await expect(actionCard.getByTestId(`angle-meta-${video.id}`)).toContainText("Angle 8/10");
+      await expect(actionCard.getByTestId(`angle-meta-${video.id}`)).toContainText("broken expectation");
+      // Clipped to the title column: a long sentence is one row, not a wider card.
+      const lineBox = await line.boundingBox();
+      const titleBox = await actionCard.getByTitle("Click to open").boundingBox();
+      expect(lineBox!.width).toBeLessThanOrEqual(titleBox!.width + 1);
+      expect(lineBox!.height).toBeLessThan(24);
+      for (const name of ["Approve", "Reject", "Revise"]) {
+        const box = await actionCard.getByRole("button", { name }).boundingBox();
+        expect(box!.x + box!.width).toBeLessThanOrEqual(1280);
+      }
+      expect(titleBox!.width).toBeGreaterThanOrEqual(200);
+
+      // Once the topic is decided the row drops the angle.
+      await patchVideo(video.id, { status: "SCRIPT_READY", script: "Words." });
+      await page.reload();
+      await expect(actionCard).toBeVisible({ timeout: 10_000 });
+      await expect(actionCard.getByTestId(`angle-line-${video.id}`)).toHaveCount(0);
+    });
   });
 
   test("VIDEO_READY card in ActionPane shows Watch + Approve + Revise buttons", async ({ page }) => {
@@ -485,6 +521,30 @@ test.describe("Pipeline board", () => {
       });
       expect(res.status).toBe(409);
       expect((await getVideo(video.id)).visual_style).toBe("stick");
+    });
+
+    test("the picker offers the styles the API serves, System Flow and Whiteboard included, and approving with it persists", async ({ page }) => {
+      // The list comes from GET /visual-styles (the style packs), not from a
+      // copy in the dashboard: a new pack must appear here with no dashboard edit.
+      const res = await fetch(`${BASE}/visual-styles`, { headers: { ...API_AUTH } });
+      const served = (await res.json()).styles.map((s: { id: string }) => s.id);
+      expect(served).toContain("system_flow");
+      expect(served).toContain("whiteboard");
+
+      const video = await createVideo({ topic: `[${uid}] System Flow pick` });
+      await page.goto("/");
+      const actionCard = page.getByTestId(`action-card-${video.id}`);
+      await expect(actionCard).toBeVisible({ timeout: 10_000 });
+      const styleSelect = actionCard.getByTestId(`style-select-${video.id}`);
+      await expect(styleSelect.locator('option[value="system_flow"]')).toHaveText("System Flow", { timeout: 10_000 });
+      await expect(styleSelect.locator('option[value="whiteboard"]')).toHaveText("Whiteboard");
+      expect(await styleSelect.locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value)))
+        .toEqual(served);
+
+      await styleSelect.selectOption("system_flow");
+      await actionCard.getByRole("button", { name: "Approve" }).click();
+      await expect(actionCard).not.toBeVisible({ timeout: 5_000 });
+      expect((await getVideo(video.id)).visual_style).toBe("system_flow");
     });
 
     test("Illustrated is disabled and refused with no OpenAI key, and offered once one is stored", async ({ page }) => {

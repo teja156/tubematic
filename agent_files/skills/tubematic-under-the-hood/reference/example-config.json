@@ -1,0 +1,328 @@
+{
+ "totalFrames": 858,
+ "canvas": "dark",
+ "subtitles": {
+  "emphasis": [
+   4,
+   15,
+   28,
+   36,
+   58
+  ]
+ },
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "UnderTheHood",
+   "startFrame": 0,
+   "durationInFrames": 858,
+   "props": {
+    "underTheHood": {
+     "plates": [
+      {
+       "start": 0,
+       "image": "/public/vid_example01/images/finger-over-glass.png",
+       "events": [
+        {
+         "type": "pose",
+         "frame": 17,
+         "pose": "point"
+        },
+        {
+         "type": "footnote",
+         "frame": 30,
+         "text": "Magnified illustration"
+        },
+        {
+         "type": "callout",
+         "frame": 54,
+         "text": "Finger",
+         "at": [
+          0.43,
+          0.43
+         ],
+         "chip": [
+          0.18,
+          0.3
+         ]
+        },
+        {
+         "type": "callout",
+         "frame": 69,
+         "text": "Glass",
+         "at": [
+          0.62,
+          0.52
+         ],
+         "chip": [
+          0.78,
+          0.62
+         ],
+         "tone": "blue"
+        },
+        {
+         "type": "pose",
+         "frame": 98,
+         "pose": "explain"
+        }
+       ]
+      },
+      {
+       "start": 123,
+       "image": "/public/vid_example01/images/screen-layers.png",
+       "focus": [
+        0.5,
+        0.48
+       ],
+       "enter": "zoom",
+       "through": [
+        0.44,
+        0.48
+       ],
+       "events": [
+        {
+         "type": "callout",
+         "frame": 146,
+         "text": "Glass",
+         "at": [
+          0.55,
+          0.33
+         ],
+         "chip": [
+          0.2,
+          0.31
+         ]
+        },
+        {
+         "type": "pose",
+         "frame": 146,
+         "pose": "present"
+        },
+        {
+         "type": "outline",
+         "frame": 178,
+         "region": [
+          0.12,
+          0.42,
+          0.88,
+          0.52
+         ],
+         "tone": "gold",
+         "shape": "bracket"
+        },
+        {
+         "type": "callout",
+         "frame": 197,
+         "text": "Electrodes",
+         "at": [
+          0.62,
+          0.47
+         ],
+         "chip": [
+          0.68,
+          0.66
+         ],
+         "tone": "gold"
+        },
+        {
+         "type": "stat",
+         "frame": 233,
+         "value": 5,
+         "suffix": "µm",
+         "label": "Line width",
+         "place": "upper"
+        },
+        {
+         "type": "pose",
+         "frame": 279,
+         "pose": "surprise"
+        }
+       ]
+      },
+      {
+       "start": 299,
+       "image": "/public/vid_example01/images/electrode-grid.png",
+       "focus": [
+        0.5,
+        0.47
+       ],
+       "events": [
+        {
+         "type": "pose",
+         "frame": 309,
+         "pose": "explain"
+        },
+        {
+         "type": "arcs",
+         "frame": 341,
+         "from": [
+          0.49,
+          0.64
+         ],
+         "to": [
+          0.49,
+          0.36
+         ],
+         "count": 7
+        },
+        {
+         "type": "callout",
+         "frame": 352,
+         "text": "Field",
+         "at": [
+          0.69,
+          0.47
+         ],
+         "chip": [
+          0.84,
+          0.36
+         ],
+         "tone": "gold"
+        },
+        {
+         "type": "pose",
+         "frame": 403,
+         "pose": "point"
+        },
+        {
+         "type": "counters",
+         "frame": 456,
+         "values": [
+          {
+           "from": 100,
+           "to": 100
+          },
+          {
+           "from": 100,
+           "to": 81
+          },
+          {
+           "from": 100,
+           "to": 62
+          },
+          {
+           "from": 100,
+           "to": 84
+          }
+         ]
+        },
+        {
+         "type": "outline",
+         "frame": 469,
+         "region": [
+          0.44,
+          0.42,
+          0.54,
+          0.52
+         ],
+         "tone": "blue"
+        }
+       ]
+      },
+      {
+       "start": 515,
+       "events": [
+        {
+         "type": "footnote",
+         "frame": 525,
+         "text": "Values illustrative"
+        },
+        {
+         "type": "pose",
+         "frame": 536,
+         "pose": "think"
+        },
+        {
+         "type": "chart",
+         "frame": 536,
+         "points": [
+          100,
+          100,
+          99,
+          97,
+          92,
+          81,
+          70,
+          64,
+          62,
+          63,
+          70,
+          84,
+          96,
+          100
+         ],
+         "label": "Signal at each crossing",
+         "suffix": "%",
+         "chip": "-38%",
+         "duration": 120
+        },
+        {
+         "type": "pose",
+         "frame": 603,
+         "pose": "explain"
+        },
+        {
+         "type": "pose",
+         "frame": 669,
+         "pose": "point"
+        }
+       ]
+      },
+      {
+       "start": 721,
+       "image": "/public/vid_example01/images/finger-over-glass.png",
+       "focus": [
+        0.45,
+        0.48
+       ],
+       "zoom": 1.3,
+       "events": [
+        {
+         "type": "arcs",
+         "frame": 747,
+         "from": [
+          0.47,
+          0.53
+         ],
+         "to": [
+          0.43,
+          0.44
+         ],
+         "count": 5
+        },
+        {
+         "type": "stat",
+         "frame": 760,
+         "value": 2,
+         "suffix": "pF",
+         "label": "The drop you cause",
+         "place": "lower"
+        },
+        {
+         "type": "callout",
+         "frame": 801,
+         "text": "Your touch",
+         "at": [
+          0.42,
+          0.44
+         ],
+         "chip": [
+          0.23,
+          0.3
+         ],
+         "tone": "blue"
+        },
+        {
+         "type": "pose",
+         "frame": 812,
+         "pose": "thumbs"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

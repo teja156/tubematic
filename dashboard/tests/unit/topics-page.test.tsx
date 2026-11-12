@@ -4,6 +4,13 @@ import TopicsPage from "@/app/topics/page";
 
 const MINING_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
+// A domain's defaults sit in a panel under its row, rendered only while the row
+// is open. Every case that reads or changes a row's picker opens it first.
+async function openDefaults(id = "seed-1") {
+  const { fireEvent } = await import("@testing-library/react");
+  fireEvent.click(await waitFor(() => screen.getByTestId(`domain-edit-${id}`)));
+}
+
 function mockFetch({ miningOk = true, miningUrls = [MINING_URL] as string[],
                      savedUrls = undefined as string[] | undefined,
                      failBody = {} as Record<string, unknown> } = {}) {
@@ -96,6 +103,88 @@ describe("TopicsPage — mining sources", () => {
   });
 });
 
+describe("TopicsPage — removing a mining URL", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("applies at once and offers an Undo that puts the list back", async () => {
+    let stored = [MINING_URL];
+    const posts: string[][] = [];
+    vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/research/mining-sources")) {
+        if (init?.method === "POST") {
+          stored = JSON.parse(String(init.body)).youtube_urls;
+          posts.push(stored);
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ youtube_urls: stored }) } as Response);
+      }
+      if (urlStr.includes("/research/strategies")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ strategies: ["mining"] }) } as Response);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as Response);
+    });
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: `Remove ${MINING_URL}` }));
+    await waitFor(() => expect(screen.getByTestId("toast-success").textContent)
+      .toContain(`Removed ${MINING_URL}.`));
+    expect(screen.queryByTestId("mining-url-item")).toBeNull();
+    expect(screen.getByTestId("mining-save-status").textContent).toBe("✓ Saved");
+
+    // A URL added after the removal stays when the removal is undone.
+    const later = "https://www.youtube.com/watch?v=abcdefghijk";
+    fireEvent.change(screen.getByTestId("mining-url-input"), { target: { value: later } });
+    fireEvent.click(screen.getByTestId("mining-url-add"));
+    await waitFor(() => expect(screen.getAllByTestId("mining-url-item")).toHaveLength(1));
+
+    fireEvent.click(screen.getByTestId("toast-action"));
+    await waitFor(() => expect(screen.getAllByTestId("mining-url-item")).toHaveLength(2));
+    expect(posts).toEqual([[], [later], [MINING_URL, later]]);
+  });
+});
+
+describe("TopicsPage — mining saves run one at a time", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("a second change waits for the first to be answered", async () => {
+    const second = "https://www.youtube.com/watch?v=abcdefghijk";
+    const answers: Array<() => void> = [];
+    const posts: string[][] = [];
+    vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/research/mining-sources")) {
+        if (init?.method === "POST") {
+          const list = JSON.parse(String(init.body)).youtube_urls as string[];
+          posts.push(list);
+          return new Promise((resolve) => answers.push(() => resolve(
+            { ok: true, json: () => Promise.resolve({ youtube_urls: list }) } as Response)));
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ youtube_urls: [MINING_URL, second] }) } as Response);
+      }
+      if (urlStr.includes("/research/strategies")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ strategies: ["mining"] }) } as Response);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as Response);
+    });
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: `Remove ${MINING_URL}` }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    // The list is disabled while saving; the Undo in the toast is not.
+    answers[0]();
+    await waitFor(() => expect(screen.getByTestId("toast-action")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: `Remove ${second}` }));
+    fireEvent.click(screen.getByTestId("toast-action"));
+    await waitFor(() => expect(posts).toHaveLength(2));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(posts).toHaveLength(2);
+    answers[1]();
+    await waitFor(() => expect(posts).toHaveLength(3));
+    answers[2]();
+    expect(posts).toEqual([[second], [], [MINING_URL]]);
+  });
+});
+
 // Pause is a curriculum-seed control: for any other domain the pause could
 // never stop the subject being researched, only which row it was filed into.
 describe("TopicsPage — domain pause", () => {
@@ -156,14 +245,15 @@ describe("TopicsPage — domain pause", () => {
     expect(screen.getByTestId("toggle-domain-seed-1").textContent).toBe("Resume topic generation");
   });
 
-  it("reports a refused pause and leaves the domain as it was", async () => {
+  it("reports a refused pause beside the domain and leaves it as it was", async () => {
     mockDomains(false);
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     render(<TopicsPage />);
     const { fireEvent } = await import("@testing-library/react");
     fireEvent.click(await waitFor(() => screen.getByTestId("toggle-domain-seed-1")));
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
-    expect(alertSpy.mock.calls[0][0]).toContain("not a curriculum seed");
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toContain("not a curriculum seed"));
+    expect(alertSpy).not.toHaveBeenCalled();
     expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("ACTIVE");
   });
 });
@@ -205,6 +295,7 @@ describe("TopicsPage — Illustrated default", () => {
   it("disables it in both pickers when no OpenAI key is stored", async () => {
     mockWithKey("");
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => expect(illustratedOption("domain-style-seed-1").disabled).toBe(true));
     expect(illustratedOption("domain-style-seed-1").textContent).toMatch(/needs an OpenAI key/);
     expect(illustratedOption("domain-style-select").disabled).toBe(true);
@@ -213,6 +304,7 @@ describe("TopicsPage — Illustrated default", () => {
   it("offers it when a key is stored", async () => {
     mockWithKey("••••••••abcd");
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => screen.getByTestId("domain-style-seed-1"));
     await waitFor(() => expect(illustratedOption("domain-style-seed-1").disabled).toBe(false));
     expect(illustratedOption("domain-style-select").disabled).toBe(false);
@@ -263,6 +355,7 @@ describe("TopicsPage — default voice", () => {
   it("shows the domain's default voice with each voice's model", async () => {
     mockDomains();
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-voice-seed-1") as HTMLSelectElement);
     await waitFor(() => expect(select.value).toBe("a1"));
     expect([...select.options].map((o) => o.textContent)).toContain("Adam · eleven_v3");
@@ -272,19 +365,22 @@ describe("TopicsPage — default voice", () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-voice-seed-1"));
     await waitFor(() => expect((select as HTMLSelectElement).value).toBe("a1"));
     fireEvent.change(select, { target: { value: "r1" } });
     await waitFor(() => expect(postedProject(spy)).toEqual({
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "r1",
-      default_script_profile_id: "", default_mascot_id: "", topic_cap: 300 }));
+      default_script_profile_id: "", default_mascot_id: "", default_agent_id: "", default_agent_model: "",
+      default_agent_effort: "", default_formula_id: "", topic_cap: 300 }));
   });
 
   it("changing the style keeps the default voice", async () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
     fireEvent.change(select, { target: { value: "auto" } });
     await waitFor(() => expect(postedProject(spy).default_voice_id).toBe("a1"));
@@ -293,6 +389,7 @@ describe("TopicsPage — default voice", () => {
   it("keeps a default voice that has left the roster visible as removed", async () => {
     mockDomains({ ...DOMAIN, default_voice_id: "gone" });
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => expect(screen.getByRole("option", { name: "gone (removed)" })).toBeTruthy());
   });
 
@@ -300,6 +397,7 @@ describe("TopicsPage — default voice", () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => expect(screen.getAllByRole("option", { name: "Adam · eleven_v3" }).length).toBe(2));
     fireEvent.change(screen.getByTestId("domain-voice-select"), { target: { value: "a1" } });
     fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
@@ -357,6 +455,7 @@ describe("TopicsPage — default script profile", () => {
   it("labels all three domain pickers", async () => {
     mockDomains();
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => screen.getByTestId("domain-profile-seed-1"));
     const row = screen.getByTestId("domain-row-seed-1");
     for (const label of ["Visual style", "Default voice", "Script profile"]) {
@@ -369,6 +468,7 @@ describe("TopicsPage — default script profile", () => {
   it("offers only READY profiles and shows the domain's default", async () => {
     mockDomains();
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-profile-seed-1") as HTMLSelectElement);
     await waitFor(() => expect(select.value).toBe("p-ready"));
     const names = [...select.options].map((o) => o.textContent);
@@ -380,19 +480,22 @@ describe("TopicsPage — default script profile", () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-profile-seed-1") as HTMLSelectElement);
     await waitFor(() => expect(select.value).toBe("p-ready"));
     fireEvent.change(select, { target: { value: "" } });
     await waitFor(() => expect(postedProject(spy)).toEqual({
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "",
-      default_script_profile_id: "", default_mascot_id: "", topic_cap: 300 }));
+      default_script_profile_id: "", default_mascot_id: "", default_agent_id: "", default_agent_model: "",
+      default_agent_effort: "", default_formula_id: "", topic_cap: 300 }));
   });
 
   it("changing the style keeps the default profile", async () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
     fireEvent.change(select, { target: { value: "auto" } });
     await waitFor(() => expect(postedProject(spy).default_script_profile_id).toBe("p-ready"));
@@ -403,23 +506,27 @@ describe("TopicsPage — default script profile", () => {
     // is a UUID in a real install and must not be shown in its place.
     mockDomains({ ...DOMAIN, default_script_profile_id: "p-gone" });
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => expect(screen.getByRole("option", { name: "Unavailable profile" })).toBeTruthy());
   });
 
   // Profile names are user-supplied with no length limit, and a <select> is as
-  // wide as its longest option: unbounded, one long name pushed the controls
-  // after it off-screen, where overflow-x: hidden made them unreachable.
-  it("caps the profile picker's width on the row and in the add form", async () => {
+  // wide as its longest option: sized by its content, one long name pushed the
+  // controls after it off-screen, where overflow-x: hidden made them
+  // unreachable. Each picker fills its field instead.
+  it("sizes the profile picker to its field, on the row and in the add form", async () => {
     mockDomains();
     render(<TopicsPage />);
+    await openDefaults();
     const row = await waitFor(() => screen.getByTestId("domain-profile-seed-1"));
-    expect((row as HTMLSelectElement).style.maxWidth).toBe("220px");
-    expect((screen.getByTestId("domain-profile-select") as HTMLSelectElement).style.maxWidth).toBe("220px");
+    expect((row as HTMLSelectElement).style.width).toBe("100%");
+    expect((screen.getByTestId("domain-profile-select") as HTMLSelectElement).style.width).toBe("100%");
   });
 
   it("names a held default that is listed but not READY", async () => {
     mockDomains({ ...DOMAIN, default_script_profile_id: "p-pending" });
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => expect(screen.getByRole("option", { name: "Still building (unavailable)" })).toBeTruthy());
   });
 
@@ -427,6 +534,7 @@ describe("TopicsPage — default script profile", () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => expect(screen.getAllByRole("option", { name: "Fireship" }).length).toBe(2));
     fireEvent.change(screen.getByTestId("domain-profile-select"), { target: { value: "p-ready" } });
     fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
@@ -477,6 +585,7 @@ describe("TopicsPage — default mascot", () => {
   it("offers install default, None and each pickable mascot", async () => {
     mockDomains();
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1") as HTMLSelectElement);
     await waitFor(() => expect([...select.options].map((o) => o.value)).toEqual(["", "none", "tubi"]));
     expect(select.value).toBe("tubi");
@@ -488,19 +597,22 @@ describe("TopicsPage — default mascot", () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1"));
     await waitFor(() => expect((select as HTMLSelectElement).value).toBe("tubi"));
     fireEvent.change(select, { target: { value: "none" } });
     await waitFor(() => expect(postedProject(spy)).toEqual({
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "",
-      default_script_profile_id: "", default_mascot_id: "none", topic_cap: 300 }));
+      default_script_profile_id: "", default_mascot_id: "none", default_agent_id: "", default_agent_model: "",
+      default_agent_effort: "", default_formula_id: "", topic_cap: 300 }));
   });
 
   it("another edit re-sends the stored default mascot (POST /projects is a full replace)", async () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
     fireEvent.change(select, { target: { value: "auto" } });
     await waitFor(() => expect(postedProject(spy).default_mascot_id).toBe("tubi"));
@@ -510,6 +622,7 @@ describe("TopicsPage — default mascot", () => {
     const spy = mockDomains({ ...DOMAIN, default_mascot_id: undefined });
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
     fireEvent.change(select, { target: { value: "auto" } });
     await waitFor(() => expect(postedProject(spy)).toHaveProperty("default_mascot_id", ""));
@@ -518,6 +631,7 @@ describe("TopicsPage — default mascot", () => {
   it("keeps a held default that is no longer pickable visible as unavailable", async () => {
     mockDomains({ ...DOMAIN, default_mascot_id: "moss" });
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => expect(screen.getByRole("option", { name: "Moss (unavailable)" })).toBeTruthy());
   });
 
@@ -529,6 +643,7 @@ describe("TopicsPage — default mascot", () => {
     gpuStatus = status;
     mockDomains({ ...DOMAIN, default_mascot_id: "" });
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1") as HTMLSelectElement);
     await waitFor(() => expect([...select.options].find((o) => o.value === "tubi")?.textContent).toBe(label));
     const by = (v: string) => [...select.options].find((o) => o.value === v)!;
@@ -544,6 +659,7 @@ describe("TopicsPage — default mascot", () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1") as HTMLSelectElement);
     await waitFor(() => expect(select.value).toBe("tubi"));
     expect([...select.options].find((o) => o.value === "tubi")!.disabled).toBe(false);
@@ -564,6 +680,7 @@ describe("TopicsPage — default mascot", () => {
       return ok([]);
     });
     render(<TopicsPage />);
+    await openDefaults();
     const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1") as HTMLSelectElement);
     await waitFor(() => expect([...select.options].find((o) => o.value === "tubi")?.disabled).toBe(true));
   });
@@ -572,6 +689,7 @@ describe("TopicsPage — default mascot", () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => expect(screen.getAllByRole("option", { name: "Tubi" }).length).toBe(2));
     fireEvent.change(screen.getByTestId("domain-mascot-select"), { target: { value: "tubi" } });
     fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
@@ -626,6 +744,7 @@ describe("TopicsPage — topic cap", () => {
   it("shows the cap, bounded, and the whole topic history beside it", async () => {
     mockDomains();
     render(<TopicsPage />);
+    await openDefaults();
     const input = await waitFor(() => screen.getByTestId("domain-cap-seed-1") as HTMLInputElement);
     await waitFor(() => expect(input.value).toBe("100"));
     expect(input.min).toBe("25");
@@ -639,6 +758,7 @@ describe("TopicsPage — topic cap", () => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const input = await waitFor(() => screen.getByTestId("domain-cap-seed-1"));
     await waitFor(() => expect((input as HTMLInputElement).value).toBe("100"));
     fireEvent.change(input, { target: { value: "250" } });
@@ -647,24 +767,31 @@ describe("TopicsPage — topic cap", () => {
     await waitFor(() => expect(projectPosts(spy)).toEqual([{
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "", default_voice_id: "",
-      default_script_profile_id: "", default_mascot_id: "", topic_cap: 250 }]));
+      default_script_profile_id: "", default_mascot_id: "", default_agent_id: "", default_agent_model: "",
+      default_agent_effort: "", default_formula_id: "", topic_cap: 250 }]));
   });
 
-  it.each(["24", "751", "abc", "100.5", ""])("reverts %j without saving", async (bad) => {
+  // The settings rule: a typed value outside the bounds stays to be corrected,
+  // with the reason beside it, rather than vanishing without a word.
+  it.each(["24", "751", "0", "100.5", ""])("keeps %j, says why, and saves nothing", async (bad) => {
     const spy = mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const input = await waitFor(() => screen.getByTestId("domain-cap-seed-1") as HTMLInputElement);
     await waitFor(() => expect(input.value).toBe("100"));
     fireEvent.change(input, { target: { value: bad } });
     fireEvent.blur(input);
-    await waitFor(() => expect(input.value).toBe("100"));
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toBe("Not saved: topic cap must be a whole number from 25 to 750"));
+    expect(input.value).toBe(bad);
     expect(projectPosts(spy)).toEqual([]);
   });
 
   it("shows EXPIRED on any domain at its cap, seed or not", async () => {
     mockDomains({ ...DOMAIN, is_curriculum_seed: 0, topic_cap: 40, expired: true });
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => expect(screen.getByTestId("domain-expired-seed-1").textContent).toBe("EXPIRED"));
   });
 
@@ -673,6 +800,7 @@ describe("TopicsPage — topic cap", () => {
   it("hides ACTIVE on an expired seed but keeps PAUSED", async () => {
     mockDomains({ ...DOMAIN, topic_cap: 40, expired: true });
     const { unmount } = render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => screen.getByTestId("domain-expired-seed-1"));
     expect(screen.queryByTestId("domain-status-seed-1")).toBeNull();
     expect(screen.getByTestId("toggle-domain-seed-1")).toBeTruthy();
@@ -681,6 +809,7 @@ describe("TopicsPage — topic cap", () => {
 
     mockDomains({ ...DOMAIN, status: "paused", topic_cap: 40, expired: true });
     render(<TopicsPage />);
+    await openDefaults();
     await waitFor(() => expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("PAUSED"));
     expect(screen.getByTestId("domain-expired-seed-1")).toBeTruthy();
   });
@@ -689,6 +818,7 @@ describe("TopicsPage — topic cap", () => {
     mockDomains();
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const input = await waitFor(() => screen.getByTestId("domain-cap-seed-1"));
     await waitFor(() => expect((input as HTMLInputElement).value).toBe("100"));
     fireEvent.change(input, { target: { value: "40" } });
@@ -703,6 +833,7 @@ describe("TopicsPage — topic cap", () => {
     mockDomains(DOMAIN, 60);
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
+    await openDefaults();
     const input = await waitFor(() => screen.getByTestId("domain-cap-seed-1"));
     await waitFor(() => expect((input as HTMLInputElement).value).toBe("100"));
     expect(screen.getByTestId("domain-topic-count-seed-1").textContent).toBe("40 filed");
@@ -827,5 +958,571 @@ describe("TopicsPage — add-domain description", () => {
     fireEvent.change(field, { target: { value: "🐘".repeat(2000) } });
     expect(field.value).toBe("🐘".repeat(2000));
     expect(screen.getByTestId("domain-description-count").textContent).toBe("2000 / 2000");
+  });
+});
+
+// TMDEV-207: a domain row is one summary line, and its defaults (now with an
+// agent, model and effort) sit in a panel that "Edit defaults" opens.
+describe("TopicsPage — domain summary and agent defaults", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const AGENT = {
+    binary: "/bin/x", run_path: "/w", install_scope: "user", effort: "high", is_default: false,
+    weight: 1, verified_at: "", archived_at: null, created_at: "", updated_at: "",
+  };
+  const AGENTS = [
+    { ...AGENT, id: "claude", name: "Claude Code", models: ["opus", "sonnet"], is_default: true },
+    { ...AGENT, id: "codex", name: "Codex", models: ["gpt-a", "gpt-b"], effort: "medium" },
+    { ...AGENT, id: "old", name: "Old Agent", models: ["m1"], archived_at: "2026-01-02T00:00:00Z" },
+  ];
+  const VOICES = [{ name: "Adam", voice_id: "a1", model_id: "eleven_v3" }];
+  const DOMAIN = {
+    id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: 1,
+    status: "active", default_visual_style: "stick", default_voice_id: "a1",
+    default_script_profile_id: "", default_mascot_id: "none",
+    default_agent_id: "claude", default_agent_model: "sonnet", default_agent_effort: "max",
+    topic_cap: 300, topic_count: 12, expired: false, created_at: "2026-01-01T00:00:00Z",
+  };
+  const PLAIN = {
+    id: "plain-1", name: "Database internals", description: "", is_curriculum_seed: 0,
+    status: "active", topic_cap: 100, topic_count: 3, created_at: "2026-01-01T00:00:00Z",
+  };
+
+  function mockDomains(domains: object[] = [DOMAIN, PLAIN], agents: object[] | null = AGENTS,
+                       refusal: string | null = null) {
+    return vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      if (urlStr.endsWith("/projects") && init?.method === "POST" && refusal) {
+        return Promise.resolve({ ok: false, status: 400,
+          json: () => Promise.resolve({ error: refusal }) } as Response);
+      }
+      if (urlStr.endsWith("/projects") && !init?.method) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(domains) } as Response);
+      }
+      if (urlStr.endsWith("/agents")) {
+        return Promise.resolve({ ok: agents !== null, json: () => Promise.resolve(agents ?? {}) } as Response);
+      }
+      if (urlStr.endsWith("/visual-styles")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([
+          { id: "stick", label: "Stick Explainer", experimental: false, needs: {} },
+        ]) } as Response);
+      }
+      if (urlStr.includes("/settings")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({
+          elevenlabs_voices: VOICES, elevenlabs_voice_id: "a1", openai_api_key: "" }) } as Response);
+      }
+      if (urlStr.includes("/research/strategies")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ strategies: [] }) } as Response);
+      }
+      if (urlStr.includes("/research/mining-sources")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ youtube_urls: [] }) } as Response);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as Response);
+    });
+  }
+
+  function projectPosts(spy: ReturnType<typeof mockDomains>) {
+    return spy.mock.calls
+      .filter(([u, i]) => u.toString().endsWith("/projects") && (i as RequestInit | undefined)?.method === "POST")
+      .map(([, i]) => JSON.parse(String((i as RequestInit).body)));
+  }
+
+  function options(testId: string) {
+    return [...(screen.getByTestId(testId) as HTMLSelectElement).options];
+  }
+
+  it("keeps the pickers out of a closed row and says what the domain overrides", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-seed-1").textContent)
+      .toBe("AgentClaude Code · sonnet · max"));
+    expect(screen.queryByTestId("domain-panel-seed-1")).toBeNull();
+    expect(screen.queryByTestId("domain-voice-seed-1")).toBeNull();
+    expect(screen.getByTestId("domain-chip-voice-seed-1").textContent).toBe("VoiceAdam");
+    expect(screen.getByTestId("domain-chip-mascot-seed-1").textContent).toBe("MascotNone");
+    expect(screen.queryByTestId("domain-chip-profile-seed-1")).toBeNull();
+    expect(screen.getByTestId("domain-topics-seed-1").textContent).toBe("12 / 300 topics");
+    // The name is cut with an ellipsis when it is long, so the whole of it is
+    // on hover.
+    expect(screen.getByTestId("domain-name-seed-1").getAttribute("title")).toBe("Linux internals");
+  });
+
+  it("says so when a domain overrides nothing", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    const chips = await waitFor(() => screen.getByTestId("domain-chips-plain-1"));
+    expect(chips.textContent).toBe("Install defaults for everything");
+  });
+
+  it("opens and closes a row's defaults, one row at a time", async () => {
+    mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    const edit = await waitFor(() => screen.getByTestId("domain-edit-seed-1"));
+    expect(edit.textContent).toBe("Edit defaults");
+    expect(edit.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(edit);
+    expect(edit.textContent).toBe("Close");
+    expect(edit.getAttribute("aria-expanded")).toBe("true");
+    expect(edit.getAttribute("aria-controls")).toBe(screen.getByTestId("domain-panel-seed-1").id);
+    // The other row stays shut, and this one's summary stays in place.
+    expect(screen.queryByTestId("domain-panel-plain-1")).toBeNull();
+    expect(screen.getByTestId("domain-chip-agent-seed-1")).toBeTruthy();
+    fireEvent.click(edit);
+    expect(screen.queryByTestId("domain-panel-seed-1")).toBeNull();
+  });
+
+  it("shows the domain's agent, model and effort, and offers only live agents", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    await openDefaults();
+    await waitFor(() => expect((screen.getByTestId("domain-agent-seed-1") as HTMLSelectElement).value).toBe("claude"));
+    expect(options("domain-agent-seed-1").map((o) => o.textContent))
+      .toEqual(["Automatic (dealt by weight)", "Claude Code", "Codex"]);
+    expect((screen.getByTestId("domain-agent-model-seed-1") as HTMLSelectElement).value).toBe("sonnet");
+    expect(options("domain-agent-model-seed-1").map((o) => o.textContent))
+      .toEqual(["opus (agent default)", "opus", "sonnet"]);
+    expect((screen.getByTestId("domain-agent-effort-seed-1") as HTMLSelectElement).value).toBe("max");
+    expect(options("domain-agent-effort-seed-1")[0].textContent).toBe("high (agent default)");
+    expect(screen.getAllByLabelText("Agent")).toContain(screen.getByTestId("domain-agent-seed-1"));
+  });
+
+  it("disables the model under Automatic and leaves the effort usable", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    const model = await waitFor(() => screen.getByTestId("domain-agent-model-plain-1") as HTMLSelectElement);
+    expect(model.disabled).toBe(true);
+    expect(options("domain-agent-model-plain-1").map((o) => o.textContent)).toEqual(["Agent default"]);
+    expect((screen.getByTestId("domain-agent-effort-plain-1") as HTMLSelectElement).disabled).toBe(false);
+    expect(options("domain-agent-effort-plain-1")[0].textContent).toBe("Agent default");
+  });
+
+  it("changing the agent clears the model and re-sends every other field", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const agent = await waitFor(() => screen.getByTestId("domain-agent-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect(agent.value).toBe("claude"));
+    fireEvent.change(agent, { target: { value: "codex" } });
+    await waitFor(() => expect(projectPosts(spy)).toEqual([{
+      id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
+      status: "active", default_visual_style: "stick", default_voice_id: "a1",
+      default_script_profile_id: "", default_mascot_id: "none",
+      default_agent_id: "codex", default_agent_model: "", default_agent_effort: "max",
+      default_formula_id: "",
+      topic_cap: 300 }]));
+    // The row then offers the new agent's models and names its effort.
+    await waitFor(() => expect(options("domain-agent-model-seed-1").map((o) => o.textContent))
+      .toEqual(["gpt-a (agent default)", "gpt-a", "gpt-b"]));
+    expect(options("domain-agent-effort-seed-1")[0].textContent).toBe("medium (agent default)");
+    expect(screen.getByTestId("domain-chip-agent-seed-1").textContent).toBe("AgentCodex · max");
+  });
+
+  it("saves a model or an effort on its own", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const model = await waitFor(() => screen.getByTestId("domain-agent-model-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect(model.value).toBe("sonnet"));
+    fireEvent.change(model, { target: { value: "" } });
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    expect(projectPosts(spy)[0]).toMatchObject({
+      default_agent_id: "claude", default_agent_model: "", default_agent_effort: "max" });
+    fireEvent.change(screen.getByTestId("domain-agent-effort-seed-1"), { target: { value: "" } });
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
+    expect(projectPosts(spy)[1]).toMatchObject({
+      default_agent_id: "claude", default_agent_model: "", default_agent_effort: "" });
+  });
+
+  // POST /projects replaces the whole row, so saves to one domain run one at
+  // a time, each built from the row as the save before it left it. Sent side
+  // by side, the second would carry the first field as it was before, and the
+  // first pick would be lost with no error.
+  function holdPosts(spy: ReturnType<typeof mockDomains>) {
+    const answer = spy.getMockImplementation()!;
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    spy.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().endsWith("/projects") && init?.method === "POST") await held;
+      return answer(url, init);
+    });
+    return () => release();
+  }
+
+  it("sends a second change after the first is answered, and with it", async () => {
+    const spy = mockDomains([PLAIN]);
+    const release = holdPosts(spy);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    await waitFor(() => expect(options("domain-agent-plain-1")).toHaveLength(3));
+    fireEvent.change(screen.getByTestId("domain-agent-plain-1"), { target: { value: "codex" } });
+    fireEvent.change(screen.getByTestId("domain-agent-effort-plain-1"), { target: { value: "low" } });
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    // Each write carries a time limit: with none, one that never answered
+    // would hold every later change to the domain behind it.
+    const first = spy.mock.calls.find(([u, i]) => u.toString().endsWith("/projects")
+      && (i as RequestInit | undefined)?.method === "POST")![1] as RequestInit;
+    expect(first.signal).toBeInstanceOf(AbortSignal);
+    release();
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
+    expect(projectPosts(spy)[1]).toMatchObject({
+      default_agent_id: "codex", default_agent_effort: "low" });
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
+      .toBe("AgentCodex · low"));
+  });
+
+  it("a refused change does not ride on the change made after it", async () => {
+    // Only the agent change is refused; the effort change behind it must go
+    // out without it and be saved.
+    const spy = mockDomains([PLAIN]);
+    const answer = spy.getMockImplementation()!;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().endsWith("/projects") && init?.method === "POST"
+          && JSON.parse(String(init.body)).default_agent_id === "codex") {
+        return Promise.resolve({ ok: false, status: 400,
+          json: () => Promise.resolve({ error: "default_agent_id 'codex' is uninstalled" }) } as Response);
+      }
+      return answer(url, init);
+    });
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    await waitFor(() => expect(options("domain-agent-plain-1")).toHaveLength(3));
+    fireEvent.change(screen.getByTestId("domain-agent-plain-1"), { target: { value: "codex" } });
+    fireEvent.change(screen.getByTestId("domain-agent-effort-plain-1"), { target: { value: "low" } });
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
+    expect(projectPosts(spy)[1]).toMatchObject({ default_agent_id: "", default_agent_effort: "low" });
+    expect(alertSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
+      .toBe("AgentAutomatic · low"));
+  });
+
+  it("reports a save that could not reach the API and keeps the row as it was", async () => {
+    const spy = mockDomains([PLAIN]);
+    const answer = spy.getMockImplementation()!;
+    let down = true;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (down && url.toString().endsWith("/projects") && init?.method === "POST") {
+        return Promise.reject(new TypeError("Failed to fetch"));
+      }
+      return answer(url, init);
+    });
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    const effort = await waitFor(() => screen.getByTestId("domain-agent-effort-plain-1") as HTMLSelectElement);
+    fireEvent.change(effort, { target: { value: "low" } });
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-plain-1").textContent)
+      .toBe("Not saved: could not change this domain's agent's effort"));
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(effort.value).toBe("");
+    expect(screen.queryByTestId("domain-chip-agent-plain-1")).toBeNull();
+    // The next save is not stuck behind the failed one.
+    down = false;
+    fireEvent.change(effort, { target: { value: "max" } });
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
+      .toBe("AgentAutomatic · max"));
+  });
+
+  // A change sent while a pause is unanswered would re-send status "active"
+  // on the full replace and undo the pause.
+  it("a change made behind a pause waits for it and keeps the domain paused", async () => {
+    const spy = mockDomains([{ ...DOMAIN, default_agent_id: "", default_agent_model: "" }]);
+    const answer = spy.getMockImplementation()!;
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let statusCalls = 0;
+    spy.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().includes("/status")) {
+        statusCalls += 1;
+        await held;
+        return { ok: true, json: () => Promise.resolve({}) } as Response;
+      }
+      return answer(url, init);
+    });
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    fireEvent.click(screen.getByTestId("toggle-domain-seed-1"));
+    fireEvent.change(screen.getByTestId("domain-agent-effort-seed-1"), { target: { value: "low" } });
+    // The pause is out and unanswered; given time, the change still has not gone.
+    await waitFor(() => expect(statusCalls).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(projectPosts(spy)).toHaveLength(0);
+    release();
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    expect(projectPosts(spy)[0]).toMatchObject({ status: "paused", default_agent_effort: "low" });
+  });
+
+  it("a pause made behind a change waits for it", async () => {
+    const spy = mockDomains([{ ...DOMAIN, default_agent_id: "", default_agent_model: "" }]);
+    const release = holdPosts(spy);
+    const statusCalls = () => spy.mock.calls.filter(([u]) => u.toString().includes("/status")).length;
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    fireEvent.change(screen.getByTestId("domain-agent-effort-seed-1"), { target: { value: "low" } });
+    fireEvent.click(screen.getByTestId("toggle-domain-seed-1"));
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(statusCalls()).toBe(0);
+    release();
+    await waitFor(() => expect(statusCalls()).toBe(1));
+    await waitFor(() => expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("PAUSED"));
+    expect(screen.getByTestId("domain-chip-agent-seed-1").textContent).toBe("AgentAutomatic · low");
+  });
+
+  it("a write that throws does not hold up the next one", async () => {
+    const spy = mockDomains([PLAIN]);
+    const answer = spy.getMockImplementation()!;
+    let first = true;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (first && url.toString().endsWith("/projects") && init?.method === "POST") {
+        first = false;
+        // Reading this answer throws, so that write ends in an exception.
+        return Promise.resolve({ ok: false, status: 500,
+          json: () => { throw new Error("unreadable body"); } } as unknown as Response);
+      }
+      return answer(url, init);
+    });
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    const effort = await waitFor(() => screen.getByTestId("domain-agent-effort-plain-1"));
+    fireEvent.change(effort, { target: { value: "low" } });
+    fireEvent.change(effort, { target: { value: "max" } });
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(2));
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
+      .toBe("AgentAutomatic · max"));
+  });
+
+  it("puts a refused topic cap back in its field", async () => {
+    mockDomains([PLAIN], AGENTS, "topic_cap must be a whole number from 25 to 750");
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults("plain-1");
+    const cap = await waitFor(() => screen.getByTestId("domain-cap-plain-1") as HTMLInputElement);
+    fireEvent.change(cap, { target: { value: "250" } });
+    fireEvent.blur(cap);
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-plain-1").textContent)
+      .toBe("Not saved: topic_cap must be a whole number from 25 to 750"));
+    expect(alertSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(cap.value).toBe("100"));
+    expect(screen.getByTestId("domain-topics-plain-1").textContent).toBe("3 / 100 topics");
+  });
+
+  it("an effort alone reads as Automatic with that effort", async () => {
+    mockDomains([{ ...PLAIN, default_agent_effort: "low" }]);
+    render(<TopicsPage />);
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-plain-1").textContent)
+      .toBe("AgentAutomatic · low"));
+  });
+
+  it("keeps an agent since uninstalled, and a model since dropped, visible and unpickable", async () => {
+    mockDomains([{ ...DOMAIN, default_agent_id: "old", default_agent_model: "m9" }]);
+    render(<TopicsPage />);
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-seed-1").textContent)
+      .toBe("AgentOld Agent (uninstalled) · m9 · max"));
+    await openDefaults();
+    const agent = screen.getByTestId("domain-agent-seed-1") as HTMLSelectElement;
+    expect(agent.value).toBe("old");
+    const held = options("domain-agent-seed-1").find((o) => o.value === "old")!;
+    expect(held.textContent).toBe("Old Agent (uninstalled)");
+    expect(held.disabled).toBe(true);
+    // No live agent to take a model from, so the model cannot be changed, but
+    // the stored one still shows.
+    const model = screen.getByTestId("domain-agent-model-seed-1") as HTMLSelectElement;
+    expect(model.disabled).toBe(true);
+    expect(model.value).toBe("m9");
+    expect(options("domain-agent-model-seed-1").map((o) => o.textContent))
+      .toEqual(["Agent default", "m9 (unavailable)"]);
+  });
+
+  it("another edit re-sends a stale agent and model untouched", async () => {
+    const spy = mockDomains([{ ...DOMAIN, default_agent_id: "old", default_agent_model: "m9" }]);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    fireEvent.change(screen.getByTestId("domain-voice-seed-1"), { target: { value: "" } });
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    expect(projectPosts(spy)[0]).toMatchObject({
+      default_voice_id: "", default_agent_id: "old", default_agent_model: "m9",
+      default_agent_effort: "max" });
+  });
+
+  it("shows a stored agent by its id, and offers only Automatic, when the agent list fails", async () => {
+    mockDomains([DOMAIN], null);
+    render(<TopicsPage />);
+    await waitFor(() => expect(screen.getByTestId("domain-chip-agent-seed-1").textContent)
+      .toBe("Agentclaude · sonnet · max"));
+    await openDefaults();
+    expect(options("domain-agent-seed-1").map((o) => [o.textContent, o.disabled]))
+      .toEqual([["Automatic (dealt by weight)", false], ["claude", true]]);
+    expect((screen.getByTestId("domain-agent-seed-1") as HTMLSelectElement).value).toBe("claude");
+  });
+
+  it("a refused change says why and leaves the domain as it was", async () => {
+    mockDomains([DOMAIN], AGENTS, "default_agent_id 'codex' is uninstalled");
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const agent = await waitFor(() => screen.getByTestId("domain-agent-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect(agent.value).toBe("claude"));
+    fireEvent.change(agent, { target: { value: "codex" } });
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toBe("Not saved: default_agent_id 'codex' is uninstalled"));
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(agent.value).toBe("claude");
+    expect((screen.getByTestId("domain-agent-model-seed-1") as HTMLSelectElement).value).toBe("sonnet");
+  });
+
+  it("the add-domain form sends the picked agent, model and effort", async () => {
+    const spy = mockDomains([]);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await waitFor(() => expect(options("domain-agent-select")).toHaveLength(3));
+    expect((screen.getByTestId("domain-agent-model-select") as HTMLSelectElement).disabled).toBe(true);
+    fireEvent.change(screen.getByTestId("domain-agent-select"), { target: { value: "codex" } });
+    fireEvent.change(screen.getByTestId("domain-agent-model-select"), { target: { value: "gpt-b" } });
+    fireEvent.change(screen.getByTestId("domain-agent-effort-select"), { target: { value: "low" } });
+    fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
+    fireEvent.click(screen.getByTestId("add-domain-submit"));
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    expect(projectPosts(spy)[0]).toMatchObject({
+      id: "new-domain", default_agent_id: "codex", default_agent_model: "gpt-b",
+      default_agent_effort: "low" });
+  });
+
+  it("the add-domain form drops the model when the agent changes", async () => {
+    const spy = mockDomains([]);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await waitFor(() => expect(options("domain-agent-select")).toHaveLength(3));
+    fireEvent.change(screen.getByTestId("domain-agent-select"), { target: { value: "codex" } });
+    fireEvent.change(screen.getByTestId("domain-agent-model-select"), { target: { value: "gpt-b" } });
+    fireEvent.change(screen.getByTestId("domain-agent-select"), { target: { value: "claude" } });
+    expect((screen.getByTestId("domain-agent-model-select") as HTMLSelectElement).value).toBe("");
+    fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
+    fireEvent.click(screen.getByTestId("add-domain-submit"));
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    expect(projectPosts(spy)[0]).toMatchObject({ default_agent_id: "claude", default_agent_model: "" });
+  });
+});
+
+// A domain's default formula: the script structure every new video in the
+// domain is written in, or Auto. It rides the same full-replace POST
+// /projects as the other defaults, so every other edit must re-send it.
+describe("TopicsPage — default formula", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const NAMES = {
+    formulas: [{ id: "scene-story", label: "Scene Story", experimental: false },
+               { id: "news-take", label: "News Take", experimental: true }],
+    hook_types: [],
+  };
+  const DOMAIN = {
+    id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: 1,
+    status: "active", default_visual_style: "", default_voice_id: "",
+    default_script_profile_id: "", default_formula_id: "scene-story", topic_cap: 300,
+    topic_count: 12, expired: false, created_at: "2026-01-01T00:00:00Z",
+  };
+
+  function mockDomains(domain: object = DOMAIN, names: object = NAMES) {
+    return vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      const ok = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+      if (urlStr.endsWith("/projects") && !init?.method) return ok([domain]);
+      if (urlStr.endsWith("/projects")) return ok({ ...domain, ...JSON.parse(String(init!.body)) });
+      if (urlStr.endsWith("/script-formulas")) return ok(names);
+      if (urlStr.includes("/settings")) return ok({ elevenlabs_voices: [], elevenlabs_voice_id: "", openai_api_key: "" });
+      if (urlStr.includes("/research/strategies")) return ok({ strategies: [] });
+      if (urlStr.includes("/research/mining-sources")) return ok({ youtube_urls: [] });
+      return ok([]);
+    });
+  }
+
+  function postedProject(spy: ReturnType<typeof mockDomains>) {
+    const call = spy.mock.calls.find(([u, i]) => u.toString().endsWith("/projects")
+      && (i as RequestInit | undefined)?.method === "POST");
+    return JSON.parse(String((call![1] as RequestInit).body));
+  }
+
+  it("names the domain's formula on its summary line", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    await waitFor(() => expect(screen.getByTestId("domain-chip-formula-seed-1")).toHaveTextContent("Scene Story"));
+  });
+
+  it("shows no formula on the summary line for a domain on Auto", async () => {
+    mockDomains({ ...DOMAIN, default_formula_id: "" });
+    render(<TopicsPage />);
+    await waitFor(() => screen.getByTestId("domain-summary-seed-1"));
+    expect(screen.queryByTestId("domain-chip-formula-seed-1")).not.toBeInTheDocument();
+  });
+
+  it("offers Auto and every formula in the defaults panel", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    await openDefaults();
+    const select = await waitFor(() => screen.getByTestId("domain-formula-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect([...select.options].map((o) => o.textContent)).toEqual(
+      ["Auto", "Scene Story", "News Take (experimental)"]));
+    expect(select.value).toBe("scene-story");
+    expect(screen.getAllByLabelText(/^Formula/)).toContain(select);
+  });
+
+  it("changing the formula re-sends every other field", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const select = await waitFor(() => screen.getByTestId("domain-formula-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect(select.options).toHaveLength(3));
+    fireEvent.change(select, { target: { value: "" } });
+    await waitFor(() => expect(postedProject(spy)).toEqual({
+      id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
+      status: "active", default_visual_style: "", default_voice_id: "",
+      default_script_profile_id: "", default_mascot_id: "", default_agent_id: "", default_agent_model: "",
+      default_agent_effort: "", default_formula_id: "", topic_cap: 300 }));
+  });
+
+  it("another edit keeps the domain's formula", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
+    fireEvent.change(select, { target: { value: "auto" } });
+    await waitFor(() => expect(postedProject(spy).default_formula_id).toBe("scene-story"));
+  });
+
+  it("keeps a formula the list does not know visible, so it is not read as Auto", async () => {
+    mockDomains({ ...DOMAIN, default_formula_id: "retired-formula" });
+    render(<TopicsPage />);
+    await openDefaults();
+    const select = await waitFor(() => screen.getByTestId("domain-formula-seed-1") as HTMLSelectElement);
+    await waitFor(() => expect(select.options).toHaveLength(4));
+    expect(select.value).toBe("retired-formula");
+  });
+
+  it("a new domain is created with the formula picked for it", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-formula-select") as HTMLSelectElement);
+    await waitFor(() => expect(select.options).toHaveLength(3));
+    expect(select.value).toBe("");
+    fireEvent.change(select, { target: { value: "news-take" } });
+    fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
+    fireEvent.click(screen.getByTestId("add-domain-submit"));
+    await waitFor(() => expect(postedProject(spy).default_formula_id).toBe("news-take"));
   });
 });

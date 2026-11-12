@@ -181,8 +181,8 @@ directory has no test.
 
 The MCP server enforces these rules too, and `mcp/tests` holds its halves. `POST /projects` replaces
 the whole row, and the dashboard re-sends every field on each save. The description limit and the
-defaults for script profile, style, voice and mascot are therefore checked only when the value
-changes. An unchanged value that has become invalid since still saves, because refusing it would
+defaults for script profile, style, voice, mascot and agent are therefore checked only when the
+value changes. An unchanged value that has become invalid since still saves, because refusing it would
 block every other edit to that domain.
 
 ### `test_project_pause.py`
@@ -237,6 +237,30 @@ Covers a domain's default script profile.
   changes. The type check runs on the raw value, so `false`, `0` and `[]` are refused and are not
   read as "no default".
 
+### `test_domain_agent.py`
+
+Covers a domain's agent, model and effort: `_domain_agent`, `_domain_agent_error`, and their use in
+`POST /videos`, `POST /videos/manual` and `POST /projects`
+([Assignment](../07-agent-layer.md#assignment)).
+
+- `POST /videos` copies the three values onto a video of every `strategy`. A domain with no agent
+  is dealt one through `_pick_agent_id`, and a video that takes its domain's agent writes nothing
+  to `agent_deck`.
+- A domain agent uninstalled since falls back to the deal without its model. A model the agent
+  dropped seeds `''`. An effort with no agent is copied onto the dealt agent's video.
+- `POST /videos/manual` takes the `manual` domain's three values when the request names no agent,
+  and none of them when it names one. A model or effort in the request replaces the domain's.
+- `POST /projects` refuses an agent that is not live, a model outside the agent's list, a model
+  with no agent, and a non-string. It checks the agent and model as a pair, when either changes.
+- `POST /projects` accepts the stored agent again with a blank model while that agent is
+  uninstalled, and refuses a new model for it.
+- `_domain_agent` and `_domain_agent_error` return what the MCP server's copies return, over every
+  branch. The MCP copies run with the MCP server's own `_agent_id_error` and `_agent_model_error`.
+
+Trap: the pause and topic-cap race tests replace `_pick_agent_id` to act between the early check
+and the `INSERT`. `_domain_agent` must keep calling it on the path that deals, or those tests pass
+without testing the race.
+
 ## Style, voice and mascot choices
 
 ### `test_visual_style.py`
@@ -253,12 +277,114 @@ Covers the visual style over HTTP and the style contract of the AI review prompt
   rules out three false positives (flat art as low quality, a held pose as broken animation, a white
   frame as a blank frame) and still asks for a review of legibility, safe zones and sync.
   [The prompt's guard clauses](../21-ai-review.md#the-prompts-guard-clauses) explains each clause.
-- The style constants, `effective_canvas` and the GPU gate are compared with `mcp/server.py` by
-  executing its copy.
+- The API and the MCP server use the same style rules: each of `pipeline.py`'s style names is the
+  object `tubematic_core.visual_styles` holds, and `mcp/server.py` imports the same names from it.
+  The GPU gate passes only `working` and gives `unknown` its own message.
+- `GET /visual-styles` lists `auto` and every [style pack](../10-scene-authoring.md#style-packs),
+  says why a style is unavailable on the install, and `system_flow` and `whiteboard` can be chosen
+  with nothing configured.
 
 Trap: a default inherited from the domain is kept and not rewritten when no OpenAI key is stored.
 The approving `PATCH` refuses it, before any spend. An unknown canvas must produce no contract,
 because a wrong contract tells the reviewer to accept defects.
+
+
+### `test_style_pick.py`
+
+Covers `POST /videos/<id>/switch-style` and the `PATCH` rules for a style Auto picked
+([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
+
+- The switch moves the video to `TOPIC_APPROVED` with the runner-up as its style, swaps the pick and
+  the runner-up, and adds a human comment. A second switch goes back, and a switch to `scenes`
+  leaves `auto`.
+- It is refused away from `SCRIPT_READY`, with no pick or no runner-up, for a runner-up that is no
+  longer a style or that the install cannot make, and for an archived or unknown video.
+- While the switch checks what the install can make, another writer is locked out, so nothing it
+  checked can change before its write. The switch clears the renderer and canvas of the old scenes.
+- A changed `visual_style` clears the pick and the recorded renderer and canvas, and the same value
+  keeps them. An approval that changes the style and sets a mascot is not refused for the old
+  Cartoon 3D renderer. A move back to
+  `TOPIC_PROPOSED` returns a pick to `auto`, a person's style survives it, and an approval keeps it.
+- Both processes use the shared SQL fragments from `tubematic_core/visual_styles.py`.
+
+Trap: the dashboard re-sends the style picker's value on every approval, so a rule that cleared the
+pick on any `visual_style` write would erase every Auto pick at its first approval.
+### `test_formula_pick.py`
+
+Covers `POST /videos/<id>/switch-formula`, `POST /videos/<id>/switch-opening`, `formula_choice` on
+`PATCH` and on the two creation routes, `default_formula_id` on `POST /projects`, and the
+`auto_experimental_formulas` and `learned_routing` settings
+([How a formula is picked](../08-scripting-and-voice.md#how-a-formula-is-picked)).
+
+- The formula switch moves the video to `TOPIC_APPROVED`, swaps the pick and the runner-up, makes
+  the new pick the person's choice and adds a human comment. A second switch goes back, and an
+  experimental runner-up needs no setting. It empties `formula_evidence`, which the opening switch
+  keeps, and the video read carries it.
+- `learned_routing` is on by default and takes only a boolean.
+- The opening switch marks the chosen opening as the one in use, clears its note, sets `hook_type`,
+  moves the video to `TOPIC_APPROVED` and adds a human comment that quotes the opening. It keeps a
+  held pick and clears `formula_id`, so the old script cannot move on before a rewrite. A video scripted before formulas were picked can use it and gets its script's formula
+  as the pick, and one whose formula this version lacks is refused.
+- Each switch is refused away from `SCRIPT_READY` and for an archived or unknown video. The formula
+  switch is refused with no pick, no runner-up or a runner-up that the installed version does not
+  have. The
+  opening switch is refused for the opening already in use, an index outside the stored openings
+  or of the wrong type, and a script with no stored openings. A refusal changes nothing.
+- A move back to `TOPIC_PROPOSED` empties the pick and keeps the person's choice. A script revision
+  keeps the pick. A style switch empties the pick, and so does a script written through `PATCH`.
+- `formula_choice` is writable at `TOPIC_PROPOSED` only, takes `""` for Auto and an experimental
+  formula with the setting off, and refuses a value that is no formula.
+- `default_formula_id` is stored, is reset by an edit that leaves it out, must be a formula when it
+  changes, and a stored one that was dropped does not block another edit. It seeds every new video
+  whatever its strategy, a formula sent with the video wins over it, and a default that is no
+  formula seeds nothing. A New Video submission takes its own pick, or the Manual Videos domain's
+  default.
+- `auto_experimental_formulas` defaults to off and takes a boolean. `GET /script-formulas` says which formulas are
+  experimental.
+
+Both switches are refused on a video on `auto` with no style pick, which a switch would send back
+to have its style picked again.
+
+Trap: neither switch edits the stored script. A new formula or a new first sentence over the old
+body would be a script nobody wrote, so both send the video back to be rewritten.
+
+### `test_script_record.py`
+
+Covers a script's record over HTTP
+([What a script records](../08-scripting-and-voice.md#what-a-script-records)).
+
+- Every video route returns `hook_alternatives` and `script_warnings` as lists, `[]` for a video
+  with no record.
+- A `script` written through `PATCH` clears the four record columns. A `PATCH` that leaves the
+  script alone keeps them.
+- `GET /script-formulas` lists every formula and every hook type with its label.
+
+### `test_topic_angle.py`
+
+Covers the [topic's angle](../02-pipeline.md#topic-angle) over HTTP: `GET /angle-kinds`,
+`POST /videos`, `POST /videos/manual` and `PATCH /videos/<video_id>`.
+
+- `GET /angle-kinds` serves `tubematic_core.angles.public_list()`.
+- `PATCH` changes the sentence and the kind at `TOPIC_PROPOSED` and answers `409` at every other
+  status. A changed sentence or kind sets `angle_score` to 0, and the same angle saved again keeps
+  its score. A body with `angle_score` alone has nothing it may write.
+- `POST /videos` stores an angle it is sent and requires none. `POST /videos/manual` accepts no
+  angle, a blank one, a `null` one and `none` spelled out as no angle, and stores a given angle with
+  score 0.
+- A malformed angle is refused on all three routes. On `POST /videos/manual` the refusal leaves no
+  video and no `manual` domain behind. A `null` score on `POST /videos` reads as unscored.
+- The edit works on a video whose style takes no mascot (Under the Hood, Cartoon 3D), alone and
+  together with the approval.
+- An edit of the angle alone leaves `updated_at` as it was, so the worker does not announce the
+  topic again. A kind is stored by its id whatever its spelling.
+
+Trap: the script writer reads the angle from the moment a topic is approved. A test lands an
+approval between the route's status read and its `UPDATE`, and the edit must write nothing. It was
+confirmed to fail without the status in the `UPDATE`'s `WHERE`.
+
+Trap: for a style that takes no mascot, `patch_video` rebuilds its parameter list from the body's
+fields. Anything appended to the `SET` list before that point loses its parameters and the request
+fails with a binding error, so the score reset is appended after it.
 
 ### `test_voice_models.py`
 
@@ -294,6 +420,52 @@ Trap: a voice's model can be edited in Settings after voicing, so reading the ro
 the audio was not made with. The ledger is ignored from `TOPIC_PROPOSED` through `VOICING`: a
 revision may have switched the voice, and the old row would pair the new voice with the old model.
 
+A video spoken in two voices reports the model of the video's own voice, read from the ledger rows
+tagged with it, and lists the other voices of its segments in `other_voices`. A changed install
+default still reports the voiced model, and a video whose own voice spoke no line reports the
+current setting.
+
+### `test_voice_speed.py`
+
+Covers a voice's speed in `POST /settings` and in voice previews
+([Speed](../08-scripting-and-voice.md#speed)).
+
+- A speed on a model that honours it is saved, a speed of 1.0 is never stored, and a roster without
+  a speed round-trips unchanged.
+- A speed on `eleven_v3` or `eleven_v4`, out of range, or off the 0.05 step is a `400`.
+- A preview at 1.0 sends no speed and keeps the cache key previews had before speeds. A changed
+  speed makes a new preview. A speed in the body on a model that ignores it is refused before any
+  call, and a stored speed is dropped when the body names such a model.
+
+Trap: older versions read a roster with any key they do not know as empty. Keeping `speed` out of
+a roster nobody changed is what lets a rollback still read it.
+
+### `test_segment_voices.py`
+
+Covers a voice per segment on the API
+([A segment's voice](../05-http-api.md#a-segments-voice)).
+
+- `segment_voices` gives a segment a voice, gives it back with `""` or the video's voice, and keeps
+  the spoken words and the beat. A body with other keys, an unknown segment or an unknown voice is
+  a `400`. Any status but `SCRIPT_READY` is a `409`.
+- A voice that cannot speak the segment's markup is a `409`, and a script written between the read
+  and the write is not overwritten.
+- `segment_voice_conflicts` lists, per segment, the voices that cannot speak it, at `SCRIPT_READY`
+  only. A change of the video's voice ignores segments with their own voice.
+- Approval to `VOICING` refuses a segment voice whose model was edited or that left the roster, with
+  or without a voice in the body. A two-voice script whose markup fits each voice approves, as the
+  negative control.
+
+### `test_review_voices.py`
+
+Covers the review prompt's note on a narration in more than one voice
+([The prompt's guard clauses](../21-ai-review.md#the-prompts-guard-clauses)).
+
+- One voice adds nothing, so a one-voice prompt is unchanged. Two voices are named and called
+  intended.
+- `render_results.py::_narration_voices` lists the video's voice, then each other voice its segments
+  name, and a voice off the roster by its id.
+
 ### `test_mascots_api.py`
 
 Covers the mascot library over HTTP ([Mascots](../05-http-api.md#mascots)), the install and domain
@@ -309,12 +481,15 @@ defaults, the seeding of new videos and the per-video pick.
   videos are seeded from the domain default, then the install default, and get nothing without a
   working GPU or on a Cartoon 3D video.
 - The per-video pick is frozen after `TOPIC_PROPOSED` and judged against the style the video will
-  have after the same `PATCH`. A switch to Cartoon 3D clears the mascot and its `mascot_version`.
+  have after the same `PATCH`. A switch to Cartoon 3D or Under the Hood clears the mascot and its
+  `mascot_version`. An Under the Hood video is seeded with no mascot, refuses a pick, and cannot be
+  approved while it holds one.
 
 Trap: the approving `PATCH` refuses a mascot archived since it was seeded, and repeats the check in
 its `UPDATE`, so an archive or a style write that commits between the check and the write still gets
-`409`. No sequence of requests may leave a Cartoon 3D video holding a mascot, because
-[the gateway refuses to hand it out](../11-rendering-and-review.md#refused-before-anything-renders).
+`409`. No sequence of requests may leave a Cartoon 3D or Under the Hood video holding a mascot,
+because [the gateway refuses to hand it out](../11-rendering-and-review.md#refused-before-anything-renders),
+which `test_render_gateway.py` checks for both styles.
 
 ## Publishing and Auto Pilot
 
@@ -376,6 +551,44 @@ Covers `metrics.poll`, the [metric snapshot pass](../14-publishing.md#capture).
 
 Trap: postforme's rate limit turns a request per publication into `429` answers that are caught and
 skipped. `video_metrics` is a time series, so a skipped reading is lost and not fetched later.
+
+### `test_watch_time.py`
+
+Covers the [watch figures](../14-publishing.md#watch-figures): `postforme.extract_retention` (which
+`postforme.py` imports from `tubematic_core/watch.py`), the
+publication rows of `GET /analytics` and `GET /videos/<id>/publications`,
+`GET /analytics/watch-time`, and the worker storing a published video's length.
+
+- Each platform's keys and units: YouTube's seconds, percentage and engaged views, Instagram's and
+  Facebook's milliseconds, Facebook's own video length, and TikTok reporting nothing.
+- An absent figure is null and a reported zero count stays zero. Zero views gives no stayed
+  figure, a share above 100 is kept, and a value that is not a number, or is too large to divide, is
+  not reported.
+- An average of 0 seconds with no share, and a 0 share, are not reported, on every platform. An
+  average that rounds to 0 follows the same rule whatever the video's length, and YouTube's 0 whole
+  seconds beside a real share is kept. A reported share of 0 gets the stored length like an absent
+  one.
+- A division by a vanishing length or view count gives no figure, so the answer stays valid JSON.
+- The routes read the latest snapshot, whatever its age. A payload
+  that does not parse reports nothing, and watch figures are added to no total.
+- The grouped route answers for one account, the largest when none is named. A group's figure is
+  the median, `videos` counts every post and `n` counts the posts that report the measure.
+- Script length bands come back shortest first, and markup in a script is not counted as words. A
+  stray `<` in the words does not remove the words after it.
+- The length is stored for published, unarchived videos with a readable `timeline.json`, and a
+  stored length is not overwritten. One unreadable timeline leaves the other videos' lengths stored.
+  An infinite length, or one above a day, is not stored. `POST /analytics/refresh` stores lengths too.
+- A video on `auto` whose `resolved_renderer` is `cartoon_3d` is grouped as Cartoon 3D.
+- The `formula` and `hook_type` groupings use the labels of `tubematic_core/formulas.py`. A video
+  with neither on record is in a group named "Not recorded", and one with a formula and no hook
+  type, or the reverse, is in the named group of the one it has. An id `formulas.py` does not know
+  is shown as its own label. Each group's `key` is the stored id. One hook type under two formulas
+  is one group.
+- A failure while storing lengths leaves the metrics poll running.
+
+Trap: archiving deletes `timeline.json`, the only other record of a video's length, while its
+analytics continue. The tests archive a video with no stored length through the retention sweep and
+through `DELETE /videos/<id>`, and check that the length is there after the files are gone.
 
 ### `test_auto_pilot.py`
 
@@ -446,7 +659,10 @@ one certificate test serve the app over real TLS on 127.0.0.1 and talk to it ove
   connection caps. A protected route answers `401` without reading its body, and no route parses
   JSON with `request.get_json()`, which reads a body without a bound.
 - Results and heartbeats: a success marks the render uploaded for the worker's review, and each
-  failure outcome goes through `render_results.py`. A heartbeat stores the GPU test result,
+  failure outcome goes through `render_results.py`. A success also writes the video's
+  `last_render_*` record: the renderer's id and its name at that moment, the GPU flag, and the
+  seconds (`0` when the timing is unusable). The next success overwrites it, and a failure or a
+  result for a lost claim leaves it. A heartbeat stores the GPU test result,
   re-queues what a restarted renderer held, and extends the lease and builds the stop list by claim
   id, so a late heartbeat for an earlier claim cannot touch the claim that replaced it.
 - Startup: with a missing or unusable TLS pair, or a port it cannot bind, the API
@@ -590,6 +806,8 @@ Covers `render_results.py`. The render gateway calls its failure rules when a re
 its re-queue when a restarted renderer sends its first heartbeat. The worker calls the review step
 (`finish_render`) on its review thread and the re-queue from its lease sweep.
 
+- The review step passes a style pack's review text (System Flow's) as `style_block`, and `""` for a
+  style without one.
 - The review step: the [routing](../21-ai-review.md#routing) of each outcome and the
   [fail-open](../21-ai-review.md#fail-open) path. Every outcome writes `videos.gemini_feedback`
   whole and a comment cut with a note, which is what makes a failing reviewer visible. Each review's
@@ -603,10 +821,19 @@ its re-queue when a restarted renderer sends its first heartbeat. The worker cal
 - A failure routed with the gateway's renderer and claim id moves the video, counts the retry,
   comments and releases the claim in one transaction. A failure from another renderer, or from an
   earlier claim, changes nothing.
+- A failed render's [page timeout](../11-rendering-and-review.md#status-transitions) is recognised
+  from Remotion's real messages. The first one re-queues the video with no retry counted and a
+  marking comment, and the second goes to `REVISION_REQUESTED` and counts, or to `FAILED` when an
+  earlier failure already used the cap. Other failures, a stall or timeout outcome, a stale claim
+  and a GPU that failed its re-test keep their own routes.
 - `requeue_interrupted` re-queues with a retry counted and fails past the cap. It does not touch an
   uploaded render, and its `UPDATE` is guarded on the holder and on the lease.
 - A blank settings row falls through to the environment, as it does in `pipeline.py`.
   `scene_config_is_cartoon3d` recognises a generated scene whose props carry a `cartoon3d` object.
+
+Trap: the page-timeout retry must not count against `max_render_retries`. With the default cap of
+1, a counted retry would send the second failure to `FAILED`, and a scene that hangs would never
+reach the agent.
 
 Trap: the review cap compares with `>`. With `>=`, a cap of 1 accepts the first review and allows no
 revision round. The review past the cap still runs, so the stored feedback belongs to the render
@@ -648,6 +875,9 @@ reach the assertions, so the method, path, headers and query string are checked.
   is checked by its wording.
 - `usage` is returned on every path where Gemini answered `200`, including a reply that failed to
   parse, and on no path where it did not.
+- A style pack's own review text replaces the canvas and figure blocks, and with no style text the
+  contract is the same as before for every combination. Whiteboard's text tells the reviewer that
+  writing a moment after its word and small writing in the closing pull-back are intended.
 
 Trap: any finding sends the video back for a revision, so a clause removed from the prompt produces
 a finding on every video it covered, and a round can cost a paid re-voice. An illustrated video gets
@@ -694,6 +924,8 @@ settings.
 - A rate limit is retried once, and an absurd `Retry-After` is clamped.
 - Every builder stays inside Discord's size limits with absurd input, because Discord answers `400`
   to an oversized embed and nothing reports the lost message. A topic with score 0 reads "unscored".
+- A topic's angle leads its field and its score sits beside the topic's. An unscored angle shows
+  its sentence and no score, and a 300-character angle leaves the field inside its budget.
 
 Trap: the webhook URL is a credential, and it sits in the request path. httpx puts the URL in its
 log line and its exception text, and the worker stores exception text in comments.

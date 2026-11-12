@@ -8,17 +8,22 @@ timeline.
 
 ## Script segments
 
-A script is an ordered list of segments, one per beat:
+A script is an ordered list of segments:
 
 ```json
 [
-  { "id": "seg-1", "voice": "Every website you visit starts with a question…",
+  { "id": "seg-1", "beat": "The action",
+                   "voice": "Every website you visit starts with a question…",
                    "visual": "Terminal typing a domain, cursor blinking" },
   { "id": "seg-2", "voice": "…", "visual": "…" }
 ]
 ```
 
 - `voice` is spoken aloud. No other field is.
+- `beat` is optional. It names the beat of the script's [formula](#formulas) the segment belongs
+  to, and the dashboard shows it beside the segment.
+- `voice_id` is optional. It names a roster voice that speaks this segment in place of the video's
+  voice (see [A voice per segment](#a-voice-per-segment)).
 - `visual` is a brief for the scene author. Its kind depends on the video's
   [visual style](10-scene-authoring.md#visual-styles): under `stick`, a beat about a generic
   role gets a pose brief ("scientist at a console, shocked, red alert pops in"), and otherwise a
@@ -29,7 +34,8 @@ A script is an ordered list of segments, one per beat:
 The agent writes segments through `update_video(script_segments=[…])`, which validates them and
 derives the flat `videos.script` column. Do not write `script` directly. The same call carries the
 publish title and description, which the agent writes while it has the whole script in view (see
-[Publishing](14-publishing.md#schema)).
+[Publishing](14-publishing.md#schema)), and the formula and openings the script was built on (see
+[What a script records](#what-a-script-records)).
 
 `mcp/server.py::_validate_script_segments` requires:
 
@@ -40,26 +46,354 @@ publish title and description, which the agent writes while it has the whole scr
   spoken
 - no standalone punctuation word (`the catch ...`)
 - well-formed `<respell>` and `<ipa>` tags
+- a `beat`, when present, that is a non-empty string of at most `SEGMENT_BEAT_MAX_LEN` characters
+- a `voice_id`, when present, that names a voice in the roster
+  (`tubematic_core/voice_models.py::segment_voice_error`)
 
-The canonical beat sequence is hook, context, core content, takeaway, call to action. Each is one
-segment, and only core content splits across several. Segments let `timeline.json` carry a frame
-span per segment, so a scene aligns to a beat.
+Segments follow the beats of the script's formula, in order. Each segment is one visual idea, so a
+long beat splits into several segments and two short beats that share a picture can share one,
+unless the second has a [role](#formulas): a turn, a re-opening or the payoff starts a segment of
+its own.
+Segments let `timeline.json` carry a frame span per segment, so a scene aligns to a beat.
 
 ## Length
 
+A script's length is the word band of its [formula](#formulas), unless the visual style's `script`
+text gives a length of its own, which then wins. One limit holds for every script:
+
 | | Seconds | Words |
 |---|---|---|
-| Target | ~90 | ~235 |
 | Hard ceiling | 3:00 | 450 |
 
-Time is the canonical measure, and the word counts are derived from it. ElevenLabs speaks at about
-157 words per minute (151 to 162 across finished videos), and word count predicts finished duration
-within about 4%. If you change one of these numbers, redo the arithmetic.
+Three minutes is the longest a YouTube Short can be. ElevenLabs speaks at about 157 words per minute
+(151 to 162 across finished videos), and word count predicts finished duration within about 4%, so
+the ceiling in words is derived from the ceiling in seconds. It is `formulas.py::WORD_CEILING`, and
+no formula's band may pass it. If you change it, redo the arithmetic.
 
-Per-beat budgets at the target: hook ~25, context ~35, core ~120, takeaway ~30, call to action ~25.
+`_validate_script_segments` has no word cap. A script outside its formula's band or past the ceiling
+is stored, and the write returns a [warning](#script-warnings) that the human sees at
+`SCRIPT_READY`.
 
-The script-writing skill states the budget, and `_validate_script_segments` has no word cap. A
-script that overruns is caught by the human who reads it at `SCRIPT_READY`.
+## Formulas
+
+A formula is a script's structure: its beats in order, each beat's share of the script, the shapes
+its opening can take, where the turn and the payoff fall, how it ends, and its word band. One is
+picked for each video before its script is written (see
+[How a formula is picked](#how-a-formula-is-picked)). A formula says nothing
+about how a line sounds (the [script profile](#script-profiles) does) or what a segment shows (the
+visual style does).
+
+Each formula is one JSON file in `tubematic_core/formulas/`, named for its id.
+`tubematic_core/formulas.py` loads and validates every file at import (`_check_formula`), so a
+malformed file stops the process at start. The MCP server and the API both import the module.
+
+| Field | Meaning |
+|---|---|
+| `id`, `label`, `order` | The id equals the file name. `order` sorts the list and is unique |
+| `family` | `explain`, `story` or `ladder` |
+| `experimental` | `true` for a formula that ships as data and that Auto may pick only while the setting `auto_experimental_formulas` is on |
+| `line` | The formula in one sentence |
+| `best_for`, `also_for`, `avoid_for` | Kinds of topic it is the first choice for, also fits, and does not suit |
+| `signals` | Statements about a topic that point to the formula when they are true of it. At least one |
+| `styles` | Ids of the [style packs](10-scene-authoring.md#style-packs) whose picture the formula suits. May be empty. An id that is no pack fails the load |
+| `words` | `[min, max]`, the word band. The maximum is at most `WORD_CEILING` |
+| `beats` | `[{name, from, to, job, role?}]`. `from` and `to` are percentages of the script's words, and the beats cover 0 to 100 with no gap. `role` is the beat's duty to the picture (below) |
+| `hooks` | `[{type, shape}]`. At least three opening shapes, each of a different hook type |
+| `holds`, `ending`, `pitfalls`, `template` | What keeps a viewer, how the script ends, what goes wrong, and a fill-in shape of the whole script |
+| `first_frame` | What the video's first frame shows. Segment 1's `visual` brief asks for it, and `get_timeline` returns it to the scene author |
+
+Hook types are one closed list, `formulas.py::HOOK_TYPES`, shared by every formula. A shared list
+lets openings be compared across formulas.
+
+A beat's `role` is one of `formulas.py::BEAT_ROLES`: `turn`, `reopen` (a re-opening of the
+question) or `payoff`. A formula has a single payoff, starting at `PAYOFF_FROM_MIN` percent or
+later, and at most one turn; other beats have no role. The roles reach the scene author as each
+segment's `role` in [`get_timeline`](06-mcp-server.md#get_timeline): a turn or a re-opening gets a
+visible change on its first word, and the payoff the video's strongest picture
+([The opening and the beats](10-scene-authoring.md#the-opening-and-the-beats)). The roles are data
+because a beat's name describes the beat and does not say where the picture must change. A segment's
+beat is matched to the formula's names whatever its case and spacing, and a label the formula does
+not have raises the `beat_unknown` script warning.
+
+The script writer reads a formula as text. `scripts/gen_formula_references.py` renders one reference
+file per formula into the script-writing skill's `formulas/` folder, and the skill reads the file of
+the video's formula only. To change a formula, edit its JSON file and run the script.
+`scripts/tests/test_script_writing_skill.py` fails while the generated text differs from the data.
+
+To add a formula, add its file and run the script. The formula is then a candidate for the pick,
+`update_video` accepts the id and `GET /script-formulas` lists it. A formula that is not
+experimental also needs three topics in the routing topic set (see
+[Formula routing tests](test-suites/formula-routing.md)). The routing skill rules out a formula that
+needs a second voice unless the roster holds a voice besides the video's (see
+[A voice per segment](#a-voice-per-segment)).
+
+### How a formula is picked
+
+A video's formula is decided once, at `TOPIC_APPROVED`, after its visual style and before its
+script. The `tubematic-formula-routing` skill makes the choice from data and
+[`choose_script_formula`](06-mcp-server.md#choose_script_formula) records it. The script-writing
+skill then writes in the pick. On a video whose formula is decided (a pick, or with no pick a
+person's `formula_choice`), `update_video` refuses a `formula_id` that differs from it and a write
+of new words with no record at all. `set_video_status` refuses `SCRIPT_READY`, `VOICING` and
+`VOICE_READY` while the stored script's `formula_id` is not the pick: a formula switch leaves another formula
+there and an opening switch clears it, so the video moves on only after a rewrite records it.
+
+```mermaid
+flowchart TD
+    A["TOPIC_APPROVED, style decided"] --> B["get_video: formula_routing.candidates"]
+    B --> C["Skill: describe the topic, rule out, score"]
+    C --> D{"Best fit used by the domain's previous two videos?"}
+    D -- "no" --> G["choose_script_formula"]
+    D -- "yes, another formula fits" --> E["Take the other formula"]
+    D -- "yes, nothing else fits" --> F["Keep it and pass repeat_reason"]
+    E --> G
+    F --> G
+    G --> H{"A person chose a formula?"}
+    H -- "no" --> I["formula_pick = the agent's formula"]
+    H -- "yes" --> J["formula_pick = the person's choice; runner-up = the agent's formula"]
+    I --> K["Script written in formula_pick"]
+    J --> K
+```
+
+Five columns on the video hold the decision (see [`videos`](03-database.md#videos)):
+
+| Column | Meaning |
+|---|---|
+| `formula_choice` | The formula a person chose, or `''` for Auto. Seeded from the domain's `default_formula_id` when the video is filed, by every creation path. Writable at `TOPIC_PROPOSED` |
+| `formula_pick` | The formula the script is written in. `''` until the pick is made |
+| `formula_runner_up` | The formula that came second, or `''` |
+| `formula_reason` | One sentence on why, at most `REASON_MAX_CHARS` characters as the agent writes it |
+| `formula_evidence` | What the install's watch figures said about the picked formula, as JSON the server writes, or `''` when the pick was made without them or a person chose the formula (see [Learned routing](#learned-routing)) |
+
+`formulas.py::routing_candidates` builds the candidate list `get_video` returns as
+`formula_routing.candidates`: every formula with its `line`, `best_for`, `also_for`, `avoid_for`,
+`signals` and `words`, and these marks:
+
+| Mark | Meaning |
+|---|---|
+| `suits_style` | The formula's `styles` names the video's visual style. The skill gives it one point. A style removes no candidate, because a style pack's own `script` text already outranks the formula |
+| `learned` | `{points, standing, videos}` from the domain's watch figures (see [Learned routing](#learned-routing)). `points` is 0 for every candidate when learning is inactive |
+| `recent` | The formula is the one of either of the domain's `ROTATION_WINDOW` most recently filed other videos that have a formula (the pick, else the one recorded with the script). A video back at `TOPIC_PROPOSED` or rejected does not count |
+| `available`, `unavailable_reason` | `false` for an experimental formula while `auto_experimental_formulas` is off. A person's own choice is available whatever the setting says |
+
+`get_video` returns the candidates to a video at `TOPIC_APPROVED` with no pick and to a video at
+`REVISION_REQUESTED` whose pick is not a person's choice, and an empty list otherwise, which keeps several thousand tokens out of every
+other session.
+
+`choose_script_formula` enforces these rules:
+
+- The visual style is decided first. At `TOPIC_APPROVED` the tool refuses a video still on `auto`
+  with no `style_pick`. A revision is past that point, so the check does not apply there.
+- The pick is made once at `TOPIC_APPROVED`. At `REVISION_REQUESTED` the agent may call the tool
+  again for a revision whose comment asks for another structure, which replaces the pick, and for
+  a video scripted before picks existed, which gets its first one. A video whose pick is a
+  person's choice is refused there.
+- The `formula` argument is the agent's own best formula. On a video with a `formula_choice` the
+  tool writes the person's choice as `formula_pick`, stores the agent's formula as the runner-up
+  when the two differ, and starts the reason with "Auto would have picked". The agent cannot
+  replace a person's choice.
+- A `recent` formula is refused unless the call carries `repeat_reason`, one sentence on why no
+  other formula fits. A domain whose videos share one structure reads as templated. The rule is
+  skipped on a video with a `formula_choice`, where the agent's formula is only the runner-up.
+- An unavailable `formula` or `runner_up` is refused.
+
+These events change a pick:
+
+| Event | What happens |
+|---|---|
+| The video returns to `TOPIC_PROPOSED` (`set_video_status` or `PATCH /videos/<id>`) | `formulas.py::PICK_RESET_SET` empties `formula_pick`, `formula_runner_up`, `formula_reason` and `formula_evidence`. `formula_choice` stays |
+| [`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style) | The same reset, so the formula is picked again for the new style |
+| [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula) | The pick and the runner-up swap, `formula_choice` becomes the new pick, `formula_evidence` is emptied, and the video returns to `TOPIC_APPROVED` to be rewritten |
+| A `script` written through [`PATCH /videos/<id>`](05-http-api.md#patch-videosvideo_id) | `PICK_RESET_SET` empties the pick with the script's record, because a script written by hand follows no formula. `formula_choice` stays |
+| [`POST /videos/<id>/switch-opening`](05-http-api.md#post-videosvideo_idswitch-opening) | The pick stays, or becomes the script's `formula_id` on a video with no pick. Another stored opening is marked as the one in use, `formula_id` is cleared, and the video returns to `TOPIC_APPROVED` to be rewritten from it |
+
+A pick or a choice that names a formula the installed version does not have counts as none, so
+the video is picked for again. A video scripted before picks existed has an empty `formula_pick`. A script revision keeps its
+stored `formula_id`, and one with no stored `formula_id` runs the routing skill first. An agent
+running an older skill against the current server writes its own formula, or none, which is
+accepted unless a person chose a formula for the video; then it is refused and the video waits for
+a session that runs the current skills. Both switches refuse a video still on `auto` with no
+`style_pick`, because sending it back to `TOPIC_APPROVED` would pick its style again.
+
+`scripts/eval_formula_routing.py` runs the skill over a fixed topic set with the Claude Code CLI
+and scores the picks. You run it by hand; see
+[Formula routing tests](test-suites/formula-routing.md).
+
+### Learned routing
+
+An install's own analytics are the only retention data it has. Learned routing reads them: in
+each domain, the formulas and the opening types that hold that domain's viewers get points in the
+router and a place in the writer's choice of opening. The rule is code in
+`tubematic_core/watch.py`, run by the MCP server. The same module holds the
+[watch figure](14-publishing.md#watch-figures) reader, `median` and `WATCH_MIN_GROUP`, which the
+API's **Watch time** figures use too, so the two processes read a post's figures the same way.
+
+`watch.py::domain_evidence` reads the latest snapshot of every published post of the domain's
+videos and takes its share watched (`LEARN_MEASURE`, `watched_pct`). Seconds watched would favour
+the longer formulas for their length. These posts are left out:
+
+- a post published less than `LEARN_MIN_AGE_DAYS` (7) ago, whose figures are still moving;
+- a post whose platform reports no share (TikTok's consumer connection).
+
+The comparison stays inside one account, because every account has its own audience and every
+platform measures in its own way:
+
+1. The account's baseline is the median share watched of all the domain's posts there. An
+   account with fewer than `WATCH_MIN_GROUP` (20) such posts gives no evidence.
+2. A formula, or a `hook_type`, with at least `WATCH_MIN_GROUP` posts on the account is compared
+   by its own median. It reads `better` at or above 1 + `LEARN_MARGIN` (10%) of the baseline,
+   `worse` at or below 1 − `LEARN_MARGIN`, and `even` between. Medians keep one outlier video
+   from carrying a group.
+3. Across accounts, `better` on at least one and `worse` on none is `better`, and the mirror is
+   `worse`. Any disagreement is `mixed` and counts as no evidence. A formula with no counted group
+   anywhere is `thin`.
+
+Learning is active when the setting `learned_routing` and `publishing_enabled` are both on and
+some formula has a counted group in the domain. Inactive, every candidate's points are 0 and
+routing is as described above. `watch.py::learning_mode` makes every `EXPLORE_EVERY`-th (4th)
+pick in a domain with evidence a trial pick, counted from the domain's videos with a stored
+`formula_evidence`. Without it the favoured formula is picked more, gathers more videos and looks
+ever more certain.
+
+| Mode | Points |
+|---|---|
+| `learned` | 2 for `better`, -1 for `worse`, 0 for the rest |
+| `explore` | 2 for `thin`, 0 for the rest |
+
+The routing skill adds the points only to the formulas that are a clear fit by the topic's own
+points, so that a formula that does not fit is not picked for its numbers. That rule is the
+skill's: `choose_script_formula` accepts any available candidate. Rotation then runs on the
+totals as before, and the figures are never a `repeat_reason`. Two clear fits that end within 1
+point of each other go to the skill's tie-break, whose first rule in `learned` mode is the
+standing (`better`, then `even`, `mixed` and `thin` alike, then `worse`). With the widest swing of
+3 points (2 against -1), the figures therefore decide between two clear fits up to 4 points apart
+on fit. The standing comes first in the tie-break because two formulas that both fit a topic are
+rarely scored within 1 point, so the 3 points alone would decide almost no pick. A trial pick
+skips the rule. `get_video` reads the figures only
+at `TOPIC_APPROVED` and `REVISION_REQUESTED`, where a formula is picked or a script written.
+
+The script-writing skill reads `formula_routing.learned.openings`, the opening types with a
+counted group, ranked. It is the last tie-break between two openings, after the quality of the
+opening and after the domain's recent types, and an unlisted or `mixed` type ranks as `even`. Opening types
+are few, so they gather enough videos before any formula does: the list is filled whenever learning
+is on, also while no formula counts. A trial pick empties it, so the favoured opening type does not
+gather videos and certainty the way an unchecked formula would. Once a pick is decided, the list
+follows the mode stored with it, and a pick with no record reads as a learned one.
+
+`get_video` gives `learned.stamp`, a short fingerprint of the mode and every formula's points
+(`watch.py::_stamp`). The skill passes it as `choose_script_formula`'s `learned_stamp` whenever
+learning is active, so every such pick is counted toward the trial picks. The tool works the figures out again under its write lock and refuses the pick when
+the stamp differs: another pick in the domain moved the trial-pick count, a setting changed, or new
+analytics moved a standing. It then stores `formula_evidence`, which the video window shows under
+**Why this formula**, so the record always describes the figures the agent scored with. The agent
+never supplies the record. No record is stored for a pick made without `learned_stamp` (learning
+was off when the agent read, or an older skill) or for a video with a `formula_choice`, whose
+script is written in the person's formula whatever the figures say; the stamp is not checked there.
+Such a pick does not count toward the trial picks either.
+
+### The topic's angle
+
+A video can arrive at the script writer with an [angle](02-pipeline.md#topic-angle): one sentence
+saying what the opening will use, and its kind. `get_video` returns them with `angle_formula`, the
+formula the kind is the first choice for (`tubematic_core/angles.py::ANGLE_KINDS`). The angle is
+used in two places:
+
+- Picking the formula ([How a formula is picked](#how-a-formula-is-picked)). With an angle,
+  `tubematic-formula-routing` takes `angle_kind` as the topic's shape and gives `angle_formula`
+  the points of a squarely matched kind of topic. Its other rules still apply: a formula ruled out
+  by its `avoid_for`, one the topic cannot fill with real facts, and rotation can pass it over, and
+  a person's choice outranks it. With no angle the router works the shape out from the topic. An
+  angle rewritten in a script revision sends the video through the router again.
+- Drafting the openings, in the script-writing skill. All three openings are built on the angle, each from a different shape of
+  the formula. The angle sentence is a note to the agent and is not spoken.
+
+A video has no angle when its topic came without one and the agent found none at pickup, or when
+its script was already written before topics carried angles. The script is then written from the
+topic alone.
+
+### What outranks a formula
+
+The script-writing skill ranks the four things that shape a script. Where two disagree, the earlier
+one wins:
+
+1. The fixed policy in the skill: the segment shape, markup, pronunciation, the ceiling, the visual
+   brief rule, the skill's grammar rules, accuracy, and no borrowed identity.
+2. The visual style's `script` text (see [Style packs](10-scene-authoring.md#style-packs)), where a
+   style says how narration maps to its picture, including how such a video ends.
+3. The formula.
+4. The script profile, or the skill's generic style when the video has none.
+
+A closing line (a follow ask, a sign-off) is written only when the install's
+[preferences](07-agent-layer.md#user-preferences) ask for one. It is one sentence after the payoff.
+
+## What a script records
+
+`update_video` takes two more arguments in the call that writes `script_segments`:
+
+- `formula_id`: the formula the script follows. On a video with a `formula_pick` it must equal the
+  pick.
+- `hooks`: the three openings the agent drafted, as `[{type, text, kept, note}]`. `type` is one of
+  the formula's hook types, `text` is the opening's spoken words, `kept` is true on the one the
+  script uses, and `note` (optional) says why another was dropped.
+
+They are stored on the video as `formula_id`, `hook_type` (the kept opening's type) and
+`hook_alternatives` (see [`videos`](03-database.md#videos)). Empty columns mean the script has no
+record. Nothing reads the record to decide what happens to a video.
+
+`update_video` refuses a record that would say something untrue. It refuses either argument without
+the other, and both without `script_segments`. `mcp/server.py::_script_record_error` refuses an id
+that is not a formula, a hook type the formula does not offer, fewer or more than three openings,
+two openings of one type, an opening with no spoken words or longer than `HOOK_TEXT_MAX_LEN`, and
+no opening or more than one marked `kept`.
+
+The record follows the script:
+
+| The script write | What happens to the record |
+|---|---|
+| Carries `formula_id` and `hooks` | Stored |
+| Carries neither, and the spoken words are unchanged (a pronunciation fix) | Kept. Nothing is checked and no `warnings` are returned, because that script is already approved |
+| Carries neither, and the spoken words changed | Cleared |
+| A flat `script` written through `PATCH /videos/<id>` | Cleared, with the stored warnings |
+
+A script write with no record is accepted. An agent running an older skill during an upgrade sends
+none, and refusing it would stop that agent's scripts.
+
+## Script warnings
+
+A script write through `update_video` that changes the spoken words, or that carries a record, runs
+`tubematic_core/script_checks.py::check` over the spoken words. The result is returned to the agent
+as `warnings`, a list of `{id, message}`, and stored in `videos.script_warnings`. The dashboard lists
+it on the Script tab. A fault inside a check is logged and the script is stored with no warnings.
+
+| `id` | Raised when |
+|---|---|
+| `no_formula` | The script has no formula on record |
+| `hook_mismatch` | The opening marked `kept` is not how the first segment begins |
+| `greeting_opener` | A greeting or an agenda line in the first two sentences |
+| `title_repeat` | The first sentence holds most of the publish title's words, or the title holds most of a short first sentence's words |
+| `beat_unknown` | A segment's `beat` is not a beat name of the recorded formula, so its picture duty is lost |
+| `opening_repeat` | The first sentence opens with the same three words as the first sentence of one of the same domain's 30 newest other scripts |
+| `hook_type_repeat` | The kept opening's type is the type of either of the domain's previous `ROTATION_WINDOW` videos that recorded one |
+| `staged_runup` | A phrase that announces a turn ("Here's the thing") |
+| `no_turn` | No turn word in the middle of the script |
+| `over_ceiling` | More than `WORD_CEILING` words |
+| `length_band` | A word count outside the formula's band, beyond `BAND_SLACK` |
+| `recap_ending` | A recap in the last two sentences |
+| `closing_ask` | The last sentence asks the viewer to follow, subscribe, share or comment |
+| `closing_repeat` | The sentence the script closes on opens with the same three words as the closing sentence of one of the same domain's 30 newest other scripts. A closing ask is skipped on both sides, so the sentences compared are the ones before it |
+
+A warning never refuses a write and never changes a status. A check that blocked would stop every
+script on its first false positive. The agent reads the list, fixes what is a real problem, and
+writes the script again at most once. The AI review does not run these checks, because a review
+finding sends a video to revision and a paid re-voice.
+
+A script whose closing line was asked for in the preferences can still get `closing_ask`. The
+server cannot tell that the line was asked for. A script whose length the visual style's `script`
+text set can still get `length_band`, for the same reason. The skill tells the agent to leave both.
+
+Every pattern and threshold is a constant in `script_checks.py`. The checks are regular expressions
+and counts, so they catch a script that fell back to a stock shape and do not judge whether a script
+is good.
 
 ---
 
@@ -102,17 +436,65 @@ the audio against it (see [AI Review](21-ai-review.md#what-it-is-given)).
 A legacy flat script is a video with a `script` and no `script_segments`. Its voicing path strips
 bracketed text and break tags itself, and writes no `segments` to the timeline.
 
+A voice with a `speed` other than 1.0 sends it as `voice_settings.speed`. A voice at 1.0 sends no
+speed, so its request is the one sent before speeds existed. See [Speed](#speed).
+
+### A voice per segment
+
+A segment may name its own roster voice in `voice_id`. Every other segment is spoken by the video's
+voice. `mcp/server.py::_plan_voice_runs` groups consecutive segments with the same voice into runs
+(`voice_models.py::segment_runs`), and `generate_voice` makes one request per run, in play order. A
+script with one voice is one run, voiced with the same request as before.
+
+Before the first request, every run is checked: its voice is still in the roster, its markup suits
+its voice's model, and its speed suits that model. A script with more than one run also needs
+`ffmpeg` on the MCP container's `PATH`. Any failure returns an error and spends nothing.
+
+Each request carries `previous_text` and `next_text`, up to 200 characters of the neighbouring runs'
+authored words, so the intonation carries across the change of voice. The authored words are sent
+because a run's own text holds respellings and, on `eleven_v3` and `eleven_v4`, IPA between
+slashes, which another model would read as text. `eleven_v3` answers these fields
+with a 400 (`voice_models.py::CONTEXT_REFUSED_MODELS`), so a run on that model goes without them.
+
+`_join_voice_audio` decodes each run to WAV, measures its length from the WAV's frame count, joins
+the WAVs and encodes one mp3. Each run's words are offset by the decoded length of the runs before
+it. The alignment's last time is not used for the offset, because on `eleven_v4` it can end about
+0.08 s after the audio does.
+
+A voice change costs no extra credits, because credits are charged per character. It costs one more
+request per run. When a later run fails, the credits of the runs already voiced are recorded, the
+video stays at `VOICING`, and a retry voices every run again. Each run's ledger row carries its
+voice in `raw_usage`, so the video window's Voice model row reports the video voice's model
+(`tubematic_core/usage.py::last_voice_model`).
+
+`videos.tts_text` holds every run's text joined with a space. The AI review is told the names of the
+voices when there are two or more (see [AI Review](21-ai-review.md#the-prompts-guard-clauses)).
+
+A `voice_id` equal to the video's voice is dropped when the segments are written
+(`voice_models.py::normalize_segment_voices`), so a later change of the video's voice moves every
+segment that has no voice of its own. A change of the video's voice alone does not rewrite the
+segments, so a segment can then name the video's own voice, and every reader treats it as the
+video's voice.
+
+A pronunciation fix resends the segments with the same spoken words and a tag added. When such a
+write carries no `voice_id` on any segment, `update_video` keeps each segment's stored voice by
+segment id, because the re-voice that follows is paid and would otherwise speak a second voice's
+lines in the video's voice.
+
 ### Voice previews
 
 `POST /voices/<voice_id>/preview` generates or replays a cached sample of a roster voice, spoken
-with that voice's model. The Settings page sends the row's model in the request body, so a model
+with that voice's model. The Settings page sends the row's model and speed in the request body, so a
 change can be heard before it is saved. The dashboard's preview button toggles play and pause, and
 it resets when the voice or model it is given changes.
 
 - A preview is generated on demand and cached. Saving settings generates none, because that would
   tie a database write to up to ten paid, slow calls that can fail.
-- The cache key is `(voice_id, model_id, sample_text)`. A model change therefore produces a fresh
-  sample, and the human-typed `voice_id` is not used in a file path.
+- The cache key is `(voice_id, model_id, speed, sample_text)`, with the speed left out at 1.0 so a
+  preview cached before speeds existed is still found. A model or speed change therefore produces a
+  fresh sample, and the human-typed `voice_id` is not used in a file path.
+- A speed in the body is refused with a `400` on a model outside `SPEED_MODELS`. A voice's stored
+  speed is dropped when the body names such a model.
 - Its credits are recorded with no video. The usage ledger treats that as a normal case, and the
   preview appears in the Analytics page's Spend tab. Do not invent a video id for it.
 
@@ -136,7 +518,7 @@ it resets when the voice or model it is given changes.
 |---|---|
 | `totalFrames` | `round(audioDurationSeconds × 30)`. The canonical length of the video |
 | `fps` | Always 30 |
-| `audioDurationSeconds` | The last character-end time in the ElevenLabs alignment |
+| `audioDurationSeconds` | The last character-end time in the ElevenLabs alignment. With more than one voice, the sum of the runs' decoded lengths |
 | `words[]` | Per-word frame spans, built by walking the character-level alignment and splitting on word boundaries. Drives the caption reveal |
 | `segments[]` | Per-segment frame spans. Present when the video had `script_segments` |
 
@@ -305,8 +687,25 @@ different models.
 
 ### The roster
 
-The roster is the `elevenlabs_voices` setting, a list of `{name, voice_id, model_id}`. It holds at
-most 10 voices (`MAX_VOICES`, copied in onboarding, the API, the MCP server and the Settings page).
+The roster is the `elevenlabs_voices` setting, a list of `{name, voice_id, model_id}` with an
+optional `speed`. It holds at most 10 voices (`MAX_VOICES`, copied in onboarding, the API, the MCP
+server and the Settings page). The API, the MCP server and onboarding read it with the same rules,
+`voice_models.py::roster_entry_error`, and read a roster with a malformed entry as empty.
+
+### Speed
+
+A voice's `speed` is ElevenLabs' `voice_settings.speed`, from `SPEED_MIN` (0.7) to `SPEED_MAX` (1.2)
+in steps of `SPEED_STEP` (0.05). Only the models in `voice_models.py::SPEED_MODELS` honour it:
+`eleven_multilingual_v2`, `eleven_flash_v2_5`, `eleven_turbo_v2_5`, `eleven_flash_v2` and
+`eleven_turbo_v2`. `eleven_v3` and `eleven_v4` answer a request with a speed and ignore it, so
+`POST /settings` refuses a speed on them with a `400`. A roster stored around that check (by hand
+in the database) reads as empty, so `generate_voice` spends nothing on it.
+
+A speed of 1.0 is never stored (`voice_models.py::normalize_roster_entry`). A roster in which no voice
+has a speed keeps the shape older versions read, and older versions read a roster with any other key
+as empty. On `eleven_multilingual_v2`, 1.15 brings a technical script from about 155 to about 185
+words a minute. Onboarding does not ask for a speed. It keeps one set on the dashboard, and says so
+when it drops one because the voice moved to a model that ignores speed.
 
 A fresh install starts with two voices, `tubematic_core/voice_models.py::DEFAULT_VOICES`: Teja on
 `eleven_v4` as the install default, and Adam on `eleven_v3`. Onboarding offers them as the default
@@ -339,6 +738,14 @@ prevent it:
    shows it disabled.
 3. `generate_voice` checks again before it spends, because a voice's model can be changed in
    Settings after the script was written.
+
+Each check reads every segment against the voice that speaks it. A change of the video's voice is
+checked against the segments without a voice of their own (`voice_models.py::video_voice_conflict`).
+Approval to `VOICING` checks every segment, with or without a voice in the request
+(`pipeline.py::_script_voice_conflict`), because a segment's own voice may have had its model edited.
+At `SCRIPT_READY` a person can give a segment another voice on the Script tab
+(`PATCH /videos/<id>` with `segment_voices`), and a voice that cannot speak the segment's markup is
+refused with a `409`.
 
 The API computes the conflicts with one function, `voice_models.py::markup_conflict`, and sends
 them on the video payload, so the dashboard disables the same voices the API refuses. The human
@@ -403,9 +810,17 @@ flowchart LR
 - The profile holds style: structure, tone, hook patterns, vocabulary, anti-patterns. It leaves out
   absolute word and duration counts and any creator identity (name, channel, handle, sponsor),
   because the finished script is voiced by your ElevenLabs voice.
-- The mechanical contract stays in `tubematic-script-writing-skill`: segment shape, length budget,
-  pronunciation and pause rules, and the rule that decides each beat's visual brief from the beat's
-  subject and the video's visual style. A profile cannot override it.
+- The script's structure comes from its [formula](#formulas), and the profile supplies the voice.
+  The script-writing skill applies a profile's Voice & Tone, Explanation Style, Vocabulary &
+  Signature Phrasing and Anti-patterns sections. It uses Hook Patterns as wording for the opening
+  shape the formula fixes. It does not use Structure Template, and it uses CTA Template only to
+  word a closing line the preferences asked for.
+- The skill tells the agent to use a profile's signature phrases in some scripts and no single one
+  in every script. A phrase repeated as every video's opener or closer is what a returning viewer
+  notices first.
+- The mechanical contract stays in `tubematic-script-writing-skill`: segment shape, the length
+  ceiling, pronunciation and pause rules, and the rule that decides each beat's visual brief from
+  the beat's subject and the video's visual style. A profile cannot override it.
 - A profile is written once and cannot be edited. Delete a bad profile and create it again.
 - Deleting a profile archives the row, so a video that referenced it still resolves.
   `GET /script-profiles/<id>` serves archived rows.

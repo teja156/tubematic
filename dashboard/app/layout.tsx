@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { TopBar } from "@/components/TopBar";
 import { TimeZoneProvider } from "@/components/TimeZoneProvider";
+import { VisualStylesProvider } from "@/components/VisualStylesProvider";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import "./globals.css";
 
@@ -28,6 +29,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body>
         <TimeZoneProvider>
+        <VisualStylesProvider>
           <TopBar />
           <UpdateBanner />
           <main
@@ -42,6 +44,7 @@ export default function RootLayout({
           >
             {children}
           </main>
+        </VisualStylesProvider>
         </TimeZoneProvider>
       </body>
     </html>

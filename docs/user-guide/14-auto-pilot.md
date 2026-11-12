@@ -27,21 +27,22 @@ It is off by default. Switching it on does nothing until you select a domain on
 
 ## Turning it on
 
-Open **Settings → Auto Pilot**. The tab has its own **Save**, and saves everything on it together.
+Open **Settings → Auto Pilot**. Each change on the tab is saved as you make it.
 
 ![Settings, Auto Pilot tab: a warning box, the on and off switch, the gap between publishes, the in-progress limit, a tick box per domain and a daily number per account](../images/settings-auto-pilot.png)
 
 | Setting | What it does | Default |
 |---|---|---|
 | **Auto Pilot** on or off | Off stops all of it and keeps the rest of the tab as you set it | Off |
-| **Gap between publishes** | The shortest time between two posts on one account. Enter minutes or hours, up to a week | 4 hours |
+| **Gap between publishes** | The shortest time between two posts on one account. Enter minutes or hours, up to a week. Switching between minutes and hours shows the same gap in the other unit | 4 hours |
 | **Most videos in progress** | How many videos may be between voicing and publishing at once. See [The in-progress limit](#the-in-progress-limit) | 0, which means no limit |
 | **Projects** | Which domains are on Auto Pilot. Each one has its own list of accounts, chosen from the accounts ticked on the Socials page | None |
 | A number for each account, under **Accounts** | How many videos Auto Pilot posts to the account in one day. 0 means it does not post there | 1 |
 
 When you turn Auto Pilot on, or add a domain while it is on, the dashboard asks you to confirm and
-tells you how many videos are waiting for approval in those domains. Auto Pilot approves them as
-soon as you save.
+tells you how many videos are waiting for approval in those domains. Nothing is saved until you
+confirm, and **Cancel** leaves the tab as it was. Auto Pilot approves those videos as soon as you
+confirm.
 
 ## What it approves
 
@@ -152,8 +153,8 @@ holding new videos back.
 | To stop | Do this |
 |---|---|
 | Everything, for now | Pause the pipeline with the switch above the tabs on **Settings** |
-| Auto Pilot, and keep the pipeline running | Switch **Auto Pilot** off on its tab and save |
-| One domain | Untick it on the tab and save |
+| Auto Pilot, and keep the pipeline running | Switch **Auto Pilot** off on its tab |
+| One domain | Untick it on the tab |
 | One scheduled post | Open the video and press **Cancel schedule** |
 
 Cancelling a scheduled post takes that video off Auto Pilot for good. Publish it by hand when you

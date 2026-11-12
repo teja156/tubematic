@@ -61,6 +61,9 @@ MAX_TOTAL_CHARS = 6000
 TOPICS_PER_MESSAGE = 15
 _TOPIC_NAME_BUDGET = 90
 _TOPIC_VALUE_BUDGET = 250
+# Below this many characters left after the angle, a topic's brief is left out
+# of its field: a few characters and an ellipsis say nothing.
+_TOPIC_BRIEF_MIN = 40
 
 # Embed colours, matching the dashboard's own palette so the two read as one
 # product: blurple for information, amber for "costs money next", green for done,
@@ -363,12 +366,24 @@ def build_topics_payload(videos: list, *, base_url: str = "") -> dict:
             str(video.get("strategy") or "manual"),
             f"score {score}/10" if score > 0 else "unscored",
         ]
+        # The angle's score beside the topic's, when the angle has one: a
+        # person's own angle, or none, is unscored and adds nothing here.
+        angle_score = video.get("angle_score") or 0
+        if angle_score > 0:
+            facts.append(f"angle {angle_score}/10")
         if video.get("project_name"):
             facts.append(str(video["project_name"]))
-        brief = _clip(video.get("topic"), _TOPIC_VALUE_BUDGET - len(" · ".join(facts)) - 4)
+        # The angle leads: it is the sentence that says why the topic is worth
+        # a video. The brief takes what is left of the field's budget.
+        budget = _TOPIC_VALUE_BUDGET - len(" · ".join(facts)) - 4
+        angle = _clip(video.get("angle") or "", budget)
+        if angle:
+            budget -= len(angle) + 1
+        brief = _clip(video.get("topic"), budget) if budget >= _TOPIC_BRIEF_MIN else ""
+        text = "\n".join(part for part in (angle, brief) if part)
         fields.append({
             "name": _clip(_display_name(video), _TOPIC_NAME_BUDGET),
-            "value": f"`{' · '.join(facts)}`\n{brief}",
+            "value": f"`{' · '.join(facts)}`\n{text}",
         })
 
     count = len(videos)

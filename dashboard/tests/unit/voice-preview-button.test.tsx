@@ -162,6 +162,24 @@ describe("VoicePreviewButton", () => {
       body: JSON.stringify({ model_id: "eleven_v3" }) });
   });
 
+  it("sends the speed it was given, and fetches a new sample when the speed changes (TMDEV-216)", async () => {
+    stubFetch();
+    const { rerender } = render(
+      <VoicePreviewButton voiceId="abc123" modelId="eleven_multilingual_v2" speed={1} />);
+    await act(async () => { fireEvent.click(screen.getByTestId("voice-preview-abc123")); });
+    expect(fetch).toHaveBeenLastCalledWith("/api/proxy/voices/abc123/preview", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: "eleven_multilingual_v2", speed: 1 }) });
+
+    rerender(<VoicePreviewButton voiceId="abc123" modelId="eleven_multilingual_v2" speed={1.15} />);
+    expect(screen.getByTestId("voice-preview-abc123").textContent).toBe("▶");
+    await act(async () => { fireEvent.click(screen.getByTestId("voice-preview-abc123")); });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenLastCalledWith("/api/proxy/voices/abc123/preview", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: "eleven_multilingual_v2", speed: 1.15 }) });
+  });
+
   it("drops a slow response for a model that is no longer selected", async () => {
     let resolveFirst: (v: unknown) => void = () => {};
     vi.stubGlobal("fetch", vi.fn()

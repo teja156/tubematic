@@ -850,6 +850,44 @@ describe("VideoModal — read-only voice and voice model", () => {
   });
 });
 
+// ── the last successful render (TMDEV-206) ──────────────────────────────────
+// Which renderer made the video, on the GPU or the CPU, and how long the
+// Remotion run took. A video rendered before the record existed has no
+// renderer id, and the rows hide.
+
+describe("VideoModal — rendered by and render time", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows the renderer, GPU or CPU, and the render time", async () => {
+    const video = { ...makeVideo("VIDEO_READY"), last_render_renderer_id: "r_abc",
+      last_render_renderer_name: "laptop-5070", last_render_on_gpu: 1, last_render_seconds: 192.4 };
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    expect(await screen.findByText("Rendered by")).toBeInTheDocument();
+    expect(screen.getByTestId("rendered-by")).toHaveTextContent("laptop-5070 · GPU");
+    expect(screen.getByTestId("render-time")).toHaveTextContent("3m 12s");
+  });
+
+  it("says CPU, falls back to the id with no name, and shows a dash with no time", async () => {
+    const video = { ...makeVideo("PUBLISHED"), last_render_renderer_id: "r_abc",
+      last_render_renderer_name: "", last_render_on_gpu: 0, last_render_seconds: 0 };
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    expect(await screen.findByTestId("rendered-by")).toHaveTextContent("r_abc · CPU");
+    expect(screen.getByTestId("render-time")).toHaveTextContent("—");
+  });
+
+  it("is hidden on a video with no render recorded", async () => {
+    const video = { ...makeVideo("VIDEO_READY"), last_render_renderer_id: "",
+      last_render_renderer_name: "", last_render_on_gpu: 0, last_render_seconds: 0 };
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    await screen.findByText("Created");
+    expect(screen.queryByText("Rendered by")).toBeNull();
+    expect(screen.queryByText("Render time")).toBeNull();
+  });
+});
+
 // ── the title/topic split ────────────────────────────────────────────────────
 // The header shows the short display name; the full descriptive brief moved to
 // its own Topic tab, since it is far too long for either the header or the
@@ -1072,6 +1110,57 @@ describe("VideoModal — publishing", () => {
     fireEvent.click(await screen.findByText("Publishing Results"));
     expect(await screen.findByTestId("publication-error-pubX")).toBeInTheDocument();
     expect(screen.queryByTestId("publication-url-pubX")).toBeNull();
+  });
+
+  // TMDEV-212: each post's latest snapshot, read from the same request.
+  it("shows how a post is doing, with what the platform did not report said in words", async () => {
+    // Instagram: seconds and reach and saves, a share only because the video's
+    // length is stored, and never a stayed-to-watch figure.
+    const video = makeVideo("PUBLISHED");
+    mockFetchWithPublications(video, [{
+      ...LIVE_POST, platform: "instagram", views: 1500, likes: 30, comments: 0, shares: 6,
+      avg_watch_secs: 23.5, watched_pct: 25, stayed_pct: null, reach: 410, saves: 12,
+      fetched_at: "2026-09-02T00:00:00Z",
+    }]);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    fireEvent.click(await screen.findByText("Publishing Results"));
+    const figures = await screen.findByTestId("publication-figures-pub1");
+    expect(screen.getByTestId("figure-pub1-Views")).toHaveTextContent("1,500");
+    expect(screen.getByTestId("figure-pub1-Comments")).toHaveTextContent("0");
+    expect(screen.getByTestId("figure-pub1-Watched")).toHaveTextContent("23.5 s");
+    expect(screen.getByTestId("figure-pub1-% watched")).toHaveTextContent("25%");
+    expect(screen.getByTestId("figure-pub1-Stayed")).toHaveTextContent("not reported");
+    expect(screen.getByTestId("figure-pub1-Reach")).toHaveTextContent("410");
+    expect(screen.getByTestId("figure-pub1-Saves")).toHaveTextContent("12");
+    expect(figures).toHaveTextContent("Read ");
+  });
+
+  it("says a post has not been read yet instead of listing blanks", async () => {
+    const video = makeVideo("PUBLISHED");
+    mockFetchWithPublications(video, [{
+      ...LIVE_POST, views: null, likes: null, comments: null, shares: null,
+      avg_watch_secs: null, watched_pct: null, stayed_pct: null, reach: null, saves: null,
+      fetched_at: null,
+    }]);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    fireEvent.click(await screen.findByText("Publishing Results"));
+    expect(await screen.findByTestId("publication-figures-pub1"))
+      .toHaveTextContent("No figures read yet");
+    expect(screen.queryByTestId("figure-pub1-Views")).toBeNull();
+  });
+
+  it("shows no figures for a failed target, or from an API that sends none", async () => {
+    const video = makeVideo("PUBLISHED");
+    mockFetchWithPublications(video, [
+      LIVE_POST,
+      { ...LIVE_POST, id: "pub2", status: "FAILED", post_url: "", error: "nope",
+        views: null, fetched_at: null },
+    ]);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    fireEvent.click(await screen.findByText("Publishing Results"));
+    await screen.findByTestId("publication-pub1");
+    expect(screen.queryByTestId("publication-figures-pub1")).toBeNull();
+    expect(screen.queryByTestId("publication-figures-pub2")).toBeNull();
   });
 });
 
@@ -1708,5 +1797,18 @@ describe("VideoModal — mascot picker", () => {
     expect(select.disabled).toBe(true);
     fireEvent.click(screen.getByText("Approve Topic"));
     expect(onAction.mock.calls[0][3]).toMatchObject({ visual_style: "cartoon_3d", mascot_id: "" });
+  });
+
+  it("clears and disables the picker when Under the Hood is chosen", async () => {
+    const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
+    mockFetchFor(video);
+    const onAction = vi.fn();
+    render(<VideoModal video={video} mascots={MASCOTS} gpu={gpu("working")} onClose={() => {}} onAction={onAction} />);
+    const select = (await screen.findByTestId("video-modal-mascot-select")) as HTMLSelectElement;
+    fireEvent.change(screen.getByTestId("video-modal-style-select"), { target: { value: "under_the_hood" } });
+    expect(select.value).toBe("");
+    expect(select.disabled).toBe(true);
+    fireEvent.click(screen.getByText("Approve Topic"));
+    expect(onAction.mock.calls[0][3]).toMatchObject({ visual_style: "under_the_hood", mascot_id: "" });
   });
 });

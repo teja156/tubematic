@@ -40,6 +40,7 @@ On the **Socials** page:
 2. Approve the connection. The flow ends on a postforme.dev page.
 3. Go back to the dashboard and press **Refresh accounts list**.
 4. Tick the account. A new account arrives unticked, and Tubematic posts only to ticked accounts.
+   The tick saves at once, and **✓ Saved** shows beside the account.
 
 If your browser blocks the new tab, the page shows a link to open instead. If the platform is not
 enabled in your postforme project, the page shows postforme's message saying so.
@@ -152,10 +153,63 @@ the Publish dialog opens. Pick the accounts and privacy again.
 Tubematic reads each published post's figures once an hour. **Refresh metrics** on the
 **Analytics** page reads them now.
 
-![The Videos tab of Analytics: totals for views, likes, comments and shares, a row per post, and bar charts by platform, by account and by month](../images/analytics-videos.png)
+![The Videos tab of Analytics: totals for views, likes, comments and shares, a row per post with its counts and watch figures, and bar charts by platform, by account and by month](../images/analytics-videos.png)
 
 A figure the platform did not report shows as a dash. Figures are kept after a video's files are
 deleted, so an archived video still shows its numbers.
+
+### Watch figures
+
+The **Videos** tab shows three watch figures beside the counts. You can sort the list by each of
+them.
+
+| Figure | Meaning |
+|---|---|
+| **Watched** | The average length of a view, in seconds |
+| **% watched** | That length as a share of the video. A video that loops can pass 100% |
+| **Stayed** | The share of views in which the viewer kept watching |
+
+The **Publishing Results** tab in a video's window shows the same figures for each post, with its
+reach and saves, and says "not reported" where the platform gave none.
+
+Each platform reports its own set:
+
+| Platform | Watched | % watched | Stayed | Reach | Saves |
+|---|---|---|---|---|---|
+| YouTube | Yes | Yes | Yes | No | No |
+| Instagram | Yes | Yes, when Tubematic knows the video's length | No | Yes | Yes |
+| Facebook | Yes | Yes | No | Yes | No |
+| TikTok | No | No | No | No | No |
+
+Instagram reports seconds only, so Tubematic divides them by the video's length. It stores that
+length while the video's files exist. An Instagram post of a video whose files were deleted before
+its length was stored shows a dash under **% watched**.
+
+postforme states that Instagram can take up to 48 hours to report some figures of a new post.
+
+### Comparing groups of videos
+
+The **Watch time** tab groups one account's posts and shows the three figures for each group.
+
+![The Watch time tab for a YouTube account, grouped by visual style: a row per style with its number of videos and the three watch figures, and a TOO FEW tag on the two groups under 20 videos](../images/analytics-watch-time.png)
+
+1. Choose the account. The tab opens on the account with the most posts.
+2. Choose **Group by**: visual style, script profile, domain, script length, formula or opening.
+   Script length is the script's word count, in bands of 50 words. Formula is the
+   [script formula](03-using-tubematic.md#script-formulas) the agent chose, and opening is the kind
+   of opening the script starts with, such as a question or a scene.
+
+How to read the table:
+
+- Each figure is the median of the group's videos, so one video with an unusual audience does not
+  set it.
+- **Videos** is the number of posts in the group. A figure that only some of them report says how
+  many, for example `25% (30 of 40)`. It adds `too few` when fewer than 20 report it.
+- A group with fewer than 20 videos is marked `TOO FEW`. One unusual video can move its figure, so
+  treat it as a hint.
+- **Not recorded** holds the videos whose script has no formula or opening on record.
+- Compare groups inside one account. Platforms count views and watch time differently, and every
+  account has its own audience.
 
 ## Platforms
 

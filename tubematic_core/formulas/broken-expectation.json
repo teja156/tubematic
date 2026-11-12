@@ -1,0 +1,106 @@
+{
+  "id": "broken-expectation",
+  "order": 20,
+  "family": "explain",
+  "experimental": false,
+  "label": "Broken Expectation",
+  "line": "Open on a failure the viewer has had or can reproduce in ten seconds. Blame two wrong suspects, then name the real mechanism and close on the phrase the title used.",
+  "best_for": [
+    "a tool did something that looks wrong",
+    "an 'it says it worked, but' moment the viewer can reproduce"
+  ],
+  "also_for": [
+    "a design that looks stupid from outside, when the viewer meets it as a failure"
+  ],
+  "avoid_for": [
+    "architecture and concept topics with no visible symptom",
+    "a tip with nothing failing"
+  ],
+  "signals": [
+    "the viewer can reproduce the failure themselves",
+    "a tool reports success while something is wrong",
+    "there is a literal output, message or screen to show",
+    "the cause is one rule"
+  ],
+  "styles": [
+    "terminal_doc",
+    "system_flow",
+    "under_the_hood"
+  ],
+  "words": [
+    130,
+    200
+  ],
+  "beats": [
+    {
+      "name": "The symptom",
+      "from": 0,
+      "to": 15,
+      "job": "The exact input and the wrong output, with real values, happening to the viewer."
+    },
+    {
+      "name": "Wrong suspect 1",
+      "from": 15,
+      "to": 25,
+      "job": "The obvious thing to blame.",
+      "role": "reopen"
+    },
+    {
+      "name": "Wrong suspect 2",
+      "from": 25,
+      "to": 32,
+      "job": "The next thing to blame. It happens there too.",
+      "role": "reopen"
+    },
+    {
+      "name": "Turn",
+      "from": 32,
+      "to": 38,
+      "job": "One short sentence: nothing is broken, the tool is answering a different question.",
+      "role": "turn"
+    },
+    {
+      "name": "Mechanism",
+      "from": 38,
+      "to": 78,
+      "job": "Two or three facts, each with a number or a named part."
+    },
+    {
+      "name": "Root cause",
+      "from": 78,
+      "to": 93,
+      "job": "One sentence the viewer can repeat.",
+      "role": "payoff"
+    },
+    {
+      "name": "Callback",
+      "from": 93,
+      "to": 100,
+      "job": "The title's phrase, now explained. A one-line fix may follow, because it is the payoff."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "problem",
+      "shape": "You [did one small thing]. And [tool] insists you [did something else]."
+    },
+    {
+      "type": "myth",
+      "shape": "[Tool] can obviously [do X]. Try [a tiny test anyone can run] and you get [the wrong result]."
+    },
+    {
+      "type": "question",
+      "shape": "Why does [tool] report [wrong-looking thing] when all you did was [small thing]?"
+    }
+  ],
+  "holds": "One question (why did it fail?) held until the root cause. Every beat is joined to the next by 'but' or 'so'. The two wrong suspects are the re-openings; the viewer's own objection, spoken aloud, can be a third.",
+  "ending": "The callback to the title's phrase, or the general rule the case stands for. A one-line fix is allowed.",
+  "first_frame": "The failure happening: the exact input going in and the wrong output coming out, with the real values readable.",
+  "pitfalls": [
+    "Naming the mechanism in the first sentence",
+    "A symptom the viewer cannot picture or reproduce",
+    "Three or more mechanisms: one failure, one cause",
+    "A callback that opens 'And that's why' or 'So that's how': it reads as a recap. State the title's phrase as a plain sentence"
+  ],
+  "template": "You [did one small thing]. And [tool] [reports something that looks wrong]. So you blame [the obvious suspect]. But [the second suspect] does it too. [Tool] is not broken. It [answers a different question]. [Fact with a number]. [Fact]. [Fact]. The real cause: [one sentence]. That is why [the title's phrase]. [One-line fix]."
+}

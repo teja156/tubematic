@@ -52,6 +52,7 @@ function mockApi({
   openaiKey = "",
   projects = [] as unknown[],
   post = { status: 201, body: { id: "v1", title: "T", status: "TOPIC_APPROVED" } as unknown },
+  angleKinds = null as unknown,
 } = {}) {
   return vi.spyOn(global, "fetch").mockImplementation((url, init) => {
     const u = url.toString();
@@ -65,8 +66,16 @@ function mockApi({
       });
     }
     if (u.endsWith("/projects")) return ok(projects);
+    if (u.endsWith("/angle-kinds")) return angleKinds === null ? ok({}, 500) : ok(angleKinds);
     if (u.endsWith("/script-profiles")) {
       return ok([profile({}), profile({ id: "p2", name: "Building", status: "GENERATING" })]);
+    }
+    if (u.endsWith("/script-formulas")) {
+      return ok({
+        formulas: [{ id: "scene-story", label: "Scene Story", experimental: false },
+                   { id: "news-take", label: "News Take", experimental: true }],
+        hook_types: [],
+      });
     }
     return ok({});
   });
@@ -112,6 +121,85 @@ describe("NewVideoPage", () => {
     await waitFor(() => expect(screen.getByRole("option", { name: "Default (Narrator)" })).toBeTruthy());
   });
 
+  // TMDEV-207: Automatic on this page is the manual domain's agent when it has
+  // a live one. The page only names it; the API does the seeding, so the
+  // request for an untouched picker stays what it was.
+  const MANUAL = {
+    id: "manual", name: "Manual Videos", default_agent_id: "codex",
+    default_agent_model: "gpt-5", default_agent_effort: "max",
+  };
+
+  function blank(testId: string) {
+    return (screen.getByTestId(testId) as HTMLSelectElement).options[0].textContent;
+  }
+
+  it("names the manual domain's agent, model and effort as what Automatic means", async () => {
+    const spy = mockApi({ projects: [MANUAL] });
+    await ready();
+    await waitFor(() => expect(blank("new-video-agent")).toBe("Domain default (Codex)"));
+    expect(blank("new-video-model")).toBe("gpt-5 (domain default)");
+    expect(blank("new-video-effort")).toBe("max (domain default)");
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy)).toMatchObject({ agent_model: "", agent_effort: "" }));
+    expect(posted(spy)).not.toHaveProperty("agent_id");
+  });
+
+  it("reads as the weighted deal when the manual domain names no agent", async () => {
+    mockApi({ projects: [{ id: "manual", name: "Manual Videos" }] });
+    await ready();
+    await waitFor(() => screen.getByRole("option", { name: "Codex" }));
+    expect(blank("new-video-agent")).toBe("Automatic (dealt by weight)");
+    expect(blank("new-video-model")).toBe("Agent default");
+    expect(blank("new-video-effort")).toBe("Agent default");
+  });
+
+  it("ignores a manual-domain agent that is uninstalled, as the API does, but keeps its effort", async () => {
+    mockApi({ projects: [{ ...MANUAL, default_agent_id: "old", default_agent_model: "sonnet" }] });
+    await ready();
+    await waitFor(() => expect(blank("new-video-effort")).toBe("max (domain default)"));
+    expect(blank("new-video-agent")).toBe("Automatic (dealt by weight)");
+    expect(blank("new-video-model")).toBe("Agent default");
+  });
+
+  it("names the domain agent's own model and effort when the domain sets neither", async () => {
+    mockApi({ projects: [{ ...MANUAL, default_agent_model: "", default_agent_effort: "" }] });
+    await ready();
+    await waitFor(() => expect(blank("new-video-agent")).toBe("Domain default (Codex)"));
+    expect(blank("new-video-model")).toBe("Agent default");
+    expect(blank("new-video-effort")).toBe("medium (agent default)");
+  });
+
+  it("says only that the domain has an agent when the agent list cannot be loaded", async () => {
+    // Whether that agent is live is unknown here, and the API decides either
+    // way, so the page must not claim the weighted deal.
+    mockApi({ agents: "fail", projects: [MANUAL] });
+    render(<NewVideoPage />);
+    await waitFor(() => expect(blank("new-video-agent")).toBe("Domain default"));
+    expect(blank("new-video-model")).toBe("Domain default");
+    expect(blank("new-video-effort")).toBe("max (domain default)");
+  });
+
+  it("a picked agent with no usable model list does not show the domain's model", async () => {
+    mockApi({
+      agents: [...AGENTS, agent({ id: "bare", name: "Bare", models: [], is_default: false })],
+      projects: [MANUAL],
+    });
+    await ready();
+    await waitFor(() => expect(blank("new-video-model")).toBe("gpt-5 (domain default)"));
+    fireEvent.change(screen.getByTestId("new-video-agent"), { target: { value: "bare" } });
+    expect(blank("new-video-model")).toBe("Agent default");
+  });
+
+  it("a picked agent takes nothing from the manual domain", async () => {
+    mockApi({ projects: [MANUAL] });
+    await ready();
+    await waitFor(() => expect(blank("new-video-agent")).toBe("Domain default (Codex)"));
+    fireEvent.change(screen.getByTestId("new-video-agent"), { target: { value: "claude" } });
+    expect(blank("new-video-effort")).toBe("high (agent default)");
+    expect((screen.getByTestId("new-video-model") as HTMLSelectElement).value).toBe("sonnet");
+  });
+
   it("sends the defaults for untouched pickers, approved", async () => {
     const spy = mockApi();
     await ready();
@@ -124,6 +212,7 @@ describe("NewVideoPage", () => {
       agent_model: "",
       agent_effort: "",
       script_profile_id: "",
+      formula_choice: "",
       visual_style: "auto",
       voice_id: "",
     }));
@@ -162,9 +251,23 @@ describe("NewVideoPage", () => {
       agent_model: "opus",
       agent_effort: "max",
       script_profile_id: "p1",
+      formula_choice: "",
       visual_style: "illustrated",
       voice_id: "o2",
     }));
+  });
+
+  it("offers Auto and every formula, and sends the one picked", async () => {
+    const spy = mockApi();
+    await ready();
+    const select = screen.getByLabelText("Formula") as HTMLSelectElement;
+    await waitFor(() => expect([...select.options].map((o) => o.textContent)).toEqual(
+      ["Auto", "Scene Story", "News Take (experimental)"]));
+    expect(select.value).toBe("");
+    fill();
+    fireEvent.change(select, { target: { value: "news-take" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy).formula_choice).toBe("news-take"));
   });
 
   it("disables the model picker under Automatic", async () => {
@@ -228,6 +331,84 @@ describe("NewVideoPage", () => {
     await waitFor(() =>
       expect(screen.getByTestId("new-video-error").textContent).toContain("not an installed agent"));
     expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("How DNS resolves a name");
+  });
+
+  // ── The angle (TMDEV-214): optional, and never a reason to refuse ─────────
+
+  const KINDS = [
+    { id: "paradox", label: "Paradox", means: "Something works in a way that seems impossible." },
+    { id: "incident", label: "Incident", means: "A real outage with a timeline." },
+  ];
+
+  it("sends no angle when the field is left empty", async () => {
+    const spy = mockApi({ angleKinds: KINDS });
+    await ready();
+    await screen.findByTestId("new-video-angle");
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy)).not.toHaveProperty("angle"));
+    expect(posted(spy)).not.toHaveProperty("angle_kind");
+  });
+
+  it("sends the sentence and its kind together", async () => {
+    const spy = mockApi({ angleKinds: KINDS });
+    await ready();
+    fill();
+    fireEvent.change(await screen.findByTestId("new-video-angle"),
+      { target: { value: "  The backup reported success for a year.  " } });
+    fireEvent.change(screen.getByTestId("new-video-angle-kind"), { target: { value: "incident" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy)).toMatchObject({
+      angle: "The backup reported success for a year.", angle_kind: "incident",
+    }));
+  });
+
+  it("will not submit a sentence without a kind, or one over the limit", async () => {
+    mockApi({ angleKinds: KINDS });
+    await ready();
+    fill();
+    const submit = screen.getByRole("button", { name: /submit/i }) as HTMLButtonElement;
+    const kind = await screen.findByTestId("new-video-angle-kind") as HTMLSelectElement;
+    // Nothing typed: the kind is not asked for.
+    expect(kind.disabled).toBe(true);
+    expect(submit.disabled).toBe(false);
+    fireEvent.change(screen.getByTestId("new-video-angle"), { target: { value: "A sentence." } });
+    expect(kind.disabled).toBe(false);
+    expect(submit.disabled).toBe(true);
+    fireEvent.change(kind, { target: { value: "paradox" } });
+    expect(submit.disabled).toBe(false);
+    fireEvent.change(screen.getByTestId("new-video-angle"), { target: { value: "x".repeat(301) } });
+    expect(screen.getByText(/^301\/300/)).toBeTruthy();
+    expect(submit.disabled).toBe(true);
+  });
+
+  it("gives the angle and its kind a label each", async () => {
+    mockApi({ angleKinds: KINDS });
+    await ready();
+    // One label around both controls would name the text box after every kind.
+    expect((await screen.findByLabelText("Angle (optional)")).getAttribute("data-testid")).toBe("new-video-angle");
+    expect(screen.getByLabelText("Angle kind").getAttribute("data-testid")).toBe("new-video-angle-kind");
+  });
+
+  it("does not offer the angle while the kinds cannot be loaded, and still submits", async () => {
+    const spy = mockApi();
+    await ready();
+    expect(screen.queryByTestId("new-video-angle")).toBeNull();
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy)).not.toHaveProperty("angle"));
+  });
+
+  it("clears the angle with the rest of the form after a submission", async () => {
+    mockApi({ angleKinds: KINDS });
+    await ready();
+    fill();
+    fireEvent.change(await screen.findByTestId("new-video-angle"), { target: { value: "A sentence." } });
+    fireEvent.change(screen.getByTestId("new-video-angle-kind"), { target: { value: "paradox" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(screen.getByTestId("new-video-success")).toBeTruthy());
+    expect((screen.getByTestId("new-video-angle") as HTMLTextAreaElement).value).toBe("");
+    expect((screen.getByTestId("new-video-angle-kind") as HTMLSelectElement).value).toBe("");
   });
 
   it("confirms the submission and clears the form", async () => {

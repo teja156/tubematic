@@ -29,16 +29,25 @@ Two conventions hold across the layer:
 
 ## The skills
 
-Eight skills ship in `agent_files/skills/`.
+These skills ship in `agent_files/skills/`.
 
 | Skill | Runs when | What it does |
 |---|---|---|
 | `tubematic-operator` | Any pipeline session | Checks the setup, routes each workable video by status and stops at human checkpoints |
-| `tubematic-topic-research` | A scheduled research run | Proposes and scores topics for the three research modes |
-| `tubematic-script-writing-skill` | `TOPIC_APPROVED`, or a script revision | The scripting contract: segments, length budget, pronunciation, pause markup and each beat's visual brief |
+| `tubematic-topic-research` | A scheduled research run | Proposes topics for the three research modes, each with its [angle](02-pipeline.md#topic-angle) and two scores, and ends with a summary of what it dropped |
+| `tubematic-style-routing` | `TOPIC_APPROVED` on a video left on `auto`, before the script | Picks the video's style from the style packs' routing data and records it with `choose_visual_style` ([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)) |
+| `tubematic-formula-routing` | `TOPIC_APPROVED`, once the style is decided and before the script. Also a script revision whose comment asks for another structure | Picks the script's [formula](08-scripting-and-voice.md#formulas) from the candidates in `get_video` and records it with `choose_script_formula` ([How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked)) |
+| `tubematic-script-writing-skill` | `TOPIC_APPROVED`, or a script revision | The scripting contract: writing in the picked [formula](08-scripting-and-voice.md#formulas), the grammar rules, segments, length, pronunciation, pause markup and each beat's visual brief |
 | `tubematic-create-script-writing-skill` | A script profile is queued at `PENDING` | Extracts a creator's style from transcripts into profile markdown |
 | `tubematic-scene-config` | `VOICE_READY`, and the revision path | Turns a voiced script and its timeline into images, scene TSX and `scene-config.json` |
 | `tubematic-cartoon3d` | `VOICE_READY` for a Cartoon 3D video, and its revision path | Writes the shots, camera, sets and cast as TypeScript, passes the beat gate with the `cartoon_*` tools and adds a soundtrack ([Cartoon 3D](10-scene-authoring.md#cartoon-3d)) |
+| `tubematic-system-flow` | `VOICE_READY` for a System Flow video, and its revision path | Writes the video as one diagram scene's data (boards, components, connectors, events timed to the narration), then validates and submits it ([System Flow](10-scene-authoring.md#system-flow)) |
+| `tubematic-bean-explainer` | `VOICE_READY` for a Bean Explainer video, and its revision path | Writes the video as one cartoon-bean scene's data (sections, shots, the bean's poses and props from the fixed library, timed to the narration), then validates and submits it ([Bean Explainer](10-scene-authoring.md#bean-explainer)) |
+| `tubematic-whiteboard` | `VOICE_READY` for a Whiteboard video, and its revision path | Writes the video as one board scene's data (regions of handwriting, formulas, doodles and marks timed to the narration), then validates and submits it ([Whiteboard](10-scene-authoring.md#whiteboard)) |
+| `tubematic-storybook-atlas` | `VOICE_READY` for a Storybook Atlas video, and its revision path | Writes the video as one picture-book scene's data (chapters, backdrops, the guide's and people's walks, props from the hatched library, plates, timed to the narration), then validates and submits it ([Storybook Atlas](10-scene-authoring.md#storybook-atlas)) |
+| `tubematic-terminal-doc` | `VOICE_READY` for a Terminal Doc video, and its revision path | Writes the video as one typographic scene's data (the skin, beats and moves timed to the narration, plus any move written for the video), then validates and submits it ([Terminal Doc](10-scene-authoring.md#terminal-doc)) |
+| `tubematic-under-the-hood` | `VOICE_READY` for an Under the Hood video, and its revision path | Makes and checks the close-up photographs with `generate_image` and `read_image`, then writes the video as one scene's data (plates, labels pinned to points of each photograph, arcs, counters, stats, charts and the presenter's poses, timed to the narration), validates and submits it ([Under the Hood](10-scene-authoring.md#under-the-hood)) |
+| `tubematic-case-file-story` | `VOICE_READY` for a Case File Story video, and its revision path | Makes the lead sheet and the painted stills with `generate_image`, checks each with `read_image`, then writes the video as one scene's data (meters, shots, cards and the closing choice), validates and submits it ([Case File Story](10-scene-authoring.md#case-file-story)) |
 | `tubematic-mascot-builder` | A mascot waits to be built or changed (the poller names the skill and the mascot id) | Writes one mascot's p5.js drawing code, renders its three model sheets with `render_mascot_sheets` and submits it for human review with `submit_mascot` |
 | `tubematic-troubleshooting` | A person asks for it by name | Triages a broken install with that person, runs the diagnostics collector and drafts a redacted bug report |
 
@@ -58,9 +67,9 @@ The skill then routes each video by status:
 
 | Status | Action |
 |---|---|
-| `TOPIC_APPROVED` | Invoke the scripting skill, write `script_segments`, upsert lexicon entries, comment, advance to `SCRIPT_READY` |
+| `TOPIC_APPROVED` | Give a video with no [angle](02-pipeline.md#topic-angle) one, or comment that its topic has none. Then invoke the scripting skill, write `script_segments`, upsert lexicon entries, comment, advance to `SCRIPT_READY` |
 | `VOICING` | Call `generate_voice`, which saves the paths and advances to `VOICE_READY`. The skill says the `SCRIPT_READY` approval authorizes the spend, because an agent that asks again leaves the video in `VOICING` |
-| `VOICE_READY` | Invoke the scene-config skill, check the image floor, `validate_job`, `submit_render`. Queue the render and stop without polling |
+| `VOICE_READY` | Invoke the skill `get_video` names in `style.authoring_skill` (the scene-config skill for `auto` and the scene styles), check the image floor where the style has images, `validate_job`, `submit_render`. Queue the render and stop without polling |
 | `REVISION_REQUESTED` | Diagnose from the comment thread and route back, or escalate to `FAILED` |
 | `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` | Stop. A human decides, or the worker for a domain on [Auto Pilot](14-publishing.md#auto-pilot). A video found past a checkpoint is authorized whoever moved it |
 | `VIDEO_APPROVED`, `PARTIALLY_PUBLISHED` | Take no action. No MCP tool publishes, and the skill forbids writing `SCHEDULED`, `PUBLISHING`, `PUBLISHED` or `PARTIALLY_PUBLISHED` |
@@ -132,9 +141,10 @@ filenames, that no copy names another agent's CLI, and that no copy tells an age
 its install denies.
 
 Read `/tubematic-submit-new-job` before you modify it. It scores the topic against the
-producibility rubric and stops below 5. It asks for a voice if the roster has two or more, and for
-a script profile if any is `READY`. It calls `create_video`, whose result names the agent the video
-was dealt, and asks for a model only if that agent has two or more (reading `agents` from
+producibility rubric and stops below 5. It looks for the topic's angle with the topic-research
+skill's rules, and files the topic without one when it finds none. It asks for a voice if the
+roster has two or more, and for a script profile if any is `READY`. It calls `create_video`, whose
+result names the video's agent and any model and effort its domain set, and asks for a model only if that agent has two or more (reading `agents` from
 `get_pipeline_status`, because only those names are accepted). It calls `update_video` for the
 agent, profile, model and effort level, and only then changes the status. `script_profile_id`
 freezes when the video leaves `TOPIC_PROPOSED`, and `agent_id`, `agent_model` and `agent_effort`
@@ -329,9 +339,17 @@ settings key, the same as the agent's models.
 
 ### Assignment
 
-A video gets its agent when it is created. All three creation paths deal one: `POST /videos`,
+A video gets its agent when it is created, on all three creation paths: `POST /videos`,
 `POST /videos/manual` (the dashboard's New Video page, unless the request names an agent) and the
-MCP server's `create_video`, which mining also files through.
+MCP server's `create_video`, which mining also files through. Each calls `_domain_agent`.
+
+A domain can name the agent its new videos start on, in `projects.default_agent_id`, with a model
+in `default_agent_model` and an effort in `default_agent_effort`. While that agent is live, the
+video starts on it, with the domain's model if the agent's `models` holds it. With no domain agent,
+or one that is uninstalled, the video is dealt an agent and its model is `""`. The domain's effort
+is copied in both cases, because every agent takes the same five levels. A video that takes its
+domain's agent takes no card from the deck, so the weights split the videos of the domains that
+name no agent.
 
 `_pick_agent_id` deals from a shuffled deck. Every live agent with a `weight` above 0 gets
 `weight ÷ gcd` cards, so 30:10 deals like 3:1. Each new video takes the next card, and an empty
@@ -368,7 +386,9 @@ poller skips a video whose agent is uninstalled or missing and does not reroute 
 at a checkpoint, the next stage may be written in a different agent's style.
 
 The default agent, each weight and each agent's default model are set on **Settings → Agents**,
-which writes through [`PATCH /agents/<id>`](05-http-api.md#agents). Uninstalling happens on the
+which writes through [`PATCH /agents/<id>`](05-http-api.md#agents). A domain's agent, model and
+effort are set on the **Topics** page, which writes through
+[`POST /projects`](05-http-api.md#post-projects). Uninstalling happens on the
 host only and keeps the row, so a video pinned to an uninstalled agent still resolves it.
 
 ---

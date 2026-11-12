@@ -1,0 +1,1198 @@
+{
+  "_about": "The fixed topic set Auto's style routing is checked against (TMDEV-203). expect: the right outcome(s), best first; ok: also acceptable; future: a coming style expected to take the topic over once its pack ships. Each style ticket updates these in its own merge. Read by tubematic_core/tests/test_style_routing.py and scripts/eval_style_routing.py.",
+  "cases": [
+    {
+      "title": "How DNS finds a website",
+      "brief": "What happens between typing a domain name and your browser getting an IP address: the resolver, root, TLD and authoritative servers, and caching along the way.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "What happens when you press Enter on a URL",
+      "brief": "The full path of a web request: DNS lookup, TCP and TLS handshakes, the load balancer, the app server, the database, and the response travelling back.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How a CDN makes sites fast",
+      "brief": "Why a request served from an edge server near you is faster than one that travels to the origin, and what happens on a cache miss.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How SQL injection reaches the database",
+      "brief": "How a crafted input travels from a login form through the app into a SQL query and dumps the users table, and how parameterised queries stop it.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How Kafka moves a message",
+      "brief": "A message's trip from a producer to a topic partition, through replication to followers, to a consumer group that reads it at its own pace.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "The TLS handshake, step by step",
+      "brief": "How a browser and a server agree on keys before any data is sent: hello messages, the certificate, key exchange and the first encrypted request.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick",
+        "terminal_doc"
+      ],
+      "future": "",
+      "note": "Messages passing between a browser and a server are a path between components (System Flow); Terminal Doc can show the keys and the first encrypted bytes, so it is acceptable."
+    },
+    {
+      "title": "How a pin tumbler lock works",
+      "brief": "Why the right key lines up the pins at the shear line, why the wrong one does not, and how lock picking exploits tiny manufacturing gaps.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How vaccines train your immune system",
+      "brief": "What a vaccine shows your immune cells, how they remember it, and why a later real infection is fought off faster.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "scenes",
+        "illustrated"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Why compound interest grows so fast",
+      "brief": "Working out how 1,000 dollars at 7 percent becomes 7,600 in 30 years, and why the last ten years add more than the first twenty.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Money arithmetic worked out step by step: the board's numbers and formula are the video."
+    },
+    {
+      "title": "How a phishing email tricks you",
+      "brief": "A walkthrough from the attacker's fake login page to the victim typing their password, and the three tells that give it away.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "system_flow",
+        "scenes",
+        "case_file_story"
+      ],
+      "future": "",
+      "note": "A scam walked through as a mechanism with generic roles: Stick. Told as a story with the viewer as the victim it would be a Case File Story, so that is acceptable."
+    },
+    {
+      "title": "How a pickpocket team works a crowded train",
+      "brief": "The spotter picks the target, the blocker stops in the doorway, the dipper lifts the wallet and passes it to a runner before anyone looks round.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A trick acted out step by step by generic roles: Stick."
+    },
+    {
+      "title": "How a fridge pushes heat out",
+      "brief": "The refrigerant loop: compressor, condenser, expansion valve and evaporator, and why the back of the fridge is warm.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "stick",
+        "scenes",
+        "system_flow"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How a touchscreen feels your finger",
+      "brief": "How a capacitive screen's grid of electrodes notices the charge your finger draws and works out where you touched.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How base64 turns bytes into text",
+      "brief": "Taking three bytes, regrouping them into four six-bit chunks and mapping each to a letter, and why the output ends in equals signs.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "stick",
+        "system_flow",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Bytes regrouped and mapped to letters is text transformed character by character."
+    },
+    {
+      "title": "Why the sky is blue",
+      "brief": "How sunlight scatters off air molecules, why short blue wavelengths scatter most, and why sunsets turn red.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A chain of causes that ends in one picture (scattering, then the colour, then the sunset)."
+    },
+    {
+      "title": "Why 0.999 repeating equals 1",
+      "brief": "Three short proofs that 0.999... and 1 are the same number: one third times three, ten x minus x, and the gap that has no size.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "A derivation built up line by line; nothing to photograph and no roles to act out."
+    },
+    {
+      "title": "How a lever lets you lift a car",
+      "brief": "Effort, load and fulcrum: why a long lever arm trades distance for force, worked out with the numbers for lifting one corner of a car.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "One object with forces on it and a formula built up: the board's core case."
+    },
+    {
+      "title": "The five most expensive watches ever sold",
+      "brief": "The Patek Philippe Grandmaster Chime, Paul Newman's Rolex Daytona and three more, what each sold for and why.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "What the James Webb telescope's first image shows",
+      "brief": "The SMACS 0723 deep field: the galaxy cluster, the gravitationally lensed arcs behind it, and how old that light is.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "The tallest buildings in the world",
+      "brief": "The Burj Khalifa, Merdeka 118, Shanghai Tower and the rest of the top five, with their heights and what makes each stand up.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Inside the Vision Pro: what Apple put in it",
+      "brief": "The named parts of Apple's headset (the M2 and R1 chips, the micro-OLED panels, the EyeSight screen) and what each does.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Named parts of one device, opened up layer by layer: Under the Hood over a tour of whole-product pictures."
+    },
+    {
+      "title": "The feud between Tesla and Edison",
+      "brief": "How Nikola Tesla and Thomas Edison went from employer and employee to rivals in the war of the currents, scene by scene.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "illustrated",
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Ada Lovelace and the first program",
+      "brief": "Ada Lovelace's friendship with Charles Babbage and how her notes on the Analytical Engine described the first algorithm for a machine.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "illustrated",
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Sam's first week as a junior developer",
+      "brief": "Following one new developer, Sam, through the first pull request, the first broken build and the first code review, as a short story.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "An invented protagonist, but no scheme, no money and nothing at risk: Illustrated, not Case File Story."
+    },
+    {
+      "title": "A night watch in a medieval castle",
+      "brief": "Walk the walls with a guard on night watch and see how the gatehouse, the murder holes and the guard rotation kept the castle safe.",
+      "expect": [
+        "cartoon_3d"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "A morning in an ancient Roman market",
+      "brief": "Stroll through a forum market at dawn with a merchant setting up stall, and see what Romans bought, how they paid and who kept order.",
+      "expect": [
+        "cartoon_3d"
+      ],
+      "ok": [
+        "illustrated",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "A telegram crosses 1920s London",
+      "brief": "Follow a messenger boy from the telegraph office through the streets of 1920s London to deliver one urgent telegram.",
+      "expect": [
+        "cartoon_3d"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Five surprising facts about honey",
+      "brief": "Why honey never spoils, how many flowers one jar takes, and three more facts, each with its own picture or quick animation.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Why we procrastinate",
+      "brief": "What happens in your brain when you put off a task, why the reward of later feels smaller, and two tricks that help.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "stick",
+        "illustrated"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "The history of the QWERTY keyboard",
+      "brief": "From Sholes's typewriter in the 1870s to today's phones: why the letters ended up in this order and why we never switched.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "scenes",
+        "motion_graphics",
+        "illustrated"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How the Enigma code was broken",
+      "brief": "How the Enigma machine scrambled letters, the mistakes German operators made, and how Turing's bombe at Bletchley Park used them.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "scenes",
+        "stick",
+        "motion_graphics",
+        "illustrated"
+      ],
+      "future": "",
+      "note": "The story turns on letters being scrambled and unscrambled, and on cribs: strings the stage can show."
+    },
+    {
+      "title": "How money laundering moves dirty cash",
+      "brief": "Placement, layering and integration: how one criminal's cash passes through shell companies until it looks like a clean salary.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "scenes",
+        "stick",
+        "system_flow"
+      ],
+      "future": "",
+      "note": "One criminal's cash followed through a scheme until it looks clean: a story with money and risk in it, not a diagram."
+    },
+    {
+      "title": "Every type of cyber attack explained",
+      "brief": "Phishing, ransomware, DDoS, man-in-the-middle, SQL injection and more, one quick idea each.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "system_flow",
+        "stick"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Habits that quietly wreck your sleep",
+      "brief": "A quick list of everyday habits that ruin sleep without you noticing: scrolling in bed, late coffee, the weekend lie-in, and a too-warm room, each with one easy fix.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "The first computer bug was a real moth",
+      "brief": "In 1947 Grace Hopper's team at Harvard found a moth stuck in a relay of the Mark II computer, taped it into the logbook, and gave 'debugging' its most famous story.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "scenes",
+        "illustrated"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How the printing press spread across Europe",
+      "brief": "From Gutenberg's workshop in Mainz around 1450 to print shops in two hundred towns fifty years later: how one invention changed who could read.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "scenes",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Milo the robot learns to cook",
+      "brief": "A short story about Milo, a clumsy kitchen robot, who burns the toast, floods the sink and finally makes his family breakfast.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "An invented protagonist the viewer follows: Illustrated, not Storybook Atlas."
+    },
+    {
+      "title": "Two friends start a lemonade stand",
+      "brief": "Follow Priya and Tom as they set up a lemonade stand, argue about the price, lose customers and work out what people will pay.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "bean_explainer",
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Invented recurring characters, told in the present: Illustrated."
+    },
+    {
+      "title": "How one tweet wiped billions off a stock",
+      "brief": "The fake post from a verified account, the minutes of panic selling, the chart of the drop and the correction, and what changed afterwards.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Fast news with a real company, a real post and a price chart: pictures and a chart carry it."
+    },
+    {
+      "title": "Five inventions that failed before they worked",
+      "brief": "The light bulb, the airplane, the telephone, the camera and the vacuum cleaner: one quick idea each about the failures before the success.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": "History, but a list of named items: Bean Explainer, not Storybook Atlas."
+    },
+    {
+      "title": "What is inside a mechanical typewriter",
+      "brief": "How pressing a key swings a typebar up to the ribbon, moves the carriage one space, and rings the bell at the end of the line.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "An old machine, but its insides part by part with no story: Under the Hood, not Storybook Atlas."
+    },
+    {
+      "title": "Why an 8-character password falls in seconds",
+      "brief": "How a stolen password hash is cracked by guessing: the keyspace of eight lowercase letters, a graphics card testing billions of guesses a second, and why a long passphrase holds out.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "One string, its hash and one big number carry the whole video."
+    },
+    {
+      "title": "Kryptos: the CIA sculpture nobody has fully solved",
+      "brief": "The four encrypted passages on the Kryptos sculpture outside CIA headquarters, how three were cracked with a keyed alphabet, and the clues the artist has released for the last one.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Ciphertext, a keyed alphabet and released clues are text on screen. Not Case File Story: a real place and a real puzzle, with no scheme the viewer is inside."
+    },
+    {
+      "title": "What a hash function does to your password",
+      "brief": "Why the same password always gives the same hash, why one changed letter changes the whole hash, and why sites store hashes with a salt instead of passwords.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "stick",
+        "system_flow",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A string going into a hash and coming out changed is this style's core move."
+    },
+    {
+      "title": "How a VPN tunnels your traffic",
+      "brief": "How your device wraps every packet in an encrypted envelope, sends it to the VPN server, and how that server forwards it so websites see its address instead of yours.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick",
+        "terminal_doc"
+      ],
+      "future": "",
+      "note": "Negative control for Terminal Doc: encryption is mentioned, but the subject is the path packets travel between components."
+    },
+    {
+      "title": "Why the Titanic sank",
+      "brief": "The ship and its famous passengers, the iceberg warnings that were missed, how the flooded compartments pulled the bow down, and why there were too few lifeboats.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas",
+        "illustrated",
+        "stick"
+      ],
+      "future": "",
+      "note": "A real ship, real people and a mechanism, all carried by photographs and vector diagrams: Motion Graphics. No beat needs someone acting a step out."
+    },
+    {
+      "title": "Why your phone battery wears out",
+      "brief": "What happens inside a lithium-ion cell every time it charges: lithium ions shuttling into the graphite, a crust growing on it, and why capacity falls to about 80 percent after 500 cycles.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "How an SSD stores a single bit",
+      "brief": "Inside a flash memory cell: electrons trapped behind a thin oxide layer, how the controller reads the charge, and why a cell wears out after a few thousand writes.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": ""
+    },
+    {
+      "title": "Why RAM prices tripled this year",
+      "brief": "How a 32 GB stick of DDR5 went from 90 to 270 dollars in twelve months: what is on the chip, the three companies that make it, and how AI servers took the supply.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A price story tied to one physical part: a magnified chip, a price chart and the numbers on it."
+    },
+    {
+      "title": "How Bluetooth pairs your headphones",
+      "brief": "What your phone and your headphones say to each other when they pair: discovery, the pairing request, the shared key, and how they find each other again next time.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "A near miss for Under the Hood: the headphones are physical, but the subject is messages between two devices."
+    },
+    {
+      "title": "The most expensive phones ever sold",
+      "brief": "From a gold-plated iPhone to the Vertu Signature Cobra: the five priciest phones, what each sold for and what made it so expensive.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": "A near miss for Under the Hood: products shown whole as a ranking, with no inside to open."
+    },
+    {
+      "title": "The fake invoice that emptied the company account",
+      "brief": "You are the accounts clerk. An email that looks like it comes from the boss asks for an urgent wire transfer to a new supplier. Follow the invoice fraud from the first message to the call from the bank.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "stick",
+        "scenes",
+        "illustrated"
+      ],
+      "future": "",
+      "note": "A fraud told from inside, with money leaving and suspicion rising."
+    },
+    {
+      "title": "How a Ponzi scheme pays its first investors",
+      "brief": "You promise twenty percent a month and pay the early investors with the later ones' money. Watch the deposits and the payouts grow until withdrawals outrun what comes in, and what the law calls it.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "whiteboard",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A scheme with numbers that move and a named crime at the end. Whiteboard is acceptable for the arithmetic."
+    },
+    {
+      "title": "The bank put 40,000 dollars in your account by mistake",
+      "brief": "A bank error leaves forty thousand dollars in your account overnight. What happens if you spend it, what the law says about keeping money that is not yours, and the choice you face in the morning.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "bean_explainer",
+        "scenes",
+        "illustrated"
+      ],
+      "future": "",
+      "note": "A money dilemma that ends on a choice."
+    },
+    {
+      "title": "Why four deposits of 9,000 dollars is a crime",
+      "brief": "You have forty thousand in cash and a bank that reports any deposit of ten thousand or more. Splitting it up to stay under the line has a name, structuring, and it is a federal offence even when the money is clean.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "whiteboard",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A financial rule shown through someone about to break it."
+    },
+    {
+      "title": "The weekend heist that one receipt undid",
+      "brief": "An invented crew empties a jewellery vault over a holiday weekend without tripping an alarm. Follow the plan step by step, then the one small purchase that leads the police to them.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A heist followed to the moment it is found out, with invented people."
+    },
+    {
+      "title": "How Bernie Madoff's scheme collapsed",
+      "brief": "The real story of Bernard Madoff's fund: the steady returns that never existed, the 2008 rush of withdrawals, his confession to his sons and the 150-year sentence.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas",
+        "illustrated"
+      ],
+      "future": "",
+      "note": "A near miss for Case File Story: a fraud, but a real, named case with real people, told through their pictures. That style's people are invented."
+    },
+    {
+      "title": "Seven scams that target your phone",
+      "brief": "The missed-call scam, the fake delivery text, the QR code sticker, the SIM swap and three more, one quick idea each and how to spot it.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "stick"
+      ],
+      "future": "",
+      "note": "A near miss for Case File Story: scams, but a list of named items with no single story."
+    },
+    {
+      "title": "How the 2008 financial crisis happened",
+      "brief": "A borrower takes a cheap mortgage, a banker bundles it into a security, a ratings agent stamps it safe, then the real Lehman Brothers collapse and the bailout, with the chart of house prices behind it all.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "whiteboard",
+        "stick",
+        "system_flow"
+      ],
+      "future": "",
+      "note": "Mixed-scenes probe: real banks as full-frame pictures, and a borrower, a banker and a ratings agent doing each step. Motion Graphics draws no figures; Stick Explainer shows pictures only in small panels."
+    },
+    {
+      "title": "Three famous inventions found by accident",
+      "brief": "Penicillin, the microwave oven and Post-it notes: what each inventor was really trying to do, and the lucky mistake that gave us the thing instead.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Bean Explainer vs Storybook Atlas: history, but three items one section each, not one story through time."
+    },
+    {
+      "title": "How penicillin was discovered by accident",
+      "brief": "London, 1928: Alexander Fleming comes back from holiday to a mouldy dish, notices the bacteria have died around the mould, and the decade it took others to turn it into a medicine.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Storybook Atlas vs Bean Explainer: one discovery told as a story through time, opening on a date and a place."
+    },
+    {
+      "title": "Why we feel nostalgic",
+      "brief": "Why old songs and smells pull you back, what nostalgia does to your mood, and why you remember the past as better than it was.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Bean Explainer vs Storybook Atlas: a feeling, not a history; the word nostalgic is a mood Storybook lists, not its subject."
+    },
+    {
+      "title": "How a SIM-swap attack takes over your bank account",
+      "brief": "The attacker's path: talking the phone carrier into moving your number to their SIM, receiving your bank's one-time codes, resetting your password and logging in.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick",
+        "case_file_story"
+      ],
+      "future": "",
+      "note": "Pair probe, System Flow vs Case File Story: a crime, but walked through as a path between systems (carrier, phone, bank), with no one inside a story."
+    },
+    {
+      "title": "Your boss asks you to backdate one invoice",
+      "brief": "You are the bookkeeper, the quarter closes tonight, and your boss wants one invoice dated last month. What it hides, who would notice, and what you choose.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Case File Story vs System Flow and Illustrated: a money dilemma in the second person that ends on a choice."
+    },
+    {
+      "title": "How your card payment reaches the shop's bank",
+      "brief": "Tap your card: the terminal, the shop's payment processor, the card network, your bank approving it, and the money settling a day or two later.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick",
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Pair probe, System Flow vs Case File Story: money, but no scheme and no one at risk; a path between components."
+    },
+    {
+      "title": "How bike gears make hills easier",
+      "brief": "Why a small front ring and a big back sprocket let you climb: the gear ratio, how far one pedal turn moves the bike, and the force on the pedal worked out with real numbers.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "under_the_hood",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe, Whiteboard vs Under the Hood: a physical object, but the video is a ratio and a force worked out step by step."
+    },
+    {
+      "title": "What is inside a smartphone camera",
+      "brief": "The lens stack, the image stabiliser's tiny magnets, the sensor's millions of pixels, and how a periscope lens fits a zoom inside a thin phone.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Under the Hood vs Whiteboard and Motion Graphics: one device opened up part by part, magnified."
+    },
+    {
+      "title": "How much energy is in a AA battery",
+      "brief": "Worked out step by step: 1.5 volts times about 2.5 amp-hours, turned into joules, then compared with a phone battery, a bar of chocolate and a car's fuel tank.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "under_the_hood",
+        "terminal_doc"
+      ],
+      "future": "",
+      "note": "Pair probe, Whiteboard vs Under the Hood: the numbers of one object, but the video is the arithmetic, not the inside of the battery."
+    },
+    {
+      "title": "How a microwave oven heats your food",
+      "brief": "Inside the box: the magnetron, the waveguide, the metal walls that keep the waves in, and why water molecules spinning back and forth make the heat.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "whiteboard",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Under the Hood vs Whiteboard: one appliance and its parts, shown inside."
+    },
+    {
+      "title": "Grandma Rosa teaches Leo to bake bread",
+      "brief": "A Sunday in Rosa's kitchen: Leo kneads too hard, the dough will not rise, and Rosa shows him the trick her own mother taught her.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Illustrated vs Storybook Atlas and Case File Story: invented recurring characters, warm, no history and no money at stake."
+    },
+    {
+      "title": "Marie Curie and the discovery of radium",
+      "brief": "Paris, 1898: Marie and Pierre Curie grind tonnes of pitchblende in a leaking shed, find two new elements, and the glow that would later make Marie ill.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "illustrated",
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Storybook Atlas vs Illustrated: a real person from history and what she found, told through time; she is named, not drawn as a recurring character."
+    },
+    {
+      "title": "Your coworker offers you a cut of the missing stock",
+      "brief": "You run the warehouse night shift. Boxes keep going missing, and tonight your coworker offers you a share to look the other way. The audit is on Monday.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Case File Story vs Illustrated: invented people, but a crime and money at stake, told in the second person."
+    },
+    {
+      "title": "Pip the fox opens a bakery",
+      "brief": "Pip saves up, rents a tiny shop, burns the first batch, and wins the town over with one recipe. A story about starting small.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "bean_explainer",
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Illustrated vs Case File Story: money at stake, but no crime and no dilemma; an invented hero the viewer follows."
+    },
+    {
+      "title": "Five body-language signs someone is lying",
+      "brief": "Five signs people read as lying, from touching the face to too much eye contact, and which of them actually mean anything.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Bean Explainer vs Stick: a list of behaviours, one section each, one everyman acting them out."
+    },
+    {
+      "title": "How a restaurant kitchen gets your order out",
+      "brief": "The waiter sends the ticket, the expeditor calls it, the grill and the line cooks fire their parts on timing, and the pass checks every plate before it leaves.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "system_flow",
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Stick vs Bean Explainer and System Flow: a process acted out step by step by generic people in roles."
+    },
+    {
+      "title": "How CPR keeps someone alive",
+      "brief": "What chest compressions do for a heart that has stopped, how fast and how deep to push, when to give breaths, and why you keep going until help arrives.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "bean_explainer",
+        "under_the_hood",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Stick vs Bean Explainer: a procedure acted out by a generic rescuer, with the mechanism inside the chest."
+    },
+    {
+      "title": "Why you can't stop checking your phone",
+      "brief": "The little rewards your brain gets from each notification, the habit loop they build, and three small changes that break it.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Bean Explainer vs Stick: a habit and its effect on the mind, told to you."
+    },
+    {
+      "title": "Inside a jet engine",
+      "brief": "Air drawn in by the fan, squeezed by the compressor, burned with fuel, spinning the turbine, and the blades that run hotter than the metal they are made of melts.",
+      "expect": [
+        "under_the_hood"
+      ],
+      "ok": [
+        "motion_graphics",
+        "stick",
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Pair probe, Under the Hood vs Motion Graphics: one machine opened up stage by stage."
+    },
+    {
+      "title": "The biggest ships ever built",
+      "brief": "From the largest oil tanker to today's biggest cruise ship and container ship: how long, how heavy, and what each one carries.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Motion Graphics vs Under the Hood: real things the viewer came to see whole, ranked, with no inside to open."
+    },
+    {
+      "title": "How a 911 call reaches the right dispatcher",
+      "brief": "Your call goes from the phone tower to a routing database that finds your location, to the nearest call centre, and on to the dispatcher who sends help.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe, System Flow vs Stick: a call's path through systems, not people acting a scene."
+    },
+    {
+      "title": "How an airport gets your bag onto the right plane",
+      "brief": "The tag scanned at check-in, the conveyors and sorting machines under the terminal, the security scan, and the cart that takes it to the plane's hold.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "stick",
+        "cartoon_3d"
+      ],
+      "future": "",
+      "note": "Pair probe, System Flow vs Stick: a physical thing travelling a path through machines."
+    },
+    {
+      "title": "Why you should switch doors in the Monty Hall problem",
+      "brief": "Three doors, one car: why switching after the host opens a door wins two times out of three, worked out case by case.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick",
+        "bean_explainer"
+      ],
+      "future": "",
+      "note": "Pair probe, Whiteboard vs Stick: reasoning worked out case by case, with a host and a player who are props, not the subject."
+    },
+    {
+      "title": "How a bill becomes a law in the US",
+      "brief": "A member of Congress writes the bill, a committee changes it, both chambers vote, the President signs or vetoes it, and Congress can override the veto.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "system_flow",
+        "whiteboard",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Stick vs System Flow: a process carried by people in roles, not data moving between components."
+    },
+    {
+      "title": "How honeybees choose a new home",
+      "brief": "Scout bees fly out, come back and dance for the spots they found, the best site wins more dancers, and the swarm moves when enough agree.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "scenes",
+        "bean_explainer"
+      ],
+      "future": "",
+      "note": "Old-style probe, Stick vs System Flow and Bean Explainer: a process acted out by generic roles (scouts and the swarm)."
+    },
+    {
+      "title": "A day inside 1969 mission control",
+      "brief": "Walk the rows of consoles in Houston during the Apollo 11 landing: the flight director, the controllers at their screens, and the room going quiet as the lander comes down.",
+      "expect": [
+        "cartoon_3d"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Old-style probe, Cartoon 3D vs Storybook Atlas: history, but one place and the people moving through it."
+    },
+    {
+      "title": "What happens to your body in space",
+      "brief": "Real astronauts on the space station, bones and muscles losing strength, fluid moving to the head, eyesight changing, and the exercise that fights it.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes",
+        "motion_graphics",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe, Bean Explainer vs mixed scenes: the body and what happens to it, one change per section; no roles are acted out, so Bean Explainer carries it."
+    },
+    {
+      "title": "How the Apollo 11 landing almost failed",
+      "brief": "The real crew and footage, the computer alarms 1202 and 1201, the boulder field Armstrong flew over, and the fuel counter running down to seconds.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas",
+        "terminal_doc"
+      ],
+      "future": "",
+      "note": "Real crew, real footage, a computer alarm and a countdown: photographs and diagrams carry every beat."
+    },
+    {
+      "title": "How a Caesar cipher works",
+      "brief": "Shift every letter three places: a message encrypted letter by letter, decrypted back, and broken in seconds by trying all 25 shifts.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "whiteboard",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe, Terminal Doc vs Whiteboard: text transformed letter by letter is the subject."
+    },
+    {
+      "title": "How Silicon Valley Bank collapsed in 48 hours",
+      "brief": "The real bank and its headquarters, the bond losses on its books, then the run: worried founders in one group chat pull their money, withdrawals pile up, and $42 billion leaves in a day.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "stick",
+        "case_file_story"
+      ],
+      "future": "",
+      "note": "Mixed-scenes probe: a real, named bank shown in pictures, and generic depositors whose run is the mechanism."
+    },
+    {
+      "title": "How the 1929 stock market crash happened",
+      "brief": "Real photographs of Wall Street and the crowds outside the exchange, and an ordinary investor who buys on margin through his broker, gets the margin call and is forced to sell as prices fall.",
+      "expect": [
+        "scenes"
+      ],
+      "ok": [
+        "motion_graphics",
+        "stick",
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Mixed-scenes probe: real photographs of a real event, and generic people whose steps are the mechanism. Motion Graphics draws no figures; Stick Explainer shows pictures only in small panels."
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 
 from tubematic_core import jobfiles
+from tubematic_core import visual_styles as tvs
 
 MASCOT_STATUSES = ("PENDING", "BUILDING", "IN_REVIEW", "READY", "FAILED")
 MAX_MASCOT_ATTEMPTS = 2
@@ -44,6 +45,19 @@ MASCOT_GPU_UNKNOWN = (
 MASCOT_NOT_ON_CARTOON_3D = ("Mascots are not available in the Cartoon 3D style (its 3D world "
                             "has no place for a flat watercolour character). Choose another "
                             "visual style, or no mascot.")
+
+# Every style a video with a mascot may not have (visual_styles.NO_MASCOT_STYLES).
+NO_MASCOT_STYLES = tvs.NO_MASCOT_STYLES
+
+
+def no_mascot_error(style: str) -> str:
+    """Why a video of `style` may not carry a mascot, or "" when it may."""
+    style = (style or "").strip()
+    if style not in NO_MASCOT_STYLES:
+        return ""
+    if style == "cartoon_3d":
+        return MASCOT_NOT_ON_CARTOON_3D
+    return tvs.pack(style)["messages"]["mascot"]
 
 
 class MascotError(ValueError):
@@ -99,13 +113,15 @@ def holds_pickable_sql(id_expr: str = "videos.mascot_id") -> str:
 def cartoon_mascot_clash_sql(style: str = "COALESCE(videos.visual_style, '')",
                              renderer: str = "COALESCE(videos.resolved_renderer, '')",
                              mascot: str = "COALESCE(videos.mascot_id, '')") -> str:
-    """An SQL condition: the video would be Cartoon 3D (by its style or the
-    renderer `auto` settled on) and hold a mascot, the pair the renderer refuses.
+    """An SQL condition: the video would be of a style that takes no mascot
+    (Cartoon 3D, by its style or the renderer `auto` settled on, or a pack with
+    "mascot": false) and hold a mascot, a pair the pipeline refuses.
     Each argument is an expression for the value the row will have once the
     UPDATE lands: a column, a literal, or "?" (bound in the order style,
     renderer, mascot). Guarded UPDATEs add `AND NOT (...)`, so a concurrent
     write cannot leave the pair behind a check made on an earlier read."""
-    return f"(({style} = 'cartoon_3d' OR {renderer} = 'cartoon_3d') AND {mascot} != '')"
+    styles = ", ".join(f"'{s}'" for s in NO_MASCOT_STYLES)
+    return f"(({style} IN ({styles}) OR {renderer} = 'cartoon_3d') AND {mascot} != '')"
 
 
 def resolve_default(con, project_default: str, install_default: str) -> str:

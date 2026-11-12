@@ -24,7 +24,8 @@
 //     "sceneConfigPath": "/public/<vid>/scene-config.json",
 //     "timelinePath":    "/public/<vid>/timeline.json",
 //     "audioPath":       "/public/<vid>/audio.mp3",
-//     "passes": [{"scene": 0, "first": 45, "step": 101, "count": 5}, ...],
+//     "passes": [{"scene": 0, "first": 45, "step": 101, "count": 5, "kind": "text"}, ...],
+//     "visualFrames": [0, 6],                     // optional: frames the probe also lists pictures at
 //     "browserExecutable": "/usr/bin/chromium"   // optional
 //   }
 //
@@ -95,6 +96,9 @@ const main = async () => {
     sceneConfigPath: cfg.sceneConfigPath,
     timelinePath: cfg.timelinePath,
     audioPath: cfg.audioPath,
+    // Frames at which the probe also lists the scene layer's pictures (the
+    // mixed-scenes first-frame pass); empty for every other audit.
+    visualFrames: Array.isArray(cfg.visualFrames) ? cfg.visualFrames : [],
   };
 
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "tubematic-audit-bundle-"));
@@ -194,6 +198,7 @@ const main = async () => {
 
       passes.push({
         scene: pass.scene,
+        kind: pass.kind ?? "text",
         requestedFrames: Array.from({ length: count }, (_, k) => first + step * k),
         frames: Array.from(byFrame.values()).sort((a, b) => a.frame - b.frame),
       });

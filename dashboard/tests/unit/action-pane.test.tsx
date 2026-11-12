@@ -20,6 +20,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionPane } from "@/components/ActionPane";
 import type { Agent, Video, VideoStatus, GpuStatus } from "@/lib/types";
+import { PACK_STYLES } from "./packStyles";
 
 // Fixed to America/New_York so the date-rendering test below has a
 // deterministic, non-UTC expected value.
@@ -622,6 +623,30 @@ describe("ActionPane — frozen choices stay visible", () => {
     render(<ActionPane videos={[video]} scriptProfiles={PROFILES} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
     expect(screen.queryByTestId(`choices-${video.id}`)).toBeNull();
   });
+
+  it("names the formula beside the profile, by its label once the names load", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({
+      formulas: [{ id: "scene-story", label: "Scene Story" }], hook_types: [] }) }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    const video = { ...makeVideo("SCRIPT_READY"), script_profile_id: "p1", formula_pick: "scene-story" };
+    render(<ActionPane videos={[video]} scriptProfiles={PROFILES} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
+    const meta = screen.getByTestId(`choices-${video.id}`);
+    expect(meta.textContent).toContain("Auto — scene-story");   // the id until the names answer
+    await act(async () => {});
+    expect(meta.textContent).toContain("Corpus A · Auto — Scene Story");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("says nothing about a formula, and asks for no names, when no video has one", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const video = makeVideo("VIDEO_READY");
+    render(<ActionPane videos={[video]} agents={[makeAgent()]} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
+    expect(screen.getByTestId(`choices-${video.id}`).textContent).not.toContain("Auto —");
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("ActionPane — visual style picker", () => {
@@ -652,15 +677,15 @@ describe("ActionPane — visual style picker", () => {
   }
 
   it("offers exactly the styles the API accepts, and defaults to Auto", () => {
-    // These values are hand-duplicated from mcp/server.py's VISUAL_STYLES.
-    // Offering one the API rejects produces a 400 on approval, which surfaces
-    // to the human as a failed click with no explanation.
+    // The list comes from the style packs the API reads (GET /visual-styles),
+    // never a copy here. Offering one the API rejects produces a 400 on
+    // approval, which surfaces to the human as a failed click with no
+    // explanation.
     const video = makeVideo("TOPIC_PROPOSED");
     render(<ActionPane videos={[video]} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
     const select = screen.getByTestId(`style-select-${video.id}`) as HTMLSelectElement;
-    expect([...select.options].map((o) => o.value)).toEqual([
-      "auto", "motion_graphics", "stick", "illustrated", "cartoon_3d",
-    ]);
+    expect([...select.options].map((o) => o.value)).toEqual(PACK_STYLES.map((s) => s.id));
+    expect([...select.options].map((o) => o.value)).toContain("system_flow");
     expect(select.value).toBe("auto");
   });
 
@@ -688,8 +713,9 @@ describe("ActionPane — visual style picker", () => {
     const illustrated = [...select.options].find((o) => o.value === "illustrated")!;
     expect(illustrated.disabled).toBe(true);
     expect(illustrated.textContent).toMatch(/needs an OpenAI key/);
+    // every style built on OpenAI images is greyed out with it (Under the Hood too)
     expect([...select.options].filter((o) => o.disabled).map((o) => o.value))
-      .toEqual(["illustrated"]);
+      .toEqual(PACK_STYLES.filter((s) => s.needs.openai_key).map((s) => s.id));
   });
 
   it("leaves Illustrated enabled when key state is not given", () => {
@@ -1181,6 +1207,21 @@ describe("ActionPane — mascot picker", () => {
     vi.useRealTimers();
   });
 
+  it("clears and disables the picker for Under the Hood too, whose pack takes no mascot", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const onAction = vi.fn();
+    const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
+    render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} illustratedAvailable onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
+    const select = screen.getByTestId(`mascot-select-${video.id}`) as HTMLSelectElement;
+    fireEvent.change(screen.getByTestId(`style-select-${video.id}`), { target: { value: "under_the_hood" } });
+    expect(select.value).toBe("");
+    expect(select.disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onAction.mock.calls[0][3]).toMatchObject({ visual_style: "under_the_hood", mascot_id: "" });
+    await act(async () => { vi.advanceTimersByTime(600); });
+    vi.useRealTimers();
+  });
+
   it.each(["working", "not_usable"] as const)(
     "re-sends an untouched held mascot on approve (GPU %s)", async (status) => {
       vi.useFakeTimers({ toFake: ["setTimeout"] });
@@ -1214,6 +1255,43 @@ describe("ActionPane — mascot picker", () => {
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
     vi.useRealTimers();
   });
+
+  // ── The topic's angle (TMDEV-214) ─────────────────────────────────────────
+
+  it("shows a proposed topic's angle under its title, with its kind and score", () => {
+    const video = { ...makeVideo("TOPIC_PROPOSED"), angle: "The backup copied an empty folder for a year.",
+                    angle_kind: "broken_expectation", angle_score: 8 };
+    render(<ActionPane videos={[video]} {...base} />);
+    const line = screen.getByTestId(`angle-line-${video.id}`);
+    expect(line.textContent).toBe("The backup copied an empty folder for a year.");
+    // The full sentence is on hover: the line is clipped to one row.
+    expect(line.getAttribute("title")).toBe("The backup copied an empty folder for a year.");
+    const meta = screen.getByTestId(`angle-meta-${video.id}`).textContent;
+    expect(meta).toContain("broken expectation");
+    expect(meta).toContain("Angle 8/10");
+  });
+
+  it("says a proposed topic has no angle", () => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} {...base} />);
+    expect(screen.getByTestId(`angle-meta-${video.id}`).textContent).toContain("No angle");
+    expect(screen.queryByTestId(`angle-line-${video.id}`)).toBeNull();
+  });
+
+  it("shows a dash for an angle a person wrote, which has no score", () => {
+    const video = { ...makeVideo("TOPIC_PROPOSED"), angle: "A sentence.", angle_kind: "myth", angle_score: 0 };
+    render(<ActionPane videos={[video]} {...base} />);
+    expect(screen.getByTestId(`angle-meta-${video.id}`).textContent).toContain("Angle —");
+  });
+
+  it.each(["SCRIPT_READY", "VIDEO_READY"] as const)(
+    "leaves the angle off a %s row, where the topic is already decided", (status) => {
+      const video = { ...makeVideo(status), angle: "A sentence.", angle_kind: "myth", angle_score: 7 };
+      render(<ActionPane videos={[video]} {...base} />);
+      expect(screen.queryByTestId(`angle-line-${video.id}`)).toBeNull();
+      expect(screen.queryByTestId(`angle-meta-${video.id}`)).toBeNull();
+    },
+  );
 
   it("shows a held mascot that can no longer be picked as unavailable", () => {
     const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "moss" };

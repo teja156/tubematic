@@ -21,9 +21,16 @@ failed, a video that failed.
 
 For each proposed topic, press **Approve**, **Reject** or **Revise**.
 
+A topic that research proposed carries an angle: one sentence saying what the video's opening will
+use. It shows under the topic's title, with its kind and a score. See [The angle](#the-angle).
+
 Before you approve, set the choices that are fixed from then on:
 
+- the **angle**, if you want the video to open on something else. Open the topic and press **Edit**
+  on its **Topic** tab,
 - the **script profile**, if you want a particular writing style,
+- the **formula**, in the video's window, if you want a particular script structure. Left on
+  **Auto**, the agent picks one for the topic (see [Script formulas](#script-formulas)),
 - the **visual style** and, optionally, a **mascot**
   (see [Visual Styles and Mascots](13-visual-styles-and-mascots.md)),
 - the **voice**, if you want one that uses a different ElevenLabs model. The agent writes the script
@@ -35,11 +42,29 @@ Leave a picker alone to keep what the video already has.
 
 Press **Read** to open the script. The agent leaves a comment explaining what it wrote.
 
+Above the script, the **Script** tab shows what the agent built it on:
+
+- **Formula** is the structure the script follows. See [Script formulas](#script-formulas).
+- **Openings considered** lists the three openings the agent drafted, with the one it used marked.
+  To have the script start with another one, press **Use this opening** under it. The agent
+  rewrites the script from that opening, in the same formula.
+- **Script warnings** are automatic checks on the script's words, such as an ending that asks
+  viewers to follow, or a script longer than its formula runs. They are advice for you and the
+  agent, and you can approve a script that has them.
+
+A script with nothing recorded shows none of these.
+
 **Approve** starts the voiceover, and ElevenLabs charges from this point. **Revise** asks the agent
 to rewrite.
 
 A voice is greyed out here when its model cannot speak the script as written. To use that voice,
 press **Revise** and name the voice in your comment. The agent rewrites the script for it.
+
+When your voice list has two or more voices, each segment on the **Script** tab has its own voice
+picker. **Video voice** speaks the segment in the video's voice. Pick another voice to have that
+segment spoken by it, for example an objection in a second voice. The change is saved at once, and
+a voice that cannot speak the segment as written is greyed out. Splitting a script across two voices
+costs no extra credits.
 
 ### 4. Watch and approve videos
 
@@ -73,20 +98,58 @@ four ways.
 |---|---|---|
 | You | You type a title and a topic | The **New Video** page |
 | Curriculum | Research lists sub-topics of a domain you describe | The **Topics** page: add a domain as a curriculum seed |
-| Trending | Research looks for video angles on what is popular on GitHub Trending, Hacker News, Lobsters and Dev.to | **Settings → Research** chooses the sites. The first two are on by default |
+| Trending | Research looks for video topics in what is popular on GitHub Trending, Hacker News, Lobsters and Dev.to | **Settings → Research** chooses the sites. The first two are on by default |
 | Mining | Research hands YouTube videos you list to Gemini, which picks out ideas they mention in passing | The **Topics** page, under **Mining Sources**. Needs a Gemini key |
 
 Curriculum, trending and mining are the three research modes. Switch each on or off with the
 toggles at the top of the **Topics** page. With all three off, research does not run.
 
-Research scores each topic from 1 to 10 for how well it suits a short explainer video, and files
-only topics that score 5 or more. Each research run files at most 2 topics per mode, or 2 per
-curriculum seed. You can change those numbers on **Settings → Research**.
+Research gives each topic two scores. The topic score, from 1 to 10, says how well the pipeline can
+show the topic in a short explainer video. The angle score, from 0 to 10, says how strong a reason
+the topic gives a viewer to keep watching. Research files only topics that score 5 or more on both. Each research
+run files at most 2 topics per mode, or 2 per curriculum seed. You can change those numbers on
+**Settings → Research**.
 
 A video you create on the **New Video** page is not scored. It is filed under a domain called
 **Manual Videos**.
 
-![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button](../images/topics.png)
+### The angle
+
+An angle is one sentence, up to 300 characters, that says what a video's opening will use: the
+contradiction, the failure, the wrong belief or the incident that makes the topic worth watching.
+Research takes it from what it already read for the topic and files it with the topic. A subject
+that offers no angle is left out. The agent ends each research run with a summary that lists the
+subjects it left out, with the reason for each, before the topics it filed. The **Logs** page shows
+it with the agent's output.
+
+Every angle has a kind. The kind tells the script writer which [script formula](#script-formulas)
+to start from.
+
+| Kind | The topic has | The script starts from |
+|---|---|---|
+| Paradox | Something you own or use that works in a way that seems impossible | Paradox, Mechanism, Reframe |
+| Broken expectation | A tool that did something that looks wrong | Broken Expectation |
+| Process | A process with a natural order and an end you have not seen | Follow the Flow |
+| Myth | A belief most people hold that is wrong | Myth, Break, Model |
+| Design question | A design decision that looks stupid from outside | Why Don't They Just |
+| Incident | A real outage, loss or bug with a timeline | Incident File |
+| Scheme | A scam, fraud or loophole that works as a loop | Scheme Machine |
+| Anomaly | Evidence that looked wrong | Anomaly File |
+| Scene | One person inside one moment | Scene Story |
+| Measure | Something with a natural measure, such as size, cost or speed | Escalating Ladder |
+
+You can change the sentence and its kind while the topic waits at Topic Proposed, on the **Topic**
+tab of the video window. An angle you write has no score, and editing an angle clears the score the
+agent gave it. You can edit the angle only until you approve the topic. A revision you request
+after that can still ask the agent for a different one.
+
+A topic of your own can come without an angle. The **New Video** page has an optional **Angle**
+field. When you leave it empty, the agent looks for an angle in your topic before it writes the
+script and records it on the video. When your topic offers none, the agent says so in a comment
+and writes the script from the topic alone. The same happens to a topic that was proposed before
+angles existed.
+
+![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button and its Edit defaults button. The second domain is open and shows its style, voice, formula, agent and topic cap](../images/topics.png)
 
 ### Adding a domain
 
@@ -96,16 +159,24 @@ On the **Topics** page, under **Curriculum Seed Domains**, fill in **Add Domain*
 2. Describe the scope in up to 2000 characters. Research works from this description, so say what
    belongs in the domain and what does not.
 3. Leave **Curriculum seed** ticked to have research propose topics for it.
-4. Optionally choose the visual style, voice, script profile and mascot its videos start with.
+4. Optionally choose what its videos start with: the visual style, mascot, voice and script
+   profile, and the agent with its model and effort.
 5. Press **Add Domain**.
 
-You can change the same choices later on the domain's row.
+To change the same choices later, press **Edit defaults** on the domain's row. Each change is saved
+as you make it, and the row says **✓ Saved**, or why the change was not saved. The row lists the choices the domain has made, and says "Install defaults for
+everything" when it has made none.
+
+A domain's agent starts every new video in that domain, whichever research mode found the topic.
+Leave it on **Automatic** to share the domain's videos between your agents
+([Choose which agent makes a video](12-agents.md#choose-which-agent-makes-a-video)).
 
 ### Mining sources
 
 Add YouTube video links under **Mining Sources** on the **Topics** page, up to 50. A link to a video,
 a Short or a live video is accepted, in the `youtube.com/watch?v=…` or `youtu.be/…` form. A link to
-a channel or a playlist is not.
+a channel or a playlist is not. Removing a link takes effect at once and offers **Undo** for a few
+seconds, which puts that link back.
 
 While no Gemini key is stored, the **Mining** toggle is greyed out. It works again once you add a
 key on **Settings → API Keys**.
@@ -120,7 +191,7 @@ Five controls bound what research produces, and so what it costs.
 |---|---|---|---|
 | Research modes | Toggles on the **Topics** page | All on | Turns curriculum, trending or mining off |
 | Pause a domain | **Pause topic generation** on a seed's row on the **Topics** page | Not paused | Stops research filing topics in that domain |
-| Topic cap | **Topic cap** on a domain's row | 100 | The most topics a domain may hold over its lifetime, from 25 to 750 |
+| Topic cap | **Topic cap**, under **Edit defaults** on a domain's row | 100 | The most topics a domain may hold over its lifetime, from 25 to 750 |
 | Pending-topic limit | **Research pending cap** on **Settings → Research** | 15 | Research does not run while this many topics are waiting for your decision |
 | Research runs per day | **Max research runs per day** on **Settings → Research** | 8 | The most research runs in any 24 hours |
 
@@ -139,8 +210,9 @@ Research checks each new idea against every topic the domain has had, including 
 or deleted, so that it does not propose the same thing twice. The cap keeps that history short
 enough for the agent to read.
 
-A domain at its cap shows **EXPIRED**, and research files nothing more in it. Raise the cap on the
-domain's row to continue. The row shows how many topics the domain has had, as "N filed".
+A domain at its cap shows **EXPIRED**, and research files nothing more in it. To continue, press
+**Edit defaults** on the domain's row and raise **Topic cap**. The row shows how many topics the
+domain has had against its cap, for example "42 / 100 topics".
 
 ### The two research limits
 
@@ -206,6 +278,109 @@ A script profile teaches the agent to write in the style of YouTube videos you c
    **Topics** page.
 
 You cannot edit a profile. Delete it and create another.
+
+A profile decides how a script sounds: its tone, its vocabulary and its phrasing. The
+[formula](#script-formulas) decides how the script is built, so the agent does not copy a
+profile's structure or its sign-off.
+
+---
+
+## Script formulas
+
+A formula is the structure of a script: its parts in order, how it opens, where it turns and how
+it ends. Each video gets one before its script is written, and the agent then writes the script
+in that formula and in your script profile's voice.
+
+### How a video gets its formula
+
+Left on **Auto**, the agent picks the formula once the topic is approved and the visual style is
+known. It scores every formula against the kind of topic it is, and it avoids the formula of the
+domain's previous two videos when another one fits, so a domain's videos do not all share one
+structure. The opening varies in the same way.
+
+You can choose the formula yourself in two places:
+
+- For one video, with the **Formula** picker in its window at Topic Proposed, or on the
+  **New Video** page.
+- For a domain, with the **Formula** picker under **Edit defaults** on its row on the **Topics**
+  page. Every new video in
+  the domain then starts with that formula, whichever research mode found it.
+
+Your choice is the formula the script is written in. The agent still records the formula it would
+have picked, with its reason.
+
+### Learning from your own viewers
+
+Once your videos are published and Tubematic reads their analytics, Auto also learns which
+formulas and openings hold viewers in each domain. It reads the share of each video viewers
+watched, on each account separately, from posts at least a week old. A formula counts once at
+least 20 of the domain's videos with figures use it on one account. A formula that holds viewers
+clearly better than the domain's videos as a whole is favoured, and one that holds them clearly
+worse counts against it.
+
+Auto is told to weigh these figures only among formulas that already fit the topic, so that a
+topic does not get a formula that does not suit it because that formula did well elsewhere. They
+decide between two formulas that fit the topic about equally well. Every fourth pick in a
+domain is a trial pick, which favours formulas the domain has too few videos of, so Auto keeps
+learning about the formulas it has not tried. When two openings the agent drafts are equally
+strong, it keeps the type that holds the domain's viewers better.
+
+With publishing off, or before a domain has enough published videos, Auto picks from the topic
+alone. **Learn from watch figures** in [Preferences](05-settings.md#preferences) switches it off.
+
+### Changing the formula at Script Ready
+
+In the video's window, **Formula** names the formula and **Why this formula** gives the reason and
+the runner-up. The formula's name follows the word Auto when the agent picked it. When Auto read
+your watch figures for the pick, a line under the reason says whether the pick leaned on them or
+was a trial pick, and how many videos and accounts were behind them. A formula you chose shows no
+such line, because the script is written in your choice whatever the figures say.
+
+- **Switch to <runner-up>** has the script rewritten in the runner-up formula. On a video whose
+  formula you chose, the runner-up is the formula Auto would have picked, or Auto's second choice
+  when Auto picked the same formula as you.
+- **Use this opening**, on the **Script** tab, has the script rewritten from another of the three
+  openings.
+
+Both discard the current script, and the agent writes a new one on its next session. For a new
+video nothing has been paid for at this point. For a video you sent back for revision after it was
+voiced, the new script is voiced again when you approve it.
+
+### The formulas
+
+| Formula | The agent picks it for |
+|---|---|
+| Paradox, Mechanism, Reframe | A thing the viewer owns or uses every day works in a way that seems impossible |
+| Broken Expectation | A tool did something that looks wrong |
+| Follow the Flow | A process with a natural order: a request, a boot, a login, a payment, a signal through the body |
+| Myth, Break, Model | A belief most people hold is wrong |
+| Why Don't They Just | A design decision that looks stupid from outside |
+| Incident File | An outage, a loss or a bug with a timeline |
+| Scheme Machine | A scam, a fraud, a loophole or an exploit that works as a loop |
+| Anomaly File | Evidence that looked wrong: every gauge normal during a failure, a record that should not exist |
+| Scene Story | One person inside one moment: a near miss, a strange true incident, an ordinary life in a big event |
+| Escalating Ladder | Something with a natural measure: size, cost, speed, time to break, risk, depth |
+
+These formulas are experimental. Auto picks them only while **Experimental formulas** is on in
+[Preferences](05-settings.md#preferences). You can choose one yourself at any time.
+
+| Formula | Suits |
+|---|---|
+| Normal World, Then the Exploit | A weakness or a class of attack on a system that otherwise works |
+| Result First, Then Rewind | The rise or the fall of a product, a company or a technology |
+| Stake-First List | Practical advice or a set of checks |
+| News Take | Something that happened in the last few weeks, with one actor and one surprising act |
+| Prize and Barrier | A "why do we not have this yet" topic |
+| Strange Sight, Hidden Cause | A curiosity about an animal, the body or an object, with one strange thing to show |
+| Test Case, Answered Last | A system of rules, tested on one famous case |
+| Contender, Then Champion | A superlative with a countable measure and a winner that is not the obvious one |
+
+Each formula has its own length, so scripts are not all the same length. The agent writes every
+script to fit inside three minutes.
+
+A script ends on its payoff, with no closing line after it. To have scripts end with a line of
+your own, such as asking viewers to follow, say so in
+[Preferences](05-settings.md#preferences).
 
 ---
 

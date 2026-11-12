@@ -114,9 +114,15 @@ Covers `build_research_prompt`, `build_pipeline_prompt` and `build_mascot_prompt
 
 - The research prompt names a mining target only when mining is active. It tells the agent to
   deduplicate with `list_project_topics` and to skip a paused or expired domain.
+- The research prompt names the three angle arguments of `create_video`, says a subject with no
+  angle is not proposed, and asks for a summary of every candidate dropped. The prompt ships with
+  the install, so it says this even when a deployed skill is a version behind.
 - The pipeline prompt names one video and where its stage ends, for every workable status. A
   cross-copy check keeps the stage table equal to the API's `WORKABLE_STATUSES`, since a status with
   no stage would never be dispatched.
+- The pipeline prompt forbids researching new topics and then says that finding the angle of the
+  video's own topic is something else, since a scripting session reads the topic-research skill's
+  rules to fill a missing angle. It says so at `TOPIC_APPROVED` and `REVISION_REQUESTED` only.
 - The mascot prompt names the builder skill, the mascot and the three build tools, and tells the
   agent not to advance any video.
 - The user preferences block names the stage of the run, limits itself to that stage and says it
@@ -365,6 +371,9 @@ Covers `scripts/collect_diagnostics.py`, whose report is meant to be pasted into
   each: secret settings, service tokens, the password hash, provider keys, auth headers, a cookie,
   an email, public addresses, the home path, user and host names, account, voice and domain ids, and
   a video's content.
+- An opening the agent drafted and did not use is content too. It is in no script column, so it
+  is read from the video's recorded openings.
+- A topic's angle is content: a sentence about the video's subject that is in no other column.
 - Ids become the same short hash wherever they appear, so lines about one account still match up.
   Content stays out unless you pass `--include-content`. Content under 12 characters is replaced as
   a whole word, and content under four characters is left.
@@ -624,6 +633,253 @@ the workspace registry
 Trap: The launch form has no free-text field, so the written list is the set of versions a user can
 install from it. A string sort or a listed prerelease is a defect no other check sees before a
 session launches.
+
+### `test_bean_explainer_skill.py`
+
+Covers the `tubematic-bean-explainer` skill ([Bean Explainer](../10-scene-authoring.md#bean-explainer)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The prop catalogue in `reference/contract.md` lists the pack's props and no others, each with its text
+  limit and acts, and every pose, face, mark, accessory, tint, entrance, field and section colour.
+- The limits the skill states are the ones `mcp/bean_explainer.py` enforces, the worked example
+  passes the validator, and the uninstaller removes the skill.
+- The skill teaches props of the agent's own within the validator's limits (count, box, text slot,
+  acts, the whole-prop acts, the preview tool), and its worked custom prop, `example-prop-rocket.tsx`,
+  passes the validator's source checks.
+
+Trap: `reference/contract.md`'s catalogue is generated from the pack. A prop added to the library
+and left out of that file is a prop no agent will use.
+
+### `test_storybook_atlas_skill.py`
+
+Covers the `tubematic-storybook-atlas` skill ([Storybook Atlas](../10-scene-authoring.md#storybook-atlas)).
+
+- The skill is loadable by an unattended run, its pack names it as the authoring skill, and the
+  operator skill routes to it.
+- `reference/contract.md` lists the pack's props and no others, each with its box, states, acts and
+  portal, every backdrop, every knob value and every coat. The skill names every backdrop, pose and
+  event type.
+- The limits the skill states are the ones `mcp/storybook_atlas.py` enforces, the worked example
+  passes the validator, and the uninstaller removes the skill.
+- The skill teaches props of the agent's own within the validator's limits, and its worked custom
+  prop, `example-prop-moth.tsx`, passes the validator's source checks.
+
+Trap: `reference/contract.md`'s tables are generated from the pack. A prop or backdrop added to the
+library and left out of that file is one no agent will use.
+
+### `test_terminal_doc_skill.py`
+
+Covers the `tubematic-terminal-doc` skill ([Terminal Doc](../10-scene-authoring.md#terminal-doc)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The skill and `reference/contract.md` list every move, and the contract every slot (with its
+  centre and sizes), size (with its characters per line), tone, skin, reveal and cut.
+- The limits the skill and the contract state are the ones `mcp/terminal_doc.py` enforces, the
+  worked example passes the validator and uses at least ten of the moves, and the uninstaller removes
+  the skill.
+- The skill teaches moves of the agent's own within the validator's limits, and its worked move,
+  `example-move-caesar.tsx`, passes the validator's source checks.
+### `test_under_the_hood_skill.py`
+
+Covers the `tubematic-under-the-hood` skill ([Under the Hood](../10-scene-authoring.md#under-the-hood)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The skill and `reference/contract.md` list every pose, event kind and tone in the pack, and state
+  the limits `mcp/under_the_hood.py` enforces.
+- The skill asks for square photographs with the no-text prompt recipe, checks each with
+  `read_image`, and never calls `generate_character`.
+- The worked example passes the validator and uses every kind of event, and the uninstaller removes
+  the skill.
+
+### `test_case_file_story_skill.py`
+
+Covers the `tubematic-case-file-story` skill ([Case File Story](../10-scene-authoring.md#case-file-story)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The skill and `reference/contract.md` list every accent, beat kind, meter kind and icon in the
+  pack, and state the limits and fixed delays `mcp/case_file_story.py` enforces. The contract's
+  number examples are the validator's own formatting.
+- The skill teaches the two calls that keep the lead the same character (the lead sheet from the
+  house lead, then stills from that sheet), tells the agent to leave the lead and the art style out
+  of its prompts, forbids writing, logos, brands, real places, weapons and violence in a picture,
+  and never calls `generate_character`. It leaves the captions to the style.
+- The worked example passes the validator, carries no `subtitles`, and uses every kind of beat, a
+  punch-in, a meter change, a panel and a hidden meter row. The uninstaller removes the skill.
+
+Trap: an agent that skips the lead sheet, or leaves `reference` off a still, gets a different
+character in each painting, and nothing after the paid call can repair that.
+
+### `test_system_flow_skill.py`
+
+Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md#system-flow)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes by `style.authoring_skill`.
+- The icon list and the limits the skill states are the ones `mcp/system_flow.py` enforces.
+- The reference files ship, and the uninstaller removes the skill.
+
+Trap: a skill that teaches a value the validator refuses teaches the agent to be refused on every
+video. Change a limit in `system_flow.py` and the skill text together.
+
+### `test_style_routing_skill.py`
+
+Covers the `tubematic-style-routing` skill
+([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
+
+- The skill is loadable by an unattended run and names no style id or label.
+- It reads every field `routing_candidates` gives a candidate, names the real fallback, and calls
+  `choose_visual_style` with its real arguments and reason limit.
+- The operator runs it before the script-writing skill at `TOPIC_APPROVED`, the script-writing skill
+  follows `style.script`, and the uninstaller and the skills README know it.
+
+Trap: a skill that named styles would prefer the ones it knew about, and a new pack would need an
+edit to be picked. The candidates are data for that reason.
+
+### `test_formula_routing_skill.py`
+
+Covers the `tubematic-formula-routing` skill
+([How a formula is picked](../08-scripting-and-voice.md#how-a-formula-is-picked)).
+
+- The skill is loadable by an unattended run and names no formula id or label except its two
+  fallbacks, which are formulas that are not experimental, one for an explanation and one for a
+  story.
+- It reads every field `routing_candidates` gives a candidate, and calls `choose_script_formula`
+  with its real arguments, reason limit and result keys.
+- It names the rotation window the server enforces, routes around a person's choice with the
+  agent's own best formula, covers every refusal the tool makes, and uses the topic's angle only
+  when there is one.
+- The operator runs it after style routing and before the script-writing skill at
+  `TOPIC_APPROVED`, and names it on a script revision. A revision runs it for a video with no
+  formula, and a person's choice is kept with a comment saying so. A pick in a revision is for a
+  script revision only and always goes back to a person. Rotation is skipped beside a person's
+  choice. The uninstaller and the skills README know it.
+- Learned points go only to formulas that are already a clear fit, decided before the points are
+  added. The skill knows both modes, takes trial-pick points as given, treats a missing `learned`
+  as 0, never uses the figures as a `repeat_reason`, and states the points and standings the server
+  gives (`tubematic_core/watch.py`).
+
+Trap: a skill that named formulas would prefer the ones it knew about, and a new formula would need
+an edit to be picked. The candidates are data for that reason.
+
+### `test_eval_formula_routing.py`
+
+Covers the plumbing of `scripts/eval_formula_routing.py` ([Formula routing](formula-routing.md)). No
+model is called.
+
+- The prompt carries the video as `get_video` returns it at `TOPIC_APPROVED`, with its style
+  decided, the style's script text and every candidate. A topic is routed with experimental
+  formulas only when it says so, and a topic with no style is a video on mixed scenes.
+- The answer is the last JSON object in the reply that names a formula, and the style eval's own
+  answer key still works.
+- The report counts best, acceptable and failed picks overall and by formula, and lists the wrong
+  ones. Every topic in the set builds a prompt.
+- A topic with no `learned` reaches the skill with the server's inactive shape and 0 points
+  everywhere. One with `learned` hands its points over as the server would: in learned mode an
+  unnamed formula is thin, and in a trial pick the formulas with the points are thin and the rest
+  counted.
+
+### `test_eval_style_routing.py`
+
+Covers the plumbing of `scripts/eval_style_routing.py` ([Style routing](style-routing.md)). No model
+is called.
+
+- The prompt carries the video as `get_video` returns it at `TOPIC_APPROVED`, with every candidate.
+- The answer is the last JSON object in the reply that names a style.
+- A pick is scored best, acceptable or wrong, and the report counts each and lists the wrong ones.
+- `--openrouter` sends the skill as the system message and the video as the user message, with the
+  key as a bearer token; a reply with no answer is an error, and a missing key stops the run before
+  any call. The report shows the run's cost when OpenRouter reports one.
+- A reply that trickles whitespace past the deadline is given up on in time, and a reply that
+  arrives in pieces is still read whole, both against a server on loopback. OpenRouter holds a slow
+  request open with whitespace, which a socket timeout never catches.
+
+### `test_topic_angle_skills.py`
+
+Covers what the agent is told about a [topic's angle](../02-pipeline.md#topic-angle), and
+`scripts/gen_angle_reference.py`.
+
+- The kind table and score table in the topic-research skill equal what `tubematic_core/angles.py`
+  renders, and `--check` notices a hand edit.
+- The research skill passes `angle`, `angle_kind` and `angle_score` to `create_video`, drops a
+  subject with no angle, never invents one, and ends with a run summary that names what it
+  dropped, with the dropped list first because the poller logs only the start of the agent's
+  final message. It tells the missing-score refusal from the two that mean a drop. Its examples name
+  no install's domains.
+- The operator skill fills a missing angle before the style and the script, leaves an approved
+  angle alone, and lets a topic revision rewrite it.
+- The formula router reads the angle and `angle_formula`, and still works with no angle. The
+  script-writing skill reads the angle and builds its openings on it. An angle rewritten in a
+  script revision sends the video through the router again.
+- The Claude and OpenCode copies of `/tubematic-submit-new-job` are the same file. The command
+  passes an angle and does not refuse a topic for lacking one.
+
+Trap: `create_video` refuses a research topic with no angle. Skill text that stopped asking for one
+would make every research run file nothing while the run still ended normally.
+
+### `test_script_writing_skill.py`
+
+Covers the `tubematic-script-writing-skill` skill and `scripts/gen_formula_references.py`
+([Formulas](../08-scripting-and-voice.md#formulas)).
+
+- The skill's `formulas/` files equal what the generator renders from the formula data, and
+  `--check` reports an edited file and a stray one. The skill holds no table for choosing a
+  formula.
+- The hand-off names `update_video`'s real arguments, reads `warnings`, allows one extra write, and
+  says what to do when an older tool server refuses the new arguments.
+- The authority order is fixed policy, the style's script text, the formula, the profile. The
+  grammar has fourteen rules, and a closing line comes only from the preferences.
+- The skill holds no fixed five-part sequence, no per-part word budget and no call-to-action step.
+- The headings other skills and tests point at are present, and the operator's `TOPIC_APPROVED` and
+  revision rows pass the record. The pronunciation row leaves the record out, in a place where
+  the sentence cannot be read as being about the publish title and description.
+- The formula's reference file and the style's script text decide how the payoff rules are met.
+  The length starts from the lower half of the band, and a length the style's script text gives
+  wins over the band.
+- The skill writes in `formula_routing.pick` and does not choose a formula. It covers a video with
+  no pick (the router has not run, a script from before picks existed, a revision with no formula
+  at all, an older tool server) and says a changed style or topic drops the pick.
+- The openings step prefers a type the domain's previous two videos did not use, and starts from
+  the opening a person switched to, word for word, only while that comment is the newest and no
+  script has been written since. Opening warnings on that opening stay, and the fallback for an
+  older tool server applies only to an unknown argument, never to a refused formula. The domain's
+  `learned.openings` break only a tie that the recent types leave.
+- A style that asks for names may name its people.
+- The user guide's formula table names every formula.
+
+Trap: an instruction that survives beside its replacement is followed whenever the agent reads it
+last, so the removed phrases are pinned as absent.
+
+### `test_eval_script_writing.py`
+
+Covers the plumbing of `scripts/eval_script_writing.py` ([Script writing](script-writing.md)). No
+model is called.
+
+- The topic set is well formed, and each topic's formula is one that is not experimental. The
+  prompt carries the video as the skill reads it at `TOPIC_APPROVED`, with no profile, no
+  preferences and the topic's formula as the pick.
+- The new side carries every formula file. The old side is read from git at the given ref.
+- The answer is the last JSON object in the reply that holds a script. A script is scored on its
+  spoken words, with its record when it has one.
+- The summary shows both sides for each topic and counts each warning per side.
+### `test_whiteboard_skill.py`
+
+Covers the `tubematic-whiteboard` skill ([Whiteboard](../10-scene-authoring.md#whiteboard)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- The doodle list, the layouts and their slots, and the limits the skill states are the ones
+  `mcp/whiteboard.py` enforces.
+- The worked example passes the validator against its own timeline, and the uninstaller removes the
+  skill.
+- The skill's `reference/doodles.json` is the shipped library and its names are the pack's list, and
+  the skill teaches every primitive, the preview tool and the custom-doodle limits.
+
+Trap: a skill that teaches a value the validator refuses teaches the agent to be refused on every
+video. Change a limit in `whiteboard.py` and the skill text together.
 
 ### `test_tubematic_remote_renderer.py`
 

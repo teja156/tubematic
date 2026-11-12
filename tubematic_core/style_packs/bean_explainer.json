@@ -1,0 +1,393 @@
+{
+  "id": "bean_explainer",
+  "label": "Bean Explainer",
+  "order": 60,
+  "experimental": true,
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-bean-explainer",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "review": "- This video is a Bean Explainer, and the following are its intended, approved look: one flat saturated colour field (yellow, mint, sky, peach or lilac) with a light grey floor strip under the characters and no texture; a bald, big-headed cream character (the bean) with a thick black outline and heavy eyelids, sometimes with one hat, glasses, tie or headset, and at most one second bean in another tint; the bean swapping whole poses and faces in a snap of about two frames on the narrator's words, then holding perfectly still (no in-between animation is intended); props drawn in the same thick outline and flat colours, popping in one at a time and staying until the next cut (an additive build); short handwritten labels near the props, some in red; reaction marks beside the head (sweat drop, question mark, exclamation mark, alarm lines, sparkle, anger mark, light bulb); a red X struck over a prop and red arrows; a brief camera shake on an impact; a rounded capital section header with a coloured underline and a coloured badge top right; between list sections a strip of badges sliding sideways; captions in dark letters on the grey floor, with the key word on a red box. Do NOT report any of these as defects, and do not suggest adding photographs, realistic drawings, smooth character animation or texture: their absence is the style.\n- Do report: a prop that cannot be recognised or does not match what the narration names at that moment, a label or caption overlapping a prop, the bean or another label, anything cut off at the frame edge, text too small to read on a phone, a pose or face that contradicts the line (a happy face on bad news), a red X or arrow on the wrong thing, and a stretch of more than about three seconds where nothing on screen changes.\n",
+  "captions": {
+    "background": "none",
+    "position": 0.75,
+    "color": "#1E1C1A",
+    "fontFamily": "'Instrument Sans', system-ui, sans-serif",
+    "fontSize": 66,
+    "maxWords": 3
+  },
+  "script": "Every beat's `visual` is a **bean** brief: the bean's pose and face, and the one prop on stage that the line is about (`\"bean panics, phone buzzing with a bank text\"`). The video is one cartoon character throughout, so a role is the bean (or the one second bean the cast allows), never a photograph.\n\nThe narration is a cartoon character's script: one everyman bean reacts to what you say, among props from a library of everyday objects (a phone, a browser bar, coins, a pill, a lock, an alarm clock...). Write it to be acted out. When the topic is a list, introduce each item with its name (\"First: urgency.\") so it gets its own section. Give each sentence one picture a person can react to (a fake text arrives, the bill comes, the alarm rings), talk to the viewer (\"you\"), and land each line on one key word, which is shown on a red box in the captions. Never write a beat that needs a photograph, a named real person or a place: this style has none, and a thing the library does not have is drawn for the video or shown as text on a sign or a note.",
+  "picture": {
+    "opening": "The first shot has the bean posed and the first sentence's subject as a prop from frame 0 (a pose on the first word, the prop at frame 0). Never an empty field or the title alone.",
+    "turn": "A new shot on the first word of a turn or a re-opening, or an impact, a strike, a new prop or the bean hopping somewhere new at that moment.",
+    "payoff": "The shot with the answer: the biggest prop and the bean's strongest reaction, with an impact.",
+    "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
+  },
+  "routing": {
+    "best_for": [
+      "psychology and behaviour",
+      "habits, health and the body",
+      "every-X-explained lists: each item its own section",
+      "money mistakes and everyday decisions",
+      "tech concepts told as a list of named items (every port, every attack type)",
+      "relatable situations one person reacts to"
+    ],
+    "avoid_for": [
+      "data-heavy diagrams and architectures (System Flow fits them)",
+      "a mechanism walked through with generic roles (Stick Explainer fits it)",
+      "recurring characters who must look like specific people or creatures (Illustrated fits them)",
+      "a place and people moving through it (Cartoon 3D fits it)",
+      "real products, places or spectacle the viewer came to see (Motion Graphics fits them)",
+      "sombre history or tragedy"
+    ],
+    "signals": [
+      "the script is a list of named items, one section each",
+      "the subject is a human behaviour, habit, feeling or an effect on the body or mind",
+      "each line carries a metaphor one person can act out",
+      "second-person, conversational narration (you, your)",
+      "a cheeky, upbeat, relatable tone",
+      "one everyman reacting, not a cast of named characters"
+    ],
+    "moods": [
+      "cheeky",
+      "upbeat",
+      "relatable",
+      "curious"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  },
+  "extra": {
+    "fields": [
+      "yellow",
+      "mint",
+      "sky",
+      "peach",
+      "lilac"
+    ],
+    "section_colors": [
+      "red",
+      "blue",
+      "green",
+      "orange",
+      "teal",
+      "purple"
+    ],
+    "poses": [
+      "stand",
+      "point",
+      "present",
+      "wave",
+      "cheer",
+      "shrug",
+      "think",
+      "facepalm",
+      "hands-hips",
+      "panic",
+      "lean"
+    ],
+    "faces": [
+      "neutral",
+      "happy",
+      "worried",
+      "shocked",
+      "squint",
+      "smug",
+      "sad",
+      "angry"
+    ],
+    "looks": [
+      "front",
+      "left",
+      "right"
+    ],
+    "marks": [
+      "sweat",
+      "alarm",
+      "question",
+      "exclaim",
+      "sparkle",
+      "shock",
+      "anger",
+      "idea"
+    ],
+    "accessories": [
+      "none",
+      "glasses",
+      "cap",
+      "tie",
+      "headset",
+      "hardhat",
+      "beanie"
+    ],
+    "tints": [
+      "cream",
+      "peach",
+      "grey",
+      "mint",
+      "lilac"
+    ],
+    "entrances": [
+      "pop",
+      "drop",
+      "slide",
+      "rise"
+    ],
+    "props": {
+      "phone": {
+        "text": 40,
+        "acts": [
+          "buzz"
+        ]
+      },
+      "browser": {
+        "text": 26,
+        "acts": [
+          "flash"
+        ]
+      },
+      "laptop": {
+        "text": 30,
+        "acts": [
+          "flash"
+        ]
+      },
+      "sign": {
+        "text": 24,
+        "acts": [
+          "wobble"
+        ]
+      },
+      "document": {
+        "text": 20,
+        "acts": [
+          "stamp"
+        ]
+      },
+      "note": {
+        "text": 30,
+        "acts": []
+      },
+      "speech": {
+        "text": 40,
+        "acts": []
+      },
+      "thought": {
+        "text": 40,
+        "acts": []
+      },
+      "pricetag": {
+        "text": 10,
+        "acts": [
+          "swing"
+        ]
+      },
+      "calendar": {
+        "text": 6,
+        "acts": [
+          "flip"
+        ]
+      },
+      "envelope": {
+        "text": 20,
+        "acts": [
+          "shake"
+        ]
+      },
+      "coins": {
+        "text": 0,
+        "acts": [
+          "shake"
+        ]
+      },
+      "banknote": {
+        "text": 6,
+        "acts": [
+          "swing"
+        ]
+      },
+      "wallet": {
+        "text": 0,
+        "acts": [
+          "shake"
+        ]
+      },
+      "piggybank": {
+        "text": 0,
+        "acts": [
+          "shake"
+        ]
+      },
+      "creditcard": {
+        "text": 16,
+        "acts": [
+          "swing"
+        ]
+      },
+      "chartup": {
+        "text": 16,
+        "acts": [
+          "grow"
+        ]
+      },
+      "chartdown": {
+        "text": 16,
+        "acts": [
+          "grow"
+        ]
+      },
+      "brain": {
+        "text": 0,
+        "acts": [
+          "spark"
+        ]
+      },
+      "heart": {
+        "text": 0,
+        "acts": [
+          "beat"
+        ]
+      },
+      "stomach": {
+        "text": 0,
+        "acts": [
+          "shake"
+        ]
+      },
+      "pill": {
+        "text": 0,
+        "acts": [
+          "spin"
+        ]
+      },
+      "coffee": {
+        "text": 0,
+        "acts": [
+          "steam"
+        ]
+      },
+      "water": {
+        "text": 0,
+        "acts": [
+          "fill"
+        ]
+      },
+      "bed": {
+        "text": 0,
+        "acts": [
+          "zzz"
+        ]
+      },
+      "dumbbell": {
+        "text": 0,
+        "acts": [
+          "shake"
+        ]
+      },
+      "apple": {
+        "text": 0,
+        "acts": [
+          "spin"
+        ]
+      },
+      "lock": {
+        "text": 0,
+        "acts": [
+          "unlock"
+        ]
+      },
+      "key": {
+        "text": 0,
+        "acts": [
+          "spin"
+        ]
+      },
+      "server": {
+        "text": 0,
+        "acts": [
+          "flash"
+        ]
+      },
+      "wifi": {
+        "text": 0,
+        "acts": [
+          "pulse"
+        ]
+      },
+      "bug": {
+        "text": 0,
+        "acts": [
+          "wobble"
+        ]
+      },
+      "shield": {
+        "text": 0,
+        "acts": [
+          "flash"
+        ]
+      },
+      "cursor": {
+        "text": 0,
+        "acts": [
+          "click"
+        ]
+      },
+      "clock": {
+        "text": 0,
+        "acts": [
+          "ring"
+        ]
+      },
+      "hourglass": {
+        "text": 0,
+        "acts": [
+          "spin"
+        ]
+      },
+      "gears": {
+        "text": 0,
+        "acts": [
+          "turn"
+        ]
+      },
+      "bulb": {
+        "text": 0,
+        "acts": [
+          "light"
+        ]
+      },
+      "cloud": {
+        "text": 0,
+        "acts": [
+          "rain"
+        ]
+      },
+      "trophy": {
+        "text": 0,
+        "acts": [
+          "spark"
+        ]
+      },
+      "bomb": {
+        "text": 0,
+        "acts": [
+          "shake"
+        ]
+      },
+      "magnifier": {
+        "text": 0,
+        "acts": [
+          "wobble"
+        ]
+      }
+    }
+  }
+}

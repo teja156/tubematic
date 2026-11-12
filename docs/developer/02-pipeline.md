@@ -36,6 +36,8 @@ flowchart TD
     TP -->|reject| TR
     TA -->|agent writes script| SR
     SR -->|"approve: voicing is paid for"| VO
+    SR -->|"switch to Auto's runner-up style"| TA
+    SR -->|"switch the formula or the opening"| TA
     VO -->|agent calls generate_voice| VR
     VR -->|agent authors scenes,<br/>validates, submits| RQ
     RQ -->|renderer claims| RN
@@ -76,7 +78,7 @@ flowchart TD
 | Status | Owner | Meaning |
 |---|---|---|
 | `TOPIC_PROPOSED` | Human | A researched, scored topic waits for a decision |
-| `TOPIC_APPROVED` | Agent | The agent writes a script |
+| `TOPIC_APPROVED` | Agent | The agent picks a style when the video is on `auto`, then writes a script |
 | `TOPIC_REJECTED` | none | Terminal. A human rejected the topic |
 | `SCRIPT_READY` | Human | A script exists. Approving it authorizes the paid voicing |
 | `VOICING` | Agent | The agent calls ElevenLabs |
@@ -93,7 +95,9 @@ flowchart TD
 | `FAILED` | none | Terminal, except after a failed publish: **Retry publishing** asks postforme and moves the video to `PUBLISHING` (a live post exists) or `VIDEO_APPROVED` (nothing is live) |
 
 There is no `SCRIPTING` status. The agent picks a video up at `TOPIC_APPROVED` and writes the
-script in one session.
+script in one session. On a video whose style is `auto`, the same session first picks the style
+([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)), because the script is
+written for it.
 
 ### Render-stage exits
 
@@ -243,7 +247,7 @@ control.
 
 | Group | Fields | Settable while the video is at |
 |---|---|---|
-| Topic | `script_profile_id`, `visual_style`, `mascot_id` | `TOPIC_PROPOSED` only |
+| Topic | `script_profile_id`, `visual_style`, `mascot_id`, `formula_choice` | `TOPIC_PROPOSED` only |
 | Agent | `agent_id`, `agent_model`, `agent_effort` | Any human checkpoint: `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` |
 
 The topic group shapes what the script is, so a later change would leave a script that does not
@@ -257,9 +261,9 @@ that lands in between fails the write with `409`.
 
 ### The agent group
 
-- A video gets `agent_id` from the weighted deal when it is created
-  ([Assignment](07-agent-layer.md#assignment)). After that only a human at a checkpoint changes
-  it. The poller does not move a video to another agent.
+- A video gets `agent_id` when it is created: its domain's agent, or one from the weighted deal
+  when the domain names none ([Assignment](07-agent-layer.md#assignment)). After that only a human
+  at a checkpoint changes it. The poller does not move a video to another agent.
 - `agent_id` must name a live agent, or the write is refused with `400`. Naming the video's
   current agent again changes nothing.
 - Changing the agent clears `agent_model` to `""`, because a model belongs to one agent's list. A
@@ -280,6 +284,32 @@ that lands in between fails the write with `409`.
 A brief for a posed figure differs from a brief for a photograph, so a later change would call for
 a new script.
 
+Three writes of `visual_style` happen after the topic checkpoint, each in one `UPDATE` that repeats
+its checks:
+
+- `choose_visual_style`, once, at `TOPIC_APPROVED`, on a video still on `auto`: the agent records
+  the style Auto picked, before any script exists.
+- [`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style), at
+  `SCRIPT_READY`: a person takes Auto's runner-up, and the video goes back to `TOPIC_APPROVED` for a
+  new script.
+- A move back to `TOPIC_PROPOSED` returns a style Auto picked to `auto`, so the revised topic is
+  routed again, and clears the renderer and canvas recorded for an `auto` video's old scenes. A
+  style a person chose is kept.
+
+`formula_choice` is the script formula a person chose for the video, or `''` for Auto. It is
+frozen because the formula is picked from it at `TOPIC_APPROVED` and the script is written in that
+pick. Three writes of the formula decision happen after the topic checkpoint
+([How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked)):
+
+- `choose_script_formula`, at `TOPIC_APPROVED` once the style is decided: the agent records the
+  pick, a runner-up and a reason, before any script exists.
+- [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula) and
+  [`POST /videos/<id>/switch-opening`](05-http-api.md#post-videosvideo_idswitch-opening), at
+  `SCRIPT_READY`: a person takes the runner-up formula, or another of the script's drafted
+  openings, and the video goes back to `TOPIC_APPROVED` for a new script.
+- A move back to `TOPIC_PROPOSED` and a style switch both drop the pick, so it is made again. A
+  person's `formula_choice` is kept.
+
 Two fields that follow from `visual_style` are write-once. The agent writes them through
 `update_video`, HTTP cannot write them, and a second, different value is refused:
 
@@ -287,9 +317,9 @@ Two fields that follow from `visual_style` are write-once. The agent writes them
   writes it at scene-config time, after `TOPIC_PROPOSED`, so a status freeze would make it
   unwritable. Write-once is what makes a revision round render on the canvas the video already
   uses. No code on the revision path reads the field.
-- `resolved_renderer` records which renderer (`dom` or `cartoon_3d`) `auto` settled on. The agent
-  writes it before it authors any scene, because a revision that changed the renderer would
-  discard every scene.
+- `resolved_renderer` records which renderer an `auto` video uses (`dom`, or `cartoon_3d` on a
+  video that recorded it before Auto picked styles). The agent writes it before it authors any
+  scene, because a revision that changed the renderer would discard every scene.
 
 `title` is not frozen. It is a display name and stays writable at any status.
 
@@ -313,7 +343,7 @@ Three mechanisms guard a video against two writers:
 
 ```mermaid
 flowchart LR
-    A["topic, title,<br/>producibility_score"] --> B["script_segments<br/>→ script"]
+    A["topic, title, angle,<br/>producibility_score"] --> B["script_segments<br/>→ script"]
     B --> C["tts_text, audio.mp3,<br/>timeline.json"]
     C --> D["images/, scene TSX,<br/>scene-config.json"]
     D --> E["video.mp4,<br/>gemini_feedback"]
@@ -321,7 +351,7 @@ flowchart LR
 
 | Stage | Files written | Columns set |
 |---|---|---|
-| Research | none | `topic`, `title`, `strategy`, `producibility_score`, `project_id` |
+| Research | none | `topic`, `title`, `strategy`, `producibility_score`, `project_id`, `angle`, `angle_kind`, `angle_score` |
 | Scripting | none | `script_segments`, `script` |
 | Voicing | `<jobs>/<id>/audio.mp3`, `timeline.json` | `tts_text`, `voice_file_path`, `timeline_path` |
 | Scene authoring | `<jobs>/<id>/images/*`, `scenes/generated/<id>/*.tsx`, `scene-config.json` | `scene_config_path` |
@@ -357,6 +387,52 @@ Five controls limit how much they produce:
 
 The API reports the last two and `scripts/poll.py` enforces them
 ([The Poller](13-the-poller.md#research-caps)).
+
+### Topic angle
+
+A topic carries an angle: what it gives the video's opening. Three columns hold it.
+
+| Column | Holds |
+|---|---|
+| `videos.angle` | One sentence, at most 300 characters (`ANGLE_MAX_CHARS`), saying what the opening will use. `''` means no angle |
+| `videos.angle_kind` | The angle's kind, a key of `ANGLE_KINDS`, or `''`. Stored together with `angle`: both or neither. Every route passes a sent kind through `clean_kind`, so `Broken expectation` is stored as `broken_expectation` |
+| `videos.angle_score` | How strong the angle is, 0 to 10. 0 means unscored |
+
+`tubematic_core/angles.py` owns the rules. `ANGLE_KINDS` lists the ten kinds, each with a label,
+what a topic must hold for it, and the script formula it is the first choice for. `ANGLE_RUBRIC`
+lists the signals of the score. `angle_error` is the validator that the MCP server and the API both
+call. The topic-research skill's kind table and score table are rendered from the same module by
+`scripts/gen_angle_reference.py`, and the mining prompt takes its text from `prompt_text`, so the
+agent, Gemini and the server read one definition.
+
+Who writes the angle:
+
+| Writer | Where | Rule |
+|---|---|---|
+| Research (curriculum, trending, mining) | `create_video` | Required. A proposal with no angle, or an angle scoring under 5 (`ANGLE_MIN_SCORE`), is refused |
+| A person's own topic | `create_video` with `strategy="manual"`, `POST /videos/manual` | Optional, and the score has no floor |
+| A person, on the dashboard | `PATCH /videos/<id>` | At `TOPIC_PROPOSED` only. A changed angle resets `angle_score` to 0 in the same statement. A request that edits only the angle leaves `updated_at` as it was |
+| The agent | `update_video` | At `TOPIC_PROPOSED`, at `REVISION_REQUESTED`, and at `TOPIC_APPROVED` while the stored angle is empty |
+
+The write at `TOPIC_APPROVED` is how a video with no angle gets one: the operator skill looks for
+an angle before the style and the script, and records it or comments that the topic has none. The
+`UPDATE` carries `angle = ''` in its `WHERE`, so that write cannot replace an angle a person
+approved with the topic. Sending the angle the video already has, beside other fields, writes
+nothing for the angle and lets the other fields through.
+
+`updated_at` stays put on an angle-only edit because the worker announces a topic on Discord when
+its `status@updated_at` changes: an edit that moved it would announce the same topic again.
+
+`POST /videos` stores the three fields when they are sent and checks their shape. It does not
+require them, for the same reason it enforces no score floor: the route seeds test and tool data,
+and research files through the MCP server.
+
+A research run reports the subjects it dropped in the summary the agent ends on, which
+`scripts/poll.py` writes to its log. `mine_youtube_topics` returns its own in `not_filed`.
+
+The formula router and the script-writing skill read the angle from `get_video`, which adds
+`angle_formula`: the formula the kind points to
+([Scripting and Voice](08-scripting-and-voice.md#the-topics-angle)).
 
 ### Domain pause
 
@@ -421,11 +497,13 @@ on by default. With it cleared the video lands at `TOPIC_PROPOSED`.
 
 The two manual routes file differently:
 
-- `/tubematic-submit-new-job` runs inside an agent session, so the agent scores the topic and
-  matches it to a domain, as research does.
+- `/tubematic-submit-new-job` runs inside an agent session, so the agent scores the topic, looks
+  for its [angle](#topic-angle) and matches it to a domain, as research does. A topic with no angle
+  is filed without one.
 - The New Video page has no agent at submit time. Every video it creates goes into one fixed
   domain, **Manual Videos** (id `manual`), with `producibility_score` 0, which the dashboard shows
   as unscored. `create_video` refuses a score below 5, so 0 does not occur on a researched topic.
+  The form's optional angle is stored with `angle_score` 0.
   The domain is created the first time the form is used. It is not a curriculum seed, so it cannot
   be paused and research does not enumerate it, and its description tells the research agent not
   to file a researched topic there ([`POST /videos/manual`](05-http-api.md#post-videosmanual)).

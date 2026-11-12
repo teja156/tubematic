@@ -7,14 +7,18 @@ import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
 import { formatDateShort } from "@/lib/datetime";
 import { scoreLabel } from "@/lib/utils";
+import { angleKindLabel, angleScoreLabel, hasAngle } from "@/lib/angles";
 import {
   AGENT_EFFORTS, type AgentPicks, agentChanged, agentLabel, agentOptions, agentPicksPayload,
   effectiveAgent, effortLabel, effortOptionLabel, initialEffort, isUsable, modelLabel,
   pickedAgent, resolvedModel, topicApprovalPayload,
 } from "@/lib/agents";
 import { styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { useVisualStyles } from "@/components/VisualStylesProvider";
+import { hasFormula, videoFormulaLabel, type ScriptFormulaNames } from "@/lib/scriptFormulas";
+import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 import { MascotPicker } from "@/components/MascotPicker";
-import { approvalMascot, showMascotPicker } from "@/lib/mascots";
+import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
 
 const STATUS_ACCENT: Partial<Record<string, string>> = {
   TOPIC_PROPOSED: "var(--amber)",
@@ -63,11 +67,13 @@ interface ActionPaneProps {
   onOpenModal: (video: Video, tab?: string, opts?: { revise?: boolean; picks?: AgentPicks }) => void;
 }
 
-function ActionMeta({ video, scriptProfiles = [], agents = [] }: {
+function ActionMeta({ video, scriptProfiles = [], agents = [], formulaNames = null }: {
   video: Video;
   scriptProfiles?: ScriptProfile[];
   agents?: Agent[];
+  formulaNames?: ScriptFormulaNames | null;
 }) {
+  const visualStyles = useVisualStyles();
   const agent = effectiveAgent(video, agents);
   const accent = STATUS_ACCENT[video.status] ?? "var(--amber)";
   const label = STATUS_LABEL[video.status] ?? video.status;
@@ -84,6 +90,15 @@ function ActionMeta({ video, scriptProfiles = [], agents = [] }: {
       <span style={{ whiteSpace: "nowrap" }}>{label}</span>
       <span style={{ color: "var(--faint)" }}>·</span>
       <span style={{ color: "var(--ink-2)", whiteSpace: "nowrap" }}>Score {scoreLabel(score)} · {updatedStr}</span>
+      {/* The angle is judged with the topic, so its kind and score sit on the
+          topic rows only. The kind reads from its id: the row loads no list. */}
+      {video.status === "TOPIC_PROPOSED" && (
+        <span data-testid={`angle-meta-${video.id}`} style={{ whiteSpace: "nowrap" }}>
+          {hasAngle(video)
+            ? <>· <span style={{ color: "var(--amber)" }}>{angleKindLabel(video.angle_kind ?? "", null)}</span> · Angle {angleScoreLabel(video.angle_score)}</>
+            : <>· No angle</>}
+        </span>
+      )}
       {/* Read-only wherever a choice has no picker on this row — without
           this they would vanish from view entirely at exactly the checkpoints
           where knowing them matters. The topic group is live only at
@@ -94,6 +109,9 @@ function ActionMeta({ video, scriptProfiles = [], agents = [] }: {
               ? (scriptProfiles.find((p) => p.id === video.script_profile_id)?.name
                  ?? video.script_profile_id)
               : "generic style"}
+          {/* The formula sits beside the profile. Left out for a video that
+              has none anywhere (scripted before formulas existed). */}
+          {hasFormula(video) && <>{" · "}{videoFormulaLabel(video, formulaNames)}</>}
           {video.status !== "SCRIPT_READY" && (
             <>
               {" · "}
@@ -105,7 +123,7 @@ function ActionMeta({ video, scriptProfiles = [], agents = [] }: {
             </>
           )}
           {" · "}
-          {videoStyleLabel(video)}
+          {videoStyleLabel(video, visualStyles)}
         </span>
       )}
     </div>
@@ -143,6 +161,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
   onAction: ActionPaneProps["onAction"];
   onOpenModal: ActionPaneProps["onOpenModal"];
 }) {
+  const visualStyles = useVisualStyles();
   // null = untouched: the shown voice is recomputed every render, so it follows
   // /settings when that answers after this row mounted (see lib/voices.ts).
   const [pickedVoice, setPickedVoice] = useState<string | null>(null);
@@ -388,7 +407,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
             onChange={(e) => {
               const next = e.target.value as typeof selectedStyle;
               setSelectedStyle(next);
-              if (next === "cartoon_3d") setSelectedMascot("");
+              if (!styleTakesMascot(next, visualStyles)) setSelectedMascot("");
             }}
             title="Visual register for this video"
             style={{
@@ -405,7 +424,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
               maxWidth: 150,
             }}
           >
-            {styleOptions(illustratedAvailable, gpu).map((o) => (
+            {styleOptions(visualStyles, illustratedAvailable, gpu, selectedStyle).map((o) => (
               <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
             ))}
           </select>
@@ -417,7 +436,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
               mascots={mascots}
               gpu={gpu}
               value={selectedMascot}
-              locked={selectedStyle === "cartoon_3d"}
+              locked={!styleTakesMascot(selectedStyle, visualStyles)}
               onChange={setSelectedMascot}
             />
           </PickerField>
@@ -428,7 +447,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
           className="tm-btn"
           onClick={() => onAction(video.id, "approve-topic", video, {
             script_profile_id: selectedProfile, visual_style: selectedStyle,
-            ...(mascotShown ? { mascot_id: approvalMascot(selectedStyle, selectedMascot) } : {}),
+            ...(mascotShown ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}),
             ...topicVoicePayload(pickedVoice),
             ...topicApprovalPayload(video, agentList, picks),
           })}
@@ -683,6 +702,8 @@ export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = []
   // Statuses the human switched off. Stored as the excluded set, so every
   // status starts shown — including one this list has not seen yet.
   const [filteredOut, setFilteredOut] = useState<Set<string>>(new Set());
+  // One request for the whole list, and none while no row has a formula.
+  const formulaNames = useScriptFormulaNames(videos.some(hasFormula));
 
   function handleAction(videoId: string, action: string, video: Video, extra?: Record<string, unknown>) {
     const kind = action.includes("reject") ? "reject" : "approve";
@@ -833,7 +854,18 @@ export function ActionPane({ videos, voices, defaultVoiceId, scriptProfiles = []
                   >
                     {video.title || video.topic}
                   </div>
-                  <ActionMeta video={video} scriptProfiles={scriptProfiles} agents={agents} />
+                  {/* What the opening will use, on the rows where the topic is
+                      being decided. One clipped line; the window has the rest. */}
+                  {video.status === "TOPIC_PROPOSED" && hasAngle(video) && (
+                    <div
+                      data-testid={`angle-line-${video.id}`}
+                      title={video.angle}
+                      style={{ fontFamily: "var(--sans)", fontSize: 12, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    >
+                      {video.angle}
+                    </div>
+                  )}
+                  <ActionMeta video={video} scriptProfiles={scriptProfiles} agents={agents} formulaNames={formulaNames} />
                 </div>
 
                 {/* Buttons */}

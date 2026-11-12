@@ -6,8 +6,9 @@ import { mascotGate, mascotGateNote, mascotOptions } from "@/lib/mascots";
 /**
  * The per-video mascot <select>. "No mascot" is always selectable; the
  * mascots themselves are disabled, saying why, until the GPU is working (the
- * API is the authority and refuses otherwise). Cartoon 3D has no mascot layer,
- * so `locked` shows "No mascot" and disables the whole control.
+ * API is the authority and refuses otherwise). Cartoon 3D has no mascot layer
+ * and Under the Hood has its own presenter, so `locked` shows "No mascot" and
+ * disables the whole control.
  */
 export function MascotPicker({
   mascots, gpu, value, locked = false, onChange, testId, maxWidth = 140, style,
@@ -23,7 +24,7 @@ export function MascotPicker({
 }) {
   const note = mascotGateNote(mascotGate(gpu));
   const title = locked
-    ? "Cartoon 3D has no mascot layer"
+    ? "This visual style takes no mascot"
     : note || "Experimental: a character that reacts to the narration";
   return (
     <select

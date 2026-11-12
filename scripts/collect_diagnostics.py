@@ -376,6 +376,14 @@ def _content_literals(db_path: Path, settings: dict) -> tuple:
                                        f"<script {vid}>")
             except ValueError:
                 pass
+            # The openings the agent drafted: two of the three are in no script.
+            try:
+                for hook in json.loads(v.get("hook_alternatives") or "[]") or []:
+                    for field in ("text", "note"):
+                        out += _pieces(hook.get(field) if isinstance(hook, dict) else None,
+                                       f"<script {vid}>")
+            except ValueError:
+                pass
         # Human comments only. Agent-authored ones are mostly Tubematic's own
         # messages — the worker files every render error and review outcome as
         # one — and that error text is what the report exists to carry. Any
@@ -409,7 +417,8 @@ def _content_literals(db_path: Path, settings: dict) -> tuple:
 
 
 # Video columns written by the human or the agent about the video's subject.
-_VIDEO_CONTENT = (("title", "title"), ("topic", "topic"), ("script", "script"),
+_VIDEO_CONTENT = (("title", "title"), ("topic", "topic"), ("angle", "topic angle"),
+                  ("script", "script"),
                   ("tts_text", "script"), ("gemini_feedback", "review"),
                   ("publish_title", "publish title"), ("publish_description", "publish description"))
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
@@ -537,7 +546,9 @@ def section_settings(settings: dict, include_content: bool) -> str:
         elif key == "elevenlabs_voices":
             try:
                 voices = json.loads(value or "[]")
-                shown = "; ".join(f"{v.get('voice_id', '')} ({v.get('model_id', '')})" for v in voices) \
+                shown = "; ".join(f"{v.get('voice_id', '')} ({v.get('model_id', '')}"
+                                  + (f", speed {v['speed']})" if "speed" in v else ")")
+                                  for v in voices) \
                     or "none"
             except (ValueError, AttributeError):
                 shown = f"<{len(value)} chars>"

@@ -128,7 +128,7 @@ cd ~/tubematic
 
 | Key | Used for |
 |---|---|
-| `openai_api_key` | Scene images, and the characters of the `illustrated` visual style. Without it `/vqa-new-video` does not offer that style |
+| `openai_api_key` | Scene images, and the characters of the `illustrated` visual style. Without it `/vqa-new-video` lists that style as unavailable, with the reason |
 | `elevenlabs_api_key` | Voicing |
 | `gemini_api_key` | `/vqa-review` |
 

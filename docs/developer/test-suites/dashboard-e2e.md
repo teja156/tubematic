@@ -109,8 +109,13 @@ Covers [the pipeline board](../15-dashboard.md#the-pipeline-board) and
 - The visual style travels in the same request as the topic approval, and the API answers `409` to
   a later change. Illustrated with no OpenAI key is a disabled option that the API refuses with
   `400`.
+- The style picker offers the list `GET /visual-styles` serves and nothing else, System Flow and Whiteboard
+  included, and a System Flow pick is stored with the approval.
 - A status pill that hides a group keeps it hidden across a poll.
 - At 1280px the `TOPIC_PROPOSED` row's buttons stay on screen and the title keeps its width.
+- A `TOPIC_PROPOSED` row shows the topic's angle with its kind and score. At 1280px a long angle
+  stays on one line no wider than the title column, with the buttons on screen, and the row drops
+  the angle once the video is at `SCRIPT_READY`.
 
 Trap: assert a disabled `<option>` with `toHaveJSProperty("disabled", true)`. Playwright's
 `toBeDisabled()` reports a disabled option inside an enabled `<select>` as enabled.
@@ -139,6 +144,26 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
   published** moves it to `PUBLISHED`. The test serves the video's publication rows (one posted,
   one failed) with `page.route`, because the button stays disabled until the rows load and the
   stack cannot post.
+- A video whose style Auto picked shows the reason, and **Switch to …** moves it to
+  `TOPIC_APPROVED` with the runner-up as its style. The pick is seeded in the API container with
+  `docker compose exec`, because only the agent's `choose_visual_style` writes one and the test
+  stack runs no agent.
+- A video with a script record shows the formula and the opening type by the labels the real
+  `GET /script-formulas` returns, the openings and the warnings. A script written over HTTP then
+  clears the record. The record is seeded the same way, because only `update_video` writes one.
+- A video with a picked formula shows it after the word Auto, with its reason, the line on what
+  the watch figures said, and the runner-up, and **Switch to …** moves it to `TOPIC_APPROVED` with
+  the runner-up as its pick and as the person's choice, and empties `formula_evidence`. **Use this opening** moves a video to `TOPIC_APPROVED` with that opening marked as the one
+  in use and a comment that names it. Both are seeded in the API container, because only the
+  agent's `choose_script_formula` and `update_video` write them.
+- A formula chosen in the window at `TOPIC_PROPOSED` is stored with the approval, from a picker
+  that lists the real formulas with the experimental ones marked.
+- The Topic tab shows a topic's angle with the kind label the real `GET /angle-kinds` returns.
+  **Edit** stores a new sentence and kind and clears the score. After the topic is approved the
+  block has no Edit button and the API refuses the same write.
+- A segment's voice is picked on the Script tab: a voice that cannot speak the segment's markup is
+  disabled by the real API's conflicts, and a pick lands in the database through the
+  `segment_voices` `PATCH`. The segments are seeded the same way.
 
 Trap: the Voice and Voice model rows need the real API, because `voice_info` comes only from the
 single-video fetch and the list row the window opens on does not carry it.
@@ -211,35 +236,44 @@ collide with the mascot a failed attempt left behind.
 Covers [the Topics page](../15-dashboard.md#the-topics-page).
 
 - A curriculum seed can be paused and resumed. A domain that is not a seed offers no pause control.
-- A default voice picked on a domain row is saved, and the next video filed into the domain starts
-  with it.
+- A default voice picked in a domain's panel is saved, and the next video filed into the domain
+  starts with it. The same holds for an effort, which also survives a reload.
 - A domain at its topic cap shows EXPIRED and refuses a curriculum video with `409`. Raising the cap
-  on the row reopens it.
-- A seed row's four pickers and its cap field each carry a caption. At 1280px the row is one line
-  and the domain name keeps its width. At 1024px the row wraps.
+  in the panel reopens it.
+- At 1280px a seed row with three chips is one line: the pause and **Edit defaults** buttons sit
+  beside the name and chips, and the name keeps its width. The open panel sits under that line,
+  each of its nine controls has a caption and stays inside it, and opening it moves nothing on the
+  line. At 1024px the line wraps and the buttons and controls stay inside the row.
 - A mining source added or removed survives a reload.
 
 Trap: the row case asserts each position separately. A check that the row fits its container still
-passes when the pause button wraps to a second line or when the pickers squeeze the name.
+passes when the pause button wraps to a second line or when the chips squeeze the name.
 
 Needs: two stubbed responses in the row case. A `READY` script profile cannot be made in the stack,
-and the projects response is patched to a three-digit count, because filing 120 topics would slow
-the suite. The cap case fills the domain with manual videos, which are exempt from the cap.
+and the projects response is patched to a three-digit count and three defaults, because filing 120
+topics would slow the suite. The cap case fills the domain with manual videos, which are exempt
+from the cap. The stack installs no agents, so the effort is the only agent default a browser can
+set here.
 
 ### `new-video.spec.ts`
 
 Covers [the New Video page](../15-dashboard.md#the-new-video-page) against the real
 `POST /videos/manual`. A submission lands at `TOPIC_APPROVED` in the `manual` domain with a dash for
-its score, or at `TOPIC_PROPOSED` with auto-approve cleared. The stack installs no agents, so the
-spec runs the Automatic path only.
+its score, or at `TOPIC_PROPOSED` with auto-approve cleared. A formula picked on the form is stored
+as the video's formula choice. The stack installs no agents, so the spec runs the Automatic path
+only. A submission with no angle is stored with none, a typed angle needs its kind before the form
+submits, and a given angle is stored with score 0.
 
 ### `analytics.spec.ts`
 
-Covers the Analytics page's two tabs.
+Covers the Analytics page's three tabs.
 
 - At 1400px the graphs sit right of the table, a mouse wheel over the table scrolls the table and
   leaves the page still, and rows load 50 at a time. At 1000px the graphs stack above the table.
 - Clicking a platform bar sends the platform filter to the API.
+- At 1680px the list's ten columns fit its box. At 1680px and 1000px the page does not scroll
+  sideways, on the Videos tab or the Watch time tab, and the Watch time tab shows its `TOO FEW` tag.
+- The Watch time tab reads the real API, which has nothing published and says so.
 - The Spend tab shows this month and Today as days in the host's zone, and a backwards custom range
   is flagged and not sent.
 
@@ -253,16 +287,23 @@ Needs: the graph cases answer `/analytics` in the browser, because the stack can
 
 Covers [the settings page](../15-dashboard.md#the-settings-page) against the real API.
 
-- An edit is staged until **SAVE** is clicked, and each tab's values persist through a reload.
+- Every change saves itself with no Save button, and each tab's values persist through a reload.
+  A value out of range is not stored and says why beside the field.
+- Turning Publishing on asks first, and Cancel leaves it off.
+- **Learn from watch figures** switches `learned_routing` off on one click and stays off through a
+  reload.
 - A voice's model is stored on that voice only, and the preview endpoint refuses an unknown model
   before any ElevenLabs call.
-- Auto Pilot: the stored switch stays off until the confirmation dialog is confirmed.
+- A voice's speed persists, its select is disabled on `eleven_v4`, and the API refuses a speed
+  there with a `400`.
+- Auto Pilot: the stored switch stays off until the confirmation dialog is confirmed, and each
+  change after it saves on its own. Switching the gap's unit shows the same gap in minutes.
 - The Renderers panel shows the built-in renderer's startup probe as CPU rendering with a
   SwiftShader renderer string.
 
-Trap: `SaveBar` must stay at module scope in `dashboard/app/settings/page.tsx`. Declared inside the
-page component it is a new component type on every render, so React rebuilds the button between
-`mousedown` and `mouseup` when a number field commits on blur, and the click on **SAVE** is lost.
+Trap: the input components and `SaveStatus` must stay at module scope. Declared inside the page
+component they are a new component type on every render, so React rebuilds them between
+`mousedown` and `mouseup` when a number field commits on blur, and the click is lost.
 
 Trap: the page clips horizontal overflow, so a tab pushed past the right edge cannot be reached. The
 1024px case measures the last tab, because the newest tab is the first one pushed off.

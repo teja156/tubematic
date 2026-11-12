@@ -434,25 +434,19 @@ def get_account_feed(api_key: str, *, social_account_id: str, social_post_id: st
                     api_key=api_key, base_url=base_url, params=params)
 
 
-# Per-platform metric names for the common subset stored as columns. Everything
-# else lives in video_metrics.raw_json — aggregating "views" across platforms is
-# defensible, summing platform-specific metrics is not.
-#
-# Facebook is the awkward one and the reason this is a table rather than a
-# straight-through copy: it has no `likes` (reactions_total is the nearest
-# equivalent) and no `views` (video_views, falling back to media_views).
-_METRIC_FIELDS = {
-    "youtube":   {"views": ("views",), "likes": ("likes",),
-                  "comments": ("comments",), "shares": ("shares",)},
-    "instagram": {"views": ("views",), "likes": ("likes",),
-                  "comments": ("comments",), "shares": ("shares",)},
-    "tiktok":    {"views": ("view_count",), "likes": ("like_count",),
-                  "comments": ("comment_count",), "shares": ("share_count",)},
-    "facebook":  {"views": ("video_views", "media_views"), "likes": ("reactions_total",),
-                  "comments": ("comments",), "shares": ("shares",)},
-}
+# The metrics a snapshot's payload maps onto (the common columns and the watch
+# figures) are read by the MCP server too, for formula routing, so they live in
+# tubematic_core.watch; the names stay importable from here.
+try:
+    from tubematic_core.watch import (  # noqa: F401
+        METRIC_COLUMNS, RETENTION_KEYS, extract_metrics, extract_retention)
+except ModuleNotFoundError:  # pragma: no cover - the same fallback as pipeline.py's
+    import pathlib
+    import sys
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+    from tubematic_core.watch import (  # noqa: F401
+        METRIC_COLUMNS, RETENTION_KEYS, extract_metrics, extract_retention)
 
-METRIC_COLUMNS = ("views", "likes", "comments", "shares")
 
 # Privacy is per platform because the platforms genuinely differ: YouTube has
 # three states, TikTok two, and Instagram/Facebook none at all (their DTOs have
@@ -466,30 +460,6 @@ PRIVACY_OPTIONS = {
     "youtube": ("public", "unlisted", "private"),
     "tiktok": ("public", "private"),
 }
-
-
-def extract_metrics(platform: str, metrics: dict | None) -> dict:
-    """Map a platform's metrics payload onto the common subset.
-
-    A metric that is absent comes back None, not 0 — "not reported" and
-    "reported as zero" are different claims, and a chart that reads a missing
-    value as a real zero is lying about the data.
-
-    An unrecognised platform yields all-None rather than raising: a new
-    platform appearing upstream must not break the metrics poll for every other
-    publication in the same pass.
-    """
-    fields = _METRIC_FIELDS.get(platform, {})
-    metrics = metrics or {}
-    out = {}
-    for column in METRIC_COLUMNS:
-        value = None
-        for name in fields.get(column, ()):
-            if metrics.get(name) is not None:
-                value = metrics[name]
-                break
-        out[column] = value
-    return out
 
 
 # ── content mapping ──────────────────────────────────────────────────────────

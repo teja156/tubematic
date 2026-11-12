@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 import pytest
 
 import server
+from sample_angle import ANGLE
 
 
 def _now() -> str:
@@ -63,14 +64,14 @@ def _video_count():
 @pytest.mark.parametrize("strategy", ["curriculum", "trending", "mining"])
 def test_a_paused_domain_refuses_every_sourced_strategy(db, strategy):
     _project("db-internals", seed=True, status="paused")
-    result = server.create_video("db-internals", "B-trees on disk", strategy, 7)
+    result = server.create_video("db-internals", "B-trees on disk", strategy, 7, **ANGLE)
     assert "error" in result
     assert _video_count() == 0
 
 
 def test_the_refusal_names_the_domain_and_says_it_is_paused(db):
     _project("db-internals", seed=True, status="paused", name="Database internals")
-    err = server.create_video("db-internals", "B-trees on disk", "trending", 7)["error"]
+    err = server.create_video("db-internals", "B-trees on disk", "trending", 7, **ANGLE)["error"]
     assert "Database internals" in err
     assert "db-internals" in err
     assert "paused" in err
@@ -81,7 +82,7 @@ def test_the_refusal_is_logged_as_a_warning_not_as_a_success(db, through_mcp):
     It is a WARNING — the agent was told no, nothing is broken."""
     _project("db-internals", seed=True, status="paused")
     out, (rec,) = through_mcp("create_video", project_id="db-internals", topic="B-trees on disk",
-                              strategy="trending", producibility_score=7)
+                              strategy="trending", producibility_score=7, **ANGLE)
     assert "paused" in out["error"]
     assert (rec.levelname, rec.outcome) == ("WARNING", "error")
     assert "paused" in rec.getMessage()
@@ -92,7 +93,7 @@ def test_the_refusal_tells_the_agent_to_skip_not_refile(db):
     """Refused on the direct path, an agent looks for a legal one; the error is
     where it reads what to do next."""
     _project("db-internals", seed=True, status="paused")
-    err = server.create_video("db-internals", "B-trees on disk", "trending", 7)["error"]
+    err = server.create_video("db-internals", "B-trees on disk", "trending", 7, **ANGLE)["error"]
     assert "skip" in err.lower()
 
 
@@ -100,7 +101,7 @@ def test_the_refusal_does_not_advertise_the_manual_exemption(db):
     """strategy is supplied by the agent. An error saying "manual gets through"
     is an instruction to relabel the candidate and walk past the pause."""
     _project("db-internals", seed=True, status="paused")
-    err = server.create_video("db-internals", "B-trees on disk", "trending", 7)["error"]
+    err = server.create_video("db-internals", "B-trees on disk", "trending", 7, **ANGLE)["error"]
     assert "manual" not in err.lower()
 
 
@@ -113,14 +114,14 @@ def test_a_manual_submission_is_accepted_into_a_paused_domain(db):
 
 def test_an_active_domain_is_unaffected(db):
     _project("db-internals", seed=True, status="active")
-    result = server.create_video("db-internals", "B-trees on disk", "trending", 7)
+    result = server.create_video("db-internals", "B-trees on disk", "trending", 7, **ANGLE)
     assert "error" not in result
 
 
 def test_resuming_restores_filing_with_no_other_action(db):
     _project("db-internals", seed=True, status="paused")
     server.set_project_status("db-internals", "active")
-    result = server.create_video("db-internals", "B-trees on disk", "trending", 7)
+    result = server.create_video("db-internals", "B-trees on disk", "trending", 7, **ANGLE)
     assert "error" not in result
 
 
@@ -128,13 +129,13 @@ def test_a_stray_paused_non_seed_still_refuses(db):
     """The check reads status alone. Written as "a seed AND paused", a paused
     non-seed row that escaped the migration would slip through unnoticed."""
     _project("db-internals", seed=False, status="paused")
-    result = server.create_video("db-internals", "B-trees on disk", "trending", 7)
+    result = server.create_video("db-internals", "B-trees on disk", "trending", 7, **ANGLE)
     assert "error" in result
 
 
 def test_videos_already_in_a_paused_domain_are_untouched(db):
     _project("db-internals", seed=True, status="active")
-    vid = server.create_video("db-internals", "B-trees on disk", "curriculum", 7)["video_id"]
+    vid = server.create_video("db-internals", "B-trees on disk", "curriculum", 7, **ANGLE)["video_id"]
     server.set_project_status("db-internals", "paused")
     result = server.set_video_status(vid, "TOPIC_APPROVED")
     assert "error" not in result
@@ -217,7 +218,7 @@ def test_a_pause_landing_between_the_check_and_the_insert_still_refuses(db, monk
         return real_pick(con, *a, **kw)
 
     monkeypatch.setattr(server, "_pick_agent_id", _pause_then_pick)
-    result = server.create_video("db-internals", "B-trees on disk", "trending", 7)
+    result = server.create_video("db-internals", "B-trees on disk", "trending", 7, **ANGLE)
     assert "error" in result
     assert "paused" in result["error"]
     assert _video_count() == 0

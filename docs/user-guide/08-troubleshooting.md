@@ -54,6 +54,11 @@ Research runs only when all of these hold:
 A paused domain and a domain marked **EXPIRED** receive no topics. Resume the domain, or raise its
 topic cap, on the **Topics** page.
 
+A research run can also end with fewer topics than its limit. Research leaves out a subject that
+scores under 5, that repeats a topic the domain already has, or that offers no
+[angle](03-using-tubematic.md#the-angle). The agent's summary at the end of the run names each
+subject it left out and why. Read it on the **Logs** page.
+
 ## A video is stuck or failed
 
 ### A card says STUCK
@@ -68,7 +73,8 @@ Open the video and read its **Comments** tab. The last comment gives the reason.
 
 - A render that fails more times than **Max render retries** allows marks the video Failed. With
   the default of 1, the second failure does it. Restarting the renderer during a render counts as
-  one failure.
+  one failure. The first time a video's render times out inside the browser, which happens on a
+  machine short of memory, it is tried again as it is and does not count.
 - A post that failed on every account marks the video Failed. See [Publishing](#publishing).
 
 A video that failed while rendering cannot be retried. Create it again.
@@ -157,6 +163,16 @@ happens when you change a voice's model after its script was written.
 
 Keep a voice that can speak the script, or press **Revise** and name the voice you want. The agent
 rewrites the script for it. Nothing is charged for a refused approval.
+
+The same applies to a segment's own voice on the **Script** tab: a voice that cannot speak that
+segment's markup is greyed out, and approval is refused when a segment's voice had its model changed
+since the script was written. Give the segment another voice, or request a revision.
+
+### "Ignores speed"
+
+You set a speed on a voice whose model is `eleven_v3` or `eleven_v4`. Those models ignore speed, so
+Tubematic refuses it. Keep the speed at 1.00x, or move the voice to a model that honours speed (see
+[Voice](05-settings.md#voice)).
 
 ### A video is stuck in Voicing
 

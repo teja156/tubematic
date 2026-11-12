@@ -188,6 +188,10 @@ Trap: onboarding reads stored values before its `database` step migrates. A rost
 per-voice models would read as empty and the apply step would then erase it, so
 `load_current_values` gives each such voice the install's stored model first.
 
+A voice's speed is kept when the roster is read and when the voice is entered again, and dropped
+when the voice moves to a model that ignores speed. A roster with a speed on `eleven_v4` reads as
+empty, as in the other two readers.
+
 ### `test_image_generation.py`
 
 Covers the image model question and the OpenAI-key gate in `apply_install_config`.
@@ -370,8 +374,9 @@ Covers `docker-compose.yml` and the test stack's renderer, parsed as YAML
   server and the worker wait for a healthy API at startup only.
 - Ports bind to loopback, and the worker and the renderer publish none. The API serves the render
   gateway on 4443 without publishing it.
-- The renderer has no database mount, reads `/jobs` read-only and is pointed at the gateway. The
-  gateway's TLS key is mounted in the API alone. The test stack's renderer has the same shape.
+- The renderer has no database mount, mounts `/jobs` read-write for the stills server and is pointed
+  at the gateway. The gateway's TLS key is mounted in the API alone. The test stack's renderer has
+  the same shape. A read-only `/jobs` failed every Cartoon 3D still with `EROFS`.
 - No service uses `env_file`, and every secret is a file in the secrets directory under the name
   `tubematic_core.auth` writes. The Dockerfile's `CMD` names a process, because `entrypoint.sh`
   ends in `exec "$@"`.
@@ -460,7 +465,8 @@ list proves the order ([`upgrade.py` in detail](../18-releases.md#upgradepy-in-d
   render can start.
 - Pre-flight refusals, each before anything changes: no dashboard password, no stored OpenAI key,
   a database newer than this code, a GPU or remote-renderers override Docker cannot apply, and a
-  generated scene that imports the removed component
+  generated scene that imports the removed component or cannot be read. The unreadable-scene
+  refusal prints the `chmod` command for root-owned `0600` scenes
   ([Pre-flight refusals](../18-releases.md#pre-flight-refusals)).
 - `--no-stop` is refused while a token file is missing, while one of two named migrations is
   pending (each constant is checked against the real file), and while the running renderer was

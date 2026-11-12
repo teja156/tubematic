@@ -35,7 +35,7 @@ Install these before you run the wizard. The wizard checks for them and installs
 | Memory | 4 GB. 8 GB recommended | `free -g` |
 | Disk | About 15 GB free | `df -h ~` |
 
-Three notes on that table:
+Four notes on that table:
 
 - `docker-compose` with a hyphen is an older tool and does not count. Tubematic needs
   `docker compose`.
@@ -43,6 +43,8 @@ Three notes on that table:
   the Remotion skill that Node installs. Install Node first.
 - An NVIDIA GPU is optional and makes rendering about three times faster. See
   [GPU Rendering](10-gpu-rendering.md).
+- One machine is enough. Once Tubematic is running, other machines can render for it, and they
+  need no Tubematic install of their own. See [Remote Renderers](11-remote-renderers.md).
 
 On Ubuntu, [Preparing an Ubuntu machine](#preparing-an-ubuntu-machine) has the commands for Docker,
 the `venv` module and Node.js.
@@ -73,11 +75,11 @@ You can add the optional keys later on **Settings → API Keys**.
 From a release:
 
 ```bash
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/tubematic-v2.0.0.tar.gz
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/tubematic-v2.1.1.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
-tar xzf tubematic-v2.0.0.tar.gz
-cd tubematic-v2.0.0
+tar xzf tubematic-v2.1.1.tar.gz
+cd tubematic-v2.1.1
 python3 onboard.py
 ```
 

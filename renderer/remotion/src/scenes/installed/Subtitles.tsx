@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
+import { AbsoluteFill, interpolate, interpolateColors, useCurrentFrame, useVideoConfig } from "remotion";
 import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
 import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
 import { loadFont as loadRoboto } from "@remotion/google-fonts/Roboto";
@@ -96,8 +96,13 @@ const DEFAULT_FONT = "system-ui, sans-serif";
 const DEFAULT_WEIGHT = 800;
 
 /** "outline": bold text with a thick dark stroke and no plate — the standard
- *  look of narrated cartoon Shorts, readable over any picture. */
-export type SubtitleBackground = "pill" | "shadow" | "outline" | "none";
+ *  look of narrated cartoon Shorts, readable over any picture.
+ *  "label": a printed ivory label hugging the phrase, a diamond each side,
+ *  every word at full strength and no rise: the Storybook Atlas caption.
+ *  "log": a terminal log strip — left-aligned, each word typed on as it is
+ *  spoken behind a prompt, a block caret, the word being spoken in `accent`.
+ *  The Terminal Doc style uses it. */
+export type SubtitleBackground = "pill" | "shadow" | "outline" | "label" | "none" | "log";
 
 export interface SubtitleConfig {
   enabled?: boolean;
@@ -115,7 +120,36 @@ export interface SubtitleConfig {
   /** Vertical centre as a fraction of frame height. */
   position?: number;
   uppercase?: boolean;
+  /**
+   * Indexes into the timeline's words that are drawn on a red box once
+   * spoken: the key word of a line. Optional and empty by default; the Bean
+   * Explainer style uses it.
+   */
+  emphasis?: number[];
+  /** The colour of the word being spoken in the "log" look; absent means the
+   *  text colour. Ignored by the other looks. */
+  accent?: string | null;
+  /**
+   * "selection": words appear one by one as they are spoken, the latest in
+   * bold, the earlier ones of the line in grey regular, and each `emphasis`
+   * word gets a thin blue text-selection box with two round handles instead
+   * of the red box. The Under the Hood style uses it.
+   * "fill": the whole phrase is on screen from its first frame with no rise;
+   * the words still to come are grey, and each turns to the text colour as it
+   * is spoken and stays there. The Case File Story style uses it.
+   * Absent means the plain look every other style has.
+   */
+  look?: "plain" | "selection" | "fill";
 }
+
+/** The "label" plate: ivory paper, ink rule and text, a flat offset shadow. */
+const LABEL_PAPER = "#EBE5D2";
+const LABEL_INK = "#2F2218";
+const LABEL_TEXT = "#2A2F33";
+
+/** The key-word box: white text on red, scaling in with a little overshoot. */
+const EMPHASIS_BG = "#D0201C";
+const EMPHASIS_IN = 8;
 
 interface Props extends SubtitleConfig {
   words: TimelineWord[];
@@ -213,6 +247,96 @@ export function visibleChunkIndex(
   return frame >= tail ? null : index;
 }
 
+/** The "fill" look: the grey of a word not yet spoken, and the frames its turn takes. */
+const FILL_AHEAD = "#979295";
+const FILL_FRAMES = 2;
+
+/**
+ * A word's colour under the "fill" look: grey until one frame before it is
+ * spoken, then the text colour, blended over FILL_FRAMES. A text colour the
+ * blend cannot parse (a CSS name it does not know, a variable) switches on
+ * the word's frame, so a caption colour can never fail a render.
+ */
+export function fillWordColor(frame: number, startFrame: number, ink: string): string {
+  const k = Math.max(0, Math.min(1, (frame - startFrame + 1) / FILL_FRAMES));
+  if (k >= 1) return ink;
+  if (k <= 0) return FILL_AHEAD;
+  try {
+    return interpolateColors(k, [0, 1], [FILL_AHEAD, ink]);
+  } catch {
+    return ink;
+  }
+}
+
+/** Frames a word is shown before its audio starts: the eye reads ahead of the ear. */
+export const SELECTION_LEAD = 2;
+const SELECTION_BLUE = "#3D6FBC";
+const SELECTION_HANDLE = "#518ED5";
+const SELECTION_PAST = "#8C8B8D";
+
+/**
+ * The "selection" look: the line builds word by word and re-centres at once
+ * (no tween); a word's first frame is blurred; the key word keeps its bold
+ * white and gets a selection box whose handles pop two frames after it lands
+ * and whose top and bottom edges grow from its centre over the next three.
+ * The last frame before the next line is drawn at 60%.
+ */
+const SelectionLine: React.FC<{
+  chunks: TimelineWord[][]; emphasised: Set<TimelineWord>; frame: number; family: string; fontSize: number;
+  color: string; position: number; uppercase: boolean;
+}> = ({ chunks, emphasised, frame, family, fontSize, color, position, uppercase }) => {
+  const at = frame + SELECTION_LEAD;
+  const index = visibleChunkIndex(chunks, at);
+  if (index === null) return null;
+  const chunk = chunks[index];
+  const shown = chunk.filter((w) => w.startFrame <= at);
+  const next = chunks[index + 1];
+  const leaving = next !== undefined && at === next[0].startFrame - 1;
+  const line = Math.max(2, Math.round(fontSize * 0.045));
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none" }}>
+      <div style={{
+        position: "absolute", left: 60, right: 60, top: `${position * 100}%`, transform: "translateY(-50%)",
+        display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.3em 0.28em",
+        fontFamily: family, fontSize, lineHeight: 1.15, textAlign: "center", letterSpacing: "-0.01em",
+        textTransform: uppercase ? "uppercase" : "none", opacity: leaving ? 0.6 : undefined,
+      }}>
+        {shown.map((w, i) => {
+          const latest = i === shown.length - 1;
+          const key = emphasised.has(w);
+          const bright = latest || key;
+          const age = at - w.startFrame;
+          const k = Math.max(0, Math.min(1, (age - 2) / 3));
+          const handle = Math.max(0, Math.min(1, (age - 2) / 2));
+          return (
+            <span key={`${i}-${w.word}`} style={{
+              position: "relative", display: "inline-block", fontWeight: bright ? 700 : 400,
+              color: bright ? color : SELECTION_PAST, filter: age === 0 ? "blur(5px)" : undefined, opacity: age === 0 ? 0.7 : undefined,
+            }}>
+              {w.word}
+              {key && age >= 2 && (
+                <span style={{ position: "absolute", left: "-0.22em", right: "-0.22em", top: "-0.12em", bottom: "-0.08em" }}>
+                  {k >= 1 && <span style={{ position: "absolute", inset: 0, background: "rgba(61,111,188,0.16)" }} />}
+                  <span style={{ position: "absolute", top: 0, left: `${50 - k * 50}%`, width: `${k * 100}%`, height: line, background: SELECTION_BLUE }} />
+                  <span style={{ position: "absolute", bottom: 0, left: `${50 - k * 50}%`, width: `${k * 100}%`, height: line, background: SELECTION_BLUE }} />
+                  {k >= 1 && <span style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: line, background: SELECTION_BLUE }} />}
+                  {k >= 1 && <span style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: line, background: SELECTION_BLUE }} />}
+                  {[{ left: -fontSize * 0.13, top: -fontSize * 0.13 }, { right: -fontSize * 0.13, bottom: -fontSize * 0.13 }].map((pos, j) => (
+                    <span key={j} style={{
+                      position: "absolute", ...pos, width: fontSize * 0.26, height: fontSize * 0.26, borderRadius: "50%",
+                      background: SELECTION_HANDLE, transform: handle >= 1 ? undefined : `scale(${0.45 + 0.55 * handle})`,
+                    }} />
+                  ))}
+                </span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 export default function Subtitles({
   words,
   canvas = "dark",
@@ -224,27 +348,46 @@ export default function Subtitles({
   background = "pill",
   position = 0.78,
   uppercase = false,
+  emphasis = [],
+  accent = null,
+  look = "plain",
 }: Props) {
   const frame = useCurrentFrame();
   const webfont = FONTS[fontFamily];
   const family = webfont ? webfont.load() : fontFamily;
-  const weight = webfont ? webfont.weight : DEFAULT_WEIGHT;
+  // a printed label is set in the regular weight its serif ships, never a synthetic bold
+  const weight = webfont ? webfont.weight : background === "label" ? 500 : DEFAULT_WEIGHT;
 
   const chunks = React.useMemo(() => chunkWords(words ?? [], maxWords), [words, maxWords]);
+  const emphasised = React.useMemo(() => new Set((emphasis ?? []).map((i) => (words ?? [])[i]).filter(Boolean)), [emphasis, words]);
   if (!enabled || chunks.length === 0) return null;
+  if (look === "selection") {
+    return <SelectionLine chunks={chunks} emphasised={emphasised} frame={frame} family={family} fontSize={fontSize}
+      color={color ?? (canvas === "light" ? "#0f0f0f" : "#F7F7F7")} position={position} uppercase={uppercase} />;
+  }
 
   const index = visibleChunkIndex(chunks, frame);
   if (index === null) return null;
   const chunk = chunks[index];
 
-  const ink = color ?? (canvas === "light" ? "#0f0f0f" : "#ffffff");
+  const label = background === "label";
+  const ink = color ?? (label ? LABEL_TEXT : canvas === "light" ? "#0f0f0f" : "#ffffff");
+  if (background === "log") {
+    return <LogStrip chunk={chunk} frame={frame} family={family} fontSize={fontSize} position={position} ink={ink} accent={accent ?? ink} uppercase={uppercase} />;
+  }
   const paper = canvas === "light" ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.55)";
 
   // A short rise on entry. Deliberately small and over in 4 frames: at this
   // size anything larger reflows the line and makes fast captions unreadable.
   const age = frame - chunk[0].startFrame;
-  const rise = interpolate(age, [0, 4], [14, 0], { extrapolateRight: "clamp" });
-  const fade = interpolate(age, [0, 3], [0, 1], { extrapolateRight: "clamp" });
+  // A label cross-fades in 2 frames and does not move: it is printed, not spoken.
+  const fill = look === "fill";
+  const rise = label || fill ? 0 : interpolate(age, [0, 4], [14, 0], { extrapolateRight: "clamp" });
+  const fade = fill ? 1 : interpolate(age, [0, label ? 2 : 3], [0, 1], { extrapolateRight: "clamp" });
+
+  const diamond = (
+    <span style={{ flex: "none", width: fontSize * 0.2, height: fontSize * 0.2, background: ink, transform: "rotate(45deg)" }} />
+  );
 
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
@@ -271,6 +414,15 @@ export default function Subtitles({
           ...(background === "pill"
             ? { background: paper, padding: "14px 28px", borderRadius: 16 }
             : {}),
+          ...(label
+            ? {
+                left: "50%", right: "auto", width: "max-content", maxWidth: 900, flexWrap: "nowrap",
+                transform: `translate(-50%, calc(-50% + ${rise}px))`, gap: fontSize * 0.36,
+                background: LABEL_PAPER, border: `2px solid ${LABEL_INK}`, boxShadow: "5px 6px 0 rgba(47,34,24,0.22)",
+                padding: `${Math.round(fontSize * 0.22)}px ${Math.round(fontSize * 0.55)}px ${Math.round(fontSize * 0.3)}px`,
+                lineHeight: 1.12,
+              }
+            : {}),
           ...(background === "shadow"
             ? { textShadow: canvas === "light" ? "0 2px 10px rgba(255,255,255,0.9)" : "0 2px 12px rgba(0,0,0,0.85)" }
             : {}),
@@ -284,6 +436,10 @@ export default function Subtitles({
             : {}),
         }}
       >
+        {label && diamond}
+        <span style={label ? {
+          display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0 0.28em", minWidth: 0,
+        } : { display: "contents" }}>
         {chunk.map((w, i) => {
           // The word being spoken is full strength, its neighbours dimmed.
           // Nothing moves or resizes — the emphasis travels along a line that
@@ -291,18 +447,95 @@ export default function Subtitles({
           // caption legible at speed.
           const active = frame >= w.startFrame && frame <= w.endFrame;
           const spoken = frame > w.endFrame;
+          if (emphasised.has(w) && frame >= w.startFrame) {
+            const k = Math.min(1, (frame - w.startFrame) / EMPHASIS_IN);
+            const pop = 0.55 + 0.45 * (1 + 2.2 * (k - 1) ** 3 + 1.2 * (k - 1) ** 2);
+            return (
+              <span key={`${i}-${w.word}`} style={{ position: "relative", display: "inline-block", isolation: "isolate", color: "#ffffff", padding: "0 0.18em" }}>
+                <span style={{ position: "absolute", inset: "-0.06em 0 -0.1em 0", background: EMPHASIS_BG, border: `${Math.max(3, Math.round(fontSize * 0.08))}px solid #1E1C1A`, borderRadius: fontSize * 0.22, transform: `scale(${pop}) rotate(-2deg)`, zIndex: -1 }} />
+                <span style={{ position: "relative" }}>{w.word}</span>
+              </span>
+            );
+          }
+          if (fill) {
+            return <span key={`${i}-${w.word}`} style={{ color: fillWordColor(frame, w.startFrame, ink) }}>{w.word}</span>;
+          }
           return (
             <span
               key={`${i}-${w.word}`}
               // outlined words have no plate behind them, so a dimmed word
               // reads as a muddy grey: keep them near full strength there
-              style={{ opacity: active ? 1 : background === "outline" ? (spoken ? 0.92 : 0.8) : spoken ? 0.62 : 0.42 }}
+              style={{ opacity: active || label ? 1 : background === "outline" ? (spoken ? 0.92 : 0.8) : spoken ? 0.62 : 0.42 }}
             >
               {w.word}
+            </span>
+          );
+        })}
+        </span>
+        {label && diamond}
+      </div>
+    </AbsoluteFill>
+  );
+}
+
+/** The "log" look's typing speed, in characters per frame. */
+const LOG_TYPE_RATE = 1.8;
+
+/**
+ * The "log" look: a strip with a LOG label and a running clock over a
+ * hairline, and the current chunk typed on behind a prompt, word by word as
+ * each is spoken. The word being spoken is in the accent colour with a block
+ * caret after it; words already spoken stay, dimmed. Left-aligned, like a
+ * terminal, so a line never shifts as words arrive.
+ */
+const LogStrip: React.FC<{
+  chunk: TimelineWord[]; frame: number; family: string; fontSize: number; position: number;
+  ink: string; accent: string; uppercase: boolean;
+}> = ({ chunk, frame, family, fontSize, position, ink, accent, uppercase }) => {
+  const top = position * 1920;
+  const meta = Math.round(fontSize * 0.62);
+  let last = -1;
+  chunk.forEach((w, i) => {
+    if (frame >= w.startFrame) last = i;
+  });
+  const { fps } = useVideoConfig();
+  const elapsed = frame / fps;
+  const clock = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${(elapsed % 60).toFixed(1).padStart(4, "0")}`;
+  const lastWord = last >= 0 ? chunk[last] : null;
+  const lastText = lastWord ? lastWord.word : "";
+  const lastTyped = lastWord ? Math.min(lastText.length, Math.floor((frame - lastWord.startFrame) * LOG_TYPE_RATE) + 1) : 0;
+  const caretOn = lastTyped < lastText.length || Math.floor(frame / 15) % 2 === 0;
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", fontFamily: family, fontSynthesis: "none" }}>
+      <div style={{ position: "absolute", left: 66, right: 66, top: top - fontSize * 1.05 - meta * 1.3, display: "flex", justifyContent: "space-between", fontSize: meta, lineHeight: `${meta * 1.2}px`, color: ink, opacity: 0.32, letterSpacing: "0.08em" }}>
+        <span>LOG</span>
+        <span>T+{clock}</span>
+      </div>
+      <div style={{ position: "absolute", left: 66, right: 66, top: top - fontSize * 1.05, height: 2, background: ink, opacity: 0.16 }} />
+      <div
+        style={{
+          position: "absolute", left: 66, right: 66, top: top - fontSize * 0.75,
+          fontSize, lineHeight: 1.2, fontWeight: 700, color: ink, whiteSpace: "pre-wrap",
+          textTransform: uppercase ? "uppercase" : "none",
+        }}
+      >
+        <span style={{ opacity: 0.3 }}>{"\u203a "}</span>
+        {chunk.map((w, i) => {
+          if (i > last) return null;
+          const isLast = i === last;
+          const text = isLast ? w.word.slice(0, lastTyped) : w.word;
+          const speaking = isLast && frame <= w.endFrame + 6;
+          return (
+            <span key={`${i}-${w.word}`} style={{ color: speaking ? accent : ink, opacity: speaking ? 1 : 0.62 }}>
+              {i > 0 ? " " : ""}
+              {text}
+              {isLast && caretOn && (
+                <span style={{ display: "inline-block", width: "0.55em", height: "0.82em", marginLeft: "0.08em", verticalAlign: "-0.1em", background: speaking ? accent : ink, opacity: 0.75 }} />
+              )}
             </span>
           );
         })}
       </div>
     </AbsoluteFill>
   );
-}
+};

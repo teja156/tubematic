@@ -131,6 +131,9 @@ comment. The status stays as it was. The row, its comments, its publication link
 are kept, and the dashboard's Archive page lists them. The dashboard's Delete action
 (`DELETE /videos/<id>`, [HTTP API](05-http-api.md#videos)) calls the same function.
 
+`archive_video` also stores the video's length in `videos.duration_secs`, because Analytics needs
+it after `timeline.json` is gone. See [Watch figures](14-publishing.md#watch-figures).
+
 The sweep is in the worker because it needs the database and the filesystem, and the poller has no
 database access. It runs hourly, with the stamp row `last_retention_sweep_at` shared by both passes.
 
@@ -167,7 +170,7 @@ video arrives at one of five statuses, each with its own setting:
 
 | Status | Setting | Message |
 |---|---|---|
-| `TOPIC_PROPOSED` | `notify_topic_proposed` | One message for all the topics waiting, sent once the newest has been still for `TOPIC_SETTLE_SECS` (120) |
+| `TOPIC_PROPOSED` | `notify_topic_proposed` | One message for all the topics waiting, sent once the newest has been still for `TOPIC_SETTLE_SECS` (120). A topic that has an angle shows the sentence before its brief, and the angle score beside the topic's score |
 | `SCRIPT_READY` | `notify_script_ready` | One per video, naming its voice |
 | `VIDEO_READY` | `notify_video_ready` | One per video, with its duration and the first line of the stored AI review |
 | `PARTIALLY_PUBLISHED` | `notify_partially_published` | One per video, naming each account that failed with its error, and linking the posts that went out |

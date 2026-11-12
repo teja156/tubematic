@@ -10,6 +10,10 @@ in its own `pytest` invocation
 python -m pytest mcp/tests
 ```
 
+`sample_angle.py` holds an angle a research proposal can be filed with, and `mined()`, one mining
+candidate as Gemini returns it. A test that files a `curriculum`, `trending` or `mining` topic for
+another reason passes it, because `create_video` refuses such a topic with no angle.
+
 `conftest.py` provides `through_mcp`, which calls a tool over a real in-memory FastMCP client. Use
 it when a test is about what the middleware sees or logs, because only that path wraps the return
 value as production does. [The MCP Server](../06-mcp-server.md) describes each tool.
@@ -135,6 +139,24 @@ Covers a domain's default script profile in `upsert_project` and `create_video`.
 - `upsert_project` keeps an omitted default, clears on `""`, and refuses a change to an unusable
   profile. Re-sending a stored default that was deleted since is accepted.
 
+### `test_domain_agent.py`
+
+Covers a domain's agent, model and effort in `upsert_project`, `create_video` and
+`mine_youtube_topics` ([Assignment](../07-agent-layer.md#assignment)).
+
+- `create_video` copies the three values onto a video of every `strategy`, and its result carries
+  what was stored. A mined topic gets them too.
+- A domain with no agent is dealt one. A domain agent uninstalled since falls back to the deal
+  without its model, and a model the agent dropped seeds `""`.
+- `upsert_project` keeps an omitted field and clears on `""`. It refuses an agent that is not
+  live, a model outside the agent's list, a model with no agent and an unknown effort, and writes
+  nothing when it refuses.
+- A stored agent and model that became invalid do not block another edit of the domain, and the
+  model can be cleared while its agent is uninstalled.
+
+Trap: changing the agent without naming a model clears the stored model. Keeping it would refuse
+the call, because the stored model belongs to the previous agent's list.
+
 ## Research
 
 ### `test_mining_urls.py`
@@ -154,6 +176,38 @@ Trap: a mining URL becomes the `file_uri` of a paid Gemini call. The URL check, 
 and the lock each stand between a bad setting and repeated spend, so the fake client counts the
 calls.
 
+### `test_topic_angle.py`
+
+Covers the [topic's angle](../02-pipeline.md#topic-angle) in `create_video`, `get_video`,
+`update_video` and `mine_youtube_topics`.
+
+- `create_video` stores a research proposal's angle, refuses one with no angle or with an angle
+  scoring under 5, and files nothing in either case. A left-out score is refused with a request for
+  it. A `manual` topic is accepted with no angle, however the agent says none (nulls through the
+  real MCP client, empty strings, `none` spelled out, or a score for an angle it did not find).
+  `none` spelled out on a research topic is still refused, and its message does not suggest leaving
+  the angle out. A real sentence with `none` as its kind is refused for the kind, not dropped. A `manual` topic keeps an angle of
+  any score. A malformed angle is refused on every strategy, and a kind is matched whatever its
+  spelling.
+- `get_video` returns the angle and `angle_formula`, the formula the kind points to. A video with
+  no angle reads as empty, and a topic filed before angles existed still approves.
+- `update_video` writes the angle at `TOPIC_PROPOSED` and `REVISION_REQUESTED`, and at
+  `TOPIC_APPROVED` only while the video has none. It refuses the write at every later status. A
+  rewrite sent with no score stores 0. A call with the score alone, or with one of the sentence and
+  the kind, is refused and leaves the angle as it was. The approved angle sent again with other
+  fields is not a write and does not stop them. An angle written with a profile, a style and an
+  effort in one call stores all four.
+- A mined candidate with no angle, an unknown kind or an angle scoring under 5 comes back in
+  `not_filed` with the reason. The prompt carries the kinds and the score from
+  `tubematic_core.angles`. The cap goes to the candidates with the highest two scores together. A
+  kind written as its label, or with a hyphen, files under its id. A fractional or quoted score is
+  brought to a whole number, and a `NaN`, `Infinity` or huge integer score costs that candidate only.
+
+Trap: the write at `TOPIC_APPROVED` fills a missing angle when the agent picks a video up. Without
+`angle = ''` in the `UPDATE`'s `WHERE`, it could replace an angle a person read and approved. A test
+commits a change between the read and the `UPDATE` for that clause and for the status clause, and
+each was confirmed to fail with its clause removed.
+
 ## Script and voice
 
 ### `test_script_segments.py`
@@ -171,6 +225,39 @@ Trap: two values are refused that ElevenLabs accepts and gets wrong: a `<phoneme
 than `cmu-arpabet` or `ipa` (the word is dropped from the audio) and a `<break>` time outside 0 to
 3 seconds. The attribute must be the real one, once: a prefixed name, a repeat, or the text inside
 another attribute's value does not count.
+
+### `test_script_record.py`
+
+Covers what `update_video` records with a script: `formula_id`, `hooks` and the returned `warnings`
+([What a script records](../08-scripting-and-voice.md#what-a-script-records)).
+
+- A script is stored with its formula, the kept opening's type and the three openings, which are
+  saved as spoken text. `get_video` returns the openings and the warnings as lists.
+- A malformed record is refused and nothing is written: one argument without the other, an unknown
+  formula, a hook type the formula does not offer, not three openings, two of one type, none or two
+  marked `kept`, a record with no `script_segments`.
+- A flagged script is still written, and the stored warnings equal the returned ones. A script with
+  no record is accepted and gets `no_formula`.
+- A pronunciation fix that resends the script with no record keeps it, checks nothing and returns
+  no warnings, on a script with a record, on one without, and on a stored flat script that holds
+  markup and line breaks. A rewrite that sends none clears it.
+  A rewrite with a new record replaces it.
+- A fault inside the checks does not stop the write.
+- The closing sentence is compared with the 30 newest other scripts of the same domain, and with
+  none when the video has no domain. The opening is compared with the same scripts, and the kept
+  opening's type with the domain's previous two videos.
+- On a video with a `formula_pick`, a script recorded under another formula is refused and nothing
+  is written. With no pick a person's choice binds the same way, and a choice of a formula this
+  version lacks does not. With neither, any formula id is taken. New words with no record are
+  refused beside a pick or a choice and accepted with neither, and a pronunciation fix is not
+  checked against the pick.
+- A `beat` label on a segment must be a short non-empty string.
+
+Trap: a warning must never refuse a write, and a script with no record must be accepted. An agent
+on an older skill sends no record during an upgrade.
+
+Trap: a pronunciation fix goes straight to a paid re-voice with no approval in between. A warning
+returned there would invite the agent to change words a person approved.
 
 ### `test_generate_voice.py`
 
@@ -214,6 +301,34 @@ Covers per-voice models at the MCP server
 Trap: an explicit `voice_id=""` beside a script means the install default, and the resolved voice
 is still written on the video. Otherwise a later change of the default would swap the model under
 a written script.
+
+### `test_voice_segments.py`
+
+Covers a voice per segment and a voice's speed in `generate_voice` and `update_video`
+([A voice per segment](../08-scripting-and-voice.md#a-voice-per-segment)).
+
+- A one-voice script is one request with the payload it had before speeds and segment voices: no
+  `speed` at 1.0 and no context fields. A voice with a speed sends it.
+- A script with a second voice is voiced in runs, in play order, each with its voice's id and model,
+  and `credits` is their sum. Each run's ledger row carries its voice, and `tts_text` holds every
+  run.
+- A run carries its neighbours' words as `previous_text` and `next_text`, except on `eleven_v3`,
+  which refuses them.
+- Words after a join are offset by the length of the runs before, and the segments' frame spans
+  stay in play order.
+- A markup problem in a later run, a segment voice that left the roster, or no `ffmpeg` spends
+  nothing. A failed later run keeps the credits already spent, writes no file and leaves the video
+  at `VOICING`.
+- `update_video` keeps a segment's voice, drops one equal to the video's, refuses one off the roster,
+  and checks each segment's markup against its own voice. The roster reader keeps a valid speed.
+- A pronunciation fix that resends the same words without any `voice_id` keeps the stored voices,
+  and a rewrite with new words and no `voice_id` gives every line to the video's voice.
+- The real join, when an `ffmpeg` is found on the host, measures each run and keeps the total
+  length. It is skipped otherwise; the MCP image has `ffmpeg`.
+
+Trap: the offset is each run's decoded length and never its last alignment time, which on
+`eleven_v4` can run past the audio. The fake ElevenLabs reply encodes its length in the audio bytes
+so the fake join can return it.
 
 ### `test_pronunciation_rules.py`
 
@@ -348,6 +463,9 @@ Covers a Cartoon 3D video's TypeScript modules through `write_scene_file`, `read
 - `submit_render` holds the per-video source lock from the readiness check to the queue and
   records the source fingerprint. A write that was waiting on the lock is then refused.
 - A write that fails leaves the last good file and no temporary file.
+- A new and an overwritten file both get `0o666` less the umask. The temporary file is `0600`,
+  and the MCP container runs as root, so without this the host user cannot read the scene and
+  `upgrade.py` refuses.
 - A name reads and deletes as `list_scene_files` lists it.
 
 Trap: the module name parser reads its two arguments and does not look at the directories on
@@ -364,6 +482,9 @@ Covers `read_scene_file`.
 - What `write_scene_file` wrote is what the read returns, so a scene can be copied from one video
   to another.
 - The read is not blocked by a scene-work claim and takes none.
+- A path inside an installed scene's folder (`beanExplainer/props/lifeProps`, with or without
+  `.ts`/`.tsx`) reads as a reference. A path that climbs out, starts at the root, runs past three
+  parts or looks like a video's composed name is refused.
 
 ### `test_write_scene_config.py`
 
@@ -394,6 +515,9 @@ must be derived again ([Revising an existing video](../10-scene-authoring.md#rev
 Covers `get_timeline`, the agent's read of `timeline.json`.
 
 - It returns segments, and words on request. A video from before segments returns an empty list.
+- Each segment carries its beat and its role. A beat split over two segments owes its change once,
+  where it starts, and the formula's `first_frame` comes back with the segments. A video whose
+  formula is not known keeps its beat labels and has no role past the opening.
 - An unknown video, a missing file, malformed JSON and a `video_id` shaped like a path are errors.
 
 ### `test_subtitles.py`
@@ -430,11 +554,378 @@ renderer checks ([Visual styles](../10-scene-authoring.md#visual-styles),
   refuses a scene kind that disagrees with the video's renderer.
 - The first config resolves an unresolved `auto` video's renderer as a compare-and-set, and a
   failed write or commit leaves the file and the row agreeing.
+- The server's style names are the objects in `tubematic_core.visual_styles`, `get_video` returns the
+  video's `style` with the skill that authors it, and `get_pipeline_status` lists every style.
 
 Trap: write-once on `resolved_visual_style` is the only thing that keeps a revision round on the
 canvas the video already uses, since no code on the revision path reads the field. A domain
 default of `illustrated` or `cartoon_3d` is checked only when it changes: re-sending a stored
 default after the key or the GPU is gone must pass, or every later edit of that domain would fail.
+
+### `test_bean_explainer.py`
+
+Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean Explainer config, the
+`subtitles.emphasis` check, and the text audit's per-shot sampling
+([Bean Explainer](../10-scene-authoring.md#bean-explainer)).
+
+- The limits, timings, geometry, event types and cast ids equal the ones in the renderer's
+  `contract.ts`, read from the TypeScript source. The style pack's catalogues (poses, faces, looks,
+  marks, accessories, tints, entrances, fields, section colours, and every prop with its text limit
+  and acts) equal the renderer's, and every prop has one drawing and no drawing lacks a prop. Both sides answer the
+  shared cases in `fixtures/bean_explainer_contract.json` (label wrapping, prop, label and bean
+  boxes).
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its shot or event and cause: an unknown field, accessory, pose, prop or act, two
+  beans with one tint, a header too long, a badge that is not a prop, a section with no shot at its
+  start, a cut or a pose off the words, a missing first `x`, a text slot over its limit, a scale out
+  of range, an act before its prop lands, a label that repeats the narration, a label over a prop or
+  the bean, a prop over the bean or off the stage, an event during the carousel or too close to a
+  cut, a strike on nothing, too many elements, poses too close together, and a still stretch over
+  3 seconds. Props may overlap each other, which the gags in the example rely on.
+- A prop the agent drew (the skill's `example-prop-rocket.tsx`) passes, serves as a badge, and is
+  placed by its declared box. A bad `customProps` entry (a library id, another video's file, a box out
+  of range, a text slot too long, a bad act name) is refused, and so is a prop file that is missing,
+  uses a filter, a gradient (SVG or CSS), randomness, a timer, a dynamic import, `performance`, a
+  fetch, Remotion's media parts, the page or a `Function` constructor, imports another package
+  (`from"fs"` with no space included) or has no default export. Terminal Doc and its moves share this
+  list.
+- `validate_job`'s re-check finds a prop file redrawn with a gradient, or deleted, after the config was
+  written. A value of the wrong type (a list where an id belongs, scene props that are not an object)
+  gets a sentence back and raises nothing. `.filter(Boolean)` is ordinary code while an SVG filter is
+  refused, a variable named `filter` is not, every import form is checked (a bare `import`,
+  `export ... from`), and `require` is refused in any form, `require("")` included. A config
+  that sets only `subtitles.emphasis` keeps the style's caption look.
+- `write_scene_config` reads the prop files a config names. `render_bean_props` refuses another
+  style, a video with no config and a config with no `customProps`; it returns the picture (the
+  renderer stubbed) and gives way to a heavy check that holds the lock.
+- `write_scene_config` writes a sound config with the style's captions, keeps an `emphasis` it was
+  given, refuses a bad one before writing anything, refuses `BeanExplainer` on another style and
+  other scenes on a Bean Explainer video. `emphasis` beyond the narration's last word, on more than
+  one word in 5, repeated, or not a list of numbers is refused, on any style.
+
+### `test_storybook_atlas.py`
+
+Covers `mcp/storybook_atlas.py`, the checks `write_scene_config` and `validate_job` run on a Storybook
+Atlas config, the `label` caption background, `render_storybook_props`, and the text audit's
+per-stretch sampling ([Storybook Atlas](../10-scene-authoring.md#storybook-atlas)).
+
+- The limits, timings, stage, acts and other lists equal the renderer's, and titles wrap and walks are
+  timed as in `fixtures/storybook_atlas_contract.json`, whose cases the renderer's own `stage.ts`
+  produced (a walk in from the edge, a walk cut short by the next move, an exit). After a change to
+  `stage.ts`, a limit or the library, `node storybook-tools/sync-contract.mjs` (from `renderer/remotion`)
+  rewrites the fixture and the pack's `extra`; never edit them by hand.
+- The pack carries the prop catalogue, and the caption band `mascots.caption_band` gives for the
+  pack's captions holds a two-line label, so a mascot stays out of it.
+- The skill's worked example passes. Each refusal names its chapter or event and cause: a bad coat,
+  knob or name, too many people, too few chapters, a chapter off the words or too short, a title or
+  byline too long, an unknown backdrop, entrance, prop, pose or act, an event off the words or in the
+  chapter's last frames, a prop off the stage, a wall prop at a bad height, an act before its prop
+  lands, a tag on nothing, the guide standing inside a prop or on a person, a plate too short,
+  overlapping another or with something else happening under it, constellation words that cannot be
+  lettered, gauge values out of range, a morph that is both or neither, a push with no portal, a still
+  stretch, three people on stage, and two name tags that touch. A person walking past the guide is
+  fine: only where people stand is checked.
+- A bad `customProps` entry and a prop file that breaks a rule (no default export, another import,
+  a filter, SVG text, a gradient, randomness) are refused; the example moth passes.
+- `write_scene_config` writes a sound config with the style's captions, refuses a missing prop file, a
+  broken config before writing anything, and `StorybookAtlas` on another style. `background: "label"`
+  is accepted on any style and an unknown background is refused. `validate_job`'s re-check finds a
+  prop redrawn with a filter. `render_storybook_props` refuses another style, a video with no config
+  and a config with no `customProps`, and returns the picture with the Storybook script (the renderer
+  stubbed).
+
+### `test_terminal_doc.py`
+
+Covers `mcp/terminal_doc.py`, the checks `write_scene_config` runs on a Terminal Doc config,
+`preview_terminal_moves`, `validate_job`'s re-check of the agent's own moves, and the text audit's
+per-beat sampling ([Terminal Doc](../10-scene-authoring.md#terminal-doc)).
+
+- The limits, timings, geometry, sizes, slots, custom-move limits and catalogues equal the ones in the
+  renderer's `contract.ts`, read from the TypeScript source, and the pack's `extra` lists the same
+  moves, slots, sizes, tones, reveals, cuts and skins. Both sides answer the shared cases in
+  `fixtures/terminal_doc_contract.json` (characters per size, number cells, note wrapping, every
+  move's length).
+- The `log` caption look and its `accent` are values `_validate_subtitles` accepts, read from
+  `Subtitles.tsx`'s type: without that, the server would refuse the style's own captions in either
+  skin.
+- The skill's worked example passes. Each refusal names its beat, event and cause: an unknown skin,
+  move, slot, size or tone, a cut off the words, a string too wide for its size, an encode not from
+  `a` to `c` or with `b` taken, a move on an element that is still playing or not on stage, two
+  elements in one slot, a reused id, more than 4 elements on screen, a bracket reaching into a taken
+  slot, stage text that repeats the narration, a move too close to its cut, and a still stretch over
+  3 seconds. A cleared slot can be used again.
+- A move the agent wrote (the skill's `example-move-caesar.tsx`) passes. A bad `customMoves` entry, a
+  text longer than the move takes, and a move file that is missing, uses a filter, randomness or
+  `useCurrentFrame`, imports anything but the kit, or has no default export are refused, at write time
+  and again by `validate_job` after a rewrite. A video id that is a UUID works for the files and the
+  preview script.
+- `write_scene_config` writes the pack's `log` captions, in amber for the `crt` skin, under the keys
+  the config sets, refuses a broken config before writing anything, and refuses `TerminalDoc` on
+  another style and other scenes on a Terminal Doc video. `preview_terminal_moves` refuses another
+  style, a video with no config and a config with no moves, returns the picture (the renderer stubbed)
+  with each move's slot and text, and gives way to a heavy check that holds the lock.
+
+### `test_under_the_hood.py`
+
+Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under the Hood config, the
+`subtitles.look` check, the text audit's per-plate sampling, and the cap on photographs in
+`generate_image` ([Under the Hood](../10-scene-authoring.md#under-the-hood)).
+
+- The limits, timings, geometry, camera, event types, poses, tones, shapes, entrances and stat slots
+  equal the ones in the renderer's `contract.ts`, read from the TypeScript source, and the pack's
+  poses, events, tones and photograph cap equal them too. Both sides answer the shared cases in
+  `fixtures/under_the_hood_contract.json` (the projection, the photograph's box, the push, chip and
+  stat boxes, the stat's text with JavaScript's rounding, the leader's start, overlap).
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its plate or event and cause: a plate or a pose off the words, a plate too
+  short, another video's or a container image path, a photograph that does not cover the band, a
+  zoom out of range, photograph fields on a plain plate, a zoom entrance with no photograph before it
+  or no `through`, a callout too long, a pinned point that leaves the band before its plate ends, a
+  chip outside the band or on its point or over another, a bad region, arc count, counter values,
+  stat affix, label, slot or width, a bad chart, a chart on a photograph or a callout on a plain
+  plate, a second footnote, text too late to read, events out of order, too many elements, poses too
+  close together or repeating the current pose, and a still stretch over 3 seconds. More than 12
+  different photographs is
+  refused and a reused one is free. A zoom-through counts the plate's text as leaving 6 frames early.
+  A value of the wrong type gets a sentence back and raises nothing.
+- The text audit samples each plate and stops before a zoom-through.
+- `write_scene_config` writes a sound config with the style's captions, fills each plate's `aspect`
+  from its file, keeps an `emphasis` it was given, refuses a photograph too wide to cover the band
+  before writing anything, refuses `UnderTheHood` on another style and other scenes on an Under the
+  Hood video. `subtitles.look` accepts `plain` and `selection` only.
+- `generate_image` refuses a 13th new photograph on an Under the Hood video before any request goes
+  out, and allows regenerating an existing one; other styles are not capped. A name being generated
+  holds its slot, so a second new name cannot take the last one meanwhile, and a call that fails gives
+  the slot back.
+
+Trap: a plate whose own fields are bad is skipped for every check that projects through its camera,
+including the next plate's zoom-through, or a malformed `focus` raised instead of being reported.
+
+### `test_case_file_story.py`
+
+Covers `mcp/case_file_story.py`, the checks `write_scene_config` runs on a Case File Story config,
+the `subtitles.look` check, the text audit's per-beat sampling, and what `generate_image` does for
+the style: the reference picture, the text added to the prompt and the cap on pictures
+([Case File Story](../10-scene-authoring.md#case-file-story)).
+
+- The limits, timings, geometry, camera, accents and their colours, beat kinds, meter kinds and
+  icons equal the ones in the renderer's `contract.ts`, read from the TypeScript source, and the
+  pack lists the same values. The pack's picture count is the stills limit plus the lead sheet. Both
+  sides answer the shared cases in `fixtures/case_file_story_contract.json` (the number format, the
+  meter cells, the camera's scale and view, the term's font size, the bars' layout, the frames of a
+  beat's parts and the quiet stretches).
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its meter or beat and cause: a bad accent, meter count, id, kind, label or
+  value; a first beat that is late or is a card; a beat off the words or out of order; a missing,
+  early or second choice; no term card before the choice; a field the beat's type does not take;
+  another video's or a container image path; the lead sheet used as a picture; a bad focus or
+  punch-in; a `set` or `panel` naming the wrong meter; card text over its limit; an unknown icon or
+  kind; a bar, result, payoff line, stamp or button timed off a word or out of order; a card whose
+  last part comes too late to read. A shot or a finished card that sits unchanged for over 4
+  seconds is refused, and a punch-in fixes the shot. More than 16 different stills is refused and a
+  reused one is free. A value of the wrong type gets a sentence back and raises nothing, and so does
+  a broken beat whose own problem falls past the 12 that are reported.
+- The text audit samples each beat, a card from the frame its last part has appeared.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one, refuses `CaseFileStory` on another style and other scenes on a Case File Story video.
+  `subtitles.look` accepts `plain`, `selection` and `fill` only.
+- The house lead's sheet ships beside the server. The lead sheet is made from it through the edits
+  endpoint, at 16:9, with the outfit between the pack's lead description and sheet style. A still
+  with `reference="lead"` sends the video's own sheet and the pack's lead description and painting
+  style around the scene. A still with no reference goes to the generations endpoint with the
+  painting style added. A still is sent at 9:16 whatever `aspect_ratio` asks for. A prompt with no
+  final full stop gets one before the pack's text.
+- `generate_image` refuses, before any request goes out, a lead sheet without `reference="house"`,
+  the house sheet used for another picture, a picture named `house`, a reference that is not yet an image of the video, a
+  reference with a path in it, and a reference on a video of another style, whose prompt is sent
+  unchanged. A 17th new still is refused and a regeneration is allowed. The lead sheet has a slot
+  of its own: a video that already holds 16 stills can still make it, and it never takes a still's
+  place. Under the Hood keeps its own cap and wording.
+
+- An edit from a reference waits up to 600 seconds for a response and a picture from text 180, and
+  a reserved slot lasts longer than both waits.
+
+Trap: the refusals for a wrong reference run before the scene-work claim and the cap, so a refused
+call reserves no picture slot and reaches no paid endpoint.
+
+Trap: a reservation that lapses sooner than the slowest call gives that call's slot to a parallel
+one, and both are billed.
+### `test_choose_script_formula.py`
+
+Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's default formula in
+`create_video` and `upsert_project`, and the write that gives a pick back
+([How a formula is picked](../08-scripting-and-voice.md#how-a-formula-is-picked)).
+
+- A pick is recorded with its runner-up and its reason on one line. A bad formula, runner-up or
+  reason is refused and nothing is written.
+- The style is decided first at `TOPIC_APPROVED`: a video still on `auto` with no style pick is
+  refused there, and a video Auto gave mixed scenes is accepted. In a revision a video scripted
+  before picks existed gets a formula whatever its style.
+- The pick is made once at `TOPIC_APPROVED` and is refused at every status but `TOPIC_APPROVED` and
+  `REVISION_REQUESTED`. In a revision the agent may pick again on a video with no person's choice.
+- A status change between the row read and the `UPDATE` leaves the video untouched. While the tool
+  reads the setting and the domain's history, another writer is locked out.
+- An experimental formula or runner-up is refused while the setting is off and accepted once it is
+  on. The candidates carry `available`, `suits_style` and `recent`, and only a video at
+  `TOPIC_APPROVED` with no pick or at `REVISION_REQUESTED` gets them. A revision whose pick is a
+  person's choice gets none.
+- `recent` is the domain's previous two videos, newest first, counting a video by its recorded
+  formula or else its pick, and rows filed in the same second by insertion order. A formula among
+  them is refused without `repeat_reason` and accepted with it, and the reason is stored. Another domain's videos and a video with no domain have no
+  history.
+- A person's choice becomes the pick, with the agent's formula as the runner-up and "Auto would
+  have picked" in the reason. It holds for an experimental formula with the setting off, is exempt
+  from rotation (also when the agent names the same recent formula), is written as the pick in a
+  revision of a video that had none, and is not replaced in a revision. A choice of a formula that the installed
+  version does not have reads as Auto.
+- A move back to `TOPIC_PROPOSED`, guarded or not, empties the pick and keeps the person's choice.
+  A script revision keeps the pick.
+- A move to `SCRIPT_READY`, guarded or not, is refused while the stored script's formula is not
+  the pick, including a pick with no record. A move to `VOICING` or `VOICE_READY` after a re-pick
+  in a revision is refused the same way, with a refusal that sends the new script to a person.
+- A pick of a formula the installed version lacks counts as none: the video is offered the
+  candidates and picked for again, and a script write is not bound to it. A rewritten script and a script from before picks pass.
+- Only a formula marked recent stores the repeat note. Recent counts the pick ahead of a switched
+  script's record, and leaves out a topic sent back or rejected.
+- The domain's default formula seeds every new video whatever its strategy. A default that is no
+  formula seeds nothing, a new default must be a formula, an omitted one is left alone, and a
+  stored one that was dropped does not block another edit.
+
+Trap: the `formula` argument is the agent's own best formula on every call. A tool that took the
+person's choice as the argument would lose what Auto would have picked, which the dashboard offers
+as the switch.
+
+Trap: rotation is enforced by the tool. Left to the skill's prose, a model that skipped the step
+would give a domain the same structure every time, with nothing recording that it did.
+
+### `test_learned_routing.py`
+
+Covers [Learned routing](../08-scripting-and-voice.md#learned-routing) through the MCP surface:
+`get_video`'s `formula_routing.learned`, each candidate's `learned` points, and the
+`formula_evidence` record `choose_script_formula` stores.
+
+- With evidence, a better formula has 2 points, a worse one -1 and an untried one 0, every formula
+  is a candidate, and the opening types come ranked. `learned` carries no per-formula table.
+- The setting `learned_routing` off, `publishing_enabled` off, or a domain with no evidence gives 0
+  points everywhere and stores `''`. At a status where nothing is picked or written, the figures are
+  not read.
+- A pick with `learned_stamp` stores what the figures said about its formula, also when it was not
+  favoured. A pick without it stores `''`. On a video with a person's choice nothing is checked,
+  `''` is stored and no trial slot is used.
+- A stamp that differs from the one worked out under the lock is refused and nothing is written:
+  a pick recorded in between, new figures, and learning switched off each change it.
+- Every fourth pick in a domain is a trial pick, which gives the points to formulas with too few
+  videos and empties the openings list. A trial pick's openings stay empty after later picks in
+  the domain move the count, and a pick with no record keeps its openings when the count sits on a
+  trial position. A return to `TOPIC_PROPOSED` clears the record with the pick.
+- What the figures can decide, with the agent's fit scores given and the skill's Steps 3b, 4.1
+  and 5 applied in the test (`_skill_decides`, pinned to the skill's wording): a worse formula
+  leading by 3 on fit loses to the better one, which is picked and recorded as `better` with 2
+  points. With the widest swing (2 against -1) the figures decide up to a fit gap of 4, and from 5
+  the better fit keeps the pick. On a trial pick the standing breaks no tie.
+
+Trap: the record is worked out by the server under the pick's write lock, and only for a pick the
+agent scored with the same stamp. Without that check, a session that read two videos before
+picking either would score the second with learned points while its record called it a trial pick.
+
+### `test_choose_visual_style.py`
+
+Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back
+([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
+
+- A pack pick becomes the video's `visual_style`, so `get_video`'s `style` names its authoring skill
+  and script guidance. `scenes` keeps `auto` and still counts as decided.
+- The choice is made once, only at `TOPIC_APPROVED`, never over a style a person chose, and never
+  for an archived video. A bad style, runner-up or reason is refused.
+- An unavailable style or runner-up is refused with the reason, and a mascot rules out a 3D world
+  and Under the Hood.
+- A status, style, pick or archive change between the row read and the `UPDATE` leaves the video
+  untouched, and so does a mascot landing before a 3D pick. While the tool reads what the install
+  can make, another writer is locked out.
+- `style_routing` lists every candidate and the video's domain.
+- A pick clears the renderer and canvas recorded for earlier scenes, including a `cartoon_3d`
+  renderer on a video with a mascot, and so does a return to the topic of an `auto` video or an Auto
+  pick, or a person changing the style. A style a person chose keeps its canvas through a return to
+  the topic.
+- A video Auto routed to mixed scenes cannot record the `cartoon_3d` renderer or take a Cartoon 3D
+  scene through `write_scene_config`, while a video from before Auto picked styles still can.
+- `visual_style` and a `resolved_*` field are refused in one call, and a style change with a mascot
+  is not refused for the Cartoon 3D renderer the same write clears.
+- A move back to `TOPIC_PROPOSED`, guarded or not, returns an Auto pick to `auto`. A person's style
+  survives it, and other moves keep the pick. A changed `visual_style` clears the pick and the same
+  value keeps it.
+
+Trap: the race and lock tests are mutation-checked. Each clause of the `UPDATE`'s `WHERE` is there
+because a check made on an earlier read can be out of date by the write, and the write lock is what
+keeps a removed key or a failed GPU from landing between the availability check and the write.
+
+### `test_system_flow.py`
+
+Covers `mcp/system_flow.py`, the checks `write_scene_config` runs on a System Flow config, and the
+text audit's per-board sampling ([System Flow](../10-scene-authoring.md#system-flow)).
+
+- The limits, timings, tones and event types equal the ones in the renderer's `contract.ts`, read
+  from the TypeScript source, and both sides answer the shared cases in
+  `fixtures/system_flow_contract.json` (label wrapping, row assignment). The pack's icon list equals
+  the icons `icons.ts` draws.
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its board and cause: a fourth node in a row, a fourth row, a cycle, an unknown
+  icon, a label too long, an edge before its source lands, a packet before its edge has drawn, an
+  event outside its board, a board not on a word, a disconnected node, and a still stretch over
+  3.5 seconds.
+- `write_scene_config` writes a sound config with the style's captions, refuses a bad one before
+  writing anything, refuses `SystemFlow` on another style, other scenes on a System Flow video, and a
+  `SystemFlow` entry of any type but `generated`.
+- An event that cannot be drawn and read before its board fades out is refused, a node's label
+  typing included (the last board has no fade-out and ends on its final frame). Two chips or two
+  focuses too close together, and a second fault on one node, are refused. The
+  stillness rule counts seconds at the timeline's frame rate, whatever `fps` the config claims.
+- The text audit samples each board.
+
+Trap: the rows are the validator's promise to the renderer. `layout.ts` pins dagre to them through
+each edge's `minlen`; a change to `compute_rows` on one side only lets a frame show more nodes in a
+row than the check counted.
+
+### `test_whiteboard.py`
+
+Covers `mcp/whiteboard.py`, the checks `write_scene_config` runs on a Whiteboard config, and the
+text audit's per-region sampling ([Whiteboard](../10-scene-authoring.md#whiteboard)).
+
+- The board sizes, limits, timings, slots, inks, marks and glyph widths equal the renderer's, read
+  from the TypeScript source, and both sides answer the shared cases in
+  `fixtures/whiteboard_contract.json`. The pack's doodle list equals the doodles `doodles.ts` draws.
+  Rounding follows JavaScript's `Math.round`.
+- The skill's worked example passes. It opens on a doodle at frame 0, which may sit before the first
+  word and is scheduled from `TIMING.openLead` frames before frame 0 (shared case `schedule_open`).
+- Each refusal names its region, item and cause: a region count outside 2 to 6, an unknown layout,
+  slot or doodle, a used slot, text that does not fit or uses a character the font lacks, an item
+  off a word, out of order or before the camera arrives, a mark or arrow on a missing or later item,
+  an arrow across another item, a second highlight, a marker that cannot keep up, an item drawn as
+  the camera leaves, a still stretch over 3.5 seconds at the narration's frame rate, and a recap
+  too short for every region's number or longer than 8 seconds.
+- A wrong type (a list where a name belongs, props that are not an object, a `big` that is not a
+  boolean) is refused with a message, never raised.
+- `write_scene_config` writes a sound config with the style's captions on the light canvas, refuses
+  a bad one before writing anything, refuses `Whiteboard` on another style, other scenes on a
+  Whiteboard video and a dark canvas, and skips the word check when there is no timeline.
+- The text audit samples each region and the recap.
+- The doodle expander answers the shared cases (every primitive, and a digest of the whole shipped
+  library) as `doodles.ts` does, and every shipped doodle passes the rules a video's own doodle
+  must, since the agent copies from them. A video's own doodle is accepted, and refused when it
+  reuses a shipped name, is defined but never drawn, leaves the box, uses an unknown primitive or a
+  wrong number of values, asks for a huge arc or star, has a single-point stroke, too many strokes,
+  or is one of more than 8; an item naming a doodle that is neither shipped nor defined is refused.
+- `preview_doodles` returns the names and a picture with a cell for each doodle and the two shipped
+  references, and refuses a doodle `write_scene_config` would refuse for its own sake. An extreme
+  number (one that overflows the trigonometry or a float) is refused, never raised, and a doodle of a
+  million segments is refused from its point count without being expanded.
+
+Trap: the validator's placement and timing must equal the renderer's to the frame. The tests that
+read `contract.ts` and the shared fixture are what catch a change made on one side only.
 
 ### `test_watermark.py`
 
@@ -473,6 +964,44 @@ Covers `validate_job`'s checks on a segmented script.
   sentences passes and a long unexplained gap fails.
 - A legacy video with no segments gets none of these checks and keeps the older ones.
 
+### `test_validate_job_typecheck.py`
+
+Covers `validate_job`'s typecheck ([`validate_job`](../06-mcp-server.md#validate_job)), with a fake
+`npx` that records the config it was given and can hang with a child of its own.
+
+- The temporary config extends `tsconfig.json`, sits beside it, and includes only this video's
+  directory and the scene files its config names. It is removed after a pass, a failure and a
+  timeout. A video with no generated scenes runs no typecheck, and neither does one whose directory
+  was emptied (`tsc` fails on an include that matches nothing).
+- On a timeout the child the fake started is dead afterwards, and the error asks for another call.
+- Two videos validated at once never overlap their typecheck, and a call that cannot get the checker
+  in time returns an error without running one.
+
+Trap: `npx` runs `tsc` as a child of its own, so killing `npx` alone leaves `tsc` running. Agents
+call `validate_job` again after a timeout, and those leftover processes once filled a host's memory.
+The timeout test fails if the kill reaches `npx` only.
+
+### `test_picture_checks.py`
+
+Covers `mcp/picture_checks.py` and its place in `validate_job`
+([Picture warnings](../10-scene-authoring.md#picture-warnings)).
+
+- Each data-driven style's worked example is read as its style and opens on a subject, and the
+  same example with its opening pushed late, its subject removed or its words first is warned once.
+- A segment owes its beat's role once, where the beat starts, and a beat label matches whatever its
+  case and spacing. Segments with no beat, or a video with no formula, owe nothing past the opening
+  and get no beat warnings. A Cartoon 3D config gets none either.
+- A System Flow node entering by `TIMING.openWithin` opens the video; one frame later is warned.
+- A mixed-scenes video that cuts on every beat is quiet. A turn or payoff inside a running scene is
+  warned with its time, segment, beat and first words. A cut `CHANGE_LEAD` frames before the word
+  or `CHANGE_WINDOW` after it counts, one frame further does not.
+- Every style reports its cuts as changes; a System Flow chip alone does not count, and a
+  Whiteboard doodle counts when the marker starts it. Malformed data is skipped, never raised.
+- `validate_job` adds these warnings after the text audit's.
+
+Trap: the quiet cases matter as much as the warnings. Each skill's example is what the agent copies,
+and a warning on a sound video teaches the agent to ignore the list.
+
 ### `test_text_audit.py`
 
 Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
@@ -486,6 +1015,12 @@ Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
   own stdout.
 - Every failure of the subprocess returns a warning and does not raise. A timeout kills the
   process group, and staged files are removed.
+- The frame-0 pass is added for a mixed-scenes video only, outside the pinned sampling plan. It warns
+  when frame 0 shows only text or a backdrop (a full-frame fill or SVG rect, a faint or tiny
+  picture) and when nothing moves by frame 6. A picture already moving, something arriving or
+  fading, and a canvas are quiet. The shapes of one SVG count as one picture, so a stick figure is a
+  subject, and a filled card holding only text is a title card. A line drawing on counts as moving,
+  and the warning names the scene on frame 0. Its frames skip the text checks.
 
 Trap: every threshold lives in this module, because it is the only layer the tests reach. The
 browser probe and its driver need a browser, so a threshold moved into the probe leaves the
@@ -587,9 +1122,11 @@ Covers a mascot on a video: `create_video`, `update_video`, `set_video_status`, 
 `write_scene_config`, `validate_job`, `submit_render` and the audit's mascot warning
 ([Mascots](../10-scene-authoring.md#mascots)).
 
-- A new video gets the default mascot only while a GPU works, and none on a Cartoon 3D video.
-- The pick is frozen after the topic stage, needs a working GPU when it changes, and is cleared by
-  a switch to `cartoon_3d` in the same write.
+- A new video gets the default mascot only while a GPU works, and none on a Cartoon 3D or Under the
+  Hood video.
+- The pick is frozen after the topic stage, needs a working GPU when it changes, is refused on an
+  Under the Hood video, and is cleared by a switch to `cartoon_3d` or `under_the_hood` in the same
+  write.
 - Topic approval is refused for a withdrawn mascot and for a Cartoon 3D video that holds one,
   including when the other write commits between the check and the `UPDATE`.
 - Invalid cues are refused with their reasons and nothing written. The mascot version is fixed by

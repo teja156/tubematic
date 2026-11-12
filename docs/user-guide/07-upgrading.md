@@ -23,15 +23,15 @@ Download the new release into a new directory, beside the old one, and run `upgr
 one:
 
 ```bash
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/tubematic-v2.0.0.tar.gz
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/tubematic-v2.1.1.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
-tar xzf tubematic-v2.0.0.tar.gz
-cd tubematic-v2.0.0
+tar xzf tubematic-v2.1.1.tar.gz
+cd tubematic-v2.1.1
 python3 upgrade.py
 ```
 
-Use the version you are moving to in place of `v2.0.0`.
+Use the version you are moving to in place of `v2.1.1`.
 
 Keep the old directory until `upgrade.py` finishes. Your scheduled job runs from the old directory
 until `upgrade.py` points it at the new one. When it finishes, `upgrade.py` names the old directory
@@ -88,6 +88,7 @@ install they are the untagged images that earlier builds left.
 | No dashboard password is set | Run `python3 onboard.py --set-password` from the new directory, then run it again |
 | No OpenAI key is stored | Add one on **Settings → API Keys** in the running version, then run it again |
 | A scene the agent wrote imports a component this version removed | Delete or fix the files it lists, under `~/.tubematic-data/scenes/generated/`, then run it again |
+| A scene the agent wrote cannot be read by your user | Run the `sudo find … chmod 664` command it prints, then run it again |
 | The GPU you chose is gone, or the NVIDIA Container Toolkit is | Run `python3 onboard.py --step gpu`, then run it again |
 | The remote-renderers file cannot be read | Run `python3 onboard.py --step renderers`, then run it again |
 | The database is newer than this version | You are running an older version than the one installed. See [Rollback policy](#rollback-policy) |

@@ -1,0 +1,345 @@
+{
+ "totalFrames": 716,
+ "fps": 30,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "BeanExplainer",
+   "startFrame": 0,
+   "durationInFrames": 716,
+   "props": {
+    "beanExplainer": {
+     "field": "yellow",
+     "title": "every phishing trick, explained",
+     "list": true,
+     "cast": [
+      {
+       "id": "narrator",
+       "accessory": "none"
+      }
+     ],
+     "sections": [
+      {
+       "start": 78,
+       "header": "URGENCY",
+       "color": "red",
+       "badge": "clock"
+      },
+      {
+       "start": 288,
+       "header": "LOOKALIKE LINKS",
+       "color": "blue",
+       "badge": "browser"
+      },
+      {
+       "start": 447,
+       "header": "FAKE LOGINS",
+       "color": "green",
+       "badge": "lock"
+      }
+     ],
+     "shots": [
+      {
+       "start": 0,
+       "events": [
+        {
+         "type": "pose",
+         "frame": 0,
+         "who": "narrator",
+         "pose": "wave",
+         "face": "happy",
+         "look": "front",
+         "x": 0.5
+        },
+        {
+         "type": "pose",
+         "frame": 33,
+         "who": "narrator",
+         "pose": "think",
+         "face": "squint",
+         "look": "right"
+        },
+        {
+         "type": "mark",
+         "frame": 50,
+         "who": "narrator",
+         "mark": "question"
+        }
+       ]
+      },
+      {
+       "start": 78,
+       "events": [
+        {
+         "type": "pose",
+         "frame": 78,
+         "who": "narrator",
+         "pose": "stand",
+         "face": "neutral",
+         "look": "right",
+         "x": 0.28
+        },
+        {
+         "type": "prop",
+         "frame": 128,
+         "id": "phone",
+         "prop": "phone",
+         "x": 0.72,
+         "y": 0.5,
+         "scale": 1.0,
+         "enter": "pop",
+         "text": "Your account is locked"
+        },
+        {
+         "type": "act",
+         "frame": 139,
+         "target": "phone",
+         "act": "buzz"
+        },
+        {
+         "type": "label",
+         "frame": 150,
+         "text": "fake text",
+         "x": 0.72,
+         "y": 0.34
+        },
+        {
+         "type": "pose",
+         "frame": 195,
+         "who": "narrator",
+         "pose": "stand",
+         "face": "worried",
+         "look": "right"
+        },
+        {
+         "type": "pose",
+         "frame": 232,
+         "who": "narrator",
+         "pose": "panic",
+         "face": "shocked",
+         "look": "front"
+        },
+        {
+         "type": "mark",
+         "frame": 232,
+         "who": "narrator",
+         "mark": "sweat"
+        },
+        {
+         "type": "impact",
+         "frame": 232,
+         "strength": 2
+        },
+        {
+         "type": "mark",
+         "frame": 236,
+         "who": "narrator",
+         "mark": "alarm"
+        },
+        {
+         "type": "pose",
+         "frame": 254,
+         "who": "narrator",
+         "pose": "point",
+         "face": "worried",
+         "look": "right",
+         "at": "phone"
+        },
+        {
+         "type": "prop",
+         "frame": 254,
+         "id": "cursor",
+         "prop": "cursor",
+         "x": 0.75,
+         "y": 0.6,
+         "scale": 0.8,
+         "enter": "pop"
+        },
+        {
+         "type": "act",
+         "frame": 266,
+         "target": "cursor",
+         "act": "click"
+        }
+       ]
+      },
+      {
+       "start": 288,
+       "events": [
+        {
+         "type": "pose",
+         "frame": 321,
+         "who": "narrator",
+         "pose": "stand",
+         "face": "neutral",
+         "look": "right",
+         "x": 0.2
+        },
+        {
+         "type": "prop",
+         "frame": 344,
+         "id": "fake",
+         "prop": "browser",
+         "x": 0.62,
+         "y": 0.42,
+         "scale": 0.7,
+         "enter": "slide",
+         "text": "paypa1.com"
+        },
+        {
+         "type": "pose",
+         "frame": 366,
+         "who": "narrator",
+         "pose": "point",
+         "face": "squint",
+         "look": "right",
+         "at": "fake"
+        },
+        {
+         "type": "prop",
+         "frame": 376,
+         "id": "real",
+         "prop": "browser",
+         "x": 0.62,
+         "y": 0.55,
+         "scale": 0.7,
+         "enter": "slide",
+         "text": "paypal.com"
+        },
+        {
+         "type": "strike",
+         "frame": 380,
+         "target": "fake"
+        },
+        {
+         "type": "label",
+         "frame": 384,
+         "text": "the real one",
+         "x": 0.62,
+         "y": 0.62
+        },
+        {
+         "type": "pose",
+         "frame": 400,
+         "who": "narrator",
+         "pose": "lean",
+         "face": "smug",
+         "look": "right",
+         "at": "real"
+        },
+        {
+         "type": "prop",
+         "frame": 411,
+         "id": "lens",
+         "prop": "magnifier",
+         "x": 0.7,
+         "y": 0.42,
+         "scale": 0.55,
+         "enter": "drop"
+        },
+        {
+         "type": "impact",
+         "frame": 423,
+         "strength": 1
+        },
+        {
+         "type": "mark",
+         "frame": 425,
+         "who": "narrator",
+         "mark": "sparkle"
+        }
+       ]
+      },
+      {
+       "start": 447,
+       "events": [
+        {
+         "type": "pose",
+         "frame": 486,
+         "who": "narrator",
+         "pose": "stand",
+         "face": "neutral",
+         "look": "right",
+         "x": 0.22
+        },
+        {
+         "type": "prop",
+         "frame": 509,
+         "id": "laptop",
+         "prop": "laptop",
+         "x": 0.64,
+         "y": 0.45,
+         "scale": 0.9,
+         "enter": "rise",
+         "text": "Log in to your bank"
+        },
+        {
+         "type": "pose",
+         "frame": 530,
+         "who": "narrator",
+         "pose": "present",
+         "face": "happy",
+         "look": "right",
+         "at": "laptop"
+        },
+        {
+         "type": "label",
+         "frame": 578,
+         "text": "wrong address!",
+         "x": 0.64,
+         "y": 0.6,
+         "tone": "red"
+        },
+        {
+         "type": "pose",
+         "frame": 601,
+         "who": "narrator",
+         "pose": "shrug",
+         "face": "shocked",
+         "look": "front"
+        },
+        {
+         "type": "mark",
+         "frame": 601,
+         "who": "narrator",
+         "mark": "exclaim"
+        },
+        {
+         "type": "pose",
+         "frame": 624,
+         "who": "narrator",
+         "pose": "hands-hips",
+         "face": "angry",
+         "look": "right"
+        },
+        {
+         "type": "strike",
+         "frame": 636,
+         "target": "laptop"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "sfx": [],
+ "subtitles": {
+  "enabled": true,
+  "maxWords": 3,
+  "fontFamily": "'Instrument Sans', system-ui, sans-serif",
+  "fontSize": 66,
+  "color": "#1E1C1A",
+  "background": "none",
+  "position": 0.75,
+  "emphasis": [
+   16,
+   25,
+   29,
+   42
+  ]
+ }
+}

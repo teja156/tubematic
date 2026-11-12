@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import pytest
 
 import server
+from sample_angle import ANGLE
 import text_audit
 from builtin_gpu import store_builtin_probe
 from tubematic_core import mascots as tmascots
@@ -68,7 +69,7 @@ def _col(col, vid=VID):
 
 
 def _create(project="p1", strategy="curriculum"):
-    out = server.create_video(project, "topic", strategy, 8)
+    out = server.create_video(project, "topic", strategy, 8, **ANGLE)
     assert "error" not in out, out
     return out
 
@@ -586,3 +587,31 @@ def test_write_scene_config_docstring_lists_every_cue_value():
         assert name in doc, name
     assert str(tmascots.MIN_REST_FRAMES) in doc
     assert str(tmascots.SCALE_MIN) in doc and str(tmascots.SCALE_MAX) in doc
+
+
+# ── Under the Hood takes no mascot either (TMDEV-201) ────────────────────────
+
+def test_under_the_hood_is_seeded_without_a_mascot_and_refuses_a_pick(db, monkeypatch):
+    monkeypatch.setattr(server, "_openai_key", lambda: "sk-test")
+    _gpu()
+    _mascot()
+    _project(default_style="under_the_hood", default_mascot="moss")
+    assert _create()["mascot_id"] == ""
+    _video(style="under_the_hood")
+    assert server.update_video(VID, mascot_id="moss") == {"error": tmascots.no_mascot_error("under_the_hood")}
+
+
+def test_switching_the_style_to_under_the_hood_clears_the_mascot(db, monkeypatch):
+    monkeypatch.setattr(server, "_openai_key", lambda: "sk-test")
+    _gpu()
+    _mascot()
+    _video(mascot="moss")
+    assert "error" not in server.update_video(VID, visual_style="under_the_hood")
+    assert (_col("visual_style"), _col("mascot_id")) == ("under_the_hood", "")
+
+
+def test_auto_cannot_pick_under_the_hood_for_a_video_with_a_mascot():
+    from tubematic_core import visual_styles as tvs
+    rows = {c["id"]: c for c in tvs.routing_candidates(True, "working", True)}
+    assert rows["under_the_hood"]["unavailable_reason"] == tvs.MASCOT_EXCLUDED
+    assert rows["bean_explainer"]["available"]

@@ -83,7 +83,7 @@ Pipeline, Library, Projects and Profiles refresh every 5 seconds, so you can lea
 
 The page has three parts.
 
-![The Pipeline page: the Overview counts, then Quick Actions with four topics, two scripts and one video waiting for a decision](../images/pipeline-quick-actions.png)
+![The Pipeline page: the Overview counts, then Quick Actions with four topics, each showing its angle, two scripts and one video waiting for a decision](../images/pipeline-quick-actions.png)
 
 **Overview** shows six counts: topics awaiting you, scripts ready, videos ready, videos in the
 pipeline, published and failed.
@@ -91,6 +91,9 @@ pipeline, published and failed.
 **Quick Actions** lists the videos that need a decision, grouped as Topic Proposed, Script Ready and
 Video Ready, oldest first. Each row has the buttons and pickers for its decision. See
 [Making decisions](#making-decisions). The three pills above the list hide or show a group.
+A Topic Proposed row also shows the topic's [angle](03-using-tubematic.md#the-angle) under the
+title, cut to one line, with the angle's kind and score beside the topic's score. A row whose topic
+has no angle says **No angle**.
 
 The board below has a column for each status, in the order a video moves through them, followed by
 Rejected, Revision Requested and Failed. Click a card to open the video. A card shows:
@@ -122,10 +125,10 @@ Click a card or a row to open the video. The left side has tabs:
 
 | Tab | Shows |
 |---|---|
-| **Topic** | The full topic |
-| **Script** | The script, segment by segment, with a note on what each segment shows. Appears once a script exists |
+| **Topic** | The topic's [angle](03-using-tubematic.md#the-angle) with its kind and score, then the full topic. At Topic Proposed, **Edit** changes the angle and **Add angle** gives one to a topic that has none. **Approve Topic** waits until you save or cancel the edit |
+| **Script** | The script, segment by segment, with a note on what each segment shows. Above it are the script's formula, the openings the agent considered and any script warnings (see [Read and approve scripts](03-using-tubematic.md#3-read-and-approve-scripts)). Appears once a script exists |
 | **Video** | The player. Appears once the video is rendered |
-| **Publishing Results** | Each account the video was posted to, with its status, link and any error |
+| **Publishing Results** | Each account the video was posted to, with its status, link and any error, and the post's latest figures |
 | **Comments** | Everything you and the agent have said about the video. You add to it through **Request Revision** |
 | **Logs** | Log records for this video from every part of Tubematic |
 
@@ -133,8 +136,8 @@ The panel on the right holds:
 
 - the buttons and pickers for the video's current status,
 - links to the live posts, under **Published to**,
-- the video's details: how the topic was found, its score, its script profile, visual style, voice
-  and agent,
+- the video's details: how the topic was found, its score, its angle score, its script profile,
+  visual style, voice, any other voices its script uses, and agent,
 - the **Cost** panel,
 - the AI review's findings, if AI review ran.
 
@@ -149,14 +152,15 @@ To save the video, use the player's own menu, or take the file from
 
 Creates a video from a topic you type.
 
-![The New Video page with a title, a topic and a visual style chosen](../images/new-video.png)
+![The New Video page with a title, a topic, a formula and a visual style chosen](../images/new-video.png)
 
 | Field | Notes |
 |---|---|
 | **Title** | Required. Up to 70 characters. It is the name shown on cards |
 | **Topic** | Required. The full brief the agent writes the script from |
-| **Agent**, **Model**, **Effort** | Optional. **Automatic** lets Tubematic choose the agent by share |
-| **Script profile**, **Visual style**, **Voice** | Optional |
+| **Angle** | Optional. One sentence, up to 300 characters, saying what the opening will use, and its kind. Leave it empty and the agent finds one. See [The angle](03-using-tubematic.md#the-angle) |
+| **Agent**, **Model**, **Effort** | Optional. **Automatic** lets Tubematic choose the agent by share. It reads **Domain default** when the Manual Videos domain has an agent of its own |
+| **Script profile**, **Formula**, **Visual style**, **Voice** | Optional. **Formula** on **Auto** lets the agent pick the script's structure for the topic |
 | **Automatically approve topic** | Ticked by default, so the agent starts on the script. Untick it to review the topic on the Pipeline page first |
 
 The video is filed under a domain called **Manual Videos** and has no score. After you submit, the
@@ -175,9 +179,18 @@ and post links. An archived video cannot be played or restored.
 
 ### Topics
 
-Holds the research mode toggles, the mining sources, and a row for each domain. Each row sets the
-domain's default visual style, voice, script profile and mascot, and its topic cap. A curriculum
-seed also has a **Pause topic generation** button.
+Holds the research mode toggles, the mining sources, and a row for each domain. A row shows the
+domain's name, the defaults it has set, how many topics and videos it holds, and its status. A
+curriculum seed also has a **Pause topic generation** button.
+
+**Edit defaults** opens the domain's choices under its row:
+
+| Group | Sets |
+|---|---|
+| Look | The visual style and the mascot |
+| Narration | The voice, the script profile and the formula |
+| Agent | The agent, its model and its effort |
+| Limits | The topic cap |
 
 [Using Tubematic](03-using-tubematic.md#where-topics-come-from) explains each of these.
 
@@ -195,16 +208,21 @@ Two pages share this tab. Script profiles are covered in
 ### Socials and Analytics
 
 **Socials** connects social accounts and chooses which ones Tubematic may post to.
-**Analytics** has two tabs:
+**Analytics** has three tabs:
 
-- **Videos** lists each published post with its views, likes, comments and shares. You can filter by
-  platform and account. A dash means the platform reported no figure.
+- **Videos** lists each published post with its views, likes, comments and shares, and how long
+  people watched it. You can filter by platform and account. A dash means the platform reported no
+  figure.
+- **Watch time** compares how long people watched across groups of videos: by visual style, script
+  profile, domain, script length, formula or opening. See
+  [Publishing](06-publishing.md#comparing-groups-of-videos).
 - **Spend** shows what the install spent today, this week, this month or over a range of days. It
   includes spend that belongs to no single video, such as research.
 
 ![The Spend tab for this month: a total, then spend on videos, on research and mining, on other agent runs, and ElevenLabs credits](../images/analytics-spend.png)
 
-**Socials** and the **Videos** tab stay empty until you set up [Publishing](06-publishing.md).
+**Socials**, the **Videos** tab and the **Watch time** tab stay empty until you set up
+[Publishing](06-publishing.md).
 
 ### Logs
 
@@ -227,6 +245,7 @@ on the row.
 | Topic Proposed | **Approve Topic** | The agent writes the script next |
 | Topic Proposed | **Reject Topic** | The topic leaves the pipeline |
 | Script Ready | **Approve Script** | The agent voices the script. ElevenLabs charges from here |
+| Script Ready, when Auto picked the style | **Switch to …** | The video takes the style Auto ranked second, and the agent rewrites the script for it. See [What Auto does](13-visual-styles-and-mascots.md#what-auto-does) |
 | Video Ready | **Approve Video** | The video moves to Video Approved. Nothing is posted |
 | Any of the three above | **Request Revision** | Opens a dialog for your comment. The agent reworks the topic, script or video |
 | Video Approved | **Publish…** | Opens the publish dialog. See [Publishing](06-publishing.md#publishing-a-video) |
@@ -248,11 +267,13 @@ Pickers beside the buttons set how the next stage is done.
 
 | Status | Pickers |
 |---|---|
-| Topic Proposed | Script profile, visual style, mascot, voice, agent, model, effort |
+| Topic Proposed | Script profile, visual style, mascot, voice, agent, model, effort. The video's window also has the formula |
 | Script Ready | Voice, agent, model, effort |
 | Video Ready | Agent, model, effort. These apply when you request a revision |
 
-- The script profile, visual style and mascot are fixed once you approve the topic.
+- The script profile, visual style, mascot and formula are fixed once you approve the topic. At
+  Script Ready you can still switch to the runner-up style or formula, which has the script
+  rewritten (see [Script formulas](03-using-tubematic.md#changing-the-formula-at-script-ready)).
 - You can change the voice at Topic Proposed and at Script Ready. At Script Ready, a voice whose
   model cannot speak the script is greyed out. Each voice is labelled with its model. The **▶**
   button beside the picker plays a sample.

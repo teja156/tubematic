@@ -82,15 +82,30 @@ One row per video, from proposed topic to published file.
 | `status` | TEXT NOT NULL | `TOPIC_PROPOSED` | See [The Pipeline](02-pipeline.md) |
 | `strategy` | TEXT NOT NULL | `manual` | `curriculum`, `trending`, `mining` or `manual` |
 | `producibility_score` | INTEGER NOT NULL | `0` | 1 to 10. The MCP `create_video` tool rejects a score below 5. `POST /videos` does not check it. A video submitted from the dashboard stores `0`, meaning unscored |
+| `angle` | TEXT NOT NULL | `''` | One sentence saying what the video's opening will use, at most 300 characters. `''` means no angle. See [Topic angle](02-pipeline.md#topic-angle) |
+| `angle_kind` | TEXT NOT NULL | `''` | The angle's kind, a key of `tubematic_core.angles.ANGLE_KINDS`, or `''`. Written together with `angle` |
+| `angle_score` | INTEGER NOT NULL | `0` | 0 to 10. `0` means unscored. The MCP `create_video` tool rejects a research proposal whose angle scores below 5 |
 | `script` | TEXT NOT NULL | `''` | The flat script, derived from `script_segments` |
-| `script_segments` | TEXT | | JSON array of `{id, voice, visual}` |
+| `script_segments` | TEXT | | JSON array of `{id, voice, visual}`, each optionally with `beat` |
+| `formula_id` | TEXT NOT NULL | `''` | The [formula](08-scripting-and-voice.md#formulas) the script follows. `''` means none on record |
+| `hook_type` | TEXT NOT NULL | `''` | The hook type of the opening the script uses, or `''` |
+| `hook_alternatives` | TEXT NOT NULL | `''` | JSON array of the three openings the agent drafted, `{type, text, kept, note}`, or `''` |
+| `script_warnings` | TEXT NOT NULL | `''` | JSON array of the [script warnings](08-scripting-and-voice.md#script-warnings) for the stored script, `{id, message}`. `''` when no script write has run the checks |
+| `formula_choice` | TEXT NOT NULL | `''` | The formula a person chose for the video, or `''` for Auto. Seeded from the domain's `default_formula_id`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for a formula switch at `SCRIPT_READY` |
+| `formula_pick` | TEXT NOT NULL | `''` | The formula the script is written in, decided before the script. `''` means not decided. See [How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked) |
+| `formula_runner_up` | TEXT NOT NULL | `''` | The formula that came second, offered as a switch at `SCRIPT_READY`, or `''` |
+| `formula_reason` | TEXT NOT NULL | `''` | One sentence on why the formula was picked |
+| `formula_evidence` | TEXT NOT NULL | `''` | JSON the server writes at the pick: what the install's watch figures said about the picked formula (`formula`, `mode`, `measure`, `standing`, `points`, `videos`, `accounts`, `min_group`). `''` means the pick was made without them or a person chose the formula. See [Learned routing](08-scripting-and-voice.md#learned-routing) |
 | `tts_text` | TEXT NOT NULL | `''` | The text sent to ElevenLabs, after pronunciation substitution |
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
 | `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
-| `visual_style` | TEXT NOT NULL | `auto` | `auto`, `motion_graphics`, `stick`, `illustrated` or `cartoon_3d`. Set while the video is `TOPIC_PROPOSED` and frozen after. See [Visual style columns](#visual-style-columns) |
+| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `terminal_doc`, `under_the_hood` or `case_file_story`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
 | `resolved_visual_style` | TEXT NOT NULL | `''` | The canvas `auto` settled on: `dark` or `light`. Written once by the agent |
-| `resolved_renderer` | TEXT NOT NULL | `''` | The renderer `auto` settled on: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
+| `resolved_renderer` | TEXT NOT NULL | `''` | The renderer an `auto` video uses: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
+| `style_pick` | TEXT NOT NULL | `''` | What Auto picked before the script: a style pack id (then also `visual_style`), `scenes` for the mixed scene system, or `''` when Auto has not decided or a person chose the style |
+| `style_runner_up` | TEXT NOT NULL | `''` | The candidate that came second, offered as a switch at `SCRIPT_READY`, or `''` |
+| `style_reason` | TEXT NOT NULL | `''` | Auto's one-sentence reason for the pick, at most 300 characters |
 | `mascot_id` | TEXT NOT NULL | `''` | The [mascot](#mascots-and-mascot_versions) the video shows. `''` means none. Settable only while the video is `TOPIC_PROPOSED` |
 | `mascot_version` | INTEGER NOT NULL | `0` | The mascot version the video was authored against. `0` means not pinned yet |
 | `agent_id` | TEXT | `NULL` | The [agent](#agents) the video runs under. `NULL` means the default agent at dispatch time |
@@ -112,6 +127,11 @@ One row per video, from proposed topic to published file.
 | `render_started_at` | TEXT NOT NULL | `''` | When the current render was claimed. The scheduler's "time spent so far" for a busy renderer |
 | `render_uploaded_at` | TEXT NOT NULL | `''` | When the render's mp4 arrived. A `RENDERING` row with this set is waiting for the worker's AI review and is not re-queued |
 | `render_claim_id` | TEXT NOT NULL | `''` | The current claim's id: random, new on every claim. See [Render lease columns](#render-lease-columns) |
+| `last_render_renderer_id` | TEXT NOT NULL | `''` | The renderer that made the video's last successful render. `''` means no render is recorded, which is true of every video rendered before 2.2.0. `renderer_id` is the lease and is cleared by the success result, so this is the lasting record |
+| `last_render_renderer_name` | TEXT NOT NULL | `''` | That renderer's name at the time of the render, so a later rename or removal leaves it unchanged |
+| `last_render_on_gpu` | INTEGER NOT NULL | `0` | `1` when that render ran on the GPU |
+| `last_render_seconds` | REAL NOT NULL | `0` | The Remotion run as the renderer measured it, the figure `render_timings` keeps. It excludes fetching the bundle and uploading the mp4. `0` means not reported |
+| `duration_secs` | REAL | NULL | The video's length in seconds, stored from `timeline.json` by the worker's hourly pass, by `POST /analytics/refresh` and by `archive_video` as it deletes the files. NULL means not known. Analytics divides Instagram's watched seconds by it. See [Watch figures](14-publishing.md#watch-figures) |
 | `publish_title` | TEXT NOT NULL | `''` | The title the video is posted with, written by the agent with the script. Separate from `title` |
 | `publish_description` | TEXT NOT NULL | `''` | The post's description, written by the agent with the script |
 | `scheduled_at` | TEXT NOT NULL | `''` | When a scheduled post goes out, UTC. `''` means not scheduled. The worker moves a `SCHEDULED` video to `PUBLISHING` once it has passed. See [Scheduling a post](14-publishing.md#scheduling-a-post) |
@@ -134,12 +154,30 @@ first. Any write to the column changes render order.
 
 ### Visual style columns
 
-The first four `visual_style` values are permission sets: each names which scene vocabularies the
-video may draw from. `cartoon_3d` selects a different renderer (one painted 3D world written as
-code for the video) and needs a working GPU. `auto` leaves the choice to the agent.
+`motion_graphics`, `stick` and `illustrated` are permission sets: each names which scene
+vocabularies the video may draw from. `system_flow` makes the whole video one diagram scene written
+as data, `bean_explainer` one cartoon-bean scene written as data, `whiteboard` one board
+scene written as data, `storybook_atlas` one picture-book scene in chapters written as data,
+`terminal_doc` one typographic scene written as data, `under_the_hood` one scene of annotated
+close-up photographs written as data, and `case_file_story` one scene of painted stills with meters
+and number cards written as data (the last two need an OpenAI key). `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
+video) and needs a working GPU. `auto` leaves the choice to the agent. The values are checked in
+code against the style packs, and the column has no CHECK constraint, so a new style needs no
+migration.
 [Frozen choices](02-pipeline.md#frozen-choices) covers when each may change.
 
-Under `auto` the agent records two decisions, each once:
+Under `auto` the agent first picks a style, at `TOPIC_APPROVED` (`choose_visual_style`). A pack it
+picks becomes `visual_style`, and `style_pick`, `style_runner_up` and `style_reason` record that
+Auto made the choice ([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)). The
+three are cleared when a person changes `visual_style` and when the video goes back to
+`TOPIC_PROPOSED`, where a style Auto picked returns to `auto`. Every new style decision (Auto's
+pick, a switch to the runner-up, a return to the topic of a video on `auto` or with an Auto pick, a
+person changing the style) also clears
+`resolved_renderer` and `resolved_visual_style`: a new script and new scenes follow it, and a
+renderer recorded as `cartoon_3d` for the old scenes would send the new ones to the Cartoon 3D
+renderer.
+
+A video that stays on `auto` (the mixed scene system) records two more decisions, each once:
 
 - `resolved_visual_style` holds the canvas (the background the scenes are designed against). The
   canvas is the one thing `auto` must fix for the life of the video, so a revision round renders on
@@ -159,8 +197,11 @@ alter a video already in progress.
 
 ### Agent columns
 
-`agent_id` is dealt when the video is created. A human may move the video to another live agent, or
-change `agent_model` and `agent_effort`, at a human checkpoint. Nothing else changes them
+The three are set when the video is created. `agent_id` and `agent_model` come from the video's
+domain when it names a live agent, and otherwise `agent_id` is dealt by weight. `agent_effort` is
+the domain's `default_agent_effort` in both cases ([Assignment](07-agent-layer.md#assignment)). A human
+may move the video to another live agent, or change `agent_model` and `agent_effort`, at a human
+checkpoint. Nothing else changes them
 ([Frozen choices](02-pipeline.md#frozen-choices)).
 
 - `agent_id` is not a declared foreign key, and nothing writes it back to `NULL`. The poller skips
@@ -237,6 +278,10 @@ A domain. Every video files into one, whatever its research mode.
 | `default_voice_id` | TEXT NOT NULL | `''` | The voice every new video in the domain starts with, whatever its `strategy`. `''` means the install default |
 | `default_script_profile_id` | TEXT NOT NULL | `''` | The [script profile](08-scripting-and-voice.md#script-profiles) the domain's `curriculum` videos start with. `''` means none |
 | `default_mascot_id` | TEXT NOT NULL | `''` | The mascot new videos start with, whatever their `strategy`. `''` inherits the install's `default_mascot_id` setting. `none` means no mascot |
+| `default_agent_id` | TEXT NOT NULL | `''` | The agent every new video in the domain starts on, whatever its `strategy`. `''` means the video is dealt an agent by weight |
+| `default_agent_model` | TEXT NOT NULL | `''` | One of that agent's models. `''` means the agent's default model |
+| `default_agent_effort` | TEXT NOT NULL | `''` | One of the five effort levels. `''` means the agent's own level |
+| `default_formula_id` | TEXT NOT NULL | `''` | The [formula](08-scripting-and-voice.md#formulas) every new video in the domain is written in, whatever its `strategy`. `''` means Auto: a formula is picked for each video |
 | `topic_cap` | INTEGER NOT NULL | `100` | How many topics the domain may ever hold, 25 to 750. See [Topic cap](02-pipeline.md#topic-cap) |
 | `created_at` | TEXT NOT NULL | | |
 
@@ -244,9 +289,9 @@ The API and the MCP server check `description` only when it changes, so a longer
 stored is kept. The limit is low because `list_projects` returns every domain's description on
 every research run.
 
-The four defaults are copied into the video's own column (`videos.voice_id`,
-`videos.script_profile_id` and so on) when the video is created. Changing one does not reach videos
-already filed.
+The defaults are copied into the video's own columns (`videos.voice_id`,
+`videos.script_profile_id`, `videos.agent_id`, `videos.formula_choice` and so on) when the video is
+created. Changing one does not reach videos already filed.
 
 - `default_visual_style` and `default_script_profile_id` apply to `curriculum` videos only, because
   curriculum is the one research mode that produces a series. A `default_visual_style` of `''` is
@@ -256,6 +301,13 @@ already filed.
 - `default_script_profile_id` is skipped if the profile is deleted or not `READY`, because the
   approving `PATCH` would refuse it.
 - A `default_mascot_id` that names an archived or unapproved mascot reads as none.
+- `default_agent_id` is skipped while that agent is uninstalled, and the video is dealt an agent by
+  weight. `default_agent_model` is skipped when the agent's `models` does not hold it.
+  `default_agent_effort` applies to whichever agent the video gets. See
+  [Assignment](07-agent-layer.md#assignment).
+- `default_formula_id` applies to every new video, like the voice. One that is no formula in the
+  installed version seeds nothing. An experimental formula is allowed here whatever the
+  `auto_experimental_formulas` setting says, because the setting covers what Auto may pick.
 
 The API and the MCP server check `topic_cap`, because SQLite cannot add a `CHECK` to an existing
 table. Every video ever filed counts, archived and rejected included. At the cap the domain is
@@ -352,7 +404,7 @@ failure to record and does not raise, so bookkeeping cannot fail a video.
 | `model` | TEXT NOT NULL, `''` | The model id the call used |
 | `operation` | TEXT NOT NULL | `voice`, `voice_preview`, `ai_review`, `mining`, `image`, `character`, `agent_pipeline`, `agent_research`, `agent_profile` or `agent_mascot`. Readers also accept `publish_metadata` and `agent_unscoped`, which no current writer produces |
 | `units` | TEXT NOT NULL, `'{}'` | JSON counts: `input`, `input_audio`, `input_image`, `output`, `reasoning`, `output_image`, `cache_read`, `cache_write` and `cache_write_1h` tokens, or ElevenLabs `credits` |
-| `raw_usage` | TEXT | The provider's own usage object, verbatim |
+| `raw_usage` | TEXT | The provider's own usage object, verbatim. On ElevenLabs `voice` rows, `{"voice_id": ...}`: the voice the call spoke |
 | `request_id` | TEXT | ElevenLabs' `request-id` response header on voice and preview rows. `NULL` elsewhere |
 | `cost_usd` | REAL | Dollars at API list price, or `NULL` when no rate was known |
 | `cost_basis` | TEXT NOT NULL | `priced` (units × rates), `reported` (the agent CLI's own figure), `credits` (ElevenLabs) or `unpriced` |
@@ -372,7 +424,9 @@ failure to record and does not raise, so bookkeeping cannot fail a video.
 
 `videos` keeps only `voice_id`, and a roster voice's model can be edited after voicing, so the
 ledger is the one record of which model voiced a video. `usage.py::last_voice_model` reads it from
-the video's latest `voice` row. See `voice_info` under
+the video's latest `voice` row. A video spoken in more than one voice is voiced in several calls,
+and each call's `raw_usage` is `{"voice_id": ...}`, so the reader can take the row of the video's
+own voice. A row without the tag is from a one-voice voicing. See `voice_info` under
 [`GET /videos/<id>`](05-http-api.md#get-videosvideo_id).
 
 | `usage_event_videos` column | Type | Meaning |
@@ -471,7 +525,8 @@ The column reference is in [Publishing](14-publishing.md#schema).
   platform" is different from "reported as zero".
 - Each `video_metrics` row is a cumulative reading. Aggregate by taking each publication's latest
   row. Summing rows multiplies a view count by the number of polls.
-- `raw_json` keeps the whole payload, so a column added later can be filled from history.
+- `raw_json` keeps the whole payload. The [watch figures](14-publishing.md#watch-figures) are read
+  from it on request, so they cover every snapshot ever stored.
 
 ## `script_profiles` and `script_profile_transcripts`
 
@@ -685,6 +740,14 @@ only in the pre-migration backup.
 | `0017_resolved_renderer.sql` | Adds `videos.resolved_renderer` and sets it to `dom` on every existing video | No |
 | `0018_mascots.sql` | Creates `mascots` and `mascot_versions`, adds `projects.default_mascot_id`, `videos.mascot_id` and `videos.mascot_version`, and inserts the built-in mascot Tubi | No |
 | `0019_renderers.sql` | Creates `renderers`, `renderer_enrollments`, `render_timings` and `idx_render_timings_renderer`, adds the five lease columns to `videos`, and inserts the built-in renderer's row | No |
+| `0020_style_pick.sql` | Adds `videos.style_pick`, `style_runner_up` and `style_reason`, `''` on every existing video | No |
+| `0021_last_render.sql` | Adds `videos.last_render_renderer_id`, `last_render_renderer_name`, `last_render_on_gpu` and `last_render_seconds`, empty on every existing video | No |
+| `0022_domain_agent.sql` | Adds `projects.default_agent_id`, `default_agent_model` and `default_agent_effort`, `''` on every existing domain | No |
+| `0023_script_record.sql` | Adds `videos.formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, `''` on every existing video | No |
+| `0024_video_duration.sql` | Adds `videos.duration_secs`, NULL on every existing video. The worker fills it for videos that have a publication and whose files exist, and archiving a video stores it | No |
+| `0025_formula_pick.sql` | Adds `videos.formula_choice`, `formula_pick`, `formula_runner_up` and `formula_reason` and `projects.default_formula_id`, `''` on every existing row | No |
+| `0026_topic_angle.sql` | Adds `videos.angle`, `angle_kind` and `angle_score`, empty and 0 on every existing video | No |
+| `0028_formula_evidence.sql` | Adds `videos.formula_evidence`, `''` on every existing video | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so

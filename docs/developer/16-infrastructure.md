@@ -35,7 +35,7 @@ rebuilds all four.
 | Mount (container path) | api | mcp | worker | renderer | dashboard |
 |---|---|---|---|---|---|
 | `output-videos` (`/output_videos`) | read-write | | read-write | | read-only |
-| `jobs-data` (`/jobs`) | read-write | read-write | read-write | read-only | |
+| `jobs-data` (`/jobs`) | read-write | read-write | read-write | read-write | |
 | `db-data` (`/data`) | read-write | read-write | read-write | | |
 | `scenes-generated` (`/app/remotion/src/scenes/generated`) | read-write | read-write | | read-write | |
 | `logs-data` (`/logs`) | read-write | read-write | read-write | read-write | |
@@ -125,7 +125,7 @@ the upload into the library and the worker runs the AI review, so the renderer m
 | Mount, variable or secret | Purpose |
 |---|---|
 | `scenes-generated` | Renders compile the shared generated-scene tree. A remote renderer stages the bundle's copy |
-| `jobs-data`, read-only | The stills server reads a video's job files. Renders use the bundle |
+| `jobs-data` | The stills server reads a video's job files and writes Cartoon 3D stills under `<video_id>/cartoon/`. Renders use the bundle |
 | `logs-data` | Its own JSONL log for the dashboard's Logs page |
 | `/etc/localtime`, `/etc/timezone` | Log timestamps in the host zone |
 | `TUBEMATIC_GATEWAY_URL=https://tubematic-api:4443` | Where the gateway is |
@@ -772,7 +772,8 @@ Tubematic sees. The cases here need knowledge of the internals.
 | Symptom | Cause | Explained in |
 |---|---|---|
 | `validate_job`: `Cannot find module '../installed/…'` | The import depth is wrong. Generated scenes are two levels down, so the path starts `../../` | [Scene Authoring](10-scene-authoring.md) |
-| `validate_job`: a TypeScript error in a file you did not touch | The typecheck covers the whole project, so a broken scene from any video fails every validation | [MCP Server](06-mcp-server.md) |
+| `validate_job`: a TypeScript error in a file you did not touch | The typecheck follows the video's imports, so an error in an installed component or a kit the scenes import is reported | [MCP Server](06-mcp-server.md#validate_job) |
+| `validate_job`: the typecheck ran out of time, or the checker was busy | The machine is loaded, or other agent sessions are validating. Neither is a fault in the video; calling again is safe | [MCP Server](06-mcp-server.md#validate_job) |
 | `validate_job`: a frame count mismatch | `scene-config.totalFrames` disagrees with `timeline.totalFrames`, usually after a re-voice changed the audio length | [MCP Server](06-mcp-server.md) |
 | `validate_job`: an image path does not resolve | Image props must be `/public/<video_id>/images/…`, and the file must exist | [Scene Authoring](10-scene-authoring.md) |
 | `Render failed: missing job file(s)`, video in `REVISION_REQUESTED` | The named file is not in `/jobs/<video_id>/`, usually because that step did not finish | [Refused before anything renders](11-rendering-and-review.md#refused-before-anything-renders) |

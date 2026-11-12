@@ -162,7 +162,25 @@ captions do not blink out between phrases. The hold ends 12 frames after the run
 (`MAX_HOLD_FRAMES`), so no caption stays up through a long pause.
 
 The word being spoken is drawn at full opacity and the rest of its run is dimmed. After a 4-frame
-entry, nothing in the line moves or resizes.
+entry, nothing in the line moves or resizes. A word listed in `emphasis` is drawn in white on a red box
+from the moment it is spoken, with the box scaling in over 8 frames.
+
+The `log` look (`background: "log"`) draws the run as a terminal log instead
+(`Subtitles.tsx::LogStrip`): a `LOG` label and a running clock over a hairline, then the run
+left-aligned behind a `›` prompt, each word typed on as it is spoken, with a block caret after the
+word being spoken. That word is in `accent`; the words already spoken stay, dimmed. Terminal Doc uses
+it.
+
+With `look` set to `"selection"` (`Subtitles.tsx::SelectionLine`), the line builds word by word
+instead, each word appearing 2 frames before its audio (`SELECTION_LEAD`) and blurred for its first
+frame; the latest word is bold and the earlier ones are grey and regular; the line re-centres at once,
+with no tween; and its last frame before the next line is drawn at 60%. An `emphasis` word keeps its
+bold and gets a thin blue selection box: two round handles pop in 2 frames after it appears, then the
+box's top and bottom edges grow from its centre over 3 frames. The Under the Hood style uses this look.
+
+With `look` set to `"fill"`, the whole phrase is on screen from its first frame, with no rise or
+fade. The words still to come are grey, and each turns to the text colour over 2 frames as it is
+spoken and stays there. The Case File Story style uses this look.
 
 ### Fonts
 
@@ -294,13 +312,37 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - `mascot`, if present, belongs to a video that has a mascot and passes the cue rules.
 - A Cartoon 3D scene is the only scene, its beats cover the video, and the scene kind agrees with the
   video's renderer ([Scene Authoring](10-scene-authoring.md#cartoon-3d)).
+- A System Flow video has the one `SystemFlow` scene and its diagram passes the System Flow checks;
+  no other video uses `SystemFlow` ([Scene Authoring](10-scene-authoring.md#system-flow)).
+- A Bean Explainer video has the one `BeanExplainer` scene and its sections and shots pass the Bean
+  Explainer checks; no other video uses `BeanExplainer`
+  ([Scene Authoring](10-scene-authoring.md#bean-explainer)).
+- A Whiteboard video has the one `Whiteboard` scene and its board passes the Whiteboard checks; no
+  other video uses `Whiteboard` ([Scene Authoring](10-scene-authoring.md#whiteboard)).
+- A Storybook Atlas video has the one `StorybookAtlas` scene and its chapters pass the Storybook
+  Atlas checks; no other video uses `StorybookAtlas`
+  ([Scene Authoring](10-scene-authoring.md#storybook-atlas)).
+- A Terminal Doc video has the one `TerminalDoc` scene and its beats and moves pass the Terminal Doc
+  checks; no other video uses `TerminalDoc` ([Scene Authoring](10-scene-authoring.md#terminal-doc)).
+- An Under the Hood video has the one `UnderTheHood` scene and its plates and events pass the Under
+  the Hood checks; no other video uses `UnderTheHood`
+  ([Scene Authoring](10-scene-authoring.md#under-the-hood)).
+- A Case File Story video has the one `CaseFileStory` scene and its meters and beats pass the Case
+  File Story checks; no other video uses `CaseFileStory`
+  ([Scene Authoring](10-scene-authoring.md#case-file-story)).
 
 The tool refuses the write while another session holds the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
 is queued or rendering (`status_mismatch`).
 
-`canvas` is the only default the tool writes into the file. The components apply the other defaults at
-render time, so a changed default reaches every video whose config omits the key.
+`canvas` is the only default the tool writes into most files. A System Flow or Whiteboard config
+with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
+style's look. A Bean Explainer, Storybook Atlas, Under the Hood or Case File Story config gets them under whatever
+`subtitles` keys it sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config
+gets them the same way, with its skin's colours and font over the pack's. An Under the Hood config
+also gets each plate's `aspect`, read from its photograph. The
+components apply the other defaults at render time, so a changed default reaches every video whose
+config omits the key.
 
 [`validate_job`](06-mcp-server.md#validate_job) checks frame-count agreement with the timeline,
 scene-file existence, image paths and types.
@@ -324,11 +366,15 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `fontFamily` | `system-ui, sans-serif` | A non-empty string. See [Fonts](#fonts) |
 | `fontSize` | `62` | 28 to 120 |
 | `color` | `null` | A CSS colour. `null` follows the canvas: white on dark, near-black on light |
-| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate) or `"none"` |
+| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label hugging the phrase, a diamond each side, every word at full strength, a 2-frame fade and no rise), `"none"` or `"log"` (typed into a terminal log strip) |
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
+| `accent` | `null` | A CSS colour for the word being spoken in the `log` look. `null` uses `color` |
+| `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken, or in a selection box under the `selection` look. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
+| `look` | `"plain"` | `"plain"`, `"selection"` (the line builds word by word) or `"fill"` (the whole phrase at once, filling in as it is spoken); see [Grouping words](#grouping-words) |
 
-`server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time. The
+`server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time.
+`server.py::_emphasis_error` checks `emphasis` against the narration's word count. The
 ranges are `SUBTITLE_NUMERIC_RANGES` in `mcp/server.py`. The defaults live only in `Subtitles.tsx`.
 
 ### `mascot`
@@ -343,7 +389,9 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 ## Installed components
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
-`KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`. The other
+`KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
+`SystemFlow`, `BeanExplainer`, `Whiteboard`, `TerminalDoc`, `UnderTheHood` and `CaseFileStory` are
+referenced the same way, by videos of their own style only. The other
 files are wrappers and helpers that a scene imports. The directory's `README.md` is the catalogue the
 agent reads.
 
@@ -409,6 +457,96 @@ per stage), `highlightStage` (default `0`) and `theme`. It fades in linearly ove
 which would put a dark slab on a light canvas. The light theme draws black line art on a transparent
 background. The component exposes two whole palettes and no single colour prop, because a diagram is
 legible only if its background, both node states and both edge states agree.
+
+### `SystemFlow`
+
+`SystemFlow` draws a whole System Flow video from `props.systemFlow`, with its own canvas, headline
+and camera; its helpers are in `systemFlow/`. It loads its fonts (Barlow, Space Grotesk, JetBrains
+Mono) from `public/fonts/` before the first frame, so a renderer with no internet access draws the
+same picture; the default caption font is unaffected. Its contract, layout, camera and the reasons
+it avoids gradients, filters and dashed strokes are in
+[System Flow](10-scene-authoring.md#system-flow).
+
+### `BeanExplainer`
+
+`BeanExplainer` draws a whole Bean Explainer video from `props.beanExplainer`, with its own colour
+field, floor, header, badge and carousel; its helpers, the bean rig and the prop library are in
+`beanExplainer/`. It loads its fonts (Fredoka, Patrick Hand, Instrument Sans) from `public/fonts/`
+before the first frame; the style's captions use Instrument Sans, which this scene loads. The
+`BeanPropSheet` composition renders the cast and the prop library as a model sheet, one page per
+frame, for a person to check a drawing: `npx remotion still src/index.ts BeanPropSheet out.png
+--frame=<page>`. With `--props='{"measure":"<prop>"}'` it draws one prop at every moment of its act
+on white, the picture each prop's box in `contract.ts` is measured from. No video uses it.
+
+A Bean Explainer video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`. The
+scene imports them under a `delayRender` handle, and one that fails to load fails the render.
+`bean-tools/render-props.mjs` renders them for the `render_bean_props` tool on the
+`BeanPropPreview` composition, from a bundle entry it writes per call into `bean-tools/.tmp/`
+(ignored by git) that imports only that video's prop files. The contract and the reason the bean is drawn as a cached bitmap
+are in [Bean Explainer](10-scene-authoring.md#bean-explainer).
+### `Whiteboard`
+
+`Whiteboard` draws a whole Whiteboard video from `props.whiteboard`: one board, a camera over it, a
+floating marker and the closing pull-back. Its helpers are in `whiteboard/`. It loads its
+handwriting font (Kalam) from `public/fonts/` before the first frame, and the style pack's captions
+use the same font. It draws its ink on a canvas; its contract, its layouts and the measurement that
+put the ink on a canvas are in [Whiteboard](10-scene-authoring.md#whiteboard).
+
+### `StorybookAtlas`
+
+`StorybookAtlas` draws a whole Storybook Atlas video from `props.storybookAtlas`, with its own paper,
+frame, plaque, backdrops, guide, people, props and plates; its helpers and the prop library are in
+`storybookAtlas/`. It loads EB Garamond from `public/fonts/` before the first frame; the style's
+caption label uses it too, which this scene loads. The `StorybookSheet` composition renders the guide,
+the people and their knobs, every backdrop as a chapter frame and the prop library (each prop with a
+check that its drawing fits its box), one page per frame, for a person to check a drawing: `npx
+remotion still src/index.ts StorybookSheet out.png --frame=<page>`. `--props='{"group":"<file>"}'`
+shows one prop file's props and `--props='{"chapter":"<backdrop>"}'` one backdrop; `"hold"`,
+`"frames"` and `"drop"` make it a render-cost probe. No video uses it.
+
+A Storybook Atlas video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
+imported the same way as Bean Explainer's. `storybook-tools/render-props.mjs` renders them for the
+`render_storybook_props` tool on the `StorybookPropPreview` composition, from a bundle entry it writes
+per call into `storybook-tools/.tmp/` (ignored by git). `storybook-tools/sync-contract.mjs` rewrites the
+style pack's `extra` and `mcp/tests/fixtures/storybook_atlas_contract.json` from the renderer's code. The
+contract and the reason every drawing is a cached bitmap are in
+[Storybook Atlas](10-scene-authoring.md#storybook-atlas).
+
+### `TerminalDoc`
+
+`TerminalDoc` draws a whole Terminal Doc video from `props.terminalDoc` on a near-black canvas, with
+its ciphertext wall, the CRT glass of its `crt` skin and its moves; its helpers are in
+`terminalDoc/`. It loads its fonts (IBM Plex Mono, and VT323 for the `crt` skin) from `public/fonts/`
+before the first frame; the style's `log` captions use the same faces, which this scene loads.
+
+A Terminal Doc video can also use moves its agent wrote, in `generated/<video_id>/move-*.tsx`. The
+scene imports them under a `delayRender` handle, and one that fails to load fails the render.
+`terminal-tools/render-moves.mjs` renders them for the `preview_terminal_moves` tool on the
+`TerminalMovePreview` composition, from a bundle entry it writes per call into `terminal-tools/.tmp/`
+(ignored by git) that imports only that video's move files. The contract and the reason the wall is
+a canvas are in [Terminal Doc](10-scene-authoring.md#terminal-doc).
+
+### `UnderTheHood`
+
+`UnderTheHood` draws a whole Under the Hood video from `props.underTheHood`: its plates (generated
+photographs, or plain dark panels for a chart), the overlays pinned to them, the counter row, the
+footnote and the presenter; its helpers are in `underTheHood/`. It loads Space Grotesk (400 and 700)
+and JetBrains Mono (500 and 700) from `public/fonts/` before the first frame; the style's captions use
+Space Grotesk, which this scene loads. The presenter is drawn once per look as a bitmap. The
+`PresenterSheet` composition renders the presenter's poses, mouth shapes and blink as a model sheet,
+for a person to check the drawing: `npx remotion still src/index.ts PresenterSheet out.png
+--frame=0`. No video uses it. The contract and the projection are in
+[Under the Hood](10-scene-authoring.md#under-the-hood).
+
+### `CaseFileStory`
+
+`CaseFileStory` draws a whole Case File Story video from `props.caseFile`: its painted stills with
+their push-ins and punch-ins, the meter row, the large meter panel, the count, bars and term cards
+and the closing choice buttons; its helpers are in `caseFileStory/`. It loads Instrument Sans (700)
+and IBM Plex Mono (400 and 700) from `public/fonts/` before the first frame; the style's captions
+use Instrument Sans, which this scene loads. It decodes every still before the first frame, and a
+still that does not load fails the render. The contract and the checks are in
+[Case File Story](10-scene-authoring.md#case-file-story).
 
 ### Figure and panel components
 
@@ -505,15 +643,17 @@ renders sheets on software GL, so building a mascot does not take the GPU from a
 ```bash
 cd renderer/remotion
 npm ci --ignore-scripts     # keep the flag for a local install
-npx tsc --noEmit            # what validate_job runs
+npx tsc --noEmit            # the whole tree; validate_job checks one video's scenes
 npm test                    # vitest
 npm run dev                 # Remotion Studio
 npm run build               # bundle
 ```
 
-`tsconfig.json` has no `include`, only an exclusion for the Remotion config file. `tsc` therefore
-covers everything under `renderer/remotion/`, including the bind-mounted `src/scenes/generated/` tree.
-That is how `validate_job` catches a broken agent-written scene before a render is queued.
+`tsconfig.json` has no `include`, only an exclusion for the Remotion config file. `npx tsc --noEmit`
+therefore covers everything under `renderer/remotion/`, including the bind-mounted
+`src/scenes/generated/` tree. `validate_job` runs `tsc` with a temporary config that extends this one
+and includes only the video's own scenes, which is how it catches a broken agent-written scene before
+a render is queued (see [`validate_job`](06-mcp-server.md#validate_job)).
 `noUnusedLocals` is on. `allowJs` is off, so the `.mjs` drivers are outside the typechecker.
 
 `--ignore-scripts` keeps a local install to a few hundred megabytes, because it skips the download of
@@ -547,3 +687,29 @@ The mascot engine descends from
 license is kept at `public/mascot/kit/LICENSE-ClaudeAnimationBase`). It ships p5.js (LGPL-2.1) and
 p5.brush (MIT), with their licenses beside them in `public/mascot/lib/`. The shipped mascot, Tubi, is
 original. None of the source's own characters are included.
+
+`SystemFlow`'s icons (`systemFlow/icons.ts`) are path data from [Lucide](https://lucide.dev) (ISC
+License; the license is in the file's header). Its fonts in `public/fonts/` are Barlow, Space Grotesk
+and JetBrains Mono, each under the SIL Open Font License 1.1, with the license beside them. Its layout
+uses [@dagrejs/dagre](https://github.com/dagrejs/dagre) (MIT License).
+
+`BeanExplainer`'s bean and props are original drawings. Its fonts in `public/fonts/` are Fredoka,
+Patrick Hand and Instrument Sans, each under the SIL Open Font License 1.1, with the license beside
+them.
+
+`Whiteboard`'s font in `public/fonts/` is Kalam, under the SIL Open Font License 1.1, with the license
+beside it (`OFL-Kalam.txt`). Its shipped doodles (`whiteboard/doodles.json`) are original.
+
+`StorybookAtlas`'s guide, people, props and backdrops are original drawings. Its font in
+`public/fonts/` is EB Garamond, under the SIL Open Font License 1.1, with the license beside it.
+
+`TerminalDoc`'s fonts in `public/fonts/` are IBM Plex Mono and VT323, each under the SIL Open Font
+License 1.1, with the license beside them.
+
+`UnderTheHood`'s presenter is an original drawing. Its fonts are the Space Grotesk and JetBrains Mono
+files in `public/fonts/` (SIL Open Font License 1.1). Its photographs are generated for each video.
+
+`CaseFileStory`'s icons are original drawings, and its fonts are the Instrument Sans and IBM Plex
+Mono files in `public/fonts/` (SIL Open Font License 1.1). Its stills are generated for each video
+from the house lead's sheet, `mcp/case_file_assets/lead.png`, an original character generated for
+this project.

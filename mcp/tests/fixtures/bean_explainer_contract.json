@@ -1,0 +1,139 @@
+{
+ "_about": "Cases both sides of the Bean Explainer contract must answer the same way: mcp/bean_explainer.py (pytest) and renderer/remotion/src/scenes/installed/beanExplainer/contract.ts (vitest).",
+ "wrap_label": [
+  {
+   "text": "fake text",
+   "lines": [
+    "fake text"
+   ]
+  },
+  {
+   "text": "the real one",
+   "lines": [
+    "the real one"
+   ]
+  },
+  {
+   "text": "wrong address!",
+   "lines": [
+    "wrong address!"
+   ]
+  },
+  {
+   "text": "your brain on no sleep at all",
+   "lines": [
+    "your brain on no sleep",
+    "at all"
+   ]
+  },
+  {
+   "text": "a label of exactly twenty",
+   "lines": [
+    "a label of exactly",
+    "twenty"
+   ]
+  },
+  {
+   "text": "supercalifragilisticexpialidocious",
+   "lines": [
+    "supercalifragilisticexpialidocious"
+   ]
+  }
+ ],
+ "prop_box": [
+  {
+   "prop": "phone",
+   "x": 0.72,
+   "y": 0.5,
+   "scale": 1.0,
+   "box": [
+    647.6,
+    740.0,
+    907.6,
+    1180.0
+   ]
+  },
+  {
+   "prop": "browser",
+   "x": 0.62,
+   "y": 0.42,
+   "scale": 0.7,
+   "box": [
+    445.6,
+    753.9,
+    893.6,
+    858.9
+   ]
+  },
+  {
+   "prop": "magnifier",
+   "x": 0.7,
+   "y": 0.42,
+   "scale": 0.55,
+   "box": [
+    684.5,
+    710.15,
+    827.5,
+    902.65
+   ]
+  },
+  {
+   "prop": "bed",
+   "x": 0.5,
+   "y": 0.6,
+   "scale": 1.4,
+   "box": [
+    190.0,
+    893.0,
+    890.0,
+    1411.0
+   ]
+  }
+ ],
+ "label_box": [
+  {
+   "text": "fake text",
+   "x": 0.72,
+   "y": 0.34,
+   "box": [
+    669.6,
+    622.8000000000001,
+    885.6,
+    682.8000000000001
+   ]
+  },
+  {
+   "text": "your brain on no sleep at all",
+   "x": 0.5,
+   "y": 0.3,
+   "box": [
+    276.0,
+    516.0,
+    804.0,
+    636.0
+   ]
+  }
+ ],
+ "bean_box": [
+  {
+   "x": 0.28,
+   "scale": 0.95,
+   "box": [
+    159.90000000000003,
+    559.0,
+    444.90000000000003,
+    1300
+   ]
+  },
+  {
+   "x": 0.7,
+   "scale": 0.8,
+   "box": [
+    636.0,
+    676.0,
+    876.0,
+    1300
+   ]
+  }
+ ]
+}

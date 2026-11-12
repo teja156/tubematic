@@ -1,0 +1,103 @@
+{
+  "id": "result-then-rewind",
+  "order": 120,
+  "family": "story",
+  "experimental": true,
+  "label": "Result First, Then Rewind",
+  "line": "Open on the end state, ask what happened, name the culprit or the choice early, and prove it with pairs of numbers.",
+  "best_for": [
+    "the rise or the fall of a product, a company or a technology",
+    "one decision that made or lost a fortune"
+  ],
+  "also_for": [
+    "the origin of a familiar product, when the origin is a surprise"
+  ],
+  "avoid_for": [
+    "a history with no single culprit or choice",
+    "a story with no figures to set side by side",
+    "a decline still unfolding this week: the end state is not settled"
+  ],
+  "signals": [
+    "the end state is known and striking",
+    "one culprit or one choice explains it",
+    "dated facts and a proof number exist",
+    "a before and an after can be set side by side"
+  ],
+  "styles": [
+    "whiteboard",
+    "system_flow"
+  ],
+  "words": [
+    150,
+    230
+  ],
+  "beats": [
+    {
+      "name": "End state",
+      "from": 0,
+      "to": 15,
+      "job": "The striking result first: the fall as a number, or the two extremes of one life."
+    },
+    {
+      "name": "What happened",
+      "from": 15,
+      "to": 25,
+      "job": "The question, then the culprit or the choice, named.",
+      "role": "reopen"
+    },
+    {
+      "name": "Rewind",
+      "from": 25,
+      "to": 55,
+      "job": "Two or three dated facts, in order."
+    },
+    {
+      "name": "Proof number",
+      "from": 55,
+      "to": 75,
+      "job": "One figure against a benchmark the viewer knows.",
+      "role": "reopen"
+    },
+    {
+      "name": "Consequence pair",
+      "from": 75,
+      "to": 90,
+      "job": "From A to B: the before and the after as numbers.",
+      "role": "payoff"
+    },
+    {
+      "name": "Verdict",
+      "from": 90,
+      "to": 100,
+      "job": "One line that judges the choice."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "result",
+      "shape": "Remember [product]? [What it was]. [Its key figure] is down [N percent]."
+    },
+    {
+      "type": "frame",
+      "shape": "[Person] was [one extreme] in [year] and [the other extreme] by [year]."
+    },
+    {
+      "type": "question",
+      "shape": "How does [a company that had everything] end up [end state]?"
+    },
+    {
+      "type": "claim",
+      "shape": "[Familiar product] exists because of [one surprising fact]."
+    }
+  ],
+  "holds": "The viewer knows how it ends and stays for the cause. Naming the culprit early turns the middle into evidence, and every fact carries a date or a number.",
+  "ending": "The before-and-after pair, or one line that judges the choice. No lesson.",
+  "first_frame": "The end state already reached: the fall as a line chart arriving at its low, or the two extremes side by side.",
+  "pitfalls": [
+    "Telling it in date order from the beginning",
+    "No named person, choice or culprit",
+    "Figures with nothing to compare them to",
+    "An invented figure: every number has a source"
+  ],
+  "template": "Remember [X]? [What it meant]. [Its figure] is down [N percent]. So what happened? [One culprit or one choice]. In [year], [fact]. In [year], [fact]. [Proof number], more than [benchmark]. That turned [A] into [B] in [time]. [Verdict]."
+}

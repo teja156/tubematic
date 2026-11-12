@@ -1,0 +1,296 @@
+{
+ "totalFrames": 536,
+ "fps": 30,
+ "canvas": "dark",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "SystemFlow",
+   "startFrame": 0,
+   "durationInFrames": 536,
+   "props": {
+    "systemFlow": {
+     "boards": [
+      {
+       "startFrame": 0,
+       "pill": "Step 1 \u00b7 the request",
+       "headline": "What happens when you open a site",
+       "nodes": [
+        {
+         "id": "browser",
+         "label": "Browser",
+         "icon": "browser"
+        },
+        {
+         "id": "dns",
+         "label": "DNS Resolver",
+         "icon": "dns"
+        },
+        {
+         "id": "lb",
+         "label": "Load Balancer",
+         "icon": "load_balancer"
+        },
+        {
+         "id": "web1",
+         "label": "Web Server 1",
+         "icon": "server"
+        },
+        {
+         "id": "web2",
+         "label": "Web Server 2",
+         "icon": "server"
+        }
+       ],
+       "edges": [
+        {
+         "from": "browser",
+         "to": "dns"
+        },
+        {
+         "from": "browser",
+         "to": "lb"
+        },
+        {
+         "from": "lb",
+         "to": "web1"
+        },
+        {
+         "from": "lb",
+         "to": "web2"
+        }
+       ],
+       "events": [
+        {
+         "type": "node",
+         "node": "browser",
+         "at": 0
+        },
+        {
+         "type": "edge",
+         "edge": "browser>dns",
+         "at": 30
+        },
+        {
+         "type": "node",
+         "node": "dns",
+         "at": 40
+        },
+        {
+         "type": "packet",
+         "edge": "browser>dns",
+         "at": 49
+        },
+        {
+         "type": "chip",
+         "edge": "browser>dns",
+         "at": 67,
+         "text": "example.com"
+        },
+        {
+         "type": "focus",
+         "node": "dns",
+         "at": 67
+        },
+        {
+         "type": "edge",
+         "edge": "browser>lb",
+         "at": 110
+        },
+        {
+         "type": "node",
+         "node": "lb",
+         "at": 117
+        },
+        {
+         "type": "focus",
+         "node": "lb",
+         "at": 152
+        },
+        {
+         "type": "packet",
+         "edge": "browser>lb",
+         "at": 152
+        },
+        {
+         "type": "edge",
+         "edge": "lb>web1",
+         "at": 164
+        },
+        {
+         "type": "node",
+         "node": "web1",
+         "at": 181
+        },
+        {
+         "type": "edge",
+         "edge": "lb>web2",
+         "at": 183
+        },
+        {
+         "type": "node",
+         "node": "web2",
+         "at": 190
+        },
+        {
+         "type": "packet",
+         "edge": "lb>web2",
+         "at": 221,
+         "tone": "ok"
+        },
+        {
+         "type": "chip",
+         "edge": "lb>web2",
+         "at": 253,
+         "text": "200 OK",
+         "tone": "ok"
+        },
+        {
+         "type": "packet",
+         "edge": "lb>web2",
+         "at": 263,
+         "reverse": true,
+         "tone": "ok"
+        },
+        {
+         "type": "packet",
+         "edge": "browser>lb",
+         "at": 275,
+         "reverse": true,
+         "tone": "ok"
+        },
+        {
+         "type": "focus",
+         "node": "browser",
+         "at": 303
+        }
+       ]
+      },
+      {
+       "startFrame": 326,
+       "pill": "Step 2 \u00b7 the defence",
+       "headline": "Where an attack gets stopped",
+       "nodes": [
+        {
+         "id": "attacker",
+         "label": "Attacker",
+         "icon": "attacker"
+        },
+        {
+         "id": "user",
+         "label": "User",
+         "icon": "user"
+        },
+        {
+         "id": "firewall",
+         "label": "Firewall",
+         "icon": "firewall"
+        },
+        {
+         "id": "server",
+         "label": "Web Server",
+         "icon": "server"
+        }
+       ],
+       "edges": [
+        {
+         "from": "attacker",
+         "to": "firewall"
+        },
+        {
+         "from": "user",
+         "to": "firewall"
+        },
+        {
+         "from": "firewall",
+         "to": "server"
+        }
+       ],
+       "events": [
+        {
+         "type": "node",
+         "node": "attacker",
+         "at": 326
+        },
+        {
+         "type": "node",
+         "node": "user",
+         "at": 360
+        },
+        {
+         "type": "edge",
+         "edge": "attacker>firewall",
+         "at": 370
+        },
+        {
+         "type": "edge",
+         "edge": "user>firewall",
+         "at": 382
+        },
+        {
+         "type": "node",
+         "node": "firewall",
+         "at": 391
+        },
+        {
+         "type": "packet",
+         "edge": "attacker>firewall",
+         "at": 393,
+         "tone": "fault"
+        },
+        {
+         "type": "fault",
+         "node": "attacker",
+         "at": 406
+        },
+        {
+         "type": "chip",
+         "edge": "attacker>firewall",
+         "at": 406,
+         "text": "BLOCKED",
+         "tone": "fault"
+        },
+        {
+         "type": "focus",
+         "node": "firewall",
+         "at": 419
+        },
+        {
+         "type": "edge",
+         "edge": "firewall>server",
+         "at": 462
+        },
+        {
+         "type": "packet",
+         "edge": "user>firewall",
+         "at": 450,
+         "tone": "ok"
+        },
+        {
+         "type": "node",
+         "node": "server",
+         "at": 476
+        },
+        {
+         "type": "packet",
+         "edge": "firewall>server",
+         "at": 480,
+         "tone": "ok"
+        },
+        {
+         "type": "chip",
+         "edge": "firewall>server",
+         "at": 499,
+         "text": "clean traffic",
+         "tone": "ok"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "sfx": []
+}

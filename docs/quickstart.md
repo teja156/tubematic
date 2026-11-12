@@ -34,11 +34,11 @@ usage. The dashboard shows what each video cost.
 Download the newest release, check it, and run the installer:
 
 ```bash
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/tubematic-v2.0.0.tar.gz
-curl -LO https://github.com/teja156/tubematic/releases/download/v2.0.0/CHECKSUMS.txt
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/tubematic-v2.1.1.tar.gz
+curl -LO https://github.com/teja156/tubematic/releases/download/v2.1.1/CHECKSUMS.txt
 sha256sum -c CHECKSUMS.txt --ignore-missing
-tar xzf tubematic-v2.0.0.tar.gz
-cd tubematic-v2.0.0
+tar xzf tubematic-v2.1.1.tar.gz
+cd tubematic-v2.1.1
 python3 onboard.py
 ```
 
@@ -72,8 +72,8 @@ agent's default.
 
 1. Open `http://localhost:3000` and sign in with the password you set.
 2. Open **New Video**.
-3. Enter a **Title** of up to 70 characters, and a **Topic**: what the video is about, the angle,
-   and anything it must cover.
+3. Enter a **Title** of up to 70 characters, and a **Topic**: what the video is about and
+   anything it must cover. **Angle** is optional; the agent finds one when you leave it empty.
 4. Leave **Automatically approve topic** ticked and press **Submit video**.
 
 ![The New Video page with a title and a topic filled in, and Automatically approve topic ticked](images/new-video.png)
@@ -117,3 +117,5 @@ script or the video and brings it back.
 - [Using Tubematic](user-guide/03-using-tubematic.md): let Tubematic find topics for you.
 - [Visual Styles and Mascots](user-guide/13-visual-styles-and-mascots.md): choose how videos look.
 - [Publishing](user-guide/06-publishing.md): post videos to YouTube, Instagram, TikTok and Facebook.
+- [GPU Rendering](user-guide/10-gpu-rendering.md): render about three times faster on an NVIDIA GPU.
+- [Remote Renderers](user-guide/11-remote-renderers.md): let other machines render for this install.

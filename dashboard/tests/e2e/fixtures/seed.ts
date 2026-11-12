@@ -129,6 +129,9 @@ export interface ProjectFields {
   is_curriculum_seed?: boolean;
   status?: string;
   default_voice_id?: string;
+  default_agent_id?: string;
+  default_agent_model?: string;
+  default_agent_effort?: string;
   topic_cap?: number;
 }
 

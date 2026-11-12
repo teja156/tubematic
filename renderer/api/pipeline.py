@@ -47,9 +47,11 @@ import transcripts
 # we do not have to is the cheapest way to keep that question closed.
 try:
     from tubematic_core import logging as tlog
+    from tubematic_core import angles as tangles
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
+    from tubematic_core import formulas as tformulas
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -57,13 +59,16 @@ try:
     from tubematic_core import usage as tusage
     from tubematic_core import version as tversion
     from tubematic_core import voice_models as tvoice
+    from tubematic_core import watch as twatch
     from tubematic_core import youtube as tyoutube
 except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
     from tubematic_core import logging as tlog
+    from tubematic_core import angles as tangles
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
+    from tubematic_core import formulas as tformulas
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -71,6 +76,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     from tubematic_core import usage as tusage
     from tubematic_core import version as tversion
     from tubematic_core import voice_models as tvoice
+    from tubematic_core import watch as twatch
     from tubematic_core import youtube as tyoutube
 
 SETTINGS_SPEC = {
@@ -135,6 +141,16 @@ SETTINGS_SPEC = {
     # switch, not a tuning knob — the audit's own time budget is a constant in
     # mcp/text_audit.py, since at ~0.3% of a render there is nothing to tune.
     "text_layout_audit_enabled": ("bool",   "true"),
+    # Whether Auto may pick a script formula marked experimental (TMDEV-213).
+    # Off by default: those formulas ship as data and are used only when a
+    # person chooses one (a domain's default, or a video's own formula). The
+    # MCP server reads it per pick, so it applies to the next video.
+    "auto_experimental_formulas": ("bool", "false"),
+    # Whether formula routing reads the install's own watch figures (TMDEV-217,
+    # tubematic_core.watch). On by default: it changes nothing until a domain
+    # has enough published videos with figures, and publishing off reads as
+    # off. The MCP server reads it per pick.
+    "learned_routing": ("bool", "true"),
     # The "Made with tubematic.ai" mark burned into every render (TMDEV-141).
     # A setting, and deliberately NOT a scene-config.json key: the agent writes
     # that file and has no tool that writes settings, so only a human can
@@ -443,48 +459,31 @@ AGENT_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 DEFAULT_AGENT_EFFORT = "high"
 
 
-# ── Visual register (TMDEV-101) ──────────────────────────────────────────────
-# A video's visual_style is a PERMISSION SET, not a look. It says which
-# vocabularies the agent may draw from, and which canvas the video is painted
-# on. The per-beat treatment is still derived from each beat's subject.
-#
-#   motion_graphics — dark canvas. Vector animation and full-bleed generated
-#                     imagery. No figures.
-#   stick           — light canvas. HAND-DRAWN StickFigure line art, line-art
-#                     diagrams, imagery contained in panels.
-#   illustrated     — characters are GENERATED illustrated assets
-#                     (generate_character) rather than line art, held
-#                     consistent across scenes. It does NOT fix a drawing
-#                     style: the agent picks one from the topic — playful
-#                     stick-ish figures, or serious rendered illustration —
-#                     and holds it video-wide. It does not fix the canvas
-#                     either; the agent resolves that too.
-#   auto            — no restriction at all. The agent picks the canvas and
-#                     may use any vocabulary.
-#
-# Only motion_graphics and stick fix a canvas. illustrated and auto leave it to
-# the agent, which is why CANVAS_BY_STYLE is a partial map and membership in it
-# — not equality with "auto" — is the test for "has this been settled yet".
-#
-# The two named options are restrictions; auto is the absence of one. That is
-# why auto can produce a video neither named option could: white-line-art
-# figures for the role beats of an otherwise image-led, dark-canvas video.
-# Keep in sync: the other copy of this block, and dashboard/lib/types.ts.
-VISUAL_STYLES = ("auto", "motion_graphics", "stick", "illustrated", "cartoon_3d")
-DEFAULT_VISUAL_STYLE = "auto"
-
-# "illustrated" draws its characters with OpenAI, the only provider with a
-# transparent-background option, so without a key it cannot be produced at
-# all. The key used to be consulted only by generate_character, after voicing,
-# on a video whose style was already frozen — so the refusal now happens where
-# the style is chosen. A key stored but later revoked is still caught only at
-# use: probing the provider on every write would be worse than the problem.
-# Keep in sync: the other copy of this block (pinned by an agreement test).
-ILLUSTRATED_NEEDS_OPENAI_KEY = (
-    "OpenAI API key not set. The illustrated visual style needs it — Gemini has no "
-    "transparency option, so there is no fallback. Add an OpenAI key on the dashboard "
-    "Settings page, or choose another visual style."
+# ── Visual styles (TMDEV-101; style packs since TMDEV-196) ──────────────────
+# The style list and every per-style rule (canvas, what a style may contain,
+# what it needs, the refusal messages) live in one data file per style under
+# tubematic_core/style_packs/, read by tubematic_core.visual_styles. The names
+# below are the ones this module has always used; the MCP server and the API
+# import the same objects, so there is no second copy to keep in step.
+from tubematic_core.visual_styles import (  # noqa: E402
+    CANVAS_BY_STYLE,
+    CARTOON3D_GPU_UNKNOWN,
+    CARTOON3D_NEEDS_GPU,
+    DEFAULT_CANVAS,
+    DEFAULT_VISUAL_STYLE,
+    ILLUSTRATED_NEEDS_OPENAI_KEY,
+    RENDERERS,
+    RESOLVED_VISUAL_STYLES,
+    VALID_CANVASES,
+    VISUAL_STYLES,
+    cartoon_3d_gpu_error,
+    characters_allowed,
+    effective_canvas,
+    figures_allowed,
+    gpu_probe_status,
+    line_art_allowed,
 )
+from tubematic_core import visual_styles as tvs  # noqa: E402
 
 # Mining is the one strategy that needs a key: it sends YouTube URLs to Gemini.
 # With no Gemini key it is off — derived at every read, never stored — so a
@@ -495,151 +494,6 @@ MINING_NEEDS_GEMINI_KEY = (
     "cannot be turned on without one. Add a Gemini key on the dashboard Settings page "
     "(API Keys), or leave mining off."
 )
-
-# The canvas is the one property that cannot vary between the scenes of one
-# video — alternating light and dark frames flashes, and a viewer reads that as
-# a broken render rather than a style. It is therefore a single top-level key
-# in scene-config.json, and the renderer paints it under every scene.
-#
-# The figure vocabulary is deliberately NOT tied to it. A stick figure is line
-# art; it is black on light and white on dark, same geometry either way. Those
-# two things were coupled in the first cut of this feature, and the coupling
-# was what forced an entire image-led video onto a white canvas because one
-# beat happened to be about "an attacker".
-# Keep in sync: the other copy of this block and
-# renderer/remotion/src/CompositionBuilder.tsx.
-VALID_CANVASES = ("dark", "light")
-# cartoon_3d fills the frame, so its canvas is never visible, but the field must
-# hold a legal value: dark, the default, so an uncovered pixel cannot flash white.
-CANVAS_BY_STYLE = {"motion_graphics": "dark", "stick": "light", "cartoon_3d": "dark"}
-DEFAULT_CANVAS = "dark"
-
-# What videos.resolved_visual_style holds: the canvas "auto" settled on, and
-# nothing else. It is named for the column rather than the concept; what it
-# stores is a canvas, because the canvas is the only thing "auto" must fix for
-# the life of the video. Everything else stays free per beat.
-RESOLVED_VISUAL_STYLES = VALID_CANVASES
-
-# Cartoon 3D renders on the GPU only. POLICY, not impossibility: software WebGL
-# (swangle) renders the style, at about 1.1 s a frame, so a 90-second Short takes
-# ~50 minutes and a long one over two hours. With the GPU onboarding step, the
-# dashboard panel and its Test button the refusal names something a person can
-# do. Gate on the "working" status, never on "configured": a configured GPU
-# whose renders fall back to the CPU is the case the gate must catch. The status
-# is tubematic_core.renderers.gpu_status's aggregate over every renderer (each
-# one's probe arrives through the render gateway), the same rule the gateway
-# uses to decide which renderer may take a GPU render.
-# Keep in sync: the other copy of this block (pinned by an agreement test).
-CARTOON3D_NEEDS_GPU = (
-    "Cartoon 3D renders on the GPU only (on the CPU a 90-second Short takes about 50 minutes). "
-    "No renderer has a working GPU: configure one with `python onboard.py --step gpu` or add a GPU "
-    "renderer, test it under Settings → Rendering → Renderers on the dashboard, or choose another visual style."
-)
-CARTOON3D_GPU_UNKNOWN = (
-    "Cartoon 3D renders on the GPU only, and no renderer has tested its GPU yet (each does so "
-    "when it starts, and on Test GPU under Settings → Rendering → Renderers). Test it first, then choose "
-    "the style."
-)
-# What videos.resolved_renderer holds: which renderer "auto" settled on, written
-# once by the agent before any scene is authored. The DOM styles need no such
-# record (per-beat freedom is the design); the renderer is the one thing a
-# revision round must not flip, since flipping it discards every scene.
-RENDERERS = ("dom", "cartoon_3d")
-
-
-def gpu_probe_status(raw_probe) -> str:
-    """One renderer's GPU state from its stored probe (the JSON in
-    renderers.gpu_probe, as the renderer reported it through the render
-    gateway): "unknown" (never probed), "not_configured" (no GPU override),
-    "working" (configured and the last probe passed) or "not_usable"
-    (configured, but renders fall back to the CPU). The gates read the
-    install-wide aggregate, tubematic_core.renderers.gpu_status, which uses
-    these same values.
-    Keep in sync: the other copy (pinned by an agreement test)."""
-    import json as _json_
-    try:
-        probe = _json_.loads(raw_probe or "null")
-    except ValueError:
-        probe = None
-    if not isinstance(probe, dict):
-        return "unknown"
-    if not probe.get("configured"):
-        return "not_configured"
-    return "working" if probe.get("ok") else "not_usable"
-
-
-def cartoon_3d_gpu_error(visual_style: str, gpu_status: str) -> str:
-    """Why `visual_style` may not be chosen on a renderer whose GPU is in
-    `gpu_status`, or "". Only "cartoon_3d" is gated and only "working" passes;
-    "unknown" gets its own message, since its fix is a test, not an install.
-    Keep in sync: the other copy (pinned by an agreement test)."""
-    if (visual_style or "").strip() != "cartoon_3d":
-        return ""
-    if gpu_status == "working":
-        return ""
-    return CARTOON3D_GPU_UNKNOWN if gpu_status == "unknown" else CARTOON3D_NEEDS_GPU
-
-
-def effective_canvas(visual_style: str, resolved_visual_style: str) -> str:
-    """The canvas a video is painted on, or "" if "auto" has not settled yet.
-
-    A forced choice wins outright and the recorded resolution is ignored, so a
-    video switched off "auto" cannot be held to an older automatic decision.
-    Under "auto" the answer is whatever the agent recorded — and "" until it
-    has recorded anything, which callers must handle rather than guessing: that
-    is exactly the window in which a scene config may legitimately arrive
-    carrying the agent's choice.
-    Keep in sync: the other copy (pinned by an agreement test).
-    """
-    chosen = (visual_style or "").strip()
-    if chosen in CANVAS_BY_STYLE:
-        return CANVAS_BY_STYLE[chosen]
-    return (resolved_visual_style or "").strip()
-
-
-def figures_allowed(visual_style: str) -> bool:
-    """Whether this video may contain character figures at all, of either kind.
-
-    False only under a forced motion_graphics: that option's whole purpose is
-    to exclude them. "auto" permits everything, and both stick options are
-    built on them.
-    Keep in sync: the other copy (pinned by an agreement test).
-    """
-    return (visual_style or "").strip() != "motion_graphics"
-
-
-def line_art_allowed(visual_style: str) -> bool:
-    """Whether this video's figures may be simple hand-drawn line art.
-
-    Narrower than figures_allowed, and the difference is the whole point:
-    "illustrated" HAS figures but they are generated character artwork, and
-    hand-authored line art is exactly what that tier excludes. Telling the AI
-    review that line art is intended on an illustrated video would license the
-    one mistake the register forbids.
-
-    True under "stick" (line art is the register) and "auto" (unrestricted, so
-    a beat may legitimately reach for it). False under "illustrated" and under
-    "motion_graphics", which has no figures at all.
-    Keep in sync: the other copy (pinned by an agreement test).
-    """
-    return (visual_style or "").strip() in ("stick", "auto")
-
-
-def characters_allowed(visual_style: str) -> bool:
-    """Whether GENERATED character art (generate_character) is permitted.
-
-    A narrower question than figures_allowed. Plain "stick" means hand-drawn
-    StickFigure line art — that is what distinguishes it from "illustrated",
-    and letting it reach for generated art would erase the difference the human
-    chose between them. "auto" permits everything, by definition.
-
-    The two must not be mixed inside one video: a line-art figure standing next
-    to a rendered, shaded one reads as an asset that failed to load rather than
-    as a style. That is prose in the skill; this is the tool-level guard.
-    Keep in sync: the other copy (pinned by an agreement test).
-    """
-    return (visual_style or "").strip() in ("auto", "illustrated")
-
 
 # ── Agents (TMDEV-90) ────────────────────────────────────────────────────────
 # Rows are written only by the host-side installer (`python onboard.py
@@ -797,6 +651,61 @@ def _agent_id_error(con, stored_agent_id, agent_id: str):
     if row["archived_at"]:
         return (f"agent_id {agent_id!r} is uninstalled, so no work can be handed to it. Pick a "
                 f"live agent, or re-install it with: python onboard.py --install-agent {agent_id}")
+    return None
+
+
+def _domain_agent(con, project_id):
+    """The (agent_id, agent_model, agent_effort) a new video filed into this
+    domain starts with (TMDEV-207).
+
+    A domain can name an agent (projects.default_agent_id). While that agent is
+    live the video starts on it, with the domain's model if the agent still
+    offers it, and takes no card from the deck, like a human's override. With
+    no domain agent, or one uninstalled since, the video is dealt by weight as
+    before, and the domain's model is dropped: it belonged to the other agent's
+    list. The effort is a closed set that every agent takes, so it rides along
+    either way. Nothing here refuses: seeding never fails a video.
+
+    Call it where _pick_agent_id was called, inside the inserting transaction.
+    Keep in sync: mcp/server.py's _domain_agent (pinned by an agreement test).
+    """
+    row = con.execute(
+        "SELECT default_agent_id, default_agent_model, default_agent_effort "
+        "FROM projects WHERE id = ?", (project_id,)).fetchone() if project_id else None
+    wanted, model, effort = (row[0] or "", row[1] or "", row[2] or "") if row else ("", "", "")
+    if effort not in AGENT_EFFORTS:
+        effort = ""
+    if wanted:
+        agent = con.execute(
+            "SELECT models FROM agents WHERE id = ? AND archived_at IS NULL",
+            (wanted,)).fetchone()
+        if agent is not None:
+            return wanted, (model if model in _agent_models(agent[0]) else ""), effort
+    return _pick_agent_id(con), "", effort
+
+
+def _domain_agent_error(con, agent_id: str, model: str, stored_agent_id: str = ""):
+    """Why a domain cannot take this agent and model as its default, or None.
+
+    A new agent must be live, and a model must be one of the agent's own; a
+    model with no agent has no list to belong to. The domain's stored agent may
+    be named again even when it has since been uninstalled, as a video's may:
+    that is how a model it no longer offers gets cleared. Callers run this only
+    when the pair changes, so a stored pair that went stale never blocks
+    another edit to the domain.
+    Keep in sync: mcp/server.py's _domain_agent_error (agreement test).
+    """
+    if not agent_id:
+        if model:
+            return ("default_agent_model needs a default_agent_id: a model belongs to one "
+                    "agent's list")
+        return None
+    err = (_agent_id_error(con, stored_agent_id, agent_id)
+           or _agent_model_error(con, agent_id, model))
+    if err:
+        return (err.replace("agent_model", "default_agent_model")
+                .replace("agent_id", "default_agent_id")
+                .replace("This video's agent", "The domain's agent"))
     return None
 
 
@@ -1069,16 +978,13 @@ def _coerce_setting(key: str, raw) -> tuple:
             raise ValueError(f"{key} allows at most {MAX_VOICES} voices, got {len(parsed)}")
         names, ids = set(), set()
         for entry in parsed:
-            if not isinstance(entry, dict) or set(entry) != {"name", "voice_id", "model_id"}:
-                raise ValueError(f"Each entry in {key} must be {{name, voice_id, model_id}}, "
-                                 f"got {entry!r}")
+            # Shape, model and speed (TMDEV-216): the rules every roster
+            # reader shares. A speed on a model that ignores it is refused
+            # here, so a stored speed always changes the audio.
+            err = tvoice.roster_entry_error(entry)
+            if err:
+                raise ValueError(f"{key}: {err}")
             name, voice_id = entry["name"], entry["voice_id"]
-            # Type first: a list or dict is unhashable, and a TypeError here
-            # would escape both this 400 and _read_all_settings' fallback.
-            if not isinstance(entry["model_id"], str) \
-                    or entry["model_id"] not in DICTIONARY_COMPATIBLE_MODELS:
-                raise ValueError(f"Voice {name!r} in {key} has model_id {entry['model_id']!r}; "
-                                 f"it must be one of {sorted(DICTIONARY_COMPATIBLE_MODELS)}")
             if not isinstance(name, str) or not name.strip():
                 raise ValueError(f"Each voice name in {key} must be a non-empty string")
             if not isinstance(voice_id, str) or not voice_id.strip():
@@ -1089,6 +995,9 @@ def _coerce_setting(key: str, raw) -> tuple:
                 raise ValueError(f"Duplicate voice_id {voice_id!r} in {key}")
             names.add(name)
             ids.add(voice_id)
+        # A speed of 1.0 is never stored: a roster nobody gave a speed keeps
+        # the exact shape older versions read, so a rollback still finds it.
+        parsed = [tvoice.normalize_roster_entry(e) for e in parsed]
         return (parsed, _json.dumps(parsed))
 
     if typ == "lexicon":
@@ -1223,6 +1132,56 @@ def _video_duration_secs(video_id: str):
     if isinstance(frames, (int, float)) and frames > 0 and fps:
         return float(frames) / float(fps)
     return None
+
+
+# No video here is a day long. A length past this is a damaged timeline.
+MAX_STORED_DURATION_SECS = 86400
+
+
+def _readable_duration_secs(video_id: str):
+    """_video_duration_secs, or None for a timeline it cannot make sense of
+    (an fps that is not a number, say). For callers that must carry on."""
+    try:
+        duration = _video_duration_secs(video_id)
+    except Exception:  # noqa: BLE001 - any shape of bad file means "not known"
+        # Debug, like a length out of range below: the video is asked again on
+        # every pass until it is archived, and a warning an hour says nothing new.
+        log.debug("could not read the length of %s from its timeline", video_id,
+                  extra={"video_id": video_id})
+        return None
+    # The value is stored once and returned with every video. 1e999 in a
+    # damaged file parses to infinity, which no browser can read back as JSON.
+    if duration is None or not 0 < duration <= MAX_STORED_DURATION_SECS:
+        return None
+    return duration
+
+
+def fill_video_durations(db_path: str) -> int:
+    """Store the length of every published video that has none yet and still
+    has its files (TMDEV-212). Returns how many were stored.
+
+    Analytics needs the length for as long as the post exists, and shows it
+    from the first reading, so the worker calls this hourly. archive_video
+    stores it too, at the moment the files go, for a video this never reached.
+    Archived videos are skipped: their files are gone, and asking again every
+    hour would only fail again. A video with no readable timeline stays NULL
+    and is asked again on the next pass, and one bad file does not stop the
+    others.
+    """
+    with _db(db_path) as con:
+        ids = [r["id"] for r in con.execute(
+            "SELECT id FROM videos v WHERE duration_secs IS NULL AND archived_at IS NULL"
+            " AND EXISTS (SELECT 1 FROM video_publications p WHERE p.video_id = v.id)")]
+    stored = 0
+    for video_id in ids:
+        duration = _readable_duration_secs(video_id)
+        if duration is None:
+            continue
+        with _db(db_path) as con:
+            stored += con.execute(
+                "UPDATE videos SET duration_secs = ? WHERE id = ? AND duration_secs IS NULL",
+                (round(duration, 3), video_id)).rowcount
+    return stored
 
 
 def _output_path(project_id: str, video_id: str):
@@ -1367,25 +1326,30 @@ def _mascot_conflict(con, mascot_id: str, what: str):
     return jsonify({"error": f"This mascot changed while {what}; reload."}), 409
 
 
-def _cartoon_mascot_error(mascot_id: str) -> str:
-    """The refusal for a Cartoon 3D video that would hold `mascot_id`."""
-    return f"This video is Cartoon 3D and holds the mascot {mascot_id!r}. {MASCOT_NOT_ON_CARTOON_3D}"
+def _cartoon_mascot_error(mascot_id: str, style: str = "cartoon_3d") -> str:
+    """The refusal for a video of a style that takes no mascot (Cartoon 3D by
+    default, or Under the Hood) that would hold `mascot_id`."""
+    if (style or "").strip() == "cartoon_3d":
+        return f"This video is Cartoon 3D and holds the mascot {mascot_id!r}. {MASCOT_NOT_ON_CARTOON_3D}"
+    return (f"This video's style is {tvs.route_label(style)} and it holds the mascot {mascot_id!r}. "
+            f"{tmascots.no_mascot_error(style)}")
 
 
-def _approval_pair_error(con, cartoon: bool, mascot_id) -> str:
-    """Why a topic that is (or would be) Cartoon 3D when `cartoon`, holding
-    `mascot_id`, cannot be approved, or "": the pair the renderer refuses, else
-    _mascot_approval_error. Shared with worker.py's Auto Pilot."""
+def _approval_pair_error(con, cartoon: bool, mascot_id, style: str = "cartoon_3d") -> str:
+    """Why a topic whose style takes no mascot (`cartoon`; Cartoon 3D unless
+    `style` names another) and holds `mascot_id` cannot be approved, or "": that
+    pair, else _mascot_approval_error. Shared with worker.py's Auto Pilot."""
     if cartoon and mascot_id:
-        return _cartoon_mascot_error(mascot_id)
+        return _cartoon_mascot_error(mascot_id, style)
     return _mascot_approval_error(con, mascot_id)
 
 
 def _seed_mascot(con, project_id, visual_style: str) -> str:
     """The mascot a new video starts with: the project's default (or the install's),
-    but only while the renderer's GPU is working and never on a Cartoon 3D video.
-    Anything else is "": seeding is a convenience and must never refuse a video."""
-    if visual_style == "cartoon_3d" or trenderers.gpu_status(con)["status"] != "working":
+    but only while the renderer's GPU is working and never on a video whose style
+    takes no mascot (Cartoon 3D, Under the Hood). Anything else is "": seeding is
+    a convenience and must never refuse a video."""
+    if tmascots.no_mascot_error(visual_style) or trenderers.gpu_status(con)["status"] != "working":
         return ""
     prow = con.execute("SELECT default_mascot_id FROM projects WHERE id = ?",
                        (project_id,)).fetchone() if project_id else None
@@ -1394,21 +1358,21 @@ def _seed_mascot(con, project_id, visual_style: str) -> str:
 
 
 def _cartoon3d_gpu_error(con, style: str) -> str:
-    """Why `style` may not be chosen on this install, or "": only cartoon_3d
-    is gated, on whether any renderer can render on a GPU (gpu_status). Keep
-    in sync: mcp/server.py's _cartoon3d_gpu_error reads the same aggregate."""
-    if style != "cartoon_3d":
+    """Why `style` may not be chosen on this install, or "": only a style whose
+    pack needs a GPU is gated, on whether any renderer can render on a GPU
+    (gpu_status). mcp/server.py's _cartoon3d_gpu_error reads the same aggregate."""
+    if not tvs.needs_gpu(style):
         return ""
     return cartoon_3d_gpu_error(style, trenderers.gpu_status(con)["status"])
 
 
 def _illustrated_needs_key(con, style: str) -> bool:
-    """True when `style` is "illustrated" and no OpenAI key is stored.
+    """True when `style`'s pack needs an OpenAI key and none is stored.
 
     Reads the key the same way mcp/server.py's _openai_key does — settings row,
     then environment — so the two write paths agree on what "stored" means.
     """
-    if style != "illustrated":
+    if not tvs.needs_openai_key(style):
         return False
     return not _secret(_read_all_settings(con), "openai_api_key", "OPENAI_API_KEY")
 
@@ -1436,10 +1400,46 @@ def _voice_state(video: dict, settings: dict) -> tuple:
     conflicts = {}
     if (segments or script) and video.get("status") != "TOPIC_PROPOSED":
         for v in roster:
-            err = tvoice.markup_conflict(segments, script, v["model_id"], voice_label=v["name"])
+            # Only the segments the video's voice speaks: a segment with its
+            # own voice (TMDEV-216) keeps it whatever the video's voice is.
+            err = tvoice.video_voice_conflict(segments, script, v["model_id"],
+                                              voice_label=v["name"])
             if err:
                 conflicts[v["voice_id"]] = err
     return (current["voice_id"] if current else ""), conflicts
+
+
+def _segment_voice_conflicts(video: dict, settings: dict) -> dict:
+    """{segment id: {voice_id: reason}} for every roster voice that cannot
+    speak a segment's markup (TMDEV-216): what the Script tab's per-segment
+    picker greys out, computed by the same rule the segment_voices PATCH
+    refuses on. Only at SCRIPT_READY, the one status the picker shows at."""
+    segments = video.get("script_segments")
+    if video.get("status") != "SCRIPT_READY" or not segments:
+        return {}
+    out = {}
+    for seg in segments:
+        if not isinstance(seg, dict):
+            continue
+        reasons = {}
+        for v in settings["elevenlabs_voices"]:
+            err = tvoice.markup_conflict([seg], "", v["model_id"], voice_label=v["name"])
+            if err:
+                reasons[v["voice_id"]] = err
+        if reasons:
+            out[str(seg.get("id"))] = reasons
+    return out
+
+
+def _script_voice_conflict(video: dict, settings: dict, voice_id: str) -> str | None:
+    """Why the script cannot be voiced as it stands with the video on
+    voice_id ("" = the install default), every segment against the voice that
+    speaks it (TMDEV-216), or None. The check at approval to VOICING: a
+    segment's own voice may have had its model edited since scripting."""
+    roster = settings["elevenlabs_voices"]
+    video_voice = tvoice.resolve_voice(voice_id or "", settings["elevenlabs_voice_id"], roster)
+    return tvoice.script_markup_conflict(video.get("script_segments"),
+                                         video.get("script") or "", video_voice, roster)
 
 
 # Statuses before a video's audio exists. A video here may still hold a ledger
@@ -1461,14 +1461,27 @@ def _voice_info(con, video: dict, settings: dict) -> dict:
     """
     voice_id = video.get("voice_id") or settings["elevenlabs_voice_id"] or ""
     entry = next((v for v in settings["elevenlabs_voices"] if v["voice_id"] == voice_id), None)
+    # The other voices its segments name (TMDEV-216), in script order, by
+    # their roster entry; a voice that has left the roster reads as its id.
+    roster = {v["voice_id"]: v for v in settings["elevenlabs_voices"]}
+    other_ids = []
+    for seg in video.get("script_segments") or []:
+        vid = tvoice.segment_voice_id(seg)
+        if vid and vid != voice_id and vid not in other_ids:
+            other_ids.append(vid)
     voiced = None
     if video.get("status") not in _PRE_VOICE_STATUSES:
-        voiced = tusage.last_voice_model(con, video["id"])
+        voiced = tusage.last_voice_model(con, video["id"], voice_id, other_ids)
+    others = [{"voice_id": vid,
+               "name": roster[vid]["name"] if vid in roster else "",
+               "model_id": roster[vid]["model_id"] if vid in roster else ""}
+              for vid in other_ids]
     return {
         "voice_id": voice_id,
         "name": entry["name"] if entry else "",
         "model_id": voiced or (entry["model_id"] if entry else ""),
         "model_voiced": bool(voiced),
+        "other_voices": others,
     }
 
 
@@ -1484,6 +1497,47 @@ def _project_default_voice(con, project_id, settings: dict) -> str:
     voice_id = (row[0] if row else "") or ""
     roster_ids = {v["voice_id"] for v in settings["elevenlabs_voices"]}
     return voice_id if voice_id in roster_ids else ""
+
+
+def _project_default_formula(con, project_id) -> str:
+    """The formula a new video in project_id is seeded with as its
+    formula_choice (TMDEV-213): the project's default_formula_id while it is
+    still a formula, else "" (Auto). Seeded for every video, like the voice,
+    and never resolved later."""
+    if not project_id:
+        return ""
+    row = con.execute("SELECT default_formula_id FROM projects WHERE id = ?",
+                      (project_id,)).fetchone()
+    formula = ((row[0] if row else "") or "").strip()
+    return formula if formula in tformulas.FORMULAS else ""
+
+
+# A video scripted before Auto picked styles can sit on "auto" with no style
+# pick. A switch sends a video back to TOPIC_APPROVED, where such a video
+# would have its style routed again under a formula picked for no style, so
+# both switches refuse it; a revision rewrites it in its own style.
+_STYLE_UNDECIDED_SWITCH = ("This video was scripted before styles were picked ahead of the "
+                           "script, so a switch would pick its style again. Request a revision "
+                           "of the script instead.")
+
+
+def _style_undecided(row) -> bool:
+    return ((row["visual_style"] or "").strip() or DEFAULT_VISUAL_STYLE) == DEFAULT_VISUAL_STYLE \
+        and not (row["style_pick"] or "")
+
+
+def _formula_choice_arg(raw):
+    """(formula_choice, error) for a formula sent with a new video: absent,
+    null and "" all mean Auto; anything else must be a formula id."""
+    if raw is None:
+        return "", None
+    if not isinstance(raw, str):
+        return "", "formula_choice must be a string"
+    choice = raw.strip()
+    if choice and choice not in tformulas.FORMULAS:
+        return "", (f"formula_choice {choice!r} is not a formula. Must be one of: "
+                    f"{list(tformulas.FORMULAS)}, or \"\" for Auto")
+    return choice, None
 
 
 def _mask_settings(data: dict) -> dict:
@@ -1586,7 +1640,22 @@ ACTIONABLE_STATUSES = {"TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY"}
 # frozen only while an agent or the renderer holds the video.
 # Keep in sync: mcp/server.py's TOPIC_ONLY_FIELDS, AGENT_CHECKPOINT_FIELDS and
 # HUMAN_CHECKPOINT_STATUSES.
-TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id")
+TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id", "formula_choice")
+
+
+def _body_angle(body: dict, *, with_score: bool):
+    """The angle a request body carries (TMDEV-214) as ((angle, kind, score),
+    None), or (None, error). Absent and null both mean none; the sentence and
+    its kind go together. with_score is for POST /videos, which a tool may
+    send the agent's score to; a person's request never carries one."""
+    angle = body.get("angle")
+    kind = body.get("angle_kind")
+    angle = "" if angle is None else tangles.clean(angle)
+    kind = "" if kind is None else tangles.clean_kind(kind)
+    score = body.get("angle_score") if with_score else 0
+    score = 0 if score is None else score
+    err = tangles.angle_error(angle, kind, score)
+    return (None, err) if err else ((angle, kind, score), None)
 AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
 # VIDEO_APPROVED is deliberately absent (TMDEV-83): publishing is never agent
 # work — a human does it from the dashboard, or Auto Pilot's worker pass does
@@ -1877,12 +1946,19 @@ def archive_video(db_path: str, video_id: str, allowed_statuses, author: str,
             return {"result": "not_found"}
         mp4 = _output_path(row["project_id"], video_id)
         job_dir = JOBS_DIR / video_id
+        # Read before the files go and stored with the archive itself: this is
+        # the last moment the video's length exists anywhere, and Analytics
+        # divides by it for as long as the post does (TMDEV-212). COALESCE
+        # keeps a length already stored.
+        duration = _readable_duration_secs(video_id)
         age_sql, age_args = (" AND updated_at < ?", [updated_before]) if updated_before else ("", [])
         cur = con.execute(
-            "UPDATE videos SET archived_at = ?, video_path = '', updated_at = ?"
+            "UPDATE videos SET archived_at = ?, video_path = '', updated_at = ?,"
+            " duration_secs = COALESCE(duration_secs, ?)"
             " WHERE id = ? AND archived_at IS NULL"
             f" AND status IN ({','.join('?' * len(allowed))}){age_sql}",
-            [now, now, video_id, *allowed, *age_args])
+            [now, now, None if duration is None else round(duration, 3),
+             video_id, *allowed, *age_args])
         if cur.rowcount == 0:
             con.rollback()
             fresh = con.execute(
@@ -2082,6 +2158,131 @@ def _publication_row(row) -> dict:
         "created_at":        row["created_at"],
         "updated_at":        row["updated_at"],
     }
+
+
+def _watch_figures(platform: str, raw_json, duration_secs) -> dict:
+    """The watch figures of one snapshot, read from its stored payload
+    (postforme.extract_retention). A snapshot that was never taken, or whose
+    payload does not parse, reads as nothing reported."""
+    try:
+        raw = _json.loads(raw_json) if raw_json else {}
+    except (TypeError, ValueError):
+        raw = {}
+    return postforme.extract_retention(platform, raw, duration_secs)
+
+
+# ── Watch time by group (TMDEV-212) ──────────────────────────────────────────
+# One account at a time: a platform counts a view and a watched second its own
+# way and every account has its own audience, so a figure only compares with
+# others from the same account.
+
+# A group with fewer videos than this is shown, and marked as too small to
+# read. The MCP server's formula routing counts groups by the same number, so
+# it is defined once, in tubematic_core.watch.
+WATCH_MIN_GROUP = twatch.WATCH_MIN_GROUP
+
+WATCH_MEASURES = ("avg_watch_secs", "watched_pct", "stayed_pct")
+
+# (lower bound in words, label), ascending. A script's band is the last one
+# whose bound it reaches.
+SCRIPT_LENGTH_BANDS = ((0, "Under 150 words"), (150, "150 to 199 words"),
+                       (200, "200 to 249 words"), (250, "250 to 299 words"),
+                       (300, "300 words or more"))
+
+# A tag holds no "<" of its own, so a stray "<" in the words ("a < b") cannot
+# pair with the ">" of a later tag and take everything between with it.
+_SCRIPT_MARKUP = re.compile(r"<[^<>]*>|\[[^\[\]\n]*\]")
+
+
+def _script_words(script) -> int:
+    """Spoken words in a stored script. Tags and bracketed cues are markup,
+    and the word a tag wraps is spoken, so only the markup itself is dropped.
+    Punctuation left standing alone by a removed tag is not a word."""
+    return sum(1 for token in _SCRIPT_MARKUP.sub(" ", script or "").split()
+               if any(ch.isalnum() for ch in token))
+
+
+def _script_length_band(script) -> tuple:
+    """(key, label, order) of a script's word band."""
+    words = _script_words(script)
+    if not words:
+        return "none", "No script", len(SCRIPT_LENGTH_BANDS)
+    index = max(i for i, (low, _label) in enumerate(SCRIPT_LENGTH_BANDS) if words >= low)
+    return str(SCRIPT_LENGTH_BANDS[index][0]), SCRIPT_LENGTH_BANDS[index][1], index
+
+
+def _watch_group_of(dimension: str, row) -> tuple:
+    """(key, label, order) placing one post in a group. Order ranks a
+    dimension whose groups have a natural sequence; elsewhere it is 0 and the
+    larger group comes first."""
+    if dimension == "visual_style":
+        style = row["visual_style"] or ""
+        if style in ("", tvs.AUTO):
+            # "auto" that never became a pack is the mixed scene system,
+            # unless Auto took the video to the Cartoon 3D renderer, which
+            # some videos record in resolved_renderer alone.
+            if row["resolved_renderer"] == "cartoon_3d" and tvs.pack("cartoon_3d"):
+                return "cartoon_3d", tvs.route_label("cartoon_3d"), 0
+            return tvs.SCENES, tvs.SCENES_LABEL, 0
+        return style, tvs.route_label(style), 0
+    if dimension == "script_profile":
+        profile = row["script_profile_id"] or ""
+        if not profile:
+            return "", "No profile", 0
+        return profile, row["profile_name"] or profile, 0
+    if dimension == "domain":
+        project = row["project_id"] or ""
+        return project, row["project_name"] or project or "No domain", 0
+    if dimension == "formula":
+        # '' is a script written before scripts recorded a formula, or one
+        # whose words were replaced without a record.
+        formula = row["formula_id"] or ""
+        return formula, tformulas.label(formula) or WATCH_NOT_RECORDED, 0
+    if dimension == "hook_type":
+        hook = row["hook_type"] or ""
+        return hook, tformulas.HOOK_TYPES.get(hook, hook) or WATCH_NOT_RECORDED, 0
+    return _script_length_band(row["script"])
+
+
+WATCH_NOT_RECORDED = "Not recorded"
+
+WATCH_DIMENSIONS = (("visual_style", "Visual style"), ("script_profile", "Script profile"),
+                    ("domain", "Domain"), ("script_length", "Script length"),
+                    ("formula", "Formula"), ("hook_type", "Opening"))
+
+
+def _watch_groups(rows: list, dimension: str) -> list:
+    """Group one account's posts by `dimension`. Each row needs the grouping
+    columns and a `figures` dict (the output of _watch_figures).
+
+    A group's figure is the median of its videos' figures, so one video with
+    many times the usual audience does not set it. `videos` counts every post
+    in the group; each measure's `n` counts the posts that report it, which is
+    smaller where a platform or an older video reports nothing.
+    """
+    groups: dict = {}
+    for row in rows:
+        key, label, order = _watch_group_of(dimension, row)
+        group = groups.setdefault(key, {"key": key, "label": label, "order": order,
+                                        "videos": 0, **{m: [] for m in WATCH_MEASURES}})
+        group["videos"] += 1
+        for measure in WATCH_MEASURES:
+            value = row["figures"].get(measure)
+            if value is not None:
+                group[measure].append(value)
+    out = []
+    for group in sorted(groups.values(),
+                        key=lambda g: (g["order"], -g["videos"], g["label"].lower())):
+        entry = {"key": group["key"], "label": group["label"], "videos": group["videos"]}
+        for measure in WATCH_MEASURES:
+            values = sorted(group[measure])
+            entry[measure] = {"n": len(values),
+                              "median": round(_median(values), 1) if values else None}
+        out.append(entry)
+    return out
+
+
+_median = twatch.median
 
 
 def _publish_platforms(api_key: str, account_ids: list) -> dict:
@@ -2575,6 +2776,10 @@ def create_pipeline_blueprint() -> Blueprint:
         the contract established by mcp/server.py's _fetch_video."""
         raw_segments = video.get("script_segments")
         video["script_segments"] = _json.loads(raw_segments) if raw_segments else None
+        # What update_video recorded with the script: the drafted openings
+        # and the advisory warnings, [] when there are none.
+        for key in ("hook_alternatives", "script_warnings"):
+            video[key] = _json.loads(video[key]) if video.get(key) else []
         return video
 
     def _list_video(video: dict) -> dict:
@@ -2599,6 +2804,70 @@ def create_pipeline_blueprint() -> Blueprint:
         video["effective_voice_id"], video["voice_conflicts"] = _voice_state(video, settings)
         return video
 
+    def _patch_segment_voices(video_id: str, changes):
+        """Give script segments their own voice, or back the video's (TMDEV-216).
+
+        changes maps a segment id to a roster voice_id, or "" for the video's
+        voice. Only at SCRIPT_READY: before it there is no script to voice,
+        after it the voice is spent. The spoken words do not change, so the
+        script, its record and its warnings stay as they are. The UPDATE is
+        bound to the segments it read, so a write that landed in between is
+        never overwritten.
+        """
+        if not isinstance(changes, dict) or not changes or not all(
+                isinstance(k, str) and isinstance(v, str) for k, v in changes.items()):
+            return jsonify({"error": "segment_voices must map segment ids to a voice_id "
+                                     "(or \"\" for the video's voice)"}), 400
+        with _conn() as con:
+            row = con.execute("SELECT status, archived_at, voice_id, script_segments "
+                              "FROM videos WHERE id = ?", (video_id,)).fetchone()
+            if not row:
+                return jsonify({"error": "Video not found"}), 404
+            if row["archived_at"]:
+                return jsonify({"error": "Video is archived and can no longer be changed"}), 409
+            if row["status"] != "SCRIPT_READY":
+                return jsonify({"error": "A segment's voice can only be changed at SCRIPT_READY "
+                                         f"(this video is {row['status']})"}), 409
+            raw = row["script_segments"]
+            segments = _json.loads(raw) if raw else None
+            if not segments:
+                return jsonify({"error": "This video's script has no segments"}), 409
+            known = {str(seg.get("id")) for seg in segments if isinstance(seg, dict)}
+            unknown = sorted(set(changes) - known)
+            if unknown:
+                return jsonify({"error": f"No segment with id {', '.join(unknown)}"}), 400
+            settings = _read_all_settings(con)
+            roster = settings["elevenlabs_voices"]
+            roster_ids = {v["voice_id"] for v in roster}
+            for vid in changes.values():
+                if vid and vid not in roster_ids:
+                    return jsonify({"error": f"voice_id {vid!r} is not in elevenlabs_voices"}), 400
+            video_voice = tvoice.resolve_voice(row["voice_id"] or "",
+                                               settings["elevenlabs_voice_id"], roster)
+            if video_voice is None:
+                return jsonify({"error": "This video has no voice in the roster; pick one first"}), 409
+            updated = []
+            for seg in segments:
+                seg = dict(seg)
+                if str(seg.get("id")) in changes:
+                    seg["voice_id"] = changes[str(seg.get("id"))]
+                updated.append(seg)
+            updated = tvoice.normalize_segment_voices(updated, video_voice["voice_id"])
+            changed = [seg for seg in updated if str(seg.get("id")) in changes]
+            err = tvoice.script_markup_conflict(changed, "", video_voice, roster)
+            if err:
+                return jsonify({"error": f"That voice can't speak this segment: {err}",
+                                "voice_conflict": True}), 409
+            cur = con.execute(
+                "UPDATE videos SET script_segments = ?, updated_at = ? WHERE id = ? "
+                "AND status = 'SCRIPT_READY' AND archived_at IS NULL AND script_segments = ?",
+                (_json.dumps(updated), _now(), video_id, raw))
+            if cur.rowcount == 0:
+                return jsonify({"error": "The script changed while this was being saved; "
+                                         "reload and pick again"}), 409
+            video = _video_with_comments(con, video_id)
+        return jsonify(video)
+
     def _video_with_comments(con, video_id: str) -> dict | None:
         row = con.execute("SELECT * FROM videos WHERE id = ?", (video_id,)).fetchone()
         if not row:
@@ -2606,6 +2875,7 @@ def create_pipeline_blueprint() -> Blueprint:
         settings = _read_all_settings(con)
         video = _with_voice(_parse_video(dict(row)), settings)
         video["voice_info"] = _voice_info(con, video, settings)
+        video["segment_voice_conflicts"] = _segment_voice_conflicts(video, settings)
         # Never clipped here — this is the route the dashboard's "read more"
         # and every agent-facing read resolve to.
         video["gemini_feedback_truncated"] = False
@@ -2712,6 +2982,14 @@ def create_pipeline_blueprint() -> Blueprint:
         body = request.get_json(force=True) or {}
         only_if = body.pop("onlyIfCurrentStatus", None)
 
+        # The Script tab's per-segment voice picker (TMDEV-216) has its own
+        # path: it rewrites one key inside script_segments, at SCRIPT_READY
+        # only, and nothing else may ride along.
+        if "segment_voices" in body:
+            if set(body) != {"segment_voices"} or only_if is not None:
+                return jsonify({"error": "segment_voices is sent on its own"}), 400
+            return _patch_segment_voices(video_id, body["segment_voices"])
+
         # The four job-path columns are written only by the code that writes
         # the files (generate_voice, write_scene_config, the worker) and are
         # refused here rather than dropped (TMDEV-159/162): a caller relying on
@@ -2728,9 +3006,39 @@ def create_pipeline_blueprint() -> Blueprint:
             "status", "title", "script", "video_version", "youtube_url",
             "gemini_feedback", "voice_id", "agent_id", "agent_model", "agent_effort",
             "script_profile_id", "visual_style", "publish_title", "publish_description",
-            "mascot_id",
+            "mascot_id", "formula_choice", "angle", "angle_kind",
         }
         fields = {k: v for k, v in body.items() if k in allowed}
+        # The formula a person chooses for the video, or "" for Auto
+        # (TMDEV-213). An experimental one is allowed whatever the setting
+        # says: the setting is about what Auto may pick.
+        if "formula_choice" in fields:
+            fc = fields["formula_choice"]
+            if not isinstance(fc, str):
+                return jsonify({"error": "formula_choice must be a string"}), 400
+            fc = fc.strip()
+            if fc and fc not in tformulas.FORMULAS:
+                return jsonify({
+                    "error": f"formula_choice {fc!r} is not a formula. Must be one of: "
+                             f"{list(tformulas.FORMULAS)}, or \"\" for Auto"
+                }), 400
+            fields["formula_choice"] = fc
+        # A topic's angle (TMDEV-214): the sentence and its kind, edited by a
+        # person at the topic. Both keys or neither; null is refused here, where
+        # a key was sent on purpose. The score is the agent's and is not
+        # writable; a changed angle resets it in the UPDATE below.
+        angle_edit = "angle" in fields or "angle_kind" in fields
+        if angle_edit:
+            if not ("angle" in fields and "angle_kind" in fields):
+                return jsonify({"error": "angle and angle_kind are written together: send the "
+                                         "sentence and its kind, or an empty string for both"}), 400
+            for key in ("angle", "angle_kind"):
+                if not isinstance(fields[key], str):
+                    return jsonify({"error": f"{key} must be a string"}), 400
+            picked, err = _body_angle(fields, with_score=False)
+            if err:
+                return jsonify({"error": err}), 400
+            fields["angle"], fields["angle_kind"], _ = picked
         if "mascot_id" in fields:
             if not isinstance(fields["mascot_id"], str):
                 return jsonify({"error": "mascot_id must be a string"}), 400
@@ -2817,7 +3125,11 @@ def create_pipeline_blueprint() -> Blueprint:
                 "error": f"Invalid status '{fields['status']}'. Must be one of: {sorted(VALID_VIDEO_STATUSES)}"
             }), 400
 
-        fields["updated_at"] = _now()
+        # A PATCH that only edits the angle does not move the video: its
+        # updated_at stays, or the worker would read the edit as the topic
+        # arriving again and announce it a second time.
+        if set(fields) - {"angle", "angle_kind"}:
+            fields["updated_at"] = _now()
 
         with _conn() as con:
             row = con.execute(
@@ -2868,6 +3180,24 @@ def create_pipeline_blueprint() -> Blueprint:
                         "voice_conflict": True,
                     }), 409
 
+            # Approval checks every segment against the voice that speaks it
+            # (TMDEV-216), with or without a voice in the PATCH: a segment's
+            # own voice is not covered by the check above, and its model may
+            # have been edited in Settings since scripting.
+            if fields.get("status") == "VOICING" and row["status"] == "SCRIPT_READY":
+                settings = _read_all_settings(con)
+                current = _parse_video(dict(con.execute(
+                    "SELECT status, voice_id, script, script_segments FROM videos WHERE id = ?",
+                    (video_id,)).fetchone()))
+                voice_after = fields["voice_id"] if "voice_id" in fields else current["voice_id"]
+                err = _script_voice_conflict(current, settings, voice_after or "")
+                if err:
+                    return jsonify({
+                        "error": f"This script can't be voiced as it stands: {err} Pick "
+                                 "another voice for that segment, or request a revision.",
+                        "voice_conflict": True,
+                    }), 409
+
             # Same shape and same place as the voice_id check above: one
             # connection, and the only_if UPDATE below stays a single atomic
             # statement. "" is always allowed — it means "no profile", the
@@ -2888,7 +3218,7 @@ def create_pipeline_blueprint() -> Blueprint:
                                  f"Must be one of: {sorted(VISUAL_STYLES)}"
                     }), 400
                 if _illustrated_needs_key(con, fields["visual_style"]):
-                    return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+                    return jsonify({"error": tvs.openai_key_error(fields["visual_style"])}), 400
                 gpu_err = _cartoon3d_gpu_error(con, fields["visual_style"])
                 if gpu_err:
                     return jsonify({"error": gpu_err}), 400
@@ -2902,7 +3232,10 @@ def create_pipeline_blueprint() -> Blueprint:
             cur_vid = con.execute("SELECT mascot_id, visual_style, resolved_renderer FROM videos "
                                   "WHERE id = ?", (video_id,)).fetchone()
             stored_mascot = cur_vid["mascot_id"] or ""
-            will_be_cartoon = fields.get("visual_style", cur_vid["visual_style"]) == "cartoon_3d"
+            # A style that takes no mascot (Cartoon 3D, Under the Hood) refuses
+            # a picked mascot and clears a stored one when the video switches to it.
+            style_after = fields.get("visual_style", cur_vid["visual_style"]) or ""
+            takes_no_mascot = bool(tmascots.no_mascot_error(style_after))
             if fields.get("mascot_id") and fields["mascot_id"] != stored_mascot:
                 err = _mascot_pick_error(con, fields["mascot_id"])
                 if err:
@@ -2910,8 +3243,8 @@ def create_pipeline_blueprint() -> Blueprint:
                 err = tmascots.mascot_gpu_error(trenderers.gpu_status(con)["status"])
                 if err:
                     return jsonify({"error": err}), 400
-                if will_be_cartoon:
-                    return jsonify({"error": MASCOT_NOT_ON_CARTOON_3D}), 400
+                if takes_no_mascot:
+                    return jsonify({"error": tmascots.no_mascot_error(style_after)}), 400
             # The approving PATCH is the last chance to catch a mascot archived
             # since it was seeded or picked, or one left on a Cartoon 3D video:
             # the video is about to be authored against it, and the renderer
@@ -2921,15 +3254,19 @@ def create_pipeline_blueprint() -> Blueprint:
             mascot_guarded = (fields.get("status") == "TOPIC_APPROVED"
                               and row["status"] == "TOPIC_PROPOSED")
             if mascot_guarded:
-                switching = (fields.get("visual_style") == "cartoon_3d"
-                             and (cur_vid["visual_style"] or "") != "cartoon_3d")
+                switching = ("visual_style" in fields
+                             and fields["visual_style"] != (cur_vid["visual_style"] or ""))
                 held = fields.get("mascot_id", stored_mascot)
-                if will_be_cartoon:
-                    err = _cartoon_mascot_error(stored_mascot) if (
+                if takes_no_mascot:
+                    err = _cartoon_mascot_error(stored_mascot, style_after) if (
                         stored_mascot and held and not switching) else ""
                 else:
-                    err = _approval_pair_error(
-                        con, (cur_vid["resolved_renderer"] or "") == "cartoon_3d", held)
+                    # A changed style clears the recorded renderer in this
+                    # same UPDATE, so the pair is judged without it.
+                    style_changes = ("visual_style" in fields
+                                     and fields["visual_style"] != (cur_vid["visual_style"] or ""))
+                    renderer_after = "" if style_changes else (cur_vid["resolved_renderer"] or "")
+                    err = _approval_pair_error(con, renderer_after == "cartoon_3d", held)
                 if err:
                     return jsonify({"error": err}), 409
 
@@ -2947,6 +3284,13 @@ def create_pipeline_blueprint() -> Blueprint:
                 return jsonify({
                     "error": f"{', '.join(sorted(topic_locked))} can only be set while the "
                              f"video is at TOPIC_PROPOSED (this one is {row['status']})"
+                }), 409
+            # The angle is read by the script writer from the moment the topic
+            # is approved, so a person edits it at the topic and nowhere else.
+            if angle_edit and row["status"] != "TOPIC_PROPOSED":
+                return jsonify({
+                    "error": "angle can only be changed while the video is at TOPIC_PROPOSED "
+                             f"(this one is {row['status']})"
                 }), 409
             # The agent group decides who does the *next* piece of work, so a
             # human may change it at every checkpoint (TMDEV-110). In between,
@@ -2966,7 +3310,7 @@ def create_pipeline_blueprint() -> Blueprint:
             # (TMDEV-90); a second race test keys on this one's (TMDEV-110).
             set_sql = [f"{k} = ?" for k in fields]
             set_params = list(fields.values())
-            if will_be_cartoon:
+            if takes_no_mascot:
                 # Whatever was sent: an echoed stored mascot must not survive
                 # the switch (a different one was refused above).
                 fields.pop("mascot_id", None)
@@ -2975,21 +3319,54 @@ def create_pipeline_blueprint() -> Blueprint:
                 set_sql.append("mascot_id = ''")
             # The pin belongs to the mascot it was taken for: a different mascot
             # (or none) starts unpinned, or it would inherit the old version number.
-            if will_be_cartoon or ("mascot_id" in fields and fields["mascot_id"] != stored_mascot):
+            if takes_no_mascot or ("mascot_id" in fields and fields["mascot_id"] != stored_mascot):
                 set_sql.append("mascot_version = 0")
+            if angle_edit:
+                # The score described the words it was given for. SET reads the
+                # old row, so the same angle saved again keeps its score. Added
+                # after the mascot block above, which rebuilds set_params from
+                # `fields` and would drop these two.
+                set_sql.append("angle_score = CASE WHEN angle IS ? AND angle_kind IS ? "
+                               "THEN angle_score ELSE 0 END")
+                set_params += [fields["angle"], fields["angle_kind"]]
             # Any human status change is a human acting on the video, so it
             # releases a stuck flag and starts the no-progress count afresh
             # (TMDEV-129). Only a status change: renaming a stuck video is not
             # a decision about why the agent could not move it.
             if "status" in fields:
                 set_sql += ["agent_no_progress_count = 0", "agent_stuck_at = NULL"]
+            # A style a person sets replaces Auto's pick (the same value, which
+            # the approval re-sends, keeps it); a move back to the topic gives
+            # an Auto pick back to Auto. Keep in sync: mcp/server.py's
+            # update_video and set_video_status.
+            if "visual_style" in fields:
+                clear_sql, clear_params = tvs.style_change_clears_pick(fields["visual_style"])
+                set_sql.append(clear_sql)
+                set_params += clear_params
+            elif fields.get("status") == "TOPIC_PROPOSED":
+                set_sql.append(tvs.AUTO_PICK_RESET_SET)
+            # Back at the topic, the formula picked for the old topic is
+            # dropped, to be picked again once the topic is approved. A
+            # person's formula_choice stays. Keep in sync: mcp/server.py's
+            # set_video_status.
+            if fields.get("status") == "TOPIC_PROPOSED":
+                set_sql.append(tformulas.PICK_RESET_SET)
+            # A script written here is a flat one with no formula and no
+            # openings, and nothing has checked it: the record update_video
+            # stored for the script it replaces would describe other words.
+            # The pick goes too: a script written by hand follows no formula,
+            # and a pick left beside it would name one the words do not
+            # follow. A person's formula_choice stays for the next rewrite.
+            if "script" in fields:
+                set_sql.append(tformulas.RECORD_CLEAR_SET)
+                set_sql.append(tformulas.PICK_RESET_SET)
             where_sql, where_params = "", []
             # Bind the write to the status the freeze was checked against.
             # Without onlyIfCurrentStatus, that check and this UPDATE are two
             # statements, and a status change landing between them would let
             # a frozen field through at a status where it is frozen — after
             # the poller may already have handed the video to its agent.
-            frozen_bound = bool(topic_locked or agent_locked or voice_exempt)
+            frozen_bound = bool(topic_locked or agent_locked or voice_exempt or angle_edit)
             if frozen_bound:
                 where_sql, where_params = " AND status = ?", [row["status"]]
             # The checks above and this UPDATE are two statements, so the
@@ -2999,19 +3376,22 @@ def create_pipeline_blueprint() -> Blueprint:
             # nor let an approval through for a mascot archived meanwhile.
             # Keep in sync: mcp/server.py's update_video and set_video_status,
             # and worker.py's _auto_pilot_approve.
-            pair_touched = "visual_style" in fields or "mascot_id" in fields or will_be_cartoon
+            pair_touched = "visual_style" in fields or "mascot_id" in fields or takes_no_mascot
             if pair_touched or mascot_guarded:
                 style_sql, style_p = (("?", [fields["visual_style"]]) if "visual_style" in fields
                                       else ("COALESCE(videos.visual_style, '')", []))
-                if will_be_cartoon:
+                if takes_no_mascot:
                     mascot_sql, mascot_p = "''", []
                 elif "mascot_id" in fields:
                     mascot_sql, mascot_p = "?", [fields["mascot_id"]]
                 else:
                     mascot_sql, mascot_p = "COALESCE(videos.mascot_id, '')", []
+                renderer_sql, renderer_p = (
+                    (tvs.renderer_after_style_write_sql(), [fields["visual_style"]])
+                    if "visual_style" in fields else ("COALESCE(videos.resolved_renderer, '')", []))
                 where_sql += " AND NOT " + tmascots.cartoon_mascot_clash_sql(
-                    style_sql, "COALESCE(videos.resolved_renderer, '')", mascot_sql)
-                where_params += style_p + mascot_p
+                    style_sql, renderer_sql, mascot_sql)
+                where_params += style_p + renderer_p + mascot_p
                 if mascot_guarded:
                     where_sql += " AND " + tmascots.holds_pickable_sql(mascot_sql)
                     where_params += mascot_p * 2
@@ -3097,13 +3477,14 @@ def create_pipeline_blueprint() -> Blueprint:
                 if pair_touched or mascot_guarded:
                     now_row = con.execute("SELECT visual_style, resolved_renderer, mascot_id "
                                           "FROM videos WHERE id = ?", (video_id,)).fetchone()
-                    post_mascot = ("" if will_be_cartoon else
+                    post_mascot = ("" if takes_no_mascot else
                                    fields["mascot_id"] if "mascot_id" in fields
                                    else now_row["mascot_id"] or "")
-                    post_cartoon = "cartoon_3d" in (fields.get("visual_style", now_row["visual_style"]),
-                                                    now_row["resolved_renderer"])
-                    err = (_approval_pair_error(con, post_cartoon, post_mascot) if mascot_guarded
-                           else _cartoon_mascot_error(post_mascot) if post_cartoon and post_mascot
+                    post_style = fields.get("visual_style", now_row["visual_style"]) or ""
+                    post_style = "cartoon_3d" if now_row["resolved_renderer"] == "cartoon_3d" else post_style
+                    post_cartoon = bool(tmascots.no_mascot_error(post_style))
+                    err = (_approval_pair_error(con, post_cartoon, post_mascot, post_style) if mascot_guarded
+                           else _cartoon_mascot_error(post_mascot, post_style) if post_cartoon and post_mascot
                            else "")
                     if err:
                         return jsonify({"error": err}), 409
@@ -3190,6 +3571,210 @@ def create_pipeline_blueprint() -> Blueprint:
                 if not exists:
                     return jsonify({"error": "Video not found"}), 404
                 return jsonify({"error": "Video is archived and can no longer be changed"}), 409
+            video = _video_with_comments(con, video_id)
+        return jsonify(video)
+
+    @bp.post("/videos/<video_id>/switch-style")
+    def switch_style(video_id: str):
+        """Switch a video to the runner-up of Auto's style pick (TMDEV-203).
+
+        Auto picks a style before the script and names a runner-up. At
+        SCRIPT_READY a person may take the runner-up instead: the video goes
+        back to TOPIC_APPROVED with that style, and its agent rewrites the
+        script for it. The new script is voiced again when it is approved, so
+        on a video that reached SCRIPT_READY through a revision, voicing is
+        paid twice. The old pick becomes the new runner-up, so a second switch
+        goes back. The formula picked for the old style is dropped and picked
+        again for the new one (a person's formula_choice stays).
+        """
+        with _conn() as con:
+            # One write transaction from the first read to the write: an
+            # approval, a second switch, a key removed in Settings or a GPU
+            # probe result waits for it, so nothing checked below can change
+            # before the UPDATE. The UPDATE repeats the row checks anyway.
+            con.execute("BEGIN IMMEDIATE")
+            row = con.execute(
+                "SELECT status, visual_style, style_pick, style_runner_up, mascot_id, archived_at "
+                "FROM videos WHERE id = ?", (video_id,)).fetchone()
+            if not row:
+                return jsonify({"error": "Video not found"}), 404
+            if row["archived_at"]:
+                return jsonify({"error": "Video is archived and can no longer be changed"}), 409
+            pick, target = row["style_pick"] or "", row["style_runner_up"] or ""
+            if not pick or not target:
+                return jsonify({"error": "Only a style Auto picked, with a runner-up, can be "
+                                         "switched"}), 409
+            if row["status"] != "SCRIPT_READY":
+                return jsonify({"error": "The style can be switched only at Script Ready, while "
+                                         f"the script waits for approval (this video is {row['status']})"}), 409
+            settings = _read_all_settings(con)
+            candidates = {c["id"]: c for c in tvs.routing_candidates(
+                bool(_secret(settings, "openai_api_key", "OPENAI_API_KEY")),
+                trenderers.gpu_status(con)["status"], bool(row["mascot_id"]))}
+            if target not in candidates:
+                return jsonify({"error": f"The runner-up {target!r} is no longer a style"}), 409
+            if not candidates[target]["available"]:
+                return jsonify({"error": f"{candidates[target]['label']} is not available: "
+                                         f"{candidates[target]['unavailable_reason']}"}), 409
+            new_style = DEFAULT_VISUAL_STYLE if target == tvs.SCENES else target
+            reason = (f"Switched by a person from {tvs.route_label(pick)} to "
+                      f"{tvs.route_label(target)}.")
+            now = _now()
+            cur = con.execute(
+                "UPDATE videos SET visual_style = ?, style_pick = ?, style_runner_up = ?, "
+                "style_reason = ?, status = 'TOPIC_APPROVED', agent_no_progress_count = 0, "
+                "agent_stuck_at = NULL, " + tvs.NEW_STYLE_CLEARS_SET + ", "
+                + tformulas.PICK_RESET_SET + ", updated_at = ? "
+                "WHERE id = ? AND archived_at IS NULL "
+                "AND status = 'SCRIPT_READY' AND style_pick = ? AND style_runner_up = ? AND NOT "
+                + tmascots.cartoon_mascot_clash_sql(style="?", renderer="''"),
+                (new_style, target, pick, reason, now, video_id, pick, target, new_style))
+            if cur.rowcount == 0:
+                return jsonify({"error": "The video changed while the request was in flight — "
+                                         "reload"}), 409
+            con.execute(
+                "INSERT INTO comments (video_id, author, content, created_at) VALUES (?, ?, ?, ?)",
+                (video_id, "human", f"Style switched from {tvs.route_label(pick)} to "
+                                    f"{tvs.route_label(target)}. Rewrite the script for "
+                                    f"{tvs.route_label(target)}; the old script is discarded.", now))
+            video = _video_with_comments(con, video_id)
+        return jsonify(video)
+
+    @bp.post("/videos/<video_id>/switch-formula")
+    def switch_formula(video_id: str):
+        """Switch a video to the runner-up of its formula pick (TMDEV-213).
+
+        A formula is picked before the script, with a runner-up. At
+        SCRIPT_READY a person may take the runner-up instead: the video goes
+        back to TOPIC_APPROVED and its agent rewrites the script in that
+        formula. The formula becomes the person's choice for the video
+        (formula_choice), so the agent never replaces it, and the old pick
+        becomes the runner-up, so a second switch goes back. A switch is
+        always a rewrite, never an edit of the stored script.
+        """
+        with _conn() as con:
+            # One write transaction from the read to the write, as in
+            # switch_style; the UPDATE repeats the row checks anyway.
+            con.execute("BEGIN IMMEDIATE")
+            row = con.execute(
+                "SELECT status, formula_pick, formula_runner_up, visual_style, style_pick, "
+                "archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
+            if not row:
+                return jsonify({"error": "Video not found"}), 404
+            if row["archived_at"]:
+                return jsonify({"error": "Video is archived and can no longer be changed"}), 409
+            pick, target = row["formula_pick"] or "", row["formula_runner_up"] or ""
+            if not pick or not target:
+                return jsonify({"error": "Only a formula picked before the script, with a "
+                                         "runner-up, can be switched"}), 409
+            if row["status"] != "SCRIPT_READY":
+                return jsonify({"error": "The formula can be switched only at Script Ready, while "
+                                         f"the script waits for approval (this video is {row['status']})"}), 409
+            if _style_undecided(row):
+                return jsonify({"error": _STYLE_UNDECIDED_SWITCH}), 409
+            if target not in tformulas.FORMULAS:
+                return jsonify({"error": f"The runner-up {target!r} is no longer a formula"}), 409
+            old, new = tformulas.label(pick), tformulas.label(target)
+            now = _now()
+            cur = con.execute(
+                "UPDATE videos SET formula_pick = ?, formula_runner_up = ?, formula_choice = ?, "
+                "formula_reason = ?, status = 'TOPIC_APPROVED', agent_no_progress_count = 0, "
+                # What the watch figures said was about the formula switched away from.
+                "formula_evidence = '', "
+                "agent_stuck_at = NULL, updated_at = ? WHERE id = ? AND archived_at IS NULL "
+                "AND status = 'SCRIPT_READY' AND formula_pick = ? AND formula_runner_up = ?",
+                (target, pick, target, f"Switched by a person from {old} to {new}.", now,
+                 video_id, pick, target))
+            if cur.rowcount == 0:
+                return jsonify({"error": "The video changed while the request was in flight — "
+                                         "reload"}), 409
+            con.execute(
+                "INSERT INTO comments (video_id, author, content, created_at) VALUES (?, ?, ?, ?)",
+                (video_id, "human", f"Formula switched from {old} to {new}. Rewrite the script "
+                                    f"in {new}; the old script is discarded.", now))
+            video = _video_with_comments(con, video_id)
+        return jsonify(video)
+
+    @bp.post("/videos/<video_id>/switch-opening")
+    def switch_opening(video_id: str):
+        """Have a video's script rewritten from another of its drafted
+        openings (TMDEV-213).
+
+        The writer drafts three openings and keeps one. At SCRIPT_READY a
+        person may take one of the other two: body {"index": n} names it by
+        its place in hook_alternatives. That opening is marked as the one in
+        use, the video goes back to TOPIC_APPROVED, and its agent rewrites
+        the script from it in the same formula. Always a rewrite: the stored
+        script is never edited here, since a new first sentence over the old
+        body would be a script nobody wrote. A video scripted before formulas
+        were picked gets its script's formula as the pick, so the rewrite is
+        not routed to another formula whose openings differ. formula_id is
+        cleared: the stored script no longer has the opening its record
+        names, and the MCP server will not move the video on until a
+        rewrite records it again.
+        """
+        body = request.get_json(force=True, silent=True) or {}
+        index = body.get("index")
+        if not isinstance(index, int) or isinstance(index, bool):
+            return jsonify({"error": "index must be a whole number: the opening's place in "
+                                     "hook_alternatives, from 0"}), 400
+        with _conn() as con:
+            con.execute("BEGIN IMMEDIATE")
+            row = con.execute(
+                "SELECT status, hook_alternatives, formula_id, formula_pick, visual_style, "
+                "style_pick, archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
+            if not row:
+                return jsonify({"error": "Video not found"}), 404
+            if row["archived_at"]:
+                return jsonify({"error": "Video is archived and can no longer be changed"}), 409
+            if row["status"] != "SCRIPT_READY":
+                return jsonify({"error": "The opening can be switched only at Script Ready, while "
+                                         f"the script waits for approval (this video is {row['status']})"}), 409
+            if _style_undecided(row):
+                return jsonify({"error": _STYLE_UNDECIDED_SWITCH}), 409
+            stored = row["hook_alternatives"] or ""
+            try:
+                hooks = _json.loads(stored) if stored else []
+            except ValueError:
+                hooks = []
+            if not isinstance(hooks, list) or not all(isinstance(h, dict) for h in hooks):
+                hooks = []
+            if not hooks:
+                return jsonify({"error": "This script has no drafted openings on record"}), 409
+            if not 0 <= index < len(hooks):
+                return jsonify({"error": f"index must be from 0 to {len(hooks) - 1}"}), 400
+            if hooks[index].get("kept"):
+                return jsonify({"error": "That opening is the one the script already uses"}), 409
+            pick = row["formula_pick"] or ""
+            if not pick:
+                pick = row["formula_id"] or ""
+                if pick not in tformulas.FORMULAS:
+                    return jsonify({"error": "The script's formula is not one this version has, "
+                                             "so it cannot be rewritten from another opening. "
+                                             "Request a revision instead."}), 409
+            chosen = hooks[index]
+            # A person's choice overrides the writer's reason for dropping it.
+            new_hooks = [{**h, "kept": i == index, "note": "" if i == index else h.get("note", "")}
+                         for i, h in enumerate(hooks)]
+            now = _now()
+            cur = con.execute(
+                "UPDATE videos SET hook_alternatives = ?, hook_type = ?, formula_pick = ?, "
+                "formula_id = '', "
+                "status = 'TOPIC_APPROVED', agent_no_progress_count = 0, agent_stuck_at = NULL, "
+                "updated_at = ? WHERE id = ? AND archived_at IS NULL AND status = 'SCRIPT_READY' "
+                "AND hook_alternatives = ? AND COALESCE(formula_pick, '') = ?",
+                (_json.dumps(new_hooks), chosen.get("type", ""), pick, now, video_id, stored,
+                 row["formula_pick"] or ""))
+            if cur.rowcount == 0:
+                return jsonify({"error": "The video changed while the request was in flight — "
+                                         "reload"}), 409
+            kind = tformulas.HOOK_TYPES.get(chosen.get("type", ""), chosen.get("type", ""))
+            con.execute(
+                "INSERT INTO comments (video_id, author, content, created_at) VALUES (?, ?, ?, ?)",
+                (video_id, "human",
+                 f"Opening switched to the {kind} one: \"{chosen.get('text', '')}\" Rewrite the "
+                 "script so it starts with that opening, word for word, in the same formula; "
+                 "the old script is discarded.", now))
             video = _video_with_comments(con, video_id)
         return jsonify(video)
 
@@ -3284,6 +3869,16 @@ def create_pipeline_blueprint() -> Blueprint:
         if not isinstance(raw_title, str):
             return jsonify({"error": "title must be a string"}), 400
         title, title_warning = _truncate_title(raw_title)
+        formula_choice, formula_err = _formula_choice_arg(body.get("formula_choice"))
+        if formula_err:
+            return jsonify({"error": formula_err}), 400
+        # Stored when sent and checked for shape only, like the score: research
+        # files through the MCP server's create_video, which is where a proposal
+        # without an angle is refused (TMDEV-214).
+        picked_angle, angle_err = _body_angle(body, with_score=True)
+        if angle_err:
+            return jsonify({"error": angle_err}), 400
+        angle, angle_kind, angle_score = picked_angle
 
         # The id names the video's job directory, so a caller-chosen one must
         # be a plain path segment (TMDEV-158). This route only ever creates.
@@ -3325,7 +3920,7 @@ def create_pipeline_blueprint() -> Blueprint:
             # default was set, the approval PATCH (which carries visual_style)
             # refuses it at the topic checkpoint, before any spend.
             if _illustrated_needs_key(con, visual_style):
-                return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+                return jsonify({"error": tvs.openai_key_error(visual_style)}), 400
             gpu_err = _cartoon3d_gpu_error(con, visual_style)
             if gpu_err:
                 return jsonify({"error": gpu_err}), 400
@@ -3360,19 +3955,30 @@ def create_pipeline_blueprint() -> Blueprint:
             # A project's default mascot seeds EVERY video, whatever the strategy,
             # like its default voice; see _seed_mascot for when it seeds nothing.
             mascot_id = _seed_mascot(con, body.get("project_id"), visual_style)
+            # The domain's agent, model and effort seed EVERY video too, whatever
+            # the strategy (TMDEV-207); a domain on Automatic is dealt by weight.
+            # Keep in sync: mcp/server.py's create_video.
+            agent_id, agent_model, agent_effort = _domain_agent(con, body.get("project_id"))
+            # The domain's default formula seeds EVERY video too (TMDEV-213);
+            # a formula sent with the video wins. Keep in sync: mcp/server.py's
+            # create_video.
+            if not formula_choice:
+                formula_choice = _project_default_formula(con, body.get("project_id"))
             # The check above runs outside any transaction, so a pause or another
             # session's topic committed since then would be missed; the INSERT
             # re-checks both itself.
             cur = con.execute(
                 f"""INSERT INTO videos
                    (id, project_id, title, topic, strategy, producibility_score,
-                    status, video_version, voice_id, agent_id, visual_style,
-                    script_profile_id, mascot_id, created_at, updated_at)
-                   SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', 1, ?, ?, ?, ?, ?, ?, ?
+                    status, video_version, voice_id, agent_id, agent_model, agent_effort,
+                    visual_style, script_profile_id, mascot_id, formula_choice, angle, angle_kind,
+                    angle_score, created_at, updated_at)
+                   SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                    WHERE {_DOMAIN_OPEN_GUARD}""",
                 (vid, body.get("project_id"), title,
                  body["topic"], body["strategy"], body["producibility_score"], voice_id,
-                 _pick_agent_id(con), visual_style, script_profile_id, mascot_id, now, now,
+                 agent_id, agent_model, agent_effort, visual_style, script_profile_id,
+                 mascot_id, formula_choice, angle, angle_kind, angle_score, now, now,
                  body["strategy"], body.get("project_id")),
             )
             if cur.rowcount == 0:
@@ -3415,6 +4021,17 @@ def create_pipeline_blueprint() -> Blueprint:
             return jsonify({"error": "topic is required"}), 400
         topic = topic.strip()
 
+        # Optional: a person's topic may come with the angle its opening should
+        # use, or without one, and is never refused for lacking it (TMDEV-214).
+        # Unscored either way; with none, the agent adds one when it picks the
+        # video up.
+        if tangles.sent_no_angle(body.get("angle"), body.get("angle_kind")):
+            body = {**body, "angle": "", "angle_kind": ""}
+        picked_angle, angle_err = _body_angle(body, with_score=False)
+        if angle_err:
+            return jsonify({"error": angle_err}), 400
+        angle, angle_kind, _ = picked_angle
+
         approve = body.get("approve", True)
         if not isinstance(approve, bool):
             return jsonify({"error": "approve must be true or false"}), 400
@@ -3427,7 +4044,7 @@ def create_pipeline_blueprint() -> Blueprint:
         # a set lookup or a SQL parameter and surface as a 500.
         picks = {}
         for key in ("agent_id", "agent_model", "agent_effort",
-                    "visual_style", "voice_id", "script_profile_id"):
+                    "visual_style", "voice_id", "script_profile_id", "formula_choice"):
             raw = body.get(key)
             if raw is not None and not isinstance(raw, str):
                 return jsonify({"error": f"{key} must be a string"}), 400
@@ -3458,6 +4075,9 @@ def create_pipeline_blueprint() -> Blueprint:
             }), 400
         voice_id = picks["voice_id"]
         profile_id = picks["script_profile_id"]
+        formula_choice, formula_err = _formula_choice_arg(picks["formula_choice"])
+        if formula_err:
+            return jsonify({"error": formula_err}), 400
 
         vid = str(uuid.uuid4())
         now = _now()
@@ -3471,7 +4091,7 @@ def create_pipeline_blueprint() -> Blueprint:
                 if err:
                     return jsonify({"error": err}), 400
             if _illustrated_needs_key(con, visual_style):
-                return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+                return jsonify({"error": tvs.openai_key_error(visual_style)}), 400
             gpu_err = _cartoon3d_gpu_error(con, visual_style)
             if gpu_err:
                 return jsonify({"error": gpu_err}), 400
@@ -3480,10 +4100,15 @@ def create_pipeline_blueprint() -> Blueprint:
                 if err:
                     return jsonify({"error": err}), 400
             else:
-                # Dealt like every other new video, so the configured weights
-                # still hold for a human who leaves the picker on Automatic.
-                # Dealing writes the deck — from here on a refusal rolls back.
-                agent_id = _pick_agent_id(con)
+                # Automatic means what it means for every other new video: the
+                # manual domain's agent when it has a live one (TMDEV-207), else
+                # the weighted deal. A model or effort picked here still wins
+                # over the domain's. A picked agent, above, takes none of the
+                # three from the domain. Dealing writes the deck — from here on
+                # a refusal rolls back.
+                agent_id, seeded_model, seeded_effort = _domain_agent(con, MANUAL_PROJECT_ID)
+                agent_model = agent_model or seeded_model
+                agent_effort = agent_effort or seeded_effort
             if agent_model:
                 err = _agent_model_error(con, agent_id, agent_model)
                 if err:
@@ -3501,14 +4126,20 @@ def create_pipeline_blueprint() -> Blueprint:
                 voice_id = _project_default_voice(con, MANUAL_PROJECT_ID,
                                                   _read_all_settings(con))
             mascot_id = _seed_mascot(con, MANUAL_PROJECT_ID, visual_style)
+            # "Auto" on the New Video page means the manual domain's default
+            # formula when it has one (TMDEV-213), like the voice.
+            if not formula_choice:
+                formula_choice = _project_default_formula(con, MANUAL_PROJECT_ID)
             con.execute(
                 """INSERT INTO videos
                    (id, project_id, title, topic, strategy, producibility_score, status,
                     video_version, voice_id, agent_id, agent_model, agent_effort,
-                    script_profile_id, visual_style, mascot_id, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, 'manual', 0, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    script_profile_id, visual_style, mascot_id, formula_choice, angle,
+                    angle_kind, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 'manual', 0, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (vid, MANUAL_PROJECT_ID, title, topic, status, voice_id, agent_id,
-                 agent_model, agent_effort, profile_id, visual_style, mascot_id, now, now),
+                 agent_model, agent_effort, profile_id, visual_style, mascot_id,
+                 formula_choice, angle, angle_kind, now, now),
             )
             video = _video_with_comments(con, vid)
         return jsonify(video), 201
@@ -3578,6 +4209,31 @@ def create_pipeline_blueprint() -> Blueprint:
         if not isinstance(default_mascot, str):
             return jsonify({"error": "default_mascot_id must be a string"}), 400
         default_mascot = default_mascot.strip()
+        # "" is Auto: a formula is picked for each video from its topic.
+        default_formula = body.get("default_formula_id")
+        if default_formula is None:
+            default_formula = ""
+        if not isinstance(default_formula, str):
+            return jsonify({"error": "default_formula_id must be a string"}), 400
+        default_formula = default_formula.strip()
+        # The agent, model and effort the domain's new videos start on
+        # (TMDEV-207). "" on the agent is Automatic, the weighted deal. Absent
+        # and null mean "", which on this full replace is what omission means;
+        # any other non-string is refused, never read as blank.
+        agent_defaults = {}
+        for key in ("default_agent_id", "default_agent_model", "default_agent_effort"):
+            raw = body.get(key)
+            if raw is not None and not isinstance(raw, str):
+                return jsonify({"error": f"{key} must be a string"}), 400
+            agent_defaults[key] = (raw or "").strip()
+        default_agent = agent_defaults["default_agent_id"]
+        default_agent_model = agent_defaults["default_agent_model"]
+        default_agent_effort = agent_defaults["default_agent_effort"]
+        if default_agent_effort not in ("",) + AGENT_EFFORTS:
+            return jsonify({
+                "error": f"default_agent_effort must be one of {list(AGENT_EFFORTS)}, or blank "
+                         f"for the agent's own effort, got {default_agent_effort!r}"
+            }), 400
         # Absent and null mean the default, which on this full replace is what
         # omission means. A cap below what the domain already holds is allowed:
         # it expires the domain at once, which is the human's call to make.
@@ -3597,7 +4253,8 @@ def create_pipeline_blueprint() -> Blueprint:
             # harmless: seeding never rewrites, and the approval PATCH refuses.
             prev = con.execute(
                 "SELECT description, default_visual_style, default_voice_id, "
-                "default_script_profile_id, default_mascot_id FROM projects WHERE id = ?",
+                "default_script_profile_id, default_mascot_id, default_agent_id, "
+                "default_agent_model, default_formula_id FROM projects WHERE id = ?",
                 (pid,)).fetchone()
             # The id names the domain's output directory, so a NEW one must be a
             # plain path segment (TMDEV-158). Only a new one: this is an upsert
@@ -3616,7 +4273,7 @@ def create_pipeline_blueprint() -> Blueprint:
                     return jsonify({"error": err}), 400
             unchanged = prev is not None and (prev["default_visual_style"] or "") == default_style
             if not unchanged and _illustrated_needs_key(con, default_style):
-                return jsonify({"error": ILLUSTRATED_NEEDS_OPENAI_KEY}), 400
+                return jsonify({"error": tvs.openai_key_error(default_style)}), 400
             gpu_err = "" if unchanged else _cartoon3d_gpu_error(con, default_style)
             if gpu_err:
                 return jsonify({"error": gpu_err}), 400
@@ -3652,12 +4309,40 @@ def create_pipeline_blueprint() -> Blueprint:
                        or tmascots.mascot_gpu_error(trenderers.gpu_status(con)["status"]))
                 if err:
                     return jsonify({"error": err.replace("mascot_id", "default_mascot_id")}), 400
+            # The default agent and its model follow the same rule, as a pair:
+            # checked only when either changes, so an agent uninstalled since,
+            # or a model it dropped, does not block every other edit. A stale
+            # pair is harmless: seeding falls back to the deal, or to the
+            # agent's own model. Keep in sync: mcp/server.py's upsert_project.
+            agent_unchanged = (prev is not None
+                               and (prev["default_agent_id"] or "") == default_agent
+                               and (prev["default_agent_model"] or "") == default_agent_model)
+            if not agent_unchanged:
+                err = _domain_agent_error(con, default_agent, default_agent_model,
+                                          (prev["default_agent_id"] or "") if prev else "")
+                if err:
+                    return jsonify({"error": err}), 400
+            # The default formula (TMDEV-213) follows the same rule: checked
+            # only when it changes, so one a later version dropped does not
+            # block every other edit; seeding skips it. An experimental one is
+            # allowed whatever the setting says: the setting is about what
+            # Auto may pick. Keep in sync: mcp/server.py's upsert_project.
+            formula_unchanged = (prev is not None
+                                 and (prev["default_formula_id"] or "") == default_formula)
+            if (default_formula and not formula_unchanged
+                    and default_formula not in tformulas.FORMULAS):
+                return jsonify({
+                    "error": f"default_formula_id {default_formula!r} is not a formula. Must be "
+                             f"one of: {list(tformulas.FORMULAS)}, or \"\" for Auto"
+                }), 400
             con.execute(
                 """INSERT INTO projects (id, name, description, is_curriculum_seed, status,
                                          default_visual_style, default_voice_id,
                                          default_script_profile_id, default_mascot_id,
-                                         topic_cap, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                         default_agent_id, default_agent_model,
+                                         default_agent_effort, default_formula_id, topic_cap,
+                                         created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                      name=excluded.name,
                      description=excluded.description,
@@ -3667,9 +4352,14 @@ def create_pipeline_blueprint() -> Blueprint:
                      default_voice_id=excluded.default_voice_id,
                      default_script_profile_id=excluded.default_script_profile_id,
                      default_mascot_id=excluded.default_mascot_id,
+                     default_agent_id=excluded.default_agent_id,
+                     default_agent_model=excluded.default_agent_model,
+                     default_agent_effort=excluded.default_agent_effort,
+                     default_formula_id=excluded.default_formula_id,
                      topic_cap=excluded.topic_cap""",
                 (pid, body["name"], description, is_seed, status,
                  default_style, default_voice, default_profile, default_mascot,
+                 default_agent, default_agent_model, default_agent_effort, default_formula,
                  topic_cap, _now()),
             )
             row = con.execute(f"{_PROJECT_SELECT} WHERE p.id = ?", (pid,)).fetchone()
@@ -3841,6 +4531,21 @@ def create_pipeline_blueprint() -> Blueprint:
                          f"got {model_id!r}"
             }), 400
 
+        # The speed the preview speaks at (TMDEV-216): the body's, so Settings
+        # can preview a change before it is saved, else the voice's stored
+        # one. A stored speed is dropped when the body names a model that
+        # ignores it; a speed the body asks for on such a model is refused.
+        if isinstance(body, dict) and "speed" in body:
+            speed = body["speed"]
+            err = tvoice.speed_error(speed, model_id, voice["name"])
+            if err:
+                return jsonify({"error": err}), 400
+            speed = round(float(speed), 2)
+        else:
+            speed = tvoice.voice_speed(voice)
+            if model_id not in tvoice.SPEED_MODELS:
+                speed = tvoice.DEFAULT_SPEED
+
         api_key = _secret(settings, "elevenlabs_api_key", "ELEVENLABS_API_KEY")
         if not api_key:
             return jsonify({
@@ -3848,8 +4553,11 @@ def create_pipeline_blueprint() -> Blueprint:
                          "access. Add it on the Settings page."
             }), 503
 
+        # The key names the speed only when it is not the default, so every
+        # preview cached before speeds existed is still found.
+        speed_part = "" if speed == tvoice.DEFAULT_SPEED else f"|{speed:.2f}"
         cache_key = hashlib.sha256(
-            f"{voice_id}|{model_id}|{VOICE_PREVIEW_SAMPLE_TEXT}".encode()
+            f"{voice_id}|{model_id}{speed_part}|{VOICE_PREVIEW_SAMPLE_TEXT}".encode()
         ).hexdigest()[:16]
         preview_dir = OUTPUT_DIR / "voice-previews"
         preview_path = preview_dir / f"{cache_key}.mp3"
@@ -3865,6 +4573,8 @@ def create_pipeline_blueprint() -> Blueprint:
             "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
             "output_format": "mp3_44100_128",
         }
+        if speed != tvoice.DEFAULT_SPEED:
+            payload["voice_settings"]["speed"] = speed
         headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
         try:
             with _httpx.Client(timeout=60) as client:
@@ -4288,12 +4998,28 @@ def create_pipeline_blueprint() -> Blueprint:
     @bp.get("/videos/<video_id>/publications")
     def get_video_publications(video_id):
         """Where a video actually went. Replaces videos.youtube_url as the read
-        path — one TEXT column cannot hold four platform URLs."""
+        path — one TEXT column cannot hold four platform URLs.
+
+        Each row also carries its latest snapshot (the four counts, the watch
+        figures and when it was read), so the video window shows how a post is
+        doing without a second request. A row with no snapshot has them all
+        None.
+        """
         with _conn() as con:
             rows = con.execute(
-                "SELECT * FROM video_publications WHERE video_id = ? ORDER BY platform, id",
+                "SELECT vp.*, v.duration_secs, m.views, m.likes, m.comments, m.shares,"
+                " m.fetched_at, m.raw_json" + _LATEST_METRIC_FROM
+                + " WHERE vp.video_id = ? ORDER BY vp.platform, vp.id",
                 (video_id,)).fetchall()
-        return jsonify([_publication_row(r) for r in rows])
+        out = []
+        for row in rows:
+            entry = _publication_row(row)
+            for column in postforme.METRIC_COLUMNS:
+                entry[column] = row[column]
+            entry.update(_watch_figures(row["platform"], row["raw_json"], row["duration_secs"]))
+            entry["fetched_at"] = row["fetched_at"]
+            out.append(entry)
+        return jsonify(out)
 
     @bp.post("/videos/<video_id>/publish-prefill")
     def publish_prefill(video_id):
@@ -4541,14 +5267,14 @@ def create_pipeline_blueprint() -> Blueprint:
     # Latest snapshot per publication. Each video_metrics row is a cumulative
     # reading, so the series is read with a max-fetched_at pick rather than a
     # SUM — adding two snapshots of the same post would double-count it.
-    _LATEST_METRIC_JOIN = """
+    _LATEST_METRIC_FROM = """
         FROM video_publications vp
         JOIN videos v ON v.id = vp.video_id
         LEFT JOIN video_metrics m ON m.id = (
             SELECT id FROM video_metrics WHERE publication_id = vp.id
             ORDER BY fetched_at DESC, id DESC LIMIT 1)
-        WHERE vp.status = 'PUBLISHED'
     """
+    _LATEST_METRIC_JOIN = _LATEST_METRIC_FROM + " WHERE vp.status = 'PUBLISHED'"
 
     @bp.get("/analytics")
     def get_analytics():
@@ -4560,13 +5286,15 @@ def create_pipeline_blueprint() -> Blueprint:
 
         Aggregating `views` across platforms is defensible and is all that is
         summed here. Platform-specific metrics are deliberately not summed —
-        they live in video_metrics.raw_json and mean different things.
+        they live in video_metrics.raw_json and mean different things. Each
+        row carries its own watch figures (seconds watched, share watched,
+        stayed to watch, reach, saves), read from that payload.
         """
         platform = request.args.get("platform", "").strip()
         account_id = request.args.get("social_account_id", "").strip()
 
-        sql = "SELECT vp.*, v.title, v.topic, m.views, m.likes, m.comments, m.shares," \
-              " m.fetched_at" + _LATEST_METRIC_JOIN
+        sql = "SELECT vp.*, v.title, v.topic, v.duration_secs, m.views, m.likes, m.comments," \
+              " m.shares, m.fetched_at, m.raw_json" + _LATEST_METRIC_JOIN
         params = []
         if platform:
             sql += " AND vp.platform = ?"
@@ -4590,6 +5318,7 @@ def create_pipeline_blueprint() -> Blueprint:
                 totals[column] = totals.get(column, 0) + (row[column] or 0)
                 bucket = by_platform.setdefault(row["platform"], {})
                 bucket[column] = bucket.get(column, 0) + (row[column] or 0)
+            entry.update(_watch_figures(row["platform"], row["raw_json"], row["duration_secs"]))
             entry["fetched_at"] = row["fetched_at"]
             publications.append(entry)
 
@@ -4601,6 +5330,54 @@ def create_pipeline_blueprint() -> Blueprint:
         return jsonify({"totals": totals, "by_platform": by_platform,
                         "publications": publications, "by_month": by_month,
                         "timezone": zone_name})
+
+    @bp.get("/analytics/watch-time")
+    def get_watch_time():
+        """One account's watch figures, grouped every way the page offers.
+
+        Figures from different platforms or accounts are never put in one
+        group (see WATCH_MIN_GROUP's section), so there is no all-accounts
+        view: without social_account_id the answer is for the account with
+        the most published posts, and `accounts` lists the others to pick
+        from. Every dimension comes back in one response, so changing the
+        grouping on the page asks for nothing. Served from the local
+        snapshots, like /analytics.
+        """
+        account_id = request.args.get("social_account_id", "").strip()
+        with _conn() as con:
+            accounts = [
+                {"id": r["social_account_id"], "platform": r["platform"], "videos": r["n"]}
+                for r in con.execute(
+                    "SELECT social_account_id, MIN(platform) AS platform, COUNT(*) AS n"
+                    " FROM video_publications WHERE status = 'PUBLISHED'"
+                    " GROUP BY social_account_id ORDER BY n DESC, social_account_id")]
+            if not account_id and accounts:
+                account_id = accounts[0]["id"]
+            fetched = con.execute(
+                "SELECT vp.platform, v.visual_style, v.resolved_renderer, v.script_profile_id,"
+                " v.project_id, v.script, v.duration_secs, v.formula_id, v.hook_type,"
+                " sp.name AS profile_name,"
+                " p.name AS project_name,"
+                " m.raw_json" + _LATEST_METRIC_FROM
+                + " LEFT JOIN script_profiles sp ON sp.id = v.script_profile_id"
+                  " LEFT JOIN projects p ON p.id = v.project_id"
+                  " WHERE vp.status = 'PUBLISHED' AND vp.social_account_id = ?",
+                (account_id,)).fetchall()
+        rows = []
+        for row in fetched:
+            entry = dict(row)
+            entry["figures"] = _watch_figures(row["platform"], row["raw_json"],
+                                              row["duration_secs"])
+            rows.append(entry)
+        return jsonify({
+            "accounts": accounts,
+            "social_account_id": account_id,
+            "platform": rows[0]["platform"] if rows else "",
+            "videos": len(rows),
+            "min_group": WATCH_MIN_GROUP,
+            "dimensions": [{"id": dim, "label": label, "groups": _watch_groups(rows, dim)}
+                           for dim, label in WATCH_DIMENSIONS],
+        })
 
     ANALYTICS_MONTHS = 12
 
@@ -4784,6 +5561,29 @@ def create_pipeline_blueprint() -> Blueprint:
         with _conn() as con:
             return jsonify(gpu_status(con))
 
+    @bp.get("/visual-styles")
+    def list_visual_styles():
+        """Every visual style, "auto" first, from the style packs, with whether
+        this install can produce it now and why not. The dashboard builds its
+        pickers from this; the write routes stay the authority on refusals."""
+        with _conn() as con:
+            key_set = bool(_secret(_read_all_settings(con), "openai_api_key", "OPENAI_API_KEY"))
+            return jsonify({"styles": tvs.public_list(key_set, trenderers.gpu_status(con)["status"])})
+
+    @bp.get("/script-formulas")
+    def list_script_formulas():
+        """Every script formula and every hook type, with its label, from the
+        formula files. The dashboard uses it to name what a video's script
+        recorded (formula_id, hook_type)."""
+        return jsonify(tformulas.public_list())
+
+    @bp.get("/angle-kinds")
+    def list_angle_kinds():
+        """The kinds a topic's angle can be, each with its label and what a
+        topic must hold for it, from tubematic_core.angles. The dashboard uses
+        it to label a video's angle and to fill the kind picker."""
+        return jsonify(tangles.public_list())
+
     @bp.post("/render/gpu/test")
     def request_gpu_test():
         """Ask the built-in renderer to probe again: the gateway's next
@@ -4939,10 +5739,20 @@ def create_pipeline_blueprint() -> Blueprint:
         Bounded by the per-account walk: one feed per account regardless of how
         many videos have been published. Returns counts rather than the payload
         — the page re-fetches /analytics itself, so this stays one job.
+
+        It first stores the length of published videos that have none, as the
+        worker's pass does (fill_video_durations): one timeline read per such
+        video that is still on disk.
         """
         _settings, api_key, err = _publishing_context()
         if err:
             return err
+        # As the worker's hourly pass does: a post first read from here would
+        # otherwise show Instagram's seconds with no share until that pass.
+        try:
+            fill_video_durations(db_path)
+        except Exception:  # noqa: BLE001 - a missing length must not fail the refresh
+            log.exception("storing video lengths failed")
         return jsonify(metrics_poll.poll(db_path, api_key))
 
     # ── /script-profiles ──────────────────────────────────────────────────────

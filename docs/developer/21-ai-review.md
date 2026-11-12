@@ -94,6 +94,11 @@ The style flags come from `pipeline.py::effective_canvas`, `figures_allowed` and
   art is what that style excludes.
 - `cartoon_3d` (the chosen style, or `videos.resolved_renderer`) replaces the other three.
 
+A [style pack](10-scene-authoring.md#style-packs) may carry its own `review` text, which
+`render_results.py` passes as `style_block`. When it is present it replaces the canvas and figure
+blocks, which describe the scene system's styles. System Flow, Bean Explainer, Whiteboard,
+Storybook Atlas, Terminal Doc, Under the Hood and Case File Story carry one.
+
 ## The prompt's guard clauses
 
 The prompt is `ai_review.py::_REVIEW_PROMPT`, with the style contract (`_register_block`) and the
@@ -111,7 +116,15 @@ paid re-voice. Each clause below prevents one. Keep them.
 | Discrete motion | Figures hold a pose and change state in a single frame, roughly 2 to 5 times per 10 seconds | A held pose reads as broken animation on every video with figures |
 | Line art | Simple line-art stick figures are the intended style | Flat, unshaded figures are reported as placeholder art |
 | Cartoon 3D | Ink outlines, depth-of-field blur, colour grading, film grain, the vignette, flat cut-out characters and a continuously moving camera are the style. Report only a frozen, black or white frame | Each of those reads as a rendering fault |
+| System Flow (from its pack) | Dimmed parts, dotted connectors with travelling lights, a glow on the active box, a moving camera and no people or images are the style. It still lists what to report | The dimming and missing imagery read as defects against the dark-canvas contract |
+| Bean Explainer (from its pack) | A flat colour field, a thick-outlined bean that snaps between poses and holds still, props that build up until each cut, and no photographs are the style. It still lists what to report | The held poses and missing imagery read as broken animation and an unfinished video |
+| Whiteboard (from its pack) | A flat white board, three inks, a floating marker, glides with no cuts, writing that lands about half a second after its word, and small writing in the closing pull-back are the style. It still lists what to report | Every video is reported for lagging writing and an unreadable ending |
+| Storybook Atlas (from its pack) | Hatched paper, a chapter plaque, stiff picture-book people known by their name tags and clothes, a mouse guide walking on twos, plates behind brass shutters and the small caption label are the style. It still lists what to report | The figures read as placeholder art, the small label as missing captions, and the held poses as broken animation |
+| Terminal Doc (from its pack) | Sparse monospace text, typing, glyph noise, a ciphertext wall, an empty dark frame, the amber CRT skin and the typed log captions are the style. It still lists what to report, including stage text that repeats the sentence being spoken | On-screen text reads as duplicated narration and the empty frame as an unfinished video |
+| Under the Hood (from its pack) | Word-by-word captions, a pushing close-up photograph, labels on leader lines, gold arcs, ticking counters and a presenter without lip sync are the style. It still lists what to report, a label on the wrong part first | The labels and the presenter read as clutter or broken animation |
+| Case File Story (from its pack) | Painted stills that push and punch in, a lead with no nose or mouth, the meter row, the cards, the stamp and the choice buttons are the style, and none is redundant text. It lists what to report, a changed lead first | The cards and buttons read as duplicated narration and the lead's blank face as an unfinished drawing |
 | Two scripts | Where the written and spoken forms differ, audio matching the spoken form is correct. An IPA transcription between slashes is spoken as the sounds it spells | Every working respelling or IPA term is reported as a mispronunciation |
+| Voices (`_voices_block`) | The narration is spoken by the named voices, and a change of speaker between lines is correct. Added only when two or more voices speak the narration, so a one-voice prompt is unchanged | Every video with a second voice is reported for an inconsistent narrator |
 | Decorative suggestions | A suggestion must critique something in the video. Adding a glow, an icon or a flourish does not count, and an empty list is acceptable | The model pads `suggestions`, and any suggestion costs a revision round |
 
 ### Scope of the clauses

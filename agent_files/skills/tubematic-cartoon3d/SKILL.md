@@ -6,11 +6,12 @@ description: Author a Cartoon 3D narrated Short as TypeScript written for this o
 # Tubematic Cartoon 3D authoring skill
 
 **Invoke this skill when:** a video is at `VOICE_READY` (`generate_voice` has produced its timeline) and it is
-a **Cartoon 3D** Short: its `visual_style` is `cartoon_3d`, or it is `auto` and the `tubematic-scene-config`
-skill has just resolved the renderer to `cartoon_3d` (`resolved_renderer` on `get_video`). Every other video
-takes the `tubematic-scene-config` skill. A video with a mascot (`mascot` on `get_video` is set) is never a
-Cartoon 3D Short, so it never reaches this skill: under `auto` the scene-config skill resolves it to the scene
-renderer. Also take this skill, on its **Revising an existing video** branch,
+a **Cartoon 3D** Short: its `visual_style` is `cartoon_3d` (a person chose it, or Auto picked it before the
+script), or it is `auto` with `resolved_renderer` `cartoon_3d` on `get_video` (recorded before Auto picked
+styles; the `tubematic-scene-config` skill hands such a video over). Every other video
+takes the skill `get_video` names in `style.authoring_skill` (`tubematic-scene-config` unless its style has its own). A video with a mascot (`mascot` on `get_video` is set) is never a
+Cartoon 3D Short, so it never reaches this skill: Auto cannot pick the style for it, and a person cannot
+choose it. Also take this skill, on its **Revising an existing video** branch,
 for a `REVISION_REQUESTED` video whose scene-config carries a Cartoon 3D scene (`props.cartoon3d`). The style
 renders on the GPU only: `cartoon_3d_available` on `get_video` is true while it can; the pipeline refused the
 style otherwise.
@@ -92,6 +93,16 @@ Before any code, write a table with one row per shot:
 - **Reactions land on their word.** An expression or gesture change inside a shot is timed to the word's
   `startFrame`, landing `LEAD` (2 frames) early. Aim for the first stressed word of the phrase.
 
+## The opening and the beats
+
+`get_timeline` gives each segment a `beat` and a `role`, and the result a `first_frame` (the formula's line on what the first frame shows, `""` when the video has no formula). The first segment's role is `opening`. A `turn` or `reopen` segment needs a visible change on its first word, the `payoff` segment the video's strongest picture, and a segment with role `""` only its own brief. `get_video`'s `style.picture` says how this style does each; in short:
+
+- Opening: shot 1 is already in motion at frame 0, a character mid-action on the set the first sentence names, the camera moving. Never a title, a black frame or an empty set.
+- Turn or re-opening: a cut to a new shot on its first word, or a punch-in or impact kick on it.
+- Payoff: the shot with the answer, held longest, with the camera's strongest move. No closing card after it.
+
+Plan these in the shot table of Step 1: a `turn`, `reopen` or `payoff` segment's first word is where a shot starts. No warning checks this style; it is yours to get right.
+
 ## Step 2 — write the video
 
 Write these files with `write_scene_file(video_id, scene_name, tsx_content)`; `scene_name` carries the
@@ -127,7 +138,7 @@ scene spans the video and the beats tile it.
 
 ## Step 3 — the loop: typecheck, look, fix
 
-1. `validate_job(video_id)` typechecks the whole project; its first error lines name your file and line. A
+1. `validate_job(video_id)` typechecks your video's source and what it imports; its first error lines name your file and line. A
    file that does not compile renders nothing: fix every error before looking at a frame. (Its readiness
    error about the beat gate is expected at this point; ignore it until step 4.)
 2. `cartoon_still(video_id, frames)` on the **middle frame of every shot**, six at a time, and look at every

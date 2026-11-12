@@ -1,6 +1,6 @@
 ---
 name: tubematic-script-writing-skill
-description: Write a Tubematic video script as an ordered segments list, in the video's chosen script profile style
+description: Write a Tubematic video script as an ordered segments list - in the formula picked for the video, in the voice of the video's script profile
 ---
 
 # Skill: Write a Video Script
@@ -10,13 +10,19 @@ needs its script written.
 
 ---
 
-## Step 1 — Read the video and its script profile
+## Step 1 — Read the video, its script profile and the preferences
 
-1. Call `get_video(video_id)` — read the topic, the title, and any human comments.
+1. Call `get_video(video_id)` — read the topic, the title, and any human comments. Read the
+   topic's angle too: `angle` is one sentence saying what the opening will use, `angle_kind` is
+   its kind, and `angle_formula` is the formula that kind points to (tubematic-formula-routing
+   starts from it when it picks the formula). All three are empty
+   when the topic has no angle; that is a normal state. On a revision
+   also read `formula_id`, `hook_alternatives` and `script_warnings`: what the last draft was built
+   on and what it was flagged for.
 2. Read the video's `script_profile_id`.
    - **Non-empty** → call `get_script_profile(<id>)`. Its `markdown` is the corpus-derived style
-     for this script: voice and tone, hook formulas, structure, CTA shape, anti-patterns. Write in
-     that style.
+     for this script: voice and tone, vocabulary, phrasing, explanation habits. Write in that
+     voice. Step 2 says which parts of a profile apply.
    - **Empty**, or the profile is not `READY`, or `markdown` comes back empty with a `warning` (an
      old profile that does not meet the profile schema) → use the **Generic style** section below.
      This is a normal, supported state, not an error. Do not wait for a profile and do not ask for
@@ -28,12 +34,57 @@ needs its script written.
    old one — take `model_id` and `pronunciation_mode` from that voice's entry in
    `get_pipeline_status`'s `elevenlabs_voices` instead. Then call `get_pipeline_status()` once — you need
    `pronunciation_lexicon` before drafting (Steps 5 and 6), and `user_preferences`: apply the parts
-   about scripts (tone, audience, wording, length) and ignore the rest. The fixed policy below
-   still wins over a preference that contradicts it.
+   about scripts (tone, audience, wording, length, a closing line) and ignore the rest. The fixed
+   policy below still wins over a preference that contradicts it.
+
+**A closing line exists only when the preferences ask for one.** A script ends on its payoff
+(Step 4, rule 10). If `user_preferences` asks for a closing line (a follow ask, a sign-off, a
+question to the viewer), add exactly one sentence after the payoff that does what the preference
+asks, tied to this video's subject, in the voice of the profile or the generic style. Word it
+differently from video to video unless the preference gives the exact words. `update_video` may
+return a warning about that sentence (`closing_ask`, or `closing_repeat` or `recap_ending` when
+its wording trips them); that is expected, and the line stays.
+
+**A length preference** moves the script inside its formula's band, or decides between two
+formulas that both fit. It never passes the ceiling (Step 3).
 
 ---
 
-## Step 2 — Fixed policy: what a profile can and cannot change
+## Step 2 — Who decides what
+
+Four sources shape a script. Where two disagree, the one earlier in this list wins:
+
+1. **Fixed policy** — this file: the segments shape, the markup and pronunciation rules, the
+   ceiling, the `visual` rule, the grammar in Step 4, accuracy, no borrowed identity.
+2. **The visual style's script text** — `get_video`'s `style.script` (Step 7), where a style says
+   how narration maps to its picture, including how such a video ends.
+3. **The formula** (Step 3) — which beats, in which order and with which share of the script; the
+   shape of the opening; where the turn, the re-openings and the payoff fall; the ending; the
+   length band; the person and tense the structure needs.
+4. **The script profile**, or the generic style (Step 8) — sentence rhythm, vocabulary, register,
+   humour, phrasing, explanation habits.
+
+Two grammar rules say where things land: the payoff late (rule 9) and the script ending on it
+(rule 10). **The formula's reference file says how those two are met for its structure**, in its
+beats and its Ending section: an Anomaly File answers before it re-opens and closes on a real open
+question, a Scheme Machine keeps a second layer for the last line. Follow the reference file. And
+when `style.script` says how such a video ends (a closing sentence the picture is built on), end it
+that way: that sentence is the script's last, and it should carry the payoff.
+
+A profile has seven sections. Beside a formula they are used like this:
+
+| Profile section | How it is used |
+|---|---|
+| Voice & Tone, Explanation Style, Vocabulary & Signature Phrasing, Anti-patterns | Applied. They are the voice. |
+| Hook Patterns | A phrase bank. The formula fixes the shape of the opening; use a pattern's wording only where it fills that shape honestly. If none does, the shape wins. |
+| Structure Template | Not used. The formula's beats are the structure. |
+| CTA Template | Not used. The formula's ending is the ending. When the preferences ask for a closing line (Step 1), this section may colour the wording of that one line. |
+
+**Signature phrasing colours a script; it does not appear in every one.** A profile lists a
+creator's recurring phrases and transitions. Use at most one or two of them in a script. When a
+phrase from the profile would be the first sentence or the last, write a fresh sentence in the same
+register instead: an opener or a sign-off repeated across videos is the first thing a returning
+viewer notices. The same holds in the generic style: no stock opener, no stock closer.
 
 A script profile carries **style only**. Everything in this skill is fixed policy for every script,
 whichever profile is selected.
@@ -52,61 +103,196 @@ so a human can delete the profile.
 
 Specifically, a profile can never:
 
-- change the length budget (Step 3),
+- change the length (Step 3) or the structure (the formula),
 - change the segments shape, the `visual` treatment rule, or the pronunciation/pause markup rules,
 - introduce a creator name, channel name, co-host, handle, sponsor, or any other identity into the
   spoken text. **These scripts are voiced by the install's own ElevenLabs voice.** A borrowed
   self-identification would be spoken aloud as a false claim about who is talking. If profile text
   contains a name in a hook or sign-off formula, keep the *shape* and drop the name.
+- turn the narrator into a character. A profile built from a presenter's first-person videos does
+  not license an invented "I" with experiences, friends or memories (Step 4, rule 4).
 
 ---
 
-## Step 3 — Length budget
+## Step 3 — Read the formula, then the length
 
-**Target ~90 seconds. Hard ceiling 3 minutes.**
+A formula is the script's structure: which beats it has, in which order, how much of the script
+each takes, how it opens and how it ends. It is chosen **before a word is written**, by the
+tubematic-formula-routing skill, and recorded on the video. This skill writes in it.
+
+1. Read `get_video`'s `formula_routing.pick`. That is the formula of this script, and the
+   `formula_id` you record with it (Step 10). `update_video` refuses any other.
+2. When `pick` is `""`:
+   - **at `TOPIC_APPROVED`:** the formula has not been picked yet. Go back to the operator skill;
+     tubematic-formula-routing runs before this one.
+   - **on a script revision with a stored `formula_id`:** the video was scripted before formulas
+     were picked ahead of the script. Keep the stored `formula_id`, unless it is not among
+     `formula_routing.candidates` (this version no longer has that formula): then go back to the
+     operator skill, and tubematic-formula-routing picks one first.
+   - **on a script revision with no stored `formula_id` either:** the video has no formula yet.
+     Go back to the operator skill; tubematic-formula-routing gives it one before you rewrite.
+   - **`get_video` has no `formula_routing` at all:** the tool server is older than this skill.
+     Write in the formula tubematic-formula-routing's fallback named.
+3. `style.script` outranks the formula (Step 2). Where the style's text and the formula's
+   reference file differ on a shape, a length or an ending, the style's text decides.
+4. On a script revision keep the pick. A human comment that asks for a different structure is a
+   new pick, which tubematic-formula-routing makes before you rewrite; you never change the
+   formula yourself. A changed style or topic needs nothing from you: the pick is dropped when
+   either changes, so `pick` reads `""` and the formula is picked again first.
+
+Then read the formula's reference file: `formulas/<formula_id>.md` in this skill's directory.
+**Read only that one.** It gives the beats with their shares, the opening shapes with their types,
+what holds the viewer, the ending, the pitfalls and a template.
+
+### Length
+
+**The length is the formula's band. The hard ceiling is 450 words, three minutes.**
 
 Three minutes is the YouTube Shorts ceiling — past it the video is no longer a Short. Measured
 across real Tubematic renders, ElevenLabs speaks at a steady **~157 words per minute** (151–162
 across nine videos; word count predicts finished duration within ~4%). So:
 
-| | Words | Spoken |
-|---|---|---|
-| Target | **~235** | ~90s |
-| Hard ceiling | **450** | 3:00 |
-
-Count words across every segment's `voice` field combined. Do not go past 450 — nothing downstream
-enforces this, and scripts written before this rule existed ran 420–660 words and produced
-four-minute videos.
-
-Per-beat budgets at the ~235 target. Scale them proportionally if the topic genuinely needs more,
-never past 450 total:
-
-| Beat | Words |
+| Words | Spoken |
 |---|---|
-| Hook | ~25 |
-| Context | ~35 |
-| Core content | ~120 |
-| Takeaway | ~30 |
-| CTA | ~25 |
+| 100 | ~40s |
+| 150 | ~57s |
+| 200 | ~76s |
+| 250 | ~96s |
+| **450, the ceiling** | 3:00 |
+
+The band is in the formula's reference file. **Start from the lower half
+of the band.** Go past its middle only when cutting the words would cost a beat a fact the payoff
+depends on. A script earns a minute and a half or more only by re-opening its question every few
+sentences; a recap never earns the time.
+
+When `style.script` gives a length of its own (a number of words, chapters or steps), that length
+wins over the band (Step 2).
+
+The band is in words. A voice with a `speed` above 1.0 in the roster speaks the same words in less
+time; do not write more words to fill the seconds it saves.
+
+Count words across every segment's `voice` field combined. `update_video` returns a warning for a
+script outside its formula's band or past the ceiling; it does not refuse it.
 
 ---
 
-## Step 4 — Structure and the segments mapping
+## Step 4 — Write it: the grammar, three openings, the segments
 
-The canonical sequence is **hook → context → core content → takeaway → CTA**, unless the profile
-gives a different one.
+### The grammar
 
-The script is produced as an ordered list of **segments**, each `{id, voice, visual}` (full shape in
-Step 5). The mapping from beats to segments:
+Fixed policy for how every script is written, under every formula and every profile. A formula
+arranges beats; these rules decide whether the beats work.
 
-- **One segment per beat by default** — five segments total.
-- **The core-content beat may split into two or more segments** if it covers more than one distinct
-  conceptual point. Each segment must correspond to exactly one visual idea and one visual
-  treatment (photographic, diagrammatic, or both — Step 7); a beat needing both a photographic
-  moment and a separate standalone diagram is two segments, since each segment's `visual` drives one
-  downstream scene.
-- **Never split hook, context, takeaway or CTA** — each is a single beat by definition.
-- A beat's word budget applies to its segments combined.
+1. **Open on an act, an anomaly or a paradox. Never on a label.** The first sentence puts
+   something that can be drawn in motion, or states two facts that cannot both be true. No
+   greeting, no definition, no "in this video", no date followed by a life history, no tool name
+   with nothing happening to it.
+2. **The title and the opening are a pair.** The publish title states the question or the stake;
+   the voice starts inside the answer, and the first sentence continues from where the title stops.
+   Neither repeats the other.
+3. **Name the subject early, hold the answer late.** By the end of the second sentence the viewer
+   knows what this is about. What they do not have yet is the answer, the name or the number. One
+   subject, one question.
+4. **Put "you" or one actor with intent in the seat. Never an invented "I".** In an explanation:
+   the viewer's own device, body, code or habit. In a story: one person who decides something,
+   named by role, and by name where `style.script` asks for names. The narrator is not a
+   character.
+5. **Specifics by the second sentence, and one number pair.** A name, a number, a place or a year
+   early. Somewhere in the script, a before and an after, or a number set against something the
+   viewer knows.
+6. **Chain with "but" and "so". One short turn sentence in the middle.** Each sentence is caused
+   by the one before it, or turns it. Around the middle, one sentence of three to ten words
+   changes direction. No run of "also".
+7. **Re-open the question twice.** A wrong suspect, the viewer's objection spoken aloud, new
+   evidence, the next rung. Each re-opening carries a new fact, never a staged phrase ("Here's the
+   thing", "Here's the catch").
+8. **Show it working, then name it.** Action first, term second, one new term per beat. No block
+   of background before something happens: the constraint is the context.
+9. **Hold the payoff late, and make it a definite answer.** The what may come early. The how, the
+   name, the number or the verdict lands in the last fifth, or where the formula's beats put it.
+   No hedge.
+10. **End on the payoff. Nothing after it.** No recap, no moral, no "next time you", no sign-off.
+    The formula's Ending section says what the payoff is for its structure. The only sentence that
+    may follow it is the closing line Step 1 describes.
+11. **Write sentences that can be drawn.** Concrete nouns. The first segment's picture is the
+    subject of its first sentence, as the formula's First frame section describes it. Pointing words
+    ("watch this", "here") only where the same segment's `visual` brief shows the thing pointed at.
+12. **Vary.** No fixed opener, no fixed closer, no sentence that would fit any topic. Two scripts
+    in one domain should not open or close the same way.
+13. **Length follows the formula** (Step 3).
+14. **Every number, name, study and incident is real.** A formula never licenses an invented
+    fact, an invented study or an invented open question. If the topic has no real anomaly or no
+    real number, choose another formula.
+
+A list is fine where the topic is a list and the formula or the style asks for one. What fails is
+a flat list: items of equal weight with nothing joining one to the next.
+
+### Three openings, then one
+
+Before writing the script, draft three openings for the chosen formula, **each from a different
+shape** in its reference file. Three shapes, not one opening worded three ways.
+
+**When the video has an angle, all three are built on it.** Each shape puts that same thing (the
+contradiction, the failure, the belief, the incident) to the viewer its own way. The `angle`
+sentence is a note to you, never a line of the script: do not reuse its wording. If the topic's
+facts do not support the angle, treat it as an opening that overclaims (item 1): open on what the
+facts do support and say so in the hand-off comment.
+
+Then:
+
+1. Mark any opening that claims more than the script will deliver, or that this topic cannot fill
+   with real facts. It is out; give it a `note` saying why.
+2. Of the rest, keep the one that names something drawable and reaches the subject soonest.
+   Between two that do so equally, keep the one whose type is not in
+   `formula_routing.recent.hook_types` (the types of opening the domain's previous two videos
+   used): `update_video` warns (`hook_type_repeat`) when the kept type repeats one of them.
+   When that still leaves two, read `formula_routing.learned.openings`: the types of opening
+   with enough of this domain's videos to read, each with its `standing` (`better`, `even`,
+   `mixed` or `worse` at holding this domain's viewers) and `videos`. Keep the one whose type
+   stands better there, counting a type that is not in the list, and a `mixed` one, as `even`. The list is empty on a
+   trial pick, and then nothing breaks the tie but the order of your drafts. The list only breaks
+   a tie: an opening that is weaker for this topic never wins because its type did well on other
+   videos.
+3. The kept opening is the start of the first segment's `voice`, word for word.
+
+**When a person switched the opening.** A human comment that begins "Opening switched to" means a
+person chose one of the stored openings at Script Ready. It applies when it is the newest human
+comment and no script has been written since it (the stored `formula_id` is then `""`). Then
+`hook_alternatives` already marks the chosen opening `kept`. Do not draft new openings: start the script with that opening word for word, rewrite the
+rest from it in the same formula, and send the same three openings back as `hooks` with `kept` on
+the one the person chose.
+
+All three go to `update_video` as `hooks` (Step 10), each
+`{"type": "<the shape's type>", "text": "<the opening>", "kept": true or false, "note": "<optional>"}`,
+with `kept: true` on exactly one. The types are the ones in the reference file's Openings table.
+
+### Segments
+
+The script is produced as an ordered list of **segments**, each `{id, voice, visual}` plus an
+optional `beat` (full shape in Step 5). The mapping from the formula's beats to segments:
+
+- **Segments follow the formula's beats, in order.** Give each segment a `beat`: the name of the
+  beat it belongs to, as the reference file spells it.
+- **Each segment is exactly one visual idea and one visual treatment** (photographic,
+  diagrammatic, or both — Step 7). A beat needing both a photographic moment and a separate
+  standalone diagram is two segments, since each segment's `visual` drives one downstream scene.
+- **A long beat splits** into several segments, one per visual idea (the steps of a mechanism, the
+  rungs of a ladder). Two short beats that share one picture may share a segment, labelled with
+  the first, unless the second has an on-screen duty in the formula's Beats table (a turn, a
+  re-opening, the payoff): that beat starts a segment of its own, so the picture can change on its
+  first word.
+- A beat's share of the script applies to its segments combined.
+- Most scripts come to five to nine segments.
+
+### Before you hand off
+
+Read the draft once against these. If any answer is no, rewrite once; one pass, not a loop.
+
+- After two sentences, does the viewer know the subject and still lack the answer?
+- Is there one question the whole script answers, re-opened twice with a new fact each time?
+- Does the script end the way the formula's Ending section says (or the way `style.script` says,
+  where it says), with nothing after it except a closing line the preferences asked for?
+- Can every number, name and claim be traced to the topic brief or a source?
 
 ---
 
@@ -121,6 +307,16 @@ An ordered array `[{"id": ..., "voice": "...", "visual": "..."}, ...]` in play o
 
 - **`id`** — a short stable slug: `seg-1`, `seg-2`, … in play order.
 - **`voice`** — pure TTS-clean spoken text for that segment.
+- **`beat`** — optional: the name of the formula beat this segment belongs to (Step 4), as the
+  formula's reference file spells it. It is shown beside the segment at Script Ready and is never
+  spoken.
+- **`voice_id`** — optional: a roster voice that speaks this segment instead of the video's voice.
+  Use one only when the formula, the Preferences or a human revision asks for a second voice (a
+  viewer's objection spoken aloud, two speakers in a dialogue). Use at most one voice besides the
+  video's, taken from `get_pipeline_status()`'s `elevenlabs_voices`, and give it short lines. Leave
+  it out for every segment the video's voice speaks; a `voice_id` equal to the video's voice is
+  dropped. The markup inside such a segment follows that voice's model (Step 5 Pronunciation,
+  Step 6).
 - **`visual`** — a free-text broll/animation directive for that segment. Not an on-screen-text
   directive: the narration is captioned automatically, so see Step 7 before asking for any text. A natural
   language production note, not a formatted spec; the scene-config skill interprets it downstream.
@@ -139,7 +335,7 @@ ElevenLabs TTS and would be read aloud verbatim. Visual and animation directions
 segment's `visual` field.
 
 **The only bracketed text ever allowed in `voice`** is a pause tag — exactly `[pause]`,
-`[short pause]` or `[long pause]`, and only when the video's model is `eleven_v3` or `eleven_v4`
+`[short pause]` or `[long pause]`, and only when the model of the voice speaking that segment is `eleven_v3` or `eleven_v4`
 (Step 6).
 `update_video` rejects any other `[...]` run outright, so a stray stage direction fails loudly at
 authoring time instead of being voiced aloud.
@@ -155,10 +351,25 @@ authoring time instead of being voiced aloud.
   it would be indistinguishable from the marker token ElevenLabs emits for a `<break/>`, which is
   what keeps caption timing unambiguous.
 
+### Writing for a synthetic voice
+
+The script is read by a text-to-speech voice, which says exactly what is written and nothing else.
+
+- **Sentences of 6 to 14 words**, with an occasional 2 to 4 word beat ("That's the trick."). A long
+  sentence with clauses inside it loses its stress in the middle; split it.
+- **Write numbers, units and symbols the way they are said**: "two hundred milliseconds", not
+  "200ms"; "forty percent", not "40%"; "control z", not "Ctrl+Z"; "version three point two", not
+  "v3.2". A voice can misread the written form, and the captions show the words either way.
+- **About one deliberate pause every three or four sentences** (Step 6): after the hook when the
+  picture needs a beat to land, and before the payoff. Never in the middle of an explanation.
+- **Pace is the voice's speed, set in Settings.** Do not cut pauses or cram words to sound faster.
+
 ### Pronunciation
 
 Before drafting, read `pronunciation_mode` ("respell", "phoneme" or "ipa") from `get_video` — it
-follows the model of this video's voice, so two videos can differ — and `pronunciation_lexicon`
+follows the model of this video's voice, so two videos can differ. A segment with its own
+`voice_id` follows that voice instead: take its `pronunciation_mode` from its entry in
+`get_pipeline_status()`'s `elevenlabs_voices`. Also read `pronunciation_lexicon`
 (the `{term, respell}` entries already registered — check it before flagging a term it already
 covers) from `get_pipeline_status()`.
 
@@ -268,8 +479,9 @@ already inline as `<respell>` or `<ipa>` tags.
 Pauses are placed explicitly, not left to the TTS engine to infer from punctuation alone. Which
 syntax is legal depends on the **model**, not on `pronunciation_mode` — independent axes, and the
 default install (`respell` + `eleven_multilingual_v2`) does support break tags. Read
-`elevenlabs_model_id` from the same `get_video` result as Step 5 — the model of this video's voice —
-then:
+`elevenlabs_model_id` from the same `get_video` result as Step 5 — the model of this video's voice;
+for a segment with its own `voice_id`, that voice's `model_id` from `get_pipeline_status()`'s
+`elevenlabs_voices` — then:
 
 | `elevenlabs_model_id` | Explicit pause syntax |
 |---|---|
@@ -316,10 +528,17 @@ visually rich topic ends up as abstract vector art.
 
 ### First read the video's visual register
 
-`get_video`'s `visual_style` is `"motion_graphics"`, `"stick"` or `"auto"`. It is chosen by a human
-at the topic checkpoint and frozen there, which is precisely so that it is knowable *here* —
-changing it after the script exists invalidates every brief below and means a rewrite, not a
-re-render.
+`get_video`'s `visual_style` is `"auto"` or the id of a style. A human chooses it at the topic
+checkpoint, or leaves it on Auto, and then the tubematic-style-routing skill has picked a style
+before you were called (a picked style is the video's `visual_style` now). Either way it is settled
+before you write a word, which is precisely so that it is knowable *here* — changing it after the
+script exists invalidates every brief below and means a rewrite, not a re-render. A `visual_style`
+still at `"auto"` means mixed scenes: no style fit better.
+
+**When `get_video`'s `style.script` is not empty, follow it.** It is the style's own guidance for
+the narration and for each segment's `visual` brief, it comes from the style's pack, and it
+overrides the table below wherever the two differ. Narrative styles depend on it: their script has
+a shape (a story, a list, a chain of steps) the style is built to show.
 
 It is a permission set, not a look, and there are two branches, not three — plus one style that
 is a different renderer. **Figures are permitted** under `"stick"`, `"illustrated"`, `"cartoon_3d"`
@@ -331,9 +550,10 @@ purpose:
 | `motion_graphics` | a diagrammatic brief, or a photographic one if the beat genuinely needs a person shown |
 | `stick`, `illustrated`, `auto` | a **pose** brief — what the figure is doing and feeling |
 | `cartoon_3d` | a **scene** brief — where this happens, who is there and what they do, what thing is on screen. The video is one 3D world with people walking through it, so every beat's brief names a place and an action, never a diagram |
+| any style with `style.script` | what `style.script` says (System Flow's, for example, asks for a **component** brief: which components are on screen and what travels between them) |
 
-Note what this does *not* depend on: the canvas. Under `"auto"` the canvas is chosen later, after
-voicing, and a figure works on either — black line art on light, white on dark. So a pose brief is
+Note what this does *not* depend on: the canvas. Under `"auto"` (mixed scenes) the canvas is chosen
+later, after voicing, and a figure works on either — black line art on light, white on dark. So a pose brief is
 written the same way regardless, and you never need to know which canvas the video will end up
 with in order to write one.
 
@@ -343,8 +563,22 @@ A pose brief names the action and the emotion, not the photography:
 will be built as one.
 
 Everything else in this step is identical in both registers. In particular a **specific, named**
-person, creature or place is a photographic brief under every register — the stick branch is for
-generic roles only.
+person, creature or place is a photographic brief under every scene register — the stick branch is
+for generic roles only. `system_flow` is the exception: it has no photographs, so a named person or
+place there is a labelled component (`"Alice's laptop"` as a `user` or `phone` node), and the
+narration names it. `bean_explainer` has none either: a named thing there is a prop with its name
+on it (a `sign`, a `note`, an address in a `browser` bar). Neither has `whiteboard`: a named person
+or place there is written on the board or drawn as a simple doodle with a label. `storybook_atlas` has
+none either: a named person there is a picture-book figure with a name tag, and a named object is a
+library prop or one drawn for the video. `terminal_doc` has none: a named thing there is its name, a
+string, number or quoted source on a dark screen.
+`under_the_hood` shows only one physical object in close-up photographs: every brief names a part
+of that object and what is labelled on it.
+`case_file_story` has no named people at all: its one person is "you", shown as the style's own
+blank-faced lead, and every brief is a place with what you are doing in it, or a card. Its story
+is a situation the viewer steps into, not an incident reported as real, so rule 14 bears on its
+laws, limits and terms, which must all be real. The amounts in the story and its meters' values
+are part of the invented situation.
 
 ### The treatment follows the beat's subject, not the writer's habit
 
@@ -367,6 +601,18 @@ generic roles only.
   permitted too: a stick figure *is* such a marker, so it is for generic roles only. The moment the
   subject has a name, the brief is photographic again.
 
+### The first segment, and the beats the picture marks
+
+The first segment's `visual` brief asks for the first frame: what the first sentence names, already
+moving, as the formula's **First frame** section describes it ("the failure happening: the wrong
+output coming out", never "a title over the logo"). The scene author opens on exactly that.
+
+A segment whose beat has an on-screen duty in the formula's Beats table (a turn, a re-opening, the
+payoff) is where the picture must change, and its brief names the change: what is new on screen at
+its first word ("cut to the same kitchen, now dark"), and for the payoff, the strongest picture of the
+video. Start such a beat on a segment of its own, so the change can land on its first word. The beat
+name you give the segment is what tells the scene author which is which.
+
 ### Do not ask for on-screen text
 
 **The finished video carries burned-in subtitles of the narration.** Every word of the `voice` is
@@ -388,31 +634,22 @@ the scene-config skill after voicing.
 ## Step 8 — Generic style
 
 Used when the video has **no script profile**, or its profile is not `READY`. A selected profile's
-markdown replaces this section — and only this section.
+markdown replaces this section — and only this section. It is voice only: the structure is the
+formula's (Step 3) and the grammar is fixed (Step 4), with a profile or without one.
 
 **Voice and tone.** Second person, conversational, confident without hype. Explain to a curious
-peer, not to a beginner and not to a room. No filler openers ("In this video we're going to…"), no
-throat-clearing, no self-congratulation.
-
-**Hook.** Open on the tension, not the topic label. A concrete claim, a surprising number, or the
-problem stated as a problem — inside the first two sentences. State what the video is actually
-about by the end of the hook; do not tease past it.
-
-**Structure.** Hook → context (why this matters now) → core content (the mechanism or the steps,
-one idea at a time) → takeaway (the one thing to remember) → CTA.
+peer, not to a beginner and not to a room. No throat-clearing, no self-congratulation.
 
 **Explanation style.** Why before how. One everyday analogy where a concept is genuinely abstract,
-not one per paragraph. Define a term the first time it is used, in a clause, not a digression.
+not one per paragraph. Name a term after the viewer has seen what it does, in a clause, not a
+digression.
 
-**Sentences.** Mostly short. Vary length deliberately — a long explanatory sentence lands better
-after two short ones. Fragments are fine at a beat boundary.
-
-**CTA.** One soft line pointing at the natural next thing to watch or try. No subscribe begging, no
-"smash that", no promises about future uploads.
+**Sentences.** Mostly short, six to fourteen words. Vary length deliberately — a long explanatory
+sentence lands better after two short ones. Fragments are fine at a beat boundary. Write a number
+the way it is read aloud.
 
 **Avoid.** Hype adjectives ("insane", "game-changing", "mind-blowing"), rhetorical questions
-stacked back to back, listicle framing ("three things you need to know"), and any sentence whose
-only job is transition.
+stacked back to back, and any sentence whose only job is transition.
 
 ---
 
@@ -427,6 +664,10 @@ weak pair is what they start from. `update_video` refuses a script without both.
   `title`, and need not match it.
 - **Description** — 2–3 sentences saying what the viewer will learn. On Instagram, TikTok and
   Facebook it is shown under the title as one caption, so it must read on its own.
+- **The title and the opening are a pair** (Step 4, rule 2). The title states the question or the
+  stake, and the script's first sentence continues from where it stops. Neither reads the other back:
+  not the sentence repeating the title, and not a title copying a short first sentence. `update_video`
+  returns a `title_repeat` warning for either.
 - No hashtags, no emoji, no markdown, and no pronunciation markup — this is read, not spoken.
 - A selected script profile does not change these rules; its voice may colour the wording.
 
@@ -439,8 +680,27 @@ before these existed), in which case write both from the script now; blanks are 
 
 ## Step 10 — Hand off
 
-1. `update_video(video_id, script_segments=[...], publish_title="...", publish_description="...")`.
-2. In `respell` or `ipa` mode only, and only if there are one or more new lexicon entries:
+1. `update_video(video_id, script_segments=[...], publish_title="...", publish_description="...",
+   formula_id="<formula_routing.pick>", hooks=[...])`.
+2. Read `warnings` in the result. Each is `{id, message}`: an advisory check on the script's
+   words, never a refusal; the script is already stored. Decide for each whether it names a real
+   problem in this script. If any does, fix those and call `update_video` once more with the whole
+   script, `formula_id` and `hooks`. **At most one extra write.** Never loop on warnings, and never
+   bend a sound script to silence one: any warning raised by the closing line the preferences
+   asked for stays, a `no_turn` on a script whose turn simply uses none of the listed words stays,
+   a `recap_ending` on a closing sentence `style.script` asks for stays, a `length_band` on a
+   script whose length `style.script` set stays, and an `opening_repeat` or `hook_type_repeat` on
+   an opening a person switched to stays.
+3. If `update_video` fails because it does not know the arguments `formula_id` or `hooks` (an
+   unexpected-argument error, not a refusal of their values), the tool server is
+   older than this skill: send the same call without those two. Any other refusal that names the formula means
+   the script is in the wrong formula: rewrite it in the one the error names.
+4. In `respell` or `ipa` mode only, and only if there are one or more new lexicon entries:
    `upsert_pronunciation_lexicon(entries=[...])`. Skip the call entirely if the list is empty.
-3. Report the segment count, the total word count, and which profile (or the generic style) was
-   used.
+5. Report the segment count, the total word count, the formula and in one clause why it fits the
+   topic, the type of the opening you kept, which profile (or the generic style) was used, and any
+   warning you left standing and why.
+
+A pronunciation-only fix changes markup, not words: resend the script without `formula_id` and
+`hooks`. The record stored with it is kept, nothing is checked and no `warnings` come back. Do not
+change any other word of an approved script in that call.

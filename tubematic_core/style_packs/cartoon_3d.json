@@ -1,0 +1,48 @@
+{
+  "id": "cartoon_3d",
+  "label": "Cartoon 3D",
+  "order": 40,
+  "experimental": true,
+  "renderer": "cartoon_3d",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-cartoon3d",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": true
+  },
+  "messages": {
+    "gpu": "Cartoon 3D renders on the GPU only (on the CPU a 90-second Short takes about 50 minutes). No renderer has a working GPU: configure one with `python onboard.py --step gpu` or add a GPU renderer, test it under Settings → Rendering → Renderers on the dashboard, or choose another visual style.",
+    "gpu_unknown": "Cartoon 3D renders on the GPU only, and no renderer has tested its GPU yet (each does so when it starts, and on Test GPU under Settings → Rendering → Renderers). Test it first, then choose the style."
+  },
+  "picture": {
+    "opening": "Shot 1 is already in motion at frame 0: a character mid-action on the set the first sentence names, the camera moving.",
+    "turn": "A cut to a new shot on the first word of a turn or a re-opening, or a punch-in or an impact kick at that moment.",
+    "payoff": "The shot with the answer, held longest, with the camera's strongest move.",
+    "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
+  },
+  "routing": {
+    "best_for": [
+      "a place and people moving through it: a story, a walkthrough with a protagonist"
+    ],
+    "avoid_for": [
+      "packet diagrams and other pure mechanisms",
+      "videos with a mascot"
+    ],
+    "signals": [
+      "where this happens matters",
+      "characters walk and react in one world"
+    ],
+    "moods": [
+      "cinematic",
+      "story-driven",
+      "whimsical"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  }
+}

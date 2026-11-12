@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { GpuStatus, Mascot, Project, ProjectStatus, ScriptProfile, Voice } from "@/lib/types";
+import { useEffect, useRef, useState } from "react";
+import type { Agent, GpuStatus, Mascot, Project, ProjectStatus, ScriptProfile, Voice } from "@/lib/types";
+import { AGENT_EFFORTS, effortOptionLabel } from "@/lib/agents";
+import {
+  NO_DOMAIN_DEFAULTS, domainAgent, domainAgentOptions, domainChips, domainDefaults,
+  domainModelOptions, type DomainDefaultValues, type DomainLists,
+} from "@/lib/domains";
 import { mascotGate, mascotGateNote, mascotOptions } from "@/lib/mascots";
 import { voiceLabel } from "@/lib/voices";
-import { illustratedAvailable, styleLabel, styleOptions } from "@/lib/visualStyles";
+import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
 import { codePoints } from "@/lib/utils";
 import { SectionLabel } from "@/components/SectionLabel";
 import { MiningSources } from "@/components/MiningSources";
+import { useVisualStyles } from "@/components/VisualStylesProvider";
+import { SaveStatus } from "@/components/SaveStatus";
+import { ToastStack, useToasts } from "@/components/Toast";
+import { responseError, useSaveStatus, useSerialQueue, type SaveState } from "@/lib/saveStatus";
+import { formulaOptions, type ScriptFormulaNames } from "@/lib/scriptFormulas";
+import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 
 const ALL_MODES: Array<{ key: string; label: string; accent: string; desc: string }> = [
   { key: "curriculum", label: "Curriculum",  accent: "var(--indigo)", desc: "Enumerate sub-topics from seed domains" },
@@ -21,7 +32,31 @@ function apiFetch(path: string, init?: RequestInit) {
   return fetch(`/api/proxy${path}`, { cache: "no-store", ...init });
 }
 
-// ── Default voice picker ──────────────────────────────────────────────────────
+// ── Domain pickers ────────────────────────────────────────────────────────────
+
+// Every picker fills its field. A select is as wide as its longest option
+// (profile names are user-supplied with no length limit), so one sized by its
+// content pushed the controls after it off-screen; the open list still shows
+// every option in full.
+const pickerStyle = {
+  fontFamily: "var(--mono)",
+  fontSize: 11,
+  padding: "6px 8px",
+  width: "100%",
+  minWidth: 0,
+  background: "var(--bg)",
+  color: "var(--ink)",
+  border: "1px solid var(--border-2)",
+} as const;
+
+const captionStyle = {
+  fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em",
+  textTransform: "uppercase", color: "var(--dim)",
+} as const;
+
+const noteStyle = {
+  fontFamily: "var(--mono)", fontSize: 10, lineHeight: 1.5, color: "var(--dim)",
+} as const;
 
 function DomainVoiceSelect({ testId, value, voices, onChange }: {
   testId: string; value: string; voices: Voice[]; onChange: (next: string) => void;
@@ -33,15 +68,7 @@ function DomainVoiceSelect({ testId, value, voices, onChange }: {
       value={value}
       onChange={(e) => onChange(e.target.value)}
       title="Voice every new video in this domain starts with"
-      style={{
-        fontFamily: "var(--mono)",
-        fontSize: 10.5,
-        padding: "5px 6px",
-        background: "var(--bg)",
-        color: "var(--ink-2)",
-        border: "1px solid var(--border-2)",
-        flexShrink: 0,
-      }}
+      style={pickerStyle}
     >
       <option value="">Install default voice</option>
       {stale && <option value={value}>{value} (removed)</option>}
@@ -50,15 +77,14 @@ function DomainVoiceSelect({ testId, value, voices, onChange }: {
   );
 }
 
-// ── Default mascot picker ─────────────────────────────────────────────────────
-
 // "" inherits the install's default mascot, "none" pins no mascot even when the
 // install has one. Gated on the GPU like the per-video picker: the mascots are
 // disabled (saying why) unless it is working, and fail closed while the status
 // loads; the non-mascot choices and a held value stay selectable, so an
 // unrelated edit re-sends the stored default untouched.
 function DomainMascotSelect({ testId, value, mascots, gpu, onChange }: {
-  testId: string; value: string; mascots: Mascot[]; gpu: GpuStatus | null; onChange: (next: string) => void;
+  testId: string; value: string; mascots: DomainLists["mascots"]; gpu: GpuStatus | null;
+  onChange: (next: string) => void;
 }) {
   const note = mascotGateNote(mascotGate(gpu));
   return (
@@ -67,17 +93,7 @@ function DomainMascotSelect({ testId, value, mascots, gpu, onChange }: {
       value={value}
       onChange={(e) => onChange(e.target.value)}
       title={note || "Experimental: the mascot this domain's new videos start with"}
-      style={{
-        fontFamily: "var(--mono)",
-        fontSize: 10.5,
-        padding: "5px 6px",
-        background: "var(--bg)",
-        color: "var(--ink-2)",
-        border: "1px solid var(--border-2)",
-        flexShrink: 0,
-        width: "100%",
-        maxWidth: 120,
-      }}
+      style={pickerStyle}
     >
       {mascotOptions(mascots, gpu, value, [
         { value: "", label: "Use install default" },
@@ -86,8 +102,6 @@ function DomainMascotSelect({ testId, value, mascots, gpu, onChange }: {
     </select>
   );
 }
-
-// ── Default script profile picker ─────────────────────────────────────────────
 
 function DomainProfileSelect({ testId, value, profiles, onChange }: {
   testId: string; value: string; profiles: ScriptProfile[]; onChange: (next: string) => void;
@@ -106,23 +120,29 @@ function DomainProfileSelect({ testId, value, profiles, onChange }: {
       value={value}
       onChange={(e) => onChange(e.target.value)}
       title="Script profile this domain's curriculum videos start with"
-      style={{
-        fontFamily: "var(--mono)",
-        fontSize: 10.5,
-        padding: "5px 6px",
-        background: "var(--bg)",
-        color: "var(--ink-2)",
-        border: "1px solid var(--border-2)",
-        flexShrink: 0,
-        // Profile names are user-supplied with no length limit, and a select is
-        // as wide as its longest option: unbounded, one long name pushed the
-        // controls after it off-screen. The open list still shows it in full.
-        maxWidth: 220,
-      }}
+      style={pickerStyle}
     >
       <option value="">No profile</option>
       {stale && <option value={value}>{staleName ? `${staleName} (unavailable)` : "Unavailable profile"}</option>}
       {ready.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+    </select>
+  );
+}
+
+// ── Default formula picker ──────────────────────────────────────────────────
+
+function DomainFormulaSelect({ testId, value, names, onChange }: {
+  testId: string; value: string; names: ScriptFormulaNames | null; onChange: (next: string) => void;
+}) {
+  return (
+    <select
+      data-testid={testId}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      title="The script formula every new video in this domain is written in. Auto picks one for each video from its topic."
+      style={pickerStyle}
+    >
+      {formulaOptions(names, value).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
 }
@@ -141,18 +161,24 @@ const MAX_TOPIC_CAP = 750;
 const MAX_DOMAIN_DESCRIPTION_CHARS = 2000;
 
 // Commits on blur or Enter, like Settings' number fields, so typing "300" is
-// one save rather than three. An entry outside the bounds reverts.
-function DomainCapInput({ testId, value, onCommit }: {
-  testId: string; value: number; onCommit: (next: number) => void;
+// one save rather than three. An entry outside the bounds is kept, with the
+// reason on the domain's line, so it can be corrected.
+function DomainCapInput({ testId, value, onCommit, onInvalid }: {
+  testId: string; value: number; onCommit: (next: number) => Promise<boolean>;
+  onInvalid: (message: string) => void;
 }) {
   const [local, setLocal] = useState(String(value));
   useEffect(() => { setLocal(String(value)); }, [value]);
   function commit() {
     const n = Number(local);
     if (Number.isInteger(n) && n >= MIN_TOPIC_CAP && n <= MAX_TOPIC_CAP) {
-      if (n !== value) onCommit(n);
+      // A save that was refused, or never reached the API, leaves `value` as
+      // it was, so the effect above does not run: put the stored cap back by
+      // hand, or the field keeps showing a number the domain does not have.
+      const revert = () => setLocal(String(value));
+      if (n !== value) onCommit(n).then((saved) => { if (!saved) revert(); }, revert);
     } else {
-      setLocal(String(value));
+      onInvalid(`topic cap must be a whole number from ${MIN_TOPIC_CAP} to ${MAX_TOPIC_CAP}`);
     }
   }
   return (
@@ -168,278 +194,389 @@ function DomainCapInput({ testId, value, onCommit }: {
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
       title={`How many topics this domain may ever hold (${MIN_TOPIC_CAP}–${MAX_TOPIC_CAP})`}
-      style={{
-        fontFamily: "var(--mono)",
-        fontSize: 10.5,
-        padding: "4px 6px",
-        width: 52,
-        background: "var(--bg)",
-        color: "var(--ink-2)",
-        border: "1px solid var(--border-2)",
-      }}
+      style={{ ...pickerStyle, width: 64 }}
     />
   );
 }
 
-// A small caption above each per-domain picker. Three unlabelled dropdowns in a
-// row read as one control; the <label> also names its select for screen readers.
-// The fixed width matters: a select is as wide as its longest option (243px for
-// the style picker's "needs an OpenAI key" one), and three at that width
-// crushed a seed row's domain name to ~70px at 1280px. The select stretches to
-// the field, and its open list still shows every option in full. 120px (it was
-// 150, and 170 before that) is what lets a seed row keep its pause button on one
-// line at 1280px with four pickers (style, voice, profile, mascot) beside the
-// topic cap: measured, the row's inner width is 1184px, and the fixed items
-// (four pickers, cap, count, badge, the 190px pause button, the gaps) must leave
-// the name its 160px minimum. A field without a width sizes to its content.
-function DomainField({ label, width, children }: {
-  label: string; width?: number; children: React.ReactNode;
+// A captioned picker. The <label> also names its control for screen readers.
+function DomainField({ label, flex, children }: {
+  label: string; flex?: string; children: React.ReactNode;
 }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0, width }}>
-      <span style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--mute)" }}>
-        {label}
-      </span>
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, flex }}>
+      <span style={captionStyle}>{label}</span>
       {children}
     </label>
   );
 }
 
-// ── Domain row ────────────────────────────────────────────────────────────────
+// A group of related defaults with the one sentence that says which videos
+// they reach. The seven defaults do not all apply to the same videos (the
+// style and profile start curriculum videos only), and a bare row of pickers
+// gave no place to say so. The bases are what each group needs for its
+// pickers to show their longest usual value ("Automatic (dealt by weight)",
+// "Use install default") in full: where three groups do not fit on one line,
+// the Agent group wraps onto its own line instead of cutting text short.
+function DomainGroup({ title, accent, note, flex = "1.1 1 360px", children }: {
+  title: string; accent?: boolean; note: string; flex?: string; children: React.ReactNode;
+}) {
+  return (
+    <div style={{ flex, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: accent ? "var(--amber)" : "var(--ink-2)" }}>
+        {title}
+      </div>
+      {children}
+      <div style={noteStyle}>{note}</div>
+    </div>
+  );
+}
 
-function DomainRow({
-  project,
-  videoCounts,
-  onToggle,
-  onStyleChange,
-  onVoiceChange,
-  onProfileChange,
-  onMascotChange,
-  onCapChange,
-  canIllustrate,
-  gpu,
-  voices,
-  profiles,
-  mascots,
-}: {
-  project: Project;
-  videoCounts: Record<string, number>;
-  onToggle: (id: string, next: ProjectStatus) => void;
-  onStyleChange: (id: string, next: string) => void;
-  onVoiceChange: (id: string, next: string) => void;
-  onProfileChange: (id: string, next: string) => void;
-  onMascotChange: (id: string, next: string) => void;
-  onCapChange: (id: string, next: number) => void;
+type DefaultControl = "style" | "voice" | "profile" | "formula" | "mascot" | "agent" | "agent-model" | "agent-effort";
+
+// The Look, Narration and Agent groups: the same controls on a domain's row,
+// where each change is saved at once, and in the add-domain form. One
+// component so the two cannot drift apart. It renders the groups as siblings;
+// the caller supplies the wrapping row and, on a domain's row, the topic cap.
+function DomainDefaults({ values, onChange, testId, lists, canIllustrate, gpu }: {
+  values: DomainDefaultValues;
+  onChange: (patch: Partial<DomainDefaultValues>) => void;
+  /** Per domain on a row (`domain-voice-<id>`), fixed in the form. */
+  testId: (control: DefaultControl) => string;
+  lists: DomainLists;
   canIllustrate: boolean;
   gpu: GpuStatus | null;
-  voices: Voice[];
-  profiles: ScriptProfile[];
-  mascots: Mascot[];
 }) {
+  const agent = domainAgent(lists.agents, values.default_agent_id);
+  return (
+    <>
+      <DomainGroup title="Look"
+                   note="The style starts this domain's curriculum videos. The mascot starts every new video.">
+        <div style={{ display: "flex", gap: 8 }}>
+          <DomainField label="Visual style" flex="1.2 1 0">
+            <select
+              data-testid={testId("style")}
+              value={values.default_visual_style}
+              onChange={(e) => onChange({ default_visual_style: e.target.value })}
+              title="Register this domain's curriculum videos start in"
+              style={pickerStyle}
+            >
+              <option value="">No style</option>
+              {styleOptions(lists.styles, canIllustrate, gpu, values.default_visual_style).map((o) => (
+                <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
+              ))}
+            </select>
+          </DomainField>
+          <DomainField label="Mascot (exp.)" flex="1 1 0">
+            <DomainMascotSelect testId={testId("mascot")} value={values.default_mascot_id}
+                                mascots={lists.mascots} gpu={gpu}
+                                onChange={(next) => onChange({ default_mascot_id: next })} />
+          </DomainField>
+        </div>
+      </DomainGroup>
+
+      <DomainGroup title="Narration" flex="1.5 1 540px"
+                   note="The voice and the formula start every new video. The profile starts curriculum videos.">
+        <div style={{ display: "flex", gap: 8 }}>
+          <DomainField label="Default voice" flex="1 1 0">
+            <DomainVoiceSelect testId={testId("voice")} value={values.default_voice_id}
+                               voices={lists.voices}
+                               onChange={(next) => onChange({ default_voice_id: next })} />
+          </DomainField>
+          <DomainField label="Script profile" flex="1 1 0">
+            <DomainProfileSelect testId={testId("profile")} value={values.default_script_profile_id}
+                                 profiles={lists.profiles}
+                                 onChange={(next) => onChange({ default_script_profile_id: next })} />
+          </DomainField>
+          <DomainField label="Formula" flex="1 1 0">
+            <DomainFormulaSelect testId={testId("formula")} value={values.default_formula_id}
+                                 names={lists.formulaNames}
+                                 onChange={(next) => onChange({ default_formula_id: next })} />
+          </DomainField>
+        </div>
+      </DomainGroup>
+
+      <DomainGroup title="Agent" accent flex="1.6 1 600px"
+                   note="New videos in this domain start on this agent. Automatic deals one by weight. You can still change it on each video.">
+        <div style={{ display: "flex", gap: 8 }}>
+          <DomainField label="Agent" flex="1.3 1 0">
+            <select
+              data-testid={testId("agent")}
+              value={values.default_agent_id}
+              // The model goes with the agent: the stored one belongs to the
+              // other agent's list, and the API would refuse the pair.
+              onChange={(e) => onChange({ default_agent_id: e.target.value, default_agent_model: "" })}
+              title="Agent every new video in this domain starts on"
+              style={pickerStyle}
+            >
+              {domainAgentOptions(lists.agents, values.default_agent_id).map((o) => (
+                <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
+              ))}
+            </select>
+          </DomainField>
+          <DomainField label="Model" flex="1.3 1 0">
+            <select
+              data-testid={testId("agent-model")}
+              value={values.default_agent_model}
+              disabled={!agent}
+              onChange={(e) => onChange({ default_agent_model: e.target.value })}
+              title={agent ? "Model those videos start on" : "Pick an agent to choose one of its models"}
+              style={{ ...pickerStyle, opacity: agent ? 1 : 0.5 }}
+            >
+              {domainModelOptions(agent, values.default_agent_model).map((o) => (
+                <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
+              ))}
+            </select>
+          </DomainField>
+          <DomainField label="Effort" flex="1 1 0">
+            <select
+              data-testid={testId("agent-effort")}
+              value={values.default_agent_effort}
+              onChange={(e) => onChange({ default_agent_effort: e.target.value })}
+              title="Effort level those videos start on"
+              style={pickerStyle}
+            >
+              <option value="">{effortOptionLabel(agent)}</option>
+              {AGENT_EFFORTS.map((e) => <option key={e} value={e}>{e}</option>)}
+            </select>
+          </DomainField>
+        </div>
+      </DomainGroup>
+    </>
+  );
+}
+
+// ── Domain row ────────────────────────────────────────────────────────────────
+
+const badgeStyle = {
+  fontFamily: "var(--mono)", fontSize: 9.5, letterSpacing: "0.16em",
+  textTransform: "uppercase", padding: "3px 8px", flexShrink: 0,
+} as const;
+
+// One line per domain: what it is, what it overrides, how full it is, and its
+// status. The defaults themselves sit in a panel under the line, opened by
+// "Edit defaults". Seven pickers and a cap on the line itself left no room
+// for the name, and nowhere to say which videos each default applies to.
+function DomainRow({ project, videoCounts, status, onToggle, onSave, onInvalid, lists, canIllustrate, gpu }: {
+  project: Project;
+  videoCounts: Record<string, number>;
+  /** How the last change to this domain went: shown on the line itself, so a
+   *  refusal is seen with the panel closed too. */
+  status?: SaveState;
+  onToggle: (id: string, next: ProjectStatus) => void;
+  /** Resolves to whether the change was stored. */
+  onSave: (id: string, patch: Partial<Project>) => Promise<boolean>;
+  /** An entry refused before it is sent, shown like a refused save. */
+  onInvalid: (id: string, message: string) => void;
+  lists: DomainLists;
+  canIllustrate: boolean;
+  gpu: GpuStatus | null;
+}) {
+  // Each row keeps its own state, so two domains can be open side by side.
+  const [open, setOpen] = useState(false);
   const isPaused = project.status === "paused";
   const isExpired = project.expired === true;
-  const accent = project.is_curriculum_seed ? "var(--indigo)" : "var(--dim)";
+  const isSeed = project.is_curriculum_seed === 1;
   const count = videoCounts[project.id] ?? 0;
+  const values = domainDefaults(project);
+  const chips = domainChips(values, lists);
+  const panelId = `domain-panel-${project.id}`;
 
   return (
     <div
       data-testid={`domain-row-${project.id}`}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        // Wraps rather than overlaps on a narrow screen: a seed row carries
-        // four pickers, a count, a badge and the pause button, and without
-        // wrapping the name shrank to nothing under them at 1024px. The 10px
-        // gap (was 16) is part of what keeps it on one line at 1280px.
-        flexWrap: "wrap",
-        gap: 10,
-        padding: "12px 16px",
-        background: "var(--panel)",
-        border: "1px solid var(--border)",
-        opacity: isPaused || isExpired ? 0.55 : 1,
-        transition: "opacity .15s",
-      }}
+      style={{ background: "var(--panel)", border: "1px solid var(--border)" }}
     >
-      {/* Seed indicator */}
       <div
-        title={project.is_curriculum_seed ? "Curriculum seed domain" : "Not a curriculum seed"}
+        data-testid={`domain-summary-${project.id}`}
         style={{
-          width: 7,
-          height: 7,
-          background: project.is_curriculum_seed ? accent : "var(--border-2)",
-          boxShadow: project.is_curriculum_seed ? `0 0 6px ${accent}` : undefined,
-          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          // Wraps rather than overlaps on a narrow screen: the name and chips
+          // keep their basis and the counts and buttons drop under them.
+          flexWrap: "wrap",
+          gap: 12,
+          padding: "10px 16px",
+          opacity: isPaused || isExpired ? 0.55 : 1,
+          transition: "opacity .15s",
         }}
-      />
+      >
+        <div
+          aria-hidden="true"
+          title={isSeed ? "Curriculum seed domain" : "Not a curriculum seed"}
+          style={{
+            width: 7,
+            height: 7,
+            background: isSeed ? "var(--indigo)" : "var(--border-2)",
+            boxShadow: isSeed ? "0 0 6px var(--indigo)" : undefined,
+            flexShrink: 0,
+          }}
+        />
 
-      {/* Name + description. The 160px basis is what the row wraps on. */}
-      <div style={{ flex: "1 1 160px", minWidth: 160 }}>
-        <div style={{ fontFamily: "var(--sans)", fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-          {project.name}
+        {/* Name, description and what the domain overrides. The 300px basis
+            is what the line wraps on. */}
+        <div style={{ flex: "1 1 300px", minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+            <span data-testid={`domain-name-${project.id}`} title={project.name} style={{ fontFamily: "var(--sans)", fontSize: 14, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 0, maxWidth: "100%" }}>
+              {project.name}
+            </span>
+            {project.description && (
+              <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                {project.description}
+              </span>
+            )}
+          </div>
+          <div data-testid={`domain-chips-${project.id}`} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+            {chips.map((c) => (
+              <span key={c.key} data-testid={`domain-chip-${c.key}-${project.id}`} style={{ fontFamily: "var(--mono)", fontSize: 10, padding: "2px 7px", background: "var(--panel-2)", border: "1px solid var(--border-2)", color: "var(--ink)", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <span style={{ color: "var(--dim)", letterSpacing: "0.1em", textTransform: "uppercase", fontSize: 9, marginRight: 6 }}>{c.label}</span>
+                {c.value}
+              </span>
+            ))}
+            {chips.length === 0 && (
+              <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)" }}>
+                Install defaults for everything
+              </span>
+            )}
+          </div>
         </div>
-        {project.description && (
-          <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--mute)", letterSpacing: "0.06em", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {project.description}
+
+        {/* The topic count is the domain's whole history, archived and
+            rejected topics included, which is why it can read higher than the
+            video count under it. */}
+        <div style={{ fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--dim)", textAlign: "right", lineHeight: 1.5, flexShrink: 0 }}>
+          <div data-testid={`domain-topics-${project.id}`} style={{ whiteSpace: "nowrap" }}>
+            <span style={{ color: "var(--ink-2)", fontWeight: 700 }}>{project.topic_count ?? 0}</span>
+            {` / ${project.topic_cap ?? 100} topics`}
+          </div>
+          <div style={{ whiteSpace: "nowrap" }}>
+            <span style={{ color: "var(--ink-2)", fontWeight: 700 }}>{count}</span>
+            {` video${count !== 1 ? "s" : ""}`}
+          </div>
+        </div>
+
+        {/* Expired: the domain holds as many topics as its cap allows, so
+            research files nothing more here until the cap is raised. Any domain
+            can expire, seed or not. */}
+        {isExpired && (
+          <div
+            data-testid={`domain-expired-${project.id}`}
+            title="This domain holds as many topics as its cap allows. Research files nothing more here until you raise the cap; manual submissions still go through."
+            style={{ ...badgeStyle, background: "rgba(255,107,107,0.06)", border: "1px solid rgba(255,107,107,0.3)", color: "var(--red)" }}
+          >
+            EXPIRED
           </div>
         )}
-      </div>
 
-      {/* Default visual style. There is no project edit form anywhere in the
-          dashboard, so without this a domain created before the register
-          existed could never be pinned to one. POST /projects is the upsert
-          path, so this needs no new endpoint. */}
-      <DomainField label="Visual style" width={120}>
-        <select
-          data-testid={`domain-style-${project.id}`}
-          value={project.default_visual_style ?? ""}
-          onChange={(e) => onStyleChange(project.id, e.target.value)}
-          title="Register this domain's curriculum videos start in"
+        {/* Pause is a curriculum-seed control: a seed is where its topics come
+            FROM, so pausing it stops generation at the root. Any other domain
+            only receives topics researched elsewhere, so a pause there could
+            not stop them, and the API refuses one. Hence no badge or toggle. */}
+        {isSeed && (
+          <>
+            {/* ACTIVE beside EXPIRED read as a contradiction, so an expired
+                seed shows only EXPIRED; a pause still shows, since resuming
+                would not re-open the domain until the cap is raised. */}
+            {(isPaused || !isExpired) && <div
+              data-testid={`domain-status-${project.id}`}
+              style={{
+                ...badgeStyle,
+                background: isPaused ? "rgba(255,255,255,0.04)" : "rgba(101,210,122,0.06)",
+                border: `1px solid ${isPaused ? "var(--border-2)" : "rgba(101,210,122,0.24)"}`,
+                color: isPaused ? "var(--dim)" : "var(--green)",
+              }}
+            >
+              {isPaused ? "PAUSED" : "ACTIVE"}
+            </div>}
+
+            <button
+              data-testid={`toggle-domain-${project.id}`}
+              onClick={() => onToggle(project.id, isPaused ? "active" : "paused")}
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                padding: "6px 14px",
+                background: "transparent",
+                border: "1px solid var(--border-2)",
+                color: isPaused ? "var(--green)" : "var(--dim)",
+                cursor: "pointer",
+                transition: "all .12s",
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = isPaused ? "rgba(101,210,122,0.4)" : "rgba(255,107,107,0.4)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-2)"; }}
+            >
+              {isPaused ? "Resume topic generation" : "Pause topic generation"}
+            </button>
+          </>
+        )}
+
+        <SaveStatus status={status} testId={`domain-save-status-${project.id}`} />
+
+        <button
+          type="button"
+          data-testid={`domain-edit-${project.id}`}
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((o) => !o)}
           style={{
             fontFamily: "var(--mono)",
-            fontSize: 10.5,
-            padding: "5px 6px",
-            background: "var(--bg)",
-            color: "var(--ink-2)",
-            border: "1px solid var(--border-2)",
-            flexShrink: 0,
-          }}
-        >
-          <option value="">No style</option>
-          {styleOptions(canIllustrate, gpu).map((o) => (
-            <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
-          ))}
-        </select>
-      </DomainField>
-
-      {/* Default voice (TMDEV-121): every new video filed into this domain,
-          whatever its sourcing mode, starts with it. A voice since removed
-          from the roster stays visible as "(removed)" rather than silently
-          reading as the install default — the API seeds nothing for it. */}
-      <DomainField label="Default voice" width={120}>
-        <DomainVoiceSelect
-          testId={`domain-voice-${project.id}`}
-          value={project.default_voice_id ?? ""}
-          voices={voices}
-          onChange={(next) => onVoiceChange(project.id, next)}
-        />
-      </DomainField>
-
-      {/* Default script profile: seeds this domain's curriculum videos only,
-          like the visual style. A human can still pick another at the topic. */}
-      <DomainField label="Script profile" width={120}>
-        <DomainProfileSelect
-          testId={`domain-profile-${project.id}`}
-          value={project.default_script_profile_id ?? ""}
-          profiles={profiles}
-          onChange={(next) => onProfileChange(project.id, next)}
-        />
-      </DomainField>
-
-      <DomainField label="Mascot (exp.)" width={120}>
-        <DomainMascotSelect
-          testId={`domain-mascot-${project.id}`}
-          value={project.default_mascot_id ?? ""}
-          mascots={mascots}
-          gpu={gpu}
-          onChange={(next) => onMascotChange(project.id, next)}
-        />
-      </DomainField>
-
-      {/* Topic cap (TMDEV-153): research deduplicates against every topic
-          ever filed here, archived ones included, so the domain may only ever
-          hold so many. The count beside it is that whole history, which is
-          why it can read higher than the video count after it. */}
-      <DomainField label="Topic cap">
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <DomainCapInput
-            testId={`domain-cap-${project.id}`}
-            value={project.topic_cap ?? 100}
-            onCommit={(next) => onCapChange(project.id, next)}
-          />
-          <span data-testid={`domain-topic-count-${project.id}`} style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--mute)", whiteSpace: "nowrap" }}>
-            {project.topic_count ?? 0} filed
-          </span>
-        </span>
-      </DomainField>
-
-      {/* Video count */}
-      <div style={{ fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.12em", color: "var(--dim)", textTransform: "uppercase", textAlign: "right", flexShrink: 0 }}>
-        <span style={{ color: "var(--ink-2)", fontWeight: 700 }}>{count}</span>
-        <span style={{ marginLeft: 4, color: "var(--mute)" }}>video{count !== 1 ? "s" : ""}</span>
-      </div>
-
-      {/* Expired: the domain holds as many topics as its cap allows, so
-          research files nothing more here until the cap is raised. Any domain
-          can expire, seed or not. */}
-      {isExpired && (
-        <div
-          data-testid={`domain-expired-${project.id}`}
-          title="This domain holds as many topics as its cap allows. Research files nothing more here until you raise the cap; manual submissions still go through."
-          style={{
-            fontFamily: "var(--mono)",
-            fontSize: 9.5,
-            letterSpacing: "0.16em",
+            fontSize: 11,
+            letterSpacing: "0.06em",
             textTransform: "uppercase",
-            padding: "3px 8px",
-            background: "rgba(255,107,107,0.06)",
-            border: "1px solid rgba(255,107,107,0.3)",
-            color: "var(--red)",
+            padding: "6px 12px",
+            // Wide enough for the longer label, so the buttons before it do
+            // not shift when the row opens.
+            minWidth: 124,
+            background: "var(--amber-soft)",
+            border: "1px solid var(--amber-glow)",
+            color: "var(--amber)",
+            cursor: "pointer",
             flexShrink: 0,
           }}
         >
-          EXPIRED
+          {open ? "Close" : "Edit defaults"}
+        </button>
+      </div>
+
+      {/* Rendered only while open: seven selects per domain, times every
+          domain, is a lot of DOM for controls nobody is looking at. */}
+      {open && (
+        <div
+          id={panelId}
+          data-testid={panelId}
+          style={{ display: "flex", flexWrap: "wrap", gap: "20px 28px", padding: "16px 16px 18px 35px", borderTop: "1px solid var(--border)", background: "var(--panel-2)" }}
+        >
+          <DomainDefaults
+            values={values}
+            onChange={(patch) => { void onSave(project.id, patch as Partial<Project>); }}
+            testId={(control) => `domain-${control}-${project.id}`}
+            lists={lists}
+            canIllustrate={canIllustrate}
+            gpu={gpu}
+          />
+          {/* Topic cap (TMDEV-153): research deduplicates against every topic
+              ever filed here, archived ones included, so the domain may only
+              ever hold so many. */}
+          <DomainGroup title="Limits" flex="0 1 190px"
+                       note={`How many topics this domain may ever hold (${MIN_TOPIC_CAP} to ${MAX_TOPIC_CAP}).`}>
+            <DomainField label="Topic cap">
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <DomainCapInput
+                  testId={`domain-cap-${project.id}`}
+                  value={project.topic_cap ?? 100}
+                  onCommit={(next) => onSave(project.id, { topic_cap: next })}
+                  onInvalid={(message) => onInvalid(project.id, message)}
+                />
+                <span data-testid={`domain-topic-count-${project.id}`} style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", whiteSpace: "nowrap" }}>
+                  {project.topic_count ?? 0} filed
+                </span>
+              </span>
+            </DomainField>
+          </DomainGroup>
         </div>
-      )}
-
-      {/* Pause is a curriculum-seed control: a seed is where its topics come
-          FROM, so pausing it stops generation at the root. Any other domain
-          only receives topics researched elsewhere, so a pause there could
-          not stop them, and the API refuses one. Hence no badge or toggle. */}
-      {project.is_curriculum_seed === 1 && (
-        <>
-          {/* Status badge. ACTIVE beside EXPIRED read as a contradiction, so
-              an expired seed shows only EXPIRED; a pause still shows, since
-              resuming would not re-open the domain until the cap is raised. */}
-          {(isPaused || !isExpired) && <div
-            data-testid={`domain-status-${project.id}`}
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 9.5,
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-              padding: "3px 8px",
-              background: isPaused ? "rgba(255,255,255,0.04)" : "rgba(101,210,122,0.06)",
-              border: `1px solid ${isPaused ? "var(--border-2)" : "rgba(101,210,122,0.24)"}`,
-              color: isPaused ? "var(--dim)" : "var(--green)",
-              flexShrink: 0,
-            }}
-          >
-            {isPaused ? "PAUSED" : "ACTIVE"}
-          </div>}
-
-          {/* Toggle button */}
-          <button
-            data-testid={`toggle-domain-${project.id}`}
-            onClick={() => onToggle(project.id, isPaused ? "active" : "paused")}
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 11,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              padding: "6px 14px",
-              background: "transparent",
-              border: "1px solid var(--border-2)",
-              color: isPaused ? "var(--green)" : "var(--dim)",
-              cursor: "pointer",
-              transition: "all .12s",
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = isPaused ? "rgba(101,210,122,0.4)" : "rgba(255,107,107,0.4)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-2)"; }}
-          >
-            {isPaused ? "Resume topic generation" : "Pause topic generation"}
-          </button>
-        </>
       )}
     </div>
   );
@@ -447,18 +584,15 @@ function DomainRow({
 
 // ── Add domain form ───────────────────────────────────────────────────────────
 
-function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots }: {
-  onAdded: () => void; canIllustrate: boolean; gpu: GpuStatus | null; voices: Voice[]; profiles: ScriptProfile[]; mascots: Mascot[];
+function AddDomainForm({ onAdded, lists, canIllustrate, gpu }: {
+  onAdded: () => void; lists: DomainLists; canIllustrate: boolean; gpu: GpuStatus | null;
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isSeed, setIsSeed] = useState(true);
-  // "" is a real choice, not an absence: it means the domain has no
-  // preference, which is not the same as pinning every video to "auto".
-  const [defaultStyle, setDefaultStyle] = useState("");
-  const [defaultVoice, setDefaultVoice] = useState("");
-  const [defaultProfile, setDefaultProfile] = useState("");
-  const [defaultMascot, setDefaultMascot] = useState("");
+  // "" is a real choice in each default, not an absence: no style preference
+  // is not the same as pinning every video to "auto".
+  const [defaults, setDefaults] = useState<DomainDefaultValues>(NO_DOMAIN_DEFAULTS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -472,7 +606,7 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots 
       const r = await apiFetch("/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: slug, name: name.trim(), description: description.trim(), is_curriculum_seed: isSeed, status: "active", default_visual_style: defaultStyle, default_voice_id: defaultVoice, default_script_profile_id: defaultProfile, default_mascot_id: defaultMascot }),
+        body: JSON.stringify({ id: slug, name: name.trim(), description: description.trim(), is_curriculum_seed: isSeed, status: "active", ...defaults }),
       });
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
@@ -482,10 +616,7 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots 
       setName("");
       setDescription("");
       setIsSeed(true);
-      setDefaultStyle("");
-      setDefaultVoice("");
-      setDefaultProfile("");
-      setDefaultMascot("");
+      setDefaults(NO_DOMAIN_DEFAULTS);
       onAdded();
     } finally {
       setBusy(false);
@@ -577,6 +708,19 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots 
         </div>
       </div>
 
+      {/* The same groups a domain's row opens, so what you choose here is
+          what you find there. All optional. */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "16px 28px", padding: "12px 0", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
+        <DomainDefaults
+          values={defaults}
+          onChange={(patch) => setDefaults((d) => ({ ...d, ...patch }))}
+          testId={(control) => `domain-${control}-select`}
+          lists={lists}
+          canIllustrate={canIllustrate}
+          gpu={gpu}
+        />
+      </div>
+
       <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
         <label
           data-testid="curriculum-seed-checkbox-label"
@@ -590,52 +734,6 @@ function AddDomainForm({ onAdded, canIllustrate, gpu, voices, profiles, mascots 
             style={{ accentColor: "var(--indigo)", width: 14, height: 14 }}
           />
           Curriculum seed (scheduled runs will enumerate this domain)
-        </label>
-
-        <label
-          data-testid="domain-style-label"
-          style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.06em", color: "var(--ink-2)" }}
-        >
-          Visual style
-          <select
-            data-testid="domain-style-select"
-            value={defaultStyle}
-            onChange={(e) => setDefaultStyle(e.target.value)}
-            title="Register this domain's curriculum videos start in"
-            style={{ fontFamily: "var(--mono)", fontSize: 11, padding: "6px 8px", background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--border-2)" }}
-          >
-            <option value="">No preference</option>
-            {styleOptions(canIllustrate, gpu).map((o) => (
-              <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
-            ))}
-          </select>
-        </label>
-
-        <label
-          data-testid="domain-voice-label"
-          style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.06em", color: "var(--ink-2)" }}
-        >
-          Default voice
-          <DomainVoiceSelect testId="domain-voice-select" value={defaultVoice}
-                             voices={voices} onChange={setDefaultVoice} />
-        </label>
-
-        <label
-          data-testid="domain-profile-label"
-          style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.06em", color: "var(--ink-2)" }}
-        >
-          Script profile
-          <DomainProfileSelect testId="domain-profile-select" value={defaultProfile}
-                               profiles={profiles} onChange={setDefaultProfile} />
-        </label>
-
-        <label
-          data-testid="domain-mascot-label"
-          style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.06em", color: "var(--ink-2)" }}
-        >
-          Mascot
-          <DomainMascotSelect testId="domain-mascot-select" value={defaultMascot}
-                              mascots={mascots} gpu={gpu} onChange={setDefaultMascot} />
         </label>
 
         <button
@@ -737,19 +835,68 @@ function ModeToggles({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+// What the message beside the domain calls the field a refused save was about, when the API gave
+// no reason of its own.
+const SAVED_FIELD: Record<string, string> = {
+  default_visual_style: "style",
+  default_voice_id: "default voice",
+  default_script_profile_id: "script profile",
+  default_formula_id: "formula",
+  default_mascot_id: "mascot",
+  default_agent_id: "agent",
+  default_agent_model: "agent's model",
+  default_agent_effort: "agent's effort",
+  topic_cap: "topic cap",
+};
+
+
+// How long one write to a domain may go unanswered. Writes to a domain wait
+// for one another, so one that never answered would hold every later change
+// to that domain behind it; past this it counts as not having reached the API.
+const DOMAIN_WRITE_TIMEOUT_MS = 30_000;
+
 export default function TopicsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjectsState] = useState<Project[]>([]);
+  // The rows as of the last write, readable by a save the moment the one
+  // before it finishes. State alone is too late for that: it reaches a closure
+  // only on the next render. Every write to the list goes through setProjects.
+  const projectsRef = useRef<Project[]>([]);
+  function setProjects(next: (prev: Project[]) => Project[]) {
+    projectsRef.current = next(projectsRef.current);
+    setProjectsState(projectsRef.current);
+  }
+  // One chain of writes per domain. POST /projects replaces the whole row, so
+  // two writes to one domain sent side by side would each carry the other's
+  // field as it was before, and the later answer would win with the earlier
+  // change lost. Queued, each is built from the row as the one before left it,
+  // and a refused one is simply not there for the next. A pause goes through
+  // the same chain, or a change sent behind it would re-send "active".
+  const domainWrites = useRef<Record<string, Promise<void>>>({});
+  function queued<T>(id: string, write: () => Promise<T>): Promise<T> {
+    const run = (domainWrites.current[id] ?? Promise.resolve()).then(write);
+    // The chain goes on whatever became of this write: one that threw must
+    // not hold up every later change to the domain.
+    domainWrites.current[id] = run.then(() => {}, () => {});
+    return run;
+  }
   const [videoCounts, setVideoCounts] = useState<Record<string, number>>({});
   const [activeStrategies, setActiveStrategies] = useState<string[]>(["curriculum", "trending", "mining"]);
   const [miningUrls, setMiningUrls] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [savingModes, setSavingModes] = useState(false);
   const [modesError, setModesError] = useState<string | null>(null);
   // Assumed until /research/strategies answers, so a slow load never shows the
   // toggle greyed out on an install that has the key.
   const [miningAvailable, setMiningAvailable] = useState(true);
   const [savingMining, setSavingMining] = useState(false);
   const [miningError, setMiningError] = useState<string | null>(null);
+  const statuses = useSaveStatus();
+  const { toasts, push, dismiss } = useToasts();
+  // The newest list, for an Undo clicked after later changes.
+  const miningUrlsRef = useRef<string[]>([]);
+  miningUrlsRef.current = miningUrls;
+  const storedMiningRef = useRef<string[]>([]);
+  const miningInFlight = useRef(0);
+  const enqueueMining = useSerialQueue();
   // Illustrated is disabled as a domain default when no OpenAI key is stored.
   // Fetched apart from loadAll so a failed settings read changes nothing but
   // this: the API refuses the style itself, so true is the safe fallback.
@@ -758,6 +905,12 @@ export default function TopicsPage() {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [profiles, setProfiles] = useState<ScriptProfile[]>([]);
   const [mascots, setMascots] = useState<Mascot[]>([]);
+  // undefined until GET /agents answers, and for good if it fails: a domain's
+  // agent then shows by its id, and only Automatic can be picked.
+  const [agents, setAgents] = useState<Agent[] | undefined>(undefined);
+  const visualStyles = useVisualStyles();
+  const formulaNames = useScriptFormulaNames(true);
+  const lists: DomainLists = { styles: visualStyles, voices, profiles, mascots, agents, formulaNames };
 
   async function loadAll() {
     const [projRes, vidRes, stratRes, miningRes] = await Promise.all([
@@ -768,7 +921,7 @@ export default function TopicsPage() {
     ]);
     if (projRes.ok) {
       const p: Project[] = await projRes.json();
-      setProjects(p);
+      setProjects(() => p);
     }
     if (vidRes.ok) {
       const vids: Array<{ project_id: string | null }> = await vidRes.json();
@@ -785,6 +938,7 @@ export default function TopicsPage() {
     }
     if (miningRes.ok) {
       const m: { youtube_urls: string[] } = await miningRes.json();
+      storedMiningRef.current = m.youtube_urls;
       setMiningUrls(m.youtube_urls);
     }
     setLoading(false);
@@ -818,128 +972,152 @@ export default function TopicsPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((rows) => { if (Array.isArray(rows)) setMascots(rows); })
       .catch(() => {});
+    apiFetch("/agents")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rows) => { if (Array.isArray(rows)) setAgents(rows); })
+      .catch(() => {});
   }, []);
 
-  async function handleToggleDomain(id: string, next: ProjectStatus) {
-    const r = await apiFetch(`/projects/${id}/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: next }),
-    });
-    // A refusal is reported, not shown as success: only a curriculum seed can
-    // be paused, and the row may have stopped being one since this page loaded.
-    if (!r.ok) {
-      const body = await r.json().catch(() => ({}));
-      alert(body.error ?? "Could not change this domain's status");
-      return;
-    }
-    setProjects((prev) => prev.map((p) => p.id === id ? { ...p, status: next } : p));
+  function handleToggleDomain(id: string, next: ProjectStatus) {
+    void statuses.run(id, () => queued(id, async () => {
+      const r = await apiFetch(`/projects/${id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+        signal: AbortSignal.timeout(DOMAIN_WRITE_TIMEOUT_MS),
+      }).catch(() => null);
+      // A refusal is reported beside the domain, not shown as success: only a
+      // curriculum seed can be paused, and the row may have stopped being one
+      // since this page loaded.
+      if (!r?.ok) {
+        return r ? responseError(r) : "could not change this domain's status";
+      }
+      setProjects((prev) => prev.map((p) => p.id === id ? { ...p, status: next } : p));
+      return null;
+    }));
   }
 
-  async function saveDomain(id: string, patch: Partial<Project>, what: string) {
-    const project = projects.find((p) => p.id === id);
-    if (!project) return;
-    const next = { ...project, ...patch };
-    // POST /projects is an upsert, and its ON CONFLICT clause overwrites every
-    // column it is given — so the unchanged fields have to be sent back or
-    // they are blanked. That is why this re-sends every editable field rather
-    // than posting the one that changed; a field missing here is a field any
-    // other edit silently clears.
-    const r = await apiFetch("/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: next.id,
-        name: next.name,
-        description: next.description,
-        is_curriculum_seed: next.is_curriculum_seed === 1,
-        status: next.status,
-        default_visual_style: next.default_visual_style ?? "",
-        default_voice_id: next.default_voice_id ?? "",
-        default_script_profile_id: next.default_script_profile_id ?? "",
-        // A full replace: an omitted default_mascot_id would reset to
-        // "use the install default".
-        default_mascot_id: next.default_mascot_id ?? "",
-        topic_cap: next.topic_cap,
-      }),
-    });
-    if (!r.ok) {
-      const body = await r.json().catch(() => ({}));
-      alert(body.error ?? `Could not change this domain's ${what}`);
-      return;
-    }
-    // The saved row carries the topic count and expiry as they are now. The
-    // count loaded with the page can be stale (research may have filed since),
-    // so expiry is never worked out here from the new cap. The id check keeps
-    // a response that is not a project row from being merged in.
-    const saved = await r.json().catch(() => null);
-    const fresh = saved && saved.id === id ? (saved as Project) : {};
-    setProjects((prev) => prev.map((p) => p.id === id ? { ...p, ...patch, ...fresh } : p));
-  }
-
-  function handleDomainStyle(id: string, next: string) {
-    return saveDomain(id, { default_visual_style: next as Project["default_visual_style"] }, "style");
-  }
-
-  function handleDomainVoice(id: string, next: string) {
-    return saveDomain(id, { default_voice_id: next }, "default voice");
-  }
-
-  function handleDomainProfile(id: string, next: string) {
-    return saveDomain(id, { default_script_profile_id: next }, "script profile");
-  }
-
-  function handleDomainMascot(id: string, next: string) {
-    return saveDomain(id, { default_mascot_id: next }, "mascot");
-  }
-
-  // Expiry comes back with the saved row, against the count as it is now.
-  function handleDomainCap(id: string, next: number) {
-    return saveDomain(id, { topic_cap: next }, "topic cap");
+  function saveDomain(id: string, patch: Partial<Project>): Promise<boolean> {
+    return statuses.run(id, () => queued(id, async () => {
+      const project = projectsRef.current.find((p) => p.id === id);
+      if (!project) return "this domain is no longer listed";
+      const next = { ...project, ...patch };
+      // POST /projects is an upsert, and its ON CONFLICT clause overwrites every
+      // column it is given — so the unchanged fields have to be sent back or
+      // they are blanked. That is why this re-sends every editable field rather
+      // than posting the one that changed; a field missing here is a field any
+      // other edit silently clears. domainDefaults is the list of defaults: an
+      // omitted default_mascot_id would reset to "use the install default", an
+      // omitted default_agent_id to Automatic.
+      const r = await apiFetch("/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: next.id,
+          name: next.name,
+          description: next.description,
+          is_curriculum_seed: next.is_curriculum_seed === 1,
+          status: next.status,
+          ...domainDefaults(next),
+          topic_cap: next.topic_cap,
+        }),
+        signal: AbortSignal.timeout(DOMAIN_WRITE_TIMEOUT_MS),
+      }).catch(() => null);
+      // A save that never reached the API is reported like a refused one, and
+      // the row keeps showing what is stored.
+      if (!r?.ok) {
+        const body = r ? await r.json().catch(() => ({})) : {};
+        return typeof body.error === "string" && body.error
+          ? body.error
+          : `could not change this domain's ${SAVED_FIELD[Object.keys(patch)[0]] ?? "settings"}`;
+      }
+      // The saved row carries the topic count and expiry as they are now. The
+      // count loaded with the page can be stale (research may have filed since),
+      // so expiry is never worked out here from the new cap. The id check keeps
+      // a response that is not a project row from being merged in.
+      const saved = await r.json().catch(() => null);
+      const fresh = saved && saved.id === id ? (saved as Project) : {};
+      setProjects((prev) => prev.map((p) => p.id === id ? { ...p, ...patch, ...fresh } : p));
+      return null;
+    }));
   }
 
   async function handleModeChange(next: string[]) {
-    setSavingModes(true);
     setModesError(null);
-    const res = await apiFetch("/research/strategies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ strategies: next }),
-    });
-    if (res.ok) {
-      setActiveStrategies(next);
-    } else {
+    await statuses.run("modes", async () => {
+      const res = await apiFetch("/research/strategies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ strategies: next }),
+      }).catch(() => null);
+      if (res?.ok) {
+        setActiveStrategies(next);
+        return null;
+      }
       // Nothing was stored, so the toggles keep showing what is in effect.
-      const body = await res.json().catch(() => ({}));
-      setModesError(typeof body.error === "string" && body.error
+      const body = res ? await res.json().catch(() => ({})) : {};
+      const message = typeof body.error === "string" && body.error
         ? body.error
-        : "Failed to save research modes — changes were not persisted.");
-    }
-    setSavingModes(false);
+        : "Failed to save research modes — changes were not persisted.";
+      setModesError(message);
+      return message;
+    });
   }
 
-  async function handleMiningUrlsChange(next: string[]) {
-    const prev = miningUrls;
+  // Mining saves run one at a time: each sends a whole list, so two side by
+  // side would race, and the screen could show the answer that lost.
+  function handleMiningUrlsChange(next: string[]) {
     setMiningUrls(next);
     setSavingMining(true);
     setMiningError(null);
-    const res = await apiFetch("/research/mining-sources", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ youtube_urls: next }),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setMiningUrls(prev);
-      // The API's 400 names the entries it refused; say that, not just "failed".
-      setMiningError(typeof body.error === "string" && body.error
-        ? body.error
-        : "Failed to save mining sources — changes were not persisted.");
-    } else if (Array.isArray(body.youtube_urls)) {
+    miningInFlight.current += 1;
+    return enqueueMining(() => saveMiningUrls(next));
+  }
+
+  async function saveMiningUrls(next: string[]) {
+    // What is stored when this save goes out, not what the screen shows.
+    const prev = storedMiningRef.current;
+    const removed = prev.filter((u) => !next.includes(u));
+    const ok = await statuses.run("mining", async () => {
+      const res = await apiFetch("/research/mining-sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtube_urls: next }),
+      }).catch(() => null);
+      const body = res ? await res.json().catch(() => ({})) : {};
+      if (!res?.ok) {
+        setMiningUrls(prev);
+        // The API's 400 names the entries it refused; say that, not just "failed".
+        const message = typeof body.error === "string" && body.error
+          ? body.error
+          : "Failed to save mining sources — changes were not persisted.";
+        setMiningError(message);
+        return message;
+      }
       // The list as stored: canonical and deduplicated by the API.
-      setMiningUrls(body.youtube_urls);
+      const stored = Array.isArray(body.youtube_urls) ? body.youtube_urls as string[] : next;
+      storedMiningRef.current = stored;
+      setMiningUrls(stored);
+      return null;
+    });
+    miningInFlight.current -= 1;
+    if (miningInFlight.current === 0) setSavingMining(false);
+    // A removal applies at once. Undo puts that one URL back into the list as
+    // it is then, so a change made after the removal is kept.
+    if (ok && removed.length === 1 && next.length === prev.length - 1) {
+      const url = removed[0];
+      const index = prev.indexOf(url);
+      push("success", `Removed ${url}.`, {
+        label: "Undo",
+        onClick: () => {
+          const current = miningUrlsRef.current;
+          if (current.includes(url)) return;
+          const restored = [...current];
+          restored.splice(Math.min(index, restored.length), 0, url);
+          void handleMiningUrlsChange(restored);
+        },
+      });
     }
-    setSavingMining(false);
   }
 
   const seedDomains = projects.filter((p) => p.is_curriculum_seed === 1);
@@ -952,12 +1130,17 @@ export default function TopicsPage() {
       {/* Research Modes */}
       <section style={{ marginBottom: 32 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: "var(--mute)", marginBottom: 10 }}>
-          Research Modes{savingModes ? " — saving…" : ""}
+          Research Modes
+          {statuses.get("modes")?.state !== "error" && (
+            <span style={{ marginLeft: 10, textTransform: "none", letterSpacing: "normal" }}>
+              <SaveStatus status={statuses.get("modes")} testId="modes-save-status" />
+            </span>
+          )}
         </div>
         <ModeToggles active={activeStrategies} miningAvailable={miningAvailable}
                      onChange={handleModeChange} />
         {modesError && (
-          <div data-testid="mode-error" style={{ marginTop: 8, fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--red)", letterSpacing: "0.04em" }}>
+          <div data-testid="mode-error" role="alert" style={{ marginTop: 8, fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--red)", letterSpacing: "0.04em" }}>
             {modesError}
           </div>
         )}
@@ -971,6 +1154,11 @@ export default function TopicsPage() {
       <section style={{ marginBottom: 32 }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: "var(--mute)", marginBottom: 10 }}>
           Mining Sources
+          {statuses.get("mining")?.state !== "error" && (
+            <span style={{ marginLeft: 10, textTransform: "none", letterSpacing: "normal" }}>
+              <SaveStatus status={statuses.get("mining")} testId="mining-save-status" />
+            </span>
+          )}
         </div>
         <MiningSources
           urls={miningUrls}
@@ -985,7 +1173,7 @@ export default function TopicsPage() {
         <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: "var(--mute)", marginBottom: 10 }}>
           Curriculum Seed Domains
         </div>
-        <AddDomainForm onAdded={loadAll} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} mascots={mascots} />
+        <AddDomainForm onAdded={loadAll} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
       </section>
 
       {/* Seed domains list */}
@@ -1003,7 +1191,7 @@ export default function TopicsPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 24 }}>
           {seedDomains.map((p) => (
-            <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onMascotChange={handleDomainMascot} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} mascots={mascots} />
+            <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
           ))}
         </div>
       )}
@@ -1016,11 +1204,12 @@ export default function TopicsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {otherDomains.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} onToggle={handleToggleDomain} onStyleChange={handleDomainStyle} onVoiceChange={handleDomainVoice} onProfileChange={handleDomainProfile} onMascotChange={handleDomainMascot} onCapChange={handleDomainCap} canIllustrate={canIllustrate} gpu={gpu} voices={voices} profiles={profiles} mascots={mascots} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
             ))}
           </div>
         </section>
       )}
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }
