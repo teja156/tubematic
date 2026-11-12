@@ -1116,6 +1116,8 @@ Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
   and the warning names the scene on frame 0. Its frames skip the text checks.
 - A main scene's samples skip the frames an insert covers or slides over: the insert's transition
   runs just outside its window, where the main scene is half covered.
+- An insert's samples never report the mascot over text, because the mascot is hidden while an
+  insert is on screen.
 
 Trap: every threshold lives in this module, because it is the only layer the tests reach. The
 browser probe and its driver need a browser, so a threshold moved into the probe leaves the

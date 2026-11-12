@@ -994,3 +994,18 @@ def test_main_scene_samples_skip_the_frames_an_insert_covers_or_slides_over():
     passes, _ = text_audit.plan_passes(cfg)
     main_frames = [p["first"] + k * p["step"] for p in passes if p["scene"] == 0 for k in range(p["count"])]
     assert main_frames and not [f for f in main_frames if 588 <= f < 852]
+
+
+def test_an_inserts_samples_never_report_the_mascot_which_is_hidden_then():
+    """TMDEV-224: the mascot is hidden while an insert is on screen."""
+    cfg = {"totalFrames": 1500, "fps": 30,
+           "scenes": [{"type": "generated", "src": "vid/Main", "startFrame": 0, "durationInFrames": 1500}],
+           "inserts": [{"style": "terminal_doc", "startFrame": 600, "durationInFrames": 240, "props": {}}]}
+    text = {"text": "SUNSHINE", "x": 300, "y": 600, "width": 400, "height": 100, "fontSize": 96,
+            "rotated": False, "opacity": 1}
+    driver = {"passes": [{"scene": 0, "frames": [{"frame": 100, "elements": [text]}]},
+                         {"scene": 1, "frames": [{"frame": 700, "elements": [text]}]}]}
+    cues = [{"frame": 30, "on": True, "x": 0.5, "y": 0.5}]
+    warnings = text_audit.summarise(driver, cfg, cues)
+    assert any("Mascot over text in scene 0" in w for w in warnings), warnings
+    assert not any("Mascot over text in insert" in w for w in warnings), warnings

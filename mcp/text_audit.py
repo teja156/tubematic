@@ -684,7 +684,9 @@ def summarise(driver_output: dict, scene_config: dict, mascot_cues: list | None 
                 key = _pair_key(scene_index, hit["a"], hit["b"])
                 if key not in worst or hit["fraction"] > worst[key]["fraction"]:
                     worst[key] = {**hit, "scene": scene_index, "frame": frame}
-            if mascot_cues:
+            # The mascot is hidden while an insert is on screen, so an insert's
+            # passes (numbered after the scenes) never measure it.
+            if mascot_cues and (scene_index or 0) < len(scenes):
                 box = tmascots.boxes_at_frames(mascot_cues, [frame]).get(frame)
                 for hit in mascot_overlaps(elements, [box] if box else []):
                     key = (scene_index, _excerpt(hit["element"]))
