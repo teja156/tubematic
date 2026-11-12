@@ -285,3 +285,64 @@ def test_a_pick_with_no_record_keeps_its_openings_at_a_trial_position(evidence):
     assert _evidence() == ""
     learned = server.get_video("vid_1")["formula_routing"]["learned"]
     assert learned["mode"] == "explore" and learned["openings"]
+
+
+# ── what the figures can decide ──────────────────────────────────────────────
+# The server never picks: the agent applies the routing skill's Steps 3b and 4.1
+# to its own fit scores and the server's points. `_skill_decides` is that rule as
+# the skill writes it (pinned below), so these tests run the real server end to
+# end with the agent's scoring given: points from get_video, the decision, the
+# pick and its record through choose_script_formula. The Step 5 tie-break reads
+# no figures, so a tie here falls to the earlier candidate (Step 5's last rule).
+
+SKILL = (__import__("pathlib").Path(__file__).resolve().parents[2]
+         / "agent_files/skills/tubematic-formula-routing/SKILL.md")
+CLEAR_FIT = 3  # the skill's clear fit: 3 or more fit points
+
+
+def _skill_decides(fit, points, order):
+    """Step 3b: learned points go to clear fits only; Step 4.1: the most points
+    wins, and two within 1 point go to the tie-break (here, list order)."""
+    total = {f: s + (points[f] if s >= CLEAR_FIT else 0) for f, s in fit.items() if s >= CLEAR_FIT}
+    best = max(total.values())
+    tied = [f for f in order if f in total and best - total[f] <= 1]
+    return tied[0]
+
+
+def test_the_rule_in_these_tests_is_the_one_the_skill_states():
+    text = SKILL.read_text()
+    assert "**only to the clear fits**" in text
+    assert ("Take the clear fit with the most points, counting Step 3b. When two are within "
+            "1 point, break the tie (Step 5).") in text
+    assert "figures" not in text.split("## Step 5")[1].split("## Step 6")[0]
+
+
+def test_the_figures_flip_a_tie_on_fit_and_the_record_says_so(evidence):
+    # Two clear fits tied on fit, the figures' worse formula first in the list:
+    # without the figures the tie-break takes it, with them the better one wins.
+    fit = {POOR: 6, GOOD: 6}
+    order = [POOR, GOOD]
+    _video()
+    points = {f: c["learned"]["points"]
+              for f, c in _candidates(server.get_video("vid_1")["formula_routing"]).items()}
+    assert (points[GOOD], points[POOR]) == (2, -1)
+    assert _skill_decides(fit, {f: 0 for f in points}, order) == POOR
+    pick = _skill_decides(fit, points, order)
+    assert pick == GOOD
+    out = server.choose_script_formula("vid_1", pick, REASON, runner_up=POOR,
+                                       learned_stamp=_stamp())
+    assert out["formula_pick"] == GOOD
+    record = json.loads(_evidence())
+    assert (record["mode"], record["standing"], record["points"]) == ("learned", "better", 2)
+
+
+@pytest.mark.parametrize("gap, flips", [(0, True), (1, True), (2, False), (3, False)])
+def test_the_figures_decide_only_when_the_fit_gap_is_under_two(evidence, gap, flips):
+    # better +2 against worse -1 is the widest swing, 3. A follower that ends 1
+    # point ahead is still a tie for Step 5, which reads no figures, so the
+    # figures decide only where the two were 0 or 1 apart on fit.
+    _video()
+    points = {f: c["learned"]["points"]
+              for f, c in _candidates(server.get_video("vid_1")["formula_routing"]).items()}
+    fit = {POOR: 6 + gap, GOOD: 6}
+    assert (_skill_decides(fit, points, [POOR, GOOD]) == GOOD) is flips
