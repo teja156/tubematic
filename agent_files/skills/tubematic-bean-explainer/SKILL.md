@@ -44,7 +44,8 @@ event is wrong. Fix every problem it lists, then write again.
 
 - **One scene.** `scenes` is exactly one entry: `{"type": "generated", "source": "installed", "src":
   "BeanExplainer", "startFrame": 0, "durationInFrames": <totalFrames>, "props": {"beanExplainer":
-  {...}}}`.
+  {...}}}`. Insert scenes are not scenes: they go in the config's own `inserts` list (**Inserts**
+  below).
 - **Shots** are cuts: the first starts at frame 0, the others on a word (within 2 frames of a word's
   `startFrame`), each at least 1.5 seconds long, at most 40 shots.
 - **Sections** start where a shot starts, each at least 2 seconds long, at most 12. A list video
@@ -184,10 +185,21 @@ characters reacting at once is busy.
 
 `validate_job` returns warnings (advisory, never blocking) when the first shot has no pose or prop by frame 3 or when a `turn`, `reopen` or `payoff` segment has no shot, section, pose, prop, act, impact, strike or arrow (a label or mark alone does not count) starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
 
+## Inserts
+
+If `get_timeline` shows a segment whose `insert` is not `""`, invoke the **tubematic-inserts** skill
+and follow it: it places one insert inside each marked segment and has its data written with the
+insert style's skill. The stage is hidden while an insert plays, so inside each insert's window no
+shot starts (and so no section) and no event has its `at`: no pose, prop, act, label, mark, impact,
+strike or arrow. Put the next shot's cut on the window's end (its last frame + 1), so the video
+comes back on a new shot, or let the shot from before the insert carry on and time its next event
+after the window. The "never still" rule does not count a window. With no marked segment, write no
+`inserts`.
+
 ## Step 5 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` and `fps` from the timeline, `"canvas":
-   "light"` (or leave it out) and the one scene. Fix every problem it reports. If the video has props
+   "light"` (or leave it out), the one scene and any `inserts`. Fix every problem it reports. If the video has props
    of your own, look at them now with `render_bean_props` (Step 2b).
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures the
    header, the labels and the prop texts in a browser; an overlap is a measurement, so move or shorten

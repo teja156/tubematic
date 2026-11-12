@@ -57,7 +57,9 @@ correct and re-spends `generate_image` on every image beat.
 3. Call `list_scene_files(source="all")` — see **Reusing Existing Scenes** below before planning
    layout. Pass `video_id=<a prior video>` to browse that video's own generated scenes; with no
    `video_id` filter, the generated half of the list is capped at the 50 most recently modified.
-4. Plan scene layout — see **Anchoring Scenes to the Narration** below for how boundaries are decided (segment-anchored primary path if `script_segments`/`timeline.segments` exist, keyword-anchored legacy fallback otherwise); for each planned scene, reuse an installed or a fitting prior generated scene if one exists, otherwise author a fresh one
+4. Plan scene layout — see **Anchoring Scenes to the Narration** below for how boundaries are decided (segment-anchored primary path if `script_segments`/`timeline.segments` exist, keyword-anchored legacy fallback otherwise); for each planned scene, reuse an installed or a fitting prior generated scene if one exists, otherwise author a fresh one.
+   A segment `get_timeline` marks with an `insert` (not `""`) is shown by an insert scene (step 8),
+   not by a scene of yours: plan no scene that starts inside it
 5. Classify every planned scene's **visual treatment** — PHOTO, HYBRID, or DIAGRAM — from the
    *subject* of its beat, not from the wording of its `visual` brief. PHOTO is the default for
    anything photographic; HYBRID is the exception and has to pass its own test. Call
@@ -72,7 +74,16 @@ correct and re-spends `generate_image` on every image beat.
 7. Call `write_scene_file(video_id, scene_name, tsx_content)` for each newly-authored scene
    component — **never** write `.tsx` files with your own file tools. Paste the returned
    `src` value verbatim into the scene-config entry below — do not build it yourself.
-8. Call `write_scene_config(video_id, config)` — **never** write `scene-config.json` with your own file tools. This writes the file and saves `scene_config_path` in one call.
+8. **Inserts, then the config.** If `get_timeline` shows a segment whose `insert` is not `""`,
+   invoke the **tubematic-inserts** skill and follow it: it places one insert inside each marked
+   segment, in the config's `inserts` list beside `scenes`, and has its data written with the
+   insert style's skill. Your scenes still cover every frame, with no gap, and no scene starts
+   inside an insert's window: let the scene before it run on under the insert, and start the next
+   scene at the window's end (its last frame + 1) or at the next segment. A DIAGRAM beat the script
+   marked as a `system_flow` insert is drawn by the insert, not as a diagram scene of your own, and
+   a beat marked `terminal_doc` likewise. No mascot cue lands inside a window. With no marked
+   segment, write no `inserts`.
+   Then call `write_scene_config(video_id, config)`, with the scenes and any `inserts` — **never** write `scene-config.json` with your own file tools. This writes the file and saves `scene_config_path` in one call.
 9. Hand back to the operator to call `validate_job`
 
 Never generate `scene-config.json` before `timeline.json` exists — `totalFrames` must be copied exactly from `timeline.totalFrames`.
@@ -135,7 +146,9 @@ what actually tell you whether the old spans still mean anything.
    `write_scene_config`. Every other entry must be carried through **exactly as read** — same
    `startFrame`, `durationInFrames`, `src`, `source`, `props`, image paths. Do not renumber, re-sort,
    re-pretty or "tidy" anything you weren't asked to fix; an untouched entry should survive
-   byte-identically.
+   byte-identically. That holds for the `inserts` list too: carry each insert through as read
+   unless the feedback named it (then fix its data with its insert style's skill, as
+   tubematic-inserts says).
 6. **Hand back to the operator to call `validate_job`.** Same as the authoring path.
 
 ### What may change, and what must not
@@ -213,15 +226,18 @@ beat's treatment — that still follows the beat's subject, exactly as it always
 
 Some styles are different in kind: they do not restrict the scene system, they **replace** it.
 `cartoon_3d` is one painted 3D world written as code for that video against the renderer's kit;
-`system_flow` is one diagram scene whose boards, nodes and packets are written as data;
 `bean_explainer` is one cartoon-bean scene whose sections, shots, poses and props are written as
 data; `whiteboard` is one board scene whose regions of writing and doodles are written as data;
 `storybook_atlas` is one picture-book scene whose chapters, people and props are written as
-data, `terminal_doc` is one typographic scene whose beats and moves are written as data,
-`under_the_hood` is one scene of close-up photographs with labels, arcs and counters pinned to them,
+data, `under_the_hood` is one scene of close-up photographs with labels, arcs and counters pinned to them,
 written as data, and `case_file_story` is one scene of painted stills with meters and number cards,
 written as data. None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
 when it is not `tubematic-scene-config`, stop here and invoke that skill.
+
+`system_flow` and `terminal_doc` are **insert styles**, never a video's style: a short System Flow
+diagram or Terminal Doc string drawn over your scenes inside a segment the script marked (Workflow
+step 8). A video whose `visual_style` is still one of them is a legacy whole video, voiced before
+they became insert styles; its style's own skill authors it, as the table says.
 
 Read `visual_style` from `get_video`:
 
@@ -231,17 +247,17 @@ Read `visual_style` from `get_video`:
 | `stick` | Light | **Hand-drawn** `StickFigure` line art, line-art diagrams, generated imagery **in panels**. |
 | `illustrated` | **You choose** | Characters are **generated illustrated assets** (`generate_character`) rather than line art. You pick the drawing style *and* the canvas from the topic. |
 | `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
-| `system_flow` | Dark | Nothing here: the whole video is the one `SystemFlow` diagram scene, written as data by the tubematic-system-flow skill. |
+| `system_flow` | Dark | Nothing here: a legacy whole video is the one `SystemFlow` diagram scene, written as data by the tubematic-system-flow skill. |
 | `bean_explainer` | Its own colour field | Nothing here: the whole video is the one `BeanExplainer` scene, written as data by the tubematic-bean-explainer skill. |
 | `whiteboard` | Light | Nothing here: the whole video is the one `Whiteboard` board scene, written as data by the tubematic-whiteboard skill. |
 | `storybook_atlas` | Its own paper | Nothing here: the whole video is the one `StorybookAtlas` scene, written as data by the tubematic-storybook-atlas skill. |
-| `terminal_doc` | Dark | Nothing here: the whole video is the one `TerminalDoc` scene, written as data by the tubematic-terminal-doc skill. |
+| `terminal_doc` | Dark | Nothing here: a legacy whole video is the one `TerminalDoc` scene, written as data by the tubematic-terminal-doc skill. |
 | `under_the_hood` | Dark | Nothing here: the whole video is the one `UnderTheHood` scene, written as data by the tubematic-under-the-hood skill. |
 | `case_file_story` | Dark | Nothing here: the whole video is the one `CaseFileStory` scene, written as data by the tubematic-case-file-story skill. |
 | `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery. This is the **mixed scene system**: the style-routing skill picked it before the script because no single style fit. |
 
-The three named scene styles are restrictions; `cartoon_3d`, `system_flow`, `bean_explainer`,
-`whiteboard`, `storybook_atlas`, `terminal_doc`, `under_the_hood` and `case_file_story` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
+The three named scene styles are restrictions; `cartoon_3d`, `bean_explainer`, `whiteboard`,
+`storybook_atlas`, `under_the_hood` and `case_file_story` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
 than the mixed scene system (a style it picked is the video's `visual_style` by now), or when the
 video was scripted before Auto picked styles. It is the absence of a restriction: **you pick the
 register.**
@@ -845,6 +861,7 @@ Rules:
   omitting it is filled in for you, but write it anyway so the file says what the video is
 - `subtitles` is optional and **on when omitted** — see **Subtitles** below
 - `music` is optional — omit if not used
+- `inserts` is optional: the insert scenes, only when the script marked a segment (Workflow step 8)
 - No `TextReveal` scene type
 - `startFrame + durationInFrames` must not exceed `totalFrames`
 

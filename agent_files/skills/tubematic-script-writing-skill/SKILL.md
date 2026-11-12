@@ -36,6 +36,8 @@ needs its script written.
    `pronunciation_lexicon` before drafting (Steps 5 and 6), and `user_preferences`: apply the parts
    about scripts (tone, audience, wording, length, a closing line) and ignore the rest. The fixed
    policy below still wins over a preference that contradicts it.
+4. Read `insert_styles` and `insert_routing` from the `get_video` result: the insert styles this
+   script may mark segments with, and why they were chosen (Step 5, *Insert marks*).
 
 **A closing line exists only when the preferences ask for one.** A script ends on its payoff
 (Step 4, rule 10). If `user_preferences` asks for a closing line (a follow ask, a sign-off, a
@@ -282,6 +284,8 @@ optional `beat` (full shape in Step 5). The mapping from the formula's beats to 
   re-opening, the payoff): that beat starts a segment of its own, so the picture can change on its
   first word.
 - A beat's share of the script applies to its segments combined.
+- A beat that one of the video's insert styles shows best gets a segment of its own, marked as an
+  insert (Step 5, *Insert marks*).
 - Most scripts come to five to nine segments.
 
 ### Before you hand off
@@ -322,10 +326,42 @@ An ordered array `[{"id": ..., "voice": "...", "visual": "..."}, ...]` in play o
   language production note, not a formatted spec; the scene-config skill interprets it downstream.
   Every segment must have a non-empty `voice` and a `visual` key present (empty string only if the
   segment truly has no visual note, which should be rare). Write it per Step 7.
+- **`insert`** — optional: an insert style id from `get_video`'s `insert_styles`, on a segment whose
+  beat that insert shows (*Insert marks* below). Leave it out of every other segment.
 
 Pass the list to `update_video(video_id, script_segments=[...])` **exactly as produced**. Never
 construct or output the joined flat script string yourself — `update_video` derives `videos.script`
 by trimming and joining each segment's `voice` with a single space.
+
+### Insert marks
+
+An insert is a short scene in another look (a System Flow diagram, a Terminal Doc string) that the
+scene author draws over the video's main style, inside a segment you mark. The
+tubematic-insert-routing skill chose the video's insert styles before you were called:
+`get_video`'s `insert_styles` lists them, and `insert_routing.reason` says which beat each is for.
+
+- **`insert_styles` is `[]` or `None`:** mark nothing. Leave `insert` out of every segment.
+- **Otherwise,** mark the segment that carries the beat an insert shows best with
+  `"insert": "<style id>"`, using only an id in `insert_styles`. Mark only the beats the routing
+  chose a style for. When no segment needs a chosen style, leave that style unused; usually one
+  segment is marked.
+- **Never the first or the last segment.** The main style carries the opening and the ending.
+- **Never two marked segments in a row.** Put a main-style segment between them.
+- **Never the segment that carries the payoff.** The payoff is the main style's strongest picture.
+- **Keep a marked segment short:** about 20 words, at most about 8 seconds spoken. `update_video`
+  returns an `insert_long` warning when it looks longer; shorten the segment, or move its other
+  sentences into an unmarked segment beside it.
+- **Write the marked segment for its insert.** Take the candidate with the style's id from
+  `insert_routing.candidates` and follow its `script` text for this one segment's `voice` and
+  `visual`: for System Flow, name the components in the order things travel and say the value worth
+  showing; for Terminal Doc, name the exact string, number or source the viewer should watch. Its
+  `visual` is that insert style's brief (a component brief, a text brief), not a brief for the main
+  style. Where that text speaks of the whole video, it holds for the marked segment only; the rest
+  of the script follows `style.script` (Step 7).
+
+`update_video` refuses bad marks with a message saying what is wrong (a mark on the first or last
+segment, two marks in a row, a style that is not in `insert_styles`, any mark on a video that takes
+no inserts). Fix the marks and send the script again.
 
 ### No stage directions in `voice`
 
@@ -533,7 +569,10 @@ checkpoint, or leaves it on Auto, and then the tubematic-style-routing skill has
 before you were called (a picked style is the video's `visual_style` now). Either way it is settled
 before you write a word, which is precisely so that it is knowable *here* — changing it after the
 script exists invalidates every brief below and means a rewrite, not a re-render. A `visual_style`
-still at `"auto"` means mixed scenes: no style fit better.
+still at `"auto"` means mixed scenes: no style fit better. `system_flow` and `terminal_doc` are
+insert styles, never a video's style: they appear only in segments you mark (Step 5, *Insert
+marks*). A `visual_style` still at one of them is a legacy whole video, voiced before they became
+insert styles; its `style.script` still applies to the whole script.
 
 **When `get_video`'s `style.script` is not empty, follow it.** It is the style's own guidance for
 the narration and for each segment's `visual` brief, it comes from the style's pack, and it
@@ -550,7 +589,7 @@ purpose:
 | `motion_graphics` | a diagrammatic brief, or a photographic one if the beat genuinely needs a person shown |
 | `stick`, `illustrated`, `auto` | a **pose** brief — what the figure is doing and feeling |
 | `cartoon_3d` | a **scene** brief — where this happens, who is there and what they do, what thing is on screen. The video is one 3D world with people walking through it, so every beat's brief names a place and an action, never a diagram |
-| any style with `style.script` | what `style.script` says (System Flow's, for example, asks for a **component** brief: which components are on screen and what travels between them) |
+| any style with `style.script` | what `style.script` says (Whiteboard's, for example, asks for a **board** brief: what gets written or drawn for this step and how it connects to the last) |
 
 Note what this does *not* depend on: the canvas. Under `"auto"` (mixed scenes) the canvas is chosen
 later, after voicing, and a figure works on either — black line art on light, white on dark. So a pose brief is
@@ -564,14 +603,11 @@ will be built as one.
 
 Everything else in this step is identical in both registers. In particular a **specific, named**
 person, creature or place is a photographic brief under every scene register — the stick branch is
-for generic roles only. `system_flow` is the exception: it has no photographs, so a named person or
-place there is a labelled component (`"Alice's laptop"` as a `user` or `phone` node), and the
-narration names it. `bean_explainer` has none either: a named thing there is a prop with its name
-on it (a `sign`, a `note`, an address in a `browser` bar). Neither has `whiteboard`: a named person
+for generic roles only. `bean_explainer` is an exception: it has no photographs, so a named thing
+there is a prop with its name on it (a `sign`, a `note`, an address in a `browser` bar). Neither has `whiteboard`: a named person
 or place there is written on the board or drawn as a simple doodle with a label. `storybook_atlas` has
 none either: a named person there is a picture-book figure with a name tag, and a named object is a
-library prop or one drawn for the video. `terminal_doc` has none: a named thing there is its name, a
-string, number or quoted source on a dark screen.
+library prop or one drawn for the video.
 `under_the_hood` shows only one physical object in close-up photographs: every brief names a part
 of that object and what is labelled on it.
 `case_file_story` has no named people at all: its one person is "you", shown as the style's own
@@ -579,6 +615,11 @@ blank-faced lead, and every brief is a place with what you are doing in it, or a
 is a situation the viewer steps into, not an incident reported as real, so rule 14 bears on its
 laws, limits and terms, which must all be real. The amounts in the story and its meters' values
 are part of the invented situation.
+A segment marked as an insert has no photographs either, and neither has a legacy whole
+`system_flow` or `terminal_doc` video (one voiced before they became insert styles). In System Flow
+a named person or place is a labelled component (`"Alice's laptop"` as a `user` or `phone` node),
+and the narration names it. In Terminal Doc a named thing is its name: a string, number or quoted
+source on screen.
 
 ### The treatment follows the beat's subject, not the writer's habit
 

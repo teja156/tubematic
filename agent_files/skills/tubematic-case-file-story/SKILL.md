@@ -42,6 +42,7 @@ beat is wrong. Fix every problem it lists, then write again.
 
 - **One scene.** `scenes` is exactly one entry: `{"type": "generated", "source": "installed", "src":
   "CaseFileStory", "startFrame": 0, "durationInFrames": <totalFrames>, "props": {"caseFile": {...}}}`.
+  Insert scenes are not scenes: they go in the config's own `inserts` list (**Inserts** below).
 - **Meters:** 2 or 3, each `{id, label, kind, value}`. The label is at most 12 characters in capitals;
   `kind` is `money`, `count` or `percent`; a value is a whole number from 0 (a percentage at most 100).
 - **Beats** are cuts: the first starts at frame 0 and is a `shot`; the others start on a word (within
@@ -86,6 +87,8 @@ card brief. Lay the story out as beats:
 - A **term** card where it names what this is and what it is in law: the consequence.
 - The **choice** on the sentence that is only the two options: the script's last, or the one before
   a closing line when the preferences asked for one.
+- A segment `get_timeline` marks as an insert is shots only, with no card, and it comes before the
+  term card (**Inserts** below).
 
 Plan the stills first and count them: 8 to 12 is usual, 16 is the ceiling. Choose the meters from what
 the script counts, and note the beat where each value changes.
@@ -204,10 +207,23 @@ overrides it.
 
 `validate_job` returns a warning (advisory, never blocking) when a `turn`, `reopen` or `payoff` segment has no beat, punch, bar or stamp starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
 
+## Inserts
+
+If `get_timeline` shows a segment whose `insert` is not `""`, invoke the **tubematic-inserts** skill
+and follow it: it places one insert inside each marked segment and has its data written with the
+insert style's skill. In this style an insert goes only over shots before the term card: never
+over a card (a count, bars or the term), never after the term card, and never in the choice. The
+story is hidden while an insert plays, so inside each insert's window no beat starts and no shot's
+punch-in lands. Start the next shot on the window's end (its last frame + 1), so the video comes
+back on a new picture, or let the shot from before the insert carry on. The "never still" rule does
+not count a window. Plan the beats around the marks (Step 1): a marked segment is carried by
+shots, with no card in it, and the term card comes after every marked segment. With no marked
+segment, write no `inserts`.
+
 ## Step 6 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` from the timeline, `"canvas": "dark"` (or
-   leave it out) and the one scene. Fix every problem it reports.
+   leave it out), the one scene and any `inserts`. Fix every problem it reports.
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures the
    meters and the cards in a browser; an overlap is a measurement, so shorten the text it names.
 3. `submit_render(video_id)`.

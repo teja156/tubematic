@@ -41,6 +41,7 @@ item is wrong. Fix every problem it lists, then write again.
 
 - **One scene.** `scenes` is exactly one entry: `{"type": "generated", "source": "installed", "src":
   "Whiteboard", "startFrame": 0, "durationInFrames": <totalFrames>, "props": {"whiteboard": {...}}}`.
+  Insert scenes are not scenes: they go in the config's own `inserts` list (**Inserts** below).
 - **2 to 6 regions.** The first starts at frame 0, each later one on a word (within 2 frames of a word's
   `startFrame`), each at least 102 frames long (the camera's 42-frame glide plus 2 seconds).
 - **Every item's `at` is a word's `startFrame`** (within 2 frames). Items draw one at a time in the
@@ -186,10 +187,20 @@ height): the bottom band below the captions.
 
 `validate_job` returns warnings (advisory, never blocking) when region 1 does not open on a doodle at frame 0 or when a `turn`, `reopen` or `payoff` segment has no region, doodle, arrow or recap starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
 
+## Inserts
+
+If `get_timeline` shows a segment whose `insert` is not `""`, invoke the **tubematic-inserts** skill
+and follow it: it places one insert inside each marked segment and has its data written with the
+insert style's skill. The board is hidden while an insert plays, so inside each insert's window no
+region starts, no item has its `at` and the recap does not start. Put the next region's
+`startFrame` on the window's end (its last frame + 1), so the video comes back on a new region, or
+let the region from before the insert carry on and time its next item after the window. The "never
+still" rule does not count a window. With no marked segment, write no `inserts`.
+
 ## Step 6 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` and `fps` from the timeline, `"canvas":
-   "light"` (or leave it out) and the one scene. Fix every problem it reports.
+   "light"` (or leave it out), the one scene and any `inserts`. Fix every problem it reports.
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures each
    region's writing in a browser; an overlap is a measurement, so move or shorten the text.
 3. `submit_render(video_id)`.

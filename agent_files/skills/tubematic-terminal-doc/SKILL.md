@@ -1,16 +1,53 @@
 ---
 name: tubematic-terminal-doc
-description: Author a Terminal Doc narrated Short as data — choose the skin, split the narration into beats, show each beat's one string, number or quote with the shipped moves (words that scramble in, letters that arc into a new word, strings encoded through a box, numbers resolving from noise, a ciphertext wall, guesses racing to a match, bracket notes with citations, one glow at a time), writing a move of your own only when none fits — then write it with write_scene_config, preview your moves, validate and submit it
+description: Author a Terminal Doc scene as data — an insert inside another style's video, or a legacy whole Terminal Doc video — choose the skin, split the narration into beats, show each beat's one string, number or quote with the shipped moves (words that scramble in, letters that arc into a new word, strings encoded through a box, numbers resolving from noise, a ciphertext wall, guesses racing to a match, bracket notes with citations, one glow at a time), writing a move of your own only when none fits — then write it with write_scene_config, preview your moves, validate and submit it
 ---
 
 # Tubematic Terminal Doc authoring skill
 
-**Invoke this skill when:** a video is at `VOICE_READY` and `get_video` says `style.authoring_skill` is
-`tubematic-terminal-doc` (its `visual_style` is `terminal_doc`). Also take it, on **Revising**, for a
-`REVISION_REQUESTED` video at that style. Every other video takes the skill its
-`style.authoring_skill` names.
+**Invoke this skill when:**
+
+- **An insert.** Terminal Doc is an insert style: a short typographic scene drawn over another
+  style's video, inside a segment the script marked `"insert": "terminal_doc"`. The main style's
+  skill sends you here through the **tubematic-inserts** skill to write one insert's data. Read
+  **As an insert** below, then the rules and steps it points to, and go back to tubematic-inserts.
+- **A legacy whole video.** A video is at `VOICE_READY` and `get_video` says `style.authoring_skill`
+  is `tubematic-terminal-doc` (its `visual_style` is still `terminal_doc`: a whole Terminal Doc
+  video voiced before Terminal Doc became an insert style). Also take it, on **Revising**, for a
+  `REVISION_REQUESTED` video at that style. Follow the whole skill from **What you are making** on,
+  and leave **As an insert** aside.
+
+Every other video takes the skill its `style.authoring_skill` names.
 
 ---
+
+## As an insert
+
+An insert is the same stage, shorter, on the video's own frames. What differs from a whole video:
+
+- **You write one entry of the config's `inserts`, not a scene.** `{"style": "terminal_doc",
+  "startFrame": ..., "durationInFrames": ..., "props": {"terminalDoc": {"beats": [...]}}}`. Never
+  put a `TerminalDoc` scene in `scenes`: the tool refuses it.
+- **The window comes from the marked segment.** tubematic-inserts says how to place it: on a word
+  of that segment, 2 to 8 seconds long.
+- **The first beat starts at the insert's `startFrame`**, not at frame 0. Every other frame is a
+  frame of the video, from `get_timeline`, inside the window.
+- **At most 3 beats; usually one.** An insert shows one string or number and what happens to it.
+- **The insert's end is the last beat's cut:** every move finishes at least 15 frames before it.
+- **No `customMoves` and no `custom` events.** An insert uses only the shipped moves; skip
+  **Step 3b**.
+- **No `skin`.** Skip **Step 1**: the look follows the video's canvas, house on a dark video and
+  paper (dark ink on paper) on a light one. The tool refuses a `skin` in an insert.
+- **Every other rule below holds over the window:** slots, restraint, fit, no echo of 4 or more
+  narration words, order, and something changing at least every 3 seconds.
+- **The narration of a marked segment was written for the stage:** it names the exact string,
+  number or source the viewer should watch. Put each move's `at` on the word that names its thing.
+- **Leave `subtitles` alone.** The main style's captions stay on screen over the insert; the
+  typed log captions belong to a whole Terminal Doc video only.
+- **No mascot cue inside the window.** The mascot is hidden while the insert plays.
+
+Skip **The opening and the beats** and **Step 5**: the opening and the payoff belong to the main
+style, and the main style's skill writes, validates and submits the config.
 
 ## What you are making
 

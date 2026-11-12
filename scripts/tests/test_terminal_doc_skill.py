@@ -53,7 +53,8 @@ def test_the_skill_and_the_contract_teach_every_move_slot_size_and_tone():
         row = re.search(rf"^\| `{slot}` \| (\d+) \| (.*?) \|", contract, re.M)
         assert int(row.group(1)) == spec["y"], slot
         assert set(re.findall(r"`(\w+)`", row.group(2))) == set(spec["sizes"]), slot
-    for value in (*td.TONES, *td.SKINS, *td.REVEALS, *td.CUTS):
+    # paper is an insert's light look, set by the server and never written by the agent
+    for value in (*td.TONES, *td.WHOLE_VIDEO_SKINS, *td.REVEALS, *td.CUTS):
         assert f"`{value}`" in contract, value
 
 
