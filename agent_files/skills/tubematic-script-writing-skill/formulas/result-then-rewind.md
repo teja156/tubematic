@@ -12,14 +12,20 @@ Open on the end state, ask what happened, name the culprit or the choice early, 
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| End state | 0 to 15% | The striking result first: the fall as a number, or the two extremes of one life. |
-| What happened | 15 to 25% | The question, then the culprit or the choice, named. |
-| Rewind | 25 to 55% | Two or three dated facts, in order. |
-| Proof number | 55 to 75% | One figure against a benchmark the viewer knows. |
-| Consequence pair | 75 to 90% | From A to B: the before and the after as numbers. |
-| Verdict | 90 to 100% | One line that judges the choice. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| End state | 0 to 15% | The striking result first: the fall as a number, or the two extremes of one life. | - |
+| What happened | 15 to 25% | The question, then the culprit or the choice, named. | a re-opening: a visible change on its first word |
+| Rewind | 25 to 55% | Two or three dated facts, in order. | - |
+| Proof number | 55 to 75% | One figure against a benchmark the viewer knows. | a re-opening: a visible change on its first word |
+| Consequence pair | 75 to 90% | From A to B: the before and the after as numbers. | the payoff: the video's strongest picture |
+| Verdict | 90 to 100% | One line that judges the choice. | - |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The end state already reached: the fall as a line chart arriving at its low, or the two extremes side by side. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

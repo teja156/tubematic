@@ -12,13 +12,19 @@ Open on a strange act or object in the middle of happening, give the cause in th
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| The sight | 0 to 15% | The strange thing in the middle of happening. The why is held back. |
-| Cause | 15 to 45% | Why it is done or why it happens, plainly. |
-| So | 45 to 55% | What followed from it. |
-| But | 55 to 75% | The cost, or the second fact that turns it. |
-| Verdict or number | 75 to 100% | The most specific detail, then stop. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| The sight | 0 to 15% | The strange thing in the middle of happening. The why is held back. | - |
+| Cause | 15 to 45% | Why it is done or why it happens, plainly. | a re-opening: a visible change on its first word |
+| So | 45 to 55% | What followed from it. | - |
+| But | 55 to 75% | The cost, or the second fact that turns it. | the turn: a visible change on its first word |
+| Verdict or number | 75 to 100% | The most specific detail, then stop. | the payoff: the video's strongest picture |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The strange thing itself in the middle of happening, before the voice explains it. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

@@ -184,6 +184,17 @@ def test_a_script_with_no_record_is_accepted_and_says_so(video):
     assert _row()["formula_id"] == ""
 
 
+def test_a_segment_beat_the_formula_lacks_reaches_the_stored_warnings(video):
+    # The beat labels travel from the segments to the checks: a label the
+    # formula does not have would hide a turn or the payoff from the scene author.
+    labelled = [dict(seg, beat="The twist") for seg in segments()]
+    result = write(video, script_segments=labelled, formula_id=FORMULA, hooks=hooks())
+    assert "beat_unknown" in warning_ids(result)
+    assert "beat_unknown" in [w["id"] for w in server.get_video(video)["script_warnings"]]
+    result = write(video, formula_id=FORMULA, hooks=hooks())
+    assert "beat_unknown" not in warning_ids(result)
+
+
 def test_the_band_comes_from_the_recorded_formula(video):
     short = [{"id": "seg-1", "voice": OPENING + " But it was a guess.", "visual": ""}]
     result = write(video, script_segments=short, formula_id=FORMULA, hooks=hooks())

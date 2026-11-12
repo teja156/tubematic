@@ -12,14 +12,20 @@ Pose one famous concrete case in the first sentence, walk the rules from easiest
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| The case | 0 to 10% | Would this famous concrete case count? Asked in the first sentence. |
-| Fair question | 10 to 14% | Why the question is a reasonable one. |
-| Rules, easiest first | 14 to 45% | One rule per sentence, with one 'you would think so, but' among them. |
-| Where the rules run out | 45 to 80% | The part of the rules that does not settle the case at first, and the source that does. |
-| Precedent | 80 to 92% | A known case the rules did settle. |
-| The case answered | 92 to 100% | The last sentence. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| The case | 0 to 10% | Would this famous concrete case count? Asked in the first sentence. | - |
+| Fair question | 10 to 14% | Why the question is a reasonable one. | - |
+| Rules, easiest first | 14 to 45% | One rule per sentence, with one 'you would think so, but' among them. | - |
+| Where the rules run out | 45 to 80% | The part of the rules that does not settle the case at first, and the source that does. | the turn: a visible change on its first word |
+| Precedent | 80 to 92% | A known case the rules did settle. | a re-opening: a visible change on its first word |
+| The case answered | 92 to 100% | The last sentence. | the payoff: the video's strongest picture |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The concrete case on screen from the first second, drawn so the same picture can come back for the answer. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

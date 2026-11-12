@@ -116,7 +116,7 @@ def test_a_system_flow_video_is_one_scene():
     (lambda b: b[0]["nodes"][0].update(icon="rocket"), "is not one of"),
     (lambda b: b[0]["nodes"][1].update(label="Recursive DNS Resolver Pool Cache"), "does not fit"),
     (lambda b: b[0]["nodes"][1].update(id="DNS"), "lowercase"),
-    (lambda b: b[0]["events"].__setitem__(1, {"type": "edge", "edge": "browser>dns", "at": 14}), "before 'browser' has landed"),
+    (lambda b: b[0]["events"].__setitem__(1, {"type": "edge", "edge": "browser>dns", "at": 4}), "before 'browser' has landed"),
     (lambda b: b[0]["events"].__setitem__(3, {"type": "packet", "edge": "browser>dns", "at": 35}), "before the edge has finished"),
     (lambda b: b[0]["events"].append({"type": "focus", "node": "web2", "at": 100}), "before it enters"),
     (lambda b: b[0]["events"].append({"type": "chip", "edge": "lb>web2", "at": 260, "text": "x" * 30}), "chip at 260 text"),

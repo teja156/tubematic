@@ -186,8 +186,12 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
         {/* node boxes and icons */}
         {Object.values(layout.nodes).map((n) => {
           const t0 = enter[n.id];
-          if (t0 === undefined || frame < t0) return null;
-          const pIn = ramp(frame, t0, TIMING.nodeIn);
+          if (t0 === undefined) return null;
+          // A node entering in the video's first frames opens it: it is drawn
+          // from frame 0, half grown, so the first frame shows it still moving.
+          const tIn = t0 <= TIMING.openWithin ? 0 : t0;
+          if (frame < tIn) return null;
+          const pIn = ramp(frame, tIn === 0 ? -TIMING.nodeIn / 2 : tIn, TIMING.nodeIn);
           const sc = 0.8 + 0.2 * easeOutExpo(pIn);
           const faulted = (faultAt[n.id] ?? Infinity) <= frame;
           const shake = faulted ? Math.sin((frame - faultAt[n.id]) * 2.2) * 6 * (1 - ramp(frame, faultAt[n.id], 10)) : 0;

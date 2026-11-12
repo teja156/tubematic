@@ -49,19 +49,22 @@
       "name": "Alarm 1 and the wrong call",
       "from": 22,
       "to": 40,
-      "job": "The first symptom and a reasonable wrong assumption."
+      "job": "The first symptom and a reasonable wrong assumption.",
+      "role": "reopen"
     },
     {
       "name": "Alarm 2",
       "from": 40,
       "to": 60,
-      "job": "It gets worse. One sentence explains the one mechanism the story needs here."
+      "job": "It gets worse. One sentence explains the one mechanism the story needs here.",
+      "role": "reopen"
     },
     {
       "name": "The act",
       "from": 60,
       "to": 70,
-      "job": "The spoken re-opening: the fix they reached for, or the fatal action again, now understood."
+      "job": "The spoken re-opening: the fix they reached for, or the fatal action again, now understood.",
+      "role": "turn"
     },
     {
       "name": "Cause",
@@ -73,7 +76,8 @@
       "name": "Before and after",
       "from": 85,
       "to": 95,
-      "job": "The number pair: what it was, what it became."
+      "job": "The number pair: what it was, what it became.",
+      "role": "payoff"
     },
     {
       "name": "Kicker",
@@ -98,6 +102,7 @@
   ],
   "holds": "The viewer knows the ending and the people in the story do not. A number in every beat. Facts come in the order an investigation finds them (effect, then cause, then the contradiction), never in calendar order. A spoken re-opening at about three fifths.",
   "ending": "The before-and-after pair, then one dry kicker. No list of lessons.",
+  "first_frame": "The fatal action in progress (the command being typed, the switch being thrown) or the cost as a number racing up and locking.",
   "pitfalls": [
     "Inventing an incident or its numbers: every figure needs a source",
     "Telling it from the victims' side",

@@ -257,6 +257,9 @@ def _valid(**over):
     ({"routing": {"best_for": [], "avoid_for": []}}, "routing.signals"),
     ({"review": ""}, "review"),
     ({"script": "  "}, "script"),
+    ({"picture": None}, "picture"),
+    ({"picture": {"opening": "a", "turn": "b", "payoff": "c"}}, "picture"),
+    ({"picture": {"opening": "a", "turn": "b", "payoff": "c", "ending": " "}}, "picture"),
 ])
 def test_a_malformed_pack_is_refused(over, fragment):
     with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
@@ -292,6 +295,26 @@ def test_a_pack_written_before_the_optional_fields_still_loads():
     data["routing"] = {k: data["routing"][k] for k in ("best_for", "avoid_for", "signals")}
     data.pop("script", None)
     tvs._check_pack(pathlib.Path("stick.json"), data)
+
+
+def test_every_style_says_how_it_shows_the_opening_the_turn_and_the_payoff():
+    # The scene author reads these to put a change on each turn and re-opening
+    # and the strongest picture on the payoff; a style without them leaves
+    # the beats with nothing on screen.
+    for sid, pack in tvs.PACKS.items():
+        assert set(pack["picture"]) == set(tvs.PICTURE_KEYS), sid
+        view = tvs.agent_view(sid)["picture"]
+        assert view == pack["picture"] and view is not pack["picture"], sid
+    assert tvs.agent_view("auto")["picture"] == tvs.SCENES_PICTURE
+    assert tvs.agent_view("")["picture"] == tvs.SCENES_PICTURE
+
+
+def test_a_style_with_its_own_ending_says_so():
+    # The user's decision: Case File Story ends on its choice card and
+    # Whiteboard on its recap; every other style holds on the payoff.
+    assert "choice card" in tvs.PACKS["case_file_story"]["picture"]["ending"]
+    assert "recap" in tvs.PACKS["whiteboard"]["picture"]["ending"]
+    assert "No closing card" in tvs.SCENES_PICTURE["ending"]
 
 
 def test_the_agent_view_carries_the_style_script_guidance():

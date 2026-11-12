@@ -172,7 +172,101 @@ const inkRect = (el: Element): DOMRect => {
   return el.getBoundingClientRect();
 };
 
-const measure = (frame: number): string => {
+/**
+ * A picture element of the scene layer, for the first-frame pass (TMDEV-215).
+ * kind "picture" is an image, a canvas, a video, an SVG shape or an element
+ * whose background is an image; "background" is an element filled with a
+ * colour or a gradient. Python decides which of them is a subject.
+ */
+interface MeasuredVisual {
+  tag: string;
+  kind: "picture" | "background";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  /** What can change while the box stays put: a stroke drawing on, a
+   *  colour, a background pan. Python compares it between two frames. */
+  look: string;
+  /** For an SVG shape: which <svg> it belongs to (document order), so Python
+   *  can judge a figure drawn from many small shapes as one picture. -1 for
+   *  anything else. */
+  group: number;
+  /** A filled box whose only content is text: a card behind a headline. */
+  textOnly: boolean;
+}
+
+const PICTURE_TAGS = new Set([
+  "img", "canvas", "video", "path", "circle", "rect", "ellipse", "line", "polyline", "polygon", "image", "use",
+]);
+
+/** How long a picture frame must be quiet before its last measurement. */
+const VISUAL_SETTLE_MS = 300;
+/** The longest a picture frame is held open, however busy the page stays. */
+const VISUAL_SETTLE_MAX_MS = 8000;
+
+/** The largest pictures reported per frame, so a scene drawn from thousands
+ *  of SVG paths still yields a short line. */
+const MAX_VISUALS = 300;
+
+const colourAlpha = (colour: string): number => {
+  if (!colour || colour === "transparent") {
+    return 0;
+  }
+  const m = colour.match(/rgba?\(([^)]+)\)/);
+  if (!m) {
+    return 1;
+  }
+  const parts = m[1].split(/[\s,/]+/).filter(Boolean);
+  return parts.length >= 4 ? Number.parseFloat(parts[3]) : 1;
+};
+
+const measureVisuals = (): MeasuredVisual[] => {
+  const out: MeasuredVisual[] = [];
+  const svgs = Array.from(document.querySelectorAll('[data-tm-layer="scene"] svg'));
+  document.querySelectorAll('[data-tm-layer="scene"]').forEach((layer) => {
+    layer.querySelectorAll("*").forEach((el) => {
+      const tag = el.tagName.toLowerCase();
+      let kind: MeasuredVisual["kind"] | null = null;
+      if (PICTURE_TAGS.has(tag)) {
+        kind = "picture";
+      } else {
+        const style = window.getComputedStyle(el);
+        const image = style.backgroundImage;
+        if (image && image !== "none") {
+          kind = image.includes("url(") ? "picture" : "background";
+        } else if (colourAlpha(style.backgroundColor) > 0) {
+          kind = "background";
+        }
+      }
+      if (!kind) {
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) {
+        return;
+      }
+      const { opacity } = accumulateFromAncestors(el);
+      const st = window.getComputedStyle(el);
+      const look = [
+        st.strokeDashoffset, st.stroke, st.fill, st.backgroundColor, st.backgroundPosition, st.backgroundSize,
+        st.transform, st.objectPosition,
+      ].join("|");
+      const owner = tag === "svg" ? null : el.closest("svg");
+      const group = owner ? svgs.indexOf(owner) : -1;
+      const textOnly =
+        kind === "background" &&
+        (el.textContent ?? "").trim().length > 0 &&
+        el.querySelector("img, svg, canvas, video") === null;
+      out.push({ tag, kind, x: rect.x, y: rect.y, width: rect.width, height: rect.height, opacity, look, group, textOnly });
+    });
+  });
+  out.sort((a, b) => b.width * b.height - a.width * a.height);
+  return out.slice(0, MAX_VISUALS);
+};
+
+const measure = (frame: number, visualFrames: number[]): string => {
   const all = Array.from(document.querySelectorAll("*"));
   const leaves: Element[] = all.filter(isLeafTextElement);
   // Document-order position of each measured element, so ancestor/descendant
@@ -214,10 +308,11 @@ const measure = (frame: number): string => {
     });
   });
 
-  return `${PROBE_LOG_PREFIX}${JSON.stringify({ frame, elements })}`;
+  const visuals = visualFrames.includes(frame) ? measureVisuals() : undefined;
+  return `${PROBE_LOG_PREFIX}${JSON.stringify({ frame, elements, visuals })}`;
 };
 
-export const TextLayoutProbe: React.FC = () => {
+export const TextLayoutProbe: React.FC<{ visualFrames?: number[] }> = ({ visualFrames = [] }) => {
   const frame = useCurrentFrame();
   const [fontHandle] = useState(() => delayRender("Text audit: waiting for fonts"));
   const [fontsReady, setFontsReady] = useState(false);
@@ -249,7 +344,46 @@ export const TextLayoutProbe: React.FC = () => {
   // its dynamic import() and calls setComponent, which triggers another commit,
   // so the final line for a frame always reflects the fully-loaded scene.
   useLayoutEffect(() => {
-    console.log(measure(frame));
+    console.log(measure(frame, visualFrames));
+    if (!visualFrames.includes(frame)) {
+      return;
+    }
+    // A picture frame is measured again once the page has been quiet for
+    // VISUAL_SETTLE_MS, holding the frame open until then (VISUAL_SETTLE_MAX_MS
+    // at most). The probe is a sibling of the composition and only re-renders
+    // with the frame, so a scene config or a lazily imported scene that commits
+    // later (always the case on the first frame rendered) would otherwise be
+    // measured as an empty layer. Any change to the page restarts the wait; the
+    // last line for the frame is the one the driver keeps.
+    const handle = delayRender(`Text audit: settling frame ${frame}`);
+    const started = Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = () => {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+      const wait = Math.max(0, Math.min(VISUAL_SETTLE_MS, VISUAL_SETTLE_MAX_MS - (Date.now() - started)));
+      timer = setTimeout(() => {
+        observer.disconnect();
+        document.removeEventListener("load", settle, true);
+        console.log(measure(frame, visualFrames));
+        continueRender(handle);
+      }, wait);
+    };
+    const observer = new MutationObserver(settle);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+    // An image finishing its load changes no attribute, so listen for it too
+    // (load does not bubble; the capture phase sees it).
+    document.addEventListener("load", settle, true);
+    settle();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("load", settle, true);
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+      continueRender(handle);
+    };
   });
 
   // fontsReady is read so the fonts.ready resolution produces a commit (and

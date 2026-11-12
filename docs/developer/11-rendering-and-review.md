@@ -406,6 +406,10 @@ decides, and the Remotion side measures:
 - `renderer/remotion/audit/run-text-layout-audit.mjs` bundles the project, selects the
   `TextLayoutAudit` composition and samples frames.
 
+For a mixed-scenes video the probe also lists the scene layer's pictures on frames 0 and 6, and
+`mcp/text_audit.py` warns when the first frame has no subject or does not move. That pass is
+described under [Text-layout warnings](10-scene-authoring.md#text-layout-warnings).
+
 The thresholds are in `mcp/text_audit.py`: an opacity floor of 0.9, a minimum overlap of 15% of the
 smaller box's area, five samples per scene, a 45-frame allowance at a scene's start before anything
 counts as settled, the 150/170/60/60 safe zone, and a 180-second timeout.

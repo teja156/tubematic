@@ -487,6 +487,9 @@ must be derived again ([Revising an existing video](../10-scene-authoring.md#rev
 Covers `get_timeline`, the agent's read of `timeline.json`.
 
 - It returns segments, and words on request. A video from before segments returns an empty list.
+- Each segment carries its beat and its role. A beat split over two segments owes its change once,
+  where it starts, and the formula's `first_frame` comes back with the segments. A video whose
+  formula is not known keeps its beat labels and has no role past the opening.
 - An unknown video, a missing file, malformed JSON and a `video_id` shaped like a path are errors.
 
 ### `test_subtitles.py`
@@ -838,7 +841,8 @@ text audit's per-region sampling ([Whiteboard](../10-scene-authoring.md#whiteboa
   from the TypeScript source, and both sides answer the shared cases in
   `fixtures/whiteboard_contract.json`. The pack's doodle list equals the doodles `doodles.ts` draws.
   Rounding follows JavaScript's `Math.round`.
-- The skill's worked example passes.
+- The skill's worked example passes. It opens on a doodle at frame 0, which may sit before the first
+  word and is scheduled from `TIMING.openLead` frames before frame 0 (shared case `schedule_open`).
 - Each refusal names its region, item and cause: a region count outside 2 to 6, an unknown layout,
   slot or doodle, a used slot, text that does not fit or uses a character the font lacks, an item
   off a word, out of order or before the camera arrives, a mark or arrow on a missing or later item,
@@ -919,6 +923,27 @@ Trap: `npx` runs `tsc` as a child of its own, so killing `npx` alone leaves `tsc
 call `validate_job` again after a timeout, and those leftover processes once filled a host's memory.
 The timeout test fails if the kill reaches `npx` only.
 
+### `test_picture_checks.py`
+
+Covers `mcp/picture_checks.py` and its place in `validate_job`
+([Picture warnings](../10-scene-authoring.md#picture-warnings)).
+
+- Each data-driven style's worked example is read as its style and opens on a subject, and the
+  same example with its opening pushed late, its subject removed or its words first is warned once.
+- A segment owes its beat's role once, where the beat starts, and a beat label matches whatever its
+  case and spacing. Segments with no beat, or a video with no formula, owe nothing past the opening
+  and get no beat warnings. A Cartoon 3D config gets none either.
+- A System Flow node entering by `TIMING.openWithin` opens the video; one frame later is warned.
+- A mixed-scenes video that cuts on every beat is quiet. A turn or payoff inside a running scene is
+  warned with its time, segment, beat and first words. A cut `CHANGE_LEAD` frames before the word
+  or `CHANGE_WINDOW` after it counts, one frame further does not.
+- Every style reports its cuts as changes; a System Flow chip alone does not count, and a
+  Whiteboard doodle counts when the marker starts it. Malformed data is skipped, never raised.
+- `validate_job` adds these warnings after the text audit's.
+
+Trap: the quiet cases matter as much as the warnings. Each skill's example is what the agent copies,
+and a warning on a sound video teaches the agent to ignore the list.
+
 ### `test_text_audit.py`
 
 Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
@@ -932,6 +957,12 @@ Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
   own stdout.
 - Every failure of the subprocess returns a warning and does not raise. A timeout kills the
   process group, and staged files are removed.
+- The frame-0 pass is added for a mixed-scenes video only, outside the pinned sampling plan. It warns
+  when frame 0 shows only text or a backdrop (a full-frame fill or SVG rect, a faint or tiny
+  picture) and when nothing moves by frame 6. A picture already moving, something arriving or
+  fading, and a canvas are quiet. The shapes of one SVG count as one picture, so a stick figure is a
+  subject, and a filled card holding only text is a title card. A line drawing on counts as moving,
+  and the warning names the scene on frame 0. Its frames skip the text checks.
 
 Trap: every threshold lives in this module, because it is the only layer the tests reach. The
 browser probe and its driver need a browser, so a threshold moved into the probe leaves the

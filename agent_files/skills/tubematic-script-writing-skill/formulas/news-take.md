@@ -12,14 +12,20 @@ The event with its actor and its irony in the first sentence, why it matters to 
 
 In this order. A share is the part of the script's words the beat covers; hold each within a few points.
 
-| Beat | Share of the script | Its job |
-|---|---|---|
-| What happened | 0 to 12% | The event with its date, its actor and the irony or the opponent. A date, never 'last week': the video may be posted later. |
-| Why it matters to you | 12 to 25% | What it changes for the viewer. |
-| The biggest claim | 25 to 35% | In plain terms. |
-| On the surface, yes | 35 to 55% | The evidence that the claim holds. |
-| The catch | 55 to 80% | One detail from a source that limits it. |
-| The take | 80 to 100% | Who gains, who loses, or the honest limits. |
+| Beat | Share of the script | Its job | On screen |
+|---|---|---|---|
+| What happened | 0 to 12% | The event with its date, its actor and the irony or the opponent. A date, never 'last week': the video may be posted later. | - |
+| Why it matters to you | 12 to 25% | What it changes for the viewer. | - |
+| The biggest claim | 25 to 35% | In plain terms. | a re-opening: a visible change on its first word |
+| On the surface, yes | 35 to 55% | The evidence that the claim holds. | - |
+| The catch | 55 to 80% | One detail from a source that limits it. | the turn: a visible change on its first word |
+| The take | 80 to 100% | Who gains, who loses, or the honest limits. | the payoff: the video's strongest picture |
+
+A segment's `visual` brief for a beat with an on-screen duty names the change it asks for. The scene author reads the same duty from the timeline.
+
+## First frame
+
+The named product, company or person from the first sentence, with the one number the news is about. Segment 1's `visual` brief asks for this picture, already moving, and it is the subject of the first sentence.
 
 ## Openings
 

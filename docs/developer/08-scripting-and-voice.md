@@ -47,7 +47,9 @@ publish title and description, which the agent writes while it has the whole scr
 - a `beat`, when present, that is a non-empty string of at most `SEGMENT_BEAT_MAX_LEN` characters
 
 Segments follow the beats of the script's formula, in order. Each segment is one visual idea, so a
-long beat splits into several segments and two short beats that share a picture can share one.
+long beat splits into several segments and two short beats that share a picture can share one,
+unless the second has a [role](#formulas): a turn, a re-opening or the payoff starts a segment of
+its own.
 Segments let `timeline.json` carry a frame span per segment, so a scene aligns to a beat.
 
 ## Length
@@ -91,12 +93,23 @@ malformed file stops the process at start. The MCP server and the API both impor
 | `signals` | Statements about a topic that point to the formula when they are true of it. At least one |
 | `styles` | Ids of the [style packs](10-scene-authoring.md#style-packs) whose picture the formula suits. May be empty. An id that is no pack fails the load |
 | `words` | `[min, max]`, the word band. The maximum is at most `WORD_CEILING` |
-| `beats` | `[{name, from, to, job}]`. `from` and `to` are percentages of the script's words, and the beats cover 0 to 100 with no gap |
+| `beats` | `[{name, from, to, job, role?}]`. `from` and `to` are percentages of the script's words, and the beats cover 0 to 100 with no gap. `role` is the beat's duty to the picture (below) |
 | `hooks` | `[{type, shape}]`. At least three opening shapes, each of a different hook type |
 | `holds`, `ending`, `pitfalls`, `template` | What keeps a viewer, how the script ends, what goes wrong, and a fill-in shape of the whole script |
+| `first_frame` | What the video's first frame shows. Segment 1's `visual` brief asks for it, and `get_timeline` returns it to the scene author |
 
 Hook types are one closed list, `formulas.py::HOOK_TYPES`, shared by every formula. A shared list
 lets openings be compared across formulas.
+
+A beat's `role` is one of `formulas.py::BEAT_ROLES`: `turn`, `reopen` (a re-opening of the
+question) or `payoff`. A formula has a single payoff, starting at `PAYOFF_FROM_MIN` percent or
+later, and at most one turn; other beats have no role. The roles reach the scene author as each
+segment's `role` in [`get_timeline`](06-mcp-server.md#get_timeline): a turn or a re-opening gets a
+visible change on its first word, and the payoff the video's strongest picture
+([The opening and the beats](10-scene-authoring.md#the-opening-and-the-beats)). The roles are data
+because a beat's name describes the beat and does not say where the picture must change. A segment's
+beat is matched to the formula's names whatever its case and spacing, and a label the formula does
+not have raises the `beat_unknown` script warning.
 
 The script writer reads a formula as text. `scripts/gen_formula_references.py` renders one reference
 file per formula into the script-writing skill's `formulas/` folder, and the skill reads the file of
@@ -278,7 +291,8 @@ it on the Script tab. A fault inside a check is logged and the script is stored 
 | `no_formula` | The script has no formula on record |
 | `hook_mismatch` | The opening marked `kept` is not how the first segment begins |
 | `greeting_opener` | A greeting or an agenda line in the first two sentences |
-| `title_repeat` | The first sentence holds most of the publish title's words |
+| `title_repeat` | The first sentence holds most of the publish title's words, or the title holds most of a short first sentence's words |
+| `beat_unknown` | A segment's `beat` is not a beat name of the recorded formula, so its picture duty is lost |
 | `opening_repeat` | The first sentence opens with the same three words as the first sentence of one of the same domain's 30 newest other scripts |
 | `hook_type_repeat` | The kept opening's type is the type of either of the domain's previous `ROTATION_WINDOW` videos that recorded one |
 | `staged_runup` | A phrase that announces a turn ("Here's the thing") |

@@ -43,7 +43,8 @@
       "name": "Cause",
       "from": 15,
       "to": 45,
-      "job": "Why it is done or why it happens, plainly."
+      "job": "Why it is done or why it happens, plainly.",
+      "role": "reopen"
     },
     {
       "name": "So",
@@ -55,13 +56,15 @@
       "name": "But",
       "from": 55,
       "to": 75,
-      "job": "The cost, or the second fact that turns it."
+      "job": "The cost, or the second fact that turns it.",
+      "role": "turn"
     },
     {
       "name": "Verdict or number",
       "from": 75,
       "to": 100,
-      "job": "The most specific detail, then stop."
+      "job": "The most specific detail, then stop.",
+      "role": "payoff"
     }
   ],
   "hooks": [
@@ -80,6 +83,7 @@
   ],
   "holds": "The sight is on screen before it is explained, so the cause answers a question the viewer already has. The single turn in the second half gives a short script a second fact to wait for.",
   "ending": "One line that turns the opening's feeling around, or the most specific number. Nothing after it.",
+  "first_frame": "The strange thing itself in the middle of happening, before the voice explains it.",
   "pitfalls": [
     "Explaining before showing",
     "More than one turn",

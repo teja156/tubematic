@@ -42,7 +42,8 @@
       "name": "But when",
       "from": 15,
       "to": 30,
-      "job": "The first change of direction."
+      "job": "The first change of direction.",
+      "role": "reopen"
     },
     {
       "name": "Escalation",
@@ -54,13 +55,15 @@
       "name": "False relief",
       "from": 55,
       "to": 65,
-      "job": "It seems to be over."
+      "job": "It seems to be over.",
+      "role": "turn"
     },
     {
       "name": "Reveal",
       "from": 65,
       "to": 85,
-      "job": "As a plain noun or a look back: bigger than the threat the viewer knew about."
+      "job": "As a plain noun or a look back: bigger than the threat the viewer knew about.",
+      "role": "payoff"
     },
     {
       "name": "Last line",
@@ -85,6 +88,7 @@
   ],
   "holds": "The viewer knows only what the person in the scene knows. One or two 'but' turns in every thirty seconds. One line that withholds, a beat before the reveal: they could not believe what they saw.",
   "ending": "A reveal of a few words, an ironic last clause or a what-if. The script stops on the payoff detail and asks nothing.",
+  "first_frame": "The sensation or the object the person is dealing with, in motion. Never the cause, and never a title.",
   "pitfalls": [
     "A name and a date before any reason to care",
     "The outcome in the title or the first line (unless the opening is the result-first shape)",

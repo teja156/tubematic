@@ -162,7 +162,9 @@ example draws a `piggy_bank` this way.
 ## Step 4 — timing
 
 Set each item's `at` to the `startFrame` of the word it shows: the marker starts about 12 frames later,
-which reads as the hand following the voice. List items in the order they should be drawn. Give
+which reads as the hand following the voice. The one exception is the item that opens the video:
+region 1's first item at `at: 0` need not be on a word, and the marker is already drawing it on the
+first frame. List items in the order they should be drawn. Give
 each item room: a long phrase on two quick words is refused, so time it to an earlier word or shorten
 it. Aim for something new every 1.5 to 3 seconds; a mark or an arrow is a cheap way to keep a region
 moving while the narrator dwells on it. Do not draw what the narration does not say: a circle on a
@@ -173,6 +175,16 @@ number nobody mentions is a defect the review reports.
 Leave `subtitles` out: the style fills in its own captions. If `get_video` has a `mascot`, add its cue
 track as the mascot skill describes and keep the mascot out of the writing band (14% to 68% of the
 height): the bottom band below the captions.
+
+## The opening and the beats
+
+`get_timeline` gives each segment a `beat` and a `role`, and the result a `first_frame` (the formula's line on what the first frame shows, `""` when the video has no formula). The first segment's role is `opening`. A `turn` or `reopen` segment needs a visible change on its first word, the `payoff` segment the video's strongest picture, and a segment with role `""` only its own brief. `get_video`'s `style.picture` says how this style does each; in short:
+
+- Opening: region 1's first item is a `doodle` at `at: 0` that draws the first sentence's subject. It may sit before the first word, and the marker is already drawing it on the first frame. Never a blank board, and never words first.
+- Turn or re-opening: a new region on its first word, or a doodle or arrow drawn at that word.
+- Payoff: the region the answer lives in, with the biggest doodle and its highlight. The recap is this style's ending.
+
+`validate_job` returns warnings (advisory, never blocking) when region 1 does not open on a doodle at frame 0 or when a `turn`, `reopen` or `payoff` segment has no region, doodle, arrow or recap starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
 
 ## Step 6 — write, validate, submit
 

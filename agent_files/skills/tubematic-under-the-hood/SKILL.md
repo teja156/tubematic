@@ -155,6 +155,16 @@ of the key words in the timeline's word list (the part's name, the number, the t
 most one word in 5, and usually one per sentence. The style fills in the rest of the caption look; any
 other key you set overrides it, so leave them alone.
 
+## The opening and the beats
+
+`get_timeline` gives each segment a `beat` and a `role`, and the result a `first_frame` (the formula's line on what the first frame shows, `""` when the video has no formula). The first segment's role is `opening`. A `turn` or `reopen` segment needs a visible change on its first word, the `payoff` segment the video's strongest picture, and a segment with role `""` only its own brief. `get_video`'s `style.picture` says how this style does each; in short:
+
+- Opening: plate 1 is the photograph of the part the first sentence names, with an outline or arcs drawing on it from the start.
+- Turn or re-opening: a new plate on its first word (a `zoom` through the part where the story goes inside), or an outline, arcs or stat on that word.
+- Payoff: the plate with the answer, its stat or chart the largest element. No plate after it.
+
+`validate_job` returns warnings (advisory, never blocking) when plate 1 has no photograph or when a `turn`, `reopen` or `payoff` segment has no plate, outline, arcs, chart, stat, counters or callout (a footnote or pose alone does not count) starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
+
 ## Step 5 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` from the timeline, `"canvas": "dark"` (or
