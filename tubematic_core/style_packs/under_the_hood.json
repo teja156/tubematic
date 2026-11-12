@@ -8,6 +8,9 @@
     "host": true,
     "transition": "cut"
   },
+  "dimension": "2d",
+  "preview": "under_the_hood",
+  "tagline": "How a real device works inside, part by part, with a presenter pointing the way.",
   "renderer": "dom",
   "canvas": "dark",
   "authoring_skill": "tubematic-under-the-hood",

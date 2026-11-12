@@ -8,6 +8,9 @@
     "host": true,
     "transition": "wipe"
   },
+  "dimension": "2d",
+  "preview": "bean_explainer",
+  "tagline": "A friendly bean character acts out an everyday idea with simple props.",
   "renderer": "dom",
   "canvas": "light",
   "authoring_skill": "tubematic-bean-explainer",

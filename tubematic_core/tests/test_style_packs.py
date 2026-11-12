@@ -261,6 +261,12 @@ def _valid(**over):
     ({"picture": None}, "picture"),
     ({"picture": {"opening": "a", "turn": "b", "payoff": "c"}}, "picture"),
     ({"picture": {"opening": "a", "turn": "b", "payoff": "c", "ending": " "}}, "picture"),
+    ({"dimension": "2.5d"}, "dimension"),
+    ({"dimension": None}, "dimension"),
+    ({"preview": ""}, "preview"),
+    ({"preview": "../stick"}, "preview"),
+    ({"preview": "Stick.mp4"}, "preview"),
+    ({"tagline": " "}, "tagline"),
 ])
 def test_a_malformed_pack_is_refused(over, fragment):
     with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
@@ -392,3 +398,46 @@ def test_a_malformed_role_block_is_refused(make, fragment):
     name = "system_flow.json" if data.get("id") == "system_flow" else "stick.json"
     with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
         tvs._check_pack(pathlib.Path(name), data)
+
+
+# ── what the dashboard's picker shows (TMDEV-226) ─────────────────────────────
+
+PREVIEW_DIR = REPO_ROOT / "dashboard" / "public" / "style-previews"
+# The previews ship inside the dashboard image, so their size is part of every
+# install's download. Each loop is a ~6 s, 540x960, silent H.264 clip; the
+# folder budget leaves room for the 2.3.x round's new styles. Raise it only on
+# purpose: scripts/make_style_preview.py re-encodes a clip that comes out over.
+PREVIEW_MAX_BYTES = 400 * 1024
+POSTER_MAX_BYTES = 40 * 1024
+FOLDER_MAX_BYTES = 12 * 1024 * 1024
+
+
+def test_the_picker_fields_come_from_the_packs():
+    rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
+    assert rows["auto"]["dimension"] is None and rows["auto"]["preview"] is None
+    assert rows["auto"]["tagline"].strip()
+    assert rows["cartoon_3d"]["dimension"] == "3d"
+    for sid, p in tvs.PACKS.items():
+        assert rows[sid]["dimension"] == p["dimension"]
+        assert rows[sid]["preview"] == p["preview"]
+        assert rows[sid]["tagline"] == p["tagline"]
+    # the GPU tag reads needs.gpu, which only Cartoon 3D sets today
+    assert [sid for sid, r in rows.items() if r["needs"]["gpu"]] == ["cartoon_3d"]
+
+
+@pytest.mark.parametrize("sid", list(tvs.PACKS))
+def test_every_pack_ships_its_preview_within_budget(sid):
+    stem = tvs.PACKS[sid]["preview"]
+    clip, poster = PREVIEW_DIR / f"{stem}.mp4", PREVIEW_DIR / f"{stem}.webp"
+    assert clip.is_file(), f"{clip} is missing: make it with scripts/make_style_preview.py"
+    assert poster.is_file(), f"{poster} is missing: make it with scripts/make_style_preview.py"
+    assert clip.stat().st_size <= PREVIEW_MAX_BYTES, f"{clip.name} is over {PREVIEW_MAX_BYTES} bytes"
+    assert poster.stat().st_size <= POSTER_MAX_BYTES, f"{poster.name} is over {POSTER_MAX_BYTES} bytes"
+
+
+def test_the_preview_folder_stays_within_budget():
+    total = sum(f.stat().st_size for f in PREVIEW_DIR.iterdir() if f.is_file())
+    assert total <= FOLDER_MAX_BYTES, f"style previews total {total} bytes, over {FOLDER_MAX_BYTES}"
+    stems = {f.stem for f in PREVIEW_DIR.iterdir() if f.suffix in (".mp4", ".webp")}
+    for stem in stems:
+        assert (PREVIEW_DIR / f"{stem}.mp4").is_file() and (PREVIEW_DIR / f"{stem}.webp").is_file(), stem

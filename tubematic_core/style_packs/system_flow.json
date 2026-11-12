@@ -14,6 +14,9 @@
     "component": "SystemFlow",
     "review": "- Between these times the video cuts to a short System Flow diagram, on purpose: line icons in thin boxes, dotted connectors that draw themselves, small points of light travelling along them, the active box glowing while the others dim, a pill tag and a short headline near the top. On a light video it is drawn dark on paper; on a dark video it is near-black with cyan lines. The change of look into it and out of it, and the video's own captions staying on screen over it, are intended. Do NOT report the switch of style, the absence of people or photographs inside it, or the diagram itself as off-style.\n- Do report inside it: a label or value overlapping another label, text cut off at the frame edge or under the captions, text too small to read on a phone, a packet or highlight on a component the narration is not talking about at that moment, and a diagram that shows something other than what the narration says.\n"
   },
+  "dimension": "2d",
+  "preview": "system_flow",
+  "tagline": "A mechanism drawn as a live diagram of parts, arrows and moving packets.",
   "renderer": "dom",
   "canvas": "dark",
   "authoring_skill": "tubematic-system-flow",

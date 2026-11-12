@@ -8,6 +8,9 @@
     "host": true,
     "transition": "cut"
   },
+  "dimension": "2d",
+  "preview": "case_file_story",
+  "tagline": "You are the lead in a money scheme or dilemma, and the video ends on a choice.",
   "renderer": "dom",
   "canvas": "dark",
   "authoring_skill": "tubematic-case-file-story",

@@ -48,6 +48,7 @@ import transcripts
 try:
     from tubematic_core import logging as tlog
     from tubematic_core import angles as tangles
+    from tubematic_core import audio_speed as taudio
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
@@ -66,6 +67,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
     from tubematic_core import logging as tlog
     from tubematic_core import angles as tangles
+    from tubematic_core import audio_speed as taudio
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
@@ -1484,6 +1486,16 @@ def _voice_info(con, video: dict, settings: dict) -> dict:
         "model_id": voiced or (entry["model_id"] if entry else ""),
         "model_voiced": bool(voiced),
         "other_voices": others,
+        # The speed (TMDEV-227). Before voicing, the one the voicing will use:
+        # the video's own, else the voice's roster speed, which the Script
+        # Ready picker offers as "Voice default" (keep in sync with
+        # mcp/server.py's get_video). Once voiced, the one the audio was made
+        # at, which generate_voice records: the roster can be edited after
+        # voicing. None for a video voiced before it was recorded.
+        "roster_speed": tvoice.voice_speed(entry) if entry else tvoice.DEFAULT_SPEED,
+        "speed": (tvoice.effective_speed(video.get("voice_speed"),
+                                         entry or {"speed": tvoice.DEFAULT_SPEED})
+                  if video.get("status") in _PRE_VOICE_STATUSES else video.get("voiced_speed")),
     }
 
 
@@ -3030,7 +3042,7 @@ def create_pipeline_blueprint() -> Blueprint:
             "status", "title", "script", "video_version", "youtube_url",
             "gemini_feedback", "voice_id", "agent_id", "agent_model", "agent_effort",
             "script_profile_id", "visual_style", "publish_title", "publish_description",
-            "mascot_id", "formula_choice", "angle", "angle_kind", "insert_mode",
+            "mascot_id", "formula_choice", "angle", "angle_kind", "insert_mode", "voice_speed",
         }
         fields = {k: v for k, v in body.items() if k in allowed}
         # The video's Inserts setting (TMDEV-224): Auto or None, at the topic.
@@ -3039,6 +3051,14 @@ def create_pipeline_blueprint() -> Blueprint:
             if mode_err or mode is None:
                 return jsonify({"error": mode_err or "insert_mode must be \"auto\" or \"none\""}), 400
             fields["insert_mode"] = mode
+        # The video's own voice speed (TMDEV-227), which a person changes at
+        # SCRIPT_READY only (bound below); null clears it back to the voice's
+        # roster speed. Keep in sync with mcp/server.py's update_video.
+        if "voice_speed" in fields and fields["voice_speed"] is not None:
+            err = tvoice.video_speed_error(fields["voice_speed"])
+            if err:
+                return jsonify({"error": f"voice_speed: {err}"}), 400
+            fields["voice_speed"] = round(float(fields["voice_speed"]), 2)
         # The formula a person chooses for the video, or "" for Auto
         # (TMDEV-213). An experimental one is allowed whatever the setting
         # says: the setting is about what Auto may pick.
@@ -3328,6 +3348,14 @@ def create_pipeline_blueprint() -> Blueprint:
                     "error": "angle can only be changed while the video is at TOPIC_PROPOSED "
                              f"(this one is {row['status']})"
                 }), 409
+            # The speed is the person's at the script checkpoint: before it the
+            # agent has not picked one, after it the audio is made.
+            speed_edit = "voice_speed" in fields
+            if speed_edit and row["status"] != "SCRIPT_READY":
+                return jsonify({
+                    "error": "voice_speed can only be changed while the video is at SCRIPT_READY "
+                             f"(this one is {row['status']})"
+                }), 409
             # The agent group decides who does the *next* piece of work, so a
             # human may change it at every checkpoint (TMDEV-110). In between,
             # an agent or the renderer holds the video, and switching under it
@@ -3402,7 +3430,7 @@ def create_pipeline_blueprint() -> Blueprint:
             # statements, and a status change landing between them would let
             # a frozen field through at a status where it is frozen — after
             # the poller may already have handed the video to its agent.
-            frozen_bound = bool(topic_locked or agent_locked or voice_exempt or angle_edit)
+            frozen_bound = bool(topic_locked or agent_locked or voice_exempt or angle_edit or speed_edit)
             if frozen_bound:
                 where_sql, where_params = " AND status = ?", [row["status"]]
             # The checks above and this UPDATE are two statements, so the
@@ -4593,18 +4621,19 @@ def create_pipeline_blueprint() -> Blueprint:
 
         # The speed the preview speaks at (TMDEV-216): the body's, so Settings
         # can preview a change before it is saved, else the voice's stored
-        # one. A stored speed is dropped when the body names a model that
-        # ignores it; a speed the body asks for on such a model is refused.
+        # one. Every model takes one (TMDEV-227): a native model is asked for
+        # it, and eleven_v3/v4 (or the part past a native model's maximum) is
+        # a pitch-keeping stretch of the recording, exactly as a voicing does.
         if isinstance(body, dict) and "speed" in body:
             speed = body["speed"]
-            err = tvoice.speed_error(speed, model_id, voice["name"])
+            err = tvoice.speed_error(speed)
             if err:
                 return jsonify({"error": err}), 400
             speed = round(float(speed), 2)
         else:
             speed = tvoice.voice_speed(voice)
-            if model_id not in tvoice.SPEED_MODELS:
-                speed = tvoice.DEFAULT_SPEED
+        native, stretch = tvoice.speed_plan(speed, model_id)
+        ffmpeg = shutil.which("ffmpeg") if stretch != 1.0 else None
 
         api_key = _secret(settings, "elevenlabs_api_key", "ELEVENLABS_API_KEY")
         if not api_key:
@@ -4615,45 +4644,74 @@ def create_pipeline_blueprint() -> Blueprint:
 
         # The key names the speed only when it is not the default, so every
         # preview cached before speeds existed is still found.
-        speed_part = "" if speed == tvoice.DEFAULT_SPEED else f"|{speed:.2f}"
-        cache_key = hashlib.sha256(
-            f"{voice_id}|{model_id}{speed_part}|{VOICE_PREVIEW_SAMPLE_TEXT}".encode()
-        ).hexdigest()[:16]
         preview_dir = OUTPUT_DIR / "voice-previews"
+
+        def _key(at: float) -> str:
+            part = "" if at == tvoice.DEFAULT_SPEED else f"|{at:.2f}"
+            return hashlib.sha256(
+                f"{voice_id}|{model_id}{part}|{VOICE_PREVIEW_SAMPLE_TEXT}".encode()).hexdigest()[:16]
+
+        cache_key = _key(speed)
         preview_path = preview_dir / f"{cache_key}.mp3"
         container_path = f"/output_videos/voice-previews/{cache_key}.mp3"
 
         if preview_path.exists():
             return jsonify({"path": container_path, "cached": True, "credits": 0})
+        if stretch != 1.0 and not ffmpeg:
+            return jsonify({"error": "ffmpeg must be on PATH in the API container to preview "
+                                     f"{model_id} at speed {speed:.2f}"}), 503
 
-        import httpx as _httpx
-        payload = {
-            "text": VOICE_PREVIEW_SAMPLE_TEXT,
-            "model_id": model_id,
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
-            "output_format": "mp3_44100_128",
-        }
-        if speed != tvoice.DEFAULT_SPEED:
-            payload["voice_settings"]["speed"] = speed
-        headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
-        try:
-            with _httpx.Client(timeout=60) as client:
-                resp = client.post(
-                    f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-                    json=payload,
-                    headers=headers,
-                )
-        except Exception as e:
-            return jsonify({"error": f"ElevenLabs request failed: {e}"}), 502
-        if resp.status_code != 200:
-            return jsonify({"error": f"ElevenLabs {resp.status_code}: {resp.text[:400]}"}), 502
-        credits, estimated = _elevenlabs_credits(resp, VOICE_PREVIEW_SAMPLE_TEXT)
-        tusage.record_usage(db_path, service="elevenlabs", model=model_id,
-                            operation="voice_preview", units={"credits": credits},
-                            request_id=resp.headers.get("request-id"), estimated=estimated)
-
-        preview_dir.mkdir(parents=True, exist_ok=True)
-        preview_path.write_bytes(resp.content)
+        # A stretched preview starts from the recording at its native speed,
+        # which is itself the cached preview at that speed: when it is cached,
+        # a new speed costs no call, and when the stretch fails after a paid
+        # call, the recording is kept for the retry.
+        native_path = preview_dir / f"{_key(native)}.mp3"
+        credits = 0
+        from_cache = stretch != 1.0 and native_path.exists()
+        if from_cache:
+            audio = native_path.read_bytes()
+        else:
+            import httpx as _httpx
+            payload = {
+                "text": VOICE_PREVIEW_SAMPLE_TEXT,
+                "model_id": model_id,
+                "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+                "output_format": "mp3_44100_128",
+            }
+            if native != tvoice.DEFAULT_SPEED:
+                payload["voice_settings"]["speed"] = native
+            headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
+            try:
+                with _httpx.Client(timeout=60) as client:
+                    resp = client.post(
+                        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                        json=payload,
+                        headers=headers,
+                    )
+            except Exception as e:
+                return jsonify({"error": f"ElevenLabs request failed: {e}"}), 502
+            if resp.status_code != 200:
+                return jsonify({"error": f"ElevenLabs {resp.status_code}: {resp.text[:400]}"}), 502
+            credits, estimated = _elevenlabs_credits(resp, VOICE_PREVIEW_SAMPLE_TEXT)
+            tusage.record_usage(db_path, service="elevenlabs", model=model_id,
+                                operation="voice_preview", units={"credits": credits},
+                                request_id=resp.headers.get("request-id"), estimated=estimated)
+            audio = resp.content
+            preview_dir.mkdir(parents=True, exist_ok=True)
+            native_path.write_bytes(audio)
+        if stretch != 1.0:
+            try:
+                audio, _ = taudio.stretch(ffmpeg, audio, stretch)
+            except Exception as e:
+                # A cached recording that cannot be stretched is unreadable: it
+                # goes, so the next request records a new one. A fresh one is
+                # kept once, in case the stretch only timed out.
+                if from_cache:
+                    native_path.unlink(missing_ok=True)
+                return jsonify({"error": f"the preview was generated but could not be sped up: {e}",
+                                "credits": credits}), 502
+            preview_dir.mkdir(parents=True, exist_ok=True)
+            preview_path.write_bytes(audio)
         return jsonify({"path": container_path, "cached": False, "credits": credits})
 
     # ── /pipeline/pause ───────────────────────────────────────────────────────

@@ -118,10 +118,20 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   Every main style hosts inserts except Cartoon 3D, whose pack says why, and every host names a
   transition from `inserts.TRANSITIONS`. `public_list` and `agent_view` carry `role` and `inserts`.
   A malformed `role`, `inserts` or `insert` block is refused with the field at fault.
+- Every pack names its picker group (`dimension`), its preview stem and its tagline, and
+  `public_list` passes them on, `null` for Auto. Cartoon 3D is the 3D style and the one whose
+  `needs.gpu` gives the GPU tag.
+- Every pack's [preview](../10-scene-authoring.md#style-previews) exists as a loop and a poster in
+  `dashboard/public/style-previews/`, each within its cap, and the folder stays within its budget.
+  Every file there comes as a loop and a poster pair.
 
 Trap: each answer in the truth table decides what an agent may draw or what the AI review is told is
 intended, so a changed answer shows up only after a render. Change the table only when a style's
 rules are meant to change.
+
+Trap: the preview caps are part of every install's download, since the dashboard image carries the
+files. Raise one only after weighing that cost; `scripts/make_style_preview.py` encodes a loop
+again at a lower quality until it fits.
 
 ### `test_angles.py`
 
@@ -638,14 +648,33 @@ Covers the speed and segment-voice rules in `voice_models.py`
 ([Speed](../08-scripting-and-voice.md#speed),
 [A voice per segment](../08-scripting-and-voice.md#a-voice-per-segment)).
 
-- `SPEED_MODELS` is the catalog without `eleven_v3` and `eleven_v4`. A speed in range on the step is
-  allowed there; on `eleven_v3` or `eleven_v4` only 1.0 is.
+- `NATIVE_SPEED_MODELS` is the catalog without `eleven_v3` and `eleven_v4`. A roster speed in
+  range on the step is allowed on every model; a video speed outside 0.9 to 1.25 or off the step is
+  refused.
+- `speed_plan` sends a native model its speed up to 1.2 and stretches the rest, and stretches all of
+  it on `eleven_v3` and `eleven_v4`. `effective_speed` is the video's speed, else the roster's.
 - A roster entry may carry `speed` and nothing else beyond its three keys. A speed of 1.0 is not
   stored, and others are rounded.
 - A segment voice equal to the video's is dropped, consecutive segments with one voice form a run,
   and each segment's markup is checked against its own voice.
 - A change of the video's voice checks only the segments it speaks, and still refuses markup it
   cannot speak.
+
+### `test_audio_speed.py`
+
+Covers `audio_speed.py`, the pitch-keeping stretch of a voice recording
+([Speed](../08-scripting-and-voice.md#speed)).
+
+- Word times are divided by the factor, and the input list is left as it was.
+- `stretch` runs `atempo` through a WAV and reports the WAV's length, then encodes the mp3. A factor
+  `atempo` cannot take in one pass is refused.
+- With an `ffmpeg` on the host, a real 4-second tone stretched by 1.25 comes back 3.2 seconds long.
+  It is skipped otherwise; the backend image has `ffmpeg`.
+
+### `test_voice_speed_migration.py`
+
+Covers migration `0030`, `videos.voice_speed` and `videos.voiced_speed`. An existing voiced video
+keeps its voice and files and has neither, a second run changes nothing, and a new video starts with none.
 
 ### `test_youtube.py`
 

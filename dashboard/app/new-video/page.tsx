@@ -8,7 +8,8 @@ import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { AgentPickers, Field, resolvePickedModel, selectStyle } from "@/components/AgentPickers";
 import { effortOptionLabel } from "@/lib/agents";
 import { NO_DOMAIN_DEFAULTS, domainAgent, domainDefaults } from "@/lib/domains";
-import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
+import { illustratedAvailable } from "@/lib/visualStyles";
+import { StylePicker } from "@/components/StylePicker";
 import { voiceLabel } from "@/lib/voices";
 import { ANGLE_MAX_CHARS, angleLength, cleanAngle, fetchAngleKinds, type AngleKind } from "@/lib/angles";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
@@ -312,16 +313,15 @@ export default function NewVideoPage() {
           </Field>
 
           <Field label="Visual style">
-            <select
-              data-testid="new-video-style"
+            <StylePicker
+              testId="new-video-style"
+              styles={visualStyles}
+              canUseOpenAI={canIllustrate}
+              gpu={gpu}
               value={style}
-              onChange={(e) => setStyle(e.target.value as VisualStyle)}
-              style={selectStyle}
-            >
-              {styleOptions(visualStyles, canIllustrate, gpu, style).map((o) => (
-                <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
-              ))}
-            </select>
+              onChange={(next) => setStyle(next as VisualStyle)}
+              buttonStyle={{ ...selectStyle, display: "flex" }}
+            />
           </Field>
 
           <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>

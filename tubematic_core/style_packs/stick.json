@@ -8,6 +8,9 @@
     "host": true,
     "transition": "wipe"
   },
+  "dimension": "2d",
+  "preview": "stick",
+  "tagline": "A process acted out step by step by simple stick figures on a white canvas.",
   "renderer": "dom",
   "canvas": "light",
   "authoring_skill": "tubematic-scene-config",

@@ -82,6 +82,15 @@ def recorder(monkeypatch, voice_env):
         return b"joined-audio", durations
 
     monkeypatch.setattr(server, "_join_voice_audio", fake_join)
+
+    def fake_stretch(ffmpeg, audio, factor):
+        # The fake audio carries its length; a stretch divides it, as atempo does.
+        _Recorder.stretches.append(factor)
+        return f"len:{float(audio.decode().split(':')[1]) / factor}".encode(), \
+            float(audio.decode().split(":")[1]) / factor
+
+    _Recorder.stretches = []
+    monkeypatch.setattr(server.taudio, "stretch", fake_stretch)
     _roster(TEJA, RACHEL, ADAM)
     return _Recorder
 
@@ -119,16 +128,14 @@ def test_a_voice_with_a_speed_sends_it(job_db, recorder):
     assert recorder.payloads[0]["voice_settings"]["speed"] == 1.15
 
 
-def test_a_roster_with_a_speed_on_a_model_that_ignores_it_voices_nothing(job_db, recorder):
-    """A roster written around Settings (Teja on v4 with a speed) is malformed,
-    so the roster reader drops all of it and no voice resolves: no spend."""
-    server._set_setting("elevenlabs_voices", json.dumps([{**TEJA, "speed": 1.1}]))
+def test_a_roster_speed_on_v4_is_a_stretch_of_the_recording(job_db, recorder):
+    """TMDEV-227 reverses TMDEV-216's refusal: v4 ignores ElevenLabs' speed, so
+    it records at 1.0 (no speed sent) and the recording is stretched."""
+    _roster({**TEJA, "speed": 1.1}, RACHEL, ADAM)
     job_db("v1", script_segments=[_seg("s1", "Hello there.")], voice_id="t1")
-    assert "no longer in elevenlabs_voices" in server.generate_voice("v1", "")["error"]
-    assert recorder.payloads == []
-
-
-# ── two voices ───────────────────────────────────────────────────────────────
+    assert "error" not in server.generate_voice("v1", "")
+    assert "speed" not in recorder.payloads[0]["voice_settings"]
+    assert recorder.stretches == [1.1]
 
 def _two_voice(job_db):
     job_db("v1", voice_id="t1", script_segments=[

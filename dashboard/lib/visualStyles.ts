@@ -56,22 +56,84 @@ function unavailableReason(
   return "";
 }
 
-/** The picker's options. A style the install cannot make is disabled and
- *  says why; a video already holding it still shows it selected, labelled, so
- *  the human can see why its approval is refused. Until the list loads, the
- *  picker offers only the value it holds. `gpu` omitted or null = not loaded =
- *  available. */
-export function styleOptions(
+/** One row of the style picker (TMDEV-226). */
+export interface StyleRow {
+  value: string;
+  label: string;
+  experimental: boolean;
+  gpu: boolean;
+  /** Why the install cannot make it now, or "". */
+  why: string;
+  /** False for an insert style and for one the install cannot make: shown, never picked. */
+  choosable: boolean;
+  /** Stem of the preview files, or null when there is none (Auto, a value the list lacks). */
+  preview: string | null;
+  dimension: "2d" | "3d" | null;
+  tagline: string;
+  insert: boolean;
+}
+
+export interface StyleGroup {
+  key: "top" | "2d" | "3d" | "insert";
+  title: string;
+  note: string;
+  rows: StyleRow[];
+}
+
+/** URL of a style's preview loop and poster, served from dashboard/public. */
+export function previewUrls(stem: string): { video: string; poster: string } {
+  return { video: `/style-previews/${stem}.mp4`, poster: `/style-previews/${stem}.webp` };
+}
+
+function rowOf(s: VisualStyleInfo, canUseOpenAI: boolean, gpu: Pick<GpuStatus, "status"> | null | undefined): StyleRow {
+  const insert = s.role === "insert";
+  const why = unavailableReason(s, canUseOpenAI, gpu);
+  return {
+    value: s.id, label: s.label, experimental: s.experimental, gpu: s.needs.gpu, why,
+    choosable: !insert && why === "", preview: s.preview ?? null,
+    dimension: s.dimension ?? null, tagline: s.tagline ?? "", insert,
+  };
+}
+
+/**
+ * The style picker's groups, in order: Auto (and the optional "none" row the
+ * caller adds), the 2D styles, the 3D styles, then the insert styles, which are
+ * listed so a person can see them but are never a video's style. Every group
+ * comes from the pack fields (dimension, role, needs.gpu), so a new pack lands
+ * in the right place by itself; a style an older API sends without a dimension
+ * counts as 2D, and one without a role as a main style. Empty groups are left
+ * out. Until the list loads, the only row is the value held, so the button
+ * still names it.
+ */
+export function styleGroups(
   styles: VisualStyleInfo[] | null,
   canUseOpenAI: boolean,
   gpu?: Pick<GpuStatus, "status"> | null,
   current: string = "",
-): { value: string; label: string; disabled: boolean }[] {
-  if (!styles) return current ? [{ value: current, label: styleLabel(current, null), disabled: false }] : [];
-  return styles.map((s) => {
-    const why = unavailableReason(s, canUseOpenAI, gpu);
-    return { value: s.id, label: why ? `${labelOf(s)} (${why})` : labelOf(s), disabled: why !== "" };
-  });
+): StyleGroup[] {
+  if (!styles) {
+    if (!current) return [];
+    return [{ key: "top", title: "", note: "", rows: [{
+      value: current, label: styleLabel(current, null), experimental: false, gpu: false, why: "",
+      choosable: true, preview: null, dimension: null, tagline: "", insert: false,
+    }] }];
+  }
+  const rows = styles.map((s) => rowOf(s, canUseOpenAI, gpu));
+  const top = rows.filter((r) => r.value === "auto");
+  const rest = rows.filter((r) => r.value !== "auto");
+  const groups: StyleGroup[] = [
+    { key: "top", title: "", note: "", rows: top },
+    { key: "2d", title: "2D", note: "", rows: rest.filter((r) => !r.insert && r.dimension !== "3d") },
+    { key: "3d", title: "3D", note: "", rows: rest.filter((r) => !r.insert && r.dimension === "3d") },
+    { key: "insert", title: "Inserts", note: "scenes inside another style, never a whole video",
+      rows: rest.filter((r) => r.insert) },
+  ];
+  return groups.filter((g) => g.rows.length > 0);
+}
+
+/** Every style with a preview, in picker order: what the preview window steps through. */
+export function previewableRows(groups: StyleGroup[]): StyleRow[] {
+  return groups.flatMap((g) => g.rows).filter((r) => r.preview);
 }
 
 /** The label for a stored value, falling back to the raw string so a value
@@ -100,6 +162,21 @@ export const SCENES_LABEL = "Mixed scenes";
 /** The label of one of Auto's outcomes: a style's label, or "Mixed scenes". */
 export function routeLabel(id: string, styles: VisualStyleInfo[] | null): string {
   return id === SCENES ? SCENES_LABEL : styleLabel(id, styles);
+}
+
+/** The style a video's frozen style row names, for its preview: the chosen
+ *  style, else the style Auto picked, else Cartoon 3D once Auto settled on that
+ *  renderer; "" while Auto has not chosen or kept the mixed scene system (which
+ *  has no pack). Follows videoStyleLabel's reading. */
+export function videoStyleId(
+  video: Pick<Video, "visual_style" | "resolved_renderer" | "style_pick">,
+): string {
+  const chosen = video.visual_style ?? "auto";
+  if (chosen !== "auto") return chosen;
+  const pick = video.style_pick ?? "";
+  if (pick && pick !== SCENES) return pick;
+  if (video.resolved_renderer === "cartoon_3d") return "cartoon_3d";
+  return "";
 }
 
 /**

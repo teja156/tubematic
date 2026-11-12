@@ -19,7 +19,7 @@ import { PublishDialog } from "@/components/PublishDialog";
 import { PublicationFigures } from "@/components/PublicationFigures";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
-import { segmentVoiceConflict, shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
+import { segmentVoiceConflict, shownVoice, speedLabel, topicVoicePayload, VIDEO_SPEED_OPTIONS, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
 import { LogList } from "@/components/LogList";
 import { CostBreakdown } from "@/components/CostBreakdown";
 import { formatDateTime, formatScheduled } from "@/lib/datetime";
@@ -30,7 +30,8 @@ import {
   effectiveAgent, effortLabel, effortOptionLabel, initialEffort, isUsable, modelLabel,
   pickedAgent, resolvedModel, topicApprovalPayload,
 } from "@/lib/agents";
-import { routeLabel, styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { routeLabel, videoStyleId, videoStyleLabel } from "@/lib/visualStyles";
+import { StylePicker, StylePreviewButton } from "@/components/StylePicker";
 import { MascotPicker } from "@/components/MascotPicker";
 import { formatRenderDuration } from "@/lib/renderers";
 import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
@@ -353,6 +354,10 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // null = untouched, like the agent picks below; the shown voice is derived
   // (see lib/voices.ts), so it follows the roster even when that answers late.
   const [pickedVoice, setPickedVoice] = useState<string | null>(null);
+  // The video's speed picked at Script Ready (TMDEV-227): undefined = untouched,
+  // so the approval sends nothing and the agent's pick stands; null = the voice's
+  // roster speed.
+  const [pickedSpeed, setPickedSpeed] = useState<number | null | undefined>(undefined);
   // "" is a real choice, not an absence: it means the script-writing skill's
   // own generic style. So the picker shows whenever there is at least one
   // profile, and always carries the none option.
@@ -482,6 +487,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     if (!seed) { setVideo(null); return; }
     setVideo(seed);
     setPickedVoice(null);
+    setPickedSpeed(undefined);
     setSegmentVoiceError("");
     setSelectedProfile(seed.script_profile_id ?? "");
     setSelectedFormula(seed.formula_choice ?? "");
@@ -616,6 +622,27 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
         </p>
       )}
     </>
+  );
+
+  // The speed the video will be voiced at, offered at Script Ready only. "Voice
+  // default" follows the voice picked beside it.
+  const speedShown = pickedSpeed !== undefined ? pickedSpeed : (video.voice_speed ?? null);
+  const rosterSpeed = voices.find((v) => v.voice_id === voice)?.speed ?? 1;
+  const speedPicker = (
+    <PickerField label="Voice speed">
+      <select
+        data-testid="video-modal-speed-select"
+        value={speedShown === null ? "" : speedShown.toFixed(2)}
+        onChange={(e) => setPickedSpeed(e.target.value === "" ? null : Number(e.target.value))}
+        title="How fast this video's voice speaks. The agent picks it with the script; change it before you approve."
+        className="w-full rounded border border-[#2a2a42] bg-[#131325] px-3 py-2 text-sm text-[#f0f0ff]"
+      >
+        <option value="">{`Voice default (${speedLabel(rosterSpeed)})`}</option>
+        {VIDEO_SPEED_OPTIONS.map((v) => (
+          <option key={v} value={v.toFixed(2)}>{speedLabel(v)}</option>
+        ))}
+      </select>
+    </PickerField>
   );
 
   const agentPickers = (
@@ -1464,20 +1491,20 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                   {!archived && video.status === "TOPIC_PROPOSED" && (
                     <>
                       <PickerField label="Visual style">
-                        <select
-                          data-testid="video-modal-style-select"
-                          value={selectedStyle}
-                          onChange={(e) => {
-                            setSelectedStyle(e.target.value as Video["visual_style"]);
-                            if (!styleTakesMascot(e.target.value, visualStyles)) setSelectedMascot("");
+                        <StylePicker
+                          testId="video-modal-style-select"
+                          styles={visualStyles}
+                          canUseOpenAI={illustratedAvailable}
+                          gpu={gpu}
+                          value={selectedStyle ?? "auto"}
+                          onChange={(next) => {
+                            setSelectedStyle(next as Video["visual_style"]);
+                            if (!styleTakesMascot(next, visualStyles)) setSelectedMascot("");
                           }}
                           title="Visual register for this video"
-                          className="w-full rounded border border-[#2a2a42] bg-[#131325] px-3 py-2 text-sm text-[#f0f0ff]"
-                        >
-                          {styleOptions(visualStyles, illustratedAvailable, gpu, selectedStyle).map((o) => (
-                            <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
-                          ))}
-                        </select>
+                          buttonStyle={{ width: "100%", borderColor: "#2a2a42", background: "#131325", color: "#f0f0ff",
+                                         padding: "8px 12px", fontSize: 14 }}
+                        />
                       </PickerField>
                       {showMascotPicker(mascots, video.mascot_id ?? "") && (
                         <PickerField label="Mascot (experimental)">
@@ -1545,8 +1572,9 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                   {!archived && video.status === "SCRIPT_READY" && (
                     <>
                       {voicePickers}
+                      {speedPicker}
                       {agentPickers}
-                      <ActionBtn fullWidth variant="primary" onClick={() => { onAction(video.id, "approve-script", video, { voice_id: voice, ...agentPicksPayload(video, agentList, picks) }); onClose(); }}>
+                      <ActionBtn fullWidth variant="primary" onClick={() => { onAction(video.id, "approve-script", video, { voice_id: voice, ...(pickedSpeed !== undefined ? { voice_speed: pickedSpeed } : {}), ...agentPicksPayload(video, agentList, picks) }); onClose(); }}>
                         Approve Script
                       </ActionBtn>
                       <ActionBtn fullWidth variant="amber" onClick={() => setReviseOpen(true)}>
@@ -1805,7 +1833,13 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                         />
                       </>
                     )}
-                    <MetaRow label="Visual style" value={videoStyleLabel(video, visualStyles)} />
+                    <MetaRow label="Visual style" value={
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span>{videoStyleLabel(video, visualStyles)}</span>
+                        <StylePreviewButton styleId={videoStyleId(video)} styles={visualStyles}
+                                            testId="video-modal-style-preview" />
+                      </span>
+                    } />
                     {(video.style_pick ?? "") !== "" && (
                       <MetaRow
                         label="Why this style"
@@ -1860,6 +1894,19 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           ? video.voice_info.model_id
                           : <span>{video.voice_info.model_id} <span style={{ color: "var(--dim)" }}>(current setting)</span></span>}
                     />
+                    {typeof video.voice_info.speed === "number" && (
+                      <MetaRow
+                        label="Voice speed"
+                        value={
+                          <span data-testid="video-modal-speed">
+                            {speedLabel(video.voice_info.speed)}
+                            {(video.voice_speed ?? null) === null && (
+                              <span style={{ color: "var(--dim)" }}> (voice default)</span>
+                            )}
+                          </span>
+                        }
+                      />
+                    )}
                     {video.voice_info.other_voices && video.voice_info.other_voices.length > 0 && (
                       <MetaRow
                         label="Other voices"

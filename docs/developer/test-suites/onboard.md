@@ -188,9 +188,9 @@ Trap: onboarding reads stored values before its `database` step migrates. A rost
 per-voice models would read as empty and the apply step would then erase it, so
 `load_current_values` gives each such voice the install's stored model first.
 
-A voice's speed is kept when the roster is read and when the voice is entered again, and dropped
-when the voice moves to a model that ignores speed. A roster with a speed on `eleven_v4` reads as
-empty, as in the other two readers.
+A voice's speed is kept when the roster is read and when the voice is entered again, also when the
+voice moves to `eleven_v4`. A roster with a speed out of range reads as empty, as in the other two
+readers.
 
 ### `test_image_generation.py`
 

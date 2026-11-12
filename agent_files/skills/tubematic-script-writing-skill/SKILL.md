@@ -170,8 +170,8 @@ sentences; a recap never earns the time.
 When `style.script` gives a length of its own (a number of words, chapters or steps), that length
 wins over the band (Step 2).
 
-The band is in words. A voice with a `speed` above 1.0 in the roster speaks the same words in less
-time; do not write more words to fill the seconds it saves.
+The band is in words. A faster voice speed (below) speaks the same words in less time; do not
+write more words to fill the seconds it saves.
 
 Count words across every segment's `voice` field combined. `update_video` returns a warning for a
 script outside its formula's band or past the ceiling; it does not refuse it.
@@ -398,7 +398,8 @@ The script is read by a text-to-speech voice, which says exactly what is written
   "v3.2". A voice can misread the written form, and the captions show the words either way.
 - **About one deliberate pause every three or four sentences** (Step 6): after the hook when the
   picture needs a beat to land, and before the payoff. Never in the middle of an explanation.
-- **Pace is the voice's speed, set in Settings.** Do not cut pauses or cram words to sound faster.
+- **Pace is the voice speed you pick for the video** (Step 9b). Do not cut pauses or cram words to
+  sound faster.
 
 ### Pronunciation
 
@@ -719,10 +720,38 @@ before these existed), in which case write both from the script now; blanks are 
 
 ---
 
+## Step 9b — Pick the voice speed
+
+Every video gets one voice speed, which the whole voiceover is spoken at. You choose it with the
+script; the person approving the script can change it.
+
+Start from `get_video`'s `effective_voice_speed`: the voice's own speed from Settings, or 1.0. Move
+off it only for a reason the script or the video gives you, in steps of 0.05, between **0.9 and
+1.25**:
+
+| The script | Speed |
+|---|---|
+| A list, a countdown or a run of quick facts in short sentences, with simple words | the start speed + 0.05 to + 0.15 |
+| Dense: several numbers, terms or names a viewer must catch in each beat | the start speed, or − 0.05 |
+| A story that builds, where `style.script` asks for a calm or slow delivery | the start speed, or − 0.05 to − 0.1 |
+| Anything else, or you are unsure | the start speed |
+
+- Read the delivery `style.script` describes (a calm storyteller, a fast terminal readout) and the
+  formula's beats (a list moves faster than a story). Never name a style here; the pack's own
+  words decide.
+- A script with many numbers or invented terms stays at 1.15 or below, whatever the formula: speed
+  is what makes a viewer miss them.
+- 1.2 and 1.25 suit only a short, punchy script of simple words.
+- The speed changes how long the video runs, never which words it has: do not shorten or lengthen
+  the script to fit a speed.
+
+Pass it as `voice_speed` in the Step 10 call. Leave `voice_speed` out only when the start speed is
+the right one and the video has no speed of its own yet.
+
 ## Step 10 — Hand off
 
 1. `update_video(video_id, script_segments=[...], publish_title="...", publish_description="...",
-   formula_id="<formula_routing.pick>", hooks=[...])`.
+   formula_id="<formula_routing.pick>", hooks=[...], voice_speed=<Step 9b>)`.
 2. Read `warnings` in the result. Each is `{id, message}`: an advisory check on the script's
    words, never a refusal; the script is already stored. Decide for each whether it names a real
    problem in this script. If any does, fix those and call `update_video` once more with the whole
@@ -732,15 +761,15 @@ before these existed), in which case write both from the script now; blanks are 
    a `recap_ending` on a closing sentence `style.script` asks for stays, a `length_band` on a
    script whose length `style.script` set stays, and an `opening_repeat` or `hook_type_repeat` on
    an opening a person switched to stays.
-3. If `update_video` fails because it does not know the arguments `formula_id` or `hooks` (an
-   unexpected-argument error, not a refusal of their values), the tool server is
-   older than this skill: send the same call without those two. Any other refusal that names the formula means
+3. If `update_video` fails because it does not know the arguments `formula_id`, `hooks` or
+   `voice_speed` (an unexpected-argument error, not a refusal of their values), the tool server is
+   older than this skill: send the same call without the ones it names. Any other refusal that names the formula means
    the script is in the wrong formula: rewrite it in the one the error names.
 4. In `respell` or `ipa` mode only, and only if there are one or more new lexicon entries:
    `upsert_pronunciation_lexicon(entries=[...])`. Skip the call entirely if the list is empty.
 5. Report the segment count, the total word count, the formula and in one clause why it fits the
-   topic, the type of the opening you kept, which profile (or the generic style) was used, and any
-   warning you left standing and why.
+   topic, the type of the opening you kept, the voice speed and in one clause why, which profile
+   (or the generic style) was used, and any warning you left standing and why.
 
 A pronunciation-only fix changes markup, not words: resend the script without `formula_id` and
 `hooks`. The record stored with it is kept, nothing is checked and no `warnings` come back. Do not

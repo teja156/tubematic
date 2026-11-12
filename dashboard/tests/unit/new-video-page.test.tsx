@@ -16,6 +16,7 @@ vi.mock("@/components/VoicePreviewButton", () => ({ VoicePreviewButton: () => nu
 
 import NewVideoPage from "@/app/new-video/page";
 import type { Agent, ScriptProfile } from "@/lib/types";
+import { isStyleDisabled, pickStyle } from "./stylePickerHelpers";
 
 function agent(over: Partial<Agent>): Agent {
   return {
@@ -239,7 +240,7 @@ describe("NewVideoPage", () => {
     fireEvent.change(screen.getByLabelText("Model"), { target: { value: "opus" } });
     fireEvent.change(screen.getByLabelText("Effort"), { target: { value: "max" } });
     fireEvent.change(screen.getByLabelText("Script profile"), { target: { value: "p1" } });
-    fireEvent.change(screen.getByLabelText("Visual style"), { target: { value: "illustrated" } });
+    pickStyle("new-video-style", "illustrated");
     fireEvent.change(screen.getByLabelText("Voice"), { target: { value: "o2" } });
     fireEvent.click(screen.getByLabelText(/automatically approve topic/i));
     fireEvent.click(screen.getByRole("button", { name: /submit/i }));
@@ -289,8 +290,7 @@ describe("NewVideoPage", () => {
   it("disables Illustrated when no OpenAI key is stored", async () => {
     mockApi({ openaiKey: "" });
     await ready();
-    const option = screen.getByRole("option", { name: /illustrated/i }) as HTMLOptionElement;
-    expect(option.disabled).toBe(true);
+    expect(isStyleDisabled("new-video-style", "illustrated")).toBe(true);
   });
 
   it("disables the agent picker when the agent list cannot be loaded", async () => {

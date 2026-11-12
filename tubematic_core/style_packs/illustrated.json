@@ -8,6 +8,9 @@
     "host": true,
     "transition": "dip"
   },
+  "dimension": "2d",
+  "preview": "illustrated",
+  "tagline": "Drawn characters the viewer follows and recognises from scene to scene.",
   "renderer": "dom",
   "canvas": null,
   "authoring_skill": "tubematic-scene-config",

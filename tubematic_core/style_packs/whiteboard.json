@@ -8,6 +8,9 @@
     "host": true,
     "transition": "push"
   },
+  "dimension": "2d",
+  "preview": "whiteboard",
+  "tagline": "One idea worked out step by step with a marker on a big whiteboard.",
   "renderer": "dom",
   "canvas": "light",
   "authoring_skill": "tubematic-whiteboard",
