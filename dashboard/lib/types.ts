@@ -45,6 +45,9 @@ export interface VisualStyleInfo {
   /** "insert" for a style used only as scenes inside another style: listed apart and never
    *  offered as a video's style. Absent (an API without inserts) means a main style. */
   role?: "main" | "insert";
+  /** Whether a video in this main style may carry insert scenes, and the transition into
+   *  and out of them. Absent on an insert style and from an API without inserts. */
+  inserts?: { host: boolean; transition?: string };
 }
 /** Which renderer `auto` settled on (videos.resolved_renderer): "" until the agent chose. */
 export type ResolvedRenderer = "" | "dom" | "cartoon_3d";
@@ -63,6 +66,9 @@ export interface ScriptSegment {
    *  to the video's voice, but a later change of the video's voice can make
    *  it equal, which reads the same as absent. */
   voice_id?: string;
+  /** The insert style the script marked this segment for (TMDEV-224); absent on
+   *  a segment drawn in the video's main style. */
+  insert?: string;
 }
 
 /** One of the three openings the writer drafted for a script. `kept` marks
@@ -263,9 +269,28 @@ export interface Video {
   voice_info?: VoiceInfo;
   /** The video's own voice speed (TMDEV-227), 0.9 to 1.25; null = each voice's roster speed. */
   voice_speed?: number | null;
+  /** The Inserts setting chosen at the topic checkpoint and frozen after it
+   *  (TMDEV-224): "auto" lets the agent add short insert scenes where they help,
+   *  "none" forbids them. Optional for the same reason as tts_text. */
+  insert_mode?: "auto" | "none";
+  /** The insert styles the agent decided on, as the API stores them: '' while
+   *  undecided, else a JSON list of style ids ("[]" = none). Read it through
+   *  lib/inserts.ts::parseInsertStyles. */
+  insert_styles?: string | string[];
+  /** One sentence on that decision. */
+  insert_reason?: string;
+  /** What the scene config holds of inserts; null before one is written. Only
+   *  on single-video responses. */
+  insert_summary?: InsertSummary | null;
   created_at: string;
   updated_at: string;
   comments?: Comment[];
+}
+
+export interface InsertSummary {
+  count: number;
+  seconds: number;
+  styles: string[];
 }
 
 export interface Project {
@@ -303,6 +328,9 @@ export interface Project {
    *  in, whatever its sourcing mode; '' = Auto. Changing it never touches
    *  videos already filed. */
   default_formula_id?: string;
+  /** The Inserts setting every new video filed into this domain starts with
+   *  (TMDEV-224); absent from an older API, which reads as "auto". */
+  default_insert_mode?: "auto" | "none";
   /** How many topics the domain may ever hold, 25–750 (100 by default). */
   topic_cap?: number;
   /** Every video ever filed into the domain, archived and rejected included —

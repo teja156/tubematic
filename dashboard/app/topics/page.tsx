@@ -19,6 +19,7 @@ import { SaveStatus } from "@/components/SaveStatus";
 import { ToastStack, useToasts } from "@/components/Toast";
 import { responseError, useSaveStatus, useSerialQueue, type SaveState } from "@/lib/saveStatus";
 import { formulaOptions, type ScriptFormulaNames } from "@/lib/scriptFormulas";
+import { INSERT_MODE_OPTIONS, INSERTS_TITLE, insertMode } from "@/lib/inserts";
 import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 
 const ALL_MODES: Array<{ key: string; label: string; accent: string; desc: string }> = [
@@ -233,7 +234,7 @@ function DomainGroup({ title, accent, note, flex = "1.1 1 360px", children }: {
   );
 }
 
-type DefaultControl = "style" | "voice" | "profile" | "formula" | "mascot" | "agent" | "agent-model" | "agent-effort";
+type DefaultControl = "style" | "inserts" | "voice" | "profile" | "formula" | "mascot" | "agent" | "agent-model" | "agent-effort";
 
 // The Look, Narration and Agent groups: the same controls on a domain's row,
 // where each change is saved at once, and in the add-domain form. One
@@ -251,8 +252,9 @@ function DomainDefaults({ values, onChange, testId, lists, canIllustrate, gpu }:
   const agent = domainAgent(lists.agents, values.default_agent_id);
   return (
     <>
-      <DomainGroup title="Look"
-                   note="The style starts this domain's curriculum videos. The mascot starts every new video.">
+      {/* Wider than the default group basis: a third picker (Inserts) sits beside the style and mascot. */}
+      <DomainGroup title="Look" flex="1.2 1 460px"
+                   note="The style starts this domain's curriculum videos. The mascot and the inserts setting start every new video.">
         <div style={{ display: "flex", gap: 8 }}>
           <DomainField label="Visual style" flex="1.2 1 0">
             <StylePicker
@@ -271,6 +273,19 @@ function DomainDefaults({ values, onChange, testId, lists, canIllustrate, gpu }:
             <DomainMascotSelect testId={testId("mascot")} value={values.default_mascot_id}
                                 mascots={lists.mascots} gpu={gpu}
                                 onChange={(next) => onChange({ default_mascot_id: next })} />
+          </DomainField>
+          {/* Not locked by the style above: that style reaches curriculum videos
+              only, while this setting starts every new video in the domain. */}
+          <DomainField label="Inserts" flex="0.7 1 0">
+            <select
+              data-testid={testId("inserts")}
+              value={values.default_insert_mode}
+              onChange={(e) => onChange({ default_insert_mode: insertMode(e.target.value) })}
+              title={INSERTS_TITLE}
+              style={pickerStyle}
+            >
+              {INSERT_MODE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </DomainField>
         </div>
       </DomainGroup>
@@ -842,6 +857,7 @@ const SAVED_FIELD: Record<string, string> = {
   default_voice_id: "default voice",
   default_script_profile_id: "script profile",
   default_formula_id: "formula",
+  default_insert_mode: "inserts setting",
   default_mascot_id: "mascot",
   default_agent_id: "agent",
   default_agent_model: "agent's model",

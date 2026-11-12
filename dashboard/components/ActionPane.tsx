@@ -15,6 +15,7 @@ import {
 } from "@/lib/agents";
 import { videoStyleLabel } from "@/lib/visualStyles";
 import { StylePicker } from "@/components/StylePicker";
+import { INSERT_MODE_OPTIONS, INSERTS_TITLE, insertMode, insertsLockedReason, type InsertMode } from "@/lib/inserts";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { hasFormula, videoFormulaLabel, type ScriptFormulaNames } from "@/lib/scriptFormulas";
 import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
@@ -177,6 +178,10 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
   // The mascot the topic starts with (a domain or install default may have
   // seeded one). Cleared and locked while the style is Cartoon 3D.
   const [selectedMascot, setSelectedMascot] = useState(video.mascot_id ?? "");
+  // The video's Inserts setting (TMDEV-224), frozen with the style; sent with
+  // the approval only when it differs from what the video holds.
+  const [selectedInsertMode, setSelectedInsertMode] = useState<InsertMode>(insertMode(video.insert_mode));
+  const insertsLocked = insertsLockedReason(selectedStyle, visualStyles);
   // A dropdown of the video's own agent's models — the installer validated
   // that list against the real binary, and the API rejects anything outside
   // it. null = untouched, so the shown value tracks initialModel() until the
@@ -430,6 +435,27 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
             />
           </PickerField>
         )}
+        <PickerField label="Inserts">
+          {/* A style that takes no inserts shows None, locked. */}
+          <select
+            data-testid={`inserts-select-${video.id}`}
+            value={insertsLocked ? "none" : selectedInsertMode}
+            disabled={insertsLocked !== ""}
+            onChange={(e) => setSelectedInsertMode(insertMode(e.target.value))}
+            title={insertsLocked || INSERTS_TITLE}
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              padding: "7px 8px",
+              background: "var(--panel)",
+              color: "var(--ink)",
+              border: "1px solid var(--border-2)",
+              ...(insertsLocked ? greyed : {}),
+            }}
+          >
+            {INSERT_MODE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </PickerField>
         {voicePickers}
         {agentPickers}
         <button
@@ -437,6 +463,7 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
           onClick={() => onAction(video.id, "approve-topic", video, {
             script_profile_id: selectedProfile, visual_style: selectedStyle,
             ...(mascotShown ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}),
+            ...(selectedInsertMode !== insertMode(video.insert_mode) ? { insert_mode: selectedInsertMode } : {}),
             ...topicVoicePayload(pickedVoice),
             ...topicApprovalPayload(video, agentList, picks),
           })}

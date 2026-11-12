@@ -23,6 +23,7 @@ interface Pack {
   dimension: "2d" | "3d";
   preview: string;
   tagline: string;
+  inserts?: { host: boolean; transition?: string };
 }
 
 const packs: Pack[] = fs
@@ -33,11 +34,15 @@ const packs: Pack[] = fs
 
 export const PACK_STYLES: VisualStyleInfo[] = [
   { id: "auto", label: "Auto", experimental: false, canvas: null, needs: { openai_key: false, gpu: false }, mascot: true,
-    dimension: null, preview: null, tagline: "The agent reads the topic and picks the style that fits it best." },
+    dimension: null, preview: null, tagline: "The agent reads the topic and picks the style that fits it best.",
+    // visual_styles.py::SCENES_INSERTS: Auto's mixed scene system hosts inserts.
+    inserts: { host: true, transition: "dip" } },
   ...packs.map((p) => ({
     id: p.id, label: p.label, experimental: p.experimental, canvas: p.canvas, needs: p.needs,
     // as visual_styles.py::public_list serves it
     mascot: p.renderer !== "cartoon_3d" && p.mascot !== false,
     dimension: p.dimension, preview: p.preview, tagline: p.tagline,
+    // `role` is left out: the picker tests mark the insert styles themselves.
+    inserts: p.inserts ?? { host: false },
   })),
 ];

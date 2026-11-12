@@ -43,6 +43,12 @@ describe("domainDefaults", () => {
     expect(domainDefaults(row)).toEqual({ ...NO_DOMAIN_DEFAULTS, default_voice_id: "a1",
                                           default_formula_id: "scene-story" });
   });
+
+  it("reads the Inserts default as auto unless the row says none", () => {
+    expect(domainDefaults({ id: "d", name: "D" } as Project).default_insert_mode).toBe("auto");
+    expect(domainDefaults({ id: "d", name: "D", default_insert_mode: "none" } as Project).default_insert_mode)
+      .toBe("none");
+  });
 });
 
 describe("domainChips", () => {
@@ -57,6 +63,12 @@ describe("domainChips", () => {
       default_agent_effort: "max", default_formula_id: "scene-story",
     })).toEqual(["Style: Stick Explainer", "Voice: Adam", "Profile: Fireship", "Formula: Scene Story",
                  "Mascot: Tubi", "Agent: Claude Code · sonnet · max"]);
+  });
+
+  it("has an Inserts chip only when the domain turns inserts off", () => {
+    expect(chips({ default_insert_mode: "auto" })).toEqual([]);
+    expect(chips({ default_visual_style: "stick", default_insert_mode: "none" }))
+      .toEqual(["Style: Stick Explainer", "Inserts: None"]);
   });
 
   it("leaves a blank model and effort out of the agent chip", () => {

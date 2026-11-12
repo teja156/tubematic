@@ -30,7 +30,7 @@ import {
   effectiveAgent, effortLabel, effortOptionLabel, initialEffort, isUsable, modelLabel,
   pickedAgent, resolvedModel, topicApprovalPayload,
 } from "@/lib/agents";
-import { routeLabel, videoStyleId, videoStyleLabel } from "@/lib/visualStyles";
+import { routeLabel, styleLabel, videoStyleId, videoStyleLabel } from "@/lib/visualStyles";
 import { StylePicker, StylePreviewButton } from "@/components/StylePicker";
 import { MascotPicker } from "@/components/MascotPicker";
 import { formatRenderDuration } from "@/lib/renderers";
@@ -41,6 +41,7 @@ import { formulaEvidenceLine, formulaLabel, formulaOptions, hasFormula, hasScrip
 import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 import { TopicAngle } from "@/components/TopicAngle";
 import { angleScoreLabel } from "@/lib/angles";
+import { INSERT_MODE_OPTIONS, INSERTS_TITLE, insertMode, insertsLockedReason, insertsRowText, type InsertMode } from "@/lib/inserts";
 
 interface VideoModalProps {
   video: Video | null;
@@ -106,6 +107,14 @@ function stripVoiceMarkup(text: string): string {
     .replace(/\s{2,}/g, " ")
     .trim();
 }
+
+// The small mono caps a script segment's beat and insert mark are set in.
+const SEGMENT_LABEL: CSSProperties = {
+  fontFamily: "var(--mono)",
+  fontSize: 9,
+  textTransform: "uppercase",
+  letterSpacing: "0.14em",
+};
 
 function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -366,6 +375,9 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // with the approval only when it differs from what the video holds, so a
   // held formula a later version dropped is never re-sent and refused.
   const [selectedFormula, setSelectedFormula] = useState("");
+  // The video's Inserts setting chosen at the topic (TMDEV-224). Sent with the
+  // approval only when it differs from what the video holds, like the formula.
+  const [selectedInsertMode, setSelectedInsertMode] = useState<InsertMode>("auto");
   // Frozen after TOPIC_PROPOSED alongside the profile and the model.
   const [selectedStyle, setSelectedStyle] = useState<Video["visual_style"]>("auto");
   const [selectedMascot, setSelectedMascot] = useState("");
@@ -491,6 +503,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     setSegmentVoiceError("");
     setSelectedProfile(seed.script_profile_id ?? "");
     setSelectedFormula(seed.formula_choice ?? "");
+    setSelectedInsertMode(insertMode(seed.insert_mode));
     setSwitchFormulaError("");
     setSelectedStyle(seed.visual_style ?? "auto");
     setSelectedMascot(seed.mascot_id ?? "");
@@ -1120,19 +1133,20 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                                 i < video.script_segments!.length - 1 ? "1px solid var(--border)" : "none",
                             }}
                           >
-                            {seg.beat ? (
-                              <div
-                                data-testid={`script-beat-${seg.id}`}
-                                style={{
-                                  fontFamily: "var(--mono)",
-                                  fontSize: 9,
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.14em",
-                                  color: "var(--dim)",
-                                  marginBottom: 6,
-                                }}
-                              >
-                                {seg.beat}
+                            {seg.beat || seg.insert ? (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 6, ...SEGMENT_LABEL }}>
+                                {seg.beat ? (
+                                  <div data-testid={`script-beat-${seg.id}`} style={{ color: "var(--dim)" }}>
+                                    {seg.beat}
+                                  </div>
+                                ) : null}
+                                {/* The script marked this segment to be shown as an
+                                    insert scene in another style (TMDEV-224). */}
+                                {seg.insert ? (
+                                  <div data-testid={`script-insert-${seg.id}`} style={{ color: "var(--amber)" }}>
+                                    Insert · {styleLabel(seg.insert, visualStyles)}
+                                  </div>
+                                ) : null}
                               </div>
                             ) : null}
                             {segmentPickerShown ? (
@@ -1506,6 +1520,22 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                                          padding: "8px 12px", fontSize: 14 }}
                         />
                       </PickerField>
+                      <PickerField label="Inserts">
+                        {/* A style that takes no inserts shows None, locked; the
+                            choice held underneath comes back with another style. */}
+                        <select
+                          data-testid="video-modal-inserts-select"
+                          value={insertsLockedReason(selectedStyle, visualStyles) ? "none" : selectedInsertMode}
+                          disabled={insertsLockedReason(selectedStyle, visualStyles) !== ""}
+                          onChange={(e) => setSelectedInsertMode(insertMode(e.target.value))}
+                          title={insertsLockedReason(selectedStyle, visualStyles) || INSERTS_TITLE}
+                          className="w-full rounded border border-[#2a2a42] bg-[#131325] px-3 py-2 text-sm text-[#f0f0ff] disabled:opacity-50"
+                        >
+                          {INSERT_MODE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </PickerField>
                       {showMascotPicker(mascots, video.mascot_id ?? "") && (
                         <PickerField label="Mascot (experimental)">
                           <MascotPicker
@@ -1558,7 +1588,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           Save or cancel the angle on the Topic tab first.
                         </div>
                       )}
-                      <ActionBtn fullWidth variant="primary" disabled={angleEditorOpen} onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(selectedFormula !== (video.formula_choice ?? "") ? { formula_choice: selectedFormula } : {}), ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
+                      <ActionBtn fullWidth variant="primary" disabled={angleEditorOpen} onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(selectedFormula !== (video.formula_choice ?? "") ? { formula_choice: selectedFormula } : {}), ...(selectedInsertMode !== insertMode(video.insert_mode) ? { insert_mode: selectedInsertMode } : {}), ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
                         Approve Topic
                       </ActionBtn>
                       <ActionBtn fullWidth variant="danger" onClick={() => { onAction(video.id, "reject-topic", video); onClose(); }}>
@@ -1855,6 +1885,19 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                         }
                       />
                     )}
+                    <MetaRow
+                      label="Inserts"
+                      value={
+                        <span data-testid="video-inserts">
+                          {insertsRowText(video, visualStyles)}
+                          {video.insert_reason && (
+                            <span data-testid="video-inserts-reason" style={{ display: "block", color: "var(--dim)", marginTop: 4 }}>
+                              {video.insert_reason}
+                            </span>
+                          )}
+                        </span>
+                      }
+                    />
                     {switchable && (
                       <div data-testid="switch-style" style={{ padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
                         <ActionBtn

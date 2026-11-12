@@ -14,6 +14,7 @@ import { voiceLabel } from "@/lib/voices";
 import { ANGLE_MAX_CHARS, angleLength, cleanAngle, fetchAngleKinds, type AngleKind } from "@/lib/angles";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { formulaOptions } from "@/lib/scriptFormulas";
+import { INSERT_MODE_OPTIONS, INSERTS_TITLE, insertMode, insertsLockedReason, type InsertMode } from "@/lib/inserts";
 import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 
 // The fixed domain every submission here is filed into. Keep in sync:
@@ -75,6 +76,9 @@ export default function NewVideoPage() {
   const [formula, setFormula] = useState("");
   const formulaNames = useScriptFormulaNames(true);
   const [style, setStyle] = useState<VisualStyle>("auto");
+  // The Inserts setting (TMDEV-224). null = untouched: nothing is sent and the
+  // API starts the video on the manual domain's default, which is what shows.
+  const [insertModePick, setInsertModePick] = useState<InsertMode | null>(null);
   const [voiceId, setVoiceId] = useState("");
   const [approve, setApprove] = useState(true);
 
@@ -146,6 +150,7 @@ export default function NewVideoPage() {
       ? `${manualDefaults.default_agent_effort} (domain default)` : effortOptionLabel(domainLive),
   };
   const readyProfiles = profiles.filter((p) => p.status === "READY");
+  const insertsLocked = insertsLockedReason(style, visualStyles);
   // What "Default" resolves to: the manual domain's voice while it is still in
   // the roster (the API skips a stale one the same way), else the install's.
   const defaultVoiceId = voices.some((v) => v.voice_id === manualVoiceId)
@@ -177,6 +182,7 @@ export default function NewVideoPage() {
       script_profile_id: profileId,
       formula_choice: formula,
       visual_style: style,
+      ...(insertModePick !== null ? { insert_mode: insertModePick } : {}),
       voice_id: voiceId,
       ...(angleText ? { angle: angleText, angle_kind: angleKind } : {}),
     };
@@ -322,6 +328,20 @@ export default function NewVideoPage() {
               onChange={(next) => setStyle(next as VisualStyle)}
               buttonStyle={{ ...selectStyle, display: "flex" }}
             />
+          </Field>
+
+          <Field label="Inserts">
+            {/* A style that takes no inserts shows None, locked. */}
+            <select
+              data-testid="new-video-inserts-select"
+              value={insertsLocked ? "none" : (insertModePick ?? manualDefaults.default_insert_mode)}
+              disabled={insertsLocked !== ""}
+              onChange={(e) => setInsertModePick(insertMode(e.target.value))}
+              title={insertsLocked || INSERTS_TITLE}
+              style={{ ...selectStyle, ...(insertsLocked ? { opacity: 0.5 } : {}) }}
+            >
+              {INSERT_MODE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </Field>
 
           <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>

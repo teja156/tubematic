@@ -1868,3 +1868,86 @@ describe("VideoModal — mascot picker", () => {
     expect(onAction.mock.calls[0][3]).toMatchObject({ visual_style: "under_the_hood", mascot_id: "" });
   });
 });
+
+describe("VideoModal — Inserts (TMDEV-224)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const GPU = {
+    status: "working", rendering_on: "gpu", configured: true, gpu: null, host_gpus: [], probe: null,
+    requested_at: null, pending: false, waiting_for_render: false,
+  } as never;
+
+  it("offers the setting at the topic, starting on the video's, and sends nothing untouched", async () => {
+    const video = { ...makeVideo("TOPIC_PROPOSED"), insert_mode: "none" as const };
+    mockFetchFor(video);
+    const onAction = vi.fn();
+    render(<VideoModal video={video} onClose={() => {}} onAction={onAction} />);
+    const select = (await screen.findByTestId("video-modal-inserts-select")) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Auto", "None"]);
+    expect(select.value).toBe("none");
+    expect(select.disabled).toBe(false);
+    fireEvent.click(screen.getByText("Approve Topic"));
+    expect(onAction.mock.calls[0][3]).not.toHaveProperty("insert_mode");
+  });
+
+  it("sends a changed setting with the approval", async () => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    mockFetchFor(video);
+    const onAction = vi.fn();
+    render(<VideoModal video={video} onClose={() => {}} onAction={onAction} />);
+    const select = (await screen.findByTestId("video-modal-inserts-select")) as HTMLSelectElement;
+    expect(select.value).toBe("auto");
+    fireEvent.change(select, { target: { value: "none" } });
+    fireEvent.click(screen.getByText("Approve Topic"));
+    expect(onAction.mock.calls[0][3]).toMatchObject({ insert_mode: "none" });
+  });
+
+  it("locks the picker to None, saying why, for a style that takes no inserts", async () => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    mockFetchFor(video);
+    render(<VideoModal video={video} gpu={GPU} onClose={() => {}} onAction={() => {}} />);
+    const select = (await screen.findByTestId("video-modal-inserts-select")) as HTMLSelectElement;
+    pickStyle("video-modal-style-select", "cartoon_3d");
+    expect(select.disabled).toBe(true);
+    expect(select.value).toBe("none");
+    expect(select.title).toBe("Cartoon 3D takes no inserts.");
+    pickStyle("video-modal-style-select", "stick");
+    expect(select.disabled).toBe(false);
+    expect(select.value).toBe("auto");
+  });
+
+  it("shows the agent's decision and its reason after the topic", async () => {
+    const video = { ...makeVideo("VOICE_READY"), visual_style: "stick",
+                    insert_styles: '["system_flow"]', insert_reason: "The request path is a diagram.",
+                    insert_summary: { count: 2, seconds: 13, styles: ["system_flow"] } };
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    const row = await screen.findByTestId("video-inserts");
+    expect(row.textContent).toContain("System Flow · 2 inserts, 13 s");
+    expect(screen.getByTestId("video-inserts-reason").textContent).toBe("The request path is a diagram.");
+    expect(screen.queryByTestId("video-modal-inserts-select")).toBeNull();
+  });
+
+  it("says None was chosen when the setting is off", async () => {
+    const video = { ...makeVideo("TOPIC_APPROVED"), insert_mode: "none" as const };
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    expect((await screen.findByTestId("video-inserts")).textContent).toBe("None (turned off for this video)");
+    expect(screen.queryByTestId("video-inserts-reason")).toBeNull();
+  });
+
+  it("marks the script segments shown as inserts, next to the beat", async () => {
+    const segments: ScriptSegment[] = [
+      { id: "s1", voice: "Start here.", visual: "[Card]", beat: "Hook" },
+      { id: "s2", voice: "The request goes in.", visual: "[Diagram]", beat: "Walkthrough", insert: "system_flow" },
+      { id: "s3", voice: "No beat.", visual: "[Log]", insert: "from_a_newer_api" },
+    ];
+    const video = makeVideo("SCRIPT_READY", segments);
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    expect((await screen.findByTestId("script-insert-s2")).textContent).toBe("Insert · System Flow");
+    expect(screen.getByTestId("script-beat-s2").textContent).toBe("Walkthrough");
+    expect(screen.queryByTestId("script-insert-s1")).toBeNull();
+    expect(screen.getByTestId("script-insert-s3").textContent).toBe("Insert · from_a_newer_api");
+  });
+});

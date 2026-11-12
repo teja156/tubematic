@@ -107,11 +107,15 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
 - The formula default offers Auto and every formula with experimental ones marked, a change
   re-sends every other field, another edit keeps it, a new domain is created with the one picked,
   and a stored formula the list does not know stays selected under its id.
+- The Inserts default offers Auto and None in the Look group. A domain set to None shows an Inserts
+  chip and one on Auto shows none, a change is saved, another edit re-sends the setting, and a new
+  domain starts on Auto and is created with the one picked.
 
 Trap: [`POST /projects`](../05-http-api.md#post-projects) replaces the whole row, so every edit
 re-sends every field. A field left out is reset by that edit: an omitted `default_mascot_id` returns
 the domain to the install default, an omitted `default_agent_id` returns it to Automatic, and an
-omitted `topic_cap` resets the cap to 100.
+omitted `topic_cap` resets the cap to 100. An omitted `default_insert_mode` resets the domain to Auto,
+which is why every expected body in the file carries it.
 
 Trap: a second change made before the first is answered must carry the first, and must leave out
 a first one that was refused. `saveDomain` queues the writes to one domain for that reason, a
@@ -137,6 +141,8 @@ Covers the request body of [the New Video page](../15-dashboard.md#the-new-video
   no agent list, the blank agent choice reads **Domain default** without a name, and so does the
   blank model choice when the domain names a model.
 - The formula picker offers Auto and every formula, and sends the one picked as `formula_choice`.
+- The Inserts picker shows the Manual Videos domain's setting and sends no `insert_mode` while
+  untouched, sends the one picked, and locks on None for a style that takes no inserts.
 - Submit is blocked with a title over 70 code points, and a refusal keeps the input.
 - The optional angle: an empty field sends no angle, a sentence is sent with its kind, and a
   sentence with no kind or over 300 characters blocks Submit. The field is not offered while the
@@ -378,6 +384,9 @@ pickers on its rows.
   Mascots are disabled with the reason unless the GPU is working, and while the GPU status has not
   loaded. `mascot_id` travels with `approve-topic` only when the picker shows. Choosing Cartoon 3D
   or Under the Hood clears and locks the picker and sends an empty mascot.
+- [Inserts](../15-dashboard.md#inserts): the picker starts on the video's setting, `approve-topic`
+  carries `insert_mode` only when it was changed, and Cartoon 3D locks it on None with the reason
+  as its hover text.
 - A refused approval (`onAction` resolving `false`) brings the row back so the pick can be changed.
 - A `TOPIC_PROPOSED` row shows the topic's angle on one line with the full sentence as its tooltip,
   and the angle's kind and score in the meta line. A topic with none reads **No angle**, an unscored
@@ -416,6 +425,12 @@ Covers `components/VideoModal.tsx`, [the video window](../15-dashboard.md#the-vi
   when the video has none of its own.
 - The frozen style row carries a preview eye for the style the video uses, and none before Auto has
   picked.
+- [Inserts](../15-dashboard.md#inserts): at the topic the picker starts on the video's setting, an
+  untouched approval sends no `insert_mode`, and a style that takes no inserts locks it on None and
+  gives the held choice back with another style. Past the topic the Inserts row names the insert
+  styles with the scene config's count and seconds and the reason under it, or None when a person
+  turned inserts off. On the Script tab a segment marked `insert` shows an Insert mark with the
+  style's name, or its id when the list lacks it, beside its beat.
 - The Rendered by and Render time rows show the last render's renderer with GPU or CPU, fall back to
   the renderer id when no name was recorded, and are hidden on a video with no render recorded.
 - A scheduled video says when it goes out, in the zone it was picked in. **Cancel schedule** calls
@@ -833,10 +848,28 @@ Covers `lib/domains.ts`, the Topics page's helpers for a domain's defaults
   An effort with no agent reads as Automatic with that effort.
 - `domainAgentOptions` offers Automatic and the live agents. `domainModelOptions` names the model a
   blank choice resolves to.
+- `domainDefaults` reads a missing `default_insert_mode` as Auto, and `domainChips` gives the
+  Inserts setting a chip only when it is None.
 
 Trap: a stored value the lists do not offer keeps its chip and its option, labelled removed,
 unavailable, uninstalled or not installed, and the option is disabled. Dropping it would show a
 domain as using the install defaults while the API still holds the value.
+
+### `inserts.test.ts`
+
+Covers `lib/inserts.ts` ([Inserts](../15-dashboard.md#inserts)).
+
+- `styleHostsInserts` follows the pack's `inserts.host`, and is true for Auto, for no style, for a
+  style the list lacks and before the list loads. `insertsLockedReason` names the style that locks
+  the picker.
+- `parseInsertStyles` reads the stored JSON text, takes a list as it is, and reads text that is not
+  a list as undecided.
+- `insertsRowText` puts a person's None first, then a main style that takes none (Auto's Cartoon 3D
+  world included), then Auto before the topic is approved and Not decided yet after, then the
+  insert styles' names with the scene config's count and seconds.
+
+Trap: `insert_styles` is `""` while the agent has not decided and `"[]"` once it decided on none.
+Reading both as an empty list would show None on a video whose inserts are still to be chosen.
 
 ### `agents-lib.test.ts`
 
@@ -879,7 +912,8 @@ Covers `lib/visualStyles.ts` ([Visual-style picker](../15-dashboard.md#visual-st
 
 `packStyles.ts` builds the style list from the real pack files in `tubematic_core/style_packs/`, and
 `vitest.setup.ts` makes `useVisualStyles()` return it in every test, so no test holds its own copy
-of the list.
+of the list. It carries each pack's `inserts` block (Auto's as the API serves it) but no `role`: the
+picker tests mark the insert styles themselves.
 
 Trap: settings and GPU status that have not loaded count as available, so the API gives the refusal
 and a page that loads neither does not grey an option out wrongly.

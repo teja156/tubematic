@@ -1298,3 +1298,42 @@ describe("ActionPane — mascot picker", () => {
     expect(screen.getByRole("option", { name: "Moss (unavailable)" })).toBeTruthy();
   });
 });
+
+describe("ActionPane — Inserts at TOPIC_PROPOSED (TMDEV-224)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("offers the setting beside the style, starting on the video's", () => {
+    const video = { ...makeVideo("TOPIC_PROPOSED"), insert_mode: "none" as const };
+    render(<ActionPane videos={[video]} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
+    const select = screen.getByTestId(`inserts-select-${video.id}`) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Auto", "None"]);
+    expect(select.value).toBe("none");
+    expect(screen.getByLabelText("Inserts")).toBe(select);
+  });
+
+  it("sends the setting with the approval only when it was changed", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const onAction = vi.fn();
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onAction.mock.calls[0][3]).not.toHaveProperty("insert_mode");
+
+    fireEvent.change(screen.getByTestId(`inserts-select-${video.id}`), { target: { value: "none" } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onAction.mock.calls[1][3]).toMatchObject({ insert_mode: "none" });
+
+    await act(async () => { vi.advanceTimersByTime(600); });
+    vi.useRealTimers();
+  });
+
+  it("locks the setting to None for a style that takes no inserts", () => {
+    const video = makeVideo("TOPIC_PROPOSED");
+    render(<ActionPane videos={[video]} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
+    pickStyle(`style-select-${video.id}`, "cartoon_3d");
+    const select = screen.getByTestId(`inserts-select-${video.id}`) as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+    expect(select.value).toBe("none");
+    expect(select.title).toBe("Cartoon 3D takes no inserts.");
+  });
+});

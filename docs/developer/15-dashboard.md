@@ -256,6 +256,8 @@ because a sentence cannot be stored without its kind. A typed sentence with no k
   domain's default voice while it is on the roster, otherwise the install default.
 - The **Formula** picker defaults to **Auto**, which sends an empty `formula_choice`. The API then
   gives the video the Manual Videos domain's default formula when it has one.
+- The **Inserts** picker shows the Manual Videos domain's setting until a person changes it, and
+  sends `insert_mode` only then. See [Inserts](#inserts).
 - The title counter counts code points, as the API does.
 - Every submission is filed into the Manual Videos domain and is unscored, which the board shows as
   a dash. See [Where topics come from](02-pipeline.md#where-topics-come-from).
@@ -280,7 +282,11 @@ The Mascots page's create form uses the same agent, model and effort controls
   panel is rendered only while its row is open.
 - The panel groups the controls as Look, Narration, Agent and Limits, each with a sentence that
   says which videos it reaches. The add form renders the Look, Narration and Agent groups from the
-  same component, `DomainDefaults`. Narration holds the voice, the script profile and the formula.
+  same component, `DomainDefaults`. Look holds the style, the mascot and the **Inserts** setting.
+  Narration holds the voice, the script profile and the formula.
+- The **Inserts** select sets `default_insert_mode`, Auto or None, which every new video in the
+  domain starts with. It does not follow the domain's style, because that style starts curriculum
+  videos only. A domain set to None shows an Inserts chip; Auto shows none.
 - The agent picker lists the live agents after **Automatic (dealt by weight)**. Changing the agent
   clears the model in the same save, because the API refuses a model from another agent's list. A
   blank model follows the agent's default at the time each video is filed. An agent that is
@@ -375,6 +381,7 @@ row mounted could show one choice and send another.
 | `agent_id` | Only when a different agent was picked | Same | Same |
 | `agent_model` | Always: the picked model, or the agent's default (`""` when the picker is disabled) | When picked, or when the agent changed | Same as Approve Script |
 | `agent_effort` | Always: the picked level, or the stored value | Only when picked | Only when picked |
+| `insert_mode` | Only when the Inserts setting was changed | No | No |
 
 `lib/agents.ts::topicApprovalPayload` builds the agent fields for Approve Topic,
 `agentPicksPayload` builds them for the other actions, and `lib/voices.ts::topicVoicePayload`
@@ -493,6 +500,26 @@ with `style_reason` and the runner-up. At Script Ready, when there is a runner-u
 [`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style), which sends the
 video back to its agent to rewrite the script, and shows the server's reason when it refuses. The
 Quick Actions row shows the label only: its controls already wrap at narrow widths.
+
+### Inserts
+
+A video may carry a few short insert scenes inside its main style
+([Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)). The rules the dashboard
+needs are in `lib/inserts.ts`.
+
+- At `TOPIC_PROPOSED` the video modal and the Quick Actions row have an **Inserts** picker beside
+  the style, with Auto and None. The approval carries `insert_mode` only when the person changed it.
+- A style whose pack says `inserts.host` is false (Cartoon 3D) locks the picker on None, with the
+  reason as its hover text (`insertsLockedReason`). The choice held underneath comes back when
+  another style is picked. Before the style list loads, every style counts as taking inserts.
+- From `TOPIC_APPROVED` on, the modal shows an **Inserts** row (`insertsRowText`): None when a
+  person turned inserts off or the main style takes none, Not decided yet until the agent decides,
+  then the insert styles' names. Once the scene config is written, the row adds how many inserts it
+  holds and their seconds (`insert_summary`). `insert_reason` sits under it.
+- `insert_styles` arrives as the stored JSON text. `parseInsertStyles` reads `""` as undecided and
+  `"[]"` as none, so the two never read alike.
+- On the Script tab, a segment the script marked with `insert` shows an Insert mark with the insert
+  style's name beside its beat label.
 
 ### The formula
 
@@ -1088,6 +1115,7 @@ suite can test them without React.
 | `voices.ts` | Voice labels and conflicts, the shown voice, and what Approve Topic sends for the voice |
 | `visualStyles.ts` | Picker options and labels built from the fetched style list, when a style is disabled, and how a frozen style reads on a card |
 | `mascots.ts` | The GPU gate for mascot pickers, their options and the mascot an approval sends |
+| `inserts.ts` | The Inserts options, whether a style takes inserts, the stored insert list read as a list, and the video window's Inserts row. See [Inserts](#inserts) |
 | `angles.ts` | The kind list fetched from `GET /angle-kinds`, a kind's label, the angle score's label and the sentence's length limit |
 | `videoStatus.ts` | Which statuses can be deleted, when Retry publishing, Mark as published and Retry agent are offered, and `patchVideo` |
 | `autoPilot.ts` | The disclaimer, the bounds, when a save needs confirmation and how many videos it would approve |
