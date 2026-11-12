@@ -124,6 +124,7 @@ paid re-voice. Each clause below prevents one. Keep them.
 | Under the Hood (from its pack) | Word-by-word captions, a pushing close-up photograph, labels on leader lines, gold arcs, ticking counters and a presenter without lip sync are the style. It still lists what to report, a label on the wrong part first | The labels and the presenter read as clutter or broken animation |
 | Case File Story (from its pack) | Painted stills that push and punch in, a lead with no nose or mouth, the meter row, the cards, the stamp and the choice buttons are the style, and none is redundant text. It lists what to report, a changed lead first | The cards and buttons read as duplicated narration and the lead's blank face as an unfinished drawing |
 | Two scripts | Where the written and spoken forms differ, audio matching the spoken form is correct. An IPA transcription between slashes is spoken as the sounds it spells | Every working respelling or IPA term is reported as a mispronunciation |
+| Voices (`_voices_block`) | The narration is spoken by the named voices, and a change of speaker between lines is correct. Added only when two or more voices speak the narration, so a one-voice prompt is unchanged | Every video with a second voice is reported for an inconsistent narrator |
 | Decorative suggestions | A suggestion must critique something in the video. Adding a glow, an icon or a flourish does not count, and an empty list is acceptable | The model pads `suggestions`, and any suggestion costs a revision round |
 
 ### Scope of the clauses

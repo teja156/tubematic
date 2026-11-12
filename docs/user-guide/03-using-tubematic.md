@@ -60,6 +60,12 @@ to rewrite.
 A voice is greyed out here when its model cannot speak the script as written. To use that voice,
 press **Revise** and name the voice in your comment. The agent rewrites the script for it.
 
+When your voice list has two or more voices, each segment on the **Script** tab has its own voice
+picker. **Video voice** speaks the segment in the video's voice. Pick another voice to have that
+segment spoken by it, for example an objection in a second voice. The change is saved at once, and
+a voice that cannot speak the segment as written is greyed out. Splitting a script across two voices
+costs no extra credits.
+
 ### 4. Watch and approve videos
 
 Press **Watch**, and watch the whole video. **Approve** moves it to Video Approved. **Revise** sends

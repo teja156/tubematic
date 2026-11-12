@@ -168,6 +168,9 @@ sentences; a recap never earns the time.
 When `style.script` gives a length of its own (a number of words, chapters or steps), that length
 wins over the band (Step 2).
 
+The band is in words. A voice with a `speed` above 1.0 in the roster speaks the same words in less
+time; do not write more words to fill the seconds it saves.
+
 Count words across every segment's `voice` field combined. `update_video` returns a warning for a
 script outside its formula's band or past the ceiling; it does not refuse it.
 
@@ -300,6 +303,13 @@ An ordered array `[{"id": ..., "voice": "...", "visual": "..."}, ...]` in play o
 - **`beat`** — optional: the name of the formula beat this segment belongs to (Step 4), as the
   formula's reference file spells it. It is shown beside the segment at Script Ready and is never
   spoken.
+- **`voice_id`** — optional: a roster voice that speaks this segment instead of the video's voice.
+  Use one only when the formula, the Preferences or a human revision asks for a second voice (a
+  viewer's objection spoken aloud, two speakers in a dialogue). Use at most one voice besides the
+  video's, taken from `get_pipeline_status()`'s `elevenlabs_voices`, and give it short lines. Leave
+  it out for every segment the video's voice speaks; a `voice_id` equal to the video's voice is
+  dropped. The markup inside such a segment follows that voice's model (Step 5 Pronunciation,
+  Step 6).
 - **`visual`** — a free-text broll/animation directive for that segment. Not an on-screen-text
   directive: the narration is captioned automatically, so see Step 7 before asking for any text. A natural
   language production note, not a formatted spec; the scene-config skill interprets it downstream.
@@ -318,7 +328,7 @@ ElevenLabs TTS and would be read aloud verbatim. Visual and animation directions
 segment's `visual` field.
 
 **The only bracketed text ever allowed in `voice`** is a pause tag — exactly `[pause]`,
-`[short pause]` or `[long pause]`, and only when the video's model is `eleven_v3` or `eleven_v4`
+`[short pause]` or `[long pause]`, and only when the model of the voice speaking that segment is `eleven_v3` or `eleven_v4`
 (Step 6).
 `update_video` rejects any other `[...]` run outright, so a stray stage direction fails loudly at
 authoring time instead of being voiced aloud.
@@ -334,10 +344,25 @@ authoring time instead of being voiced aloud.
   it would be indistinguishable from the marker token ElevenLabs emits for a `<break/>`, which is
   what keeps caption timing unambiguous.
 
+### Writing for a synthetic voice
+
+The script is read by a text-to-speech voice, which says exactly what is written and nothing else.
+
+- **Sentences of 6 to 14 words**, with an occasional 2 to 4 word beat ("That's the trick."). A long
+  sentence with clauses inside it loses its stress in the middle; split it.
+- **Write numbers, units and symbols the way they are said**: "two hundred milliseconds", not
+  "200ms"; "forty percent", not "40%"; "control z", not "Ctrl+Z"; "version three point two", not
+  "v3.2". A voice can misread the written form, and the captions show the words either way.
+- **About one deliberate pause every three or four sentences** (Step 6): after the hook when the
+  picture needs a beat to land, and before the payoff. Never in the middle of an explanation.
+- **Pace is the voice's speed, set in Settings.** Do not cut pauses or cram words to sound faster.
+
 ### Pronunciation
 
 Before drafting, read `pronunciation_mode` ("respell", "phoneme" or "ipa") from `get_video` — it
-follows the model of this video's voice, so two videos can differ — and `pronunciation_lexicon`
+follows the model of this video's voice, so two videos can differ. A segment with its own
+`voice_id` follows that voice instead: take its `pronunciation_mode` from its entry in
+`get_pipeline_status()`'s `elevenlabs_voices`. Also read `pronunciation_lexicon`
 (the `{term, respell}` entries already registered — check it before flagging a term it already
 covers) from `get_pipeline_status()`.
 
@@ -447,8 +472,9 @@ already inline as `<respell>` or `<ipa>` tags.
 Pauses are placed explicitly, not left to the TTS engine to infer from punctuation alone. Which
 syntax is legal depends on the **model**, not on `pronunciation_mode` — independent axes, and the
 default install (`respell` + `eleven_multilingual_v2`) does support break tags. Read
-`elevenlabs_model_id` from the same `get_video` result as Step 5 — the model of this video's voice —
-then:
+`elevenlabs_model_id` from the same `get_video` result as Step 5 — the model of this video's voice;
+for a segment with its own `voice_id`, that voice's `model_id` from `get_pipeline_status()`'s
+`elevenlabs_voices` — then:
 
 | `elevenlabs_model_id` | Explicit pause syntax |
 |---|---|

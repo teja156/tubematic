@@ -287,17 +287,43 @@ def video_costs(con: sqlite3.Connection, video_id: str) -> dict:
     }
 
 
-def last_voice_model(con: sqlite3.Connection, video_id: str) -> str | None:
+def last_voice_model(con: sqlite3.Connection, video_id: str,
+                     voice_id: str | None = None, other_voices=()) -> str | None:
     """The ElevenLabs model this video's most recent voicing call was sent with,
     or None when the ledger holds none (never voiced, or voiced before the
     ledger existed). Read for the video modal (TMDEV-147): the video row keeps
     only voice_id, and a roster voice's model can be edited after voicing, so
-    the ledger is the only record of the model the audio was made with."""
-    row = con.execute(
-        "SELECT e.model FROM usage_events e "
-        "JOIN usage_event_videos l ON l.event_id = e.id "
-        "WHERE l.video_id = ? AND e.service = 'elevenlabs' AND e.operation = 'voice' "
-        "ORDER BY e.created_at DESC, e.id DESC LIMIT 1", (video_id,)).fetchone()
+    the ledger is the only record of the model the audio was made with.
+
+    A script with more than one voice is voiced in several calls, each tagged
+    with its voice in raw_usage (TMDEV-216). With voice_id, the answer is:
+    - the newest call tagged with that voice;
+    - else, when the video has no tagged call, the newest untagged one (from
+      before the tag existed, when the video had one voice);
+    - else the newest tagged call of a voice not in other_voices (the voices
+      the video's segments name): the video's own voice was another one when
+      it was voiced, as when the install default changed since;
+    - else None. A video whose own voice spoke nothing has no model of its own.
+    """
+    base = ("SELECT e.model FROM usage_events e "
+            "JOIN usage_event_videos l ON l.event_id = e.id "
+            "WHERE l.video_id = ? AND e.service = 'elevenlabs' AND e.operation = 'voice' ")
+    order = "ORDER BY e.created_at DESC, e.id DESC LIMIT 1"
+    tag = "json_extract(e.raw_usage, '$.voice_id')"
+    if not voice_id:
+        row = con.execute(base + order, (video_id,)).fetchone()
+        return row[0] if row else None
+    row = con.execute(base + f"AND {tag} = ? " + order, (video_id, voice_id)).fetchone()
+    if row:
+        return row[0]
+    if con.execute(base + f"AND {tag} IS NOT NULL " + order, (video_id,)).fetchone() is None:
+        row = con.execute(base + f"AND (e.raw_usage IS NULL OR {tag} IS NULL) " + order,
+                          (video_id,)).fetchone()
+        return row[0] if row else None
+    others = [v for v in other_voices if v]
+    excl = f"AND {tag} NOT IN ({','.join('?' * len(others))}) " if others else ""
+    row = con.execute(base + f"AND {tag} IS NOT NULL " + excl + order,
+                      (video_id, *others)).fetchone()
     return row[0] if row else None
 
 

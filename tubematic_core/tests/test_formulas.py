@@ -64,8 +64,9 @@ def test_every_band_sits_inside_the_ceiling_and_beats_cover_the_whole_script():
 
 
 def test_no_formula_needs_a_second_voice():
-    # Dialogue formulas need a voice per segment, which the pipeline does not
-    # have. One slipping in would produce a script nobody can voice.
+    # A dialogue formula needs a second roster voice, and no formula field says
+    # so yet: on an install with one voice, routing could pick a script nobody
+    # can voice. The field comes with the first two-voice formula.
     for f in tf.FORMULAS.values():
         text = json.dumps(f).lower()
         assert "second voice" not in text and "dialogue" not in text, f["id"]

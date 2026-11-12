@@ -159,6 +159,9 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
 - The Topic tab shows a topic's angle with the kind label the real `GET /angle-kinds` returns.
   **Edit** stores a new sentence and kind and clears the score. After the topic is approved the
   block has no Edit button and the API refuses the same write.
+- A segment's voice is picked on the Script tab: a voice that cannot speak the segment's markup is
+  disabled by the real API's conflicts, and a pick lands in the database through the
+  `segment_voices` `PATCH`. The segments are seeded the same way.
 
 Trap: the Voice and Voice model rows need the real API, because `voice_info` comes only from the
 single-video fetch and the list row the window opens on does not carry it.
@@ -285,6 +288,8 @@ Covers [the settings page](../15-dashboard.md#the-settings-page) against the rea
 - An edit is staged until **SAVE** is clicked, and each tab's values persist through a reload.
 - A voice's model is stored on that voice only, and the preview endpoint refuses an unknown model
   before any ElevenLabs call.
+- A voice's speed persists, its select is disabled on `eleven_v4`, and the API refuses a speed
+  there with a `400`.
 - Auto Pilot: the stored switch stays off until the confirmation dialog is confirmed.
 - The Renderers panel shows the built-in renderer's startup probe as CPU rendering with a
   SwiftShader renderer string.

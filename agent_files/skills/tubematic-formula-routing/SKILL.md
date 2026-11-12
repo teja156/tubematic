@@ -89,6 +89,8 @@ Remove a candidate when:
   times and numbers, one built on an anomaly a real anomaly, one built on a belief a belief
   people hold and a real source against it. No formula licenses an invented fact.
 - Its structure contradicts the shape `style.script` asks for.
+- Its beats give lines to a second speaker, and `get_pipeline_status()`'s `elevenlabs_voices` has
+  no voice besides this video's.
 
 ## Step 3: Score the rest
 

@@ -14,6 +14,7 @@ from functools import partial
 import questionary
 from questionary import Style
 
+from tubematic_core import voice_models as _voice_models
 from onboard import api_keys
 from onboard.config import (
     DEFAULT_DICTIONARY_MODEL, DICTIONARY_COMPATIBLE_MODELS,
@@ -280,7 +281,8 @@ def _ask_voices(current_value: str) -> str | None:
     if existing:
         rail("Current voices:")
         for ev in existing:
-            rail(f"  - {ev['name']} ({ev['voice_id']}, {ev['model_id']})")
+            speed = f", speed {ev['speed']}" if "speed" in ev else ""
+            rail(f"  - {ev['name']} ({ev['voice_id']}, {ev['model_id']}{speed})")
     voices = []
     while len(voices) < MAX_VOICES:
         finish_hint = "keep the list above unchanged" if not voices and existing else "finish"
@@ -313,7 +315,17 @@ def _ask_voices(current_value: str) -> str | None:
         ).ask()
         if model_id is None:
             raise SystemExit(0)
-        voices.append({"name": name, "voice_id": voice_id, "model_id": model_id})
+        entry = {"name": name, "voice_id": voice_id, "model_id": model_id}
+        # Onboarding never asks for a speed (TMDEV-216); a voice re-entered
+        # here keeps the one set on the dashboard while its model can use it.
+        speed = next((ev["speed"] for ev in existing
+                      if ev["voice_id"] == voice_id and "speed" in ev), None)
+        if speed is not None and not _voice_models.speed_error(speed, model_id):
+            entry["speed"] = speed
+        elif speed is not None:
+            rail(f"  {model_id} ignores speed, so this voice's speed {speed} is reset to 1.0.",
+                 style="#ebcb8b")
+        voices.append(entry)
     if not voices:
         return current_value if existing else None
     return json.dumps(voices)

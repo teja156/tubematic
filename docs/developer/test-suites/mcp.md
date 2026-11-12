@@ -302,6 +302,34 @@ Trap: an explicit `voice_id=""` beside a script means the install default, and t
 is still written on the video. Otherwise a later change of the default would swap the model under
 a written script.
 
+### `test_voice_segments.py`
+
+Covers a voice per segment and a voice's speed in `generate_voice` and `update_video`
+([A voice per segment](../08-scripting-and-voice.md#a-voice-per-segment)).
+
+- A one-voice script is one request with the payload it had before speeds and segment voices: no
+  `speed` at 1.0 and no context fields. A voice with a speed sends it.
+- A script with a second voice is voiced in runs, in play order, each with its voice's id and model,
+  and `credits` is their sum. Each run's ledger row carries its voice, and `tts_text` holds every
+  run.
+- A run carries its neighbours' words as `previous_text` and `next_text`, except on `eleven_v3`,
+  which refuses them.
+- Words after a join are offset by the length of the runs before, and the segments' frame spans
+  stay in play order.
+- A markup problem in a later run, a segment voice that left the roster, or no `ffmpeg` spends
+  nothing. A failed later run keeps the credits already spent, writes no file and leaves the video
+  at `VOICING`.
+- `update_video` keeps a segment's voice, drops one equal to the video's, refuses one off the roster,
+  and checks each segment's markup against its own voice. The roster reader keeps a valid speed.
+- A pronunciation fix that resends the same words without any `voice_id` keeps the stored voices,
+  and a rewrite with new words and no `voice_id` gives every line to the video's voice.
+- The real join, when an `ffmpeg` is found on the host, measures each run and keeps the total
+  length. It is skipped otherwise; the MCP image has `ffmpeg`.
+
+Trap: the offset is each run's decoded length and never its last alignment time, which on
+`eleven_v4` can run past the audio. The fake ElevenLabs reply encodes its length in the audio bytes
+so the fake join can return it.
+
 ### `test_pronunciation_rules.py`
 
 Covers `upsert_pronunciation_lexicon` and `remove_pronunciation_lexicon`, and the guidance an agent

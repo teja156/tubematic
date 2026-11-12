@@ -298,3 +298,29 @@ class TestRootResolvesFromScriptLocation:
         assert review_path.exists()
         assert "Gemini API key not set" in review_path.read_text()
         assert f"Written to: {review_path}" in result.stdout
+
+
+def test_a_two_voice_video_is_reviewed_with_its_voices(tmp_path):
+    """The same note the render worker gives (TMDEV-216): without it a second
+    voice on purpose can come back as a finding."""
+    import json as _json
+    import sqlite3 as _sqlite3
+    _seed_video(tmp_path)
+    con = _sqlite3.connect(str(tmp_path / "data" / "tubematic.db"))
+    con.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('elevenlabs_voices', ?)",
+                (_json.dumps([{"name": "Teja", "voice_id": "t1", "model_id": "eleven_v4"},
+                              {"name": "Rachel", "voice_id": "r1",
+                               "model_id": "eleven_multilingual_v2"}]),))
+    con.execute("UPDATE videos SET voice_id = 't1', script_segments = ? WHERE id = 'vid_test123'",
+                (_json.dumps([{"id": "a", "voice": "x", "visual": ""},
+                              {"id": "b", "voice": "y", "visual": "", "voice_id": "r1"}]),))
+    con.commit()
+    con.close()
+    seen = {}
+
+    def fake_run(video_path, scene_config, **kwargs):
+        seen.update(kwargs)
+        return {"feedback": "ok"}
+
+    review_video("vid_test123", tmp_path, run_review=fake_run)
+    assert seen["voices"] == ["Teja", "Rachel"]

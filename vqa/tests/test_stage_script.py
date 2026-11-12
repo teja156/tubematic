@@ -59,6 +59,21 @@ class FakeMcpServer:
     def _check_phoneme_model(self, text, model_id, voice_label=""):
         return self._settings.get("phoneme_error")
 
+    def _get_voices(self):
+        return []
+
+    def _plan_voice_runs(self, segments, voice, roster, lexicon):
+        # One run, built from the same fakes stage_script used to call
+        # directly; the real run planning is mcp/server.py's (TMDEV-216).
+        joined = self._join_segment_voice(segments)
+        err = (self._check_ipa_model(joined, voice["model_id"], voice["name"])
+               or self._check_phoneme_model(joined, voice["model_id"], voice["name"]))
+        if err:
+            return err
+        mode = self._pronunciation_mode_for_model(voice["model_id"])
+        return [{"voice": voice, "segments": segments,
+                 "tts_text": self._build_tts_text(joined, mode, lexicon)}]
+
     def _resolve_voice(self, video_voice_id):
         if self._settings.get("no_voice"):
             return None

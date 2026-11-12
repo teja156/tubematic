@@ -175,7 +175,9 @@ Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-setti
   in seconds).
 - An API key renders as the mask the server returned. Clearing the field posts an empty string.
 - Voice: each roster row picks its own model, and a save carries the roster with no
-  `elevenlabs_model_id` or `pronunciation_mode` key.
+  `elevenlabs_model_id` or `pronunciation_mode` key. A row's speed is saved with it, 1.00 is not
+  sent, the speed is disabled on a model that ignores it, and moving a voice to such a model drops
+  its speed. A preview sends the row's model and speed.
 - Agents: the default, weight, default model and effort each `PATCH` at once, and the tab issues no
   `DELETE`.
 - The Rendering tab's default-mascot picker lists only pickable mascots and saves
@@ -459,6 +461,18 @@ Covers `components/TopicAngle.tsx` on the video window's Topic tab and `lib/angl
 - A sentence with no kind says the kind is needed and marks the picker invalid; an over-long one
   marks the text box invalid.
 
+### `video-modal-segment-voices.test.tsx`
+
+Covers the Script tab's voice per segment
+([Voice picker](../15-dashboard.md#voice-picker)).
+
+- At `SCRIPT_READY`, with a second voice on the roster, each segment has a picker whose first option
+  is the video's voice. A voice the API lists as unable to speak the segment is disabled with the
+  reason as its title.
+- A pick sends a `PATCH` holding only `segment_voices`, and a refusal shows its message.
+- With one voice on the roster there is no picker. After `SCRIPT_READY` a segment's own voice is
+  shown by name.
+
 ### `video-modal-retry-agent.test.tsx`
 
 Covers **Retry agent**, `lib/videoStatus.ts::isAgentStuck` and the board card's STUCK tag. The
@@ -570,8 +584,8 @@ Covers `components/VoicePreviewButton.tsx`.
 
 - A second click replays the cached sample without a fetch. One button shows play or pause and
   follows the audio's own events.
-- A change of voice or model fetches a new sample, and a slow response for a model that is not
-  selected any more is dropped.
+- A change of voice, model or speed fetches a new sample, and a slow response for a model that is
+  not selected any more is dropped.
 - A model is sent in a JSON body with its `Content-Type`, because the proxy refuses a body without
   one.
 
@@ -764,6 +778,8 @@ video to another agent.
 Covers `lib/voices.ts` ([Voice picker](../15-dashboard.md#voice-picker)). `topicVoicePayload`
 carries a voice only when one was picked. `shownVoice` is the pick, else the video's own voice, else
 the install default. `voiceMissing` detects a voice with no roster entry, so the picker can list it.
+`voiceLabel` names a speed only when it is not 1.00, and `segmentVoiceConflict` reads the API's
+per-segment conflicts.
 
 ### `visual-styles.test.ts`
 

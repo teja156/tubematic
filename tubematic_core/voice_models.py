@@ -71,6 +71,37 @@ V3_PAUSE_MODELS = frozenset({"eleven_v3", "eleven_v4"})
 # bracketed-pause ones, which take no SSML at all.
 BREAK_TAG_COMPATIBLE_MODELS = DICTIONARY_COMPATIBLE_MODELS - V3_PAUSE_MODELS
 
+# Models that honour voice_settings.speed (TMDEV-216, probed live with paid
+# calls). On every model below, speed 1.2 made the same line 15-22% shorter and
+# the alignment timings shrank with the audio. eleven_v3 and eleven_v4 answer
+# 200 and ignore the field: across repeats their lengths at 1.0 and 1.2
+# overlap. ElevenLabs does not refuse it there, so Tubematic does — a speed a
+# person sets has to change the audio or be refused, never be dropped quietly.
+# Keep in sync with dashboard SPEED_MODELS (pinned by the cross-copy test).
+SPEED_MODELS = frozenset({
+    "eleven_multilingual_v2",
+    "eleven_flash_v2_5",
+    "eleven_turbo_v2_5",
+    "eleven_flash_v2",
+    "eleven_turbo_v2",
+})
+SPEED_MIN = 0.7
+SPEED_MAX = 1.2
+SPEED_STEP = 0.05
+DEFAULT_SPEED = 1.0
+
+# Models that refuse previous_text / next_text, the context fields a request
+# for one run of a two-voice script carries about its neighbours (TMDEV-216,
+# probed: eleven_v3 answers 400 unsupported_model; eleven_v4 and the v2 models
+# accept them).
+CONTEXT_REFUSED_MODELS = frozenset({"eleven_v3"})
+
+# A roster entry's keys. `speed` is optional and stored only when it is not
+# DEFAULT_SPEED, so a roster nobody gave a speed keeps the exact shape older
+# versions read (their readers drop a roster with any other key).
+ROSTER_KEYS = frozenset({"name", "voice_id", "model_id"})
+ROSTER_OPTIONAL_KEYS = frozenset({"speed"})
+
 # The voices a fresh install starts with (TMDEV-172), in roster order; the
 # first is the install default. Onboarding seeds them as the default answers
 # of its voice questions, so they reach only an install that has never stored
@@ -209,3 +240,156 @@ def _voice_phrase(voice_label: str, model_id: str) -> str:
     if voice_label:
         return f"voice {voice_label!r} is on model '{model_id}'"
     return f"the model is '{model_id}'"
+
+
+# ── Speed (TMDEV-216) ──────────────────────────────────────────────────────────
+
+def voice_speed(entry: dict) -> float:
+    """A roster voice's speed: its stored speed, else DEFAULT_SPEED."""
+    return float(entry.get("speed", DEFAULT_SPEED))
+
+
+def speed_error(speed, model_id: str, voice_label: str = "") -> str | None:
+    """Why `speed` cannot be set on a voice on model_id, or None.
+
+    The range is ElevenLabs' own; the 0.05 step keeps a value a person can
+    read, and a preview cache key that does not split on float noise."""
+    if isinstance(speed, bool) or not isinstance(speed, (int, float)):
+        return f"speed must be a number, got {speed!r}"
+    if not SPEED_MIN <= speed <= SPEED_MAX:
+        return f"speed must be between {SPEED_MIN} and {SPEED_MAX}, got {speed}"
+    if abs(round(speed / SPEED_STEP) * SPEED_STEP - speed) > 1e-9:
+        return f"speed must be a multiple of {SPEED_STEP}, got {speed}"
+    if round(speed, 2) != DEFAULT_SPEED and model_id not in SPEED_MODELS:
+        who = f"voice {voice_label!r} is on" if voice_label else "the model is"
+        return (f"{who} '{model_id}', which ignores speed; only "
+                f"{', '.join(sorted(SPEED_MODELS))} honour it. Keep it at {DEFAULT_SPEED}.")
+    return None
+
+
+def roster_entry_error(entry) -> str | None:
+    """Why one roster entry is malformed, or None: the shape, model and speed
+    rules every roster reader shares. Names, ids and duplicates stay the
+    readers' own checks (they need the whole list)."""
+    if not isinstance(entry, dict):
+        return f"a roster entry must be an object, got {entry!r}"
+    keys = set(entry)
+    if not ROSTER_KEYS <= keys or not keys <= ROSTER_KEYS | ROSTER_OPTIONAL_KEYS:
+        return ("a roster entry must be {name, voice_id, model_id} with an optional speed, "
+                f"got {entry!r}")
+    # Type first: a list or dict is unhashable and would raise on the `in`.
+    if not isinstance(entry["model_id"], str) or entry["model_id"] not in DICTIONARY_COMPATIBLE_MODELS:
+        return (f"voice {entry.get('name')!r} has model_id {entry['model_id']!r}; "
+                f"it must be one of {sorted(DICTIONARY_COMPATIBLE_MODELS)}")
+    if "speed" in entry:
+        return speed_error(entry["speed"], entry["model_id"], str(entry.get("name", "")))
+    return None
+
+
+def normalize_roster_entry(entry: dict) -> dict:
+    """The entry as stored: a speed of DEFAULT_SPEED is dropped and any other
+    rounded to two places. Call only on an entry roster_entry_error passed."""
+    out = {k: entry[k] for k in ("name", "voice_id", "model_id")}
+    if "speed" in entry and round(float(entry["speed"]), 2) != DEFAULT_SPEED:
+        out["speed"] = round(float(entry["speed"]), 2)
+    return out
+
+
+# ── A voice per segment (TMDEV-216) ────────────────────────────────────────────
+
+def segment_voice_id(seg) -> str:
+    """The roster voice a segment names, or "" for the video's own voice."""
+    if isinstance(seg, dict) and isinstance(seg.get("voice_id"), str):
+        return seg["voice_id"].strip()
+    return ""
+
+
+def segment_voice_error(segments, roster: list[dict]) -> str | None:
+    """Why a segment's voice_id is unusable, or None. Absent or "" means the
+    video's voice; anything else must be a string naming a roster voice."""
+    ids = {v["voice_id"] for v in roster}
+    for i, seg in enumerate(segments or []):
+        if not isinstance(seg, dict) or "voice_id" not in seg:
+            continue
+        vid = seg["voice_id"]
+        if not isinstance(vid, str):
+            return f"script_segments[{i}].voice_id must be a string, got {vid!r}"
+        if vid.strip() and vid.strip() not in ids:
+            return (f"script_segments[{i}].voice_id {vid!r} is not in elevenlabs_voices — "
+                    "use a voice_id from get_pipeline_status's elevenlabs_voices")
+    return None
+
+
+def normalize_segment_voices(segments: list, video_voice_id: str) -> list:
+    """Segments as stored: a voice_id that is blank or equal to the video's
+    own voice is dropped when the segments are written, so a later change of
+    the video's voice moves every segment without one. A change of the video's
+    voice alone does not rewrite the segments, so a segment can then name the
+    video's own voice; every reader treats that as the video's voice. Both
+    write paths call this: MCP update_video and the API's segment_voices
+    PATCH."""
+    out = []
+    for seg in segments:
+        seg = dict(seg)
+        vid = segment_voice_id(seg)
+        seg.pop("voice_id", None)
+        if vid and vid != (video_voice_id or ""):
+            seg["voice_id"] = vid
+        out.append(seg)
+    return out
+
+
+def segment_runs(segments: list, video_voice_id: str) -> list[tuple[str, list[int]]]:
+    """Consecutive segments grouped by the voice that speaks them, in play
+    order: [(voice_id, [segment indices])]. One run means one voice."""
+    runs: list[tuple[str, list[int]]] = []
+    for i, seg in enumerate(segments):
+        vid = segment_voice_id(seg) or video_voice_id
+        if runs and runs[-1][0] == vid:
+            runs[-1][1].append(i)
+        else:
+            runs.append((vid, [i]))
+    return runs
+
+
+def video_voice_conflict(segments, script: str, model_id: str,
+                         voice_label: str = "") -> str | None:
+    """markup_conflict for a change of the VIDEO's voice: only the segments it
+    speaks are checked. A script whose every segment has its own voice gives
+    the video voice nothing to speak."""
+    if segments:
+        own = [s for s in segments if isinstance(s, dict) and not segment_voice_id(s)]
+        if not own:
+            return None
+        return markup_conflict(own, "", model_id, voice_label)
+    return markup_conflict(segments, script, model_id, voice_label)
+
+
+def script_markup_conflict(segments, script: str, video_voice: dict | None,
+                           roster: list[dict]) -> str | None:
+    """Why a script cannot be voiced as written, or None. Every segment is
+    checked against the model of the voice that speaks it: its own voice_id,
+    else the video's voice. A segment voice that has left the roster is a
+    conflict, as a video voice that has is. `video_voice` is the resolved
+    roster entry; None checks nothing for the segments it would speak (every
+    caller refuses a missing video voice on its own)."""
+    if not segments:
+        if video_voice is None:
+            return None
+        return markup_conflict(segments, script, video_voice["model_id"], video_voice["name"])
+    by_id = {v["voice_id"]: v for v in roster}
+    groups: dict[str, list] = {}
+    for seg in segments:
+        if isinstance(seg, dict):
+            groups.setdefault(segment_voice_id(seg), []).append(seg)
+    for vid, segs in groups.items():
+        entry = video_voice if not vid else by_id.get(vid)
+        if entry is None:
+            if not vid:
+                continue
+            return (f"a segment is voiced by {vid!r}, which is no longer in elevenlabs_voices. "
+                    "Re-add it, or give the segment another voice.")
+        err = markup_conflict(segs, "", entry["model_id"], entry["name"])
+        if err:
+            return err
+    return None
