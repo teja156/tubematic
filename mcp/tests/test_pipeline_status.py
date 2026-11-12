@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import pytest
 
 import server
+from sample_angle import ANGLE, mined
 
 
 def _now() -> str:
@@ -565,8 +566,8 @@ def test_mine_youtube_topics_drops_sub_threshold_candidates(job_db, monkeypatch)
 
     payload = {
         "candidates": [{"content": {"parts": [{"text": json.dumps([
-            {"topic": "Best Python libraries 2026", "producibility_score": 3},
-            {"topic": "How DNS really works", "producibility_score": 8},
+            mined("Best Python libraries 2026", 3),
+            mined("How DNS really works", 8),
         ])}]}}]
     }
     _stub_mine_post(monkeypatch, _MineResp(payload))
@@ -674,7 +675,7 @@ def _prompt(payload):
 
 def test_mining_files_no_more_than_the_cap_and_rejects_nothing(job_db, monkeypatch):
     server._set_setting("max_mining_per_run", "2")
-    answer = [{"topic": t, "producibility_score": s} for t, s in (
+    answer = [mined(t, s) for t, s in (
         ("Same-origin policy", 6), ("DNS rebinding", 9), ("TLS session resumption", 7),
         ("NAT traversal", 8))]
     result, sent = _mine(monkeypatch, [answer])
@@ -694,8 +695,8 @@ def test_the_next_url_is_asked_only_for_what_is_left_and_sees_existing_topics(jo
     server.create_video(project_id=pid, topic="How TCP congestion control works",
                         strategy="manual", producibility_score=7)
     result, sent = _mine(monkeypatch, [
-        [{"topic": "Same-origin policy", "producibility_score": 8}],
-        [{"topic": "DNS rebinding", "producibility_score": 9}],
+        [mined("Same-origin policy", 8)],
+        [mined("DNS rebinding", 9)],
     ], urls=(URL_A, URL_B), project_id=pid)
     assert result["proposed"] == 2
     first, second = (_prompt(p) for p in sent)
@@ -707,11 +708,10 @@ def test_the_next_url_is_asked_only_for_what_is_left_and_sees_existing_topics(jo
 def test_a_repeat_of_an_existing_topic_is_not_filed_even_if_rejected(job_db, monkeypatch):
     pid = _make_project()
     vid = server.create_video(project_id=pid, topic="Cron Job Scheduling", strategy="mining",
-                              producibility_score=5)["video_id"]
+                              producibility_score=5, **ANGLE)["video_id"]
     with server._conn() as con:
         con.execute("UPDATE videos SET status = 'TOPIC_REJECTED' WHERE id = ?", (vid,))
-    result, _ = _mine(monkeypatch, [[{"topic": "Cron Jobs for Scheduling",
-                                      "producibility_score": 8}]], project_id=pid)
+    result, _ = _mine(monkeypatch, [[mined("Cron Jobs for Scheduling", 8)]], project_id=pid)
     assert result["proposed"] == 0
     assert result["not_filed"] == [{"topic": "Cron Jobs for Scheduling",
                                     "reason": "repeats an existing topic"}]
@@ -739,7 +739,7 @@ def test_each_run_starts_at_the_url_after_the_last_one_asked(job_db, monkeypatch
     pid = _make_project()
     firsts = []
     for topic in ("Same-origin policy", "DNS rebinding", "TLS session resumption"):
-        _, sent = _mine(monkeypatch, [[{"topic": topic, "producibility_score": 8}]],
+        _, sent = _mine(monkeypatch, [[mined(topic, 8)]],
                         urls=(URL_A, URL_B), project_id=pid)
         firsts.append(sent[0]["contents"][0]["parts"][0]["file_data"]["file_uri"])
     # Gemini is handed the canonical form, never the URL as written.

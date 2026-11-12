@@ -54,6 +54,11 @@ Research runs only when all of these hold:
 A paused domain and a domain marked **EXPIRED** receive no topics. Resume the domain, or raise its
 topic cap, on the **Topics** page.
 
+A research run can also end with fewer topics than its limit. Research leaves out a subject that
+scores under 5, that repeats a topic the domain already has, or that offers no
+[angle](03-using-tubematic.md#the-angle). The agent's summary at the end of the run names each
+subject it left out and why. Read it on the **Logs** page.
+
 ## A video is stuck or failed
 
 ### A card says STUCK

@@ -142,6 +142,14 @@ export interface Video {
   style_runner_up?: string;
   /** Auto's one-sentence reason for the pick. */
   style_reason?: string;
+  /** What the topic gives the video's opening: one sentence, its kind (an id
+   *  from GET /angle-kinds) and how strong the agent scored it, 0-10 with 0 =
+   *  unscored. '' and 0 when the topic has no angle: a person's own topic, or
+   *  one filed before 2.2.0. A person edits the sentence and the kind at
+   *  Topic Proposed only. Optional for the same reason as tts_text. */
+  angle?: string;
+  angle_kind?: string;
+  angle_score?: number;
   /** What the agent recorded with the script: the formula it follows ('' =
    *  none on record, which every script written before 2.2.0 reads as), the
    *  type of the opening it uses, the three openings drafted, and the script
