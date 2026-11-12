@@ -151,10 +151,16 @@ the narration. The character's head is the same in every video.
 Once you approve the topic, the style is fixed.
 
 Click the style field to open the list. **Auto** comes first, then the 2D styles, then the 3D
-styles. A style marked **EXP** is experimental. A style marked **GPU** renders on a GPU only. The
-eye button on a row plays a few seconds of that style in a window, with **Prev** and **Next** to
-step through the others and **Use this style** to pick the one you are watching. Picking a style
+styles. A style marked **EXP** is experimental. A style marked **GPU** renders on a GPU only. A
+style this install cannot make is greyed out, with the reason under its name.
+
+![The visual style list open on the New Video page: Auto, then the 2D styles, each with an eye button; Whiteboard is chosen, three styles are marked EXP, and three are greyed out with "needs an OpenAI key" under their names](../images/style-picker.png)
+
+The eye button on a row plays a few seconds of that style in a window, with **Prev** and **Next**
+to step through the others and **Use this style** to pick the one you are watching. Picking a style
 there does not approve the topic.
+
+![The preview window for Storybook Atlas: a still of the style's looping preview on the left, and on the right its name, the 2D and EXP tags, one line on what the style is for, Prev and Next, and Use this style](../images/style-preview.png)
 
 At the bottom of the list, **Inserts** are styles used for a few seconds inside another style, such
 as a diagram of a mechanism. You can watch their preview, and you cannot choose one for a whole
