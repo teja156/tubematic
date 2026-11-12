@@ -301,6 +301,7 @@ Four computed fields describe the voice:
 | `voice_conflicts` | Lists and single videos | `{voice_id: reason}` for each roster voice whose model cannot speak the segments the video's voice speaks |
 | `segment_voice_conflicts` | Single videos | `{segment id: {voice_id: reason}}` for each roster voice that cannot speak a segment's markup. Empty outside `SCRIPT_READY` |
 | `voice_info` | Single videos | The voice and model for the modal's read-only Voice rows |
+| `insert_summary` | Single videos | `{count, seconds, styles}` of the insert scenes in the video's scene config, or `null` before one is written ([Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)) |
 
 `voice_conflicts` comes from the check that makes `PATCH` answer `409` for such a voice, so a
 picker that disables these voices agrees with the server. It is empty at `TOPIC_PROPOSED`, because
