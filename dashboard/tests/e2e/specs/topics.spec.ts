@@ -224,7 +224,7 @@ test.describe("Topics page", () => {
       expect(panelBox.x).toBeGreaterThanOrEqual(rowBox.x);
       expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
       for (const id of ["domain-style", "domain-mascot", "domain-voice", "domain-profile",
-                        "domain-agent", "domain-agent-model", "domain-agent-effort", "domain-cap"]) {
+                        "domain-formula", "domain-agent", "domain-agent-model", "domain-agent-effort", "domain-cap"]) {
         const box = (await page.getByTestId(`${id}-${slug}`).boundingBox())!;
         expect(box.x, id).toBeGreaterThanOrEqual(panelBox.x);
         expect(box.x + box.width, id).toBeLessThanOrEqual(panelBox.x + panelBox.width);

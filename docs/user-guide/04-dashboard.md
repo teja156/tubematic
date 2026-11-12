@@ -152,7 +152,7 @@ To save the video, use the player's own menu, or take the file from
 
 Creates a video from a topic you type.
 
-![The New Video page with a title, a topic and a visual style chosen](../images/new-video.png)
+![The New Video page with a title, a topic, a formula and a visual style chosen](../images/new-video.png)
 
 | Field | Notes |
 |---|---|

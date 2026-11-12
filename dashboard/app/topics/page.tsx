@@ -209,8 +209,11 @@ function DomainField({ label, flex, children }: {
 // A group of related defaults with the one sentence that says which videos
 // they reach. The seven defaults do not all apply to the same videos (the
 // style and profile start curriculum videos only), and a bare row of pickers
-// gave no place to say so.
-function DomainGroup({ title, accent, note, flex = "1 1 220px", children }: {
+// gave no place to say so. The bases are what each group needs for its
+// pickers to show their longest usual value ("Automatic (dealt by weight)",
+// "Use install default") in full: where three groups do not fit on one line,
+// the Agent group wraps onto its own line instead of cutting text short.
+function DomainGroup({ title, accent, note, flex = "1.1 1 360px", children }: {
   title: string; accent?: boolean; note: string; flex?: string; children: React.ReactNode;
 }) {
   return (
@@ -267,7 +270,7 @@ function DomainDefaults({ values, onChange, testId, lists, canIllustrate, gpu }:
         </div>
       </DomainGroup>
 
-      <DomainGroup title="Narration" flex="1.4 1 300px"
+      <DomainGroup title="Narration" flex="1.5 1 540px"
                    note="The voice and the formula start every new video. The profile starts curriculum videos.">
         <div style={{ display: "flex", gap: 8 }}>
           <DomainField label="Default voice" flex="1 1 0">
@@ -288,7 +291,7 @@ function DomainDefaults({ values, onChange, testId, lists, canIllustrate, gpu }:
         </div>
       </DomainGroup>
 
-      <DomainGroup title="Agent" accent flex="1.4 1 300px"
+      <DomainGroup title="Agent" accent flex="1.6 1 600px"
                    note="New videos in this domain start on this agent. Automatic deals one by weight. You can still change it on each video.">
         <div style={{ display: "flex", gap: 8 }}>
           <DomainField label="Agent" flex="1.3 1 0">
