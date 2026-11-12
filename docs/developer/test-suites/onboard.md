@@ -468,7 +468,7 @@ list proves the order ([`upgrade.py` in detail](../18-releases.md#upgradepy-in-d
   generated scene that imports the removed component or cannot be read. The unreadable-scene
   refusal prints the `chmod` command for root-owned `0600` scenes
   ([Pre-flight refusals](../18-releases.md#pre-flight-refusals)).
-- `--no-stop` is refused while a token file is missing, while one of two named migrations is
+- `--no-stop` is refused while a token file is missing, while one of three named migrations is
   pending (each constant is checked against the real file), and while the running renderer was
   created with the combined loop ([`--no-stop`](../18-releases.md#--no-stop)). That last refusal
   reads the renderer container's own command, and a command that cannot be read counts as old.

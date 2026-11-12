@@ -51,7 +51,8 @@ export const TONES = ["white", "grey", "dim", "red", "blue"] as const;
 export type Tone = (typeof TONES)[number];
 export const GLOW_TONES = ["red", "blue"] as const;
 export const REVEALS = ["scramble", "type", "cut"] as const;
-export const SKINS = ["house", "crt"] as const;
+// "paper" is for an insert in a light-canvas main style (TMDEV-224).
+export const SKINS = ["house", "crt", "paper"] as const;
 export type Skin = (typeof SKINS)[number];
 export const CUTS = ["hard", "collapse"] as const;
 

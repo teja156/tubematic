@@ -25,6 +25,8 @@ from __future__ import annotations
 import math
 import re
 
+from quiet_windows import uncovered, window_at, window_text
+
 SCENE_SRC = "StorybookAtlas"
 PROPS_KEY = "storybookAtlas"
 STYLE_ID = "storybook_atlas"
@@ -369,11 +371,12 @@ def _overlap(a, b) -> bool:
 
 
 def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "",
-          sources: dict | None = None) -> list[str]:
+          sources: dict | None = None, quiet=()) -> list[str]:
     """Every problem with a Storybook Atlas config, one sentence each (at most
     MAX_ERRORS), or [] when it may be written. `extra` is the style pack's
     catalogue block. A config's customProps join the library for this video;
-    `sources` maps their src to the file's text (None skips the source checks)."""
+    `sources` maps their src to the file's text (None skips the source checks).
+    `quiet` holds the config's insert windows (mcp/quiet_windows.py)."""
     errors: list[str] = []
 
     def err(msg: str) -> None:
@@ -453,17 +456,21 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
         if end - s < min_len:
             err(f"Chapter {i + 1} lasts {(end - s) / fps:.1f} s; a chapter lasts at least "
                 f"{LIMITS['chapterMinSeconds']} s.")
+        w = window_at(s, quiet) if s > 0 else None
+        if w:
+            err(f"Chapter {i + 1} starts at frame {s}, inside an insert ({window_text(w)}), where the book is hidden; "
+                f"start it at {w[1]} or before {w[0]}.")
 
     still = round(LIMITS["quietSeconds"] * fps)
     for i, ch in enumerate(chapters):
         if not isinstance(ch, dict):
             err(f"Chapter {i + 1} must be an object.")
             continue
-        _check_chapter(ch, i, spans[i], chapters, spans, catalog, people, extra, fps, on_word, still, err)
+        _check_chapter(ch, i, spans[i], chapters, spans, catalog, people, extra, fps, on_word, still, quiet, err)
     return errors
 
 
-def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on_word, still, err) -> None:
+def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on_word, still, quiet, err) -> None:
     where = f"Chapter {i + 1}"
     start, end = span
     title = ch.get("title")
@@ -492,6 +499,14 @@ def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on
             continue
         evs.append(e)
     evs.sort(key=event_order)
+    for e in evs:
+        # a constellation's second words are a change of their own
+        for key, what in (("at", f"the {e['type']} at frame {e['at']} starts"),
+                          ("thenAt", f"the {e['type']}'s thenAt {e.get('thenAt')} is")):
+            w = window_at(e[key], quiet) if _int(e.get(key)) else None
+            if w:
+                err(f"{where}: {what} inside an insert ({window_text(w)}), where the book is hidden; time it "
+                    f"to a word at {w[1]} or later, or before {w[0]}.")
     last = end - TIMING["endMargin"]
     for e in evs:
         if not start <= e["at"] < last:
@@ -605,7 +620,9 @@ def _check_chapter(ch, i, span, chapters, spans, catalog, people, extra, fps, on
     changes = sorted({start} | {e["at"] for e in evs} | {f for fs in ends.values() for f in fs} | set(guide_ends)
                      | {u + TIMING["plateOpen"] for _, u in plates} | {e["thenAt"] for e in evs if _int(e.get("thenAt"))})
     changes = [c for c in changes if start <= c < end] + [end]
-    for a, b in zip(changes, changes[1:]):
+    # An insert window is not still: the insert changes the screen there.
+    gaps = [g for a, b in zip(changes, changes[1:]) for g in uncovered(a, b, quiet)]
+    for a, b in gaps:
         if in_plate(a):
             continue
         if b - a > still:

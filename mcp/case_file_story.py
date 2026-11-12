@@ -25,6 +25,8 @@ from __future__ import annotations
 import math
 import re
 
+from quiet_windows import uncovered, window_at, window_text
+
 SCENE_SRC = "CaseFileStory"
 PROPS_KEY = "caseFile"
 STYLE_ID = "case_file_story"
@@ -274,10 +276,12 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
     return ""
 
 
-def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "") -> list[str]:
+def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "",
+          quiet=()) -> list[str]:
     """Every problem with a Case File Story config, one sentence each (at most
     MAX_ERRORS), or [] when it may be written. `extra` is the style pack's
-    catalogue block."""
+    catalogue block. `quiet` holds the config's insert windows
+    (mcp/quiet_windows.py)."""
     errors: list[str] = []
     found = [0]   # every problem, including the ones past MAX_ERRORS that are not reported
 
@@ -374,12 +378,15 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
         err(f"The beats use {len(images)} different stills; a video may use at most {LIMITS['maxImages']}. "
             "Reuse a still with another focus or a punch-in instead of a new one.")
 
+    _check_quiet(beats, starts, ends, quiet, err)
+
     # ── nothing may sit still for long ──
     if all(sound):
         still = round(LIMITS["maxStillSeconds"] * fps)
         for i, b in enumerate(beats):
             frames = part_frames(b) + [ends[i]]
-            for a, c in zip(frames, frames[1:]):
+            # An insert window is not still: the insert changes the screen there.
+            for a, c in (g for x, y in zip(frames, frames[1:]) for g in uncovered(x, y, quiet)):
                 if c - a > still:
                     fix = ("Add a punch-in, or cut to another shot or a card sooner." if b["type"] == "shot"
                            else "Time its parts to later words, or start the next beat sooner.")
@@ -387,6 +394,38 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
                         f"({(c - a) / fps:.1f} s); the longest stretch allowed is "
                         f"{LIMITS['maxStillSeconds']} s. {fix}")
     return errors
+
+
+def _check_quiet(beats, starts, ends, quiet, err) -> None:
+    """The story stays on screen where it matters: an insert (where the scene is
+    hidden) goes only over shots before the term card, and no beat or punch-in
+    starts inside one. A card is never covered, so its parts need no check."""
+    term = next((s for b, s in zip(beats, starts) if b["type"] == "term"), None)
+    for wa, wb in quiet:
+        w = window_text((wa, wb))
+        if term is not None and wa >= term:
+            err(f"An insert ({w}) starts at or after the term card at frame {term}; the consequence and the "
+                f"choice end the story on screen, so place the insert before frame {term}.")
+            continue
+        card = next((i for i, b in enumerate(beats) if b["type"] != "shot" and wa < ends[i] and wb > starts[i]), None)
+        if card is not None:
+            err(f"An insert ({w}) covers beat {card + 1} ({beats[card]['type']}, frames {starts[card]}-"
+                f"{ends[card] - 1}); a card is never covered, so end the insert by frame {starts[card]} or "
+                "put it over a shot.")
+    for i, b in enumerate(beats):
+        if b["type"] != "shot":
+            continue   # a card inside a window is reported above, as covered
+        where = f"Beat {i + 1} (shot)"
+        w = window_at(starts[i], quiet) if starts[i] else None
+        if w:
+            err(f"{where} starts at frame {starts[i]}, inside an insert ({window_text(w)}), where the scene is "
+                f"hidden; start it at {w[1]} or before {w[0]}.")
+        punch = b.get("punch")
+        f = punch.get("frame") if isinstance(punch, dict) else None
+        w = window_at(f, quiet) if _int(f) else None
+        if w:
+            err(f"{where}: the punch-in at frame {f} is inside an insert ({window_text(w)}), where the scene is "
+                f"hidden; put it on a word at {w[1]} or later, or before {w[0]}.")
 
 
 def _check_image(b, where, video_id, images, err) -> None:

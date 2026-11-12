@@ -40,7 +40,8 @@ event is wrong. Fix every problem it lists, then write again.
 
 - **One scene.** `scenes` is exactly one entry: `{"type": "generated", "source": "installed", "src":
   "UnderTheHood", "startFrame": 0, "durationInFrames": <totalFrames>, "props": {"underTheHood":
-  {...}}}`.
+  {...}}}`. Insert scenes are not scenes: they go in the config's own `inserts` list (**Inserts**
+  below).
 - **Plates** are cuts: the first starts at frame 0, the others on a word (within 2 frames of a word's
   `startFrame`), each at least 1.5 seconds long, at most 30 plates.
 - **Photographs:** at most **12 different ones per video**. `generate_image` refuses a 13th new name;
@@ -165,10 +166,21 @@ other key you set overrides it, so leave them alone.
 
 `validate_job` returns warnings (advisory, never blocking) when plate 1 has no photograph or when a `turn`, `reopen` or `payoff` segment has no plate, outline, arcs, chart, stat, counters or callout (a footnote or pose alone does not count) starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
 
+## Inserts
+
+If `get_timeline` shows a segment whose `insert` is not `""`, invoke the **tubematic-inserts** skill
+and follow it: it places one insert inside each marked segment and has its data written with the
+insert style's skill. The plate is hidden while an insert plays, so inside each insert's window no
+plate starts and no event has its `frame`: no callout, outline, arcs, counters, stat, chart,
+footnote or pose. Put the next plate's `start` on the window's end (its last frame + 1), so the
+video comes back on a new plate, or let the plate from before the insert carry on and time its next
+event after the window. The "never still" rule does not count a window. With no marked segment,
+write no `inserts`.
+
 ## Step 5 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` from the timeline, `"canvas": "dark"` (or
-   leave it out) and the one scene. It reads each photograph's shape from its file; you never write
+   leave it out), the one scene and any `inserts`. It reads each photograph's shape from its file; you never write
    `aspect`. Fix every problem it reports.
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures the
    chips, the stat and the chart text in a browser; an overlap is a measurement, so move a chip or

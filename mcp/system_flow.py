@@ -143,13 +143,18 @@ def _int(v) -> bool:
 
 def check_scene_use(visual_style: str, scenes: list) -> str:
     """The whole-video rule: a System Flow video is exactly the one SystemFlow
-    scene, and no other video uses it. "" when the scenes obey it."""
+    scene, and no other video uses it as a scene. "" when the scenes obey it.
+
+    System Flow is an insert style (TMDEV-224): inside another style's video it
+    appears only in `inserts`, never in `scenes`. A whole System Flow video is
+    left only to a video voiced before that, whose stored visual_style is still
+    system_flow."""
     uses = [s for s in scenes if is_system_flow_scene(s)]
     if (visual_style or "").strip() != STYLE_ID:
         if uses:
-            return ("The SystemFlow scene draws a whole System Flow video and is used only when the "
-                    "video's visual_style is system_flow (chosen at the topic). Build this video's "
-                    "scenes from the other components.")
+            return ("SystemFlow is never one of a video's scenes: System Flow is an insert style. Put a "
+                    "System Flow diagram in the config's \"inserts\" list, over a segment the script "
+                    "marks as a system_flow insert, and build the scenes in the video's own style.")
         return ""
     if (len(scenes) != 1 or not uses or uses[0].get("type") != "generated"
             or uses[0].get("source") != "installed"):
@@ -160,20 +165,52 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
 
 
 def check(config: dict, fps: int, word_starts: list[int], icons: list[str]) -> list[str]:
-    """Every problem with a System Flow config's one scene, as messages that
-    name the board, node or event and what to change. [] when it is sound.
-    Call after check_scene_use passed for a system_flow video."""
-    errs: list[str] = []
+    """Every problem with a whole System Flow video's one scene, as messages
+    that name the board, node or event and what to change. [] when it is
+    sound. Call after check_scene_use passed for a system_flow video."""
+    total = config.get("totalFrames")
+    scene = config["scenes"][0]
+    head = []
+    if scene.get("startFrame") != 0 or scene.get("durationInFrames") != total:
+        head.append(f"The SystemFlow scene must start at frame 0 and last totalFrames ({total}) frames.")
+    return _check_flow((scene.get("props") or {}).get(PROPS_KEY), 0, total, fps, word_starts, icons,
+                       head, last_fades=False)
+
+
+# An insert is a few seconds, so it holds few boards.
+MAX_INSERT_BOARDS = 3
+
+
+def check_insert(entry: dict, fps: int, word_starts: list[int], icons: list[str]) -> list[str]:
+    """Every problem with one System Flow insert (an entry of the config's
+    `inserts`, TMDEV-224): its boards run from the insert's first frame to its
+    last, on the video's own frames. The window itself (length, placement) is
+    checked by mcp/inserts.py. The host style's transitions run outside the
+    window, so the whole window is on screen. [] when it is sound."""
+    start, dur = entry.get("startFrame"), entry.get("durationInFrames")
+    if not (_int(start) and _int(dur) and dur > 0):
+        return ["The insert needs whole-number startFrame and durationInFrames."]
+    props = entry.get("props")
+    flow = props.get(PROPS_KEY) if isinstance(props, dict) else None
+    head = []
+    if isinstance(flow, dict) and isinstance(flow.get("boards"), list) \
+            and len(flow["boards"]) > MAX_INSERT_BOARDS:
+        head.append(f"A System Flow insert holds at most {MAX_INSERT_BOARDS} boards; it lasts a few "
+                    "seconds, so show one diagram, or two.")
+    # The insert ends on a cut back to the main style, so its last board is
+    # read before its final frames as any board is before a cut.
+    return _check_flow(flow, start, start + dur, fps, word_starts, icons, head, last_fades=True)
+
+
+def _check_flow(flow, span_start: int, span_end: int, fps: int, word_starts: list[int],
+                icons: list[str], head: list[str], *, last_fades: bool) -> list[str]:
+    errs: list[str] = list(head)
 
     def err(msg: str) -> None:
         if len(errs) < MAX_ERRORS:
             errs.append(msg)
 
-    total = config.get("totalFrames")
-    scene = config["scenes"][0]
-    if scene.get("startFrame") != 0 or scene.get("durationInFrames") != total:
-        err(f"The SystemFlow scene must start at frame 0 and last totalFrames ({total}) frames.")
-    flow = (scene.get("props") or {}).get(PROPS_KEY)
+    total = span_end
     if not isinstance(flow, dict) or not isinstance(flow.get("boards"), list) or not flow["boards"]:
         return errs + ["props.systemFlow.boards must be a non-empty list of boards."]
     boards = flow["boards"]
@@ -182,8 +219,9 @@ def check(config: dict, fps: int, word_starts: list[int], icons: list[str]) -> l
     starts = [b.get("startFrame") if isinstance(b, dict) else None for b in boards]
     if not all(_int(s) for s in starts):
         return errs + ["Every board needs a whole-number startFrame."]
-    if starts[0] != 0:
-        err("The first board must start at frame 0.")
+    if starts[0] != span_start:
+        err("The first board must start at frame 0." if span_start == 0 else
+            f"The first board must start at the insert's first frame ({span_start}).")
     min_len = int(MIN_BOARD_SECONDS * fps)
     still = int(LIMITS["maxStillSeconds"] * fps)
     for i, board in enumerate(boards):
@@ -202,7 +240,7 @@ def check(config: dict, fps: int, word_starts: list[int], icons: list[str]) -> l
         # The last frame an event can still be seen at full strength: a board
         # that is not the last fades out over its final frames, and the last
         # board's final frame is end - 1.
-        visible_until = end - TIMING["boardFade"] if i + 1 < len(boards) else end - 1
+        visible_until = end - TIMING["boardFade"] if (i + 1 < len(boards) or last_fades) else end - 1
         _check_board(board, where, start, end, visible_until, still, icons, err)
         if len(errs) >= MAX_ERRORS:
             break
@@ -398,6 +436,19 @@ def _check_board(board: dict, where: str, start: int, end: int, visible_until: i
             err(f"{where}: nothing changes on screen from frame {a} to {b} ({(b - a)} frames); add a "
                 f"packet, focus or chip at least every {LIMITS['maxStillSeconds']} s so the picture never stalls.")
             break
+
+
+def insert_board_windows(entry: dict) -> list[tuple[int, int]]:
+    """(start, end) of each board of one System Flow insert, for the text audit."""
+    try:
+        boards = entry["props"][PROPS_KEY]["boards"]
+        boards = [b for b in boards if isinstance(b, dict)]
+        end = entry["startFrame"] + entry["durationInFrames"]
+        starts = [b["startFrame"] for b in boards]
+    except (KeyError, IndexError, TypeError):
+        return []
+    return [(s, starts[i + 1] if i + 1 < len(starts) else end) for i, s in enumerate(starts)
+            if (starts[i + 1] if i + 1 < len(starts) else end) > s]
 
 
 def board_windows(config: dict) -> list[tuple[int, int]]:

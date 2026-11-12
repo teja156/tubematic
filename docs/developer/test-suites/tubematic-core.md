@@ -105,7 +105,7 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   subject limits and the lengths the term, the stamp and the options may have, and its `review`
   text says the meter row is hidden on the closing choice. A pack that takes no mascot must say why.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
-  routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
+  routing's `avoid_for` names System Flow, Stick and Photo Explainer, the styles Auto must tell it
   apart from.
 - Every pack says how it shows the opening, a turn, the payoff and the ending (`picture`), and
   `agent_view` hands a copy of it to the agent, the mixed scenes' block under `auto`. Case File
@@ -114,6 +114,14 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   pack passes. Every pack states what it cannot show (`routing.cannot_show`). The optional
   `routing.images`, `routing.moods` and `script` are checked when present, and a pack without them
   still loads.
+- System Flow and Terminal Doc are the insert styles and every other pack is a main style; a stored
+  insert style still reads as a style, and choosing one as a video's style is refused with a reason.
+  Every main style hosts inserts except Cartoon 3D, whose pack says why, and every host names a
+  transition from `inserts.TRANSITIONS`. `public_list` and `agent_view` carry `role` and `inserts`.
+  A malformed `role`, `inserts` or `insert` block is refused with the field at fault.
+- `motion_graphics` is labelled Photo Explainer, is the one main pack whose `routing.yields_ties`
+  is `true`, and none of its picture duties asks for a diagram. A `yields_ties` that is not true or
+  false is refused.
 - Every pack names its picker group (`dimension`), its preview stem and its tagline, and
   `public_list` passes them on, `null` for Auto. Cartoon 3D is the 3D style and the one whose
   `needs.gpu` gives the GPU tag.
@@ -203,21 +211,43 @@ Covers `tubematic_core/script_checks.py`
 Trap: the quiet half matters as much as the firing half. The list is shown to a person and handed to
 the agent, so a check that fires on a sound script teaches both to ignore it.
 
+### `test_inserts.py`
+
+Covers `tubematic_core/inserts.py`: the rules a script's insert marks are held to
+([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
+
+- A mark in the middle of the script is fine, and a script with no marks is fine whatever the
+  video's settings.
+- A mark on the first or the last segment, on two segments in a row, or on the segment that opens
+  the formula's payoff beat is refused.
+- A main style that takes no inserts refuses any mark with its own reason.
+- Marks are refused when the video's Inserts setting is None, when inserts are not decided yet
+  (the message names the insert-routing skill), when the style is not one the video chose, and
+  when it is not an insert style at all.
+- A marked segment whose words would run past 8 seconds warns (`insert_long`), pause and
+  pronunciation tags do not count as words, and a faster voice moves the limit.
+- `parse_styles` reads `''` as undecided and anything malformed as no inserts.
+
+Trap: length is only a warning here, because a segment's real length is known only once it is
+voiced; `mcp/inserts.py` measures it on the timeline when the scenes are written.
+
 ### `test_style_routing.py`
 
 Covers the candidate list Auto's style routing reads (`visual_styles.py::routing_candidates`) and
 the fixed topic set in `tests/fixtures/style_routing_cases.json`
 ([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
 
-- Every pack, then `scenes`, is a candidate in pack order, and a pack added at run time becomes one
-  with no other edit.
+- Every main pack, then `scenes`, is a candidate in pack order, and a pack added at run time becomes
+  one with no other edit. An insert style is never a candidate for the main style; every insert pack
+  is an insert candidate, with its routing block and its longest length.
 - Each candidate, `scenes` included, carries its routing block (`cannot_show` too) and its image
   count, and the list shares no state with the packs.
 - A candidate is unavailable for the same reasons that refuse the choice: no OpenAI key, a GPU that
   is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood, Case File Story).
   `scenes` is always available.
 - Every topic names only real outcomes, and every outcome is the first expectation of at least
-  three topics.
+  three topics. No topic expects an insert style as its main style; every insert style is expected
+  as an insert in at least three topics (`inserts_expect`), and at least three topics expect none.
 
 Trap: the three-topic minimum fails CI for a new pack until its ticket adds topics for it. That is
 what keeps the topic set growing with the packs, so the hand-run eval
@@ -546,6 +576,26 @@ Covers `0026`: `videos.angle`, `angle_kind` and `angle_score`.
 
 Trap: `''` means no angle, which is true of every topic filed before the upgrade. Such a topic
 stays usable, so the migration has no backfill.
+
+### `test_inserts_migration.py`
+
+Covers `0029`: the insert columns, and what still held an insert style as its main one.
+
+- A domain whose default is System Flow or Terminal Doc gets `auto`; every domain's insert mode is
+  `auto`.
+- A video not yet voiced (Topic Proposed, Topic Approved, Script Ready) in one of those styles goes
+  back to Auto: one at Script Ready returns to Topic Approved, its style pick, renderer, canvas and
+  formula pick are cleared, a person's formula choice is kept, and a comment says why.
+- A video at Revision Requested with no voice file moves the same way: back to Topic Approved when
+  it has a script; a revision asked for at the topic stays at Revision Requested with its style on
+  Auto, so the person's request is still carried out. A runner-up
+  that names an insert style is cleared.
+- A voiced or later video, and an archived one, keeps its style.
+- Every video past Topic Approved is marked as having no inserts; one before it starts undecided.
+- A second run changes nothing, and a new video starts undecided with inserts on Auto.
+
+Trap: a script written before inserts existed has no insert segments, so marking it "no inserts"
+keeps the scene author from adding any to it.
 
 ## Shared rules
 

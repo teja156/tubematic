@@ -300,6 +300,27 @@ misplaced, overlapping or cut off.
 """
 
 
+def insert_review_block(entries) -> str:
+    """The prompt's part about insert scenes (TMDEV-224): for each, its times
+    and what its style looks like on purpose, so the reviewer does not report
+    a planned change of look as a defect. `entries` is [(start_s, end_s,
+    review text)]. Empty when the video has none."""
+    if not entries:
+        return ""
+    lines = ["INSERT SCENES — short scenes in another style, shown over this video's own style on "
+             "purpose, where the narration reaches what they show best. The rest of the video is "
+             "judged by the style above; inside these times, judge by these notes."]
+    for start, end, review in entries:
+        lines.append(f"From {_clock(start)} to {_clock(end)}:")
+        lines.append(review.rstrip("\n"))
+    return "\n".join(lines) + "\n"
+
+
+def _clock(seconds: float) -> str:
+    m, s = divmod(max(0.0, seconds), 60)
+    return f"{int(m)}:{s:04.1f}"
+
+
 def _register_block(canvas: str, figures: bool = False, line_art: bool = False,
                     cartoon_3d: bool = False, style_block: str = "") -> str:
     """The style contract for what this video was deliberately produced as.
@@ -544,7 +565,7 @@ def run_ai_review(video_path: str, scene_config: dict, *,
                    model: str = "", fps=0, api_key: str = "",
                    canvas: str = "", figures: bool = False,
                    line_art: bool = False, cartoon_3d: bool = False,
-                   style_block: str = "", voices=()) -> dict:
+                   style_block: str = "", voices=(), insert_block: str = "") -> dict:
     """Run a Gemini quality review on a rendered video.
 
     Args:
@@ -682,7 +703,8 @@ def run_ai_review(video_path: str, scene_config: dict, *,
         top=SAFE_ZONE_TOP,
         bottom=SAFE_ZONE_BOTTOM,
         sampled_fps=sampling_fps or 1,
-        register_block=_register_block(canvas, figures, line_art, cartoon_3d, style_block),
+        register_block=(_register_block(canvas, figures, line_art, cartoon_3d, style_block)
+                        + insert_block),
         scene_config_json=json.dumps(scene_config, indent=2),
         reference_text_block=(_reference_text_block(script_text, tts_text)
                               + _voices_block(voices)),

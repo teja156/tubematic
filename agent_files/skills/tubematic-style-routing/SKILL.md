@@ -25,7 +25,10 @@ script away, so get it right the first time.
 ## The candidates are data
 
 `get_video(video_id).style_routing.candidates` lists every style you may pick, in a fixed order.
-Each entry is:
+These are main styles: each carries a whole video. Insert styles (a short diagram of parts, a string or
+number on screen) are never in this list. They are short scenes inside the main style, and the
+tubematic-insert-routing skill decides them after you, so pick the main style that carries the whole
+topic best and leave its diagram or string beats to the inserts. Each entry is:
 
 | Field | Meaning |
 |---|---|
@@ -35,6 +38,7 @@ Each entry is:
 | `routing.cannot_show` | What the style cannot put on screen at all |
 | `routing.signals` | Things that, when true of this topic's script, point to the style |
 | `routing.moods` | The tones the style suits. A tie-break only |
+| `routing.yields_ties` | When `true`, the style loses a tie to any candidate without it (Step 5) |
 | `images` | Generated images a video in this style costs, at most. A tie-break only |
 | `experimental` | The style is new. A tie-break only, never a reason to skip it |
 | `available`, `unavailable_reason` | Whether this install and this video can have the style now |
@@ -132,12 +136,14 @@ A candidate is a **clear fit** with at least 3 points.
 
 ## Step 5: Break ties, in this order
 
-1. **Specificity.** The candidate whose winning `best_for` entry names this topic's kind more
+1. **Yielding.** A candidate whose `routing.yields_ties` is `true` loses a tie to one
+   without it: its pack says it gives way when another style fits as well.
+2. **Specificity.** The candidate whose winning `best_for` entry names this topic's kind more
    narrowly. "Networking and protocols" beats "mechanisms" for a protocol.
-2. **A person's hint.** The domain's description or a comment asks for a look one candidate has.
-3. **Mood.** The candidate whose `moods` match the mood from Step 1.
-4. **Cost.** Fewer `images`. Generated images cost money on every video.
-5. **Order.** The earlier candidate in the list.
+3. **A person's hint.** The domain's description or a comment asks for a look one candidate has.
+4. **Mood.** The candidate whose `moods` match the mood from Step 1.
+5. **Cost.** Fewer `images`. Generated images cost money on every video.
+6. **Order.** The earlier candidate in the list.
 
 Never break a tie by novelty, by what recent videos used, or by which style is the most elaborate.
 The right style for this topic is right even if the last three videos used it.
@@ -188,15 +194,16 @@ request: DNS, TCP and TLS, the load balancer, the app server, the database, and 
 - Step 2: `world_3d` is unavailable (no working GPU) and its `avoid_for` says "pure mechanisms"
   anyway. `photo_led`'s `cannot_show` is "figures acting out a step", which this topic does not
   need, so it stays. Nothing else is ruled out.
-- Step 3: `flow_diagram`'s `best_for` has "how a request is handled" (3), and three of its signals
-  hold (components that talk, a path a request travels, an architecture) (3): 6.
-  `line_art`'s `best_for` has "mechanisms: how a thing works" (a close neighbour, 1) and one signal
-  (1): 2. `photo_led` scores 0.
-- Step 4: `flow_diagram` is the only clear fit.
-- Step 6: the runner-up is `line_art` (2).
-- Step 7: `choose_visual_style(video_id, "flow_diagram", "A web request's path from browser to
-  database and back, step by step.", "line_art")`, then the comment
-  `Path through a system, roles only, calm. Picked flow_diagram (6) over line_art (2) and photo_led (0).`
+- Step 3: `acted_roles`' `best_for` has "how a system works, told with its parts as roles" (3),
+  and two of its signals hold (the people are roles, a request walks through the parts of a system)
+  (2): 5. `board_reasoning`'s `best_for` has "a chain of causes" (a close neighbour, 1) and one
+  signal (1): 2. `photo_led` scores 0.
+- Step 4: `acted_roles` is the only clear fit. The request's path as a diagram is not a reason to
+  look for another style: that beat becomes an insert, decided by the next skill.
+- Step 6: the runner-up is `board_reasoning` (2).
+- Step 7: `choose_visual_style(video_id, "acted_roles", "A web request's path from browser to
+  database and back, acted out by its parts.", "board_reasoning")`, then the comment
+  `Path through a system, roles only, calm. Picked acted_roles (5) over board_reasoning (2) and photo_led (0).`
 
 ## Checklist
 
@@ -208,6 +215,6 @@ request: DNS, TCP and TLS, the load balancer, the app server, the database, and 
       what must be seen ruled out
 - [ ] Points counted from `best_for` and `signals` by meaning, not by shared words
 - [ ] A style picked only as a clear fit (3 points or more), otherwise `scenes`
-- [ ] Ties broken by specificity, a person's hint, mood, cost, then order
+- [ ] Ties broken by yielding, specificity, a person's hint, mood, cost, then order
 - [ ] `choose_visual_style` called with a one-sentence reason and a runner-up
 - [ ] A comment with the description and the top three scores

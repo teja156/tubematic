@@ -59,9 +59,23 @@ export const SKIN_TOKENS: Record<Skin, SkinTokens> = {
     line: "#b07a10",
     bloom: "0 0 6px rgba(255,176,0,0.45)",
   },
+  // Dark ink on paper: a Terminal Doc insert inside a light-canvas main style
+  // (TMDEV-224) follows that style's canvas, so the video never cuts to black.
+  paper: {
+    name: "paper",
+    canvas: "#f6f5f0",
+    font: MONO,
+    fontScale: 1,
+    weight: 700,
+    tones: { white: "#141414", grey: "#6b6b6b", dim: "#a8a8a8", red: "#d61f1f", blue: "#1f5fd6" },
+    noise: "#9a9a9a",
+    line: "#7a7a7a",
+    bloom: "",
+  },
 };
 
-export const skinTokens = (skin: Skin | undefined): SkinTokens => SKIN_TOKENS[skin === "crt" ? "crt" : "house"];
+export const skinTokens = (skin: Skin | undefined): SkinTokens =>
+  SKIN_TOKENS[skin === "crt" || skin === "paper" ? skin : "house"];
 
 // ── numbers and easing ───────────────────────────────────────────────────────
 

@@ -76,8 +76,8 @@ def test_get_timeline_success_segments_only(job_db):
         "fps": 30,
         "first_frame": "",
         "segments": [
-            {"id": "seg-1", "startFrame": 0, "endFrame": 150, "beat": "", "role": "opening"},
-            {"id": "seg-2", "startFrame": 150, "endFrame": 300, "beat": "", "role": ""},
+            {"id": "seg-1", "startFrame": 0, "endFrame": 150, "beat": "", "role": "opening", "insert": ""},
+            {"id": "seg-2", "startFrame": 150, "endFrame": 300, "beat": "", "role": "", "insert": ""},
         ],
     }
     assert "words" not in result

@@ -382,6 +382,40 @@ def test_errors_are_capped_so_the_message_stays_readable():
     assert len(_check(_with(wreck))) <= wb.MAX_ERRORS
 
 
+# ── insert windows: the board stays quiet while an insert plays ─────────────
+
+def test_the_example_passes_with_an_insert_where_nothing_starts():
+    assert wb.check(EXAMPLE, 30, WORD_STARTS, DOODLES, quiet=()) == []
+    assert wb.check(EXAMPLE, 30, WORD_STARTS, DOODLES, quiet=[(600, 670)]) == []
+
+
+def test_an_item_inside_an_insert_is_refused():
+    """The board is hidden under the insert; an item timed there is drawn unseen."""
+    errs = wb.check(EXAMPLE, 30, WORD_STARTS, DOODLES, quiet=[(440, 470)])
+    assert any("item 'not_just' (at 452) starts inside an insert (440-469)" in e for e in errs), errs
+
+
+def test_a_region_cut_inside_an_insert_is_refused_and_at_its_end_is_allowed():
+    errs = wb.check(EXAMPLE, 30, WORD_STARTS, DOODLES, quiet=[(660, 700)])
+    assert any("Region 3 starts at frame 672, inside an insert (660-699)" in e for e in errs), errs
+    assert wb.check(EXAMPLE, 30, WORD_STARTS, DOODLES, quiet=[(640, 672)]) == []
+
+
+def test_the_recap_inside_an_insert_is_refused():
+    errs = wb.check(EXAMPLE, 30, WORD_STARTS, DOODLES, quiet=[(900, 930)])
+    assert any("recapFrame 920 is inside an insert (900-929)" in e for e in errs), errs
+
+
+def test_an_insert_is_not_a_still_stretch():
+    """Without the item at 452 region 2 sits still too long; an insert over
+    that stretch is what changes on screen, so it is not refused."""
+    def quiet(b):
+        b["regions"][1]["items"] = [i for i in b["regions"][1]["items"] if i["id"] != "not_just"]
+    cfg = _with(quiet)
+    assert any("Nothing new happens" in e for e in _check(cfg))
+    assert not any("Nothing new" in e for e in wb.check(cfg, 30, WORD_STARTS, DOODLES, quiet=[(420, 540)]))
+
+
 def test_region_windows():
     assert wb.region_windows(EXAMPLE) == [(0, 294), (294, 672), (672, 920), (920, 1057)]
     assert wb.region_windows({"scenes": []}) == []

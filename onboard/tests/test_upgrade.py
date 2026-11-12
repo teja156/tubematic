@@ -562,6 +562,38 @@ def test_the_renderers_migration_constant_names_the_real_migration(upgrade):
     assert names[upgrade.RENDER_GATEWAY_MIGRATION] == "renderers"
 
 
+# ── System Flow and Terminal Doc become insert styles (TMDEV-224) ──────────
+
+def _before_inserts(upgrade, env):
+    con = sqlite3.connect(env.db_path)
+    con.execute("DELETE FROM schema_migrations WHERE version >= ?", (upgrade.INSERTS_MIGRATION,))
+    con.commit()
+    con.close()
+
+
+def test_no_stop_is_refused_while_the_inserts_migration_is_pending(upgrade, env):
+    """The migration sends unvoiced System Flow and Terminal Doc videos back to
+    Auto; an old MCP server left running would let an agent pick them again."""
+    _before_inserts(upgrade, env)
+    code, order, rep = _run(upgrade, env, no_stop=True)
+    assert code == 1
+    assert order == []
+    assert "--no-stop" in rep.text() and "insert styles" in rep.text()
+
+
+def test_the_pending_inserts_migration_still_allows_a_normal_upgrade(upgrade, env):
+    _before_inserts(upgrade, env)
+    code, order, _ = _run(upgrade, env)
+    assert code == 0
+    assert _index(order, "docker compose stop") < _index(order, "docker compose up -d")
+
+
+def test_the_inserts_migration_constant_names_the_real_migration(upgrade):
+    from tubematic_core import db as tdb_real
+    names = {m.version: m.name for m in tdb_real.discover()}
+    assert names[upgrade.INSERTS_MIGRATION] == "inserts"
+
+
 def test_the_upgrade_creates_missing_tokens_before_up(upgrade, env):
     """Compose refuses to start a service whose token file is missing."""
     from tubematic_core import auth

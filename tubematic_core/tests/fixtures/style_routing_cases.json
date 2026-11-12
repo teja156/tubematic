@@ -1,78 +1,108 @@
 {
-  "_about": "The fixed topic set Auto's style routing is checked against (TMDEV-203). expect: the right outcome(s), best first; ok: also acceptable; future: a coming style expected to take the topic over once its pack ships. Each style ticket updates these in its own merge. Read by tubematic_core/tests/test_style_routing.py and scripts/eval_style_routing.py.",
+  "_about": "The fixed topic set Auto's style routing is checked against (TMDEV-203). expect: the right outcome(s), best first; ok: also acceptable; future: a coming style expected to take the topic over once its pack ships. Each style ticket updates these in its own merge. Read by tubematic_core/tests/test_style_routing.py and scripts/eval_style_routing.py. inserts_expect (TMDEV-224): the insert styles the insert step should choose for the picked main style, [] for none, or \"any\" (also when absent); inserts_ok: insert styles also acceptable.",
   "cases": [
     {
       "title": "How DNS finds a website",
       "brief": "What happens between typing a domain name and your browser getting an IP address: the resolver, root, TLD and authoritative servers, and caching along the way.",
       "expect": [
-        "system_flow"
-      ],
-      "ok": [
         "stick"
       ],
+      "ok": [
+        "whiteboard",
+        "scenes"
+      ],
       "future": "",
-      "note": ""
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out.",
+      "inserts_expect": [
+        "system_flow"
+      ]
     },
     {
       "title": "What happens when you press Enter on a URL",
       "brief": "The full path of a web request: DNS lookup, TCP and TLS handshakes, the load balancer, the app server, the database, and the response travelling back.",
       "expect": [
-        "system_flow"
-      ],
-      "ok": [
         "stick"
       ],
+      "ok": [
+        "whiteboard",
+        "scenes"
+      ],
       "future": "",
-      "note": ""
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out.",
+      "inserts_expect": [
+        "system_flow"
+      ]
     },
     {
       "title": "How a CDN makes sites fast",
       "brief": "Why a request served from an edge server near you is faster than one that travels to the origin, and what happens on a cache miss.",
       "expect": [
-        "system_flow"
-      ],
-      "ok": [
         "stick"
       ],
+      "ok": [
+        "whiteboard",
+        "scenes",
+        "motion_graphics"
+      ],
       "future": "",
-      "note": ""
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out.",
+      "inserts_expect": [
+        "system_flow"
+      ]
     },
     {
       "title": "How SQL injection reaches the database",
       "brief": "How a crafted input travels from a login form through the app into a SQL query and dumps the users table, and how parameterised queries stop it.",
       "expect": [
-        "system_flow"
-      ],
-      "ok": [
         "stick"
       ],
+      "ok": [
+        "whiteboard",
+        "scenes"
+      ],
       "future": "",
-      "note": ""
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out.",
+      "inserts_expect": [
+        "system_flow"
+      ],
+      "inserts_ok": [
+        "terminal_doc"
+      ]
     },
     {
       "title": "How Kafka moves a message",
       "brief": "A message's trip from a producer to a topic partition, through replication to followers, to a consumer group that reads it at its own pace.",
       "expect": [
-        "system_flow"
-      ],
-      "ok": [
         "stick"
       ],
+      "ok": [
+        "whiteboard",
+        "scenes"
+      ],
       "future": "",
-      "note": ""
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out.",
+      "inserts_expect": [
+        "system_flow"
+      ]
     },
     {
       "title": "The TLS handshake, step by step",
       "brief": "How a browser and a server agree on keys before any data is sent: hello messages, the certificate, key exchange and the first encrypted request.",
       "expect": [
-        "system_flow"
+        "stick"
       ],
       "ok": [
-        "stick",
-        "terminal_doc"
+        "whiteboard",
+        "scenes"
       ],
       "future": "",
-      "note": "Messages passing between a browser and a server are a path between components (System Flow); Terminal Doc can show the keys and the first encrypted bytes, so it is acceptable."
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Messages passing between a browser and a server are a path between components (System Flow); Terminal Doc can show the keys and the first encrypted bytes, so it is acceptable.",
+      "inserts_expect": [
+        "system_flow"
+      ],
+      "inserts_ok": [
+        "terminal_doc"
+      ]
     },
     {
       "title": "How a pin tumbler lock works",
@@ -120,12 +150,12 @@
         "stick"
       ],
       "ok": [
-        "system_flow",
         "scenes",
         "case_file_story"
       ],
       "future": "",
-      "note": "A scam walked through as a mechanism with generic roles: Stick. Told as a story with the viewer as the victim it would be a Case File Story, so that is acceptable."
+      "note": "A scam walked through as a mechanism with generic roles: Stick. Told as a story with the viewer as the victim it would be a Case File Story, so that is acceptable.",
+      "inserts_expect": "any"
     },
     {
       "title": "How a pickpocket team works a crowded train",
@@ -148,11 +178,14 @@
       ],
       "ok": [
         "stick",
-        "scenes",
-        "system_flow"
+        "scenes"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": [],
+      "inserts_ok": [
+        "system_flow"
+      ]
     },
     {
       "title": "How a touchscreen feels your finger",
@@ -171,15 +204,17 @@
       "title": "How base64 turns bytes into text",
       "brief": "Taking three bytes, regrouping them into four six-bit chunks and mapping each to a letter, and why the output ends in equals signs.",
       "expect": [
-        "terminal_doc"
+        "whiteboard"
       ],
       "ok": [
         "stick",
-        "system_flow",
         "scenes"
       ],
       "future": "",
-      "note": "Bytes regrouped and mapped to letters is text transformed character by character."
+      "note": "Terminal Doc is an insert style: the string or the number is its insert, inside a main style that works the rest through. Bytes regrouped and mapped to letters is text transformed character by character.",
+      "inserts_expect": [
+        "terminal_doc"
+      ]
     },
     {
       "title": "Why the sky is blue",
@@ -279,7 +314,8 @@
         "scenes"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "Ada Lovelace and the first program",
@@ -293,7 +329,8 @@
         "scenes"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "Sam's first week as a junior developer",
@@ -306,7 +343,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "An invented protagonist, but no scheme, no money and nothing at risk: Illustrated, not Case File Story."
+      "note": "An invented protagonist, but no scheme, no money and nothing at risk: Illustrated, not Case File Story.",
+      "inserts_expect": []
     },
     {
       "title": "A night watch in a medieval castle",
@@ -319,7 +357,8 @@
         "scenes"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "A morning in an ancient Roman market",
@@ -332,7 +371,8 @@
         "motion_graphics"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "A telegram crosses 1920s London",
@@ -345,7 +385,8 @@
         "scenes"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "Five surprising facts about honey",
@@ -358,7 +399,8 @@
         "motion_graphics"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "Why we procrastinate",
@@ -372,7 +414,8 @@
         "illustrated"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "The history of the QWERTY keyboard",
@@ -386,22 +429,26 @@
         "illustrated"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "How the Enigma code was broken",
       "brief": "How the Enigma machine scrambled letters, the mistakes German operators made, and how Turing's bombe at Bletchley Park used them.",
       "expect": [
-        "terminal_doc"
+        "scenes"
       ],
       "ok": [
-        "scenes",
-        "stick",
         "motion_graphics",
-        "illustrated"
+        "illustrated",
+        "stick",
+        "storybook_atlas"
       ],
       "future": "",
-      "note": "The story turns on letters being scrambled and unscrambled, and on cribs: strings the stage can show."
+      "note": "Terminal Doc is an insert style: the string or the number is its insert, inside a main style that works the rest through. The story turns on letters being scrambled and unscrambled, and on cribs: strings the stage can show.",
+      "inserts_expect": [
+        "terminal_doc"
+      ]
     },
     {
       "title": "How money laundering moves dirty cash",
@@ -411,11 +458,11 @@
       ],
       "ok": [
         "scenes",
-        "stick",
-        "system_flow"
+        "stick"
       ],
       "future": "",
-      "note": "One criminal's cash followed through a scheme until it looks clean: a story with money and risk in it, not a diagram."
+      "note": "One criminal's cash followed through a scheme until it looks clean: a story with money and risk in it, not a diagram.",
+      "inserts_expect": "any"
     },
     {
       "title": "Every type of cyber attack explained",
@@ -425,11 +472,11 @@
       ],
       "ok": [
         "scenes",
-        "system_flow",
         "stick"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": "any"
     },
     {
       "title": "Habits that quietly wreck your sleep",
@@ -442,7 +489,8 @@
         "scenes"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "The first computer bug was a real moth",
@@ -455,7 +503,8 @@
         "illustrated"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "How the printing press spread across Europe",
@@ -468,7 +517,8 @@
         "motion_graphics"
       ],
       "future": "",
-      "note": ""
+      "note": "",
+      "inserts_expect": []
     },
     {
       "title": "Milo the robot learns to cook",
@@ -481,7 +531,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "An invented protagonist the viewer follows: Illustrated, not Storybook Atlas."
+      "note": "An invented protagonist the viewer follows: Illustrated, not Storybook Atlas.",
+      "inserts_expect": []
     },
     {
       "title": "Two friends start a lemonade stand",
@@ -495,7 +546,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "Invented recurring characters, told in the present: Illustrated."
+      "note": "Invented recurring characters, told in the present: Illustrated.",
+      "inserts_expect": []
     },
     {
       "title": "How one tweet wiped billions off a stock",
@@ -521,7 +573,8 @@
         "motion_graphics"
       ],
       "future": "",
-      "note": "History, but a list of named items: Bean Explainer, not Storybook Atlas."
+      "note": "History, but a list of named items: Bean Explainer, not Storybook Atlas.",
+      "inserts_expect": []
     },
     {
       "title": "What is inside a mechanical typewriter",
@@ -540,54 +593,70 @@
       "title": "Why an 8-character password falls in seconds",
       "brief": "How a stolen password hash is cracked by guessing: the keyspace of eight lowercase letters, a graphics card testing billions of guesses a second, and why a long passphrase holds out.",
       "expect": [
-        "terminal_doc"
+        "whiteboard"
       ],
       "ok": [
         "stick",
         "scenes"
       ],
       "future": "",
-      "note": "One string, its hash and one big number carry the whole video."
+      "note": "Terminal Doc is an insert style: the string or the number is its insert, inside a main style that works the rest through. One string, its hash and one big number carry the whole video.",
+      "inserts_expect": [
+        "terminal_doc"
+      ]
     },
     {
       "title": "Kryptos: the CIA sculpture nobody has fully solved",
       "brief": "The four encrypted passages on the Kryptos sculpture outside CIA headquarters, how three were cracked with a keyed alphabet, and the clues the artist has released for the last one.",
       "expect": [
-        "terminal_doc"
+        "motion_graphics"
       ],
       "ok": [
-        "motion_graphics",
         "scenes"
       ],
       "future": "",
-      "note": "Ciphertext, a keyed alphabet and released clues are text on screen. Not Case File Story: a real place and a real puzzle, with no scheme the viewer is inside."
+      "note": "Terminal Doc is an insert style: the string or the number is its insert, inside a main style that works the rest through. Ciphertext, a keyed alphabet and released clues are text on screen. Not Case File Story: a real place and a real puzzle, with no scheme the viewer is inside.",
+      "inserts_expect": [
+        "terminal_doc"
+      ]
     },
     {
       "title": "What a hash function does to your password",
       "brief": "Why the same password always gives the same hash, why one changed letter changes the whole hash, and why sites store hashes with a salt instead of passwords.",
       "expect": [
-        "terminal_doc"
+        "stick"
       ],
       "ok": [
-        "stick",
-        "system_flow",
+        "whiteboard",
         "scenes"
       ],
       "future": "",
-      "note": "A string going into a hash and coming out changed is this style's core move."
+      "note": "Terminal Doc is an insert style: the string or the number is its insert, inside a main style that works the rest through. A string going into a hash and coming out changed is this style's core move.",
+      "inserts_expect": [
+        "terminal_doc"
+      ],
+      "inserts_ok": [
+        "system_flow"
+      ]
     },
     {
       "title": "How a VPN tunnels your traffic",
       "brief": "How your device wraps every packet in an encrypted envelope, sends it to the VPN server, and how that server forwards it so websites see its address instead of yours.",
       "expect": [
-        "system_flow"
+        "stick"
       ],
       "ok": [
-        "stick",
-        "terminal_doc"
+        "whiteboard",
+        "scenes"
       ],
       "future": "",
-      "note": "Negative control for Terminal Doc: encryption is mentioned, but the subject is the path packets travel between components."
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Negative control for Terminal Doc: encryption is mentioned, but the subject is the path packets travel between components.",
+      "inserts_expect": [
+        "system_flow"
+      ],
+      "inserts_ok": [
+        "terminal_doc"
+      ]
     },
     {
       "title": "Why the Titanic sank",
@@ -602,7 +671,7 @@
         "stick"
       ],
       "future": "",
-      "note": "A real ship, real people and a mechanism, all carried by photographs and vector diagrams: Motion Graphics. No beat needs someone acting a step out."
+      "note": "A real ship, real people and a mechanism, all carried by photographs and vector diagrams: Photo Explainer. No beat needs someone acting a step out."
     },
     {
       "title": "Why your phone battery wears out",
@@ -647,13 +716,17 @@
       "title": "How Bluetooth pairs your headphones",
       "brief": "What your phone and your headphones say to each other when they pair: discovery, the pairing request, the shared key, and how they find each other again next time.",
       "expect": [
-        "system_flow"
-      ],
-      "ok": [
         "stick"
       ],
+      "ok": [
+        "whiteboard",
+        "under_the_hood"
+      ],
       "future": "",
-      "note": "A near miss for Under the Hood: the headphones are physical, but the subject is messages between two devices."
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. A near miss for Under the Hood: the headphones are physical, but the subject is messages between two devices.",
+      "inserts_expect": [
+        "system_flow"
+      ]
     },
     {
       "title": "The most expensive phones ever sold",
@@ -679,7 +752,8 @@
         "illustrated"
       ],
       "future": "",
-      "note": "A fraud told from inside, with money leaving and suspicion rising."
+      "note": "A fraud told from inside, with money leaving and suspicion rising.",
+      "inserts_expect": []
     },
     {
       "title": "How a Ponzi scheme pays its first investors",
@@ -693,7 +767,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "A scheme with numbers that move and a named crime at the end. Whiteboard is acceptable for the arithmetic."
+      "note": "A scheme with numbers that move and a named crime at the end. Whiteboard is acceptable for the arithmetic.",
+      "inserts_expect": []
     },
     {
       "title": "The bank put 40,000 dollars in your account by mistake",
@@ -707,7 +782,8 @@
         "illustrated"
       ],
       "future": "",
-      "note": "A money dilemma that ends on a choice."
+      "note": "A money dilemma that ends on a choice.",
+      "inserts_expect": []
     },
     {
       "title": "Why four deposits of 9,000 dollars is a crime",
@@ -721,7 +797,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "A financial rule shown through someone about to break it."
+      "note": "A financial rule shown through someone about to break it.",
+      "inserts_expect": []
     },
     {
       "title": "The weekend heist that one receipt undid",
@@ -735,7 +812,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "A heist followed to the moment it is found out, with invented people."
+      "note": "A heist followed to the moment it is found out, with invented people.",
+      "inserts_expect": []
     },
     {
       "title": "How Bernie Madoff's scheme collapsed",
@@ -762,7 +840,8 @@
         "stick"
       ],
       "future": "",
-      "note": "A near miss for Case File Story: scams, but a list of named items with no single story."
+      "note": "A near miss for Case File Story: scams, but a list of named items with no single story.",
+      "inserts_expect": []
     },
     {
       "title": "How the 2008 financial crisis happened",
@@ -773,11 +852,11 @@
       "ok": [
         "motion_graphics",
         "whiteboard",
-        "stick",
-        "system_flow"
+        "stick"
       ],
       "future": "",
-      "note": "Mixed-scenes probe: real banks as full-frame pictures, and a borrower, a banker and a ratings agent doing each step. Motion Graphics draws no figures; Stick Explainer shows pictures only in small panels."
+      "note": "Mixed-scenes probe: real banks as full-frame pictures, and a borrower, a banker and a ratings agent doing each step. Photo Explainer draws no figures; Stick Explainer shows pictures only in small panels.",
+      "inserts_expect": "any"
     },
     {
       "title": "Three famous inventions found by accident",
@@ -791,7 +870,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Bean Explainer vs Storybook Atlas: history, but three items one section each, not one story through time."
+      "note": "Pair probe, Bean Explainer vs Storybook Atlas: history, but three items one section each, not one story through time.",
+      "inserts_expect": []
     },
     {
       "title": "How penicillin was discovered by accident",
@@ -804,7 +884,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Storybook Atlas vs Bean Explainer: one discovery told as a story through time, opening on a date and a place."
+      "note": "Pair probe, Storybook Atlas vs Bean Explainer: one discovery told as a story through time, opening on a date and a place.",
+      "inserts_expect": []
     },
     {
       "title": "Why we feel nostalgic",
@@ -817,20 +898,24 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Bean Explainer vs Storybook Atlas: a feeling, not a history; the word nostalgic is a mood Storybook lists, not its subject."
+      "note": "Pair probe, Bean Explainer vs Storybook Atlas: a feeling, not a history; the word nostalgic is a mood Storybook lists, not its subject.",
+      "inserts_expect": []
     },
     {
       "title": "How a SIM-swap attack takes over your bank account",
       "brief": "The attacker's path: talking the phone carrier into moving your number to their SIM, receiving your bank's one-time codes, resetting your password and logging in.",
       "expect": [
-        "system_flow"
+        "stick"
       ],
       "ok": [
-        "stick",
-        "case_file_story"
+        "case_file_story",
+        "scenes"
       ],
       "future": "",
-      "note": "Pair probe, System Flow vs Case File Story: a crime, but walked through as a path between systems (carrier, phone, bank), with no one inside a story."
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Case File Story: a crime, but walked through as a path between systems (carrier, phone, bank), with no one inside a story.",
+      "inserts_expect": [
+        "system_flow"
+      ]
     },
     {
       "title": "Your boss asks you to backdate one invoice",
@@ -843,20 +928,24 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Case File Story vs System Flow and Illustrated: a money dilemma in the second person that ends on a choice."
+      "note": "Pair probe, Case File Story vs System Flow and Illustrated: a money dilemma in the second person that ends on a choice.",
+      "inserts_expect": []
     },
     {
       "title": "How your card payment reaches the shop's bank",
       "brief": "Tap your card: the terminal, the shop's payment processor, the card network, your bank approving it, and the money settling a day or two later.",
       "expect": [
-        "system_flow"
+        "stick"
       ],
       "ok": [
-        "stick",
-        "whiteboard"
+        "whiteboard",
+        "scenes"
       ],
       "future": "",
-      "note": "Pair probe, System Flow vs Case File Story: money, but no scheme and no one at risk; a path between components."
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Case File Story: money, but no scheme and no one at risk; a path between components.",
+      "inserts_expect": [
+        "system_flow"
+      ]
     },
     {
       "title": "How bike gears make hills easier",
@@ -882,7 +971,7 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Under the Hood vs Whiteboard and Motion Graphics: one device opened up part by part, magnified."
+      "note": "Pair probe, Under the Hood vs Whiteboard and Photo Explainer: one device opened up part by part, magnified."
     },
     {
       "title": "How much energy is in a AA battery",
@@ -891,11 +980,11 @@
         "whiteboard"
       ],
       "ok": [
-        "under_the_hood",
-        "terminal_doc"
+        "under_the_hood"
       ],
       "future": "",
-      "note": "Pair probe, Whiteboard vs Under the Hood: the numbers of one object, but the video is the arithmetic, not the inside of the battery."
+      "note": "Pair probe, Whiteboard vs Under the Hood: the numbers of one object, but the video is the arithmetic, not the inside of the battery.",
+      "inserts_expect": []
     },
     {
       "title": "How a microwave oven heats your food",
@@ -923,7 +1012,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "Old-style probe, Illustrated vs Storybook Atlas and Case File Story: invented recurring characters, warm, no history and no money at stake."
+      "note": "Old-style probe, Illustrated vs Storybook Atlas and Case File Story: invented recurring characters, warm, no history and no money at stake.",
+      "inserts_expect": []
     },
     {
       "title": "Marie Curie and the discovery of radium",
@@ -937,7 +1027,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Storybook Atlas vs Illustrated: a real person from history and what she found, told through time; she is named, not drawn as a recurring character."
+      "note": "Pair probe, Storybook Atlas vs Illustrated: a real person from history and what she found, told through time; she is named, not drawn as a recurring character.",
+      "inserts_expect": []
     },
     {
       "title": "Your coworker offers you a cut of the missing stock",
@@ -950,7 +1041,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Case File Story vs Illustrated: invented people, but a crime and money at stake, told in the second person."
+      "note": "Pair probe, Case File Story vs Illustrated: invented people, but a crime and money at stake, told in the second person.",
+      "inserts_expect": []
     },
     {
       "title": "Pip the fox opens a bakery",
@@ -964,7 +1056,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "Old-style probe, Illustrated vs Case File Story: money at stake, but no crime and no dilemma; an invented hero the viewer follows."
+      "note": "Old-style probe, Illustrated vs Case File Story: money at stake, but no crime and no dilemma; an invented hero the viewer follows.",
+      "inserts_expect": []
     },
     {
       "title": "Five body-language signs someone is lying",
@@ -977,7 +1070,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Bean Explainer vs Stick: a list of behaviours, one section each, one everyman acting them out."
+      "note": "Pair probe, Bean Explainer vs Stick: a list of behaviours, one section each, one everyman acting them out.",
+      "inserts_expect": []
     },
     {
       "title": "How a restaurant kitchen gets your order out",
@@ -986,12 +1080,15 @@
         "stick"
       ],
       "ok": [
-        "system_flow",
         "cartoon_3d",
         "scenes"
       ],
       "future": "",
-      "note": "Old-style probe, Stick vs Bean Explainer and System Flow: a process acted out step by step by generic people in roles."
+      "note": "Old-style probe, Stick vs Bean Explainer and System Flow: a process acted out step by step by generic people in roles.",
+      "inserts_expect": [],
+      "inserts_ok": [
+        "system_flow"
+      ]
     },
     {
       "title": "How CPR keeps someone alive",
@@ -1018,7 +1115,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Bean Explainer vs Stick: a habit and its effect on the mind, told to you."
+      "note": "Pair probe, Bean Explainer vs Stick: a habit and its effect on the mind, told to you.",
+      "inserts_expect": []
     },
     {
       "title": "Inside a jet engine",
@@ -1032,7 +1130,7 @@
         "whiteboard"
       ],
       "future": "",
-      "note": "Pair probe, Under the Hood vs Motion Graphics: one machine opened up stage by stage."
+      "note": "Pair probe, Under the Hood vs Photo Explainer: one machine opened up stage by stage."
     },
     {
       "title": "The biggest ships ever built",
@@ -1044,32 +1142,39 @@
         "scenes"
       ],
       "future": "",
-      "note": "Old-style probe, Motion Graphics vs Under the Hood: real things the viewer came to see whole, ranked, with no inside to open."
+      "note": "Old-style probe, Photo Explainer vs Under the Hood: real things the viewer came to see whole, ranked, with no inside to open."
     },
     {
       "title": "How a 911 call reaches the right dispatcher",
       "brief": "Your call goes from the phone tower to a routing database that finds your location, to the nearest call centre, and on to the dispatcher who sends help.",
       "expect": [
-        "system_flow"
-      ],
-      "ok": [
         "stick"
       ],
+      "ok": [
+        "whiteboard",
+        "scenes"
+      ],
       "future": "",
-      "note": "Pair probe, System Flow vs Stick: a call's path through systems, not people acting a scene."
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Stick: a call's path through systems, not people acting a scene.",
+      "inserts_expect": [
+        "system_flow"
+      ]
     },
     {
       "title": "How an airport gets your bag onto the right plane",
       "brief": "The tag scanned at check-in, the conveyors and sorting machines under the terminal, the security scan, and the cart that takes it to the plane's hold.",
       "expect": [
-        "system_flow"
+        "stick"
       ],
       "ok": [
-        "stick",
-        "cartoon_3d"
+        "cartoon_3d",
+        "under_the_hood"
       ],
       "future": "",
-      "note": "Pair probe, System Flow vs Stick: a physical thing travelling a path through machines."
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Stick: a physical thing travelling a path through machines.",
+      "inserts_expect": [
+        "system_flow"
+      ]
     },
     {
       "title": "Why you should switch doors in the Monty Hall problem",
@@ -1091,12 +1196,12 @@
         "stick"
       ],
       "ok": [
-        "system_flow",
         "whiteboard",
         "scenes"
       ],
       "future": "",
-      "note": "Old-style probe, Stick vs System Flow: a process carried by people in roles, not data moving between components."
+      "note": "Old-style probe, Stick vs System Flow: a process carried by people in roles, not data moving between components.",
+      "inserts_expect": []
     },
     {
       "title": "How honeybees choose a new home",
@@ -1123,7 +1228,8 @@
         "scenes"
       ],
       "future": "",
-      "note": "Old-style probe, Cartoon 3D vs Storybook Atlas: history, but one place and the people moving through it."
+      "note": "Old-style probe, Cartoon 3D vs Storybook Atlas: history, but one place and the people moving through it.",
+      "inserts_expect": []
     },
     {
       "title": "What happens to your body in space",
@@ -1137,7 +1243,8 @@
         "stick"
       ],
       "future": "",
-      "note": "Pair probe, Bean Explainer vs mixed scenes: the body and what happens to it, one change per section; no roles are acted out, so Bean Explainer carries it."
+      "note": "Pair probe, Bean Explainer vs mixed scenes: the body and what happens to it, one change per section; no roles are acted out, so Bean Explainer carries it.",
+      "inserts_expect": []
     },
     {
       "title": "How the Apollo 11 landing almost failed",
@@ -1156,14 +1263,16 @@
       "title": "How a Caesar cipher works",
       "brief": "Shift every letter three places: a message encrypted letter by letter, decrypted back, and broken in seconds by trying all 25 shifts.",
       "expect": [
-        "terminal_doc"
+        "whiteboard"
       ],
       "ok": [
-        "whiteboard",
         "stick"
       ],
       "future": "",
-      "note": "Pair probe, Terminal Doc vs Whiteboard: text transformed letter by letter is the subject."
+      "note": "Terminal Doc is an insert style: the string or the number is its insert, inside a main style that works the rest through. Pair probe, Terminal Doc vs Whiteboard: text transformed letter by letter is the subject.",
+      "inserts_expect": [
+        "terminal_doc"
+      ]
     },
     {
       "title": "How Silicon Valley Bank collapsed in 48 hours",
@@ -1191,7 +1300,7 @@
         "whiteboard"
       ],
       "future": "",
-      "note": "Mixed-scenes probe: real photographs of a real event, and generic people whose steps are the mechanism. Motion Graphics draws no figures; Stick Explainer shows pictures only in small panels."
+      "note": "Mixed-scenes probe: real photographs of a real event, and generic people whose steps are the mechanism. Photo Explainer draws no figures; Stick Explainer shows pictures only in small panels."
     },
     {
       "title": "Ariane 5: A 64-Bit Number Squeezed Into 16 Bits",
@@ -1265,11 +1374,11 @@
         "motion_graphics"
       ],
       "ok": [
-        "scenes",
-        "terminal_doc"
+        "scenes"
       ],
       "future": "",
-      "note": "Real-event pair probe, Motion Graphics vs Terminal Doc: a real video and its counter, but the number stays on screen, so Terminal Doc is acceptable."
+      "note": "Real-event pair probe, Photo Explainer vs Terminal Doc: a real video and its counter, but the number stays on screen, so Terminal Doc is acceptable.",
+      "inserts_expect": "any"
     },
     {
       "title": "The Patriot missile that lost a third of a second",
@@ -1327,27 +1436,35 @@
       "title": "Why 2,147,483,647 is the biggest number in many programs",
       "brief": "Where the number comes from: 31 bits of value and one sign bit, what happens when you add one to it, and why so many counters and timestamps are stored this way.",
       "expect": [
-        "terminal_doc"
-      ],
-      "ok": [
         "whiteboard"
       ],
+      "ok": [
+        "stick"
+      ],
       "future": "",
-      "note": "Negative control for the real-event rule: the same number as the Gangnam Style probe, with no real event. The number itself is the subject."
+      "note": "Terminal Doc is an insert style: the string or the number is its insert, inside a main style that works the rest through. Negative control for the real-event rule: the same number as the Gangnam Style probe, with no real event. The number itself is the subject.",
+      "inserts_expect": [
+        "terminal_doc"
+      ]
     },
     {
       "title": "How Heartbleed leaked server memory",
       "brief": "The 2014 OpenSSL bug: a heartbeat message claims to carry 64 kilobytes but carries one byte, the server echoes back 64 kilobytes anyway, and the extra bytes are whatever sat next to it in memory: passwords, keys, cookies. Beats: the heartbeat, the lie about its length, the echo, what leaked, the one-line fix.",
       "expect": [
-        "system_flow"
+        "stick"
       ],
       "ok": [
-        "terminal_doc",
-        "stick",
+        "whiteboard",
         "scenes"
       ],
       "future": "",
-      "note": "Negative control for the real-failure rule: a real, named bug, but nothing to see beyond the requests and the bytes, so a diagram style stays right."
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Negative control for the real-failure rule: a real, named bug, but nothing to see beyond the requests and the bytes, so a diagram style stays right.",
+      "inserts_expect": [
+        "system_flow"
+      ],
+      "inserts_ok": [
+        "terminal_doc"
+      ]
     }
   ]
 }

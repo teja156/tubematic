@@ -424,10 +424,16 @@ def test_the_style_list_says_what_this_install_cannot_make(client, db_path):
     assert by_id["illustrated"]["available"]
 
 
-def test_system_flow_needs_nothing_to_be_chosen(client):
+def test_an_insert_style_is_refused_as_a_videos_style(client):
+    """System Flow and Terminal Doc are insert styles (TMDEV-224): they draw
+    short scenes inside another style's video, never a whole video."""
     vid = _video(client)
-    assert client.patch(f"/videos/{vid}", json={"visual_style": "system_flow"}).status_code == 200
-    assert client.get(f"/videos/{vid}").get_json()["visual_style"] == "system_flow"
+    for style in ("system_flow", "terminal_doc"):
+        r = client.patch(f"/videos/{vid}", json={"visual_style": style})
+        assert r.status_code == 400 and "insert style" in r.get_json()["error"]
+    assert client.get(f"/videos/{vid}").get_json()["visual_style"] != "system_flow"
+    by_id = {r["id"]: r for r in client.get("/visual-styles").get_json()["styles"]}
+    assert by_id["system_flow"]["role"] == "insert" and by_id["whiteboard"]["role"] == "main"
 
 
 def test_whiteboard_needs_nothing_to_be_chosen(client):

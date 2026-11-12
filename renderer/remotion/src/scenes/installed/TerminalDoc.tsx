@@ -1,5 +1,6 @@
 /*
- * TerminalDoc: the whole of a Terminal Doc video, as one scene.
+ * TerminalDoc: a Terminal Doc insert (TMDEV-224), or the whole of a Terminal
+ * Doc video made before Terminal Doc became an insert style.
  *
  * A dark typographic documentary where the text is the picture: sparse
  * monospace capitals on near-black, letters that lift and arc into new
@@ -57,17 +58,38 @@ const Beat: React.FC<{ state: StageState; ctx: MoveContext }> = ({ state, ctx })
   </>
 );
 
-export default function TerminalDoc({ terminalDoc, durationInFrames }: { terminalDoc?: TerminalDocData; durationInFrames: number }) {
-  const frame = useCurrentFrame();
+/** Where an insert sits on the video (TMDEV-224); see CompositionBuilder's InsertPlacement. */
+type Placement = { origin: number; lead?: number; palette: "dark" | "light"; shift: number };
+
+export default function TerminalDoc({
+  terminalDoc,
+  durationInFrames,
+  insert,
+}: {
+  terminalDoc?: TerminalDocData;
+  durationInFrames: number;
+  insert?: Placement;
+}) {
+  // As an insert, the data is timed on the video's frames and the scene runs
+  // from `origin`; its skin follows the main style's canvas and it uses only
+  // shipped moves (the validator refuses custom moves in an insert).
+  const origin = insert?.origin ?? 0;
+  const end = origin + durationInFrames;
+  // An insert's Sequence starts `lead` frames early for its way in and runs as
+  // long after its window for its way out; it holds its first and last frame
+  // through them, so it slides in already showing its picture.
+  const raw = useCurrentFrame() + origin - (insert?.lead ?? 0);
+  const frame = insert ? Math.min(Math.max(raw, origin), end - 1) : raw;
   const ready = useTerminalFonts("TerminalDoc");
   const data: TerminalDocData = terminalDoc ?? { skin: "house", beats: [] };
-  const customList = data.customMoves ?? [];
+  const customList = insert ? [] : (data.customMoves ?? []);
   const customDraw = useCustomMoves(customList) ?? {};
   const custom = Object.fromEntries(customList.map((c) => [c.id, c]));
-  const skin = skinTokens(data.skin);
+  const skin = skinTokens(insert ? (insert.palette === "light" ? "paper" : "house") : data.skin);
+  const shift = insert?.shift ?? 0;
 
   const bi = beatIndexAt(data, frame);
-  const state = beatState(data, bi, frame, durationInFrames);
+  const state = beatState(data, bi, frame, end);
   const cam = camFor(pushScale(state.push, frame, ease.arc));
   const ctx: MoveContext = { frame, skin, glows: state.glows, cam, custom, customDraw };
 
@@ -78,7 +100,7 @@ export default function TerminalDoc({ terminalDoc, durationInFrames }: { termina
   let collapsing: React.ReactNode = null;
   if (collapseT < TIMING.collapse) {
     const prevFrame = beat!.start - 1;
-    const prev = beatState(data, bi - 1, prevFrame, durationInFrames);
+    const prev = beatState(data, bi - 1, prevFrame, end);
     const prevCtx: MoveContext = { ...ctx, frame: prevFrame, glows: prev.glows, cam: camFor(pushScale(prev.push, prevFrame, ease.arc)) };
     const k = clamp01(collapseT / TIMING.collapse);
     const sy = Math.max(0.004, 1 - k / 0.6);
@@ -98,8 +120,12 @@ export default function TerminalDoc({ terminalDoc, durationInFrames }: { termina
   return (
     <AbsoluteFill style={{ background: skin.canvas, width: W, height: H, overflow: "hidden" }}>
       <Wall frame={frame} opacity={wallOp} skin={skin} ready={ready} />
-      {collapsing}
-      {showNew && <Beat state={state} ctx={ctx} />}
+      {/* The stage moves clear of the main style's captions in an insert: a
+          positioned offset, never a CSS transform. */}
+      <div style={{ position: "absolute", left: 0, top: shift, width: W, height: H }}>
+        {collapsing}
+        {showNew && <Beat state={state} ctx={ctx} />}
+      </div>
       {skin.name === "crt" && <CrtGlass />}
     </AbsoluteFill>
   );

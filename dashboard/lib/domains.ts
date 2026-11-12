@@ -2,13 +2,15 @@ import type { Agent, Mascot, Project, ScriptProfile, Voice, VisualStyleInfo } fr
 import { isUsable } from "@/lib/agents";
 import { styleLabel } from "@/lib/visualStyles";
 import { formulaLabel, type ScriptFormulaNames } from "@/lib/scriptFormulas";
+import { insertMode, type InsertMode } from "@/lib/inserts";
 
 /**
  * A domain's defaults, as the Topics page edits them: on a domain's row (each
  * change is saved at once) and in the add-domain form (sent on submit). Every
  * value is a string and "" is a real choice in each: no style preference, the
  * install's voice and mascot, no profile, Automatic for the agent, the agent's
- * own model and effort, Auto for the formula.
+ * own model and effort, Auto for the formula. The Inserts setting is the one
+ * default with no "": it is "auto" or "none" (TMDEV-224).
  */
 export interface DomainDefaultValues {
   default_visual_style: string;
@@ -19,6 +21,7 @@ export interface DomainDefaultValues {
   default_agent_model: string;
   default_agent_effort: string;
   default_formula_id: string;
+  default_insert_mode: InsertMode;
 }
 
 export const NO_DOMAIN_DEFAULTS: DomainDefaultValues = {
@@ -30,6 +33,7 @@ export const NO_DOMAIN_DEFAULTS: DomainDefaultValues = {
   default_agent_model: "",
   default_agent_effort: "",
   default_formula_id: "",
+  default_insert_mode: "auto",
 };
 
 /** A domain's stored defaults. POST /projects replaces the whole row, so this
@@ -44,6 +48,7 @@ export function domainDefaults(p: Project): DomainDefaultValues {
     default_agent_model: p.default_agent_model ?? "",
     default_agent_effort: p.default_agent_effort ?? "",
     default_formula_id: p.default_formula_id ?? "",
+    default_insert_mode: insertMode(p.default_insert_mode),
   };
 }
 
@@ -60,7 +65,7 @@ export interface DomainLists {
 }
 
 export interface DomainChip {
-  key: "style" | "voice" | "profile" | "formula" | "mascot" | "agent";
+  key: "style" | "inserts" | "voice" | "profile" | "formula" | "mascot" | "agent";
   label: string;
   value: string;
 }
@@ -75,6 +80,10 @@ export function domainChips(v: DomainDefaultValues, lists: DomainLists): DomainC
   const chips: DomainChip[] = [];
   if (v.default_visual_style) {
     chips.push({ key: "style", label: "Style", value: styleLabel(v.default_visual_style, lists.styles) });
+  }
+  // Auto is what a domain gets without asking, so only None earns a chip.
+  if (v.default_insert_mode === "none") {
+    chips.push({ key: "inserts", label: "Inserts", value: "None" });
   }
   if (v.default_voice_id) {
     const voice = lists.voices.find((x) => x.voice_id === v.default_voice_id);

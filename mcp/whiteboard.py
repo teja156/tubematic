@@ -26,6 +26,8 @@ from __future__ import annotations
 import math
 import re
 
+from quiet_windows import uncovered, window_at, window_text
+
 SCENE_SRC = "Whiteboard"
 PROPS_KEY = "whiteboard"
 STYLE_ID = "whiteboard"
@@ -604,10 +606,11 @@ def _near_word(frame: int, word_starts: list[int]) -> tuple[bool, int]:
     return abs(frame - nearest) <= TIMING["snap"], nearest
 
 
-def check(config: dict, fps: int, word_starts: list[int], doodles: list[str]) -> list[str]:
+def check(config: dict, fps: int, word_starts: list[int], doodles: list[str], quiet=()) -> list[str]:
     """Every problem with a Whiteboard config's one scene, as messages that
     name the region and item and what to change. [] when it is sound.
-    Call after check_scene_use passed for a whiteboard video."""
+    Call after check_scene_use passed for a whiteboard video. `quiet` holds
+    the config's insert windows (mcp/quiet_windows.py)."""
     errs: list[str] = []
 
     def err(msg: str) -> None:
@@ -673,6 +676,7 @@ def check(config: dict, fps: int, word_starts: list[int], doodles: list[str]) ->
         err(f"The recap lasts {recap_len} frames (recapFrame {recap} to the end at {total}); with "
             f"{len(regions)} regions it must last {recap_min} frames to {LIMITS['recapMaxSeconds']} seconds, "
             "so every region's number has popped and been seen. Start it on the closing sentence.")
+    _check_quiet(regions, recap, quiet, err)
     if errs:
         return errs
 
@@ -691,12 +695,34 @@ def check(config: dict, fps: int, word_starts: list[int], doodles: list[str]) ->
                 "give what follows a later word, or shorten its text.")
     still = int(LIMITS["maxStillSeconds"] * fps)
     events.sort()
-    for a, b in zip(events, events[1:]):
+    # An insert window is not still: the insert changes the screen there.
+    gaps = [g for a, b in zip(events, events[1:]) for g in uncovered(a, b, quiet)]
+    for a, b in gaps:
         if b - a > still:
             err(f"Nothing new happens between frames {a} and {b}; something must start (an item or a "
                 f"region) at least every {LIMITS['maxStillSeconds']} seconds. Add an item or a mark.")
             break
     return errs
+
+
+def _check_quiet(regions: list, recap: int, quiet, err) -> None:
+    """Nothing of the board starts inside an insert window, where the board is
+    hidden: no region, no recap, no item."""
+    for i, r in enumerate(regions):
+        w = window_at(r["startFrame"], quiet) if r["startFrame"] else None
+        if w:
+            err(f"Region {i + 1} starts at frame {r['startFrame']}, inside an insert ({window_text(w)}), where the "
+                f"board is hidden; start it at {w[1]} or before {w[0]}.")
+        for it in r.get("items") if isinstance(r.get("items"), list) else []:
+            at = it.get("at") if isinstance(it, dict) else None
+            w = window_at(at, quiet) if _int(at) else None
+            if w:
+                err(f"Region {i + 1}, item {it.get('id')!r} (at {at}) starts inside an insert ({window_text(w)}), "
+                    f"where the board is hidden; time it to a word at {w[1]} or later, or before {w[0]}.")
+    w = window_at(recap, quiet)
+    if w:
+        err(f"recapFrame {recap} is inside an insert ({window_text(w)}), where the board is hidden; start the "
+            f"recap at {w[1]} or later.")
 
 
 def _check_region(region: dict, ri: int, where: str, doodles: list[str], word_starts: list[int], err) -> None:

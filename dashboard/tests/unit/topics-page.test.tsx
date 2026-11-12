@@ -374,7 +374,8 @@ describe("TopicsPage — default voice", () => {
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "r1",
       default_script_profile_id: "", default_mascot_id: "", default_agent_id: "", default_agent_model: "",
-      default_agent_effort: "", default_formula_id: "", topic_cap: 300 }));
+      default_agent_effort: "", default_formula_id: "", default_insert_mode: "auto",
+      topic_cap: 300 }));
   });
 
   it("changing the style keeps the default voice", async () => {
@@ -489,7 +490,8 @@ describe("TopicsPage — default script profile", () => {
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "",
       default_script_profile_id: "", default_mascot_id: "", default_agent_id: "", default_agent_model: "",
-      default_agent_effort: "", default_formula_id: "", topic_cap: 300 }));
+      default_agent_effort: "", default_formula_id: "", default_insert_mode: "auto",
+      topic_cap: 300 }));
   });
 
   it("changing the style keeps the default profile", async () => {
@@ -606,7 +608,8 @@ describe("TopicsPage — default mascot", () => {
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "stick", default_voice_id: "",
       default_script_profile_id: "", default_mascot_id: "none", default_agent_id: "", default_agent_model: "",
-      default_agent_effort: "", default_formula_id: "", topic_cap: 300 }));
+      default_agent_effort: "", default_formula_id: "", default_insert_mode: "auto",
+      topic_cap: 300 }));
   });
 
   it("another edit re-sends the stored default mascot (POST /projects is a full replace)", async () => {
@@ -769,7 +772,8 @@ describe("TopicsPage — topic cap", () => {
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "", default_voice_id: "",
       default_script_profile_id: "", default_mascot_id: "", default_agent_id: "", default_agent_model: "",
-      default_agent_effort: "", default_formula_id: "", topic_cap: 250 }]));
+      default_agent_effort: "", default_formula_id: "", default_insert_mode: "auto",
+      topic_cap: 250 }]));
   });
 
   // The settings rule: a typed value outside the bounds stays to be corrected,
@@ -1112,7 +1116,7 @@ describe("TopicsPage — domain summary and agent defaults", () => {
       status: "active", default_visual_style: "stick", default_voice_id: "a1",
       default_script_profile_id: "", default_mascot_id: "none",
       default_agent_id: "codex", default_agent_model: "", default_agent_effort: "max",
-      default_formula_id: "",
+      default_formula_id: "", default_insert_mode: "auto",
       topic_cap: 300 }]));
     // The row then offers the new agent's models and names its effort.
     await waitFor(() => expect(options("domain-agent-model-seed-1").map((o) => o.textContent))
@@ -1492,7 +1496,8 @@ describe("TopicsPage — default formula", () => {
       id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: true,
       status: "active", default_visual_style: "", default_voice_id: "",
       default_script_profile_id: "", default_mascot_id: "", default_agent_id: "", default_agent_model: "",
-      default_agent_effort: "", default_formula_id: "", topic_cap: 300 }));
+      default_agent_effort: "", default_formula_id: "", default_insert_mode: "auto",
+      topic_cap: 300 }));
   });
 
   it("another edit keeps the domain's formula", async () => {
@@ -1525,5 +1530,86 @@ describe("TopicsPage — default formula", () => {
     fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
     fireEvent.click(screen.getByTestId("add-domain-submit"));
     await waitFor(() => expect(postedProject(spy).default_formula_id).toBe("news-take"));
+  });
+});
+
+// A domain's default Inserts setting (TMDEV-224): Auto or None for every new
+// video filed into it. It rides the same full-replace POST /projects, so every
+// other edit must re-send it.
+describe("TopicsPage — default inserts", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const DOMAIN = {
+    id: "seed-1", name: "Linux internals", description: "kernels", is_curriculum_seed: 1,
+    status: "active", default_visual_style: "", default_voice_id: "",
+    default_script_profile_id: "", default_formula_id: "", default_insert_mode: "none", topic_cap: 300,
+    topic_count: 12, expired: false, created_at: "2026-01-01T00:00:00Z",
+  };
+
+  function mockDomains(domain: object = DOMAIN) {
+    return vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      const ok = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+      if (urlStr.endsWith("/projects") && !init?.method) return ok([domain]);
+      if (urlStr.endsWith("/projects")) return ok({ ...domain, ...JSON.parse(String(init!.body)) });
+      if (urlStr.includes("/settings")) return ok({ elevenlabs_voices: [], elevenlabs_voice_id: "", openai_api_key: "" });
+      if (urlStr.includes("/research/strategies")) return ok({ strategies: [] });
+      if (urlStr.includes("/research/mining-sources")) return ok({ youtube_urls: [] });
+      return ok([]);
+    });
+  }
+
+  function projectPosts(spy: ReturnType<typeof mockDomains>) {
+    return spy.mock.calls
+      .filter(([u, i]) => u.toString().endsWith("/projects") && (i as RequestInit | undefined)?.method === "POST")
+      .map(([, i]) => JSON.parse(String((i as RequestInit).body)));
+  }
+
+  it("names None on the summary line, and nothing for Auto", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    await waitFor(() => expect(screen.getByTestId("domain-chip-inserts-seed-1")).toHaveTextContent("InsertsNone"));
+  });
+
+  it("shows no inserts chip for a domain on Auto", async () => {
+    mockDomains({ ...DOMAIN, default_insert_mode: "auto" });
+    render(<TopicsPage />);
+    await waitFor(() => screen.getByTestId("domain-summary-seed-1"));
+    expect(screen.queryByTestId("domain-chip-inserts-seed-1")).not.toBeInTheDocument();
+  });
+
+  it("offers Auto and None in the Look group, and saves a change", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const select = await waitFor(() => screen.getByTestId("domain-inserts-seed-1") as HTMLSelectElement);
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Auto", "None"]);
+    expect(select.value).toBe("none");
+    fireEvent.change(select, { target: { value: "auto" } });
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    expect(projectPosts(spy)[0]).toMatchObject({ default_insert_mode: "auto" });
+  });
+
+  it("another edit keeps the domain's setting", async () => {
+    const spy = mockDomains();
+    render(<TopicsPage />);
+    await openDefaults();
+    await waitFor(() => screen.getByTestId("domain-style-seed-1"));
+    pickStyle("domain-style-seed-1", "auto");
+    await waitFor(() => expect(projectPosts(spy)[0]?.default_insert_mode).toBe("none"));
+  });
+
+  it("a new domain starts on Auto and is created with the setting picked for it", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    const select = await waitFor(() => screen.getByTestId("domain-inserts-select") as HTMLSelectElement);
+    expect(select.value).toBe("auto");
+    fireEvent.change(select, { target: { value: "none" } });
+    fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: "New domain" } });
+    fireEvent.click(screen.getByTestId("add-domain-submit"));
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    expect(projectPosts(spy)[0]).toMatchObject({ default_insert_mode: "none" });
   });
 });

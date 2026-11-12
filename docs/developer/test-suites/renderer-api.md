@@ -281,13 +281,33 @@ Covers the visual style over HTTP and the style contract of the AI review prompt
   object `tubematic_core.visual_styles` holds, and `mcp/server.py` imports the same names from it.
   The GPU gate passes only `working` and gives `unknown` its own message.
 - `GET /visual-styles` lists `auto` and every [style pack](../10-scene-authoring.md#style-packs),
-  says why a style is unavailable on the install, and `system_flow` and `whiteboard` can be chosen
-  with nothing configured.
+  says why a style is unavailable on the install, and `whiteboard` can be chosen with nothing
+  configured. An insert style (System Flow, Terminal Doc) is refused as a video's style, and the list
+  marks each style's `role`.
 
 Trap: a default inherited from the domain is kept and not rewritten when no OpenAI key is stored.
 The approving `PATCH` refuses it, before any spend. An unknown canvas must produce no contract,
 because a wrong contract tells the reviewer to accept defects.
 
+
+### `test_inserts_api.py`
+
+Covers the per-video Inserts setting and the HTTP side of insert scenes
+([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
+
+- A new video starts on `auto`; a person sets `insert_mode` at the topic, a bad value is refused, and
+  the setting is frozen after `TOPIC_PROPOSED`.
+- A domain's `default_insert_mode` seeds every new video in it; a domain save that leaves it out
+  means `auto` (the route is a full replace) and a bad value is refused.
+- An insert style is refused as a domain default on a change only, as a New Video style and on
+  `POST /videos`. New Video takes the setting, or the manual domain's default.
+- A switch to the runner-up clears the inserts chosen for the old main style, and a return to the
+  topic gives an insert style a person chose back to Auto (a person's main style is kept).
+- The review prompt names each insert's times, its transition frames included, with its style's
+  insert review text, never a main style's; with no inserts it adds nothing.
+- `GET /visual-styles` marks insert styles and which styles host inserts.
+- A single video reports `insert_summary` (count, seconds, styles) from its scene config, and `null`
+  before one is written.
 
 ### `test_style_pick.py`
 
@@ -295,7 +315,8 @@ Covers `POST /videos/<id>/switch-style` and the `PATCH` rules for a style Auto p
 ([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
 
 - The switch moves the video to `TOPIC_APPROVED` with the runner-up as its style, swaps the pick and
-  the runner-up, and adds a human comment. A second switch goes back, and a switch to `scenes`
+  the runner-up, and adds a human comment. The fixtures use Whiteboard and Stick Explainer, two main
+  styles; an insert style is never a pick or a runner-up. A second switch goes back, and a switch to `scenes`
   leaves `auto`.
 - It is refused away from `SCRIPT_READY`, with no pick or no runner-up, for a runner-up that is no
   longer a style or that the install cannot make, and for an archived or unknown video.
@@ -1006,7 +1027,7 @@ argument checks of `mascot-tools/render-sheet.mjs`.
 
 - `MascotLayer` sits over the scenes and under the captions in `CompositionBuilder`.
 - The layer is drawn only when the `mascotPath` render prop and a non-empty `mascot` cue list are
-  both present, and it reads no word timings.
+  both present, it reads no word timings, and it is wrapped so it is hidden during insert scenes.
 - The `MascotSheet` sizes match what `sheet.js` draws. The sheet renderer uses its own entry point
   and software GL, and its in-page timeout stays below the limit `mcp/mascot_sheets.py` gives the
   whole command.

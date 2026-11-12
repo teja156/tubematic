@@ -1,15 +1,57 @@
 ---
 name: tubematic-system-flow
-description: Author a System Flow narrated Short as data — split the narration into boards, lay out each board's components and connectors, time nodes, packets, focus and value chips to the narration's words — then write it with write_scene_config, validate and submit it
+description: Author a System Flow diagram as data — an insert inside another style's video, or a legacy whole System Flow video — split the narration into boards, lay out each board's components and connectors, time nodes, packets, focus and value chips to the narration's words — then write it with write_scene_config
 ---
 
 # Tubematic System Flow authoring skill
 
-**Invoke this skill when:** a video is at `VOICE_READY` and `get_video` says `style.authoring_skill` is
-`tubematic-system-flow` (its `visual_style` is `system_flow`). Also take it, on **Revising**, for a
-`REVISION_REQUESTED` video at that style. Every other video takes the skill its `style.authoring_skill` names.
+**Invoke this skill when:**
+
+- **An insert.** System Flow is an insert style: a short diagram drawn over another style's video,
+  inside a segment the script marked `"insert": "system_flow"`. The main style's skill sends you
+  here through the **tubematic-inserts** skill to write one insert's data. Read **As an insert**
+  below, then the rules and steps it points to, and go back to tubematic-inserts.
+- **A legacy whole video.** A video is at `VOICE_READY` and `get_video` says `style.authoring_skill`
+  is `tubematic-system-flow` (its `visual_style` is still `system_flow`: a whole System Flow video
+  voiced before System Flow became an insert style). Also take it, on **Revising**, for a
+  `REVISION_REQUESTED` video at that style. Follow the whole skill from **What you are making** on,
+  and leave **As an insert** aside.
+
+Every other video takes the skill its `style.authoring_skill` names.
 
 ---
+
+## As an insert
+
+An insert is the same diagram, shorter, on the video's own frames. What differs from a whole video:
+
+- **You write one entry of the config's `inserts`, not a scene.** `{"style": "system_flow",
+  "startFrame": ..., "durationInFrames": ..., "props": {"systemFlow": {"boards": [...]}}}`. Never
+  put a `SystemFlow` scene in `scenes`: the tool refuses it.
+- **The window comes from the marked segment.** tubematic-inserts says how to place it: on a word
+  of that segment, 2 to 8 seconds long.
+- **The first board starts at the insert's `startFrame`**, not at frame 0. Every other frame is a
+  frame of the video, from `get_timeline`, inside the window.
+- **At most 3 boards; usually one.** An insert shows one diagram, or two.
+- **The insert's end is a cut back to the main style.** The main style's transition runs just before
+  and just after the window, so the whole window is on screen. Every event of the last board still
+  finishes, and is read, before the window's final 6 frames: the tool names the latest frame that
+  works.
+- **Every other rule below holds over the window:** the diagram limits, labels, icons, order,
+  seen before the cut, one chip and one focus at a time, and something new at least every 3.5
+  seconds.
+- **The narration of a marked segment was written for the diagram:** it names the components in
+  the order things travel and says the value worth showing. Time each `node`, `edge`, `packet` and
+  `chip` to the word that names it.
+- **Leave `subtitles` alone.** The main style's captions stay on screen over the insert, and the
+  insert moves clear of them by itself.
+- **No mascot cue inside the window, or in the transition frames just before and after it.** The
+  mascot is hidden while the insert slides in, plays and slides out.
+- **Look:** the insert follows the video's canvas (dark lines on paper on a light video, cyan on
+  near-black on a dark one). You write no colour and no canvas for it.
+
+Skip **The opening and the beats** and **Step 5**: the opening and the payoff belong to the main
+style, and the main style's skill writes, validates and submits the config.
 
 ## What you are making
 

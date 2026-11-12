@@ -148,7 +148,7 @@ export function styleLabel(value: string | undefined | null, styles: VisualStyle
 
 /** How an auto-resolved canvas reads. The stored value is a canvas, not a
  *  style name: an auto video on a dark canvas may still contain figures, so
- *  naming it "Motion Graphics" would be wrong. */
+ *  naming it "Photo Explainer" would be wrong. */
 const CANVAS_LABELS: Record<string, string> = {
   dark: "Auto — dark canvas",
   light: "Auto — light canvas",

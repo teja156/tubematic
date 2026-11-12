@@ -45,6 +45,7 @@ import tempfile
 import threading
 from pathlib import Path
 
+from tubematic_core import inserts as tinserts
 from tubematic_core import jobfiles as tjobs
 from tubematic_core import mascots as tmascots
 
@@ -333,7 +334,64 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
             "count": count,
         })
 
+    # While an insert is on screen, and while it slides in or out (its
+    # transition runs just outside its window), the main scenes are covered
+    # or half covered: a sample of them there measures text nobody reads.
+    # Their samples in those frames are dropped; the insert's own passes
+    # below measure what is on screen then.
+    lead = tinserts.TRANSITION_FRAMES.get(scene_config.get("insertTransition") or "cut", 0)
+    covered = [(e["startFrame"] - lead, e["startFrame"] + e["durationInFrames"] + lead)
+               for e in scene_config.get("inserts") or []
+               if isinstance(e, dict) and isinstance(e.get("startFrame"), int)
+               and isinstance(e.get("durationInFrames"), int)]
+    if covered:
+        kept = []
+        for pass_ in passes:
+            frames = [pass_["first"] + k * pass_["step"] for k in range(pass_["count"])]
+            if not any(a <= f < b for f in frames for a, b in covered):
+                kept.append(pass_)
+                continue
+            # One pass per frame left, so the driver still samples exactly them.
+            kept += [{**pass_, "first": f, "step": 1, "count": 1} for f in frames
+                     if not any(a <= f < b for a, b in covered)]
+        passes = kept
+
+    # Insert scenes (TMDEV-224) are sampled per board or beat like the
+    # whole-video styles they come from; their passes are numbered after the
+    # scenes, and the findings name them as inserts.
+    for k, entry in enumerate(scene_config.get("inserts") or []):
+        if not isinstance(entry, dict):
+            continue
+        style = entry.get("style")
+        if style == system_flow.STYLE_ID:
+            units, tail = system_flow.insert_board_windows(entry), system_flow.TIMING["boardFade"]
+        elif style == terminal_doc.STYLE_ID:
+            units, tail = terminal_doc.insert_beat_windows(entry), terminal_doc.TIMING["readMargin"]
+        else:
+            units, tail = [], 0
+        for u_start, u_end in units:
+            first = min(u_start + ENTRANCE_ALLOWANCE_FRAMES, u_end - 1)
+            last = u_end - 1 - tail
+            if first > last:
+                first = last = u_start + max(0, (u_end - u_start) // 2)
+            span = last - first
+            count = min(SAMPLES_PER_SCENE, span + 1)
+            step = max(1, span // max(1, count - 1))
+            passes.append({"scene": len(scenes) + k, "first": first, "step": step,
+                           "count": min(count, span // step + 1)})
+
     return passes, notes
+
+
+def _unit_label(scene_config: dict, index: int) -> str:
+    """How a finding names what it was found in: a scene, or an insert."""
+    scenes = scene_config.get("scenes") or []
+    if index < len(scenes):
+        return f"scene {index} ({_scene_label(scenes[index])})"
+    inserts = scene_config.get("inserts") or []
+    k = index - len(scenes)
+    style = inserts[k].get("style") if 0 <= k < len(inserts) and isinstance(inserts[k], dict) else "?"
+    return f"insert {k + 1} ({style})"
 
 
 def _scene_label(scene: dict) -> str:
@@ -626,7 +684,9 @@ def summarise(driver_output: dict, scene_config: dict, mascot_cues: list | None 
                 key = _pair_key(scene_index, hit["a"], hit["b"])
                 if key not in worst or hit["fraction"] > worst[key]["fraction"]:
                     worst[key] = {**hit, "scene": scene_index, "frame": frame}
-            if mascot_cues:
+            # The mascot is hidden while an insert is on screen, so an insert's
+            # passes (numbered after the scenes) never measure it.
+            if mascot_cues and (scene_index or 0) < len(scenes):
                 box = tmascots.boxes_at_frames(mascot_cues, [frame]).get(frame)
                 for hit in mascot_overlaps(elements, [box] if box else []):
                     key = (scene_index, _excerpt(hit["element"]))
@@ -639,10 +699,9 @@ def summarise(driver_output: dict, scene_config: dict, mascot_cues: list | None 
 
     warnings: list[str] = list(first_frame)
     for hit in sorted(worst.values(), key=lambda h: -h["fraction"]):
-        scene = scenes[hit["scene"]] if hit["scene"] < len(scenes) else {}
         a, b = hit["a"], hit["b"]
         warnings.append(
-            f"Text overlap in scene {hit['scene']} ({_scene_label(scene)}) at frame "
+            f"Text overlap in {_unit_label(scene_config, hit['scene'])} at frame "
             f"{hit['frame']}: '{_excerpt(a)}' "
             f"[{a['x']:.0f},{a['y']:.0f} {a['width']:.0f}x{a['height']:.0f}] overlaps "
             f"'{_excerpt(b)}' "
@@ -651,10 +710,9 @@ def summarise(driver_output: dict, scene_config: dict, mascot_cues: list | None 
         )
 
     for hit in sorted(under_mascot.values(), key=lambda h: -h["fraction"]):
-        scene = scenes[hit["scene"]] if hit["scene"] < len(scenes) else {}
         element, box = hit["element"], hit["box"]
         warnings.append(
-            f"Mascot over text in scene {hit['scene']} ({_scene_label(scene)}) at frame "
+            f"Mascot over text in {_unit_label(scene_config, hit['scene'])} at frame "
             f"{hit['frame']}: '{_excerpt(element)}' "
             f"[{element['x']:.0f},{element['y']:.0f} {element['width']:.0f}x{element['height']:.0f}] "
             f"sits under the mascot's box [{box[0]:.0f},{box[1]:.0f} to {box[2]:.0f},{box[3]:.0f}] "
@@ -663,12 +721,11 @@ def summarise(driver_output: dict, scene_config: dict, mascot_cues: list | None 
         )
 
     for hit in zones.values():
-        scene = scenes[hit["scene"]] if hit["scene"] < len(scenes) else {}
         element = hit["element"]
         clipped = " and is CLIPPED by the frame edge" if hit["clipped"] else ""
         warnings.append(
-            f"Text outside the safe zone in scene {hit['scene']} "
-            f"({_scene_label(scene)}) at frame {hit['frame']}: '{_excerpt(element)}' "
+            f"Text outside the safe zone in {_unit_label(scene_config, hit['scene'])} "
+            f"at frame {hit['frame']}: '{_excerpt(element)}' "
             f"crosses {', '.join(hit['breaches'])}{clipped}"
         )
 

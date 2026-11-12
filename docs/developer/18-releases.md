@@ -608,7 +608,7 @@ Two more cases refuse, because the check cannot tell whether the file imports th
 
 `--no-stop` skips the stop, so `up -d` recreates the containers one at a time and old code runs
 for a moment against the new schema. Use it only for an upgrade whose migrations are additive.
-`run_upgrade` refuses it in four cases:
+`run_upgrade` refuses it in five cases:
 
 | Refused while | Why |
 |---|---|
@@ -616,6 +616,7 @@ for a moment against the new schema. Use it only for an upgrade whose migrations
 | The running `tubematic-renderer` was not started with `render_agent.py` (`_worker_split_pending`) | That renderer also publishes, runs Auto Pilot and sends notifications, and would keep doing so beside the new `tubematic-worker` |
 | The schema is below `OPENAI_ONLY_IMAGES_MIGRATION` | Old containers would keep reading the `image_provider` setting that migration deletes |
 | The schema is below `RENDER_GATEWAY_MIGRATION` | An old renderer would keep claiming from the database beside the render gateway |
+| The schema is below `INSERTS_MIGRATION` | The migration sends videos not yet voiced in System Flow or Terminal Doc back to Auto, and an old MCP server could let an agent pick those insert styles for them again |
 
 `_worker_split_pending` decides from the command the running renderer was created with. A
 leftover `tubematic-worker` container says nothing about which code the renderer runs. A renderer

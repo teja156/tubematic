@@ -547,6 +547,8 @@ Covers `get_timeline`, the agent's read of `timeline.json`.
 - Each segment carries its beat and its role. A beat split over two segments owes its change once,
   where it starts, and the formula's `first_frame` comes back with the segments. A video whose
   formula is not known keeps its beat labels and has no role past the opening.
+- Each segment carries `insert`, the insert style the script marked it with (`""` for the main
+  style); a stored segment the read cannot use gets `""`.
 - An unknown video, a missing file, malformed JSON and a `video_id` shaped like a path are errors.
 
 ### `test_subtitles.py`
@@ -632,6 +634,10 @@ Covers `mcp/bean_explainer.py`, the checks `write_scene_config` runs on a Bean E
   given, refuses a bad one before writing anything, refuses `BeanExplainer` on another style and
   other scenes on a Bean Explainer video. `emphasis` beyond the narration's last word, on more than
   one word in 5, repeated, or not a list of numbers is refused, on any style.
+- With insert windows passed as `quiet`, the example still passes when nothing starts inside one. A
+  shot cut or an event inside a window is refused, because the stage is hidden there, and a cut on
+  the frame a window ends is accepted. A window over a stretch that would otherwise be too still is
+  not counted as still: the insert is what changes on screen there.
 
 ### `test_storybook_atlas.py`
 
@@ -663,6 +669,10 @@ per-stretch sampling ([Storybook Atlas](../10-scene-authoring.md#storybook-atlas
   prop redrawn with a filter. `render_storybook_props` refuses another style, a video with no config
   and a config with no `customProps`, and returns the picture with the Storybook script (the renderer
   stubbed).
+- With insert windows passed as `quiet`, the example still passes when nothing starts inside one. A
+  chapter start, an event or a constellation's `thenAt` inside a window is refused, because the book
+  is hidden there, and a chapter starting on the frame a window ends is accepted. A window over a
+  stretch that would otherwise be too still is not counted as still.
 
 ### `test_terminal_doc.py`
 
@@ -690,8 +700,8 @@ per-beat sampling ([Terminal Doc](../10-scene-authoring.md#terminal-doc)).
   and again by `validate_job` after a rewrite. A video id that is a UUID works for the files and the
   preview script.
 - `write_scene_config` writes the pack's `log` captions, in amber for the `crt` skin, under the keys
-  the config sets, refuses a broken config before writing anything, and refuses `TerminalDoc` on
-  another style and other scenes on a Terminal Doc video. `preview_terminal_moves` refuses another
+  the config sets, refuses a broken config before writing anything, and refuses `TerminalDoc` as a
+  scene of another style (it is an insert style there) and other scenes on a whole Terminal Doc video. `preview_terminal_moves` refuses another
   style, a video with no config and a config with no moves, returns the picture (the renderer stubbed)
   with each move's slot and text, and gives way to a heavy check that holds the lock.
 
@@ -720,6 +730,10 @@ Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under
   refused and a reused one is free. A zoom-through counts the plate's text as leaving 6 frames early.
   A value of the wrong type gets a sentence back and raises nothing.
 - The text audit samples each plate and stops before a zoom-through.
+- With insert windows passed as `quiet`, the example still passes when nothing starts inside one. A
+  plate cut or an event inside a window is refused, because the plate is hidden there, and a cut on
+  the frame a window ends is accepted. A window over a stretch that would otherwise be too still is
+  not counted as still.
 - `write_scene_config` writes a sound config with the style's captions, fills each plate's `aspect`
   from its file, keeps an `emphasis` it was given, refuses a photograph too wide to cover the band
   before writing anything, refuses `UnderTheHood` on another style and other scenes on an Under the
@@ -758,6 +772,11 @@ the style: the reference picture, the text added to the prompt and the cap on pi
   reused one is free. A value of the wrong type gets a sentence back and raises nothing, and so does
   a broken beat whose own problem falls past the 12 that are reported.
 - The text audit samples each beat, a card from the frame its last part has appeared.
+- With insert windows passed as `quiet`, a window over a shot passes. A shot starting or a punch-in
+  landing inside a window is refused, and a shot starting on the frame a window ends is accepted. A
+  window over a shot that would otherwise sit still too long is not counted as still. A window that
+  covers any part of a card (count, bars, term or the choice), or starts at or after the first term
+  card, is refused: a card is read on screen, and the consequence and the choice end the story there.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
   one, refuses `CaseFileStory` on another style and other scenes on a Case File Story video.
   `subtitles.look` accepts `plain`, `selection` and `fill` only.
@@ -891,6 +910,47 @@ Trap: the race and lock tests are mutation-checked. Each clause of the `UPDATE`'
 because a check made on an earlier read can be out of date by the write, and the write lock is what
 keeps a removed key or a failed GPU from landing between the availability check and the write.
 
+### `test_inserts.py`
+
+Covers `mcp/inserts.py`, the insert half of `write_scene_config`, `choose_inserts`, `get_video`'s
+`insert_routing`, the insert marks in `update_video`, and the text audit's insert passes
+([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
+
+- A sound System Flow insert and a sound Terminal Doc insert pass, over a synthetic timeline of five
+  segments with the middle one marked.
+- Each refusal names its insert and cause: longer than 9 seconds or shorter than 2, off a word, not
+  an insert style, an unknown key, outside the video, outside a segment marked with its style,
+  running into the next segment, in the first or last segment, over the payoff's first word, back to
+  back or overlapping another, inserts over a third of the video, a main scene starting under one, a
+  marked segment with no insert over it, and a style the video did not choose.
+- The Inserts setting None, a main style that hosts none (Cartoon 3D) and a whole System Flow video
+  made before inserts each refuse inserts with their own message.
+- The insert style's own checks run over the window: a first board or beat off the insert's first
+  frame, custom moves and a skin in a Terminal Doc insert, and more than 3 boards are refused.
+- Captions low in the frame leave an insert in place or lift it a little; captions at the top push
+  it down and it stays inside the frame. `fill` names the scene, the palette (the video's canvas) and
+  the main style's transition, and a mascot cue may not land inside an insert.
+- `write_scene_config` writes the filled insert; `SystemFlow` as a scene is refused with the insert
+  message.
+- `choose_inserts` records the styles once, accepts `[]`, and refuses an undecided main style,
+  Inserts None, Cartoon 3D, a video past `TOPIC_APPROVED` and unknown styles. `insert_routing` is
+  decided when there is nothing to choose and lists every insert style.
+- `update_video` refuses marks on the first segment and any mark with Inserts None, warns about a
+  long insert segment (`insert_long`), and refuses an insert style as a video's style on a change
+  only. A domain cannot default to an insert style, and its `default_insert_mode` seeds new videos.
+- The text audit samples each insert's boards and beats and names them as inserts.
+
+- An insert belongs to the segment that starts at or before it, also when the previous segment's
+  last word ends on that frame; non-object `props` are refused with a sentence; captions the
+  shift cannot clear are refused; a main scene starting on an insert's first frame is refused; an
+  insert anywhere in the segment that opens the payoff is refused; a System Flow insert's last events
+  are read before its final frames; an insert longer than its pack's `max_seconds` is refused; a
+  mascot cue in an insert's transition frames is refused.
+
+Trap: `BLOCKS` in `inserts.py` is where each insert style draws on the frame; a test reads System
+Flow's band from `camera.ts`, so a layout change there that moves the block fails until the shift is
+recomputed.
+
 ### `test_system_flow.py`
 
 Covers `mcp/system_flow.py`, the checks `write_scene_config` runs on a System Flow config, and the
@@ -907,8 +967,8 @@ text audit's per-board sampling ([System Flow](../10-scene-authoring.md#system-f
   event outside its board, a board not on a word, a disconnected node, and a still stretch over
   3.5 seconds.
 - `write_scene_config` writes a sound config with the style's captions, refuses a bad one before
-  writing anything, refuses `SystemFlow` on another style, other scenes on a System Flow video, and a
-  `SystemFlow` entry of any type but `generated`.
+  writing anything, refuses `SystemFlow` as a scene of another style (it is an insert style there),
+  other scenes on a whole System Flow video, and a `SystemFlow` entry of any type but `generated`.
 - An event that cannot be drawn and read before its board fades out is refused, a node's label
   typing included (the last board has no fade-out and ends on its final frame). Two chips or two
   focuses too close together, and a second fault on one node, are refused. The
@@ -942,6 +1002,10 @@ text audit's per-region sampling ([Whiteboard](../10-scene-authoring.md#whiteboa
   a bad one before writing anything, refuses `Whiteboard` on another style, other scenes on a
   Whiteboard video and a dark canvas, and skips the word check when there is no timeline.
 - The text audit samples each region and the recap.
+- With insert windows passed as `quiet`, the example still passes when nothing starts inside one. A
+  region start, an item's `at` or `recapFrame` inside a window is refused, because the board is
+  hidden there, and a region starting on the frame a window ends is accepted. A window over a stretch
+  that would otherwise be too still is not counted as still.
 - The doodle expander answers the shared cases (every primitive, and a digest of the whole shipped
   library) as `doodles.ts` does, and every shipped doodle passes the rules a video's own doodle
   must, since the agent copies from them. A video's own doodle is accepted, and refused when it
@@ -1050,6 +1114,10 @@ Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
   fading, and a canvas are quiet. The shapes of one SVG count as one picture, so a stick figure is a
   subject, and a filled card holding only text is a title card. A line drawing on counts as moving,
   and the warning names the scene on frame 0. Its frames skip the text checks.
+- A main scene's samples skip the frames an insert covers or slides over: the insert's transition
+  runs just outside its window, where the main scene is half covered.
+- An insert's samples never report the mascot over text, because the mascot is hidden while an
+  insert is on screen.
 
 Trap: every threshold lives in this module, because it is the only layer the tests reach. The
 browser probe and its driver need a browser, so a threshold moved into the probe leaves the

@@ -13,6 +13,7 @@ import { TextRevealScene, TimelineWord } from "./scenes/TextRevealScene";
 import Subtitles, { SubtitleConfig } from "./scenes/installed/Subtitles";
 import Watermark from "./Watermark";
 import { MascotCue, MascotLayer } from "./mascot/MascotLayer";
+import { TRANSITION_FRAMES, activeInsert, insertLook, transitionOf, type InsertWindow } from "./inserts/transitions";
 
 // ── Types (the shape of scene-config.json; docs/developer/09-remotion-project.md) ───
 
@@ -67,6 +68,37 @@ interface GeneratedSceneConfig {
 type SceneConfig = TextRevealSceneConfig | GeneratedSceneConfig;
 
 /**
+ * One insert scene (TMDEV-224): a short scene from an insert style (System
+ * Flow, Terminal Doc) drawn over the main style's scenes and under the
+ * captions. The agent writes `style`, the window and `props`; write_scene_config
+ * fills `src` (the installed scene that draws the style), `palette` (the
+ * video's canvas, which the insert follows) and `shift` (pixels the insert's
+ * layout moves down, or up when negative, to stay clear of the main style's
+ * captions). Its data is timed on the video's own frames, like the main's.
+ */
+interface InsertConfig {
+  style: string;
+  src: string;
+  startFrame: number;
+  durationInFrames: number;
+  props?: Record<string, unknown>;
+  palette?: Canvas;
+  shift?: number;
+}
+
+/** What an insert scene is given beside its own data. */
+export interface InsertPlacement {
+  /** The insert's first frame on the video's clock: its data's frames are absolute. */
+  origin: number;
+  /** Frames the scene's Sequence starts before `origin` (the way in); the scene
+   *  holds its first frame through them and its last frame through as many
+   *  after its window (the way out). */
+  lead: number;
+  palette: Canvas;
+  shift: number;
+}
+
+/**
  * The ground painted under every scene (TMDEV-101). A whole-video property,
  * never a per-scene one: alternating white and dark scenes flashes. Omitted
  * means "dark", which is what every video produced before the Stick Explainer
@@ -100,6 +132,10 @@ interface SceneConfigFile {
   mascot?: MascotCue[];
   scenes: SceneConfig[];
   sfx: SfxEntry[];
+  /** Insert scenes over the main style, in time order (TMDEV-224). */
+  inserts?: InsertConfig[];
+  /** The main style's transition into and out of an insert. */
+  insertTransition?: string;
 }
 
 interface Timeline {
@@ -227,6 +263,76 @@ const GeneratedScene: React.FC<{
   return <Component durationInFrames={durationInFrames} words={words} {...props} />;
 };
 
+// ── Inserts (TMDEV-224) ─────────────────────────────────────────────────────
+//
+// The main layer wraps every scene. During an insert's transition it slides
+// (push) or is veiled in the canvas colour (dip); while the insert covers the
+// frame it is hidden with visibility, which skips its paint but keeps it
+// mounted, so it resumes on the picture its frame gives it.
+
+const MainLayer: React.FC<{
+  children: React.ReactNode;
+  windows: InsertWindow[];
+  transition: ReturnType<typeof transitionOf>;
+  canvasColor: string;
+}> = ({ children, windows, transition, canvasColor }) => {
+  const frame = useCurrentFrame();
+  const at = windows.length ? activeInsert(frame, windows, transition) : null;
+  const look = at ? insertLook(transition, at.progress) : null;
+  return (
+    <AbsoluteFill
+      style={{
+        visibility: look?.covers ? "hidden" : undefined,
+        transform: look && look.mainShiftX !== 0 ? `translateX(${look.mainShiftX}px)` : undefined,
+      }}
+    >
+      {children}
+      {look && look.veilOpacity > 0 && (
+        <AbsoluteFill style={{ backgroundColor: canvasColor, opacity: look.veilOpacity }} />
+      )}
+    </AbsoluteFill>
+  );
+};
+
+/** One insert, inside its own Sequence, which starts `lead` frames before the
+ *  window (so the frame here is local to that). */
+const InsertFrame: React.FC<{
+  children: React.ReactNode;
+  durationInFrames: number;
+  startFrame: number;
+  lead: number;
+  transition: ReturnType<typeof transitionOf>;
+}> = ({ children, durationInFrames, startFrame, lead, transition }) => {
+  const local = useCurrentFrame();
+  const at = activeInsert(local + startFrame - lead, [{ startFrame, durationInFrames }], transition);
+  const look = insertLook(transition, at ? at.progress : 0);
+  if (look.insertOpacity <= 0) return null;
+  return (
+    <AbsoluteFill
+      data-tm-layer="insert"
+      style={{
+        opacity: look.insertOpacity < 1 ? look.insertOpacity : undefined,
+        transform: look.insertShiftX !== 0 ? `translateX(${look.insertShiftX}px)` : undefined,
+        clipPath: look.insertClipLeft > 0 ? `inset(0 0 0 ${look.insertClipLeft}px)` : undefined,
+      }}
+    >
+      {children}
+    </AbsoluteFill>
+  );
+};
+
+/** Hides what it wraps (the mascot) for the whole of every insert window and
+ *  its transition frames on either side, `lead` frames each. */
+const HiddenDuringInserts: React.FC<{ children: React.ReactNode; windows: InsertWindow[]; lead: number }> = ({
+  children,
+  windows,
+  lead,
+}) => {
+  const frame = useCurrentFrame();
+  const inside = windows.some((w) => frame >= w.startFrame - lead && frame < w.startFrame + w.durationInFrames + lead);
+  return <AbsoluteFill style={{ visibility: inside ? "hidden" : undefined }}>{children}</AbsoluteFill>;
+};
+
 // ── Main composition ────────────────────────────────────────────────────────
 
 export const CompositionBuilder: React.FC<CompositionBuilderProps> = ({
@@ -267,6 +373,8 @@ export const CompositionBuilder: React.FC<CompositionBuilderProps> = ({
   // still covers this, so nothing that predates the canvas key changes; a
   // scene built for the light register simply leaves its background alone.
   const canvasColor = CANVAS_COLOR[sceneConfig.canvas ?? DEFAULT_CANVAS];
+  const inserts = sceneConfig.inserts ?? [];
+  const transition = transitionOf(sceneConfig.insertTransition);
 
   return (
     <AbsoluteFill style={{ backgroundColor: canvasColor }}>
@@ -296,7 +404,8 @@ export const CompositionBuilder: React.FC<CompositionBuilderProps> = ({
         </Sequence>
       ))}
 
-      {/* ── Scenes ───────────────────────────────────────────────────────── */}
+      {/* ── Scenes (the main style) ──────────────────────────────────────── */}
+      <MainLayer windows={inserts} transition={transition} canvasColor={canvasColor}>
       {sceneConfig.scenes.map((scene, i) => {
         if (scene.type === "TextReveal") {
           return (
@@ -357,13 +466,46 @@ export const CompositionBuilder: React.FC<CompositionBuilderProps> = ({
 
         return null;
       })}
+      </MainLayer>
+
+      {/* ── Inserts ──────────────────────────────────────────────────────── */}
+      {/* Over the main style and under the mascot and the captions, which
+          stay on screen through an insert. */}
+      {inserts.map((ins, i) => {
+        // The Sequence also holds the transition frames on either side of
+        // the window (see transitions.ts), during which the scene holds its
+        // first and its last frame.
+        const lead = TRANSITION_FRAMES[transition];
+        const placement: InsertPlacement = {
+          origin: ins.startFrame,
+          lead,
+          palette: ins.palette ?? sceneConfig.canvas ?? DEFAULT_CANVAS,
+          shift: ins.shift ?? 0,
+        };
+        return (
+          <Sequence key={`insert-${i}`} from={ins.startFrame - lead} durationInFrames={ins.durationInFrames + 2 * lead}>
+            <InsertFrame durationInFrames={ins.durationInFrames} startFrame={ins.startFrame} lead={lead}
+                         transition={transition}>
+              <GeneratedScene
+                src={ins.src}
+                source="installed"
+                durationInFrames={ins.durationInFrames}
+                props={{ ...(ins.props ?? {}), insert: placement }}
+                words={timeline.words}
+              />
+            </InsertFrame>
+          </Sequence>
+        );
+      })}
 
       {/* ── Mascot ───────────────────────────────────────────────────────── */}
       {/* Over every scene and under the captions, outside any Sequence (its
           cue frames are absolute, like the word timings). Only when the
           worker staged code AND the config has cues. */}
       {mascotPath && Array.isArray(sceneConfig.mascot) && sceneConfig.mascot.length > 0 && (
-        <MascotLayer mascotPath={mascotPath} cues={sceneConfig.mascot} />
+        <HiddenDuringInserts windows={inserts} lead={TRANSITION_FRAMES[transition]}>
+          <MascotLayer mascotPath={mascotPath} cues={sceneConfig.mascot} />
+        </HiddenDuringInserts>
       )}
 
       {/* ── Subtitles ────────────────────────────────────────────────────── */}

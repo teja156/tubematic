@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import re
 
+from quiet_windows import uncovered, window_at, window_text
+
 SCENE_SRC = "BeanExplainer"
 PROPS_KEY = "beanExplainer"
 STYLE_ID = "bean_explainer"
@@ -283,12 +285,13 @@ def custom_prop_errors(custom, video_id: str, library: dict, sources: dict | Non
 
 
 def check(config: dict, fps: int, word_starts: list[int], words: list[str], extra: dict,
-          video_id: str = "", sources: dict | None = None) -> list[str]:
+          video_id: str = "", sources: dict | None = None, quiet=()) -> list[str]:
     """Every problem with a Bean Explainer config, one sentence each (at most
     MAX_ERRORS), or [] when it may be written. `extra` is the style pack's
     catalogue block; `words` is the narration's text, word by word. A config's
     customProps join the library for this video; `sources` maps their src to
-    the file's text (None skips the source checks)."""
+    the file's text (None skips the source checks). `quiet` holds the config's
+    insert windows (mcp/quiet_windows.py)."""
     errors: list[str] = []
 
     def err(msg: str) -> None:
@@ -371,6 +374,18 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
                 f"{SNAP_FRAMES} frames of a word's start.")
         if b - a < LIMITS["minShotSeconds"] * fps:
             err(f"Shot {i + 1} lasts {b - a} frames; a shot needs at least {LIMITS['minShotSeconds']} s.")
+        w = window_at(a, quiet) if a else None
+        if w:
+            err(f"Shot {i + 1} cuts at frame {a}, inside an insert ({window_text(w)}), where the stage is hidden; "
+                f"cut at {w[1]} or before {w[0]}.")
+        evs = shots[i].get("events") if isinstance(shots[i], dict) else None
+        for e in evs if isinstance(evs, list) else []:
+            f = e.get("frame") if isinstance(e, dict) else None
+            w = window_at(f, quiet) if _int(f) else None
+            if w:
+                err(f"Shot {i + 1}, the {e.get('type') or 'event'} at frame {f} starts inside an insert "
+                    f"({window_text(w)}), where the stage is hidden; move it to a word at {w[1]} or later, or "
+                    f"before {w[0]}.")
 
     sections = data.get("sections")
     if not isinstance(sections, list) or len(sections) > LIMITS["maxSections"]:
@@ -419,9 +434,11 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
     marks = sorted(c for c in changes if 0 <= c < total) + [total]
     prev = 0
     for c in marks:
-        if c - prev > still:
-            err(f"Nothing changes from frame {prev} to {c} ({(c - prev) / fps:.1f} s); the longest still "
-                f"stretch allowed is {LIMITS['maxStillSeconds']} s. Add a pose, a prop, a label or a cut.")
+        # An insert window is not still: the insert changes the screen there.
+        for a, b in uncovered(prev, c, quiet):
+            if b - a > still:
+                err(f"Nothing changes from frame {a} to {b} ({(b - a) / fps:.1f} s); the longest still "
+                    f"stretch allowed is {LIMITS['maxStillSeconds']} s. Add a pose, a prop, a label or a cut.")
         prev = c
     return errors
 

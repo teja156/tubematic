@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 54 tools
+## The 55 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -103,6 +103,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`set_video_status`](#set_video_status) | Guarded status write |
 | [`update_video`](#update_video) | Partial update: script, publish text, voice, agent, style |
 | [`choose_visual_style`](#choose_visual_style) | Record the style `auto` picks, before the script |
+| [`choose_inserts`](#choose_inserts) | Record which insert styles the script may use, after the main style |
 | [`choose_script_formula`](#choose_script_formula) | Record the script formula, after the style and before the script |
 | [`add_comment`](#add_comment) | Add an agent comment |
 
@@ -195,11 +196,13 @@ The calls one video takes when it has no mascot and is not Cartoon 3D:
    and the `script_profile_id`.
 2. `choose_visual_style(video_id, style, reason, runner_up)` records the style `auto` picks, when
    `style_routing.decided` is `false`. The script is then written for that style.
-3. `choose_script_formula(video_id, formula, reason, runner_up)` records the script formula,
+3. `choose_inserts(video_id, inserts, reason)` records which insert styles the script may mark
+   segments with, when `insert_routing.decided` is `false`; `[]` is a common answer.
+4. `choose_script_formula(video_id, formula, reason, runner_up)` records the script formula,
    when `formula_routing.decided` is `false`. The script is then written in the returned
    `formula_pick`.
-4. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
-5. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…,
+5. `get_script_profile(profile_id)` returns the style to write in, if the video names a profile.
+6. `update_video(video_id, script_segments=[…], publish_title=…, publish_description=…,
    formula_id=…, hooks=[…])` stores the script, the text the video is posted with, the picked formula
    and the openings the script was built on. It returns `warnings`, which the agent reads before it
    moves on.
@@ -484,6 +487,24 @@ style write or a mascot committed between the check and the write leaves the vid
 reads what the install can make after taking the write lock (`BEGIN IMMEDIATE`), so a key removed in
 Settings or a GPU probe result cannot commit between that check and the write. The result carries
 the new `visual_style` and `style`, so the agent writes the script for it in the same session.
+
+### `choose_inserts`
+
+`choose_inserts(video_id, inserts, reason)` records which insert styles a video's script may use,
+once, at `TOPIC_APPROVED`, after the main style is decided (by a person or by `auto`) and before the
+formula and the script. The tubematic-insert-routing skill calls it
+([Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)).
+
+- `inserts` is a list of insert style ids from `insert_routing.candidates`, at most
+  `insert_routing.max_styles` (`inserts.MAX_STYLES_PER_VIDEO`), or `[]` when no insert helps. It is
+  stored as JSON in `videos.insert_styles`.
+- `reason` is one sentence of at most 300 characters, shown on the dashboard.
+
+It refuses a video not at `TOPIC_APPROVED`, a main style not decided yet, an Inserts setting of
+None, a main style that takes no inserts (Cartoon 3D, a 3D world on `auto`, a whole System Flow or
+Terminal Doc video made before they became insert styles), an insert style the install cannot make,
+and a second decision. The `UPDATE` repeats the row conditions. A new main style (a switch to the
+runner-up, a return to the topic) clears the choice, so it is made again for the new style.
 
 ### `choose_script_formula`
 

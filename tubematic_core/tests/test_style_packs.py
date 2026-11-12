@@ -16,6 +16,7 @@ import pytest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
+from tubematic_core import inserts as tinserts  # noqa: E402
 from tubematic_core import visual_styles as tvs  # noqa: E402
 
 # style: (figures, line_art, generated_characters, fixed canvas, needs key, needs GPU)
@@ -94,7 +95,7 @@ def test_whiteboard():
     assert p["extra"]["doodles"] == sorted(set(p["extra"]["doodles"]))
     # TMDEV-203 routes on these; each must name what sets it apart.
     avoid = " ".join(p["routing"]["avoid_for"])
-    assert "System Flow" in avoid and "Stick" in avoid and "Motion Graphics" in avoid
+    assert "System Flow" in avoid and "Stick" in avoid and "Photo Explainer" in avoid
 def test_bean_explainer():
     p = tvs.pack("bean_explainer")
     assert p["renderer"] == "dom" and p["canvas"] == "light"
@@ -136,7 +137,7 @@ def test_terminal_doc():
     assert "review" in p and p["captions"]["background"] == "log"
     assert p["routing"]["images"] == 0
     # each skin's caption changes are caption keys
-    assert set(p["extra"]["skins"]) == {"house", "crt"}
+    assert set(p["extra"]["skins"]) == {"house", "crt", "paper"}  # paper: an insert on a light canvas
     for skin in p["extra"]["skins"].values():
         assert set(skin["captions"]) <= set(p["captions"]) | {"accent"}
     assert tvs.effective_canvas("terminal_doc", "light") == "dark"
@@ -331,6 +332,76 @@ def test_the_agent_view_carries_the_style_script_guidance():
     assert tvs.agent_view("auto")["script"] == ""
 
 
+# ── main styles and insert styles (TMDEV-224) ────────────────────────────────
+
+def test_system_flow_and_terminal_doc_are_insert_styles_and_the_rest_are_main():
+    assert set(tvs.INSERT_STYLES) == {"system_flow", "terminal_doc"}
+    assert tvs.MAIN_STYLES == ("auto",) + tuple(s for s in tvs.PACKS if s not in tvs.INSERT_STYLES)
+    # A stored legacy value still reads as a style.
+    assert {"system_flow", "terminal_doc"} <= set(tvs.VISUAL_STYLES)
+
+
+def test_every_main_style_hosts_inserts_except_cartoon_3d():
+    hosts = {sid: tvs.hosts_inserts(sid)["host"] for sid in tvs.MAIN_PACKS}
+    assert {sid for sid, host in hosts.items() if not host} == {"cartoon_3d"}
+    assert tvs.hosts_inserts("auto") == tvs.SCENES_INSERTS
+    assert tvs.hosts_inserts("system_flow") == {"host": False}  # a legacy whole-video video
+    for sid, p in tvs.MAIN_PACKS.items():
+        if p["inserts"]["host"]:
+            assert p["inserts"]["transition"] in tinserts.TRANSITIONS, sid
+    assert tvs.PACKS["cartoon_3d"]["messages"]["inserts"]
+
+
+def test_an_insert_style_is_refused_as_a_video_style_with_a_reason():
+    assert "insert style" in tvs.insert_style_error("system_flow")
+    assert "Terminal Doc" in tvs.insert_style_error(" terminal_doc ")
+    assert tvs.insert_style_error("whiteboard") == ""
+    assert tvs.insert_style_error("auto") == ""
+
+
+def test_the_public_list_and_the_agent_view_carry_the_role():
+    rows = {r["id"]: r for r in tvs.public_list(True, "working")}
+    assert rows["system_flow"]["role"] == "insert"
+    assert rows["whiteboard"]["role"] == "main" and rows["whiteboard"]["inserts"]["host"] is True
+    assert rows["cartoon_3d"]["inserts"] == {"host": False}
+    assert rows["auto"]["role"] == "main"
+    view = tvs.agent_view("bean_explainer")
+    assert view["role"] == "main" and view["inserts"] == {"host": True, "transition": "wipe"}
+    assert tvs.agent_view("auto")["inserts"] == tvs.SCENES_INSERTS
+
+
+def _insert_pack(**over):
+    data = json.loads((tvs.PACKS_DIR / "system_flow.json").read_text())
+    data.update(over)
+    return data
+
+
+@pytest.mark.parametrize("make, fragment", [
+    (lambda: _valid(role="side"), "role must be one of"),
+    (lambda: {k: v for k, v in _valid().items() if k != "inserts"}, "inserts: {host"),
+    (lambda: _valid(inserts={"host": True}), "inserts.transition"),
+    (lambda: _valid(inserts={"host": True, "transition": "spin"}), "inserts.transition"),
+    (lambda: _valid(inserts={"host": False, "transition": "cut"}), "only the key host"),
+    (lambda: _valid(inserts={"host": False}), "messages.inserts"),
+    (lambda: _valid(insert={"max_seconds": 8}), 'no "insert" block'),
+    (lambda: _insert_pack(inserts={"host": True, "transition": "cut"}), 'no "inserts" block'),
+    (lambda: _insert_pack(insert={"max_seconds": 8}), "insert: {max_seconds"),
+    (lambda: _insert_pack(insert={"max_seconds": 20, "palettes": ["dark"], "props_key": "x", "component": "X", "review": "r"}),
+     "insert.max_seconds"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["blue"], "props_key": "x", "component": "X", "review": "r"}),
+     "insert.palettes"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "", "component": "X", "review": "r"}),
+     "insert.props_key"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": " ", "review": "r"}),
+     "insert.component"),
+])
+def test_a_malformed_role_block_is_refused(make, fragment):
+    data = make()
+    name = "system_flow.json" if data.get("id") == "system_flow" else "stick.json"
+    with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
+        tvs._check_pack(pathlib.Path(name), data)
+
+
 # ── what the dashboard's picker shows (TMDEV-226) ─────────────────────────────
 
 PREVIEW_DIR = REPO_ROOT / "dashboard" / "public" / "style-previews"
@@ -372,3 +443,22 @@ def test_the_preview_folder_stays_within_budget():
     stems = {f.stem for f in PREVIEW_DIR.iterdir() if f.suffix in (".mp4", ".webp")}
     for stem in stems:
         assert (PREVIEW_DIR / f"{stem}.mp4").is_file() and (PREVIEW_DIR / f"{stem}.webp").is_file(), stem
+
+
+# ── Photo Explainer (TMDEV-225) ─────────────────────────────────────────────
+
+def test_motion_graphics_is_labelled_photo_explainer_and_yields_close_calls():
+    p = tvs.pack("motion_graphics")
+    assert p["label"] == "Photo Explainer"  # the stored id is unchanged
+    assert p["routing"]["yields_ties"] is True
+    # Its diagrams are System Flow inserts: no picture duty asks it to build one.
+    assert "diagram" not in " ".join(p["picture"].values()).lower()
+    others = [sid for sid, q in tvs.MAIN_PACKS.items() if q["routing"].get("yields_ties")]
+    assert others == ["motion_graphics"]
+
+
+def test_yields_ties_is_checked_when_present():
+    data = _valid()
+    data["routing"] = {**data["routing"], "yields_ties": "yes"}
+    with pytest.raises(tvs.PackError, match=r"routing\.yields_ties"):
+        tvs._check_pack(pathlib.Path("stick.json"), data)

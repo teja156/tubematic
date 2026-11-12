@@ -3,6 +3,11 @@
   "label": "Whiteboard",
   "order": 50,
   "experimental": false,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "push"
+  },
   "dimension": "2d",
   "preview": "whiteboard",
   "tagline": "One idea worked out step by step with a marker on a big whiteboard.",
@@ -44,13 +49,13 @@
       "a mental model, a rule of thumb or a definition"
     ],
     "avoid_for": [
-      "components passing requests, packets or data between them (System Flow draws those)",
-      "real, named things the viewer should see as pictures (Motion Graphics)",
+      "components passing requests, packets or data between them (Stick Explainer acts them out, with System Flow inserts)",
+      "real, named things the viewer should see as pictures (Photo Explainer)",
       "generic roles acting out a scene (Stick)",
       "emotional or people-centred stories",
       "visually rich history or places",
       "fast news or hype",
-      "a real accident, disaster or failure told with its real machine, place or company (Motion Graphics fits it)"
+      "a real accident, disaster or failure told with its real machine, place or company (Photo Explainer fits it)"
     ],
     "cannot_show": "photographs or faithful pictures of real, named things or people: everything is a marker doodle",
     "signals": [

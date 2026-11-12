@@ -44,8 +44,8 @@ def client(db_path):
         yield c
 
 
-def _video(db_path, vid="vid_1", status="SCRIPT_READY", style="system_flow",
-           pick="system_flow", runner_up="stick", mascot=""):
+def _video(db_path, vid="vid_1", status="SCRIPT_READY", style="whiteboard",
+           pick="whiteboard", runner_up="stick", mascot=""):
     con = sqlite3.connect(db_path)
     con.execute(
         "INSERT INTO videos (id, topic, status, visual_style, style_pick, style_runner_up, "
@@ -81,8 +81,8 @@ def test_the_switch_sends_the_video_back_to_scripting_in_the_runner_up(client, d
     r = client.post("/videos/vid_1/switch-style")
     assert r.status_code == 200, r.get_json()
     assert _row(db_path) == {"status": "TOPIC_APPROVED", "visual_style": "stick",
-                             "style_pick": "stick", "style_runner_up": "system_flow",
-                             "style_reason": "Switched by a person from System Flow to Stick Explainer."}
+                             "style_pick": "stick", "style_runner_up": "whiteboard",
+                             "style_reason": "Switched by a person from Whiteboard to Stick Explainer."}
     (author, content), = _comments(db_path)
     assert author == "human" and "Rewrite the script for Stick Explainer" in content
     assert r.get_json()["style_pick"] == "stick"
@@ -96,7 +96,7 @@ def test_switching_twice_goes_back(client, db_path):
     con.commit()
     con.close()
     assert client.post("/videos/vid_1/switch-style").status_code == 200
-    assert _row(db_path)["visual_style"] == "system_flow"
+    assert _row(db_path)["visual_style"] == "whiteboard"
 
 
 def test_a_switch_to_mixed_scenes_leaves_auto(client, db_path):
@@ -166,8 +166,8 @@ def test_the_switch_holds_the_write_lock_while_it_checks(client, db_path, monkey
 
 def test_a_changed_style_clears_the_pick_and_the_same_one_keeps_it(client, db_path):
     _video(db_path, status="TOPIC_PROPOSED")
-    assert client.patch("/videos/vid_1", json={"visual_style": "system_flow"}).status_code == 200
-    assert _row(db_path)["style_pick"] == "system_flow"
+    assert client.patch("/videos/vid_1", json={"visual_style": "whiteboard"}).status_code == 200
+    assert _row(db_path)["style_pick"] == "whiteboard"
     assert client.patch("/videos/vid_1", json={"visual_style": "stick"}).status_code == 200
     assert _row(db_path) == {"status": "TOPIC_PROPOSED", "visual_style": "stick", "style_pick": "",
                              "style_runner_up": "", "style_reason": ""}
@@ -192,14 +192,14 @@ def test_the_approval_keeps_the_pick(client, db_path):
     _video(db_path, status="SCRIPT_READY")
     r = client.patch("/videos/vid_1", json={"status": "VOICING"})
     assert r.status_code == 200, r.get_json()
-    assert _row(db_path)["style_pick"] == "system_flow"
+    assert _row(db_path)["style_pick"] == "whiteboard"
 
 
 def test_get_returns_the_pick_columns(client, db_path):
     _video(db_path)
     body = client.get("/videos/vid_1").get_json()
     assert (body["style_pick"], body["style_runner_up"], body["style_reason"]) == (
-        "system_flow", "stick", "why")
+        "whiteboard", "stick", "why")
 
 
 def test_both_processes_use_the_shared_reset_sql():

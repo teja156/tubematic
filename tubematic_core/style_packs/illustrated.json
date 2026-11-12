@@ -3,6 +3,11 @@
   "label": "Illustrated",
   "order": 30,
   "experimental": false,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "dip"
+  },
   "dimension": "2d",
   "preview": "illustrated",
   "tagline": "Drawn characters the viewer follows and recognises from scene to scene.",

@@ -73,6 +73,7 @@ def test_write_scene_config_success(job_db):
         "size_bytes": expected_path.stat().st_size,
         "total_frames": 300,
         "scene_count": 1,
+        "insert_count": 0,  # TMDEV-224
         # TMDEV-101: filled in rather than required, so a config written by a
         # skill that predates the canvas key still writes a complete file.
         "canvas": "dark",

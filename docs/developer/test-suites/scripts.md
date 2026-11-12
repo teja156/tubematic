@@ -3,7 +3,7 @@
 Covers the host scripts in `scripts/`: the poller (`poll.py`), the agent adapters, the operations
 scripts (`service.py`, `status.py`, `uninstall.py`, `collect_diagnostics.py`), the release tooling
 and the remote-renderer script. It also checks files that no local test run executes: the GitHub
-Actions workflows, the two Kasm Workspace images and three agent skills. The suite needs `pytest`,
+Actions workflows, the two Kasm Workspace images and the agent skills. The suite needs `pytest`,
 PyYAML, `git` and the packages in `scripts/requirements.txt`.
 
 ```bash
@@ -675,7 +675,9 @@ Covers the `tubematic-terminal-doc` skill ([Terminal Doc](../10-scene-authoring.
 - The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
   skill, and the operator skill routes to it.
 - The skill and `reference/contract.md` list every move, and the contract every slot (with its
-  centre and sizes), size (with its characters per line), tone, skin, reveal and cut.
+  centre and sizes), size (with its characters per line), tone, whole-video skin, reveal and cut.
+  The `paper` skin is left out: it is an insert's look on a light video, which the server sets and
+  the agent never writes.
 - The limits the skill and the contract state are the ones `mcp/terminal_doc.py` enforces, the
   worked example passes the validator and uses at least ten of the moves, and the uninstaller removes
   the skill.
@@ -735,6 +737,8 @@ Covers the `tubematic-style-routing` skill
   `choose_visual_style` with its real arguments and reason limit.
 - The operator runs it before the script-writing skill at `TOPIC_APPROVED`, the script-writing skill
   follows `style.script`, and the uninstaller and the skills README know it.
+- A candidate whose pack sets `routing.yields_ties` loses a tie first, before specificity, and at
+  least one main pack sets it.
 
 Trap: a skill that named styles would prefer the ones it knew about, and a new pack would need an
 edit to be picked. The candidates are data for that reason.
@@ -764,6 +768,31 @@ Covers the `tubematic-formula-routing` skill
 
 Trap: a skill that named formulas would prefer the ones it knew about, and a new formula would need
 an edit to be picked. The candidates are data for that reason.
+
+### `test_insert_skills.py`
+
+Covers the skills that make a video with insert scenes
+([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
+
+- The operator runs `tubematic-insert-routing` after style routing and before formula routing at
+  `TOPIC_APPROVED`, and treats System Flow and Terminal Doc as insert styles, with a whole video in
+  one of them only as a legacy case.
+- The script-writing skill's insert marks keep to the rules `update_video` enforces (never the first
+  or last segment, never two in a row, never the payoff, only the video's chosen insert styles), name
+  the target length from `tubematic_core/inserts.py` and the `insert_long` warning the server
+  returns, and its segment shape names the `insert` key.
+- Every main style that takes inserts, by its pack, sends its authoring skill to
+  `tubematic-inserts`, and the mixed scene system does too. Case File Story keeps inserts off its
+  cards and its ending. The scene system draws a marked diagram beat as the insert, and under Photo
+  Explainer draws no diagram scene of its own (an insert, or a labelled photograph). Cartoon 3D,
+  whose pack takes none, says so.
+- The insert styles' skills open with an **As an insert** section that states the limits
+  `mcp/system_flow.py` and `mcp/terminal_doc.py` enforce on an insert (the board or beat count, no
+  moves of the agent's own and no skin in Terminal Doc), and keep the legacy whole-video path.
+- The skills README lists both insert skills, and none of these skills carries a ticket id.
+
+Trap: these skills are read at different steps by one agent. One that still teaches System Flow or
+Terminal Doc as a whole-video style sends the agent down a path `write_scene_config` refuses.
 
 ### `test_eval_formula_routing.py`
 

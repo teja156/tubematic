@@ -46,7 +46,10 @@ STAGE_BANDS = ("a", "b", "c")
 TONES = ("white", "grey", "dim", "red", "blue")
 GLOW_TONES = ("red", "blue")
 REVEALS = ("scramble", "type", "cut")
-SKINS = ("house", "crt")
+# "paper" is the light look of an insert inside a light-canvas main style
+# (TMDEV-224); a whole Terminal Doc video uses "house" or "crt".
+SKINS = ("house", "crt", "paper")
+WHOLE_VIDEO_SKINS = ("house", "crt")
 CUTS = ("hard", "collapse")
 MOVES = ("word", "rearrange", "encode", "number", "wall", "grid", "stream", "bracket", "glow", "type", "push",
          "clear", "custom")
@@ -234,9 +237,9 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
     uses = [s for s in scenes or [] if is_td_scene(s)]
     if (visual_style or "").strip() != STYLE_ID:
         if uses:
-            return ("The TerminalDoc scene draws a whole Terminal Doc video and is used only when the video's "
-                    "visual_style is terminal_doc (chosen at the topic). Build this video's scenes from the "
-                    "other components.")
+            return ("TerminalDoc is never one of a video's scenes: Terminal Doc is an insert style. Put a "
+                    "Terminal Doc beat in the config's \"inserts\" list, over a segment the script marks as "
+                    "a terminal_doc insert, and build the scenes in the video's own style.")
         return ""
     if (len(scenes or []) != 1 or not uses or uses[0].get("type") != "generated"
             or uses[0].get("source") != "installed"):
@@ -354,16 +357,11 @@ def _bottom_of(el: _El) -> float:
 
 def check(config: dict, fps: int, word_starts: list[int], words: list[str], video_id: str = "",
           sources: dict | None = None) -> list[str]:
-    """Every problem with a Terminal Doc config, one sentence each (at most
-    MAX_ERRORS), or [] when it may be written. `words` is the narration's text,
-    word by word. `sources` maps each custom move's src to the file's text
-    (None skips the source checks)."""
-    errors: list[str] = []
-
-    def err(msg: str) -> None:
-        if len(errors) < MAX_ERRORS:
-            errors.append(msg)
-
+    """Every problem with a whole Terminal Doc video's config, one sentence
+    each (at most MAX_ERRORS), or [] when it may be written. `words` is the
+    narration's text, word by word. `sources` maps each custom move's src to
+    the file's text (None skips the source checks)."""
+    head: list[str] = []
     total = config.get("totalFrames")
     scenes = config.get("scenes") or []
     use = check_scene_use(STYLE_ID, scenes)
@@ -371,18 +369,60 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], vide
         return [use]
     scene = scenes[0]
     if scene.get("startFrame") != 0 or scene.get("durationInFrames") != total:
-        err(f"The {SCENE_SRC} scene must start at frame 0 and last totalFrames ({total}) frames.")
+        head.append(f"The {SCENE_SRC} scene must start at frame 0 and last totalFrames ({total}) frames.")
     scene_props = scene.get("props")
     data = scene_props.get(PROPS_KEY) if isinstance(scene_props, dict) else None
     if not isinstance(data, dict):
-        return errors + [f"The scene's props must hold {PROPS_KEY!r}: the skin and the beats."]
+        return head + [f"The scene's props must hold {PROPS_KEY!r}: the skin and the beats."]
     if not _int(total) or total <= 0:
-        return errors + ["totalFrames must be a positive whole number."]
-    if data.get("skin", "house") not in SKINS:
-        err(f"skin must be one of {', '.join(SKINS)}.")
+        return head + ["totalFrames must be a positive whole number."]
+    if data.get("skin", "house") not in WHOLE_VIDEO_SKINS:
+        head.append(f"skin must be one of {', '.join(WHOLE_VIDEO_SKINS)}.")
     custom_errs, custom = custom_move_errors(data.get("customMoves"), video_id, sources)
-    for e in custom_errs:
+    return _check_data(data, 0, total, fps, word_starts, words, custom, head + custom_errs)
+
+
+def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]) -> list[str]:
+    """Every problem with one Terminal Doc insert (an entry of the config's
+    `inserts`, TMDEV-224): its beats run from the insert's first frame to its
+    last, on the video's own frames. An insert uses only shipped moves and
+    takes its skin from the main style's canvas, so `customMoves` and `skin`
+    are refused. The window itself is checked by mcp/inserts.py."""
+    start, dur = entry.get("startFrame"), entry.get("durationInFrames")
+    if not (_int(start) and _int(dur) and dur > 0):
+        return ["The insert needs whole-number startFrame and durationInFrames."]
+    props = entry.get("props")
+    data = props.get(PROPS_KEY) if isinstance(props, dict) else None
+    if not isinstance(data, dict):
+        return [f"The insert's props must hold {PROPS_KEY!r}: its beats."]
+    head = []
+    if data.get("customMoves"):
+        head.append("A Terminal Doc insert uses only the shipped moves: remove customMoves. Moves written "
+                    "for one video are for a whole Terminal Doc video.")
+    if "skin" in data:
+        head.append("Leave skin out of a Terminal Doc insert: it follows the video's canvas (house on a "
+                    "dark canvas, paper on a light one).")
+    beats = data.get("beats")
+    if isinstance(beats, list) and len(beats) > MAX_INSERT_BEATS:
+        head.append(f"A Terminal Doc insert holds at most {MAX_INSERT_BEATS} beats; it lasts a few seconds.")
+    return _check_data(data, start, start + dur, fps, word_starts, words, {}, head)
+
+
+# An insert is a few seconds, so it holds few beats.
+MAX_INSERT_BEATS = 3
+
+
+def _check_data(data: dict, span_start: int, span_end: int, fps: int, word_starts: list[int],
+                words: list[str], custom: dict, head: list[str]) -> list[str]:
+    errors: list[str] = []
+
+    def err(msg: str) -> None:
+        if len(errors) < MAX_ERRORS:
+            errors.append(msg)
+
+    for e in head:
         err(e)
+    total = span_end
 
     snaps = sorted(set(word_starts))
 
@@ -395,10 +435,12 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], vide
     starts = [b.get("start") if isinstance(b, dict) else None for b in beats]
     if not all(_int(v) for v in starts):
         return errors + ["Every beat needs a whole-number start frame."]
-    if starts[0] != 0:
-        err("The first beat must start at frame 0.")
+    if starts[0] != span_start:
+        err("The first beat must start at frame 0." if span_start == 0 else
+            f"The first beat must start at the insert's first frame ({span_start}).")
     if any(b <= a for a, b in zip(starts, starts[1:])) or starts[-1] >= total:
-        return errors + ["Beat starts must increase and stay inside the video."]
+        return errors + ["Beat starts must increase and stay inside the video." if span_start == 0 else
+                         "Beat starts must increase and stay inside the insert."]
     ends = starts[1:] + [total]
     for i, (a, b) in enumerate(zip(starts, ends)):
         if i and not on_word(a):
@@ -426,7 +468,7 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], vide
     # Nothing may hold still for long: the look is a held frame with something
     # small changing every few seconds.
     still = round(LIMITS["maxStillSeconds"] * fps)
-    reach = 0
+    reach = span_start
     for a, b in sorted(active) + [(total, total)]:
         if a - reach > still:
             err(f"Nothing changes on stage from frame {reach} to {a} ({(a - reach) / fps:.1f} s); the longest "
@@ -841,6 +883,18 @@ def _event_problem(e: dict, t: str, custom: dict) -> str:
         if not isinstance(text, str) or len(text) > spec["text"]:
             return f"text is at most {spec['text']} characters for this move."
     return ""
+
+
+def insert_beat_windows(entry: dict) -> list[tuple[int, int]]:
+    """(start, end) of every beat of one Terminal Doc insert, for the text audit."""
+    props = entry.get("props")
+    data = props.get(PROPS_KEY) if isinstance(props, dict) else None
+    data = data if isinstance(data, dict) else {}
+    beats = data.get("beats") if isinstance(data.get("beats"), list) else []
+    starts = [b.get("start") for b in beats if isinstance(b, dict) and _int(b.get("start"))]
+    s, d = entry.get("startFrame"), entry.get("durationInFrames")
+    end = s + d if _int(s) and _int(d) else 0
+    return [(a, b) for a, b in zip(starts, starts[1:] + [end]) if b > a]
 
 
 def beat_windows(config: dict) -> list[tuple[int, int]]:

@@ -110,7 +110,8 @@ Covers [the pipeline board](../15-dashboard.md#the-pipeline-board) and
   a later change. Illustrated with no OpenAI key is a disabled option that the API refuses with
   `400`.
 - The style picker offers the list `GET /visual-styles` serves and nothing else, System Flow and Whiteboard
-  included, and a System Flow pick is stored with the approval.
+  included. System Flow is listed as an insert style that cannot be chosen, the server refuses it as a
+  video's style, and a Whiteboard pick is stored with the approval.
 - The picker groups Cartoon 3D under 3D with its GPU tag, and a style's preview loop is served and
   plays (`readyState` 2 or more). **Use this style** sets the picker and sends nothing until
   **Approve**.

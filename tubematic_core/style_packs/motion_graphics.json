@@ -1,8 +1,13 @@
 {
   "id": "motion_graphics",
-  "label": "Motion Graphics",
+  "label": "Photo Explainer",
   "order": 10,
   "experimental": false,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "dip"
+  },
   "dimension": "2d",
   "preview": "motion_graphics",
   "tagline": "Real, specific things shown as full-frame pictures: products, screens, named people and places.",
@@ -19,24 +24,25 @@
     "gpu": false
   },
   "picture": {
-    "opening": "Scene 1 shows the subject of the first sentence from frame 0, already moving: a diagram already building or a photograph already pushing in. Never a title card, a blank or black frame, or an abstract gradient.",
-    "turn": "A new scene starts on the first word of a turn or a re-opening, and its picture is visibly different from the scene before (a new image, the diagram's next state, a new place). Never merge that segment into the scene before it.",
-    "payoff": "The payoff scene gets the video's strongest picture: the hero image, the largest element, the diagram fully built.",
+    "opening": "Scene 1 shows the subject of the first sentence from frame 0, already moving: a photograph already pushing in. Never a title card, a blank or black frame, or an abstract gradient.",
+    "turn": "A new scene starts on the first word of a turn or a re-opening, and its picture is visibly different from the scene before (a new image, a new place, a tighter crop of the real thing). Never merge that segment into the scene before it.",
+    "payoff": "The payoff scene gets the video's strongest picture: the hero image of the real thing, full frame.",
     "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
   },
   "routing": {
     "best_for": [
-      "real, specific subjects the viewer came to see: products, screenshots, named people and places as images",
-      "image-led topics where full-bleed imagery carries the beats",
-      "a real event, accident or failure and its cause, shown with the real machine, place or company and diagrams of what went wrong"
+      "real, specific things the viewer came to see as full-frame pictures: products, buildings, artworks, machines, named people and places",
+      "a real event, accident or failure and its cause, shown with the real machine, place or company; a diagram of the cause becomes a System Flow insert"
     ],
     "avoid_for": [
-      "topics whose beats are generic roles acted out by people"
+      "topics whose beats are generic roles acted out by people",
+      "a mechanism, process or flow that diagrams carry (a richer style carries it, with System Flow inserts)",
+      "an abstract idea with nothing real to photograph"
     ],
     "cannot_show": "drawn figures acting out a step: it draws no figures, and people appear only in photographs",
     "signals": [
       "the script names specific real things that are best shown as pictures",
-      "most beats want a full-frame image or a vector diagram, none wants a character",
+      "most beats want a full-frame photograph of a real thing, none wants a character",
       "a real, dated event happens to a named machine, company or place"
     ],
     "moods": [
@@ -45,6 +51,7 @@
       "informative"
     ],
     "images_per_video": "varies",
-    "images": 8
+    "images": 8,
+    "yields_ties": true
   }
 }

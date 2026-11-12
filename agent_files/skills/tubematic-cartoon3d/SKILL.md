@@ -44,7 +44,9 @@ writing a line, then read the worked example with `cartoon_kit_read` (below). No
 - **The kit is frozen.** You import from it (`../../cartoon3d/...`); you never copy a kit file into the
   video, never edit one, never add a dependency. What the kit cannot do, your set code does with three.js.
 - **One scene.** The video is one generated scene, `CartoonShort.tsx`, spanning every frame. Never one scene
-  per beat: the world is one WebGL mount, and remounting it breaks shadows and continuity.
+  per beat: the world is one WebGL mount, and remounting it breaks shadows and continuity. A Cartoon 3D
+  video also takes no insert scenes (System Flow, Terminal Doc): its style pack says so and insert routing
+  decides none for it, so its script has no insert marks and its config has no `inserts` list.
 - **The render is gated.** `validate_job` and `submit_render` refuse a video until its source typechecks and
   two fresh judges have passed the beat sheet for exactly the source on disk (a changed file re-opens the
   gate). Their error names the tool that closes it.

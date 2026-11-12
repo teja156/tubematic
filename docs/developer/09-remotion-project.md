@@ -69,14 +69,21 @@ flowchart TD
     GS --> IMP{"source"}
     IMP -->|installed| I["import('./scenes/installed/{src}.tsx')"]
     IMP -->|generated| G["import('./scenes/generated/{src}.tsx')"]
+    CB --> INS["for each entry in scene-config.inserts:<br/>a Sequence over the main layer"]
+    INS --> GS
     CB --> OVR["overlays, outside any Sequence:<br/>mascot, captions, watermark"]
 ```
 
 `CompositionBuilder` fetches the scene config and the timeline, mounts the audio and walks the scene
 list. It wraps each `generated` entry in a `<Sequence>` at the entry's `startFrame` for its
-`durationInFrames`, and `GeneratedScene` renders it. The layers, bottom to top, are the canvas colour
-(`#0f0f0f` for `dark`, `#ffffff` for `light`), the scenes, the mascot, the captions and the
-watermark.
+`durationInFrames`, and `GeneratedScene` renders it. The layers, bottom to top, are:
+
+1. the canvas colour (`#0f0f0f` for `dark`, `#ffffff` for `light`)
+2. the main layer (`MainLayer`), which holds every entry of `scenes`
+3. the [insert scenes](#insert-scenes), one `<Sequence>` each
+4. the mascot, hidden for every insert window and its transition frames on either side (`HiddenDuringInserts`)
+5. the captions
+6. the watermark
 
 ### Dynamic import, and why there are two branches
 
@@ -117,6 +124,45 @@ The fade-out length is the scene's own `transitionToNext.durationInFrames`: 8 fr
 absent, and 0 for a hard cut. The fade-in length is the previous scene's value, because the two fades
 share one overlap window. The first scene has no fade-in and the last has no fade-out. Start frames
 do not move, so audio sync is unaffected.
+
+### Insert scenes
+
+An insert is a short scene in an insert style (System Flow, Terminal Doc) drawn over the main
+style for a window of frames. The rules for when a video has inserts and where they go are in
+[Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts).
+
+`CompositionBuilder` wraps each entry of the config's `inserts` list in a `<Sequence>` at its
+`startFrame` for its `durationInFrames`, inside `InsertFrame` (`data-tm-layer="insert"`), and renders
+the installed component its `src` names through `GeneratedScene`. The component receives the
+entry's `props` plus an `insert` prop, `InsertPlacement`:
+
+| Key | Meaning |
+|---|---|
+| `origin` | The insert's first frame on the video's clock. The insert's data is timed on the video's frames, so the component adds it to its local frame |
+| `palette` | `dark` or `light`: the look to draw in, which follows the video's canvas |
+| `shift` | Pixels the component's layout moves down, or up when negative, to stay clear of the main style's captions |
+
+The main style names one transition into and out of its inserts (`insertTransition`). Each
+transition runs just outside the insert's window: the way in over the frames before it and the way
+out over the frames after it, so the whole window is on screen and the main style is already on its
+next picture as the insert leaves. The insert's `Sequence` covers those frames too, and the component
+holds its first frame through the way in and its last through the way out (`InsertPlacement.lead`). `inserts/transitions.ts` holds the transitions as pure functions of the frame
+(`insertProgress`, `activeInsert`, `insertLook`), and `TRANSITION_FRAMES` gives their lengths.
+
+| Transition | Frames | What it looks like |
+|---|---|---|
+| `cut` | 0 | The insert appears and disappears on one frame |
+| `dip` | 8 | The main layer fades to the canvas colour, then the insert fades up, and the reverse on the way out |
+| `push` | 12 | The insert slides in from the right while the main layer slides out to the left, and back on the way out |
+| `wipe` | 12 | An edge moving right to left reveals the insert, and moves back left to right on the way out |
+ An
+unknown or absent `insertTransition` reads as `cut`. `tubematic_core/inserts.py::TRANSITIONS` and
+`TRANSITION_FRAMES` are the Python copy, which the style packs are checked against.
+
+While an insert covers the whole frame, `MainLayer` hides the main layer with `visibility: hidden`
+and keeps it mounted. Every main component is a pure function of the frame, so it comes back on the
+picture its frame gives it, and hiding it skips its paint, which is most of a frame's cost in software
+GL.
 
 ---
 
@@ -270,6 +316,15 @@ MCP tool and `CompositionBuilder` reads the file directly. No schema file exists
   "sfx": [                    // optional
     { "src": "…", "startFrame": 120, "volume": 0.6 }
   ],
+  "inserts": [                // optional; see Insert scenes
+    {
+      "style": "system_flow",
+      "startFrame": 600, "durationInFrames": 240,
+      "props": { "systemFlow": { "boards": [ … ] } },
+      "src": "SystemFlow", "palette": "light", "shift": 0   // filled by write_scene_config
+    }
+  ],
+  "insertTransition": "wipe", // filled by write_scene_config
   "scenes": [
     {
       "type": "generated",
@@ -296,6 +351,10 @@ MCP tool and `CompositionBuilder` reads the file directly. No schema file exists
 | `scenes[].source` | `"generated"` (the default) or `"installed"` |
 | `scenes[].props` | Forwarded to the component. See [Props a scene receives](#props-a-scene-receives) |
 | `scenes[].transitionToNext` | `{"durationInFrames": N}`. See [Crossfades](#crossfades) |
+| `inserts` | Optional. The [insert scenes](#insert-scenes), in time order |
+| `inserts[].style`, `startFrame`, `durationInFrames`, `props` | Written by the agent: the insert style id, the window on the video's frames, and the style's data under its props key (`systemFlow`, `terminalDoc`) |
+| `inserts[].src`, `palette`, `shift` | Filled by `write_scene_config` (`mcp/inserts.py::fill`): the component from the pack's `insert.component`, the video's canvas, and the caption clearance (`mcp/inserts.py::shift_for`) |
+| `insertTransition` | Filled by `write_scene_config` from the main style's `inserts.transition`. Absent when the config has no inserts |
 
 An image path inside `props` must have the form `/public/<video_id>/images/…` and the file must
 exist. `validate_job` checks both (`server.py::_bad_image_refs`). A path that does not resolve fails
@@ -312,8 +371,9 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - `mascot`, if present, belongs to a video that has a mascot and passes the cue rules.
 - A Cartoon 3D scene is the only scene, its beats cover the video, and the scene kind agrees with the
   video's renderer ([Scene Authoring](10-scene-authoring.md#cartoon-3d)).
-- A System Flow video has the one `SystemFlow` scene and its diagram passes the System Flow checks;
-  no other video uses `SystemFlow` ([Scene Authoring](10-scene-authoring.md#system-flow)).
+- A video that holds System Flow as its style from an earlier version has the one `SystemFlow`
+  scene and its diagram passes the System Flow checks; no other video has `SystemFlow` in `scenes`
+  ([Scene Authoring](10-scene-authoring.md#system-flow)).
 - A Bean Explainer video has the one `BeanExplainer` scene and its sections and shots pass the Bean
   Explainer checks; no other video uses `BeanExplainer`
   ([Scene Authoring](10-scene-authoring.md#bean-explainer)).
@@ -322,20 +382,27 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - A Storybook Atlas video has the one `StorybookAtlas` scene and its chapters pass the Storybook
   Atlas checks; no other video uses `StorybookAtlas`
   ([Scene Authoring](10-scene-authoring.md#storybook-atlas)).
-- A Terminal Doc video has the one `TerminalDoc` scene and its beats and moves pass the Terminal Doc
-  checks; no other video uses `TerminalDoc` ([Scene Authoring](10-scene-authoring.md#terminal-doc)).
+- A video that holds Terminal Doc as its style from an earlier version has the one `TerminalDoc`
+  scene and its beats and moves pass the Terminal Doc checks; no other video has `TerminalDoc` in
+  `scenes` ([Scene Authoring](10-scene-authoring.md#terminal-doc)).
 - An Under the Hood video has the one `UnderTheHood` scene and its plates and events pass the Under
   the Hood checks; no other video uses `UnderTheHood`
   ([Scene Authoring](10-scene-authoring.md#under-the-hood)).
 - A Case File Story video has the one `CaseFileStory` scene and its meters and beats pass the Case
   File Story checks; no other video uses `CaseFileStory`
   ([Scene Authoring](10-scene-authoring.md#case-file-story)).
+- `inserts`, if present or if the script marks a segment `insert`, passes `mcp/inserts.py::check`:
+  the window rules, the style's own checks (`system_flow.check_insert`, `terminal_doc.check_insert`),
+  and no main scene starting inside a window. Each main style's checks treat the windows as quiet
+  spans, and no mascot cue may fall inside one
+  ([Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)).
 
 The tool refuses the write while another session holds the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim) (`scene_work_claimed`), and while the video
 is queued or rendering (`status_mismatch`).
 
-`canvas` is the only default the tool writes into most files. A System Flow or Whiteboard config
+`canvas` is the only default the tool writes into most files, besides each insert's `src`, `palette`
+and `shift` and the `insertTransition`, which the agent never writes. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
 style's look. A Bean Explainer, Storybook Atlas, Under the Hood or Case File Story config gets them under whatever
 `subtitles` keys it sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config
@@ -390,8 +457,10 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`SystemFlow`, `BeanExplainer`, `Whiteboard`, `TerminalDoc`, `UnderTheHood` and `CaseFileStory` are
-referenced the same way, by videos of their own style only. The other
+`BeanExplainer`, `Whiteboard`, `UnderTheHood` and `CaseFileStory` are referenced the same way, by
+videos of their own style only. `SystemFlow` and `TerminalDoc` are drawn as
+[insert scenes](#insert-scenes) from the `inserts` list, and as a video's one scene only for a video
+that holds their style from an earlier version. The other
 files are wrappers and helpers that a scene imports. The directory's `README.md` is the catalogue the
 agent reads.
 
@@ -460,8 +529,12 @@ legible only if its background, both node states and both edge states agree.
 
 ### `SystemFlow`
 
-`SystemFlow` draws a whole System Flow video from `props.systemFlow`, with its own canvas, headline
-and camera; its helpers are in `systemFlow/`. It loads its fonts (Barlow, Space Grotesk, JetBrains
+`SystemFlow` draws a System Flow insert, or a whole System Flow video, from `props.systemFlow`, with
+its own canvas, headline and camera; its helpers are in `systemFlow/`. Given an `insert` prop, it
+times its boards from `origin`, draws in its `light` look (dark ink and teal on paper) when
+`palette` is `light` and in its `dark` look otherwise (`LOOKS`), and moves its boards and header down
+by `shift` with a positioned offset, because a CSS-transformed layer is composited again every frame
+in software GL. It loads its fonts (Barlow, Space Grotesk, JetBrains
 Mono) from `public/fonts/` before the first frame, so a renderer with no internet access draws the
 same picture; the default caption font is unaffected. Its contract, layout, camera and the reasons
 it avoids gradients, filters and dashed strokes are in
@@ -514,12 +587,15 @@ contract and the reason every drawing is a cached bitmap are in
 
 ### `TerminalDoc`
 
-`TerminalDoc` draws a whole Terminal Doc video from `props.terminalDoc` on a near-black canvas, with
-its ciphertext wall, the CRT glass of its `crt` skin and its moves; its helpers are in
-`terminalDoc/`. It loads its fonts (IBM Plex Mono, and VT323 for the `crt` skin) from `public/fonts/`
+`TerminalDoc` draws a Terminal Doc insert, or a whole Terminal Doc video, from `props.terminalDoc`,
+with its ciphertext wall, the CRT glass of its `crt` skin and its moves; its helpers are in
+`terminalDoc/`. Its skins are in `terminalDoc/kit.tsx::SKIN_TOKENS`: `house` (near-black), `crt` and
+`paper` (dark ink on paper). Given an `insert` prop, it times its beats from `origin`, takes the
+`paper` skin when `palette` is `light` and `house` otherwise, ignores `customMoves`, and moves its
+stage by `shift` with a positioned offset. It loads its fonts (IBM Plex Mono, and VT323 for the `crt` skin) from `public/fonts/`
 before the first frame; the style's `log` captions use the same faces, which this scene loads.
 
-A Terminal Doc video can also use moves its agent wrote, in `generated/<video_id>/move-*.tsx`. The
+A whole Terminal Doc video can also use moves its agent wrote, in `generated/<video_id>/move-*.tsx`. The
 scene imports them under a `delayRender` handle, and one that fails to load fails the render.
 `terminal-tools/render-moves.mjs` renders them for the `preview_terminal_moves` tool on the
 `TerminalMovePreview` composition, from a bundle entry it writes per call into `terminal-tools/.tmp/`
@@ -609,7 +685,8 @@ for the MCP server, `cartoon-tools/audio/` is the soundtrack engine (Python), an
 ## The mascot layer
 
 A video with a mascot gets one extra layer from `CompositionBuilder`, `src/mascot/MascotLayer.tsx`. It
-sits above the scenes and below the captions. It renders only when the renderer passed the
+sits above the scenes and the inserts and below the captions, and is hidden for every insert window
+and its transition frames on either side. It renders only when the renderer passed the
 `mascotPath` render prop and the scene config carries a non-empty `mascot` cue list.
 
 The renderer alone sets `mascotPath`, as it does `watermark`. The prop points at the version of the

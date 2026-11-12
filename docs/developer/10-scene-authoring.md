@@ -50,9 +50,12 @@ skill also call a style a **register**.
 style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
-does not decide any beat's treatment. `cartoon_3d`, `system_flow`, `bean_explainer`, `whiteboard`,
-`storybook_atlas`, `terminal_doc`, `under_the_hood` and `case_file_story` replace the scene system
-with one whole-video scene of their own.
+does not decide any beat's treatment. `cartoon_3d`, `bean_explainer`, `whiteboard`,
+`storybook_atlas`, `under_the_hood` and `case_file_story` replace the scene system with one
+whole-video scene of their own. `system_flow` and `terminal_doc` are insert styles: they draw short
+scenes inside another style's video and are never a video's style
+([Main styles and inserts](#main-styles-and-inserts)). A video voiced before that keeps its whole
+System Flow or Terminal Doc scene, so both stay in the table below.
 
 | `visual_style` | Canvas | Figures | Hand-drawn line art | Generated characters |
 |---|---|---|---|---|
@@ -74,10 +77,11 @@ The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `ch
 `characters_allowed` gates the `generate_character` tool. `figures_allowed` and `line_art_allowed` go
 into the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses), so the reviewer judges a video
 against the look it was meant to have. `cartoon_3d` replaces the scene system with one 3D world
-([Cartoon 3D](#cartoon-3d)), `system_flow` with one diagram scene ([System Flow](#system-flow)),
+([Cartoon 3D](#cartoon-3d)), `system_flow` (on a video voiced before it became an insert style)
+with one diagram scene ([System Flow](#system-flow)),
 `bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)), `whiteboard`
 with one board scene ([Whiteboard](#whiteboard)), `storybook_atlas` with one picture-book scene
-([Storybook Atlas](#storybook-atlas)), `terminal_doc` with one typographic scene
+([Storybook Atlas](#storybook-atlas)), `terminal_doc` (likewise) with one typographic scene
 ([Terminal Doc](#terminal-doc)), `under_the_hood` with one scene of annotated close-up
 photographs ([Under the Hood](#under-the-hood)), and `case_file_story` with one scene of painted
 stills, meters and number cards ([Case File Story](#case-file-story)).
@@ -127,13 +131,20 @@ style.
 | `script` | Optional. How to write the narration and each segment's `visual` brief for this style; `get_video` returns it as `style.script` and the script-writing skill follows it |
 | `picture` | `{opening, turn, payoff, ending}`: how the style shows the first frame, a turn or re-opening, the payoff, and how a video in it ends. `get_video` returns it as `style.picture`; [The opening and the beats](#the-opening-and-the-beats) says how it is used |
 | `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's and Storybook Atlas's cast and prop catalogues or Whiteboard's doodle library |
+| `role` | `main` for a style that carries a whole video, `insert` for one that draws only insert scenes ([Main styles and inserts](#main-styles-and-inserts)) |
+| `inserts` | A main style only: `{host, transition}`, whether it takes insert scenes and how it goes into one |
+| `insert` | An insert style only: `{max_seconds, palettes, props_key, component, review}` |
 
 The `routing` block lists what the style suits (`best_for`), what it must not get (`avoid_for`),
 one sentence saying what it cannot put on screen at all (`cannot_show`, such as "any picture of a
 real thing" for a style that draws only text), and the signals in a topic or script that point to
-it (`signals`). Two fields are optional: `moods`, the tones the style suits, and `images`, a whole
-number of generated images a video costs at most (0 when absent).
-[How Auto picks a style](#how-auto-picks-a-style) reads all six.
+it (`signals`). Three fields are optional: `moods`, the tones the style suits, `images`, a whole
+number of generated images a video costs at most (0 when absent), and `yields_ties`, `true` on a
+style that loses a close call to any style without it (`motion_graphics`, labelled Photo Explainer,
+is the plain photo style the richer styles should win close calls from).
+[How Auto picks a style](#how-auto-picks-a-style) reads all seven. An insert style's `routing`
+describes beats, because the insert-routing skill scores beats
+([Main styles and inserts](#main-styles-and-inserts)).
 
 `tubematic_core/tests/test_style_packs.py` pins every gate's answer for each style, `auto`, a blank
 value and an unknown one. Adding a style is a new pack file, the style's renderer work, its
@@ -190,15 +201,16 @@ flowchart TD
     C --> D["rule out: unavailable,<br/>a plain avoid_for match,<br/>cannot_show covers what must be seen"]
     D --> E["score: best_for 3 or 1,<br/>each signal 1"]
     E --> F{"a clear fit?<br/>3 points or more"}
-    F -->|yes| G["the highest; ties by<br/>specificity, a person's hint,<br/>mood, images, order"]
+    F -->|yes| G["the highest; ties by yielding,<br/>specificity, a person's hint,<br/>mood, images, order"]
     F -->|no| H["scenes:<br/>the mixed scene system"]
     G --> I["choose_visual_style"]
     H --> I
     I --> J["script written for<br/>the picked style"]
 ```
 
-The candidates are data: `tubematic_core/visual_styles.py::routing_candidates` lists every style
-pack in pack order, then `scenes`, each with its `routing` block and whether this install and this
+The candidates are data: `tubematic_core/visual_styles.py::routing_candidates` lists every main
+style pack in pack order, then `scenes` (insert styles are decided after the main style, by
+`choose_inserts`), each with its `routing` block and whether this install and this
 video can have it. A style that needs an OpenAI key or a working GPU the install lacks is
 unavailable, and so is a style that takes no mascot (a 3D world, or a pack with `"mascot": false`)
 on a video with a mascot. The skill names no style, so a new
@@ -223,7 +235,7 @@ video back to `TOPIC_APPROVED` for a new script. A video moved back to `TOPIC_PR
 `scenes` is the mixed scene system: every beat drawn from any vocabulary, on a canvas the agent
 chooses at `VOICE_READY`. Its routing block (`visual_styles.py::SCENES_ROUTING`) is scored like a
 pack's. It is the best answer when full-frame pictures of real things carry some beats and roles
-acted out by figures carry others (Motion Graphics draws no figures, Stick Explainer shows pictures
+acted out by figures carry others (Photo Explainer draws no figures, Stick Explainer shows pictures
 only in panels), and the fallback when nothing reaches 3 points. Its renderer is always `dom`, recorded in `videos.resolved_renderer`. The
 agent chooses the canvas once, `update_video(resolved_visual_style="dark" | "light")`: `dark` when
 images carry the video (about a third or more of the beats are PHOTO or HYBRID) and `light` when
@@ -260,6 +272,156 @@ through `ImageFX` or `KenBurnsImage`, which fill the frame.
 
 Under a forced `illustrated` the agent does not check for a key and does not fall back to line art.
 If `generate_character` refuses, the agent comments on the video and ends the session.
+
+---
+
+## Main styles and inserts
+
+Every video has one main style. It carries the opening, the payoff and the ending, and almost every
+second of the video. A video may also carry a few short insert scenes from an insert style, shown
+where the narration reaches what that style shows best: a request travelling between components (a
+System Flow diagram), a password being hashed or a command being typed (a Terminal Doc string). A
+whole video in an insert style is plain, so an insert style is never a video's style.
+
+Each pack's `role` says which it is. `system_flow` and `terminal_doc` are insert styles; every other
+pack is a main style, and so is the mixed scene system (`scenes`).
+
+### The limits
+
+The limits live in `tubematic_core/inserts.py`. The script marks are checked when the script is
+written (`inserts.mark_errors`); the windows are measured on the voiced timeline when the scenes are
+written (`mcp/inserts.py::check`).
+
+| Rule | Where it is checked |
+|---|---|
+| An insert is one script segment marked `"insert": "<style id>"`, with a style the video chose | Script write, scene write |
+| Never the first or the last segment, never two marked segments in a row | Script write, scene write |
+| A window starts within `WORD_SNAP_FRAMES` (2) of a word, lasts 2 seconds to its pack's `insert.max_seconds` (at most `MAX_SECONDS`, 9), and ends by the next segment's first word; the skills aim for `TARGET_SECONDS` (8) | Scene write |
+| Never in the segment that opens the payoff (the first segment of the formula's payoff beat) | Script write, scene write |
+| Never under the captions: an insert moves clear of them (`shift_for`), and captions placed where no move can clear them are refused (`caption_clash`) | Scene write |
+| At least `MIN_MAIN_GAP_SECONDS` (1.5) of the main style before the first insert, after the last, and between two | Scene write |
+| Inserts together take at most `MAX_SHARE` (a third) of `totalFrames` | Scene write |
+| A marked segment whose words would run past 8 seconds | A script warning, `insert_long` |
+
+### How a video gets its inserts
+
+```mermaid
+flowchart TD
+    A["TOPIC_PROPOSED<br/>Inserts: Auto or None"] --> B["TOPIC_APPROVED<br/>main style decided"]
+    B --> C{"insert_routing.decided?"}
+    C -->|no| D["tubematic-insert-routing:<br/>beats an insert shows better"]
+    D --> E["choose_inserts<br/>insert_styles = [...] or []"]
+    C -->|yes| F["formula routing"]
+    E --> F
+    F --> G["script: segments marked<br/>insert: style id"]
+    G --> H["VOICE_READY: main style's skill<br/>+ tubematic-inserts"]
+    H --> I["write_scene_config:<br/>inserts[] checked and filled"]
+    I --> J["render: insert layer<br/>over the main style"]
+```
+
+- A person sets the video's Inserts setting (`videos.insert_mode`, `auto` or `none`) at the topic
+  checkpoint, on New Video, or through the domain's `default_insert_mode`, which seeds every new
+  video. It is frozen after `TOPIC_PROPOSED`, like the style.
+- At `TOPIC_APPROVED`, once the main style is decided, the
+  [`choose_inserts`](06-mcp-server.md#choose_inserts) call records which insert styles the script may
+  use (`videos.insert_styles`, a JSON list; `''` while undecided). `get_video`'s `insert_routing`
+  says whether that is decided: it is when the setting is None or the main style takes no inserts.
+  A new main style (a switch to the runner-up, a return to the topic) clears the choice.
+- The script marks the segments an insert shows, and `get_timeline` returns each segment's `insert`.
+- At `VOICE_READY` the main style's own skill authors the video and follows the `tubematic-inserts`
+  skill for each marked segment; the insert's data is written with the insert style's own skill,
+  in its insert mode.
+
+### The config
+
+Inserts sit in a top-level list of `scene-config.json`, beside `scenes`, and the main scene or scenes
+still cover every frame ([scene-config.json](09-remotion-project.md#scene-configjson)).
+
+| Key | Written by | Holds |
+|---|---|---|
+| `style` | The agent | The insert style's id |
+| `startFrame`, `durationInFrames` | The agent | The window, on the video's own frames |
+| `props` | The agent | The insert style's data under its props key (`systemFlow`, `terminalDoc`), timed on the video's frames |
+| `src` | `write_scene_config` | The installed scene that draws the style, from the pack's `insert.component` |
+| `palette` | `write_scene_config` | The video's canvas, which the insert follows |
+| `shift` | `write_scene_config` | Pixels the insert's layout moves down (up when negative) to stay clear of the main style's captions |
+
+`write_scene_config` also fills the top-level `insertTransition` from the main pack's
+`inserts.transition`. The agent writes none of the filled keys, so a revision cannot set a look the
+main style did not choose.
+
+The shift comes from `mcp/inserts.py::shift_for`: the band the captions take (`caption_box`, from
+the `subtitles` position and size) against the band the insert style draws in (`BLOCKS`, read from
+`systemFlow/camera.ts` and `terminalDoc/contract.ts`). Captions in the upper half (Under the Hood's)
+push the insert down; captions in the lower half that reach into it lift it a little. The captions
+never move.
+
+### How the renderer draws an insert
+
+`CompositionBuilder` draws, bottom to top: the main style's scenes, the inserts, the mascot, the
+captions and the watermark. Each insert is its own `Sequence` and runs the main style's transition
+just outside its window, over the frames before it and after it, so the whole window is on screen
+and the main style is already on its next picture as the insert leaves (`src/inserts/transitions.ts`):
+
+| Transition | Frames | What it does |
+|---|---|---|
+| `cut` | 0 | The insert appears and disappears on a frame |
+| `dip` | 8 | The main fades to the canvas colour, then the insert fades up; the reverse on the way out |
+| `push` | 12 | The insert slides in from the right while the main slides out to the left |
+| `wipe` | 12 | The insert is uncovered by an edge moving right to left |
+
+While an insert covers the frame, the main layer is hidden with `visibility`: every main component is
+a pure function of the frame, so it comes back on the picture its frame gives it, and hiding it skips
+its paint, which is most of a frame's cost in software GL. The mascot is hidden for each window and
+its transition frames on either side, and no cue may land there. The captions stay on screen, in the main style's look.
+
+An insert style's scene takes an `insert` prop, `{origin, palette, shift}`. It adds `origin` to its
+frame, so its data stays on the video's frames; it draws its light look on a light canvas; and it
+moves its layout by `shift` with a positioned offset, never a CSS transform, which software GL
+re-composites every frame.
+
+### The checks
+
+- `mcp/inserts.py::check` runs each window against the marks, the timeline and the limits, then the
+  insert style's own check over the window: `system_flow.check_insert` (at most 3 boards, the first on
+  the insert's first frame, the last board's events read before its final 6 frames) and `terminal_doc.check_insert` (at most 3 beats, no custom moves, no
+  skin). `server.py::_INSERT_CHECKS` maps each insert style to its check.
+- The main style's validator gets the windows as `quiet` spans (`mcp/quiet_windows.py`): nothing of
+  the main style starts inside one (no cut, no event), and its stillness rule skips them. Case File
+  Story also refuses a window over a card, after the term card or over the choice. A scene system
+  with several scenes may not start a scene inside a window.
+- The text-layout audit samples each insert's boards or beats, and names a finding by its insert.
+- The AI review prompt adds each insert's times and its pack's `insert.review` text
+  ([AI review](21-ai-review.md)).
+
+A whole System Flow or Terminal Doc video made before they became insert styles keeps its style and
+its whole-video path: its stored `visual_style` still names the style, and the style's validator
+still checks it as one scene. Migration `0029` sends such videos back to Auto while they are not
+yet voiced, and leaves them alone from voicing on.
+
+### Adding a main style
+
+- The pack has `"role": "main"` and an `inserts` block: `{"host": true, "transition": <one of
+  inserts.TRANSITIONS>}`, the transition chosen to match how the style cuts. A style that cannot take
+  inserts (Cartoon 3D: one continuous 3D world) has `{"host": false}` and a `messages.inserts`
+  refusal.
+- A whole-video scene's validator takes `quiet=()` as its last keyword argument and applies
+  `quiet_windows.window_at` to every cut and event frame and `quiet_windows.uncovered` to its
+  stillness gaps; `write_scene_config` passes `quiet=inserts_mod.windows(config)`.
+- Its authoring skill has an Inserts step that sends the agent to `tubematic-inserts` and names the
+  style's own quiet rule.
+
+### Adding an insert style
+
+- The pack has `"role": "insert"` and an `insert` block: `max_seconds`, the `palettes` it can follow,
+  its `props_key`, the installed `component` that draws it, and the `review` text for the AI review.
+  Its `routing` describes beats, since insert routing scores beats; its `script` says how a marked
+  segment is narrated.
+- The scene takes the `insert` prop as above and has a look for every palette it lists.
+- Its module has a `check_insert(entry, …)` over the window and an `insert_*_windows(entry)` for the
+  text audit; register them in `server.py::_INSERT_CHECKS`, in `text_audit.plan_passes`, and its
+  drawing band in `inserts.BLOCKS`.
+- Its authoring skill has an **As an insert** section.
 
 ---
 
@@ -592,7 +754,11 @@ does not run for a Cartoon 3D video.
 
 ## System Flow
 
-A System Flow video is one installed scene, `SystemFlow`, that spans the whole video. The agent
+System Flow is an insert style: a `SystemFlow` insert draws one or more boards over a main style for
+a few seconds ([Main styles and inserts](#main-styles-and-inserts)), with the same data and checks
+as below over its window, at most 3 boards, in the light look on a light canvas. A whole System Flow
+video, one made before it became an insert style, is one installed scene, `SystemFlow`, that spans
+the whole video. The agent
 writes no code for it. Its props carry `systemFlow: {boards}`: one diagram per subject, each with
 nodes, edges and events timed to the narration's word frames. The agent writes them with the
 `tubematic-system-flow` skill, whose `reference/contract.md` documents every field and whose
@@ -734,7 +900,11 @@ side.
 
 ## Terminal Doc
 
-A Terminal Doc video is one installed scene, `TerminalDoc`, that spans the whole video: a dark
+Terminal Doc is an insert style: a `TerminalDoc` insert draws one or more beats over a main style
+for a few seconds ([Main styles and inserts](#main-styles-and-inserts)), with the same data and
+checks as below over its window, at most 3 beats, shipped moves only, and the `house` skin on a dark
+canvas or the `paper` skin on a light one. A whole Terminal Doc video, one made before it became an
+insert style, is one installed scene, `TerminalDoc`, that spans the whole video: a dark
 typographic documentary where the text is the picture. Sparse monospace capitals sit on near-black,
 letters lift out of a word and arc into a new one, numbers resolve out of glyph noise, and one element
 at a time glows red or blue. The agent writes `props.terminalDoc: {skin, beats, customMoves}` with the

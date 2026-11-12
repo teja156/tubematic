@@ -72,3 +72,12 @@ def test_the_script_writer_follows_the_style_guidance():
 def test_the_uninstaller_and_the_readme_know_the_skill():
     assert '"tubematic-style-routing"' in (REPO / "uninstall.py").read_text()
     assert "`tubematic-style-routing/`" in (REPO / "agent_files" / "skills" / "README.md").read_text()
+
+
+def test_a_style_that_yields_loses_a_tie_first():
+    """Photo Explainer loses close calls to the richer styles (TMDEV-225): the
+    rule is a pack field, read as the first tie-break, so no style is named."""
+    text = _text()
+    step5 = text.split("## Step 5")[1].split("## Step 6")[0]
+    assert step5.index("yields_ties") < step5.index("Specificity")
+    assert any(p["routing"].get("yields_ties") for p in tvs.MAIN_PACKS.values())

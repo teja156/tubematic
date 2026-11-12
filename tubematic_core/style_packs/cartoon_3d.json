@@ -3,6 +3,10 @@
   "label": "Cartoon 3D",
   "order": 40,
   "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": false
+  },
   "dimension": "3d",
   "preview": "cartoon_3d",
   "tagline": "Characters walk and react in one inked 3D world, filmed by a moving camera.",
@@ -20,7 +24,8 @@
   },
   "messages": {
     "gpu": "Cartoon 3D renders on the GPU only (on the CPU a 90-second Short takes about 50 minutes). No renderer has a working GPU: configure one with `python onboard.py --step gpu` or add a GPU renderer, test it under Settings → Rendering → Renderers on the dashboard, or choose another visual style.",
-    "gpu_unknown": "Cartoon 3D renders on the GPU only, and no renderer has tested its GPU yet (each does so when it starts, and on Test GPU under Settings → Rendering → Renderers). Test it first, then choose the style."
+    "gpu_unknown": "Cartoon 3D renders on the GPU only, and no renderer has tested its GPU yet (each does so when it starts, and on Test GPU under Settings → Rendering → Renderers). Test it first, then choose the style.",
+    "inserts": "A Cartoon 3D video takes no insert scenes: it is one continuous 3D world, and an insert would cut it apart. Set Inserts to None, or choose another visual style."
   },
   "picture": {
     "opening": "Shot 1 is already in motion at frame 0: a character mid-action on the set the first sentence names, the camera moving.",

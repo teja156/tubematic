@@ -48,7 +48,8 @@ or event is wrong. Fix every problem it lists, then write again.
 
 - **One scene.** `scenes` is exactly one entry: `{"type": "generated", "source": "installed", "src":
   "StorybookAtlas", "startFrame": 0, "durationInFrames": <totalFrames>, "props": {"storybookAtlas":
-  {...}}}`.
+  {...}}}`. Insert scenes are not scenes: they go in the config's own `inserts` list (**Inserts**
+  below).
 - **Chapters:** 3 to 5. The first starts at frame 0, the others on a word (within 2 frames of a word's
   `startFrame`), each at least 8 seconds long. A title fits 2 lines of 18 characters; a byline is at
   most 28.
@@ -240,10 +241,21 @@ track as the mascot skill describes, small and to one side, away from the guide 
 
 `validate_job` returns warnings (advisory, never blocking) when nothing moves in chapter 1 by frame 3 or when a `turn`, `reopen` or `payoff` segment has no chapter, guide, person, prop, act or plate (a tag alone does not count) starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
 
+## Inserts
+
+If `get_timeline` shows a segment whose `insert` is not `""`, invoke the **tubematic-inserts** skill
+and follow it: it places one insert inside each marked segment and has its data written with the
+insert style's skill. The book is hidden while an insert plays, so inside each insert's window no
+chapter starts and no event has its `at`, and no constellation has its `thenAt`. Let the chapter
+from before the insert carry on and time its next event at the window's end (its last frame + 1)
+or later, or start the next chapter there. The "never still" rule does not
+count a window. With no marked segment, write no `inserts`.
+
 ## Step 5 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` and `fps` from the timeline, `"canvas":
-   "light"` (or leave it out), `"sfx": []` (this style has no sound effects) and the one scene. Fix every problem it reports. If the video has props
+   "light"` (or leave it out), `"sfx": []` (this style has no sound effects), the one scene and any
+   `inserts`. Fix every problem it reports. If the video has props
    of your own, look at them now with `render_storybook_props` (Step 3b).
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures the
    plaque, the tags and the plates' text in a browser; an overlap is a measurement, so move or shorten

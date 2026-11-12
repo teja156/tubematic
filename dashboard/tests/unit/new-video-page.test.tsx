@@ -422,3 +422,39 @@ describe("NewVideoPage", () => {
     expect((screen.getByLabelText("Topic") as HTMLTextAreaElement).value).toBe("");
   });
 });
+
+describe("NewVideoPage — Inserts (TMDEV-224)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("shows the manual domain's setting and sends none while untouched", async () => {
+    const spy = mockApi({ projects: [{ id: "manual", name: "Manual Videos", default_insert_mode: "none" }] });
+    await ready();
+    const select = screen.getByLabelText("Inserts") as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Auto", "None"]);
+    await waitFor(() => expect(select.value).toBe("none"));
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy)).not.toHaveProperty("insert_mode"));
+  });
+
+  it("sends the setting once it is picked", async () => {
+    const spy = mockApi();
+    await ready();
+    const select = screen.getByLabelText("Inserts") as HTMLSelectElement;
+    expect(select.value).toBe("auto");
+    fill();
+    fireEvent.change(select, { target: { value: "none" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy).insert_mode).toBe("none"));
+  });
+
+  it("locks the setting to None for a style that takes no inserts", async () => {
+    mockApi();
+    await ready();
+    pickStyle("new-video-style", "cartoon_3d");
+    const select = screen.getByTestId("new-video-inserts-select") as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+    expect(select.value).toBe("none");
+    expect(select.title).toBe("Cartoon 3D takes no inserts.");
+  });
+});

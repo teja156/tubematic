@@ -28,6 +28,7 @@ from pathlib import Path
 import ai_review
 import db
 import pipeline
+from tubematic_core import inserts as tinserts
 from tubematic_core import jobfiles as tjobs
 from tubematic_core import renderers
 from tubematic_core import usage as tusage
@@ -495,6 +496,7 @@ def finish_render(video_id: str) -> None:
 
         with open(scene_config_path) as fh:
             scene_config_dict = json.load(fh)
+        insert_block = _insert_review_block(scene_config_dict)
 
         # Runs even when over_cap — TMDEV-58: the render that actually ships still gets a fresh
         # review instead of shipping with the previous round's stale gemini_feedback.
@@ -510,7 +512,8 @@ def finish_render(video_id: str) -> None:
                                                 line_art=has_line_art,
                                                 cartoon_3d=is_cartoon_3d,
                                                 style_block=style_block,
-                                                voices=review_voices)
+                                                voices=review_voices,
+                                                insert_block=insert_block)
         # Every paid review is recorded — a second loop costs a second row, and
         # a reply that failed to parse was still billed (TMDEV-107).
         review_usage = result_review.get("usage")
@@ -559,3 +562,23 @@ def finish_render(video_id: str) -> None:
             db.set_status(DB_PATH, video_id, "REVISION_REQUESTED", only_if="RENDERING")
         except Exception as exc2:
             log.error(f"[{video_id}] also failed to set REVISION_REQUESTED: {exc2}", extra={"video_id": video_id})
+
+
+def _insert_review_block(scene_config: dict) -> str:
+    """The review prompt's notes on a video's insert scenes (TMDEV-224): each
+    insert's times and its style's insert review text, from the packs."""
+    fps = scene_config.get("fps") or 30
+    # The insert is on screen through its transition, which runs just outside
+    # its window, so the times the reviewer is given include it.
+    lead = tinserts.TRANSITION_FRAMES.get(scene_config.get("insertTransition") or "cut", 0)
+    entries = []
+    for e in scene_config.get("inserts") or []:
+        p = pipeline.tvs.pack(e.get("style", "")) if isinstance(e, dict) else None
+        if not p or p.get("role") != "insert":
+            continue
+        try:
+            start, dur = int(e["startFrame"]), int(e["durationInFrames"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        entries.append((max(0, start - lead) / fps, (start + dur + lead) / fps, p["insert"]["review"]))
+    return ai_review.insert_review_block(entries)
