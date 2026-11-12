@@ -30,6 +30,7 @@ const LISTS: DomainLists = {
   ] as DomainLists["profiles"],
   mascots: [{ id: "tubi", name: "Tubi", pickable: true }, { id: "moss", name: "Moss", pickable: false }],
   agents: AGENTS,
+  formulaNames: { formulas: [{ id: "scene-story", label: "Scene Story" }], hook_types: [] },
 };
 
 function chips(over: Partial<typeof NO_DOMAIN_DEFAULTS>, lists = LISTS) {
@@ -38,8 +39,9 @@ function chips(over: Partial<typeof NO_DOMAIN_DEFAULTS>, lists = LISTS) {
 
 describe("domainDefaults", () => {
   it("reads every default as a string, blank when the row has none", () => {
-    const row = { id: "d", name: "D", default_voice_id: "a1" } as Project;
-    expect(domainDefaults(row)).toEqual({ ...NO_DOMAIN_DEFAULTS, default_voice_id: "a1" });
+    const row = { id: "d", name: "D", default_voice_id: "a1", default_formula_id: "scene-story" } as Project;
+    expect(domainDefaults(row)).toEqual({ ...NO_DOMAIN_DEFAULTS, default_voice_id: "a1",
+                                          default_formula_id: "scene-story" });
   });
 });
 
@@ -52,9 +54,9 @@ describe("domainChips", () => {
     expect(chips({
       default_visual_style: "stick", default_voice_id: "a1", default_script_profile_id: "p1",
       default_mascot_id: "tubi", default_agent_id: "claude", default_agent_model: "sonnet",
-      default_agent_effort: "max",
-    })).toEqual(["Style: Stick Explainer", "Voice: Adam", "Profile: Fireship", "Mascot: Tubi",
-                 "Agent: Claude Code · sonnet · max"]);
+      default_agent_effort: "max", default_formula_id: "scene-story",
+    })).toEqual(["Style: Stick Explainer", "Voice: Adam", "Profile: Fireship", "Formula: Scene Story",
+                 "Mascot: Tubi", "Agent: Claude Code · sonnet · max"]);
   });
 
   it("leaves a blank model and effort out of the agent chip", () => {
@@ -63,6 +65,12 @@ describe("domainChips", () => {
 
   it("reads an effort with no agent as Automatic with that effort", () => {
     expect(chips({ default_agent_effort: "low" })).toEqual(["Agent: Automatic · low"]);
+  });
+
+  it("names a formula the list does not know by its id, and none while it loads", () => {
+    expect(chips({ default_formula_id: "retired-formula" })).toEqual(["Formula: retired-formula"]);
+    expect(chips({ default_formula_id: "scene-story" }, { ...LISTS, formulaNames: null }))
+      .toEqual(["Formula: scene-story"]);
   });
 
   it("reads the mascot value none as a choice, not as nothing", () => {

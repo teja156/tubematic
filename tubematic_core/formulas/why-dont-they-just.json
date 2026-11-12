@@ -2,6 +2,7 @@
   "id": "why-dont-they-just",
   "order": 50,
   "family": "explain",
+  "experimental": false,
   "label": "Why Don't They Just",
   "line": "Name the obvious fix the viewer would suggest, then the rule of the system that blocks it, the exception that proves the rule, and what the rule means.",
   "best_for": [
@@ -14,6 +15,17 @@
   "avoid_for": [
     "a question the audience has seen answered many times",
     "a rule that is a guess: the rule needs a source"
+  ],
+  "signals": [
+    "an outsider's obvious fix exists and is not used",
+    "a rule, a cost or a constraint explains it",
+    "the question is one people keep asking",
+    "the answer has a source"
+  ],
+  "styles": [
+    "system_flow",
+    "storybook_atlas",
+    "whiteboard"
   ],
   "words": [
     150,

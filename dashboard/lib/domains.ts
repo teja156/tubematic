@@ -1,13 +1,14 @@
 import type { Agent, Mascot, Project, ScriptProfile, Voice, VisualStyleInfo } from "@/lib/types";
 import { isUsable } from "@/lib/agents";
 import { styleLabel } from "@/lib/visualStyles";
+import { formulaLabel, type ScriptFormulaNames } from "@/lib/scriptFormulas";
 
 /**
  * A domain's defaults, as the Topics page edits them: on a domain's row (each
  * change is saved at once) and in the add-domain form (sent on submit). Every
  * value is a string and "" is a real choice in each: no style preference, the
  * install's voice and mascot, no profile, Automatic for the agent, the agent's
- * own model and effort.
+ * own model and effort, Auto for the formula.
  */
 export interface DomainDefaultValues {
   default_visual_style: string;
@@ -17,6 +18,7 @@ export interface DomainDefaultValues {
   default_agent_id: string;
   default_agent_model: string;
   default_agent_effort: string;
+  default_formula_id: string;
 }
 
 export const NO_DOMAIN_DEFAULTS: DomainDefaultValues = {
@@ -27,6 +29,7 @@ export const NO_DOMAIN_DEFAULTS: DomainDefaultValues = {
   default_agent_id: "",
   default_agent_model: "",
   default_agent_effort: "",
+  default_formula_id: "",
 };
 
 /** A domain's stored defaults. POST /projects replaces the whole row, so this
@@ -40,6 +43,7 @@ export function domainDefaults(p: Project): DomainDefaultValues {
     default_agent_id: p.default_agent_id ?? "",
     default_agent_model: p.default_agent_model ?? "",
     default_agent_effort: p.default_agent_effort ?? "",
+    default_formula_id: p.default_formula_id ?? "",
   };
 }
 
@@ -51,10 +55,12 @@ export interface DomainLists {
   profiles: ScriptProfile[];
   mascots: Pick<Mascot, "id" | "name" | "pickable">[];
   agents: Agent[] | undefined;
+  /** The script formulas, or null until GET /script-formulas answers. */
+  formulaNames: ScriptFormulaNames | null;
 }
 
 export interface DomainChip {
-  key: "style" | "voice" | "profile" | "mascot" | "agent";
+  key: "style" | "voice" | "profile" | "formula" | "mascot" | "agent";
   label: string;
   value: string;
 }
@@ -81,6 +87,9 @@ export function domainChips(v: DomainDefaultValues, lists: DomainLists): DomainC
       value: profile?.status === "READY" ? profile.name
         : profile ? `${profile.name} (unavailable)` : "Unavailable profile",
     });
+  }
+  if (v.default_formula_id) {
+    chips.push({ key: "formula", label: "Formula", value: formulaLabel(v.default_formula_id, lists.formulaNames) });
   }
   if (v.default_mascot_id) {
     const mascot = lists.mascots.find((m) => m.id === v.default_mascot_id);

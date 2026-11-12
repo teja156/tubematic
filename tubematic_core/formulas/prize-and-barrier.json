@@ -1,0 +1,96 @@
+{
+  "id": "prize-and-barrier",
+  "order": 150,
+  "family": "explain",
+  "experimental": true,
+  "label": "Prize and Barrier",
+  "line": "Open on the prize as a number, keep it in view, and hold the barrier back to about two thirds so it lands as the reason.",
+  "best_for": [
+    "a 'why do we not have this yet' topic",
+    "a limit with a number behind it: a cost, a temperature, a distance, an error rate"
+  ],
+  "also_for": [
+    "a technology that works in one place and nowhere else"
+  ],
+  "avoid_for": [
+    "a barrier that is only money or politics, with no figure",
+    "a prize the viewer does not want",
+    "a problem already solved: the barrier must still stand"
+  ],
+  "signals": [
+    "something valuable exists and is not being used",
+    "the size of the prize is a number",
+    "one barrier with a number explains why",
+    "somewhere it already works"
+  ],
+  "styles": [
+    "whiteboard",
+    "system_flow",
+    "under_the_hood"
+  ],
+  "words": [
+    150,
+    240
+  ],
+  "beats": [
+    {
+      "name": "The prize",
+      "from": 0,
+      "to": 16,
+      "job": "The size of it as a number, against something the viewer knows."
+    },
+    {
+      "name": "However",
+      "from": 16,
+      "to": 20,
+      "job": "One line: getting it is not easy."
+    },
+    {
+      "name": "The lucky exception",
+      "from": 20,
+      "to": 40,
+      "job": "Where it already works, and why there. End on the tease as one image."
+    },
+    {
+      "name": "The more, the better",
+      "from": 40,
+      "to": 70,
+      "job": "What improves as the effort grows, with a number."
+    },
+    {
+      "name": "The barrier",
+      "from": 70,
+      "to": 90,
+      "job": "The cost or the limit that grows with it, as a number."
+    },
+    {
+      "name": "Who is trying",
+      "from": 90,
+      "to": 100,
+      "job": "Who is working on it, or what would have to change."
+    }
+  ],
+  "hooks": [
+    {
+      "type": "number",
+      "shape": "[Untapped thing] holds [huge number]. Just [tiny fraction] of it could [benefit]."
+    },
+    {
+      "type": "question",
+      "shape": "If [prize] is right there, why is nobody using it?"
+    },
+    {
+      "type": "paradox",
+      "shape": "[Thing] is everywhere and almost free, and we still cannot [use it]."
+    }
+  ],
+  "holds": "The prize stays in view while the barrier is held back, so the viewer keeps asking why not. The exception shows it is possible, which makes the barrier a real answer when it comes.",
+  "ending": "Who is trying to change it, or what would have to change. No promise about when.",
+  "pitfalls": [
+    "Opening on the cost or the difficulty",
+    "Reasons joined by 'also' with no single barrier",
+    "A prize with no number",
+    "A forecast stated as fact"
+  ],
+  "template": "[Untapped thing] holds [huge number]. Just [tiny fraction] could [benefit]. But getting to it is not easy. [One place where it works]. [The tease as one image]. The more [x], the better: [number]. The problem is [barrier], because [the cost that grows]. [Who is trying]."
+}
